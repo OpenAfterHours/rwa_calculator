@@ -322,13 +322,6 @@ For Standardised Approach exposures:
    - SCRA coverage >= 20% of unsecured portion → **100% RW**
    - SCRA coverage < 20% of unsecured portion → **150% RW**
 
-```python
-from rwa_calc.engine.provisions import run_sa_provision_adjustments
-
-# Apply provision adjustments to SA exposures
-adjusted_df = run_sa_provision_adjustments(exposures_df)
-# Adds: provision_adjusted_ev, unsecured_portion, scra_coverage_ratio
-```
 
 ### IRB Provisions (PRA PS9/24 Chapter 5)
 
@@ -338,16 +331,6 @@ For IRB exposures, provisions are compared to Expected Loss:
 2. **EL Shortfall** (Provisions < EL): Deducted from CET1 capital
 3. **EL Excess** (Provisions > EL): Added to Tier 2 capital (capped at 0.6% of IRB RWA)
 
-```python
-from rwa_calc.engine.provisions import calculate_portfolio_el_comparison
-
-# Calculate portfolio-level EL vs provisions comparison
-el_result = calculate_portfolio_el_comparison(irb_results_df)
-print(f"Regulatory EL: {el_result.total_regulatory_el:,.0f}")
-print(f"Eligible Provisions: {el_result.total_eligible_provisions:,.0f}")
-print(f"EL Shortfall (CET1 deduction): {el_result.el_shortfall:,.0f}")
-print(f"Tier 2 Addition: {el_result.tier2_addition:,.0f}")
-```
 
 ### F-IRB Collateral-Based LGD (PRA PS9/24 Chapter 5)
 

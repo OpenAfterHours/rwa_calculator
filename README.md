@@ -1,18 +1,28 @@
 # UK Credit Risk RWA Calculator
 
-A high-performance, UK Credit Risk RWA calculator which is compliant for current (Basel 3.0) and 
-PRA PS9/24 (Basel 3.1) Risk-Weighted Assets (RWA) calculator for credit risk, built with Python using Polars.
-A toggle, allows the user to be able to switch between the calculation types. 
+A high-performance Risk-Weighted Assets (RWA) calculator for UK credit risk, supporting both current regulations and future Basel 3.1 implementation. Built with Python using Polars for vectorized performance.
+
+## Regulatory Scope
+
+This calculator supports two regulatory regimes:
+
+| Regime | Effective Period | UK Implementation |
+|--------|------------------|-------------------|
+| **Basel 3.0** (Current) | Until 31 December 2026 | UK CRR (EU 575/2013 as onshored) |
+| **Basel 3.1** (Future) | From 1 January 2027 | PRA PS9/24 |
+
+A configuration toggle allows switching between calculation modes, enabling:
+- Current regulatory reporting under UK CRR
+- Impact analysis and parallel running ahead of Basel 3.1 go-live
+- Seamless transition when Basel 3.1 becomes effective
 
 ## Overview
 
-This calculator implements the current UK and Basel 3.1 credit risk framework as adopted by the UK 
-Prudential Regulation Authority (PRA) under PS9/24. It supports both Standardised Approach (SA) and 
-Internal Ratings-Based (IRB) approaches with full Credit Risk Mitigation (CRM) capabilities.
+The calculator implements the full credit risk framework for both regimes as adopted by the UK Prudential Regulation Authority (PRA). It supports both Standardised Approach (SA) and Internal Ratings-Based (IRB) approaches with full Credit Risk Mitigation (CRM) capabilities.
 
 ### Key Features
 
-- **Regulatory Compliance**: Full PRA PS9/24 / Basel 3.1 implementation / Basel 3.0 including UK-specific deviations
+- **Dual Regulatory Compliance**: Full support for UK CRR (Basel 3.0) and PRA PS9/24 (Basel 3.1) with UK-specific deviations
 - **High Performance**: Polars-native vectorized calculations - no row-by-row iteration - utilising LazyFrame optimisations
 - **Dual Approach Support**: Both Standardised (SA) and IRB (F-IRB & A-IRB) approaches
 - **Complete CRM**: Collateral at counterparty/facility/loan level with supervisory haircuts and RWA-optimized allocation
@@ -21,6 +31,18 @@ Internal Ratings-Based (IRB) approaches with full Credit Risk Mitigation (CRM) c
 - **Dynamic Classification**: Exposure class and approach determined from counterparty attributes
 - **Audit Trail**: Full calculation transparency for regulatory review
 
+
+### Key Differences Between Regimes
+
+| Area | Basel 3.0 (UK CRR) | Basel 3.1 (PRA PS9/24) |
+|------|-------------------|------------------------|
+| **Output Floor** | None | 72.5% of SA equivalent |
+| **IRB Scope** | All exposure classes eligible | Central govs, Equity, CIUs must use SA |
+| **PD Floors** | Varies | Standardised floors (0.03%-0.10%) |
+| **LGD Floors** | Varies | New A-IRB floors (0%-25%) |
+| **SA Risk Weights** | CRR Part Three, Title II | Revised tables per PS9/24 |
+| **Retail Threshold** | €1m exposure | £880k exposure |
+| **SME Support Factor** | Applies | Withdrawn |
 
 ## How it works:
 
@@ -323,9 +345,11 @@ The CRM processor automatically tracks the `primary_collateral_type` (highest al
 
 ## Key Regulatory Parameters
 
+The following parameters are specific to the **Basel 3.1** regime (PRA PS9/24). Basel 3.0/UK CRR parameters are maintained separately in `config/regulatory_params.py`.
+
 | Parameter | Value | Reference |
 |-----------|-------|-----------|
-| Output Floor | 72.5% | PS9/24 Ch. 6 |
+| Output Floor | 72.5% | PS9/24 Ch. 6 (Basel 3.1 only - not in current UK CRR) |
 | PD Floor (Corporate) | 0.03% | PS9/24 Ch. 5 |
 | PD Floor (Retail) | 0.05% | PS9/24 Ch. 5 |
 | PD Floor (QRRE) | 0.10% | PS9/24 Ch. 5 |
@@ -460,5 +484,11 @@ The `OutputFloorResult` provides full visibility:
 
 ## References
 
+### Current Regulations (Basel 3.0 / UK CRR)
+- [PRA Rulebook - CRR Firms](https://www.prarulebook.co.uk/pra-rules/crr-firms)
+- [UK CRR - Regulation (EU) No 575/2013 as onshored](https://www.legislation.gov.uk/eur/2013/575/contents)
+
+### Basel 3.1 Implementation (January 2027)
 - [PRA PS9/24 - Implementation of the Basel 3.1 standards](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
+- [PRA CP16/22 - Implementation of Basel 3.1 Standards](https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards)
 - [Basel Committee - CRE: Calculation of RWA for credit risk](https://www.bis.org/basel_framework/chapter/CRE/20.htm)

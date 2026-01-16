@@ -3,6 +3,13 @@
 ### UK Basel 3.1 Credit Risk References
 
 When working on this project, to understand some of the regulations for the RWA calculation, refer to these resource (taking the PRA resources as priority over BCBS):
+
+#### Current regulations
+Please focus on the Credit Risk sections
+- https://www.prarulebook.co.uk/pra-rules/crr-firms
+- https://www.legislation.gov.uk/eur/2013/575/contents
+
+#### Basel 3.1 implentation
 - PRA PS9/24 for UK-specific implementation rules - https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2
 - BCBS CRE standards for underlying methodology - https://www.bis.org/basel_framework/standard/CRE.htm?tldate=20260111
 - PRA CP16/22 - Implementation of Basel 3.1 Standards - https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards

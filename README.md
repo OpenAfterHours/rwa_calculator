@@ -235,18 +235,7 @@ Collateral: £200k cash linked to exposure_ids="LOAN_A,LOAN_B"
 **RWA Benefit:** £200k × 100% = **£200k RWA saved**
 
 ### Collateral Data Format
-
-```python
-collateral_df = pl.DataFrame({
-    "external_id": ["COL001", "COL002", "COL003"],
-    # Choose ONE allocation level per collateral item:
-    "counterparty_id": ["CPTY001", None, None],      # Counterparty level
-    "facility_id": [None, "FAC001", None],           # Facility level
-    "exposure_ids": [None, None, "LOAN_A,LOAN_B"],   # Loan level
-    "value": [2_000_000, 400_000, 200_000],
-    "collateral_type": ["cash", "cash", "gold"],
-})
-```
+TBC
 
 ### Two-Pass Optimization
 
@@ -262,46 +251,15 @@ This maximises capital benefit per Basel CRE22 guidance.
 
 Exposure class and approach are dynamically determined from counterparty attributes:
 
-```python
-from rwa_calc.engine.classification import classify_exposures
-from rwa_calc.domain.enums import ApproachType
-
-# Define IRB permissions by exposure class
-irb_permissions = {
-    "corporates": ApproachType.AIRB,
-    "corporates_sme": ApproachType.FIRB,
-    "retail_mortgage": ApproachType.AIRB,
-}
-
-# Classify exposures
-result = classify_exposures(exposures_df, counterparties_df, irb_permissions)
-# Adds: exposure_class, approach columns
-```
-
 ### Classification Logic
 
 1. **SA Exposure Class** (determined in precedence order):
-   1. `is_securitisation` → SECURITISATION
-   2. `is_ciu` → CIUS
-   3. `is_subordinated` → SUBORDINATED_DEBT; `counterparty_type=equity` → EQUITY
-   4. `is_high_risk` → HIGH_RISK
-   5. `is_defaulted` → DEFAULTED
-   6. `is_covered_bond` → COVERED_BONDS
-   7. LTV ratio + product type → REAL_ESTATE_* (ADC, IPRE, Commercial, Residential)
-   8. `is_international_org` → INTERNATIONAL_ORGANISATIONS
-   9. `is_mdb` → MULTILATERAL_DEVELOPMENT_BANKS
-   10. `is_financial_institution` → INSTITUTIONS
-   11. `is_central_bank` → CENTRAL_GOVERNMENTS
-   12. `is_regional_gov` → REGIONAL_GOVERNMENTS
-   13. `is_pse` → PUBLIC_SECTOR_ENTITIES
-   14. `is_individual` + product → RETAIL_MORTGAGE/QRRE/OTHER
-   15. `is_sme` → CORPORATES_SME; `counterparty_type=corporate` → CORPORATES
-   16. Otherwise → OTHER
+   TBC
 
 2. **IRB Exposure Class** (for IRB-permitted exposures):
    - Corporates: Sub-classified by revenue threshold (£440m) and specialised lending criteria
    - Retail: Sub-classified by property security, QRRE criteria, and SME threshold (£0.88m)
-   - **Note**: Central govs, Equity, CIUs must use SA (IRB withdrawn)
+   - **Note**: Central govs, Equity, CIUs must use SA (IRB withdrawn) for Basel 3.1
 
 3. **Approach** (from IRB permissions + data availability):
    - A-IRB: Permitted + `has_internal_rating` + `has_internal_lgd`

@@ -58,7 +58,6 @@ FACILITY_SCHEMA = {
     "committed": pl.Boolean,
     "lgd": pl.Float64,
     "beel": pl.Float64,
-    "ltv": pl.Float64,  # Loan-to-value ratio for real estate
     "is_revolving": pl.Boolean,
 }
 
@@ -73,7 +72,6 @@ LOAN_SCHEMA = {
     "drawn_amount": pl.Float64,
     "lgd": pl.Float64,
     "beel": pl.Float64,
-    "ltv": pl.Float64,  # Loan-to-value ratio for real estate
 }
 
 CONTINGENTS_SCHEMA = {

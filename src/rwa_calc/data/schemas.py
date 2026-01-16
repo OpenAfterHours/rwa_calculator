@@ -43,3 +43,86 @@ Output Schemas (defined in results.py):
 - Output_floor_result       # Floor calculation breakdown (72.5% of SA equivalent)
 
 """
+
+import polars as pl
+
+FACILITY_SCHEMA = {
+    "facility_reference": pl.String,
+    "contract_type": pl.String,
+    "book_code": pl.String,
+    "counterparty_reference": pl.String,
+    "value_date": pl.Date,
+    "maturity_date": pl.Date,
+    "currency": pl.Date,
+    "limit": pl.Date,
+    "committed": pl.Boolean,
+    "lgd": pl.Float64,
+    "beel": pl.Float64,
+}
+
+LOAN_SCHEMA = {
+    "loan_reference": pl.String,
+    "contract_type": pl.String,
+    "book_code": pl.String,
+    "counterparty_reference": pl.String,
+    "value_date": pl.Date,
+    "maturity_date": pl.Date,
+    "currency": pl.Date,
+    "amount": pl.Float64,
+    "lgd": pl.Float64,
+    "beel": pl.Float64,
+}
+
+CONTINGENTS_SCHEMA = {
+    "contingents_reference": pl.String,
+    "contract_type": pl.String,
+    "book_code": pl.String,
+    "counterparty_reference": pl.String,
+    "value_date": pl.Date,
+    "maturity_date": pl.Date,
+    "currency": pl.Date,
+    "amount": pl.Float64,
+    "lgd": pl.Float64,
+    "beel": pl.Float64,
+    "off_balance_sheet": pl.Boolean,
+}
+
+COUNTERPARTY_SCHEMA = {
+    "counterparty_reference": pl.String,
+    "counterparty_name": pl.String,
+    "entity_type": pl.String,
+    "country_code": pl.String,
+    "annual_revenue": pl.Float64,
+    "default_status": pl.Boolean,
+}
+
+COLLATERAL_SCHEMA = {
+    "collateral_reference": pl.String,
+    "collateral_type": pl.String,
+    "currency": pl.String,
+    "maturity_date": pl.Date,
+    "market_value": pl.Float64,
+    "nominal_value": pl.Float64,
+    "beneficiary_type": pl.String, # counterparty/loan/facility/contingent
+    "beneficiary_reference":pl.String, # reference to find on the above tables
+}
+
+GUARANTEE_SCHEMA = {
+    "guarantee_reference": pl.String,
+    "guarantee_type": pl.String,
+    "guarantor": pl.String,
+    "currency": pl.String,
+    "maturity_date": pl.Date,
+    "amount_covered": pl.Float64,
+    "percentage_covered": pl.Float64,
+    "beneficiary_type": pl.String,
+    "beneficiary_reference":pl.String,
+}
+
+PROVISION_SCHEMA = {
+
+}
+
+RATINGS_SCHEMA = {
+
+}

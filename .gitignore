@@ -1,2 +1,6 @@
 .idea
 nul
+
+# exclude datafiles
+*.parquet
+*.csv

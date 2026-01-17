@@ -1,390 +1,251 @@
 """
-CRR Group B: Foundation IRB Acceptance Tests.
+CRR Group B: Foundation IRB (F-IRB) Acceptance Tests.
 
-These tests verify correct implementation of CRR F-IRB calculations
-with supervisory LGD values and hand-calculated expected results.
+These tests validate that the production RWA calculator produces correct
+outputs for F-IRB exposures when given fixture data as input.
+
+Tests are skipped until the production calculator is implemented in src/rwa_calc/.
 
 Regulatory References:
 - CRR Art. 153: IRB risk weight formula
-- CRR Art. 154: Defaulted exposures
 - CRR Art. 161: Supervisory LGD values (45% senior, 75% subordinated)
 - CRR Art. 162: Maturity (1-5 year floor/cap)
 - CRR Art. 163: PD floor (0.03% single floor)
+- CRR Art. 153(4): SME firm size adjustment
 - CRR Art. 501: SME supporting factor (0.7619)
 """
 
 import pytest
-from decimal import Decimal
-import math
-from scipy.stats import norm
+from typing import Any
+
+from tests.acceptance.crr.conftest import (
+    assert_rwa_within_tolerance,
+    assert_risk_weight_match,
+)
 
 
-def calculate_irb_k(pd: float, lgd: float, correlation: float, maturity: float) -> float:
-    """
-    Calculate capital K using Basel IRB formula.
-
-    K = [LGD × N((1-R)^-0.5 × G(PD) + (R/(1-R))^0.5 × G(0.999)) - PD × LGD] × MA
-
-    Where:
-    - N() = Standard normal CDF
-    - G() = Inverse standard normal
-    - R = Correlation
-    - MA = Maturity adjustment
-    """
-    # Conditional PD
-    g_pd = norm.ppf(pd)
-    g_999 = norm.ppf(0.999)
-
-    conditional_pd = norm.cdf(
-        (math.sqrt(1 / (1 - correlation)) * g_pd) +
-        (math.sqrt(correlation / (1 - correlation)) * g_999)
-    )
-
-    # Expected loss = PD × LGD
-    expected_loss = pd * lgd
-
-    # Unexpected loss = LGD × Conditional PD - EL
-    unexpected_loss = lgd * conditional_pd - expected_loss
-
-    # Maturity adjustment
-    b = (0.11852 - 0.05478 * math.log(pd)) ** 2
-    ma = (1 + (maturity - 2.5) * b) / (1 - 1.5 * b)
-
-    # Capital K
-    k = unexpected_loss * ma
-
-    return k
-
-
-def calculate_corporate_correlation(pd: float) -> float:
-    """Calculate asset correlation for corporate exposures."""
-    # R = 0.12 × (1 - e^(-50×PD))/(1 - e^(-50)) + 0.24 × (1 - (1 - e^(-50×PD))/(1 - e^(-50)))
-    exp_factor = (1 - math.exp(-50 * pd)) / (1 - math.exp(-50))
-    return 0.12 * exp_factor + 0.24 * (1 - exp_factor)
+# Marker for tests awaiting production implementation
+SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
 
 
 class TestCRRGroupB_FoundationIRB:
-    """CRR F-IRB acceptance tests with hand-calculated expected outputs."""
+    """
+    CRR F-IRB acceptance tests.
 
-    @pytest.fixture
-    def crr_config(self):
-        """Standard CRR configuration."""
-        return {
-            "regulatory_framework": "CRR",
-            "reporting_date": "2025-12-31",
-            "apply_sme_supporting_factor": True,
-        }
+    Each test loads fixture data, runs it through the production calculator,
+    and compares the output against pre-calculated expected values.
 
-    # =========================================================================
-    # CRR-B1: Corporate F-IRB - Low PD
-    # =========================================================================
+    Note: F-IRB only applies to wholesale exposures (corporate, institution,
+    sovereign). Retail exposures require A-IRB or Standardised Approach.
+    """
 
-    def test_crr_b1_corporate_firb_low_pd(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_b1_corporate_firb_low_pd(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
         CRR-B1: Corporate F-IRB with low PD.
 
-        Hand calculation:
-        - EAD: £10,000,000
-        - PD (raw): 0.10%
-        - PD (floored): max(0.10%, 0.03%) = 0.10% (floor not binding)
-        - LGD: 45% (supervisory, senior unsecured)
-        - Maturity: 2.5 years
-        - Correlation: R = 0.12 × exp_factor + 0.24 × (1 - exp_factor)
-
-        Using IRB formula to calculate K and RWA.
-
-        Regulatory Reference: CRR Art. 153, 161, 162, 163
+        Input: £25m loan, PD 0.10%, LGD 45% (supervisory), M 2.5y
+        Expected: Calculated using IRB formula with 1.06 scaling factor
         """
-        # Inputs
-        ead = 10_000_000.0
-        pd = 0.001  # 0.10%
-        lgd = 0.45  # 45% supervisory
-        maturity = 2.5
+        fixtures = load_test_fixtures
+        expected = expected_outputs_dict["CRR-B1"]
 
-        # Calculate expected values
-        correlation = calculate_corporate_correlation(pd)
-        k = calculate_irb_k(pd, lgd, correlation, maturity)
-        rw = k * 12.5
-        rwa = ead * rw
+        loan = fixtures.get_loan("LOAN_CORP_UK_001")
+        counterparty = fixtures.get_counterparty("CORP_UK_001")
 
-        expected_pd_floor = 0.0003  # 0.03%
-        expected_lgd = Decimal("0.45")
+        # TODO: Run through production calculator
 
-        pytest.skip("Implementation not yet complete")
-
-    # =========================================================================
-    # CRR-B2: Corporate F-IRB - High PD
-    # =========================================================================
-
-    def test_crr_b2_corporate_firb_high_pd(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_b2_corporate_firb_high_pd(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
         CRR-B2: Corporate F-IRB with high PD.
 
-        Hand calculation:
-        - EAD: £5,000,000
-        - PD: 5.00% (well above 0.03% floor)
-        - LGD: 45% (supervisory)
-        - Maturity: 3.0 years
-        - Note: Higher PD leads to lower correlation
+        Input: £5m loan, PD 5.00%, LGD 45%, M 3.0y
+        Expected: Higher RWA due to high PD, lower correlation
 
-        Regulatory Reference: CRR Art. 153, 161, 162
+        Note: Higher PD leads to lower asset correlation (0.130 vs 0.24 at low PD)
         """
-        ead = 5_000_000.0
-        pd = 0.05  # 5.00%
-        lgd = 0.45
-        maturity = 3.0
+        expected = expected_outputs_dict["CRR-B2"]
 
-        correlation = calculate_corporate_correlation(pd)
-        k = calculate_irb_k(pd, lgd, correlation, maturity)
-        rw = k * 12.5
-        expected_rwa = ead * rw
+        # TODO: Run through production calculator
 
-        pytest.skip("Implementation not yet complete")
-
-    # =========================================================================
-    # CRR-B3: Subordinated Exposure - 75% LGD
-    # =========================================================================
-
-    def test_crr_b3_subordinated_75_lgd(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_b3_subordinated_exposure(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
         CRR-B3: Subordinated exposure uses 75% supervisory LGD.
 
-        Hand calculation:
-        - EAD: £2,000,000
-        - PD: 1.00%
-        - LGD: 75% (supervisory subordinated, CRR Art. 161)
-        - Maturity: 4.0 years
+        Input: £2m subordinated loan, PD 1.00%, LGD 75%, M 4.0y
+        Expected: Higher RWA due to 75% LGD vs 45% for senior
 
-        Higher LGD leads to significantly higher RWA.
-
-        Regulatory Reference: CRR Art. 153, 161
+        CRR Art. 161: Subordinated claims have 75% LGD
         """
-        ead = 2_000_000.0
-        pd = 0.01  # 1.00%
-        lgd = 0.75  # Subordinated
-        maturity = 4.0
+        expected = expected_outputs_dict["CRR-B3"]
 
-        correlation = calculate_corporate_correlation(pd)
-        k = calculate_irb_k(pd, lgd, correlation, maturity)
-        expected_rw = k * 12.5
-        expected_rwa = ead * expected_rw
+        # TODO: Run through production calculator
 
-        pytest.skip("Implementation not yet complete")
-
-    # =========================================================================
-    # CRR-B4: Financial Collateral - Reduced LGD
-    # =========================================================================
-
-    def test_crr_b4_financial_collateral_reduced_lgd(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_b4_sme_corporate_firm_size_adjustment(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-B4: Financial collateral reduces effective LGD.
+        CRR-B4: SME Corporate F-IRB with firm size adjustment.
 
-        Hand calculation:
-        - EAD: £5,000,000
-        - PD: 0.50%
-        - Cash collateral: 50% coverage
-        - LGD unsecured: 45%
-        - LGD secured (cash): 0%
-        - Blended LGD: 50% × 0% + 50% × 45% = 22.5%
-        - Maturity: 2.5 years
+        Input: £3m loan, PD 1.50%, turnover EUR 25m
+        Expected: Reduced correlation due to firm size adjustment
 
-        Regulatory Reference: CRR Art. 153, 161, 228
+        CRR Art. 153(4): R_SME = R - 0.04 × (1 - (S-5)/45)
+        where S = turnover in EUR millions, capped at 5-50 range
         """
-        ead = 5_000_000.0
-        pd = 0.005  # 0.50%
-        collateral_coverage = 0.50
-        lgd_unsecured = 0.45
-        lgd_secured = 0.00
-        blended_lgd = (collateral_coverage * lgd_secured) + ((1 - collateral_coverage) * lgd_unsecured)
-        maturity = 2.5
+        fixtures = load_test_fixtures
+        expected = expected_outputs_dict["CRR-B4"]
 
-        assert blended_lgd == 0.225  # 22.5%
+        loan = fixtures.get_loan("LOAN_CORP_SME_002")
+        counterparty = fixtures.get_counterparty("CORP_SME_002")
 
-        correlation = calculate_corporate_correlation(pd)
-        k = calculate_irb_k(pd, blended_lgd, correlation, maturity)
-        expected_rw = k * 12.5
-        expected_rwa = ead * expected_rw
+        # TODO: Run through production calculator
 
-        pytest.skip("Implementation not yet complete")
-
-    # =========================================================================
-    # CRR-B5: SME Corporate F-IRB with Supporting Factor
-    # =========================================================================
-
-    def test_crr_b5_sme_firb_with_supporting_factor(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_b5_sme_corporate_both_adjustments(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-B5: SME corporate F-IRB gets correlation adjustment AND SME factor.
+        CRR-B5: SME Corporate F-IRB with BOTH adjustments.
 
-        Hand calculation:
-        - EAD: £3,000,000
-        - PD: 2.00%
-        - LGD: 45% (supervisory)
-        - Turnover: £25m (SME)
-        - Maturity: 2.5 years
+        Input: £2m loan, PD 2.00%, turnover EUR 15m
+        Expected: Both firm size correlation adjustment AND SME supporting factor
 
-        SME treatment:
-        1. Correlation adjustment: R_SME = R - 0.04 × (1 - (S-5)/45)
-        2. SME supporting factor: 0.7619
+        This demonstrates the dual benefit for SME corporates under CRR:
+        1. Lower correlation (Art. 153(4))
+        2. 0.7619 RWA multiplier (Art. 501)
 
-        Note: SME factor NOT available under Basel 3.1.
-
-        Regulatory Reference: CRR Art. 153, 501
+        Note: Neither adjustment available under Basel 3.1
         """
-        ead = 3_000_000.0
-        pd = 0.02  # 2.00%
-        lgd = 0.45
-        turnover_m = 25.0  # £25m
-        maturity = 2.5
+        fixtures = load_test_fixtures
+        expected = expected_outputs_dict["CRR-B5"]
 
-        # SME correlation adjustment
-        base_correlation = calculate_corporate_correlation(pd)
-        sme_adjustment = 0.04 * (1 - (turnover_m - 5) / 45)
-        sme_correlation = max(base_correlation - sme_adjustment, 0.03)
+        loan = fixtures.get_loan("LOAN_CORP_SME_003")
+        counterparty = fixtures.get_counterparty("CORP_SME_003")
 
-        k = calculate_irb_k(pd, lgd, sme_correlation, maturity)
-        rw = k * 12.5
-        rwa_before_sf = ead * rw
+        # TODO: Run through production calculator
+        # Verify supporting factor is applied
+        # assert result.supporting_factor == pytest.approx(0.7619, rel=0.001)
 
-        # SME supporting factor
-        sme_factor = 0.7619
-        expected_rwa = rwa_before_sf * sme_factor
-
-        pytest.skip("Implementation not yet complete")
-
-    # =========================================================================
-    # CRR-B6: PD Floor Binding
-    # =========================================================================
-
-    def test_crr_b6_pd_floor_binding(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_b6_corporate_at_sme_threshold(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-B6: PD floor is binding when internal PD < 0.03%.
+        CRR-B6: Corporate at EUR 50m SME threshold boundary.
 
-        Hand calculation:
-        - EAD: £5,000,000
-        - PD (internal): 0.01%
-        - PD (floored): max(0.01%, 0.03%) = 0.03%
-        - LGD: 45%
-        - Maturity: 2.0 years
+        Input: £4m loan, PD 1.00%, turnover EUR 50m
+        Expected: No firm size adjustment (at boundary)
 
-        CRR uses single 0.03% floor for all exposure classes.
-        Basel 3.1 uses differentiated floors (0.03%/0.05%/0.10%).
-
-        Regulatory Reference: CRR Art. 153, 163
+        Threshold: Turnover < EUR 50m qualifies for adjustment
+        At exactly EUR 50m: No adjustment applies
         """
-        ead = 5_000_000.0
-        pd_internal = 0.0001  # 0.01%
-        pd_floor = 0.0003  # 0.03%
-        pd_floored = max(pd_internal, pd_floor)
-        lgd = 0.45
-        maturity = 2.0
+        expected = expected_outputs_dict["CRR-B6"]
 
-        assert pd_floored == pd_floor  # Floor is binding
+        # TODO: Run through production calculator
 
-        correlation = calculate_corporate_correlation(pd_floored)
-        k = calculate_irb_k(pd_floored, lgd, correlation, maturity)
-        expected_rw = k * 12.5
-        expected_rwa = ead * expected_rw
 
-        pytest.skip("Implementation not yet complete")
+class TestCRRGroupB_ParameterizedValidation:
+    """
+    Parametrized tests to validate expected outputs structure.
+    These tests run without the production calculator.
+    """
 
-    # =========================================================================
-    # CRR-B7: Retail F-IRB (No Maturity Adjustment)
-    # =========================================================================
+    def test_all_crr_b_scenarios_exist(
+        self,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """Verify all CRR-B scenarios exist in expected outputs."""
+        expected_ids = [f"CRR-B{i}" for i in range(1, 7)]
+        for scenario_id in expected_ids:
+            assert scenario_id in expected_outputs_dict, (
+                f"Missing expected output for {scenario_id}"
+            )
 
-    def test_crr_b7_retail_firb_no_maturity_adjustment(self, crr_config):
-        """
-        CRR-B7: Retail exposures do not have maturity adjustment.
+    def test_all_crr_b_scenarios_use_firb_approach(
+        self,
+        crr_b_scenarios: list[dict[str, Any]],
+    ) -> None:
+        """Verify all CRR-B scenarios use F-IRB approach."""
+        for scenario in crr_b_scenarios:
+            assert scenario["approach"] == "F-IRB", (
+                f"Scenario {scenario['scenario_id']} should use F-IRB approach, "
+                f"got {scenario['approach']}"
+            )
 
-        Hand calculation:
-        - EAD: £200,000
-        - PD: 1.50%
-        - LGD: 45%
-        - Maturity: Not applied for retail
+    def test_crr_b_scenarios_have_irb_parameters(
+        self,
+        crr_b_scenarios: list[dict[str, Any]],
+    ) -> None:
+        """Verify all CRR-B scenarios have required IRB parameters."""
+        for scenario in crr_b_scenarios:
+            assert scenario["pd"] is not None, (
+                f"Scenario {scenario['scenario_id']} missing PD"
+            )
+            assert scenario["lgd"] is not None, (
+                f"Scenario {scenario['scenario_id']} missing LGD"
+            )
 
-        Retail uses different correlation function:
-        R = 0.03 × exp_factor + 0.16 × (1 - exp_factor)
+    def test_crr_b_scenarios_have_expected_loss(
+        self,
+        crr_b_scenarios: list[dict[str, Any]],
+    ) -> None:
+        """Verify all CRR-B scenarios have expected loss calculated."""
+        for scenario in crr_b_scenarios:
+            assert scenario["expected_loss"] is not None, (
+                f"Scenario {scenario['scenario_id']} missing expected loss"
+            )
+            # EL = PD × LGD × EAD
+            expected_el = scenario["pd"] * scenario["lgd"] * scenario["ead"]
+            assert scenario["expected_loss"] == pytest.approx(expected_el, rel=0.01), (
+                f"Scenario {scenario['scenario_id']} EL mismatch"
+            )
 
-        Regulatory Reference: CRR Art. 153, 154
-        """
-        ead = 200_000.0
-        pd = 0.015  # 1.50%
-        lgd = 0.45
+    def test_crr_b_supervisory_lgd_values(
+        self,
+        crr_b_scenarios: list[dict[str, Any]],
+    ) -> None:
+        """Verify F-IRB scenarios use correct supervisory LGD values."""
+        for scenario in crr_b_scenarios:
+            lgd = scenario["lgd"]
+            # F-IRB uses supervisory LGDs: 45% or 75%
+            assert lgd in [0.45, 0.75], (
+                f"Scenario {scenario['scenario_id']} has non-supervisory LGD: {lgd}"
+            )
 
-        # Retail correlation (different formula)
-        exp_factor = (1 - math.exp(-35 * pd)) / (1 - math.exp(-35))
-        retail_correlation = 0.03 * exp_factor + 0.16 * (1 - exp_factor)
-
-        # No maturity adjustment for retail (MA = 1.0)
-        g_pd = norm.ppf(pd)
-        g_999 = norm.ppf(0.999)
-        conditional_pd = norm.cdf(
-            (math.sqrt(1 / (1 - retail_correlation)) * g_pd) +
-            (math.sqrt(retail_correlation / (1 - retail_correlation)) * g_999)
+    def test_crr_b5_has_sme_supporting_factor(
+        self,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """Verify CRR-B5 (SME with both adjustments) has supporting factor."""
+        scenario = expected_outputs_dict["CRR-B5"]
+        assert scenario["supporting_factor"] == pytest.approx(0.7619, rel=0.001), (
+            "CRR-B5 should have SME supporting factor 0.7619"
         )
-        k = lgd * conditional_pd - pd * lgd  # No maturity adjustment
-
-        expected_rw = k * 12.5
-        expected_rwa = ead * expected_rw
-
-        pytest.skip("Implementation not yet complete")
-
-    # =========================================================================
-    # CRR-B8: Long Maturity (5 Year Cap)
-    # =========================================================================
-
-    def test_crr_b8_long_maturity_5y_cap(self, crr_config):
-        """
-        CRR-B8: Maturity is capped at 5 years.
-
-        Hand calculation:
-        - EAD: £8,000,000
-        - PD: 0.80%
-        - LGD: 45%
-        - Maturity (raw): 7.0 years
-        - Maturity (capped): min(7.0, 5.0) = 5.0 years
-
-        Regulatory Reference: CRR Art. 153, 162
-        """
-        ead = 8_000_000.0
-        pd = 0.008  # 0.80%
-        lgd = 0.45
-        maturity_raw = 7.0
-        maturity_capped = min(maturity_raw, 5.0)
-
-        assert maturity_capped == 5.0  # Cap is binding
-
-        correlation = calculate_corporate_correlation(pd)
-        k = calculate_irb_k(pd, lgd, correlation, maturity_capped)
-        expected_rw = k * 12.5
-        expected_rwa = ead * expected_rw
-
-        pytest.skip("Implementation not yet complete")
-
-
-class TestCRRGroupB_EdgeCases:
-    """Edge case tests for CRR F-IRB calculations."""
-
-    def test_crr_b_maturity_at_1y_floor(self):
-        """Edge case: Maturity at exactly 1 year (floor)."""
-        maturity = 1.0
-        expected_maturity_used = 1.0
-        pytest.skip("Implementation not yet complete")
-
-    def test_crr_b_maturity_below_1y_floored(self):
-        """Edge case: Maturity below 1 year is floored to 1 year."""
-        maturity_raw = 0.5
-        expected_maturity_used = 1.0
-        pytest.skip("Implementation not yet complete")
-
-    def test_crr_b_pd_at_floor(self):
-        """Edge case: PD at exactly 0.03% should not be adjusted."""
-        pd = 0.0003  # Exactly at floor
-        pd_floored = max(pd, 0.0003)
-        assert pd_floored == pd
-        pytest.skip("Implementation not yet complete")
-
-    def test_crr_b_defaulted_exposure(self):
-        """Edge case: Defaulted exposure (PD = 100%)."""
-        pd = 1.0
-        # Defaulted exposures have special treatment
-        pytest.skip("Implementation not yet complete")

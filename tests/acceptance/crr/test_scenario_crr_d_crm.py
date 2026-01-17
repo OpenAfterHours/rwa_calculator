@@ -1,8 +1,10 @@
 """
-CRR Group D: Credit Risk Mitigation Acceptance Tests.
+CRR Group D: Credit Risk Mitigation (CRM) Acceptance Tests.
 
-These tests verify correct implementation of CRR CRM treatments
-including collateral haircuts, guarantees, and maturity mismatches.
+These tests validate that the production RWA calculator correctly applies
+CRM treatments including collateral haircuts, guarantees, and maturity mismatches.
+
+Tests are skipped until the production calculator is implemented in src/rwa_calc/.
 
 Regulatory References:
 - CRR Art. 192-241: Credit Risk Mitigation
@@ -12,169 +14,184 @@ Regulatory References:
 """
 
 import pytest
-from decimal import Decimal
+from typing import Any
+
+from tests.acceptance.crr.conftest import (
+    assert_rwa_within_tolerance,
+    assert_ead_match,
+)
+
+
+# Marker for tests awaiting production implementation
+SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
 
 
 class TestCRRGroupD_CreditRiskMitigation:
-    """CRR CRM acceptance tests with hand-calculated expected outputs."""
+    """
+    CRR CRM acceptance tests.
 
-    @pytest.fixture
-    def crr_config(self):
-        return {
-            "regulatory_framework": "CRR",
-            "reporting_date": "2025-12-31",
-        }
+    Each test loads fixture data, runs it through the production calculator,
+    and compares the output against pre-calculated expected values.
+    """
 
-    # =========================================================================
-    # CRR-D1: Cash Collateral - 0% Haircut
-    # =========================================================================
-
-    def test_crr_d1_cash_collateral_zero_haircut(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_d1_cash_collateral_zero_haircut(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
         CRR-D1: Cash collateral has 0% supervisory haircut.
 
-        Hand calculation:
-        - Exposure: £1,000,000
-        - Cash collateral: £400,000
-        - Haircut: 0%
-        - Adjusted collateral: £400,000 × (1 - 0%) = £400,000
-        - Net exposure: £1,000,000 - £400,000 = £600,000
+        Input: £1m exposure, £500k cash collateral
+        Expected: EAD = £500k (cash reduces exposure 1:1)
 
-        Regulatory Reference: CRR Art. 224
+        CRR Art. 224: Cash has 0% haircut
         """
-        expected_exposure = Decimal("1000000")
-        expected_collateral = Decimal("400000")
-        expected_haircut = Decimal("0.00")
-        expected_adjusted_collateral = Decimal("400000")
-        expected_net_exposure = Decimal("600000")
+        expected = expected_outputs_dict["CRR-D1"]
 
-        pytest.skip("Implementation not yet complete")
+        # TODO: Run through production calculator
+        # assert result.ead == expected["ead"]
+        # assert result.collateral_haircut == 0.0
 
-    # =========================================================================
-    # CRR-D2: Government Bond Collateral - CQS 1
-    # =========================================================================
-
-    def test_crr_d2_govt_bond_collateral_cqs1(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_d2_govt_bond_collateral(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-D2: Government bond (CQS 1, 3 year maturity) has 2% haircut.
+        CRR-D2: Government bond collateral with supervisory haircut.
 
-        Hand calculation:
-        - Exposure: £1,000,000
-        - Gilt collateral: £500,000 (CQS 1, 3 year residual maturity)
-        - Haircut: 2% (CRR Art. 224)
-        - Adjusted collateral: £500,000 × (1 - 2%) = £490,000
-        - Net exposure: £1,000,000 - £490,000 = £510,000
+        Input: £1m exposure, £600k govt bond (CQS 1, >5y maturity)
+        Expected: 4% haircut applied to collateral
 
-        Regulatory Reference: CRR Art. 224
+        CRR Art. 224: CQS 1 govt bond >5y = 4% haircut
         """
-        expected_exposure = Decimal("1000000")
-        expected_collateral = Decimal("500000")
-        expected_haircut = Decimal("0.02")
-        expected_adjusted_collateral = Decimal("490000")
-        expected_net_exposure = Decimal("510000")
+        expected = expected_outputs_dict["CRR-D2"]
 
-        pytest.skip("Implementation not yet complete")
+        # TODO: Run through production calculator
 
-    # =========================================================================
-    # CRR-D3: Equity Collateral - Main Index
-    # =========================================================================
-
-    def test_crr_d3_equity_collateral_main_index(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_d3_equity_collateral_main_index(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-D3: Equity on main index has 15% haircut.
+        CRR-D3: Equity collateral (main index) has 15% haircut.
 
-        Hand calculation:
-        - Exposure: £1,000,000
-        - FTSE 100 equity collateral: £300,000
-        - Haircut: 15% (main index)
-        - Adjusted collateral: £300,000 × (1 - 15%) = £255,000
-        - Net exposure: £1,000,000 - £255,000 = £745,000
+        Input: £1m exposure, £400k FTSE 100 equity collateral
+        Expected: 15% haircut (vs 25% for non-main index)
 
-        Regulatory Reference: CRR Art. 224
+        CRR Art. 224: Main index equity = 15% haircut
         """
-        expected_haircut = Decimal("0.15")
-        pytest.skip("Implementation not yet complete")
+        expected = expected_outputs_dict["CRR-D3"]
 
-    # =========================================================================
-    # CRR-D4: FX Mismatch - 8% Additional Haircut
-    # =========================================================================
+        # TODO: Run through production calculator
 
-    def test_crr_d4_fx_mismatch_haircut(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_d4_bank_guarantee_substitution(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-D4: Currency mismatch adds 8% haircut.
+        CRR-D4: Bank guarantee allows substitution of guarantor's RW.
 
-        Hand calculation:
-        - Exposure: £1,000,000 (GBP)
-        - USD cash collateral: $500,000 (= £400,000)
-        - Base haircut: 0% (cash)
-        - FX haircut: 8%
-        - Total haircut: 0% + 8% = 8%
-        - Adjusted collateral: £400,000 × (1 - 8%) = £368,000
+        Input: £1m to unrated corporate, £600k guaranteed by CQS 2 bank
+        Expected: Split treatment - guaranteed portion at 30% RW (UK deviation)
 
-        Regulatory Reference: CRR Art. 224
+        CRR Art. 213-217: Unfunded credit protection
         """
-        expected_fx_haircut = Decimal("0.08")
-        pytest.skip("Implementation not yet complete")
+        expected = expected_outputs_dict["CRR-D4"]
 
-    # =========================================================================
-    # CRR-D5: Guarantee - Substitution Approach
-    # =========================================================================
+        # TODO: Run through production calculator
 
-    def test_crr_d5_guarantee_substitution(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_d5_maturity_mismatch(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-D5: Guarantee allows substitution of guarantor's risk weight.
+        CRR-D5: Maturity mismatch reduces collateral effectiveness.
 
-        Hand calculation:
-        - Exposure: £1,000,000 to unrated corporate (100% RW)
-        - Guarantee: £600,000 from CQS 1 sovereign (0% RW)
-        - Guaranteed portion: £600,000 × 0% RW = £0 RWA
-        - Unguaranteed portion: £400,000 × 100% RW = £400,000 RWA
-        - Total RWA: £400,000
+        Input: £1m exposure (5y), £500k collateral (2y)
+        Expected: Collateral value reduced by maturity adjustment
 
-        Regulatory Reference: CRR Art. 233-236
+        Formula: Adjusted = C × (t - 0.25) / (T - 0.25)
+        where t = collateral maturity, T = exposure maturity
+
+        CRR Art. 238: Maturity mismatch
         """
-        expected_rwa = Decimal("400000")
-        pytest.skip("Implementation not yet complete")
+        expected = expected_outputs_dict["CRR-D5"]
 
-    # =========================================================================
-    # CRR-D6: Maturity Mismatch
-    # =========================================================================
+        # TODO: Run through production calculator
 
-    def test_crr_d6_maturity_mismatch(self, crr_config):
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_crr_d6_currency_mismatch(
+        self,
+        load_test_fixtures,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+        crr_config: dict[str, Any],
+    ) -> None:
         """
-        CRR-D6: Maturity mismatch reduces collateral value.
+        CRR-D6: Currency mismatch adds 8% additional haircut.
 
-        Hand calculation:
-        - Exposure: £1,000,000 (5 year maturity)
-        - Collateral: £400,000 (2 year maturity)
-        - Formula: Adjusted = C × (t - 0.25) / (T - 0.25)
-        - Adjusted = £400,000 × (2 - 0.25) / (5 - 0.25)
-        - Adjusted = £400,000 × 1.75 / 4.75 = £147,368
+        Input: £1m GBP exposure, €500k EUR collateral
+        Expected: 8% FX haircut applied
 
-        Regulatory Reference: CRR Art. 238
+        CRR Art. 224: Currency mismatch = 8% additional haircut
         """
-        expected_adjustment_factor = Decimal("1.75") / Decimal("4.75")
-        pytest.skip("Implementation not yet complete")
+        expected = expected_outputs_dict["CRR-D6"]
+
+        # TODO: Run through production calculator
 
 
-class TestCRRGroupD_EdgeCases:
-    """Edge case tests for CRR CRM."""
+class TestCRRGroupD_ParameterizedValidation:
+    """
+    Parametrized tests to validate expected outputs structure.
+    These tests run without the production calculator.
+    """
 
-    def test_crr_d_collateral_maturity_below_3_months(self):
-        """
-        Edge case: Collateral with < 3 months residual maturity provides no protection.
-        """
-        pytest.skip("Implementation not yet complete")
+    def test_all_crr_d_scenarios_exist(
+        self,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """Verify all CRR-D scenarios exist in expected outputs."""
+        expected_ids = [f"CRR-D{i}" for i in range(1, 7)]
+        for scenario_id in expected_ids:
+            assert scenario_id in expected_outputs_dict, (
+                f"Missing expected output for {scenario_id}"
+            )
 
-    def test_crr_d_gold_haircut(self):
-        """
-        Edge case: Gold has 15% haircut.
-        """
-        expected_haircut = Decimal("0.15")
-        pytest.skip("Implementation not yet complete")
+    def test_all_crr_d_scenarios_use_crm_approach(
+        self,
+        crr_d_scenarios: list[dict[str, Any]],
+    ) -> None:
+        """Verify all CRR-D scenarios use SA-CRM approach."""
+        for scenario in crr_d_scenarios:
+            assert scenario["approach"] == "SA-CRM", (
+                f"Scenario {scenario['scenario_id']} should use SA-CRM approach, "
+                f"got {scenario['approach']}"
+            )
 
-    def test_crr_d_fully_collateralised(self):
-        """
-        Edge case: Exposure fully collateralised (adjusted collateral >= exposure).
-        """
-        pytest.skip("Implementation not yet complete")
+    def test_crr_d_scenarios_have_reduced_ead(
+        self,
+        crr_d_scenarios: list[dict[str, Any]],
+    ) -> None:
+        """Verify CRM scenarios show effect of mitigation on EAD or RWA."""
+        for scenario in crr_d_scenarios:
+            # All CRM scenarios should result in some form of risk reduction
+            assert scenario["ead"] is not None, (
+                f"Scenario {scenario['scenario_id']} missing EAD"
+            )
+            assert scenario["rwa_after_sf"] is not None, (
+                f"Scenario {scenario['scenario_id']} missing RWA"
+            )

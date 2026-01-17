@@ -127,14 +127,35 @@ CRR_CCF: dict[str, Decimal] = {
 # SUPPORTING FACTORS (CRR Art. 501)
 # =============================================================================
 
-# SME supporting factor (CRR Art. 501)
-# Applied to exposures to SMEs (turnover < EUR 50m / GBP 44m)
+# SME supporting factor - Tiered approach (CRR2 Art. 501)
+# The SME supporting factor uses a tiered structure based on total exposure:
+#   - Exposures up to €2.5m (£2.2m): factor of 0.7619 (23.81% reduction)
+#   - Exposures above €2.5m (£2.2m): factor of 0.85 (15% reduction)
+#
+# Formula: SME_factor = [min(E, €2.5m) × 0.7619 + max(E - €2.5m, 0) × 0.85] / E
+#
+# This means the effective factor ranges from 0.7619 (small exposures) to
+# approaching 0.85 (very large exposures).
+#
+# Reference: CRR2 Art. 501 (EU 2019/876 amending EU 575/2013)
+
+# Tier 1: Exposures up to threshold
+CRR_SME_SUPPORTING_FACTOR_TIER1: Decimal = Decimal("0.7619")
+
+# Tier 2: Portion of exposures above threshold
+CRR_SME_SUPPORTING_FACTOR_TIER2: Decimal = Decimal("0.85")
+
+# Exposure threshold for tiered treatment
+CRR_SME_EXPOSURE_THRESHOLD_EUR: Decimal = Decimal("2500000")    # EUR 2.5m
+CRR_SME_EXPOSURE_THRESHOLD_GBP: Decimal = Decimal("2200000")    # GBP 2.2m (approx)
+
+# Legacy constant for backwards compatibility (use calculate_sme_supporting_factor instead)
 CRR_SME_SUPPORTING_FACTOR: Decimal = Decimal("0.7619")
 
 # Infrastructure supporting factor (CRR Art. 501a)
 CRR_INFRASTRUCTURE_SUPPORTING_FACTOR: Decimal = Decimal("0.75")
 
-# SME threshold
+# SME turnover threshold (for eligibility, not the exposure threshold)
 CRR_SME_TURNOVER_THRESHOLD_EUR: Decimal = Decimal("50000000")   # EUR 50m
 CRR_SME_TURNOVER_THRESHOLD_GBP: Decimal = Decimal("44000000")   # GBP 44m (approx)
 

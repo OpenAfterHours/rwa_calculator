@@ -91,6 +91,12 @@ def crr_e_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
+def crr_f_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get CRR-F (Supporting Factors) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "CRR-F")
+
+
+@pytest.fixture(scope="session")
 def crr_g_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
     """Get CRR-G (Provisions) scenarios."""
     return get_scenarios_by_group(expected_outputs_df, "CRR-G")
@@ -116,9 +122,17 @@ def crr_config() -> dict[str, Any]:
         "reporting_date": "2025-12-31",
         "apply_sme_supporting_factor": True,
         "apply_infrastructure_factor": True,
+        # SME eligibility threshold (turnover)
         "sme_turnover_threshold_gbp": Decimal("44000000"),
-        "sme_supporting_factor": Decimal("0.7619"),
+        "sme_turnover_threshold_eur": Decimal("50000000"),
+        # SME supporting factor - tiered approach (CRR2 Art. 501)
+        "sme_exposure_threshold_gbp": Decimal("2200000"),  # £2.2m
+        "sme_exposure_threshold_eur": Decimal("2500000"),  # €2.5m
+        "sme_supporting_factor_tier1": Decimal("0.7619"),  # Up to threshold
+        "sme_supporting_factor_tier2": Decimal("0.85"),    # Above threshold
+        # Infrastructure factor (not tiered)
         "infrastructure_factor": Decimal("0.75"),
+        # IRB parameters
         "pd_floor": Decimal("0.0003"),  # 0.03% single floor
         "maturity_floor": Decimal("1.0"),
         "maturity_cap": Decimal("5.0"),

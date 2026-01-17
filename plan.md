@@ -22,8 +22,8 @@ This ensures we can validate against the current regulatory framework before ext
 | **IRB Scope** | All exposure classes permitted | Excludes central govt exposures, equity, large/mid corporates (revenue >€500m), CIUs |
 | **PD Floors** | 0.03% (all) | Differentiated: 0.03% corp, 0.05% retail, 0.10% QRRE |
 | **LGD Floors (A-IRB)** | Supervisory LGDs for F-IRB only | New A-IRB LGD floors (0%-25% by collateral) |
-| **SME Supporting Factor** | Applies (0.7619 factor) | Withdrawn |
-| **Infrastructure Supporting Factor** | Applies (0.75 factor) | Withdrawn |
+| **SME Supporting Factor** | Tiered: 0.7619 (≤€2.5m) / 0.85 (>€2.5m) | Withdrawn |
+| **Infrastructure Supporting Factor** | Applies (0.75 factor, flat) | Withdrawn |
 | **Retail Threshold** | €1m aggregate exposure | £880k aggregate exposure |
 | **SA Risk Weights** | CRR Tables | Revised tables (more granular LTV bands, due diligence requirements) |
 | **Real Estate** | Whole loan approach | Split by LTV bands, ADC treatment |
@@ -81,13 +81,14 @@ Tests are structured as stub tests that skip until the production calculator is 
 | `test_scenario_crr_c_airb.py` | CRR-C (A-IRB) | 3 | 4 | Complete |
 | `test_scenario_crr_d_crm.py` | CRR-D (CRM) | 6 | 3 | Complete |
 | `test_scenario_crr_e_slotting.py` | CRR-E (Slotting) | 4 | 5 | Complete |
+| `test_scenario_crr_f_supporting_factors.py` | CRR-F (Supporting Factors) | 7 | 8 | Complete |
 | `test_scenario_crr_g_provisions.py` | CRR-G (Provisions) | 3 | 4 | Complete |
 | `test_scenario_crr_h_complex.py` | CRR-H (Complex) | 4 | 4 | Complete |
 | `conftest.py` | Shared fixtures | - | - | Complete |
 
 **Test Results:**
-- **30 validation tests PASS** - Verify expected outputs structure is correct
-- **46 stub tests SKIP** - Await production calculator implementation (Phase 3)
+- **38 validation tests PASS** - Verify expected outputs structure is correct
+- **45 stub tests SKIP** - Await production calculator implementation (Phase 3)
 
 **Test Pattern:**
 Each acceptance test follows the pattern:
@@ -160,6 +161,28 @@ Run tests: `uv run pytest tests/acceptance/crr/ -v`
 
 **Note**: CRR has same RW for Strong and Good (both 70%). Basel 3.1 differentiates (50%/70%).
 
+#### CRR-F: Supporting Factors - COMPLETE
+
+| Scenario ID | Description | Status |
+|-------------|-------------|--------|
+| CRR-F1 | SME Tier 1 only - small exposure (£2m ≤ £2.2m) | Complete |
+| CRR-F2 | SME blended tiers - medium exposure (£4m) | Complete |
+| CRR-F3 | SME Tier 2 dominant - large exposure (£10m) | Complete |
+| CRR-F4 | SME retail with Tier 1 factor (£500k) | Complete |
+| CRR-F5 | Infrastructure supporting factor (0.75) | Complete |
+| CRR-F6 | Large corporate - no SME factor (turnover > £44m) | Complete |
+| CRR-F7 | At exposure threshold boundary (£2.2m exactly) | Complete |
+
+**CRR SME Supporting Factor - Tiered Approach (CRR2 Art. 501):**
+- **Tier 1**: Exposures up to €2.5m (£2.2m): factor of 0.7619 (23.81% RWA reduction)
+- **Tier 2**: Exposures above €2.5m (£2.2m): factor of 0.85 (15% RWA reduction)
+
+**Formula**: `factor = [min(E, threshold) × 0.7619 + max(E - threshold, 0) × 0.85] / E`
+
+This tiered approach means smaller SME exposures get proportionally more capital relief than larger exposures.
+
+**Note**: Infrastructure factor (0.75) is flat, not tiered. Both factors are NOT available under Basel 3.1.
+
 #### CRR-G: Provisions & Impairments - COMPLETE
 
 | Scenario ID | Description | Status |
@@ -196,6 +219,7 @@ Run tests: `uv run pytest tests/acceptance/crr/ -v`
 | CRR-C A-IRB Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_c_airb.py` | Complete |
 | CRR-D CRM Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_d_crm.py` | Complete |
 | CRR-E Slotting Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_e_slotting.py` | Complete |
+| CRR-F Supporting Factors | `workbooks/crr_expected_outputs/scenarios/group_crr_f_supporting_factors.py` | Complete |
 | CRR-G Provision Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_g_provisions.py` | Complete |
 | CRR-H Complex Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_h_complex.py` | Complete |
 
@@ -203,10 +227,15 @@ Run tests: `uv run pytest tests/acceptance/crr/ -v`
 
 1. **1.06 Scaling Factor**: Implemented in IRB formulas - applies to ALL exposure classes under CRR (removed in Basel 3.1)
 2. **SME Firm Size Adjustment**: R_adjusted = R - 0.04 × (1 - (max(S, 5) - 5) / 45) for turnover < EUR 50m
-3. **SME Supporting Factor**: 0.7619 multiplier on RWA (CRR Art. 501) - NOT available under Basel 3.1
-4. **PD Floor**: Single 0.03% floor for all exposure classes (Basel 3.1 has differentiated floors)
-5. **F-IRB LGDs**: 45% unsecured senior, 75% subordinated
-6. **Maturity**: Floor 1 year, Cap 5 years
+3. **SME Supporting Factor (Tiered)**: Per CRR2 Art. 501:
+   - Tier 1: Factor 0.7619 for exposures ≤ €2.5m (£2.2m)
+   - Tier 2: Factor 0.85 for exposures > €2.5m (£2.2m)
+   - Effective factor calculated as: `[min(E, threshold) × 0.7619 + max(E - threshold, 0) × 0.85] / E`
+   - NOT available under Basel 3.1
+4. **Infrastructure Supporting Factor**: 0.75 (flat, not tiered) - NOT available under Basel 3.1
+5. **PD Floor**: Single 0.03% floor for all exposure classes (Basel 3.1 has differentiated floors)
+6. **F-IRB LGDs**: 45% unsecured senior, 75% subordinated
+7. **Maturity**: Floor 1 year, Cap 5 years
 
 ### Expected Output Files Generated
 
@@ -933,6 +962,7 @@ tests/
 │   │   ├── test_scenario_crr_c_airb.py
 │   │   ├── test_scenario_crr_d_crm.py
 │   │   ├── test_scenario_crr_e_slotting.py
+│   │   ├── test_scenario_crr_f_supporting_factors.py
 │   │   ├── test_scenario_crr_g_provisions.py
 │   │   └── test_scenario_crr_h_complex.py
 │   └── basel31/
@@ -1002,6 +1032,7 @@ workbooks/
 │       ├── group_crr_c_airb.py
 │       ├── group_crr_d_crm.py
 │       ├── group_crr_e_slotting.py
+│       ├── group_crr_f_supporting_factors.py
 │       ├── group_crr_g_provisions.py
 │       └── group_crr_h_complex.py
 ```
@@ -1170,17 +1201,19 @@ workbooks/
 - [x] Implement correlation calculation with SME firm size adjustment
 - [x] Implement CRR SA risk weights (Art. 112-134)
 - [x] Implement CRR CCF tables (Art. 111)
-- [x] Implement CRR SME supporting factor (Art. 501)
+- [x] Implement CRR SME supporting factor - tiered approach (CRR2 Art. 501)
+- [x] Implement CRR infrastructure supporting factor (Art. 501a)
 - [x] Create CRR-A (SA) scenarios (12 scenarios)
 - [x] Create CRR-B (F-IRB) scenarios (7 scenarios - wholesale only)
 - [x] Create CRR-C (A-IRB) scenarios (3 scenarios)
 - [x] Create CRR-D (CRM) scenarios (6 scenarios)
 - [x] Create CRR-E (Slotting) scenarios (4 scenarios)
+- [x] Create CRR-F (Supporting Factors) scenarios (7 scenarios)
 - [x] Create CRR-G (Provisions) scenarios (3 scenarios)
 - [x] Create CRR-H (Complex/Combined) scenarios (4 scenarios)
 - [x] Generate expected output files (CSV, JSON, Parquet)
 - [x] Create fixture loader for Marimo workbooks
-- [x] Create pytest acceptance tests for CRR scenarios (38 scenarios, 76 total tests)
+- [x] Create pytest acceptance tests for CRR scenarios (45 scenarios, 83 total tests)
 - [x] Integrate all scenario groups into main workbook output generator
 
 ### In Progress

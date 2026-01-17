@@ -39,7 +39,12 @@ from workbooks.crr_expected_outputs.calculations.crr_ccf import (
 )
 from workbooks.crr_expected_outputs.calculations.crr_supporting_factors import (
     apply_sme_supporting_factor,
+    apply_sme_supporting_factor_simple,
+    calculate_sme_supporting_factor,
     is_sme_eligible,
+)
+from workbooks.crr_expected_outputs.scenarios.group_crr_f_supporting_factors import (
+    generate_crr_f_scenarios as generate_crr_f_raw_scenarios,
 )
 from workbooks.crr_expected_outputs.calculations.crr_irb import (
     apply_pd_floor,
@@ -409,13 +414,13 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
     turnover_a10 = Decimal("30000000")  # £30m
     rw_a10 = get_corporate_rw(None)
     rwa_before_sf_a10 = calculate_sa_rwa(ead_a10, rw_a10)
-    rwa_after_sf_a10, sf_applied_a10, sf_desc_a10 = apply_sme_supporting_factor(
+    rwa_after_sf_a10, sf_a10, sf_applied_a10, sf_desc_a10 = apply_sme_supporting_factor(
         rwa=rwa_before_sf_a10,
+        total_exposure=ead_a10,
         is_sme=True,
         turnover=turnover_a10,
         currency="GBP",
     )
-    sf_a10 = Decimal("0.7619") if sf_applied_a10 else Decimal("1.0")
 
     scenarios.append(CRRScenarioOutput(
         scenario_id="CRR-A10",
@@ -448,13 +453,13 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
     turnover_a11 = Decimal("750000")
     rw_a11 = get_retail_rw()
     rwa_before_sf_a11 = calculate_sa_rwa(ead_a11, rw_a11)
-    rwa_after_sf_a11, sf_applied_a11, sf_desc_a11 = apply_sme_supporting_factor(
+    rwa_after_sf_a11, sf_a11, sf_applied_a11, sf_desc_a11 = apply_sme_supporting_factor(
         rwa=rwa_before_sf_a11,
+        total_exposure=ead_a11,
         is_sme=True,
         turnover=turnover_a11,
         currency="GBP",
     )
-    sf_a11 = Decimal("0.7619") if sf_applied_a11 else Decimal("1.0")
 
     scenarios.append(CRRScenarioOutput(
         scenario_id="CRR-A11",
@@ -1284,6 +1289,48 @@ def generate_crr_e_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
+def generate_crr_f_scenarios(fixtures) -> list[CRRScenarioOutput]:
+    """
+    Generate CRR Group F (Supporting Factors) scenario outputs.
+
+    Demonstrates the tiered SME supporting factor (CRR2 Art. 501):
+    - Exposures up to €2.5m (£2.2m): factor of 0.7619
+    - Exposures above €2.5m (£2.2m): factor of 0.85
+    """
+    # Get raw scenarios from dedicated module
+    raw_scenarios = generate_crr_f_raw_scenarios()
+
+    # Convert to CRRScenarioOutput format
+    scenarios = []
+    for raw in raw_scenarios:
+        scenarios.append(CRRScenarioOutput(
+            scenario_id=raw.scenario_id,
+            scenario_group=raw.scenario_group,
+            description=raw.description,
+            regulatory_framework=raw.regulatory_framework,
+            approach=raw.approach,
+            exposure_class=raw.exposure_class,
+            exposure_reference=raw.exposure_reference,
+            counterparty_reference=raw.counterparty_reference,
+            ead=raw.ead,
+            pd=None,
+            lgd=None,
+            maturity=None,
+            cqs=None,
+            ltv=None,
+            turnover=raw.turnover,
+            risk_weight=raw.risk_weight,
+            rwa_before_sf=raw.rwa_before_sf,
+            supporting_factor=raw.supporting_factor,
+            rwa_after_sf=raw.rwa_after_sf,
+            expected_loss=None,
+            regulatory_reference=raw.regulatory_reference,
+            calculation_notes=raw.calculation_notes,
+        ))
+
+    return scenarios
+
+
 def generate_crr_g_scenarios(fixtures) -> list[CRRScenarioOutput]:
     """Generate CRR Group G (Provisions) scenario outputs."""
     scenarios = []
@@ -1494,7 +1541,13 @@ def generate_crr_h_scenarios(fixtures) -> list[CRRScenarioOutput]:
     turnover_h3 = Decimal("25000000")  # £25m
     rw_h3 = get_corporate_rw(None)  # 100%
     rwa_before_sf_h3 = ead_h3 * rw_h3
-    rwa_after_sf_h3, sf_applied_h3, _ = apply_sme_supporting_factor(rwa_before_sf_h3, True, turnover_h3, "GBP")
+    rwa_after_sf_h3, sf_h3, sf_applied_h3, _ = apply_sme_supporting_factor(
+        rwa=rwa_before_sf_h3,
+        total_exposure=ead_h3,
+        is_sme=True,
+        turnover=turnover_h3,
+        currency="GBP",
+    )
     effective_rw_h3 = rwa_after_sf_h3 / ead_h3
 
     scenarios.append(CRRScenarioOutput(
@@ -1515,11 +1568,11 @@ def generate_crr_h_scenarios(fixtures) -> list[CRRScenarioOutput]:
         turnover=float(turnover_h3),
         risk_weight=float(rw_h3),
         rwa_before_sf=float(rwa_before_sf_h3),
-        supporting_factor=float(CRR_SME_SUPPORTING_FACTOR),
+        supporting_factor=float(sf_h3),
         rwa_after_sf=float(rwa_after_sf_h3),
         expected_loss=None,
         regulatory_reference="CRR Art. 501",
-        calculation_notes=f"Effective RW={effective_rw_h3*100:.2f}% after SME factor",
+        calculation_notes=f"Tiered SME factor: {float(sf_h3):.4f}. Effective RW={effective_rw_h3*100:.2f}%",
     ))
 
     # CRR-H4: Full CRM Chain
@@ -1593,6 +1646,10 @@ def generate_all_outputs():
     crr_e_scenarios = generate_crr_e_scenarios(fixtures)
     print(f"  Generated {len(crr_e_scenarios)} Slotting scenarios")
 
+    print("Generating CRR-F (Supporting Factors) scenarios...")
+    crr_f_scenarios = generate_crr_f_scenarios(fixtures)
+    print(f"  Generated {len(crr_f_scenarios)} Supporting Factor scenarios")
+
     print("Generating CRR-G (Provisions) scenarios...")
     crr_g_scenarios = generate_crr_g_scenarios(fixtures)
     print(f"  Generated {len(crr_g_scenarios)} Provision scenarios")
@@ -1607,6 +1664,7 @@ def generate_all_outputs():
         crr_c_scenarios +
         crr_d_scenarios +
         crr_e_scenarios +
+        crr_f_scenarios +
         crr_g_scenarios +
         crr_h_scenarios
     )
@@ -1632,11 +1690,12 @@ def generate_all_outputs():
             "CRR-C": {"name": "Advanced IRB", "count": len(crr_c_scenarios)},
             "CRR-D": {"name": "Credit Risk Mitigation", "count": len(crr_d_scenarios)},
             "CRR-E": {"name": "Specialised Lending (Slotting)", "count": len(crr_e_scenarios)},
+            "CRR-F": {"name": "Supporting Factors (Tiered SME)", "count": len(crr_f_scenarios)},
             "CRR-G": {"name": "Provisions & Impairments", "count": len(crr_g_scenarios)},
             "CRR-H": {"name": "Complex/Combined", "count": len(crr_h_scenarios)},
         },
         "key_differences_from_basel31": [
-            "SME supporting factor (0.7619) available under CRR",
+            "SME supporting factor - tiered approach: 0.7619 (≤€2.5m) / 0.85 (>€2.5m)",
             "Infrastructure supporting factor (0.75) available under CRR",
             "No output floor under CRR",
             "Residential mortgage: 35%/75% split at 80% LTV (vs granular LTV bands)",

@@ -19,12 +19,12 @@
     },
     {
       "id": "MJUe",
-      "code_hash": "9d3ebe450b3b82350c57982c6014567b",
+      "code_hash": "8743e1f342c44639b468f5d8198645e1",
       "outputs": [
         {
           "type": "data",
           "data": {
-            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"group-crr-b-crr-foundation-irb-f-irb-scenarios\">Group CRR-B: CRR Foundation IRB (F-IRB) Scenarios</h1>\n<span class=\"paragraph\">This workbook calculates expected RWA values for CRR F-IRB scenarios CRR-B1 to CRR-B8.</span>\n<span class=\"paragraph\"><strong>Regulatory Framework:</strong> CRR (Capital Requirements Regulation)\n<strong>Effective:</strong> Until 31 December 2026</span>\n<span class=\"paragraph\"><strong>Key CRR F-IRB Features:</strong></span>\n<ul>\n<li>Bank provides own PD estimates</li>\n<li>\n<span class=\"paragraph\">Supervisory LGD values (Art. 161):</span>\n<ul>\n<li>45% unsecured senior</li>\n<li>75% subordinated</li>\n<li>Reduced LGD for collateralised exposures</li>\n</ul>\n</li>\n<li>Single PD floor: 0.03% for all exposure classes</li>\n<li>Maturity adjustment: 1-5 year floor/cap</li>\n<li>SME supporting factor (0.7619) available</li>\n</ul>\n<span class=\"paragraph\"><strong>Key differences from Basel 3.1:</strong></span>\n<ul>\n<li>CRR has single 0.03% PD floor (Basel 3.1 has differentiated floors)</li>\n<li>CRR SME factor available (not in Basel 3.1)</li>\n<li>No output floor under CRR</li>\n</ul></span>"
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"group-crr-b-crr-foundation-irb-f-irb-scenarios\">Group CRR-B: CRR Foundation IRB (F-IRB) Scenarios</h1>\n<span class=\"paragraph\">This workbook calculates expected RWA values for CRR F-IRB scenarios CRR-B1 to CRR-B7.</span>\n<span class=\"paragraph\"><strong>Regulatory Framework:</strong> CRR (Capital Requirements Regulation)\n<strong>Effective:</strong> Until 31 December 2026</span>\n<span class=\"paragraph\"><strong>Key CRR F-IRB Features:</strong></span>\n<ul>\n<li>Bank provides own PD estimates</li>\n<li>\n<span class=\"paragraph\">Supervisory LGD values (Art. 161):</span>\n<ul>\n<li>45% unsecured senior</li>\n<li>75% subordinated</li>\n<li>Reduced LGD for collateralised exposures</li>\n</ul>\n</li>\n<li>Single PD floor: 0.03% for all exposure classes</li>\n<li>Maturity adjustment: 1-5 year floor/cap</li>\n<li>SME supporting factor (0.7619) available</li>\n<li>\n<span class=\"paragraph\"><strong>F-IRB only applies to wholesale exposures</strong> (corporate, institution, sovereign)</span>\n<ul>\n<li>Retail exposures must use A-IRB (with internal LGD) or Standardised Approach</li>\n</ul>\n</li>\n</ul>\n<span class=\"paragraph\"><strong>Key differences from Basel 3.1:</strong></span>\n<ul>\n<li>CRR has single 0.03% PD floor (Basel 3.1 has differentiated floors)</li>\n<li>CRR SME factor available (not in Basel 3.1)</li>\n<li>No output floor under CRR</li>\n</ul></span>"
           }
         }
       ],
@@ -256,12 +256,12 @@
     },
     {
       "id": "ROlb",
-      "code_hash": "e8325620fc9856b38c26dcb763ff5bd2",
+      "code_hash": "f419cfd9323c82c7c3562ff0752b6955",
       "outputs": [
         {
           "type": "data",
           "data": {
-            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"scenario-crr-b7-retail-f-irb-no-maturity-adjustment\">Scenario CRR-B7: Retail F-IRB (No Maturity Adjustment)</h2>\n<span class=\"paragraph\"><strong>Input:</strong> \u00a3200k retail exposure, PD 1.50%\n<strong>Expected:</strong> No maturity adjustment for retail</span>\n<span class=\"paragraph\"><strong>CRR Treatment:</strong></span>\n<ul>\n<li>Retail exposures: no maturity adjustment</li>\n<li>Different correlation function for retail</li>\n</ul>\n<span class=\"paragraph\"><strong>Reference:</strong> CRR Art. 153, 154</span></span>"
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"scenario-crr-b7-long-maturity-exposure-5y-cap\">Scenario CRR-B7: Long Maturity Exposure (5Y Cap)</h2>\n<span class=\"paragraph\"><strong>Input:</strong> \u00a38m loan with 7 year maturity (capped at 5)\n<strong>Expected:</strong> Maturity capped at 5 years</span>\n<span class=\"paragraph\"><strong>CRR Treatment (Art. 162):</strong></span>\n<ul>\n<li>Maturity floor: 1 year</li>\n<li>Maturity cap: 5 years</li>\n</ul>\n<span class=\"paragraph\"><strong>Reference:</strong> CRR Art. 153, 162</span></span>"
           }
         }
       ],
@@ -269,7 +269,7 @@
     },
     {
       "id": "qnkX",
-      "code_hash": "d9c0ab63a62991f7f22719ba589e4066",
+      "code_hash": "2a6555a0d3bc86a25b738fbb9df31e87",
       "outputs": [
         {
           "type": "data",
@@ -282,19 +282,19 @@
         {
           "type": "stream",
           "name": "stdout",
-          "text": "CRR-B7: EAD=\u00a3200,000, PD=1.50%, RWA=\u00a3183,057\n",
+          "text": "CRR-B7: EAD=\u00a38,000,000, Maturity=7.0y -> 5.0y, RWA=\u00a39,841,717\n",
           "mimetype": "text/plain"
         }
       ]
     },
     {
       "id": "TqIu",
-      "code_hash": "ea73d9983956b8f078ed61dcd5e53689",
+      "code_hash": "89c48272e1a5d50da4e7a5e6e0c88769",
       "outputs": [
         {
           "type": "data",
           "data": {
-            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"scenario-crr-b8-long-maturity-exposure-5y-cap\">Scenario CRR-B8: Long Maturity Exposure (5Y Cap)</h2>\n<span class=\"paragraph\"><strong>Input:</strong> \u00a38m loan with 7 year maturity (capped at 5)\n<strong>Expected:</strong> Maturity capped at 5 years</span>\n<span class=\"paragraph\"><strong>CRR Treatment (Art. 162):</strong></span>\n<ul>\n<li>Maturity floor: 1 year</li>\n<li>Maturity cap: 5 years</li>\n</ul>\n<span class=\"paragraph\"><strong>Reference:</strong> CRR Art. 153, 162</span></span>"
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"summary-group-crr-b-f-irb-results\">Summary: Group CRR-B F-IRB Results</h2>\n<span class=\"paragraph\">Key CRR F-IRB observations:</span>\n<ol>\n<li>Single PD floor (0.03%) for all exposure classes</li>\n<li>Supervisory LGD: 45% senior, 75% subordinated</li>\n<li>SME supporting factor (0.7619) available</li>\n<li>Maturity capped at 5 years, floored at 1 year</li>\n<li>\n<span class=\"paragraph\">F-IRB only applies to wholesale exposures (corporate, institution, sovereign)</span>\n<ul>\n<li>Retail must use A-IRB (internal LGD) or Standardised Approach</li>\n</ul>\n</li>\n</ol></span>"
           }
         }
       ],
@@ -302,52 +302,19 @@
     },
     {
       "id": "Vxnm",
-      "code_hash": "ae5b2007cab9d7bf8d745ede44833800",
+      "code_hash": "586361bc85a81b11625cafa8968685ed",
       "outputs": [
         {
           "type": "data",
           "data": {
-            "text/plain": ""
+            "text/html": "<marimo-ui-element object-id='Vxnm-0' random-id='ad5925c5-36cf-b0e1-20a1-a7e67b9f3e27'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;_marimo_row_id&#92;&quot;:0,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B1&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Corporate F-IRB - low PD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;25,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.10%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;7,858,308&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;7,858,308&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:1,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B2&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Corporate F-IRB - high PD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;5,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;5.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;8,259,489&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;8,259,489&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:2,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B3&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Subordinated exposure - 75% LGD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;1.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;75%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;3,934,551&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;3,934,551&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:3,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B4&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Financial collateral - reduced LGD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;5,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.50%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;22%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;1,844,711&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;1,844,711&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:4,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B5&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;SME corporate F-IRB with supporting factor&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;2.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;2,122,946&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;0.7619&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;1,617,473&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:5,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B6&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;PD floor binding (0.01% -&gt; 0.03%)&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;1,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.03%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;128,848&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;128,848&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:6,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B7&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Long maturity exposure (7Y -&gt; 5Y cap)&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;8,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.80%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;9,841,717&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;9,841,717&#92;&quot;}]&quot;' data-total-rows='7' data-total-columns='8' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='false' data-page-size='10' data-field-types='[[&quot;Scenario&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;Description&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;EAD (\u00a3)&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;PD&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;LGD&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;RWA Before SF&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;SF&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;RWA After SF&quot;,[&quot;string&quot;,&quot;str&quot;]]]' data-selection='&quot;multi&quot;' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='true' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
           }
         }
       ],
-      "console": [
-        {
-          "type": "stream",
-          "name": "stdout",
-          "text": "CRR-B8: EAD=\u00a38,000,000, Maturity=7.0y -> 5.0y, RWA=\u00a39,841,717\n",
-          "mimetype": "text/plain"
-        }
-      ]
+      "console": []
     },
     {
       "id": "DnEU",
-      "code_hash": "b88129043bf18b6abfc7369a2f499246",
-      "outputs": [
-        {
-          "type": "data",
-          "data": {
-            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"summary-group-crr-b-f-irb-results\">Summary: Group CRR-B F-IRB Results</h2>\n<span class=\"paragraph\">Key CRR F-IRB observations:</span>\n<ol>\n<li>Single PD floor (0.03%) for all exposure classes</li>\n<li>Supervisory LGD: 45% senior, 75% subordinated</li>\n<li>SME supporting factor (0.7619) available</li>\n<li>Maturity capped at 5 years, floored at 1 year</li>\n<li>No maturity adjustment for retail exposures</li>\n</ol></span>"
-          }
-        }
-      ],
-      "console": []
-    },
-    {
-      "id": "ulZA",
-      "code_hash": "3cd35ac55038c413370f93545aaabe46",
-      "outputs": [
-        {
-          "type": "data",
-          "data": {
-            "text/html": "<marimo-ui-element object-id='ulZA-0' random-id='e7e0d2b9-da21-507a-c17a-30922e766829'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;_marimo_row_id&#92;&quot;:0,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B1&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Corporate F-IRB - low PD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;25,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.10%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;7,858,308&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;7,858,308&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:1,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B2&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Corporate F-IRB - high PD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;5,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;5.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;8,259,489&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;8,259,489&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:2,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B3&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Subordinated exposure - 75% LGD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;1.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;75%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;3,934,551&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;3,934,551&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:3,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B4&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Financial collateral - reduced LGD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;5,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.50%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;22%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;1,844,711&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;1,844,711&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:4,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B5&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;SME corporate F-IRB with supporting factor&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;2.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;2,122,946&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;0.7619&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;1,617,473&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:5,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B6&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;PD floor binding (0.01% -&gt; 0.03%)&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;1,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.03%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;128,848&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;128,848&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:6,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B7&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Retail F-IRB (no maturity adjustment)&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;200,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;1.50%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;183,057&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;183,057&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:7,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B8&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Long maturity exposure (7Y -&gt; 5Y cap)&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;8,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.80%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;9,841,717&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;9,841,717&#92;&quot;}]&quot;' data-total-rows='8' data-total-columns='8' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='false' data-page-size='10' data-field-types='[[&quot;Scenario&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;Description&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;EAD (\u00a3)&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;PD&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;LGD&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;RWA Before SF&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;SF&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;RWA After SF&quot;,[&quot;string&quot;,&quot;str&quot;]]]' data-selection='&quot;multi&quot;' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='true' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
-          }
-        }
-      ],
-      "console": []
-    },
-    {
-      "id": "ecfG",
       "code_hash": "af0e47828f5eda362949ebfdf3ca3ed6",
       "outputs": [
         {

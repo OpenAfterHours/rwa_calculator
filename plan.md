@@ -64,9 +64,10 @@ All test data fixtures have been created with Python generators and parquet outp
 | Mapping - Org | Complete | 8 | `mapping/org_mapping.py` |
 | Mapping - Lending | Complete | 7 | `mapping/lending_mapping.py` |
 
-### Phase 1.2A: CRR Acceptance Test Scenarios - IN PROGRESS
+### Phase 1.2A: CRR Acceptance Test Scenarios - COMPLETE
 
 CRR expected outputs workbook structure created with calculation modules and Marimo scenarios.
+All CRR scenario groups (A through H) have been implemented.
 
 #### CRR-A: Standardised Approach (SA) - COMPLETE
 
@@ -99,15 +100,54 @@ CRR expected outputs workbook structure created with calculation modules and Mar
 
 **Note**: F-IRB only applies to wholesale exposures (corporate, institution, sovereign). Retail exposures require A-IRB (internal LGD) or Standardised Approach.
 
-#### CRR-C: Advanced IRB (A-IRB) - NOT STARTED
+#### CRR-C: Advanced IRB (A-IRB) - COMPLETE
 
-#### CRR-D: Credit Risk Mitigation (CRM) - NOT STARTED
+| Scenario ID | Description | Status |
+|-------------|-------------|--------|
+| CRR-C1 | Corporate A-IRB - own LGD estimate (35%) | Complete |
+| CRR-C2 | Retail A-IRB - own estimates (PD 0.3%, LGD 15%) | Complete |
+| CRR-C3 | Specialised lending A-IRB - project finance | Complete |
 
-#### CRR-E: Specialised Lending (Slotting) - NOT STARTED
+**Note**: CRR A-IRB has NO LGD floors (unlike Basel 3.1 which has 25% unsecured floor).
 
-#### CRR-G: Provisions & Impairments - NOT STARTED
+#### CRR-D: Credit Risk Mitigation (CRM) - COMPLETE
 
-#### CRR-H: Complex/Combined - NOT STARTED
+| Scenario ID | Description | Status |
+|-------------|-------------|--------|
+| CRR-D1 | Cash collateral - 0% haircut | Complete |
+| CRR-D2 | Government bond collateral - 4% haircut | Complete |
+| CRR-D3 | Equity collateral (main index) - 15% haircut | Complete |
+| CRR-D4 | Bank guarantee - substitution approach | Complete |
+| CRR-D5 | Maturity mismatch adjustment | Complete |
+| CRR-D6 | Currency mismatch - 8% FX haircut | Complete |
+
+#### CRR-E: Specialised Lending (Slotting) - COMPLETE
+
+| Scenario ID | Description | Status |
+|-------------|-------------|--------|
+| CRR-E1 | Project finance - Strong (70% RW) | Complete |
+| CRR-E2 | Project finance - Good (70% RW) | Complete |
+| CRR-E3 | IPRE - Weak (250% RW) | Complete |
+| CRR-E4 | HVCRE - Strong (70% RW) | Complete |
+
+**Note**: CRR has same RW for Strong and Good (both 70%). Basel 3.1 differentiates (50%/70%).
+
+#### CRR-G: Provisions & Impairments - COMPLETE
+
+| Scenario ID | Description | Status |
+|-------------|-------------|--------|
+| CRR-G1 | SA with specific provision - net EAD | Complete |
+| CRR-G2 | IRB EL shortfall - CET1/T2 deduction | Complete |
+| CRR-G3 | IRB EL excess - T2 credit (capped) | Complete |
+
+#### CRR-H: Complex/Combined - COMPLETE
+
+| Scenario ID | Description | Status |
+|-------------|-------------|--------|
+| CRR-H1 | Facility with multiple loans - hierarchy | Complete |
+| CRR-H2 | Counterparty group - rating inheritance | Complete |
+| CRR-H3 | SME chain with supporting factor | Complete |
+| CRR-H4 | Full CRM chain - collateral + guarantee + provision | Complete |
 
 ### CRR Workbook Implementation Status
 
@@ -118,12 +158,18 @@ CRR expected outputs workbook structure created with calculation modules and Mar
 | SA Risk Weights | `workbooks/crr_expected_outputs/calculations/crr_risk_weights.py` | Complete |
 | CCF Tables | `workbooks/crr_expected_outputs/calculations/crr_ccf.py` | Complete |
 | Supporting Factors | `workbooks/crr_expected_outputs/calculations/crr_supporting_factors.py` | Complete |
+| CRM Haircuts | `workbooks/crr_expected_outputs/calculations/crr_haircuts.py` | Complete |
 | IRB Formulas (shared) | `workbooks/shared/irb_formulas.py` | Complete |
 | CRR IRB (wrapper) | `workbooks/crr_expected_outputs/calculations/crr_irb.py` | Complete |
 | Correlation (shared) | `workbooks/shared/correlation.py` | Complete |
 | Output Generator | `workbooks/crr_expected_outputs/generate_outputs.py` | Complete |
 | CRR-A SA Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_a_sa.py` | Complete |
 | CRR-B F-IRB Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_b_firb.py` | Complete |
+| CRR-C A-IRB Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_c_airb.py` | Complete |
+| CRR-D CRM Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_d_crm.py` | Complete |
+| CRR-E Slotting Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_e_slotting.py` | Complete |
+| CRR-G Provision Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_g_provisions.py` | Complete |
+| CRR-H Complex Scenarios | `workbooks/crr_expected_outputs/scenarios/group_crr_h_complex.py` | Complete |
 
 ### Key CRR Implementation Details
 
@@ -1099,19 +1145,21 @@ workbooks/
 - [x] Implement CRR SME supporting factor (Art. 501)
 - [x] Create CRR-A (SA) scenarios (12 scenarios)
 - [x] Create CRR-B (F-IRB) scenarios (7 scenarios - wholesale only)
+- [x] Create CRR-C (A-IRB) scenarios (3 scenarios)
+- [x] Create CRR-D (CRM) scenarios (6 scenarios)
+- [x] Create CRR-E (Slotting) scenarios (4 scenarios)
+- [x] Create CRR-G (Provisions) scenarios (3 scenarios)
+- [x] Create CRR-H (Complex/Combined) scenarios (4 scenarios)
 - [x] Generate expected output files (CSV, JSON, Parquet)
 - [x] Create fixture loader for Marimo workbooks
 
 ### In Progress
-- [ ] Create CRR-C (A-IRB) scenarios
-- [ ] Create CRR-D (CRM) scenarios
-- [ ] Create CRR-E (Slotting) scenarios
-- [ ] Create CRR-G (Provisions) scenarios
-- [ ] Create CRR-H (Complex/Combined) scenarios
+- [ ] Create pytest acceptance tests that validate against expected outputs
+- [ ] Integrate all scenario groups into main workbook output generator
 
 ### Up Next (CRR Priority)
-1. **Phase 1.2A (continued)**: Complete remaining CRR scenario groups (C, D, E, G, H)
-2. **Phase 1.2A**: Create pytest acceptance tests that validate against expected outputs
+1. **Phase 1.2A**: Create pytest acceptance tests that validate against expected outputs
+2. **Phase 1.2A**: Regenerate expected output files (CSV, JSON, Parquet) with all scenarios
 3. **Phase 2**: Define process contracts
 4. **Phase 3.1**: Implement CRR production components in `src/`
 5. **Phase 3.1**: Complete CRR Marimo workbook orchestration

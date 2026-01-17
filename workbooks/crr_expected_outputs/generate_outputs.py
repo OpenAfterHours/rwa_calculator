@@ -48,7 +48,22 @@ from workbooks.crr_expected_outputs.calculations.crr_irb import (
     calculate_irb_rwa_with_turnover,
 )
 from workbooks.shared.correlation import calculate_correlation
-from workbooks.crr_expected_outputs.data.crr_params import CRR_SME_SUPPORTING_FACTOR
+from workbooks.shared.irb_formulas import (
+    calculate_irb_rwa as base_calculate_irb_rwa,
+    calculate_expected_loss,
+    apply_pd_floor as base_apply_pd_floor,
+)
+from workbooks.crr_expected_outputs.calculations.crr_haircuts import (
+    get_collateral_haircut,
+    get_fx_haircut,
+    calculate_adjusted_collateral_value,
+    apply_maturity_mismatch,
+)
+from workbooks.crr_expected_outputs.data.crr_params import (
+    CRR_SME_SUPPORTING_FACTOR,
+    CRR_PD_FLOOR,
+    CRR_SLOTTING_RW,
+)
 
 
 @dataclass
@@ -782,6 +797,777 @@ def generate_crr_b_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
+def generate_crr_c_scenarios(fixtures) -> list[CRRScenarioOutput]:
+    """Generate CRR Group C (A-IRB) scenario outputs."""
+    scenarios = []
+
+    # CRR-C1: Corporate A-IRB - Own LGD Estimate
+    ead_c1 = 5_000_000.0
+    pd_raw_c1 = 0.01  # 1.00%
+    lgd_internal_c1 = 0.35  # Bank's own estimate (35% < 45% F-IRB)
+    maturity_c1 = 2.5
+    pd_floored_c1 = apply_pd_floor(pd_raw_c1)
+    correlation_c1 = calculate_correlation(pd_floored_c1, "CORPORATE")
+
+    result_c1 = base_calculate_irb_rwa(
+        ead=ead_c1,
+        pd=pd_raw_c1,
+        lgd=lgd_internal_c1,
+        correlation=correlation_c1,
+        maturity=maturity_c1,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,  # CRR A-IRB has NO LGD floor
+        apply_maturity_adjustment=True,
+        is_retail=False,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-C1",
+        scenario_group="CRR-C",
+        description="Corporate A-IRB - own LGD estimate (35%)",
+        regulatory_framework="CRR",
+        approach="A-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CORP_AIRB_001",
+        counterparty_reference="CORP_AIRB_001",
+        ead=ead_c1,
+        pd=pd_floored_c1,
+        lgd=lgd_internal_c1,
+        maturity=maturity_c1,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_c1["rwa"] / ead_c1 if ead_c1 > 0 else 0,
+        rwa_before_sf=result_c1["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_c1["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_c1, lgd_internal_c1, ead_c1),
+        regulatory_reference="CRR Art. 143, 153",
+        calculation_notes="CRR A-IRB: No LGD floor. Internal LGD 35% vs F-IRB 45%.",
+    ))
+
+    # CRR-C2: Retail A-IRB - Own Estimates
+    ead_c2 = 100_000.0
+    pd_raw_c2 = 0.003  # 0.30%
+    lgd_internal_c2 = 0.15  # Bank's own estimate (15%)
+    pd_floored_c2 = apply_pd_floor(pd_raw_c2)
+    correlation_c2 = calculate_correlation(pd_floored_c2, "RETAIL")
+
+    result_c2 = base_calculate_irb_rwa(
+        ead=ead_c2,
+        pd=pd_raw_c2,
+        lgd=lgd_internal_c2,
+        correlation=correlation_c2,
+        maturity=2.5,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=False,  # No MA for retail
+        is_retail=True,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-C2",
+        scenario_group="CRR-C",
+        description="Retail A-IRB - own estimates (PD 0.3%, LGD 15%)",
+        regulatory_framework="CRR",
+        approach="A-IRB",
+        exposure_class="RETAIL",
+        exposure_reference="LOAN_RTL_AIRB_001",
+        counterparty_reference="RTL_AIRB_001",
+        ead=ead_c2,
+        pd=pd_floored_c2,
+        lgd=lgd_internal_c2,
+        maturity=None,  # No maturity for retail
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_c2["rwa"] / ead_c2 if ead_c2 > 0 else 0,
+        rwa_before_sf=result_c2["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_c2["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_c2, lgd_internal_c2, ead_c2),
+        regulatory_reference="CRR Art. 154",
+        calculation_notes="Retail must use A-IRB. No maturity adjustment. No LGD floor.",
+    ))
+
+    # CRR-C3: Specialised Lending A-IRB (Project Finance)
+    ead_c3 = 10_000_000.0
+    pd_raw_c3 = 0.015  # 1.50%
+    lgd_internal_c3 = 0.25  # Bank's own estimate (25%)
+    maturity_c3 = 4.0
+    pd_floored_c3 = apply_pd_floor(pd_raw_c3)
+    correlation_c3 = calculate_correlation(pd_floored_c3, "CORPORATE")
+
+    result_c3 = base_calculate_irb_rwa(
+        ead=ead_c3,
+        pd=pd_raw_c3,
+        lgd=lgd_internal_c3,
+        correlation=correlation_c3,
+        maturity=maturity_c3,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        is_retail=False,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-C3",
+        scenario_group="CRR-C",
+        description="Specialised lending A-IRB - project finance",
+        regulatory_framework="CRR",
+        approach="A-IRB",
+        exposure_class="SPECIALISED_LENDING",
+        exposure_reference="LOAN_SL_AIRB_001",
+        counterparty_reference="SL_PF_001",
+        ead=ead_c3,
+        pd=pd_floored_c3,
+        lgd=lgd_internal_c3,
+        maturity=maturity_c3,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_c3["rwa"] / ead_c3 if ead_c3 > 0 else 0,
+        rwa_before_sf=result_c3["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_c3["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_c3, lgd_internal_c3, ead_c3),
+        regulatory_reference="CRR Art. 153",
+        calculation_notes="Project finance with A-IRB approval. Alternative: slotting.",
+    ))
+
+    return scenarios
+
+
+def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
+    """Generate CRR Group D (CRM) scenario outputs."""
+    scenarios = []
+
+    # CRR-D1: Cash Collateral
+    exposure_d1 = Decimal("1000000")
+    coll_value_d1 = Decimal("500000")
+    rw_d1 = get_corporate_rw(None)  # 100%
+    coll_haircut_d1 = get_collateral_haircut("cash")  # 0%
+    coll_adjusted_d1 = calculate_adjusted_collateral_value(coll_value_d1, coll_haircut_d1, Decimal("0.00"))
+    ead_post_d1 = exposure_d1 - coll_adjusted_d1
+    rwa_post_d1 = calculate_sa_rwa(ead_post_d1, rw_d1)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-D1",
+        scenario_group="CRR-D",
+        description="Cash collateral - 0% haircut",
+        regulatory_framework="CRR",
+        approach="SA-CRM",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CRM_D1",
+        counterparty_reference="CORP_CRM_D1",
+        ead=float(ead_post_d1),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_d1),
+        rwa_before_sf=float(rwa_post_d1),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_post_d1),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 207, 224",
+        calculation_notes=f"Cash 0% haircut. EAD reduced from £{exposure_d1:,.0f} to £{ead_post_d1:,.0f}",
+    ))
+
+    # CRR-D2: Government Bond Collateral
+    exposure_d2 = Decimal("1000000")
+    coll_value_d2 = Decimal("600000")
+    coll_haircut_d2 = get_collateral_haircut("govt_bond", cqs=1, residual_maturity_years=6.0)  # 4%
+    coll_adjusted_d2 = calculate_adjusted_collateral_value(coll_value_d2, coll_haircut_d2, Decimal("0.00"))
+    ead_post_d2 = exposure_d2 - coll_adjusted_d2
+    rwa_post_d2 = calculate_sa_rwa(ead_post_d2, rw_d1)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-D2",
+        scenario_group="CRR-D",
+        description="Government bond collateral - 4% haircut",
+        regulatory_framework="CRR",
+        approach="SA-CRM",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CRM_D2",
+        counterparty_reference="CORP_CRM_D2",
+        ead=float(ead_post_d2),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_d1),
+        rwa_before_sf=float(rwa_post_d2),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_post_d2),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 224",
+        calculation_notes=f"CQS 1 govt bond >5y: {coll_haircut_d2*100:.1f}% haircut",
+    ))
+
+    # CRR-D3: Equity Collateral (Main Index)
+    exposure_d3 = Decimal("1000000")
+    coll_value_d3 = Decimal("400000")
+    coll_haircut_d3 = get_collateral_haircut("equity", is_main_index=True)  # 15%
+    coll_adjusted_d3 = calculate_adjusted_collateral_value(coll_value_d3, coll_haircut_d3, Decimal("0.00"))
+    ead_post_d3 = exposure_d3 - coll_adjusted_d3
+    rwa_post_d3 = calculate_sa_rwa(ead_post_d3, rw_d1)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-D3",
+        scenario_group="CRR-D",
+        description="Equity collateral (main index) - 15% haircut",
+        regulatory_framework="CRR",
+        approach="SA-CRM",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CRM_D3",
+        counterparty_reference="CORP_CRM_D3",
+        ead=float(ead_post_d3),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_d1),
+        rwa_before_sf=float(rwa_post_d3),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_post_d3),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 224",
+        calculation_notes="Main index equity: 15% haircut (other equity: 25%)",
+    ))
+
+    # CRR-D4: Guarantee Substitution
+    exposure_d4 = Decimal("1000000")
+    guarantee_d4 = Decimal("600000")
+    rw_guarantor_d4 = get_institution_rw(cqs=2, country="GB", use_uk_deviation=True)  # 30%
+    rw_borrower_d4 = get_corporate_rw(None)  # 100%
+    non_guaranteed_d4 = exposure_d4 - guarantee_d4
+    rwa_post_d4 = calculate_sa_rwa(guarantee_d4, rw_guarantor_d4) + calculate_sa_rwa(non_guaranteed_d4, rw_borrower_d4)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-D4",
+        scenario_group="CRR-D",
+        description="Bank guarantee - substitution approach",
+        regulatory_framework="CRR",
+        approach="SA-CRM",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CRM_D4",
+        counterparty_reference="CORP_CRM_D4",
+        ead=float(exposure_d4),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rwa_post_d4 / exposure_d4),
+        rwa_before_sf=float(rwa_post_d4),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_post_d4),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 213-217",
+        calculation_notes=f"Guarantor 30% RW, Borrower 100% RW. Split treatment.",
+    ))
+
+    # CRR-D5: Maturity Mismatch
+    exposure_d5 = Decimal("1000000")
+    coll_value_d5 = Decimal("500000")
+    coll_maturity_d5 = 2.0
+    exposure_maturity_d5 = 5.0
+    coll_adjusted_d5, mm_desc_d5 = apply_maturity_mismatch(coll_value_d5, coll_maturity_d5, exposure_maturity_d5)
+    ead_post_d5 = exposure_d5 - coll_adjusted_d5
+    rwa_post_d5 = calculate_sa_rwa(ead_post_d5, rw_d1)
+    mat_adj_d5 = (coll_maturity_d5 - 0.25) / (exposure_maturity_d5 - 0.25)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-D5",
+        scenario_group="CRR-D",
+        description="Maturity mismatch - 2y collateral, 5y exposure",
+        regulatory_framework="CRR",
+        approach="SA-CRM",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CRM_D5",
+        counterparty_reference="CORP_CRM_D5",
+        ead=float(ead_post_d5),
+        pd=None,
+        lgd=None,
+        maturity=exposure_maturity_d5,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_d1),
+        rwa_before_sf=float(rwa_post_d5),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_post_d5),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 238",
+        calculation_notes=f"Maturity adjustment: {mat_adj_d5:.4f}. {mm_desc_d5}",
+    ))
+
+    # CRR-D6: Currency Mismatch
+    exposure_d6 = Decimal("1000000")
+    coll_value_d6 = Decimal("500000")
+    fx_haircut_d6 = get_fx_haircut("GBP", "EUR")  # 8%
+    coll_adjusted_d6 = calculate_adjusted_collateral_value(coll_value_d6, Decimal("0.00"), fx_haircut_d6)
+    ead_post_d6 = exposure_d6 - coll_adjusted_d6
+    rwa_post_d6 = calculate_sa_rwa(ead_post_d6, rw_d1)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-D6",
+        scenario_group="CRR-D",
+        description="Currency mismatch - GBP exposure, EUR collateral",
+        regulatory_framework="CRR",
+        approach="SA-CRM",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CRM_D6",
+        counterparty_reference="CORP_CRM_D6",
+        ead=float(ead_post_d6),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_d1),
+        rwa_before_sf=float(rwa_post_d6),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_post_d6),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 224",
+        calculation_notes=f"FX mismatch: {fx_haircut_d6*100:.0f}% additional haircut",
+    ))
+
+    return scenarios
+
+
+def generate_crr_e_scenarios(fixtures) -> list[CRRScenarioOutput]:
+    """Generate CRR Group E (Slotting) scenario outputs."""
+    scenarios = []
+
+    slotting_rw = {
+        "strong": Decimal("0.70"),
+        "good": Decimal("0.70"),
+        "satisfactory": Decimal("1.15"),
+        "weak": Decimal("2.50"),
+        "default": Decimal("0.00"),
+    }
+
+    # CRR-E1: Project Finance - Strong
+    ead_e1 = Decimal("10000000")
+    rw_e1 = slotting_rw["strong"]
+    rwa_e1 = ead_e1 * rw_e1
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-E1",
+        scenario_group="CRR-E",
+        description="Project finance - Strong (70% RW)",
+        regulatory_framework="CRR",
+        approach="Slotting",
+        exposure_class="SPECIALISED_LENDING",
+        exposure_reference="LOAN_SL_PF_001",
+        counterparty_reference="SL_PF_STRONG",
+        ead=float(ead_e1),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_e1),
+        rwa_before_sf=float(rwa_e1),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_e1),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 153(5)",
+        calculation_notes="CRR Strong=Good=70% (Basel 3.1 Strong=50%)",
+    ))
+
+    # CRR-E2: Project Finance - Good
+    ead_e2 = Decimal("10000000")
+    rw_e2 = slotting_rw["good"]
+    rwa_e2 = ead_e2 * rw_e2
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-E2",
+        scenario_group="CRR-E",
+        description="Project finance - Good (70% RW)",
+        regulatory_framework="CRR",
+        approach="Slotting",
+        exposure_class="SPECIALISED_LENDING",
+        exposure_reference="LOAN_SL_PF_002",
+        counterparty_reference="SL_PF_GOOD",
+        ead=float(ead_e2),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_e2),
+        rwa_before_sf=float(rwa_e2),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_e2),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 153(5)",
+        calculation_notes="Good category = 70% RW",
+    ))
+
+    # CRR-E3: IPRE - Weak
+    ead_e3 = Decimal("5000000")
+    rw_e3 = slotting_rw["weak"]
+    rwa_e3 = ead_e3 * rw_e3
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-E3",
+        scenario_group="CRR-E",
+        description="IPRE - Weak (250% RW)",
+        regulatory_framework="CRR",
+        approach="Slotting",
+        exposure_class="SPECIALISED_LENDING",
+        exposure_reference="LOAN_SL_IPRE_001",
+        counterparty_reference="SL_IPRE_WEAK",
+        ead=float(ead_e3),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_e3),
+        rwa_before_sf=float(rwa_e3),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_e3),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 153(5)",
+        calculation_notes="Weak category = 250% RW (punitive)",
+    ))
+
+    # CRR-E4: HVCRE - Strong
+    ead_e4 = Decimal("5000000")
+    rw_e4 = slotting_rw["strong"]  # Same as non-HVCRE under CRR
+    rwa_e4 = ead_e4 * rw_e4
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-E4",
+        scenario_group="CRR-E",
+        description="HVCRE - Strong (70% RW)",
+        regulatory_framework="CRR",
+        approach="Slotting",
+        exposure_class="SPECIALISED_LENDING_HVCRE",
+        exposure_reference="LOAN_SL_HVCRE_001",
+        counterparty_reference="SL_HVCRE_STRONG",
+        ead=float(ead_e4),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_e4),
+        rwa_before_sf=float(rwa_e4),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_e4),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 153(5)",
+        calculation_notes="CRR HVCRE = non-HVCRE weights (Basel 3.1 higher for HVCRE)",
+    ))
+
+    return scenarios
+
+
+def generate_crr_g_scenarios(fixtures) -> list[CRRScenarioOutput]:
+    """Generate CRR Group G (Provisions) scenario outputs."""
+    scenarios = []
+
+    # CRR-G1: SA with Specific Provision
+    gross_exp_g1 = Decimal("1000000")
+    provision_g1 = Decimal("50000")
+    net_exp_g1 = gross_exp_g1 - provision_g1
+    rw_g1 = get_corporate_rw(None)  # 100%
+    rwa_g1 = calculate_sa_rwa(net_exp_g1, rw_g1)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-G1",
+        scenario_group="CRR-G",
+        description="SA with specific provision - net EAD",
+        regulatory_framework="CRR",
+        approach="SA",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_PROV_G1",
+        counterparty_reference="CORP_PROV_G1",
+        ead=float(net_exp_g1),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_g1),
+        rwa_before_sf=float(rwa_g1),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_g1),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 110",
+        calculation_notes=f"EAD = Gross - Provision = £{net_exp_g1:,.0f}",
+    ))
+
+    # CRR-G2: IRB EL Shortfall
+    ead_g2 = 5_000_000.0
+    pd_g2 = 0.02  # 2%
+    lgd_g2 = 0.45  # 45%
+    total_prov_g2 = 30_000.0
+    el_g2 = pd_g2 * lgd_g2 * ead_g2  # = 45,000
+    shortfall_g2 = max(el_g2 - total_prov_g2, 0)  # = 15,000
+    cet1_deduction_g2 = shortfall_g2 * 0.5
+
+    correlation_g2 = calculate_correlation(pd_g2, "CORPORATE")
+    result_g2 = calculate_irb_rwa(
+        ead=ead_g2,
+        pd=pd_g2,
+        lgd=lgd_g2,
+        correlation=correlation_g2,
+        maturity=2.5,
+        exposure_class="CORPORATE",
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-G2",
+        scenario_group="CRR-G",
+        description="IRB EL shortfall - CET1/T2 deduction",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_PROV_G2",
+        counterparty_reference="CORP_PROV_G2",
+        ead=ead_g2,
+        pd=pd_g2,
+        lgd=lgd_g2,
+        maturity=2.5,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_g2["rwa"] / ead_g2,
+        rwa_before_sf=result_g2["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_g2["rwa"],
+        expected_loss=el_g2,
+        regulatory_reference="CRR Art. 158, 159",
+        calculation_notes=f"EL=£{el_g2:,.0f}, Prov=£{total_prov_g2:,.0f}, Shortfall=£{shortfall_g2:,.0f}. 50% CET1 deduct.",
+    ))
+
+    # CRR-G3: IRB EL Excess
+    ead_g3 = 5_000_000.0
+    pd_g3 = 0.005  # 0.5%
+    lgd_g3 = 0.45  # 45%
+    total_prov_g3 = 50_000.0
+    el_g3 = pd_g3 * lgd_g3 * ead_g3  # = 11,250
+    excess_g3 = max(total_prov_g3 - el_g3, 0)  # = 38,750
+
+    correlation_g3 = calculate_correlation(pd_g3, "CORPORATE")
+    result_g3 = calculate_irb_rwa(
+        ead=ead_g3,
+        pd=pd_g3,
+        lgd=lgd_g3,
+        correlation=correlation_g3,
+        maturity=2.5,
+        exposure_class="CORPORATE",
+    )
+    t2_cap_g3 = result_g3["rwa"] * 0.006
+    t2_credit_g3 = min(excess_g3, t2_cap_g3)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-G3",
+        scenario_group="CRR-G",
+        description="IRB EL excess - T2 credit (capped)",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_PROV_G3",
+        counterparty_reference="CORP_PROV_G3",
+        ead=ead_g3,
+        pd=pd_g3,
+        lgd=lgd_g3,
+        maturity=2.5,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_g3["rwa"] / ead_g3,
+        rwa_before_sf=result_g3["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_g3["rwa"],
+        expected_loss=el_g3,
+        regulatory_reference="CRR Art. 62(d)",
+        calculation_notes=f"EL=£{el_g3:,.0f}, Prov=£{total_prov_g3:,.0f}, Excess=£{excess_g3:,.0f}. T2 credit (capped)=£{t2_credit_g3:,.0f}",
+    ))
+
+    return scenarios
+
+
+def generate_crr_h_scenarios(fixtures) -> list[CRRScenarioOutput]:
+    """Generate CRR Group H (Complex/Combined) scenario outputs."""
+    scenarios = []
+
+    # CRR-H1: Facility with Multiple Loans
+    rw_h1 = get_corporate_rw(None)  # 100%
+    exposures_h1 = [
+        ("Term Loan", Decimal("2000000"), Decimal("1.00")),
+        ("Trade Finance", Decimal("1500000"), Decimal("1.00")),
+        ("Overdraft", Decimal("500000"), Decimal("1.00")),
+        ("Undrawn", Decimal("1000000"), Decimal("0.50")),
+    ]
+    total_ead_h1 = sum(amt * ccf for _, amt, ccf in exposures_h1)
+    total_rwa_h1 = total_ead_h1 * rw_h1
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-H1",
+        scenario_group="CRR-H",
+        description="Facility with multiple loans - hierarchy",
+        regulatory_framework="CRR",
+        approach="SA",
+        exposure_class="CORPORATE",
+        exposure_reference="FAC_MULTI_001",
+        counterparty_reference="CORP_FAC_001",
+        ead=float(total_ead_h1),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rw_h1),
+        rwa_before_sf=float(total_rwa_h1),
+        supporting_factor=1.0,
+        rwa_after_sf=float(total_rwa_h1),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 111, 113",
+        calculation_notes="Aggregated EAD from 4 sub-exposures including 50% CCF on undrawn",
+    ))
+
+    # CRR-H2: Counterparty Group - Rating Inheritance
+    members_h2 = [
+        ("Parent", Decimal("3000000"), 2),  # CQS 2 = 50%
+        ("Sub1", Decimal("1500000"), 2),     # Inherits CQS 2
+        ("Sub2", Decimal("500000"), 3),      # Own CQS 3 = 100%
+    ]
+    total_rwa_h2 = Decimal("0")
+    for name, amt, cqs in members_h2:
+        rw = get_corporate_rw(cqs)
+        total_rwa_h2 += amt * rw
+    total_ead_h2 = sum(amt for _, amt, _ in members_h2)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-H2",
+        scenario_group="CRR-H",
+        description="Counterparty group - rating inheritance",
+        regulatory_framework="CRR",
+        approach="SA",
+        exposure_class="CORPORATE",
+        exposure_reference="GRP_MULTI_001",
+        counterparty_reference="CORP_GRP_001",
+        ead=float(total_ead_h2),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,  # Mixed
+        ltv=None,
+        turnover=None,
+        risk_weight=float(total_rwa_h2 / total_ead_h2),
+        rwa_before_sf=float(total_rwa_h2),
+        supporting_factor=1.0,
+        rwa_after_sf=float(total_rwa_h2),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 142",
+        calculation_notes="Unrated subsidiary inherits parent CQS 2. Sub2 uses own CQS 3.",
+    ))
+
+    # CRR-H3: SME Chain with Supporting Factor
+    ead_h3 = Decimal("2000000")
+    turnover_h3 = Decimal("25000000")  # £25m
+    rw_h3 = get_corporate_rw(None)  # 100%
+    rwa_before_sf_h3 = ead_h3 * rw_h3
+    rwa_after_sf_h3, sf_applied_h3, _ = apply_sme_supporting_factor(rwa_before_sf_h3, True, turnover_h3, "GBP")
+    effective_rw_h3 = rwa_after_sf_h3 / ead_h3
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-H3",
+        scenario_group="CRR-H",
+        description="SME chain with supporting factor",
+        regulatory_framework="CRR",
+        approach="SA",
+        exposure_class="CORPORATE_SME",
+        exposure_reference="LOAN_SME_CHAIN",
+        counterparty_reference="CORP_SME_CHAIN",
+        ead=float(ead_h3),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=float(turnover_h3),
+        risk_weight=float(rw_h3),
+        rwa_before_sf=float(rwa_before_sf_h3),
+        supporting_factor=float(CRR_SME_SUPPORTING_FACTOR),
+        rwa_after_sf=float(rwa_after_sf_h3),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 501",
+        calculation_notes=f"Effective RW={effective_rw_h3*100:.2f}% after SME factor",
+    ))
+
+    # CRR-H4: Full CRM Chain
+    gross_h4 = Decimal("2000000")
+    provision_h4 = Decimal("100000")
+    cash_coll_h4 = Decimal("500000")
+    guarantee_h4 = Decimal("400000")
+
+    exp_after_prov_h4 = gross_h4 - provision_h4
+    exp_after_cash_h4 = exp_after_prov_h4 - cash_coll_h4
+
+    rw_guarantor_h4 = get_institution_rw(cqs=2, country="GB", use_uk_deviation=True)  # 30%
+    rw_borrower_h4 = get_corporate_rw(None)  # 100%
+
+    guaranteed_h4 = min(guarantee_h4, exp_after_cash_h4)
+    non_guaranteed_h4 = exp_after_cash_h4 - guaranteed_h4
+
+    rwa_h4 = calculate_sa_rwa(guaranteed_h4, rw_guarantor_h4) + calculate_sa_rwa(non_guaranteed_h4, rw_borrower_h4)
+    rwa_pre_crm_h4 = calculate_sa_rwa(gross_h4, rw_borrower_h4)
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-H4",
+        scenario_group="CRR-H",
+        description="Full CRM chain - collateral + guarantee + provision",
+        regulatory_framework="CRR",
+        approach="SA-CRM",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CRM_FULL",
+        counterparty_reference="CORP_CRM_FULL",
+        ead=float(exp_after_cash_h4),
+        pd=None,
+        lgd=None,
+        maturity=None,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=float(rwa_h4 / exp_after_cash_h4) if exp_after_cash_h4 > 0 else 0,
+        rwa_before_sf=float(rwa_h4),
+        supporting_factor=1.0,
+        rwa_after_sf=float(rwa_h4),
+        expected_loss=None,
+        regulatory_reference="CRR Art. 207-236",
+        calculation_notes=f"RWA reduced from £{rwa_pre_crm_h4:,.0f} to £{rwa_h4:,.0f} via CRM chain",
+    ))
+
+    return scenarios
+
+
 def generate_all_outputs():
     """Generate all CRR expected outputs."""
     print("Loading fixtures...")
@@ -795,12 +1581,40 @@ def generate_all_outputs():
     crr_b_scenarios = generate_crr_b_scenarios(fixtures)
     print(f"  Generated {len(crr_b_scenarios)} F-IRB scenarios")
 
-    all_scenarios = crr_a_scenarios + crr_b_scenarios
+    print("Generating CRR-C (A-IRB) scenarios...")
+    crr_c_scenarios = generate_crr_c_scenarios(fixtures)
+    print(f"  Generated {len(crr_c_scenarios)} A-IRB scenarios")
+
+    print("Generating CRR-D (CRM) scenarios...")
+    crr_d_scenarios = generate_crr_d_scenarios(fixtures)
+    print(f"  Generated {len(crr_d_scenarios)} CRM scenarios")
+
+    print("Generating CRR-E (Slotting) scenarios...")
+    crr_e_scenarios = generate_crr_e_scenarios(fixtures)
+    print(f"  Generated {len(crr_e_scenarios)} Slotting scenarios")
+
+    print("Generating CRR-G (Provisions) scenarios...")
+    crr_g_scenarios = generate_crr_g_scenarios(fixtures)
+    print(f"  Generated {len(crr_g_scenarios)} Provision scenarios")
+
+    print("Generating CRR-H (Complex) scenarios...")
+    crr_h_scenarios = generate_crr_h_scenarios(fixtures)
+    print(f"  Generated {len(crr_h_scenarios)} Complex scenarios")
+
+    all_scenarios = (
+        crr_a_scenarios +
+        crr_b_scenarios +
+        crr_c_scenarios +
+        crr_d_scenarios +
+        crr_e_scenarios +
+        crr_g_scenarios +
+        crr_h_scenarios
+    )
 
     # Build output structure
     output = {
         "framework": "CRR",
-        "version": "1.0",
+        "version": "2.0",
         "effective_until": "2026-12-31",
         "generated_at": datetime.now().isoformat(),
         "regulatory_references": {
@@ -808,6 +1622,18 @@ def generate_all_outputs():
             "supporting_factors": "CRR Art. 501 (SME), Art. 501a (Infrastructure)",
             "sa_risk_weights": "CRR Art. 112-134",
             "irb_approach": "CRR Art. 142-191",
+            "crm": "CRR Art. 207-236",
+            "slotting": "CRR Art. 153(5)",
+            "provisions": "CRR Art. 110, 158-159, 62(d)",
+        },
+        "scenario_groups": {
+            "CRR-A": {"name": "Standardised Approach", "count": len(crr_a_scenarios)},
+            "CRR-B": {"name": "Foundation IRB", "count": len(crr_b_scenarios)},
+            "CRR-C": {"name": "Advanced IRB", "count": len(crr_c_scenarios)},
+            "CRR-D": {"name": "Credit Risk Mitigation", "count": len(crr_d_scenarios)},
+            "CRR-E": {"name": "Specialised Lending (Slotting)", "count": len(crr_e_scenarios)},
+            "CRR-G": {"name": "Provisions & Impairments", "count": len(crr_g_scenarios)},
+            "CRR-H": {"name": "Complex/Combined", "count": len(crr_h_scenarios)},
         },
         "key_differences_from_basel31": [
             "SME supporting factor (0.7619) available under CRR",
@@ -816,6 +1642,8 @@ def generate_all_outputs():
             "Residential mortgage: 35%/75% split at 80% LTV (vs granular LTV bands)",
             "Single PD floor 0.03% for all classes (vs differentiated floors)",
             "No A-IRB LGD floors under CRR",
+            "Slotting: Strong=Good=70% (Basel 3.1 Strong=50%)",
+            "HVCRE same weights as non-HVCRE under CRR",
         ],
         "scenario_count": len(all_scenarios),
         "scenarios": [s.to_dict() for s in all_scenarios],

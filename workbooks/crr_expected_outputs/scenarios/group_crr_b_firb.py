@@ -1,7 +1,9 @@
 """
 Group CRR-B: CRR Foundation IRB (F-IRB) Scenarios
 
-Scenarios CRR-B1 to CRR-B8 covering F-IRB calculations using supervisory LGD.
+Scenarios CRR-B1 to CRR-B7 covering F-IRB calculations using supervisory LGD.
+Note: F-IRB only applies to wholesale exposures (corporate, institution, sovereign).
+Retail exposures require A-IRB (internal LGD) or must use Standardised Approach.
 
 Usage:
     uv run marimo edit workbooks/crr_expected_outputs/scenarios/group_crr_b_firb.py
@@ -77,7 +79,7 @@ def _(mo):
     mo.md("""
     # Group CRR-B: CRR Foundation IRB (F-IRB) Scenarios
 
-    This workbook calculates expected RWA values for CRR F-IRB scenarios CRR-B1 to CRR-B8.
+    This workbook calculates expected RWA values for CRR F-IRB scenarios CRR-B1 to CRR-B7.
 
     **Regulatory Framework:** CRR (Capital Requirements Regulation)
     **Effective:** Until 31 December 2026
@@ -91,6 +93,8 @@ def _(mo):
     - Single PD floor: 0.03% for all exposure classes
     - Maturity adjustment: 1-5 year floor/cap
     - SME supporting factor (0.7619) available
+    - **F-IRB only applies to wholesale exposures** (corporate, institution, sovereign)
+      - Retail exposures must use A-IRB (with internal LGD) or Standardised Approach
 
     **Key differences from Basel 3.1:**
     - CRR has single 0.03% PD floor (Basel 3.1 has differentiated floors)
@@ -712,91 +716,7 @@ def _(mo):
     """Scenario CRR-B7 Header."""
     mo.md("""
     ---
-    ## Scenario CRR-B7: Retail F-IRB (No Maturity Adjustment)
-
-    **Input:** £200k retail exposure, PD 1.50%
-    **Expected:** No maturity adjustment for retail
-
-    **CRR Treatment:**
-    - Retail exposures: no maturity adjustment
-    - Different correlation function for retail
-
-    **Reference:** CRR Art. 153, 154
-    """)
-    return
-
-
-@app.cell
-def _(
-    CRRFIRBResult,
-    CRR_PD_FLOOR,
-    apply_pd_floor,
-    calculate_correlation,
-    calculate_expected_loss,
-    calculate_irb_rwa,
-    get_firb_lgd,
-):
-    """Calculate Scenario CRR-B7: Retail F-IRB."""
-    ead_b7 = 200_000.0
-    pd_raw_b7 = 0.015  # 1.50%
-    pd_floored_b7 = apply_pd_floor(pd_raw_b7)
-    lgd_b7 = float(get_firb_lgd("unsecured"))
-    maturity_b7 = 1.0  # Not used for retail
-
-    # Retail correlation
-    correlation_b7 = calculate_correlation(pd_floored_b7, "RETAIL_OTHER")
-
-    result_dict_b7 = calculate_irb_rwa(
-        ead=ead_b7,
-        pd=pd_raw_b7,
-        lgd=lgd_b7,
-        correlation=correlation_b7,
-        maturity=maturity_b7,
-        exposure_class="RETAIL_OTHER",
-        apply_maturity_adjustment=False,  # No MA for retail
-        apply_pd_floor_flag=True,
-    )
-
-    el_b7 = calculate_expected_loss(ead_b7, pd_floored_b7, lgd_b7)
-
-    result_crr_b7 = CRRFIRBResult(
-        scenario_id="CRR-B7",
-        scenario_group="CRR-B",
-        description="Retail F-IRB (no maturity adjustment)",
-        exposure_reference="LOAN_RTL_001",
-        counterparty_reference="RTL_001",
-        approach="F-IRB",
-        exposure_class="RETAIL_OTHER",
-        ead=ead_b7,
-        pd_raw=pd_raw_b7,
-        pd_floored=pd_floored_b7,
-        lgd=lgd_b7,
-        correlation=correlation_b7,
-        maturity=maturity_b7,
-        maturity_adjustment=1.0,  # No adjustment
-        k=result_dict_b7["k"],
-        rwa_before_sf=result_dict_b7["rwa"],
-        supporting_factor=1.0,
-        rwa_after_sf=result_dict_b7["rwa"],
-        expected_loss=el_b7,
-        calculation_details={
-            "pd_floor": float(CRR_PD_FLOOR),
-            "maturity_adjustment": "Not applied (retail)",
-            "retail_correlation": correlation_b7,
-        },
-        regulatory_reference="CRR Art. 153, 154",
-    )
-
-    print(f"CRR-B7: EAD=£{ead_b7:,.0f}, PD={pd_floored_b7*100:.2f}%, RWA=£{result_dict_b7['rwa']:,.0f}")
-    return (result_crr_b7,)
-
-
-@app.cell
-def _(mo):
-    """Scenario CRR-B8 Header."""
-    mo.md("""
-    ---
-    ## Scenario CRR-B8: Long Maturity Exposure (5Y Cap)
+    ## Scenario CRR-B7: Long Maturity Exposure (5Y Cap)
 
     **Input:** £8m loan with 7 year maturity (capped at 5)
     **Expected:** Maturity capped at 5 years
@@ -820,61 +740,61 @@ def _(
     calculate_irb_rwa,
     get_firb_lgd,
 ):
-    """Calculate Scenario CRR-B8: Long Maturity (Capped)."""
-    ead_b8 = 8_000_000.0
-    pd_raw_b8 = 0.008  # 0.80%
-    pd_floored_b8 = apply_pd_floor(pd_raw_b8)
-    lgd_b8 = float(get_firb_lgd("unsecured"))
-    maturity_raw_b8 = 7.0  # Will be capped to 5.0
-    maturity_b8 = min(maturity_raw_b8, 5.0)
+    """Calculate Scenario CRR-B7: Long Maturity (Capped)."""
+    ead_b7 = 8_000_000.0
+    pd_raw_b7 = 0.008  # 0.80%
+    pd_floored_b7 = apply_pd_floor(pd_raw_b7)
+    lgd_b7 = float(get_firb_lgd("unsecured"))
+    maturity_raw_b7 = 7.0  # Will be capped to 5.0
+    maturity_b7 = min(maturity_raw_b7, 5.0)
 
-    correlation_b8 = calculate_correlation(pd_floored_b8, "CORPORATE")
+    correlation_b7 = calculate_correlation(pd_floored_b7, "CORPORATE")
 
-    result_dict_b8 = calculate_irb_rwa(
-        ead=ead_b8,
-        pd=pd_raw_b8,
-        lgd=lgd_b8,
-        correlation=correlation_b8,
-        maturity=maturity_raw_b8,  # Pass raw, function caps it
+    result_dict_b7 = calculate_irb_rwa(
+        ead=ead_b7,
+        pd=pd_raw_b7,
+        lgd=lgd_b7,
+        correlation=correlation_b7,
+        maturity=maturity_raw_b7,  # Pass raw, function caps it
         exposure_class="CORPORATE",
         apply_maturity_adjustment=True,
         apply_pd_floor_flag=True,
     )
 
-    el_b8 = calculate_expected_loss(ead_b8, pd_floored_b8, lgd_b8)
+    el_b7 = calculate_expected_loss(ead_b7, pd_floored_b7, lgd_b7)
 
-    result_crr_b8 = CRRFIRBResult(
-        scenario_id="CRR-B8",
+    result_crr_b7 = CRRFIRBResult(
+        scenario_id="CRR-B7",
         scenario_group="CRR-B",
         description="Long maturity exposure (7Y -> 5Y cap)",
         exposure_reference="LOAN_LONG_MAT_001",
         counterparty_reference="CORP_LM_001",
         approach="F-IRB",
         exposure_class="CORPORATE",
-        ead=ead_b8,
-        pd_raw=pd_raw_b8,
-        pd_floored=pd_floored_b8,
-        lgd=lgd_b8,
-        correlation=correlation_b8,
-        maturity=maturity_b8,
-        maturity_adjustment=result_dict_b8["maturity_adjustment"],
-        k=result_dict_b8["k"],
-        rwa_before_sf=result_dict_b8["rwa"],
+        ead=ead_b7,
+        pd_raw=pd_raw_b7,
+        pd_floored=pd_floored_b7,
+        lgd=lgd_b7,
+        correlation=correlation_b7,
+        maturity=maturity_b7,
+        maturity_adjustment=result_dict_b7["maturity_adjustment"],
+        k=result_dict_b7["k"],
+        rwa_before_sf=result_dict_b7["rwa"],
         supporting_factor=1.0,
-        rwa_after_sf=result_dict_b8["rwa"],
-        expected_loss=el_b8,
+        rwa_after_sf=result_dict_b7["rwa"],
+        expected_loss=el_b7,
         calculation_details={
             "pd_floor": float(CRR_PD_FLOOR),
-            "maturity_raw": maturity_raw_b8,
-            "maturity_capped": maturity_b8,
+            "maturity_raw": maturity_raw_b7,
+            "maturity_capped": maturity_b7,
             "maturity_cap": 5.0,
             "maturity_floor": 1.0,
         },
         regulatory_reference="CRR Art. 153, 162",
     )
 
-    print(f"CRR-B8: EAD=£{ead_b8:,.0f}, Maturity={maturity_raw_b8}y -> {maturity_b8}y, RWA=£{result_dict_b8['rwa']:,.0f}")
-    return (result_crr_b8,)
+    print(f"CRR-B7: EAD=£{ead_b7:,.0f}, Maturity={maturity_raw_b7}y -> {maturity_b7}y, RWA=£{result_dict_b7['rwa']:,.0f}")
+    return (result_crr_b7,)
 
 
 @app.cell
@@ -889,7 +809,8 @@ def _(mo):
     2. Supervisory LGD: 45% senior, 75% subordinated
     3. SME supporting factor (0.7619) available
     4. Maturity capped at 5 years, floored at 1 year
-    5. No maturity adjustment for retail exposures
+    5. F-IRB only applies to wholesale exposures (corporate, institution, sovereign)
+       - Retail must use A-IRB (internal LGD) or Standardised Approach
     """)
     return
 
@@ -905,12 +826,11 @@ def _(
     result_crr_b5,
     result_crr_b6,
     result_crr_b7,
-    result_crr_b8,
 ):
     """Compile all Group CRR-B results."""
     group_crr_b_results = [
         result_crr_b1, result_crr_b2, result_crr_b3, result_crr_b4,
-        result_crr_b5, result_crr_b6, result_crr_b7, result_crr_b8,
+        result_crr_b5, result_crr_b6, result_crr_b7,
     ]
 
     # Create summary DataFrame

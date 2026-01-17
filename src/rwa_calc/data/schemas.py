@@ -310,6 +310,188 @@ CORRELATION_PARAMETER_SCHEMA = {
 
 
 # =============================================================================
+# INTERMEDIATE PIPELINE SCHEMAS
+# =============================================================================
+
+# Schema for exposures after loading (unified from facilities, loans, contingents)
+RAW_EXPOSURE_SCHEMA = {
+    "exposure_reference": pl.String,  # Unique identifier
+    "exposure_type": pl.String,  # "facility", "loan", "contingent"
+    "product_type": pl.String,
+    "book_code": pl.String,
+    "counterparty_reference": pl.String,
+    "value_date": pl.Date,
+    "maturity_date": pl.Date,
+    "currency": pl.String,
+    "drawn_amount": pl.Float64,  # Drawn balance (0 for facilities without loans)
+    "undrawn_amount": pl.Float64,  # Undrawn commitment (limit - drawn for facilities)
+    "nominal_amount": pl.Float64,  # Total nominal (for contingents)
+    "lgd": pl.Float64,  # Internal LGD estimate (if available)
+    "beel": pl.Float64,  # Best estimate expected loss
+    "seniority": pl.String,  # senior, subordinated
+    "commitment_type": pl.String,  # For CCF determination
+    "ccf_category": pl.String,  # CCF lookup category
+}
+
+# Schema for exposures after hierarchy resolution
+RESOLVED_HIERARCHY_SCHEMA = {
+    # Original exposure fields
+    "exposure_reference": pl.String,
+    "exposure_type": pl.String,
+    "product_type": pl.String,
+    "book_code": pl.String,
+    "counterparty_reference": pl.String,
+    "value_date": pl.Date,
+    "maturity_date": pl.Date,
+    "currency": pl.String,
+    "drawn_amount": pl.Float64,
+    "undrawn_amount": pl.Float64,
+    "nominal_amount": pl.Float64,
+    "lgd": pl.Float64,
+    "seniority": pl.String,
+    "commitment_type": pl.String,
+    "ccf_category": pl.String,
+    # Counterparty hierarchy additions
+    "counterparty_has_parent": pl.Boolean,
+    "parent_counterparty_reference": pl.String,
+    "ultimate_parent_reference": pl.String,
+    "counterparty_hierarchy_depth": pl.Int8,
+    # Rating inheritance
+    "rating_inherited": pl.Boolean,
+    "rating_source_counterparty": pl.String,
+    "rating_inheritance_reason": pl.String,
+    # Facility hierarchy additions
+    "exposure_has_parent": pl.Boolean,
+    "parent_facility_reference": pl.String,
+    "root_facility_reference": pl.String,
+    "facility_hierarchy_depth": pl.Int8,
+    # Lending group aggregation
+    "lending_group_reference": pl.String,
+    "lending_group_total_exposure": pl.Float64,
+}
+
+# Schema for exposures after classification
+CLASSIFIED_EXPOSURE_SCHEMA = {
+    # Include all resolved hierarchy fields
+    "exposure_reference": pl.String,
+    "exposure_type": pl.String,
+    "counterparty_reference": pl.String,
+    "currency": pl.String,
+    "drawn_amount": pl.Float64,
+    "undrawn_amount": pl.Float64,
+    "seniority": pl.String,
+    "commitment_type": pl.String,
+    "ccf_category": pl.String,
+    # Classification additions
+    "exposure_class": pl.String,  # sovereign, institution, corporate, retail, etc.
+    "exposure_class_reason": pl.String,  # Explanation of classification
+    "approach_permitted": pl.String,  # SA, FIRB, AIRB based on permissions
+    "approach_applied": pl.String,  # Actual approach used
+    "approach_selection_reason": pl.String,  # Why this approach was selected
+    # Rating information
+    "cqs": pl.Int8,  # Credit Quality Step (1-6, 0 for unrated)
+    "pd": pl.Float64,  # Probability of default (for IRB)
+    "rating_agency": pl.String,  # Source of external rating
+    "rating_value": pl.String,  # Original rating value
+    # Entity flags carried forward
+    "is_sme": pl.Boolean,  # SME classification flag
+    "is_retail_eligible": pl.Boolean,  # Meets retail criteria
+}
+
+# Schema for exposures after CRM application
+CRM_ADJUSTED_SCHEMA = {
+    # Include all classified exposure fields
+    "exposure_reference": pl.String,
+    "exposure_type": pl.String,
+    "counterparty_reference": pl.String,
+    "currency": pl.String,
+    "exposure_class": pl.String,
+    "approach_applied": pl.String,
+    "cqs": pl.Int8,
+    "pd": pl.Float64,
+    "seniority": pl.String,
+    # EAD calculation
+    "drawn_amount": pl.Float64,
+    "undrawn_amount": pl.Float64,
+    "ccf_applied": pl.Float64,  # Credit conversion factor
+    "converted_undrawn": pl.Float64,  # undrawn × CCF
+    "gross_ead": pl.Float64,  # drawn + converted_undrawn
+    # Collateral impact
+    "collateral_gross_value": pl.Float64,
+    "collateral_haircut_applied": pl.Float64,
+    "fx_haircut_applied": pl.Float64,
+    "collateral_adjusted_value": pl.Float64,
+    "ead_after_collateral": pl.Float64,
+    # Guarantee impact
+    "guarantee_coverage_pct": pl.Float64,
+    "guaranteed_amount": pl.Float64,
+    "ead_after_guarantee": pl.Float64,
+    # Final EAD
+    "final_ead": pl.Float64,
+    # LGD determination
+    "lgd_type": pl.String,  # "supervisory" or "modelled"
+    "lgd_value": pl.Float64,  # LGD for calculation
+    "lgd_floor": pl.Float64,  # Applicable floor (Basel 3.1)
+    "lgd_floored": pl.Float64,  # max(lgd_value, lgd_floor)
+}
+
+# Schema for SA calculation results
+SA_RESULT_SCHEMA = {
+    "exposure_reference": pl.String,
+    "exposure_class": pl.String,
+    "final_ead": pl.Float64,
+    # Risk weight determination
+    "sa_cqs": pl.Int8,
+    "sa_base_risk_weight": pl.Float64,
+    "sa_rw_adjustment": pl.Float64,
+    "sa_rw_adjustment_reason": pl.String,
+    "sa_final_risk_weight": pl.Float64,
+    "sa_rw_regulatory_ref": pl.String,
+    # RWA calculation
+    "sa_rwa": pl.Float64,  # final_ead × risk_weight
+}
+
+# Schema for IRB calculation results
+IRB_RESULT_SCHEMA = {
+    "exposure_reference": pl.String,
+    "exposure_class": pl.String,
+    "final_ead": pl.Float64,
+    # IRB parameters
+    "irb_pd_original": pl.Float64,
+    "irb_pd_floor": pl.Float64,
+    "irb_pd_floored": pl.Float64,  # max(pd_original, pd_floor)
+    "irb_lgd_type": pl.String,  # "supervisory" or "modelled"
+    "irb_lgd_original": pl.Float64,
+    "irb_lgd_floor": pl.Float64,
+    "irb_lgd_floored": pl.Float64,  # max(lgd_original, lgd_floor)
+    "irb_maturity_m": pl.Float64,  # Effective maturity
+    # Formula components
+    "irb_correlation_r": pl.Float64,  # Asset correlation
+    "irb_maturity_adj_b": pl.Float64,  # Maturity adjustment factor
+    "irb_capital_k": pl.Float64,  # Capital requirement (K)
+    "irb_scaling_factor": pl.Float64,  # 1.06
+    # RWA calculation
+    "irb_risk_weight": pl.Float64,  # 12.5 × K × scaling_factor
+    "irb_rwa": pl.Float64,  # final_ead × risk_weight
+    # Expected loss
+    "irb_expected_loss": pl.Float64,  # PD × LGD × EAD
+}
+
+# Schema for slotting calculation results
+SLOTTING_RESULT_SCHEMA = {
+    "exposure_reference": pl.String,
+    "sl_type": pl.String,  # project_finance, object_finance, etc.
+    "slotting_category": pl.String,  # strong, good, satisfactory, weak, default
+    "remaining_maturity_years": pl.Float64,
+    "is_hvcre": pl.Boolean,
+    "sl_base_risk_weight": pl.Float64,
+    "sl_maturity_adjusted_rw": pl.Float64,
+    "sl_final_risk_weight": pl.Float64,
+    "sl_rwa": pl.Float64,
+}
+
+
+# =============================================================================
 # CONFIGURATION SCHEMAS
 # =============================================================================
 

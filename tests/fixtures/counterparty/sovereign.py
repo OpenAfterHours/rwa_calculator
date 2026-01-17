@@ -209,7 +209,7 @@ def save_sovereign_counterparties(output_dir: Path | None = None) -> Path:
         output_dir = Path(__file__).parent
 
     df = create_sovereign_counterparties()
-    output_path = output_dir / "sovereigns.parquet"
+    output_path = output_dir / "sovereign.parquet"
     df.write_parquet(output_path)
 
     return output_path

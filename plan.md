@@ -17,27 +17,27 @@ Create realistic test datasets covering key regulatory scenarios:
 ```
 tests/
 ├── fixtures/
-│   ├── counterparties/
-│   │   ├── sovereigns.parquet         # UK Govt, US Govt, etc.
-│   │   ├── institutions.parquet       # Banks, regulated entities
-│   │   ├── corporates.parquet         # Large corp, SME, unrated
+│   ├── counterparty/
+│   │   ├── sovereign.parquet         # UK Govt, US Govt, etc.
+│   │   ├── institution.parquet       # Banks, regulated entities
+│   │   ├── corporate.parquet         # Large corp, SME, unrated
 │   │   ├── retail.parquet             # Individuals, small business
 │   │   └── specialised_lending.parquet # Project finance, IPRE
 │   ├── exposures/
-│   │   ├── facilities.parquet
-│   │   ├── loans.parquet
-│   │   └── contingents.parquet
+│   │   ├── facility.parquet
+│   │   ├── loan.parquet
+│   │   └── contingent.parquet
 │   ├── collateral/
 │   │   ├── financial_collateral.parquet
 │   │   ├── real_estate.parquet
 │   │   └── receivables.parquet
-│   ├── guarantees.parquet
-│   ├── provisions.parquet
-│   ├── ratings.parquet
+│   ├── guarantee.parquet
+│   ├── provision.parquet
+│   ├── rating.parquet
 │   └── mappings/
-│       ├── facility_mappings.parquet
-│       ├── org_mappings.parquet
-│       └── lending_mappings.parquet
+│       ├── facility_mapping.parquet
+│       ├── org_mapping.parquet
+│       └── lending_mapping.parquet
 ```
 
 ### 1.2 Acceptance Test Scenarios

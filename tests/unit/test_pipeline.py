@@ -120,29 +120,58 @@ def mock_raw_data() -> RawDataBundle:
         "is_regional_govt_local_auth": [False, False],
     })
 
-    # Collateral (empty)
-    collateral = pl.LazyFrame({
-        "collateral_reference": pl.Series([], dtype=pl.String),
-        "beneficiary_reference": pl.Series([], dtype=pl.String),
-        "market_value": pl.Series([], dtype=pl.Float64),
+    # Collateral (empty with full schema)
+    collateral = pl.LazyFrame(schema={
+        "collateral_reference": pl.String,
+        "collateral_type": pl.String,
+        "currency": pl.String,
+        "maturity_date": pl.Date,
+        "market_value": pl.Float64,
+        "nominal_value": pl.Float64,
+        "beneficiary_type": pl.String,
+        "beneficiary_reference": pl.String,
+        "issuer_cqs": pl.Int8,
+        "issuer_type": pl.String,
+        "residual_maturity_years": pl.Float64,
+        "is_eligible_financial_collateral": pl.Boolean,
+        "is_eligible_irb_collateral": pl.Boolean,
+        "valuation_date": pl.Date,
+        "valuation_type": pl.String,
+        "property_type": pl.String,
+        "property_ltv": pl.Float64,
+        "is_income_producing": pl.Boolean,
+        "is_adc": pl.Boolean,
+        "is_presold": pl.Boolean,
     })
 
-    # Guarantees (empty)
-    guarantees = pl.LazyFrame({
-        "guarantee_reference": pl.Series([], dtype=pl.String),
-        "beneficiary_reference": pl.Series([], dtype=pl.String),
-        "amount_covered": pl.Series([], dtype=pl.Float64),
+    # Guarantees (empty with full schema)
+    guarantees = pl.LazyFrame(schema={
+        "guarantee_reference": pl.String,
+        "guarantee_type": pl.String,
+        "guarantor": pl.String,
+        "currency": pl.String,
+        "maturity_date": pl.Date,
+        "amount_covered": pl.Float64,
+        "percentage_covered": pl.Float64,
+        "beneficiary_type": pl.String,
+        "beneficiary_reference": pl.String,
     })
 
-    # Provisions (empty)
-    provisions = pl.LazyFrame({
-        "provision_reference": pl.Series([], dtype=pl.String),
-        "exposure_reference": pl.Series([], dtype=pl.String),
-        "provision_amount": pl.Series([], dtype=pl.Float64),
+    # Provisions (empty with full schema)
+    provisions = pl.LazyFrame(schema={
+        "provision_reference": pl.String,
+        "provision_type": pl.String,
+        "ifrs9_stage": pl.Int8,
+        "currency": pl.String,
+        "amount": pl.Float64,
+        "as_of_date": pl.Date,
+        "beneficiary_type": pl.String,
+        "beneficiary_reference": pl.String,
     })
 
     # Ratings
     ratings = pl.LazyFrame({
+        "rating_reference": ["RTG001"],
         "counterparty_reference": ["CP001"],
         "rating_type": ["external"],
         "rating_agency": ["S&P"],
@@ -150,6 +179,7 @@ def mock_raw_data() -> RawDataBundle:
         "cqs": [3],
         "pd": [0.005],
         "rating_date": [date(2024, 1, 1)],
+        "is_solicited": [True],
     })
 
     # Facility mappings (empty hierarchy)
@@ -205,9 +235,49 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
         "lending_group_total_exposure": [0.0, 0.0],
     })
 
+    # Create counterparty lookup with matching counterparties
+    counterparties = pl.LazyFrame({
+        "counterparty_reference": ["CP001", "CP002"],
+        "entity_type": ["corporate", "individual"],
+        "country_code": ["GB", "GB"],
+        "annual_revenue": [30000000.0, 0.0],
+        "default_status": [False, False],
+        "is_financial_institution": [False, False],
+        "is_regulated": [False, False],
+        "is_pse": [False, False],
+        "is_mdb": [False, False],
+        "is_international_org": [False, False],
+        "is_central_counterparty": [False, False],
+        "is_regional_govt_local_auth": [False, False],
+    })
+
+    rating_inheritance = pl.LazyFrame({
+        "counterparty_reference": ["CP001", "CP002"],
+        "cqs": [3, 0],  # CP002 is unrated
+        "pd": [0.005, None],
+        "rating_value": ["BBB", None],
+        "inherited": [False, False],
+        "source_counterparty": ["CP001", None],
+        "inheritance_reason": ["own_rating", "unrated"],
+    })
+
+    counterparty_lookup = CounterpartyLookup(
+        counterparties=counterparties,
+        parent_mappings=pl.LazyFrame(schema={
+            "child_counterparty_reference": pl.String,
+            "parent_counterparty_reference": pl.String,
+        }),
+        ultimate_parent_mappings=pl.LazyFrame(schema={
+            "counterparty_reference": pl.String,
+            "ultimate_parent_reference": pl.String,
+            "hierarchy_depth": pl.Int32,
+        }),
+        rating_inheritance=rating_inheritance,
+    )
+
     return ResolvedHierarchyBundle(
         exposures=exposures,
-        counterparty_lookup=create_empty_counterparty_lookup(),
+        counterparty_lookup=counterparty_lookup,
         collateral=pl.LazyFrame(),
         guarantees=pl.LazyFrame(),
         provisions=pl.LazyFrame(),

@@ -80,6 +80,7 @@ def create_loans() -> pl.DataFrame:
         *_institution_loans(),
         *_corporate_standalone_loans(),
         *_corporate_facility_loans(),
+        *_firb_scenario_loans(),
         *_retail_loans(),
         *_hierarchy_test_loans(),
         *_defaulted_loans(),
@@ -318,6 +319,113 @@ def _corporate_facility_loans() -> list[Loan]:
             maturity_date=date(2028, 12, 31),
             currency="GBP",
             drawn_amount=3_000_000.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+    ]
+
+
+def _firb_scenario_loans() -> list[Loan]:
+    """
+    Loans for CRR F-IRB scenario testing (Group CRR-B).
+
+    These loans are used in conjunction with FIRB internal ratings
+    to test specific F-IRB calculation features.
+
+    Scenarios:
+        CRR-B2: High PD corporate (CORP_UK_005)
+        CRR-B3: Subordinated loan (CORP_UK_004)
+        CRR-B4: Collateralised loan (CORP_SME_002)
+        CRR-B6: Standalone loan for PD floor test (CORP_UK_002)
+        CRR-B7: Long maturity loan (CORP_LRG_001)
+    """
+    return [
+        # =============================================================================
+        # CRR-B2: High PD corporate loan
+        # £5m term loan to CORP_UK_005 with 5% PD
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_CORP_UK_005",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UK_005",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 1, 1),  # 3 year maturity
+            currency="GBP",
+            drawn_amount=5_000_000.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # CRR-B3: Subordinated loan
+        # £2m subordinated loan to CORP_UK_004 with 75% LGD
+        # Tests CRR Art. 161 subordinated claim treatment
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_SUB_001",
+            product_type="SUBORDINATED_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UK_004",
+            value_date=VALUE_DATE,
+            maturity_date=date(2030, 1, 1),  # 4 year maturity
+            currency="GBP",
+            drawn_amount=2_000_000.0,
+            lgd=0.75,  # Subordinated LGD per CRR Art. 161
+            beel=0.0,
+            seniority="subordinated",
+        ),
+        # =============================================================================
+        # CRR-B4: Collateralised loan
+        # £5m loan to CORP_SME_002 with 50% cash collateral coverage
+        # Tests blended LGD calculation (50% secured at 0%, 50% unsecured at 45%)
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_COLL_001",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_SME_002",
+            value_date=VALUE_DATE,
+            maturity_date=date(2028, 6, 30),  # 2.5 year maturity
+            currency="GBP",
+            drawn_amount=5_000_000.0,
+            lgd=0.225,  # Blended: 50% × 0% + 50% × 45%
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # CRR-B6: Standalone loan for PD floor binding test
+        # £1m loan to CORP_UK_002 (rated CQS 1) to test 0.03% floor
+        # Internal rating has PD 0.01% which is floored to 0.03%
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_CORP_UK_002",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UK_002",
+            value_date=VALUE_DATE,
+            maturity_date=date(2028, 1, 1),  # 2 year maturity
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # CRR-B7: Long maturity loan
+        # £8m loan to CORP_LRG_001 with 7 year contractual maturity
+        # Tests CRR Art. 162 maturity cap of 5 years
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_LONG_MAT_001",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_LRG_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2033, 1, 1),  # 7 year maturity (capped at 5)
+            currency="GBP",
+            drawn_amount=8_000_000.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",

@@ -78,6 +78,7 @@ def create_ratings() -> pl.DataFrame:
         *_institution_external_ratings(),
         *_corporate_external_ratings(),
         *_corporate_internal_ratings(),
+        *_firb_scenario_internal_ratings(),
         *_retail_internal_ratings(),
     ]
 
@@ -222,6 +223,73 @@ def _corporate_internal_ratings() -> list[Rating]:
         Rating("RTG_INT_INST_UK_003", "INST_UK_003", "internal", "internal", "2A", 2, 0.0012, RATING_DATE, False),
         # PD floor test - internal PD below regulatory floor (use CORP_UK_002 instead)
         Rating("RTG_INT_FLOOR_TEST", "CORP_UK_002", "internal", "internal", "1A+", 1, 0.0001, RATING_DATE, False),
+    ]
+
+
+def _firb_scenario_internal_ratings() -> list[Rating]:
+    """
+    Internal ratings with specific PD values for CRR F-IRB scenario testing.
+
+    These ratings have exact PD values to match the expected outputs in the
+    CRR-B scenario workbook. Each rating uses a specific PD that demonstrates
+    a particular F-IRB calculation feature.
+
+    Note: These ratings use FIRB_RATING_DATE (one day after RATING_DATE) to ensure
+    they take precedence over other internal ratings for the same counterparty
+    when using get_internal_rating() which returns the most recent rating.
+
+    Scenarios:
+        CRR-B1: Low PD corporate (0.10%)
+        CRR-B2: High PD corporate (5.00%)
+        CRR-B3: Subordinated exposure (1.00%)
+        CRR-B4: Financial collateral (0.50%)
+        CRR-B5: SME with supporting factor (2.00%)
+        CRR-B6: PD floor binding (0.01% -> 0.03%)
+        CRR-B7: Long maturity (0.80%)
+    """
+    # Use a date one day after standard rating date so FIRB ratings take precedence
+    firb_rating_date = date(2026, 1, 2)
+
+    return [
+        # CRR-B1: Corporate F-IRB - Low PD (0.10%)
+        # Tests standard F-IRB calculation with low credit risk
+        Rating(
+            "RTG_INT_FIRB_B1", "CORP_UK_001", "internal", "internal",
+            "1C", 1, 0.0010, firb_rating_date, False
+        ),
+        # CRR-B2: Corporate F-IRB - High PD (5.00%)
+        # Tests F-IRB with elevated credit risk (correlation decreases with PD)
+        Rating(
+            "RTG_INT_FIRB_B2", "CORP_UK_005", "internal", "internal",
+            "5A", 5, 0.0500, firb_rating_date, False
+        ),
+        # CRR-B3: Subordinated Exposure - PD 1.00%
+        # Tests 75% supervisory LGD for subordinated claims
+        Rating(
+            "RTG_INT_FIRB_B3", "CORP_UK_004", "internal", "internal",
+            "4A", 4, 0.0100, firb_rating_date, False
+        ),
+        # CRR-B4: Financial Collateral - PD 0.50%
+        # Tests blended LGD with 50% cash collateral coverage
+        Rating(
+            "RTG_INT_FIRB_B4", "CORP_SME_002", "internal", "internal",
+            "3B", 3, 0.0050, firb_rating_date, False
+        ),
+        # CRR-B5: SME with Supporting Factor - PD 2.00%
+        # Tests SME firm size adjustment + 0.7619 supporting factor
+        Rating(
+            "RTG_INT_FIRB_B5", "CORP_SME_001", "internal", "internal",
+            "4B", 4, 0.0200, firb_rating_date, False
+        ),
+        # CRR-B6: PD Floor Binding - PD 0.01% (uses existing RTG_INT_FLOOR_TEST)
+        # The existing CORP_UK_002 rating with PD 0.0001 demonstrates floor binding
+        # No new rating needed as RTG_INT_FLOOR_TEST already has PD 0.01%
+        # CRR-B7: Long Maturity - PD 0.80%
+        # Tests maturity cap of 5 years (7Y contractual -> 5Y capped)
+        Rating(
+            "RTG_INT_FIRB_B7", "CORP_LRG_001", "internal", "internal",
+            "2C", 2, 0.0080, firb_rating_date, False
+        ),
     ]
 
 

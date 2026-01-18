@@ -206,18 +206,18 @@
       "code_hash": "a1dfeb606e4f44368b48ec67c5411ff4",
       "outputs": [
         {
-          "type": "data",
-          "data": {
-            "text/plain": ""
-          }
+          "type": "error",
+          "ename": "exception",
+          "evalue": "apply_sme_supporting_factor() missing 1 required positional argument: 'total_exposure'",
+          "traceback": []
         }
       ],
       "console": [
         {
           "type": "stream",
-          "name": "stdout",
-          "text": "CRR-B5: EAD=\u00a32,000,000, PD=2.00%\n  Correlation (with SME firm size adj): 0.1419\n  SME adjustment applied: True\n  RWA before SF: \u00a32,122,946\n  Supporting factor: 0.7619\n  RWA after SF: \u00a31,617,473\n",
-          "mimetype": "text/plain"
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;C:\\Users\\philm\\PycharmProjects\\rwa_calculator\\.venv\\Lib\\site-packages\\marimo\\_runtime\\executor.py&quot;</span>, line <span class=\"m\">138</span>, in <span class=\"n\">execute_cell</span>\n<span class=\"w\">    </span><span class=\"n\">exec</span><span class=\"p\">(</span><span class=\"n\">cell</span><span class=\"o\">.</span><span class=\"n\">body</span><span class=\"p\">,</span> <span class=\"n\">glbls</span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;C:\\Users\\philm\\AppData\\Local\\Temp\\marimo_16068\\__marimo__cell_nWHF_.py&quot;</span>, line <span class=\"m\">33</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">rwa_after_sf_b5</span><span class=\"p\">,</span> <span class=\"n\">sf_applied_b5</span><span class=\"p\">,</span> <span class=\"n\">sf_desc_b5</span> <span class=\"o\">=</span> <span class=\"n\">apply_sme_supporting_factor</span><span class=\"p\">(</span>\n<span class=\"w\">                                                 </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">rwa</span><span class=\"o\">=</span><span class=\"n\">rwa_before_sf_b5</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">2</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">currency</span><span class=\"o\">=</span><span class=\"s2\">&quot;EUR&quot;</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n<span class=\"gr\">TypeError</span>: <span class=\"n\">apply_sme_supporting_factor() missing 1 required positional argument: &#39;total_exposure&#39;</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
         }
       ]
     },
@@ -305,10 +305,10 @@
       "code_hash": "586361bc85a81b11625cafa8968685ed",
       "outputs": [
         {
-          "type": "data",
-          "data": {
-            "text/html": "<marimo-ui-element object-id='Vxnm-0' random-id='ad5925c5-36cf-b0e1-20a1-a7e67b9f3e27'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;_marimo_row_id&#92;&quot;:0,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B1&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Corporate F-IRB - low PD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;25,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.10%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;7,858,308&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;7,858,308&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:1,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B2&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Corporate F-IRB - high PD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;5,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;5.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;8,259,489&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;8,259,489&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:2,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B3&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Subordinated exposure - 75% LGD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;1.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;75%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;3,934,551&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;3,934,551&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:3,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B4&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Financial collateral - reduced LGD&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;5,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.50%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;22%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;1,844,711&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;1,844,711&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:4,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B5&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;SME corporate F-IRB with supporting factor&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;2.00%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;2,122,946&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;0.7619&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;1,617,473&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:5,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B6&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;PD floor binding (0.01% -&gt; 0.03%)&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;1,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.03%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;128,848&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;128,848&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:6,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-B7&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Long maturity exposure (7Y -&gt; 5Y cap)&#92;&quot;,&#92;&quot;EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;8,000,000&#92;&quot;,&#92;&quot;PD&#92;&quot;:&#92;&quot;0.80%&#92;&quot;,&#92;&quot;LGD&#92;&quot;:&#92;&quot;45%&#92;&quot;,&#92;&quot;RWA Before SF&#92;&quot;:&#92;&quot;9,841,717&#92;&quot;,&#92;&quot;SF&#92;&quot;:&#92;&quot;-&#92;&quot;,&#92;&quot;RWA After SF&#92;&quot;:&#92;&quot;9,841,717&#92;&quot;}]&quot;' data-total-rows='7' data-total-columns='8' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='false' data-page-size='10' data-field-types='[[&quot;Scenario&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;Description&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;EAD (\u00a3)&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;PD&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;LGD&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;RWA Before SF&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;SF&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;RWA After SF&quot;,[&quot;string&quot;,&quot;str&quot;]]]' data-selection='&quot;multi&quot;' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='true' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
-          }
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (TypeError): ",
+          "traceback": []
         }
       ],
       "console": []
@@ -318,10 +318,10 @@
       "code_hash": "af0e47828f5eda362949ebfdf3ca3ed6",
       "outputs": [
         {
-          "type": "data",
-          "data": {
-            "text/plain": ""
-          }
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (TypeError): ",
+          "traceback": []
         }
       ],
       "console": []

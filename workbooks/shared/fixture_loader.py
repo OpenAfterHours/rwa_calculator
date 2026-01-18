@@ -135,12 +135,17 @@ class FixtureData:
         return result.row(0, named=True)
 
     def get_internal_rating(self, counterparty_reference: str) -> dict | None:
-        """Get the most recent internal rating for a counterparty."""
+        """Get the most recent internal rating for a counterparty.
+
+        Returns the internal rating with the most recent rating_date.
+        If multiple ratings have the same date, uses rating_reference
+        as a secondary sort key for deterministic ordering.
+        """
         result = (
             self.ratings
             .filter(pl.col("counterparty_reference") == counterparty_reference)
             .filter(pl.col("rating_type") == "internal")
-            .sort("rating_date", descending=True)
+            .sort(["rating_date", "rating_reference"], descending=[True, True])
             .collect()
         )
         if result.height == 0:

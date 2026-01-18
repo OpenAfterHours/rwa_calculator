@@ -245,16 +245,22 @@ class HierarchyResolver:
         - source_counterparty: Where the rating came from
         - inheritance_reason: own_rating, parent_rating, or unrated
         """
-        # Get first rating per counterparty
-        first_ratings = ratings.group_by("counterparty_reference").first().select([
-            pl.col("counterparty_reference").alias("rated_cp"),
-            pl.col("rating_type"),
-            pl.col("rating_agency"),
-            pl.col("rating_value"),
-            pl.col("cqs"),
-            pl.col("pd"),
-            pl.col("rating_date"),
-        ])
+        # Get most recent rating per counterparty (sort by date then reference for consistency)
+        first_ratings = (
+            ratings
+            .sort(["rating_date", "rating_reference"], descending=[True, True])
+            .group_by("counterparty_reference")
+            .first()
+            .select([
+                pl.col("counterparty_reference").alias("rated_cp"),
+                pl.col("rating_type"),
+                pl.col("rating_agency"),
+                pl.col("rating_value"),
+                pl.col("cqs"),
+                pl.col("pd"),
+                pl.col("rating_date"),
+            ])
+        )
 
         # Start with all counterparties
         result = counterparties.select("counterparty_reference")

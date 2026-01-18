@@ -181,11 +181,15 @@ def _(
     """Calculate Scenario CRR-B1: Corporate F-IRB - Low PD."""
     loan_b1 = fixtures.get_loan("LOAN_CORP_UK_001")
     cpty_b1 = fixtures.get_counterparty("CORP_UK_001")
-    rating_b1 = fixtures.get_rating("CORP_UK_001")
+    internal_rating_b1 = fixtures.get_internal_rating("CORP_UK_001")
 
-    # Input parameters
+    # Validate internal rating exists for F-IRB calculation
+    if internal_rating_b1 is None:
+        raise ValueError("No internal rating found for CORP_UK_001 - required for F-IRB")
+
+    # Input parameters - PD from internal rating fixture
     ead_b1 = float(loan_b1["drawn_amount"])
-    pd_raw_b1 = 0.001  # 0.10%
+    pd_raw_b1 = float(internal_rating_b1["pd"])  # From fixture: 0.0010 (0.10%)
     pd_floored_b1 = apply_pd_floor(pd_raw_b1)
     lgd_b1 = float(get_firb_lgd("unsecured"))
     maturity_b1 = 2.5
@@ -230,6 +234,7 @@ def _(
         expected_loss=el_b1,
         calculation_details={
             "counterparty_name": cpty_b1["counterparty_name"],
+            "internal_rating_ref": internal_rating_b1["rating_reference"],
             "pd_floor": float(CRR_PD_FLOOR),
             "lgd_source": "supervisory",
             "formula": "K = LGD × [N(G(PD)) - PD × LGD] × MA",
@@ -265,12 +270,21 @@ def _(
     calculate_correlation,
     calculate_expected_loss,
     calculate_irb_rwa,
+    fixtures,
     get_firb_lgd,
 ):
     """Calculate Scenario CRR-B2: Corporate F-IRB - High PD."""
-    # Hypothetical high-PD corporate (no fixture needed)
-    ead_b2 = 5_000_000.0
-    pd_raw_b2 = 0.05  # 5.00%
+    loan_b2 = fixtures.get_loan("LOAN_CORP_UK_005")
+    cpty_b2 = fixtures.get_counterparty("CORP_UK_005")
+    internal_rating_b2 = fixtures.get_internal_rating("CORP_UK_005")
+
+    # Validate internal rating exists for F-IRB calculation
+    if internal_rating_b2 is None:
+        raise ValueError("No internal rating found for CORP_UK_005 - required for F-IRB")
+
+    # Input parameters - PD from internal rating fixture
+    ead_b2 = float(loan_b2["drawn_amount"])
+    pd_raw_b2 = float(internal_rating_b2["pd"])  # From fixture: 0.0500 (5.00%)
     pd_floored_b2 = apply_pd_floor(pd_raw_b2)  # No effect as 5% > 0.03%
     lgd_b2 = float(get_firb_lgd("unsecured"))
     maturity_b2 = 3.0
@@ -296,8 +310,8 @@ def _(
         scenario_id="CRR-B2",
         scenario_group="CRR-B",
         description="Corporate F-IRB - high PD",
-        exposure_reference="LOAN_CORP_UK_002",
-        counterparty_reference="CORP_UK_002",
+        exposure_reference="LOAN_CORP_UK_005",
+        counterparty_reference="CORP_UK_005",
         approach="F-IRB",
         exposure_class="CORPORATE",
         ead=ead_b2,
@@ -313,7 +327,8 @@ def _(
         rwa_after_sf=result_dict_b2["rwa"],
         expected_loss=el_b2,
         calculation_details={
-            "counterparty_name": "High PD Corporate",
+            "counterparty_name": cpty_b2["counterparty_name"],
+            "internal_rating_ref": internal_rating_b2["rating_reference"],
             "pd_floor": float(CRR_PD_FLOOR),
             "pd_floor_binding": pd_raw_b2 < float(CRR_PD_FLOOR),
             "lgd_source": "supervisory",
@@ -352,12 +367,21 @@ def _(
     calculate_correlation,
     calculate_expected_loss,
     calculate_irb_rwa,
+    fixtures,
     get_firb_lgd,
 ):
     """Calculate Scenario CRR-B3: Subordinated Exposure."""
-    # Hypothetical subordinated exposure
-    ead_b3 = 2_000_000.0
-    pd_raw_b3 = 0.01  # 1.00%
+    loan_b3 = fixtures.get_loan("LOAN_SUB_001")
+    cpty_b3 = fixtures.get_counterparty("CORP_UK_004")
+    internal_rating_b3 = fixtures.get_internal_rating("CORP_UK_004")
+
+    # Validate internal rating exists for F-IRB calculation
+    if internal_rating_b3 is None:
+        raise ValueError("No internal rating found for CORP_UK_004 - required for F-IRB")
+
+    # Input parameters - PD from internal rating fixture
+    ead_b3 = float(loan_b3["drawn_amount"])
+    pd_raw_b3 = float(internal_rating_b3["pd"])  # From fixture: 0.0100 (1.00%)
     pd_floored_b3 = apply_pd_floor(pd_raw_b3)
     lgd_b3 = float(get_firb_lgd("unsecured", is_subordinated=True))  # 75%
     maturity_b3 = 4.0
@@ -382,7 +406,7 @@ def _(
         scenario_group="CRR-B",
         description="Subordinated exposure - 75% LGD",
         exposure_reference="LOAN_SUB_001",
-        counterparty_reference="CORP_SUB_001",
+        counterparty_reference="CORP_UK_004",
         approach="F-IRB",
         exposure_class="CORPORATE_SUBORDINATED",
         ead=ead_b3,
@@ -398,6 +422,8 @@ def _(
         rwa_after_sf=result_dict_b3["rwa"],
         expected_loss=el_b3,
         calculation_details={
+            "counterparty_name": cpty_b3["counterparty_name"],
+            "internal_rating_ref": internal_rating_b3["rating_reference"],
             "pd_floor": float(CRR_PD_FLOOR),
             "lgd_source": "supervisory_subordinated",
             "lgd_senior": 0.45,
@@ -437,11 +463,21 @@ def _(
     calculate_correlation,
     calculate_expected_loss,
     calculate_irb_rwa,
+    fixtures,
     get_firb_lgd,
 ):
     """Calculate Scenario CRR-B4: Financial Collateral."""
-    ead_b4 = 5_000_000.0
-    pd_raw_b4 = 0.005  # 0.50%
+    loan_b4 = fixtures.get_loan("LOAN_COLL_001")
+    cpty_b4 = fixtures.get_counterparty("CORP_SME_002")
+    internal_rating_b4 = fixtures.get_internal_rating("CORP_SME_002")
+
+    # Validate internal rating exists for F-IRB calculation
+    if internal_rating_b4 is None:
+        raise ValueError("No internal rating found for CORP_SME_002 - required for F-IRB")
+
+    # Input parameters - PD from internal rating fixture
+    ead_b4 = float(loan_b4["drawn_amount"])
+    pd_raw_b4 = float(internal_rating_b4["pd"])  # From fixture: 0.0050 (0.50%)
     pd_floored_b4 = apply_pd_floor(pd_raw_b4)
     maturity_b4 = 2.5
 
@@ -471,7 +507,7 @@ def _(
         scenario_group="CRR-B",
         description="Financial collateral - reduced LGD",
         exposure_reference="LOAN_COLL_001",
-        counterparty_reference="CORP_COLL_001",
+        counterparty_reference="CORP_SME_002",
         approach="F-IRB",
         exposure_class="CORPORATE_SECURED",
         ead=ead_b4,
@@ -487,6 +523,8 @@ def _(
         rwa_after_sf=result_dict_b4["rwa"],
         expected_loss=el_b4,
         calculation_details={
+            "counterparty_name": cpty_b4["counterparty_name"],
+            "internal_rating_ref": internal_rating_b4["rating_reference"],
             "pd_floor": float(CRR_PD_FLOOR),
             "collateral_type": "cash",
             "collateral_coverage": collateral_coverage_b4,
@@ -544,9 +582,15 @@ def _(
     """
     loan_b5 = fixtures.get_loan("LOAN_CORP_SME_001")
     cpty_b5 = fixtures.get_counterparty("CORP_SME_001")
+    internal_rating_b5 = fixtures.get_internal_rating("CORP_SME_001")
 
+    # Validate internal rating exists for F-IRB calculation
+    if internal_rating_b5 is None:
+        raise ValueError("No internal rating found for CORP_SME_001 - required for F-IRB")
+
+    # Input parameters - PD from internal rating fixture
     ead_b5 = float(loan_b5["drawn_amount"])
-    pd_raw_b5 = 0.02  # 2.00%
+    pd_raw_b5 = float(internal_rating_b5["pd"])  # From fixture: 0.0200 (2.00%)
     lgd_b5 = float(get_firb_lgd("unsecured"))
     maturity_b5 = 2.5
     turnover_m_b5 = 25.0  # EUR 25m (or ~£22m) - qualifies for firm size adjustment
@@ -597,6 +641,7 @@ def _(
         expected_loss=el_b5,
         calculation_details={
             "counterparty_name": cpty_b5["counterparty_name"],
+            "internal_rating_ref": internal_rating_b5["rating_reference"],
             "pd_floor": float(CRR_PD_FLOOR),
             "turnover_m": turnover_m_b5,
             "sme_firm_size_adjustment_applied": result_dict_b5["sme_adjustment_applied"],
@@ -648,11 +693,17 @@ def _(
     get_firb_lgd,
 ):
     """Calculate Scenario CRR-B6: PD Floor Binding."""
-    loan_b6 = fixtures.get_loan("LOAN_CORP_UK_003")
-    cpty_b6 = fixtures.get_counterparty("CORP_UK_003")
+    loan_b6 = fixtures.get_loan("LOAN_CORP_UK_002")
+    cpty_b6 = fixtures.get_counterparty("CORP_UK_002")
+    internal_rating_b6 = fixtures.get_internal_rating("CORP_UK_002")
 
+    # Validate internal rating exists for F-IRB calculation
+    if internal_rating_b6 is None:
+        raise ValueError("No internal rating found for CORP_UK_002 - required for F-IRB")
+
+    # Input parameters - PD from internal rating fixture
     ead_b6 = float(loan_b6["drawn_amount"])
-    pd_raw_b6 = 0.0001  # 0.01% - very low, will be floored
+    pd_raw_b6 = float(internal_rating_b6["pd"])  # From fixture: 0.0001 (0.01%) - very low, will be floored
     pd_floored_b6 = apply_pd_floor(pd_raw_b6)  # Will become 0.03%
     lgd_b6 = float(get_firb_lgd("unsecured"))
     maturity_b6 = 2.0
@@ -679,8 +730,8 @@ def _(
         scenario_id="CRR-B6",
         scenario_group="CRR-B",
         description="PD floor binding (0.01% -> 0.03%)",
-        exposure_reference="LOAN_CORP_UK_003",
-        counterparty_reference="CORP_UK_003",
+        exposure_reference="LOAN_CORP_UK_002",
+        counterparty_reference="CORP_UK_002",
         approach="F-IRB",
         exposure_class="CORPORATE",
         ead=ead_b6,
@@ -697,6 +748,7 @@ def _(
         expected_loss=el_b6,
         calculation_details={
             "counterparty_name": cpty_b6["counterparty_name"],
+            "internal_rating_ref": internal_rating_b6["rating_reference"],
             "pd_raw": pd_raw_b6,
             "pd_floor": float(CRR_PD_FLOOR),
             "pd_floored": pd_floored_b6,
@@ -738,11 +790,21 @@ def _(
     calculate_correlation,
     calculate_expected_loss,
     calculate_irb_rwa,
+    fixtures,
     get_firb_lgd,
 ):
     """Calculate Scenario CRR-B7: Long Maturity (Capped)."""
-    ead_b7 = 8_000_000.0
-    pd_raw_b7 = 0.008  # 0.80%
+    loan_b7 = fixtures.get_loan("LOAN_LONG_MAT_001")
+    cpty_b7 = fixtures.get_counterparty("CORP_LRG_001")
+    internal_rating_b7 = fixtures.get_internal_rating("CORP_LRG_001")
+
+    # Validate internal rating exists for F-IRB calculation
+    if internal_rating_b7 is None:
+        raise ValueError("No internal rating found for CORP_LRG_001 - required for F-IRB")
+
+    # Input parameters - PD from internal rating fixture
+    ead_b7 = float(loan_b7["drawn_amount"])
+    pd_raw_b7 = float(internal_rating_b7["pd"])  # From fixture: 0.0080 (0.80%)
     pd_floored_b7 = apply_pd_floor(pd_raw_b7)
     lgd_b7 = float(get_firb_lgd("unsecured"))
     maturity_raw_b7 = 7.0  # Will be capped to 5.0
@@ -768,7 +830,7 @@ def _(
         scenario_group="CRR-B",
         description="Long maturity exposure (7Y -> 5Y cap)",
         exposure_reference="LOAN_LONG_MAT_001",
-        counterparty_reference="CORP_LM_001",
+        counterparty_reference="CORP_LRG_001",
         approach="F-IRB",
         exposure_class="CORPORATE",
         ead=ead_b7,
@@ -784,6 +846,8 @@ def _(
         rwa_after_sf=result_dict_b7["rwa"],
         expected_loss=el_b7,
         calculation_details={
+            "counterparty_name": cpty_b7["counterparty_name"],
+            "internal_rating_ref": internal_rating_b7["rating_reference"],
             "pd_floor": float(CRR_PD_FLOOR),
             "maturity_raw": maturity_raw_b7,
             "maturity_capped": maturity_b7,

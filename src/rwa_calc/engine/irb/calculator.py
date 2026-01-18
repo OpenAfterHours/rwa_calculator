@@ -53,6 +53,7 @@ from rwa_calc.engine.irb.formulas import (
     calculate_maturity_adjustment,
     calculate_expected_loss,
 )
+from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -153,7 +154,10 @@ class IRBCalculator:
         # Step 4: Apply IRB formulas (PD floor, correlation, K, MA, RWA)
         exposures = apply_irb_formulas(exposures, config)
 
-        # Step 5: Build audit trail
+        # Step 5: Apply supporting factors (CRR only - Art. 501)
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        # Step 6: Build audit trail
         audit = self._build_audit(exposures)
 
         # Step 6: Calculate expected loss
@@ -318,22 +322,89 @@ class IRBCalculator:
                     pl.lit(0.0).alias("ead_final"),
                 ])
 
-        # Maturity
-        if "maturity" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(2.5).alias("maturity"),  # Default 2.5 years
-            ])
+        # Maturity calculation per CRR Art. 162
+        # Floor: 1 year, Cap: 5 years
+        maturity_floor = 1.0
+        maturity_cap = 5.0
+        default_maturity = 5.0  # Default if no maturity date available
 
-        # Turnover for SME adjustment
+        if "maturity" not in schema.names():
+            if "maturity_date" in schema.names():
+                # Calculate maturity from maturity_date - reporting_date
+                reporting_date = config.reporting_date
+                exposures = exposures.with_columns([
+                    pl.when(pl.col("maturity_date").is_not_null())
+                    .then(
+                        # Calculate years to maturity, apply floor and cap
+                        ((pl.col("maturity_date") - pl.lit(reporting_date)).dt.total_days() / 365.0)
+                        .clip(maturity_floor, maturity_cap)
+                    )
+                    .otherwise(pl.lit(default_maturity))
+                    .alias("maturity"),
+                ])
+            else:
+                # No maturity date available, use default
+                exposures = exposures.with_columns([
+                    pl.lit(default_maturity).alias("maturity"),
+                ])
+
+        # Turnover for SME correlation adjustment
+        # Derive turnover_m (in millions) from cp_annual_revenue if available
         if "turnover_m" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(None).cast(pl.Float64).alias("turnover_m"),
-            ])
+            if "cp_annual_revenue" in schema.names():
+                # Convert annual_revenue to turnover in millions
+                exposures = exposures.with_columns([
+                    (pl.col("cp_annual_revenue") / 1_000_000.0).alias("turnover_m"),
+                ])
+            else:
+                exposures = exposures.with_columns([
+                    pl.lit(None).cast(pl.Float64).alias("turnover_m"),
+                ])
 
         # Exposure class
         if "exposure_class" not in schema.names():
             exposures = exposures.with_columns([
                 pl.lit("CORPORATE").alias("exposure_class"),
+            ])
+
+        return exposures
+
+    def _apply_supporting_factors(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply SME and infrastructure supporting factors (CRR Art. 501).
+
+        Supporting factors reduce RWA for qualifying exposures:
+        - SME factor: 0.7619 (tiered approach for large exposures)
+        - Infrastructure factor: 0.75
+
+        Under Basel 3.1, supporting factors are not available.
+        """
+        if not config.supporting_factors.enabled:
+            # Basel 3.1 or supporting factors disabled - no adjustment
+            return exposures.with_columns([
+                pl.lit(1.0).alias("supporting_factor"),
+            ])
+
+        schema = exposures.collect_schema()
+
+        # Prepare RWA column for factor application
+        # The rwa column from formulas is pre-factor
+        exposures = exposures.with_columns([
+            pl.col("rwa").alias("rwa_pre_factor"),
+        ])
+
+        # Use the SA supporting factor calculator
+        sf_calc = SupportingFactorCalculator()
+        exposures = sf_calc.apply_factors(exposures, config)
+
+        # Rename rwa_post_factor back to rwa for consistency
+        if "rwa_post_factor" in exposures.collect_schema().names():
+            exposures = exposures.with_columns([
+                pl.col("rwa_post_factor").alias("rwa"),
             ])
 
         return exposures

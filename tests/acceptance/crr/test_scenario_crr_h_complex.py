@@ -4,8 +4,6 @@ CRR Group H: Complex/Combined Scenarios Acceptance Tests.
 These tests validate that the production RWA calculator correctly handles
 complex scenarios involving multiple features, hierarchies, and combined treatments.
 
-Tests are skipped until the production calculator is implemented in src/rwa_calc/.
-
 Regulatory References:
 - CRR Art. 111, 113: Facility hierarchy and aggregation
 - CRR Art. 142: Counterparty group and rating inheritance
@@ -14,16 +12,23 @@ Regulatory References:
 """
 
 import pytest
+import polars as pl
 from typing import Any
 
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_supporting_factor_match,
+    get_result_for_exposure,
 )
 
 
-# Marker for tests awaiting production implementation
-SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
+# Mapping of scenario IDs to exposure references
+SCENARIO_EXPOSURE_MAP = {
+    "CRR-H1": "FAC_MULTI_001",
+    "CRR-H2": "GRP_MULTI_001",
+    "CRR-H3": "LOAN_SME_CHAIN",
+    "CRR-H4": "LOAN_CRM_FULL",
+}
 
 
 class TestCRRGroupH_ComplexScenarios:
@@ -40,99 +45,128 @@ class TestCRRGroupH_ComplexScenarios:
     - Chained CRM treatments
     """
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture FAC_MULTI_001 not available")
     def test_crr_h1_facility_multiple_loans(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-H1: Facility with multiple sub-exposures.
 
-        Input: Facility containing:
-          - Term loan: £2m (100% CCF)
-          - Trade finance: £1.5m (100% CCF)
-          - Overdraft: £500k (100% CCF)
-          - Undrawn commitment: £1m (50% CCF)
-        Expected: Aggregated EAD = £4.5m
+        Input: Facility containing term loan, trade finance, overdraft, undrawn commitment
+        Expected: Aggregated EAD across sub-exposures
 
         Tests correct aggregation of exposures within facility hierarchy.
         """
         expected = expected_outputs_dict["CRR-H1"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-H1"]
 
-        # TODO: Run through production calculator
-        # Verify aggregation across sub-exposures
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-H1",
+        )
+
+    @pytest.mark.skip(reason="Fixture GRP_MULTI_001 not available")
     def test_crr_h2_counterparty_group_rating_inheritance(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-H2: Counterparty group with rating inheritance.
 
-        Input: Group containing:
-          - Parent: £3m, CQS 2 (50% RW)
-          - Sub1: £1.5m, unrated (inherits parent CQS 2)
-          - Sub2: £500k, CQS 3 (100% RW) - uses own rating
+        Input: Group with:
+          - Parent: CQS 2
+          - Sub1: unrated (inherits parent CQS 2)
+          - Sub2: CQS 3 (uses own rating)
         Expected: Blended RW based on inheritance rules
 
         CRR Art. 142: Rating inheritance within groups
         """
         expected = expected_outputs_dict["CRR-H2"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-H2"]
 
-        # TODO: Run through production calculator
-        # Verify rating inheritance is applied correctly
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-H2",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SME_CHAIN not available")
     def test_crr_h3_sme_chain_supporting_factor(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-H3: SME chain with supporting factor.
 
-        Input: £2m loan, SME counterparty (turnover £25m)
+        Input: Loan, SME counterparty
         Expected: RWA reduced by SME supporting factor (0.7619)
 
-        Effective RW = 100% × 0.7619 = 76.19%
+        Effective RW = 100% * 0.7619 = 76.19%
         """
         expected = expected_outputs_dict["CRR-H3"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-H3"]
 
-        # TODO: Run through production calculator
-        # assert result.supporting_factor == pytest.approx(0.7619, rel=0.001)
-        # assert result.effective_rw == pytest.approx(0.7619, rel=0.01)
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_supporting_factor_match(
+            result["supporting_factor"],
+            expected["supporting_factor"],
+            scenario_id="CRR-H3",
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-H3",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CRM_FULL not available")
     def test_crr_h4_full_crm_chain(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-H4: Full CRM chain - collateral + guarantee + provision.
 
-        Input: £2m gross exposure with:
-          - Specific provision: £100k
-          - Cash collateral: £500k
-          - Bank guarantee: £400k
+        Input: Gross exposure with:
+          - Specific provision
+          - Cash collateral
+          - Bank guarantee
         Expected: RWA significantly reduced through combined CRM
 
         Tests correct ordering and application of multiple CRM techniques.
         """
         expected = expected_outputs_dict["CRR-H4"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-H4"]
 
-        # TODO: Run through production calculator
-        # Verify each CRM step is applied in correct order:
-        # 1. Net of provision
-        # 2. Less collateral (with haircuts)
-        # 3. Guarantee substitution on remainder
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-H4",
+        )
 
 
 class TestCRRGroupH_ParameterizedValidation:
@@ -178,7 +212,7 @@ class TestCRRGroupH_ParameterizedValidation:
     ) -> None:
         """Verify CRR-H4 demonstrates RWA reduction from CRM chain."""
         scenario = expected_outputs_dict["CRR-H4"]
-        # £2m gross at 100% RW would be £2m RWA without CRM
+        # Gross at 100% RW would be a high RWA without CRM
         # With CRM chain, should be significantly lower
         gross_rwa = 2_000_000.0
         actual_rwa = scenario["rwa_after_sf"]

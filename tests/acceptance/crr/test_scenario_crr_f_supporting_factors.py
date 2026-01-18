@@ -4,12 +4,10 @@ CRR Group F: Supporting Factors Acceptance Tests.
 These tests validate that the production RWA calculator correctly applies
 the CRR-specific supporting factors.
 
-Tests are skipped until the production calculator is implemented in src/rwa_calc/.
-
 Key Features:
 - SME supporting factor uses TIERED approach (CRR2 Art. 501):
-  - Exposures up to €2.5m (£2.2m): factor of 0.7619 (23.81% reduction)
-  - Exposures above €2.5m (£2.2m): factor of 0.85 (15% reduction)
+  - Exposures up to EUR 2.5m: factor of 0.7619 (23.81% reduction)
+  - Exposures above EUR 2.5m: factor of 0.85 (15% reduction)
 - Infrastructure supporting factor: 0.75 (flat, not tiered)
 
 These factors are NOT available under Basel 3.1.
@@ -20,17 +18,27 @@ Regulatory References:
 """
 
 import pytest
+import polars as pl
 from decimal import Decimal
 from typing import Any
 
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_supporting_factor_match,
+    get_result_for_exposure,
 )
 
 
-# Marker for tests awaiting production implementation
-SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
+# Mapping of scenario IDs to exposure references
+SCENARIO_EXPOSURE_MAP = {
+    "CRR-F1": "LOAN_SME_TIER1",
+    "CRR-F2": "LOAN_SME_TIER_BLEND",
+    "CRR-F3": "LOAN_SME_TIER2_DOM",
+    "CRR-F4": "LOAN_RTL_SME_TIER1",
+    "CRR-F5": "LOAN_INFRA_001",
+    "CRR-F6": "LOAN_CORP_LARGE",
+    "CRR-F7": "LOAN_SME_BOUNDARY",
+}
 
 
 class TestCRRGroupF_TieredSMEFactor:
@@ -38,158 +46,195 @@ class TestCRRGroupF_TieredSMEFactor:
     CRR Tiered SME Supporting Factor acceptance tests.
 
     The SME factor is calculated as:
-        factor = [min(E, threshold) × 0.7619 + max(E - threshold, 0) × 0.85] / E
+        factor = [min(E, threshold) * 0.7619 + max(E - threshold, 0) * 0.85] / E
 
-    Where threshold = £2.2m (€2.5m)
+    Where threshold = EUR 2.5m
     """
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture LOAN_SME_TIER1 not available")
     def test_crr_f1_sme_tier1_only_small_exposure(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
-        CRR-F1: Small SME exposure (£2m) gets Tier 1 factor only.
+        CRR-F1: Small SME exposure gets Tier 1 factor only.
 
-        Input: £2m exposure (< £2.2m threshold)
+        Input: Small exposure (< threshold)
         Expected: Factor = 0.7619 (pure Tier 1)
-
-        Hand calculation:
-        - EAD: £2,000,000
-        - Factor: 0.7619 (exposure ≤ threshold, 100% Tier 1)
-        - RWA after: £2,000,000 × 1.0 × 0.7619 = £1,523,800
         """
         expected = expected_outputs_dict["CRR-F1"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F1"]
 
-        # Verify Tier 1 only factor
-        # assert result.supporting_factor == pytest.approx(0.7619, rel=0.0001)
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_supporting_factor_match(
+            result["supporting_factor"],
+            expected["supporting_factor"],
+            scenario_id="CRR-F1",
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-F1",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SME_TIER_BLEND not available")
     def test_crr_f2_sme_blended_medium_exposure(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
-        CRR-F2: Medium SME exposure (£4m) gets blended factor.
+        CRR-F2: Medium SME exposure gets blended factor.
 
-        Input: £4m exposure (above £2.2m threshold)
+        Input: Medium exposure (above threshold)
         Expected: Blended factor between 0.7619 and 0.85
-
-        Hand calculation:
-        - Tier 1: £2.2m × 0.7619 = £1,676,180
-        - Tier 2: £1.8m × 0.85 = £1,530,000
-        - Total weighted: £3,206,180
-        - Effective factor: £3,206,180 / £4,000,000 = 0.8015
         """
         expected = expected_outputs_dict["CRR-F2"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F2"]
 
-        # Verify blended factor
-        # assert result.supporting_factor == pytest.approx(0.8015, rel=0.001)
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_supporting_factor_match(
+            result["supporting_factor"],
+            expected["supporting_factor"],
+            scenario_id="CRR-F2",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SME_TIER2_DOM not available")
     def test_crr_f3_sme_tier2_dominant_large_exposure(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
-        CRR-F3: Large SME exposure (£10m) - Tier 2 dominates.
+        CRR-F3: Large SME exposure - Tier 2 dominates.
 
-        Input: £10m exposure (well above threshold)
+        Input: Large exposure (well above threshold)
         Expected: Factor approaching 0.85 as Tier 2 dominates
-
-        Hand calculation:
-        - Tier 1: £2.2m × 0.7619 = £1,676,180 (22%)
-        - Tier 2: £7.8m × 0.85 = £6,630,000 (78%)
-        - Total: £8,306,180
-        - Effective factor: 0.8306
         """
         expected = expected_outputs_dict["CRR-F3"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F3"]
 
-        # Verify Tier 2 dominant factor
-        # assert 0.83 < result.supporting_factor < 0.85
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_supporting_factor_match(
+            result["supporting_factor"],
+            expected["supporting_factor"],
+            scenario_id="CRR-F3",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_RTL_SME_TIER1 not available")
     def test_crr_f4_sme_retail_with_tiered_factor(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-F4: SME retail with tiered factor.
 
-        Input: £500k retail SME exposure
+        Input: Retail SME exposure
         Expected: 75% RW + Tier 1 SME factor (0.7619)
-
-        Effective RW = 75% × 0.7619 = 57.14%
         """
         expected = expected_outputs_dict["CRR-F4"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F4"]
 
-        # Verify retail + SME factor combination
-        # assert result.risk_weight == 0.75
-        # assert result.supporting_factor == pytest.approx(0.7619, rel=0.0001)
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_supporting_factor_match(
+            result["supporting_factor"],
+            expected["supporting_factor"],
+            scenario_id="CRR-F4",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_INFRA_001 not available")
     def test_crr_f5_infrastructure_factor_not_tiered(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-F5: Infrastructure factor is NOT tiered.
 
-        Input: £50m infrastructure exposure
+        Input: Infrastructure exposure
         Expected: Flat 0.75 factor regardless of exposure size
 
         Note: Infrastructure factor is not tiered like SME factor
         """
         expected = expected_outputs_dict["CRR-F5"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F5"]
 
-        # Verify flat infrastructure factor
-        # assert result.supporting_factor == 0.75
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert result["supporting_factor"] == pytest.approx(0.75, rel=0.001), (
+            "Infrastructure factor should be 0.75"
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CORP_LARGE not available")
     def test_crr_f6_large_corporate_no_factor(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
-        CRR-F6: Large corporate (turnover > £44m) gets no SME factor.
+        CRR-F6: Large corporate (turnover > threshold) gets no SME factor.
 
-        Input: £20m exposure, turnover £200m
+        Input: Large exposure, high turnover
         Expected: No SME factor (turnover exceeds eligibility threshold)
         """
         expected = expected_outputs_dict["CRR-F6"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F6"]
 
-        # Verify no factor applied
-        # assert result.supporting_factor == 1.0
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert result["supporting_factor"] == pytest.approx(1.0), (
+            "Large corporate should have no supporting factor (1.0)"
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SME_BOUNDARY not available")
     def test_crr_f7_at_exposure_threshold_boundary(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
-        CRR-F7: Exposure exactly at £2.2m threshold.
+        CRR-F7: Exposure exactly at threshold.
 
-        Input: £2.2m exposure (exactly at threshold)
+        Input: Exposure at threshold
         Expected: Factor = 0.7619 (Tier 1 includes threshold)
         """
         expected = expected_outputs_dict["CRR-F7"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F7"]
 
-        # Verify at-threshold factor
-        # assert result.supporting_factor == pytest.approx(0.7619, rel=0.0001)
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_supporting_factor_match(
+            result["supporting_factor"],
+            expected["supporting_factor"],
+            scenario_id="CRR-F7",
+        )
 
 
 class TestCRRGroupF_ParameterizedValidation:
@@ -297,10 +342,10 @@ class TestCRRGroupF_ParameterizedValidation:
         # Test various exposure amounts
         test_cases = [
             # (exposure_gbp, expected_factor)
-            (Decimal("1000000"), Decimal("0.7619")),      # £1m - Tier 1 only
-            (Decimal("2200000"), Decimal("0.7619")),      # £2.2m - at threshold
-            (Decimal("4000000"), None),                    # £4m - blended (calculate)
-            (Decimal("10000000"), None),                   # £10m - Tier 2 dominant
+            (Decimal("1000000"), Decimal("0.7619")),      # Small - Tier 1 only
+            (Decimal("2200000"), Decimal("0.7619")),      # At threshold
+            (Decimal("4000000"), None),                    # Blended (calculate)
+            (Decimal("10000000"), None),                   # Tier 2 dominant
         ]
 
         for exposure, expected in test_cases:
@@ -308,10 +353,10 @@ class TestCRRGroupF_ParameterizedValidation:
             factor_float = float(factor)
             if expected is not None:
                 assert factor_float == pytest.approx(float(expected), rel=0.001), (
-                    f"Factor for £{exposure:,} should be {expected}, got {factor_float}"
+                    f"Factor for {exposure:,} should be {expected}, got {factor_float}"
                 )
             else:
                 # Just verify it's in valid range
                 assert 0.7619 <= factor_float <= 0.85, (
-                    f"Factor for £{exposure:,} should be between 0.7619 and 0.85"
+                    f"Factor for {exposure:,} should be between 0.7619 and 0.85"
                 )

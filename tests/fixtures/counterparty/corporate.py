@@ -160,14 +160,14 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "is_central_counterparty": False,
             "is_regional_govt_local_auth": False,
         },
-        # SME Corporate (revenue £50m - £440m) - eligible for SME supporting factor
+        # SME Corporate (revenue < £44m) - eligible for SME supporting factor
         {
             "counterparty_reference": "CORP_SME_001",
             "counterparty_name": "SME Engineering Ltd",
             "entity_type": "corporate",
             "country_code": "GB",
-            "annual_revenue": 100_000_000.0,
-            "total_assets": 80_000_000.0,
+            "annual_revenue": 30_000_000.0,  # £30m - below £44m SME threshold
+            "total_assets": 25_000_000.0,
             "default_status": False,
             "sector_code": "25.62",
             "is_financial_institution": False,
@@ -183,8 +183,8 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "counterparty_name": "SME Tech Solutions Ltd",
             "entity_type": "corporate",
             "country_code": "GB",
-            "annual_revenue": 75_000_000.0,
-            "total_assets": 50_000_000.0,
+            "annual_revenue": 35_000_000.0,  # £35m - below £44m SME threshold
+            "total_assets": 28_000_000.0,
             "default_status": False,
             "sector_code": "62.01",
             "is_financial_institution": False,

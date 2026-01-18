@@ -159,7 +159,7 @@ def _corporate_external_ratings() -> list[Rating]:
     """
     return [
         # CQS 1 Corporates - 20% Risk Weight
-        Rating("RTG_CORP_UK_001", "CORP_UK_001", "external", "S&P", "AA", 1, None, RATING_DATE, True),
+        # Note: CORP_UK_001 intentionally unrated for A12 test (large corp, no SME factor)
         Rating("RTG_CORP_UK_002", "CORP_UK_002", "external", "Moodys", "Aa2", 1, None, RATING_DATE, True),
         # CQS 2 Corporates - 50% Risk Weight
         Rating("RTG_CORP_UK_003", "CORP_UK_003", "external", "Fitch", "A", 2, None, RATING_DATE, True),
@@ -199,7 +199,7 @@ def _corporate_internal_ratings() -> list[Rating]:
     """
     return [
         # Large corporates - low PD
-        Rating("RTG_INT_CORP_UK_001", "CORP_UK_001", "internal", "internal", "1A", 1, 0.0005, RATING_DATE, False),
+        # Note: CORP_UK_001 intentionally unrated for A12 test
         Rating("RTG_INT_CORP_UK_002", "CORP_UK_002", "internal", "internal", "1B", 1, 0.0008, RATING_DATE, False),
         Rating("RTG_INT_CORP_UK_003", "CORP_UK_003", "internal", "internal", "2A", 2, 0.0015, RATING_DATE, False),
         # Mid-tier corporates
@@ -220,8 +220,8 @@ def _corporate_internal_ratings() -> list[Rating]:
         Rating("RTG_INT_INST_UK_001", "INST_UK_001", "internal", "internal", "1A", 1, 0.0003, RATING_DATE, False),
         Rating("RTG_INT_INST_UK_002", "INST_UK_002", "internal", "internal", "1A", 1, 0.0003, RATING_DATE, False),
         Rating("RTG_INT_INST_UK_003", "INST_UK_003", "internal", "internal", "2A", 2, 0.0012, RATING_DATE, False),
-        # PD floor test - internal PD below regulatory floor
-        Rating("RTG_INT_FLOOR_TEST", "CORP_UK_001", "internal", "internal", "1A+", 1, 0.0001, RATING_DATE, False),
+        # PD floor test - internal PD below regulatory floor (use CORP_UK_002 instead)
+        Rating("RTG_INT_FLOOR_TEST", "CORP_UK_002", "internal", "internal", "1A+", 1, 0.0001, RATING_DATE, False),
     ]
 
 

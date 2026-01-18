@@ -4,24 +4,29 @@ CRR Group E: Specialised Lending Slotting Acceptance Tests.
 These tests validate that the production RWA calculator correctly applies
 the slotting approach for specialised lending exposures.
 
-Tests are skipped until the production calculator is implemented in src/rwa_calc/.
-
 Regulatory References:
 - CRR Art. 153(5): Slotting approach for specialised lending
 - CRR Art. 147(8): Specialised lending sub-classes
 """
 
 import pytest
+import polars as pl
 from typing import Any
 
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_risk_weight_match,
+    get_result_for_exposure,
 )
 
 
-# Marker for tests awaiting production implementation
-SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
+# Mapping of scenario IDs to exposure references
+SCENARIO_EXPOSURE_MAP = {
+    "CRR-E1": "LOAN_SL_PF_001",
+    "CRR-E2": "LOAN_SL_PF_002",
+    "CRR-E3": "LOAN_SL_IPRE_001",
+    "CRR-E4": "LOAN_SL_HVCRE_001",
+}
 
 
 class TestCRRGroupE_SlottingApproach:
@@ -36,78 +41,118 @@ class TestCRRGroupE_SlottingApproach:
     - Basel 3.1: Strong=50%, Good=70%, Satisfactory=100%, Weak=250%
     """
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture LOAN_SL_PF_001 not available")
     def test_crr_e1_project_finance_strong(
         self,
-        load_test_fixtures,
+        slotting_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-E1: Project finance with Strong slotting category.
 
-        Input: £10m project finance, Strong category
+        Input: Project finance, Strong category
         Expected: 70% RW (CRR has Strong=Good=70%)
 
         Note: Basel 3.1 would give Strong=50%
         """
         expected = expected_outputs_dict["CRR-E1"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E1"]
 
-        # TODO: Run through production calculator
-        # assert result.risk_weight == 0.70
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E1",
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-E1",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SL_PF_002 not available")
     def test_crr_e2_project_finance_good(
         self,
-        load_test_fixtures,
+        slotting_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-E2: Project finance with Good slotting category.
 
-        Input: £10m project finance, Good category
+        Input: Project finance, Good category
         Expected: 70% RW (same as Strong under CRR)
         """
         expected = expected_outputs_dict["CRR-E2"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E2"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E2",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SL_IPRE_001 not available")
     def test_crr_e3_ipre_weak(
         self,
-        load_test_fixtures,
+        slotting_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-E3: Income-producing real estate with Weak category.
 
-        Input: £5m IPRE, Weak category
+        Input: IPRE, Weak category
         Expected: 250% RW (punitive for weak credits)
         """
         expected = expected_outputs_dict["CRR-E3"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E3"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E3",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SL_HVCRE_001 not available")
     def test_crr_e4_hvcre_strong(
         self,
-        load_test_fixtures,
+        slotting_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-E4: HVCRE with Strong slotting category.
 
-        Input: £5m HVCRE, Strong category
+        Input: HVCRE, Strong category
         Expected: 70% RW (same as non-HVCRE under CRR)
 
         Note: Basel 3.1 applies higher RWs for HVCRE
         """
         expected = expected_outputs_dict["CRR-E4"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E4"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E4",
+        )
 
 
 class TestCRRGroupE_ParameterizedValidation:

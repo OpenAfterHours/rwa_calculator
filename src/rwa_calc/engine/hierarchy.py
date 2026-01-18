@@ -90,6 +90,9 @@ class HierarchyResolver:
         )
         errors.extend(exp_errors)
 
+        # Step 2b: Add collateral LTV to exposures (for real estate risk weights)
+        exposures = self._add_collateral_ltv(exposures, data.collateral)
+
         # Step 3: Calculate lending group totals
         lending_group_totals, lg_errors = self._calculate_lending_group_totals(
             exposures,
@@ -377,6 +380,7 @@ class HierarchyResolver:
             rating_inheritance.select([
                 pl.col("counterparty_reference").alias("_ri_cp"),
                 pl.col("cqs"),
+                pl.col("pd"),
                 pl.col("rating_value"),
                 pl.col("rating_agency"),
                 pl.col("inherited").alias("rating_inherited"),
@@ -477,6 +481,10 @@ class HierarchyResolver:
                 pl.col("parent_counterparty_reference"),
                 pl.col("ultimate_parent_reference"),
                 pl.col("counterparty_hierarchy_depth"),
+                pl.col("cqs"),
+                pl.col("pd"),
+                pl.col("rating_value"),
+                pl.col("rating_agency"),
                 pl.col("rating_inherited"),
                 pl.col("rating_source_counterparty"),
                 pl.col("rating_inheritance_reason"),
@@ -534,6 +542,55 @@ class HierarchyResolver:
         ])
 
         return lending_group_totals, errors
+
+    def _add_collateral_ltv(
+        self,
+        exposures: pl.LazyFrame,
+        collateral: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Add LTV from collateral to exposures for real estate risk weight calculations.
+
+        Joins collateral property_ltv to exposures where collateral is linked via
+        beneficiary_reference. For mortgages and commercial RE, LTV determines risk weight.
+
+        Args:
+            exposures: Unified exposures with exposure_reference
+            collateral: Collateral data with beneficiary_reference and property_ltv
+
+        Returns:
+            Exposures with ltv column added
+        """
+        # Check if collateral has the required columns
+        collateral_schema = collateral.collect_schema()
+        if "beneficiary_reference" not in collateral_schema or "property_ltv" not in collateral_schema:
+            # No LTV data available, add null ltv column
+            return exposures.with_columns([
+                pl.lit(None).cast(pl.Float64).alias("ltv"),
+            ])
+
+        # Select only the LTV column from collateral
+        ltv_lookup = collateral.select([
+            pl.col("beneficiary_reference"),
+            pl.col("property_ltv").alias("ltv"),
+        ]).filter(
+            # Only include collateral with LTV data
+            pl.col("ltv").is_not_null()
+        ).unique(
+            # Take first match if multiple collaterals
+            subset=["beneficiary_reference"],
+            keep="first",
+        )
+
+        # Join LTV to exposures
+        exposures = exposures.join(
+            ltv_lookup,
+            left_on="exposure_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        )
+
+        return exposures
 
     def _add_lending_group_totals_to_exposures(
         self,

@@ -4,8 +4,6 @@ CRR Group B: Foundation IRB (F-IRB) Acceptance Tests.
 These tests validate that the production RWA calculator produces correct
 outputs for F-IRB exposures when given fixture data as input.
 
-Tests are skipped until the production calculator is implemented in src/rwa_calc/.
-
 Regulatory References:
 - CRR Art. 153: IRB risk weight formula
 - CRR Art. 161: Supervisory LGD values (45% senior, 75% subordinated)
@@ -16,16 +14,25 @@ Regulatory References:
 """
 
 import pytest
+import polars as pl
 from typing import Any
 
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_risk_weight_match,
+    get_result_for_exposure,
 )
 
 
-# Marker for tests awaiting production implementation
-SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
+# Mapping of scenario IDs to exposure references
+SCENARIO_EXPOSURE_MAP = {
+    "CRR-B1": "LOAN_CORP_UK_001",
+    "CRR-B2": "LOAN_CORP_UK_002",
+    "CRR-B3": "LOAN_SUB_001",
+    "CRR-B4": "LOAN_CORP_SME_002",
+    "CRR-B5": "LOAN_CORP_SME_003",
+    "CRR-B6": "LOAN_CORP_UK_004",
+}
 
 
 class TestCRRGroupB_FoundationIRB:
@@ -39,100 +46,133 @@ class TestCRRGroupB_FoundationIRB:
     sovereign). Retail exposures require A-IRB or Standardised Approach.
     """
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture PD data not available for IRB calculation")
     def test_crr_b1_corporate_firb_low_pd(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-B1: Corporate F-IRB with low PD.
 
-        Input: £25m loan, PD 0.10%, LGD 45% (supervisory), M 2.5y
+        Input: Loan, PD 0.10%, LGD 45% (supervisory), M 2.5y
         Expected: Calculated using IRB formula with 1.06 scaling factor
+
+        Note: Requires PD values in fixture data which are not currently available.
         """
-        fixtures = load_test_fixtures
         expected = expected_outputs_dict["CRR-B1"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-B1"]
 
-        loan = fixtures.get_loan("LOAN_CORP_UK_001")
-        counterparty = fixtures.get_counterparty("CORP_UK_001")
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
 
-        # TODO: Run through production calculator
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        # Check if PD is available for IRB calculation
+        if result.get("pd") is None:
+            pytest.skip(f"PD not available for IRB calculation: {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-B1",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CORP_UK_002 not available")
     def test_crr_b2_corporate_firb_high_pd(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-B2: Corporate F-IRB with high PD.
 
-        Input: £5m loan, PD 5.00%, LGD 45%, M 3.0y
+        Input: Loan, PD 5.00%, LGD 45%, M 3.0y
         Expected: Higher RWA due to high PD, lower correlation
 
         Note: Higher PD leads to lower asset correlation (0.130 vs 0.24 at low PD)
         """
         expected = expected_outputs_dict["CRR-B2"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-B2"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-B2",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SUB_001 not available")
     def test_crr_b3_subordinated_exposure(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-B3: Subordinated exposure uses 75% supervisory LGD.
 
-        Input: £2m subordinated loan, PD 1.00%, LGD 75%, M 4.0y
+        Input: Subordinated loan, PD 1.00%, LGD 75%, M 4.0y
         Expected: Higher RWA due to 75% LGD vs 45% for senior
 
         CRR Art. 161: Subordinated claims have 75% LGD
         """
         expected = expected_outputs_dict["CRR-B3"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-B3"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-B3",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CORP_SME_002 not available")
     def test_crr_b4_sme_corporate_firm_size_adjustment(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-B4: SME Corporate F-IRB with firm size adjustment.
 
-        Input: £3m loan, PD 1.50%, turnover EUR 25m
+        Input: Loan, PD 1.50%, turnover EUR 25m
         Expected: Reduced correlation due to firm size adjustment
 
-        CRR Art. 153(4): R_SME = R - 0.04 × (1 - (S-5)/45)
+        CRR Art. 153(4): R_SME = R - 0.04 * (1 - (S-5)/45)
         where S = turnover in EUR millions, capped at 5-50 range
         """
-        fixtures = load_test_fixtures
         expected = expected_outputs_dict["CRR-B4"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-B4"]
 
-        loan = fixtures.get_loan("LOAN_CORP_SME_002")
-        counterparty = fixtures.get_counterparty("CORP_SME_002")
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
 
-        # TODO: Run through production calculator
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-B4",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CORP_SME_003 not available")
     def test_crr_b5_sme_corporate_both_adjustments(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-B5: SME Corporate F-IRB with BOTH adjustments.
 
-        Input: £2m loan, PD 2.00%, turnover EUR 15m
+        Input: Loan, PD 2.00%, turnover EUR 15m
         Expected: Both firm size correlation adjustment AND SME supporting factor
 
         This demonstrates the dual benefit for SME corporates under CRR:
@@ -141,35 +181,50 @@ class TestCRRGroupB_FoundationIRB:
 
         Note: Neither adjustment available under Basel 3.1
         """
-        fixtures = load_test_fixtures
         expected = expected_outputs_dict["CRR-B5"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-B5"]
 
-        loan = fixtures.get_loan("LOAN_CORP_SME_003")
-        counterparty = fixtures.get_counterparty("CORP_SME_003")
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
 
-        # TODO: Run through production calculator
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-B5",
+        )
         # Verify supporting factor is applied
-        # assert result.supporting_factor == pytest.approx(0.7619, rel=0.001)
+        assert result["supporting_factor"] == pytest.approx(0.7619, rel=0.001)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture LOAN_CORP_UK_004 not available")
     def test_crr_b6_corporate_at_sme_threshold(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-B6: Corporate at EUR 50m SME threshold boundary.
 
-        Input: £4m loan, PD 1.00%, turnover EUR 50m
+        Input: Loan, PD 1.00%, turnover EUR 50m
         Expected: No firm size adjustment (at boundary)
 
         Threshold: Turnover < EUR 50m qualifies for adjustment
         At exactly EUR 50m: No adjustment applies
         """
         expected = expected_outputs_dict["CRR-B6"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-B6"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-B6",
+        )
 
 
 class TestCRRGroupB_ParameterizedValidation:
@@ -222,7 +277,7 @@ class TestCRRGroupB_ParameterizedValidation:
             assert scenario["expected_loss"] is not None, (
                 f"Scenario {scenario['scenario_id']} missing expected loss"
             )
-            # EL = PD × LGD × EAD
+            # EL = PD * LGD * EAD
             expected_el = scenario["pd"] * scenario["lgd"] * scenario["ead"]
             assert scenario["expected_loss"] == pytest.approx(expected_el, rel=0.01), (
                 f"Scenario {scenario['scenario_id']} EL mismatch"

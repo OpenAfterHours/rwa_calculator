@@ -26,6 +26,7 @@ Subpackages:
 from .loader import ParquetLoader, CSVLoader
 from .hierarchy import HierarchyResolver, create_hierarchy_resolver
 from .aggregator import OutputAggregator, create_output_aggregator
+from .pipeline import PipelineOrchestrator, create_pipeline, create_test_pipeline
 
 __all__ = [
     "ParquetLoader",
@@ -34,4 +35,7 @@ __all__ = [
     "create_hierarchy_resolver",
     "OutputAggregator",
     "create_output_aggregator",
+    "PipelineOrchestrator",
+    "create_pipeline",
+    "create_test_pipeline",
 ]

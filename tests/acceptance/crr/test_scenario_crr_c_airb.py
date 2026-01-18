@@ -4,8 +4,6 @@ CRR Group C: Advanced IRB (A-IRB) Acceptance Tests.
 These tests validate that the production RWA calculator produces correct
 outputs for A-IRB exposures when given fixture data as input.
 
-Tests are skipped until the production calculator is implemented in src/rwa_calc/.
-
 Key CRR A-IRB Features:
 - Bank provides own estimates for PD, LGD, EAD
 - NO LGD floors under CRR (unlike Basel 3.1 which has 25% unsecured floor)
@@ -21,16 +19,22 @@ Regulatory References:
 """
 
 import pytest
+import polars as pl
 from typing import Any
 
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_risk_weight_match,
+    get_result_for_exposure,
 )
 
 
-# Marker for tests awaiting production implementation
-SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
+# Mapping of scenario IDs to exposure references
+SCENARIO_EXPOSURE_MAP = {
+    "CRR-C1": "LOAN_CORP_AIRB_001",
+    "CRR-C2": "LOAN_RTL_AIRB_001",
+    "CRR-C3": "LOAN_SL_AIRB_001",
+}
 
 
 class TestCRRGroupC_AdvancedIRB:
@@ -41,65 +45,91 @@ class TestCRRGroupC_AdvancedIRB:
     and compares the output against pre-calculated expected values.
     """
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture LOAN_CORP_AIRB_001 not available")
     def test_crr_c1_corporate_airb_own_lgd(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-C1: Corporate A-IRB with bank's own LGD estimate.
 
-        Input: £5m loan, PD 1.00%, internal LGD 35%
+        Input: Loan, PD 1.00%, internal LGD 35%
         Expected: Lower RWA than F-IRB due to better LGD estimate
 
         Key: CRR A-IRB has NO LGD floor (Basel 3.1 would floor at 25%)
         """
         expected = expected_outputs_dict["CRR-C1"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-C1"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-C1",
+        )
         # Verify own LGD estimate is used
-        # assert result.lgd == 0.35  # Not floored
+        assert result["lgd"] == pytest.approx(0.35, rel=0.01)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture LOAN_RTL_AIRB_001 not available")
     def test_crr_c2_retail_airb_own_estimates(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-C2: Retail A-IRB with bank's own estimates.
 
-        Input: £100k loan, PD 0.30%, internal LGD 15%
+        Input: Loan, PD 0.30%, internal LGD 15%
         Expected: Retail IRB calculation with no maturity adjustment
 
         Key: Retail MUST use A-IRB (F-IRB not available for retail)
         """
         expected = expected_outputs_dict["CRR-C2"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-C2"]
 
-        # TODO: Run through production calculator
-        # Verify no maturity adjustment for retail
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-C2",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_SL_AIRB_001 not available")
     def test_crr_c3_specialised_lending_airb(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-C3: Specialised Lending A-IRB (Project Finance).
 
-        Input: £10m project finance loan, PD 1.50%, internal LGD 25%
+        Input: Project finance loan, PD 1.50%, internal LGD 25%
         Expected: A-IRB calculation for specialised lending
 
         Alternative: Slotting approach (tested in CRR-E)
         """
         expected = expected_outputs_dict["CRR-C3"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-C3"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-C3",
+        )
 
 
 class TestCRRGroupC_ParameterizedValidation:

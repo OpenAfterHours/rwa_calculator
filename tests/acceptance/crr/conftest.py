@@ -6,6 +6,7 @@ RWA calculations against expected outputs.
 """
 
 import pytest
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 import sys
@@ -352,3 +353,201 @@ def assert_supporting_factor_match(
     assert actual == pytest.approx(expected, rel=0.0001), (
         f"{scenario_id}: Supporting factor mismatch: actual={actual}, expected={expected}"
     )
+
+
+# =============================================================================
+# Pipeline-Based Testing Fixtures
+# =============================================================================
+
+
+@pytest.fixture(scope="session")
+def crr_calculation_config():
+    """
+    Create CRR CalculationConfig for pipeline execution.
+
+    Uses SA-only permissions for acceptance tests to ensure
+    SA scenarios are processed using the Standardised Approach.
+    IRB tests use a separate config with IRB permissions.
+    """
+    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+
+    return CalculationConfig.crr(
+        reporting_date=date(2025, 12, 31),
+        irb_permissions=IRBPermissions.sa_only(),
+    )
+
+
+@pytest.fixture(scope="session")
+def crr_irb_calculation_config():
+    """
+    Create CRR CalculationConfig with full IRB permissions.
+
+    Used for IRB scenario tests (CRR-B, CRR-C).
+    """
+    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+
+    return CalculationConfig.crr(
+        reporting_date=date(2025, 12, 31),
+        irb_permissions=IRBPermissions.full_irb(),
+    )
+
+
+@pytest.fixture(scope="session")
+def raw_data_bundle(load_test_fixtures):
+    """
+    Convert test fixtures to RawDataBundle for pipeline processing.
+
+    This assembles all fixture LazyFrames into the format expected
+    by the production pipeline.
+    """
+    from rwa_calc.contracts.bundles import RawDataBundle
+
+    fixtures = load_test_fixtures
+
+    return RawDataBundle(
+        facilities=fixtures.facilities,
+        loans=fixtures.loans,
+        contingents=fixtures.contingents,
+        counterparties=fixtures.get_all_counterparties(),
+        collateral=fixtures.collateral,
+        guarantees=fixtures.guarantees,
+        provisions=fixtures.provisions,
+        ratings=fixtures.ratings,
+        facility_mappings=fixtures.facility_mappings,
+        org_mappings=fixtures.org_mappings,
+        lending_mappings=fixtures.lending_mappings,
+        specialised_lending=fixtures.specialised_lending,
+    )
+
+
+@pytest.fixture(scope="session")
+def pipeline_results(raw_data_bundle, crr_calculation_config):
+    """
+    Run all fixtures through the pipeline and return results.
+
+    This is session-scoped to avoid re-running the pipeline for each test.
+    The results are cached and shared across all acceptance tests.
+
+    Returns:
+        AggregatedResultBundle with all calculation results
+    """
+    from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+    pipeline = PipelineOrchestrator()
+    result = pipeline.run_with_data(raw_data_bundle, crr_calculation_config)
+
+    return result
+
+
+@pytest.fixture(scope="session")
+def pipeline_results_df(pipeline_results) -> pl.DataFrame:
+    """
+    Get pipeline results as a collected DataFrame.
+
+    Provides easy access to results for individual scenario lookups.
+    """
+    return pipeline_results.results.collect()
+
+
+@pytest.fixture(scope="session")
+def sa_results_df(pipeline_results) -> pl.DataFrame:
+    """Get SA results as a collected DataFrame."""
+    if pipeline_results.sa_results is None:
+        return pl.DataFrame()
+    return pipeline_results.sa_results.collect()
+
+
+@pytest.fixture(scope="session")
+def irb_results_df(pipeline_results) -> pl.DataFrame:
+    """Get IRB results as a collected DataFrame."""
+    if pipeline_results.irb_results is None:
+        return pl.DataFrame()
+    return pipeline_results.irb_results.collect()
+
+
+@pytest.fixture(scope="session")
+def slotting_results_df(pipeline_results) -> pl.DataFrame:
+    """Get Slotting results as a collected DataFrame."""
+    if pipeline_results.slotting_results is None:
+        return pl.DataFrame()
+    return pipeline_results.slotting_results.collect()
+
+
+@pytest.fixture(scope="session")
+def irb_pipeline_results(raw_data_bundle, crr_irb_calculation_config):
+    """
+    Run all fixtures through the pipeline with IRB permissions.
+
+    Used for IRB scenario tests (CRR-B F-IRB, CRR-C A-IRB).
+    Session-scoped to avoid re-running for each test.
+
+    Returns:
+        AggregatedResultBundle with IRB calculation results
+    """
+    from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+    pipeline = PipelineOrchestrator()
+    result = pipeline.run_with_data(raw_data_bundle, crr_irb_calculation_config)
+
+    return result
+
+
+@pytest.fixture(scope="session")
+def irb_pipeline_results_df(irb_pipeline_results) -> pl.DataFrame:
+    """Get IRB pipeline results as a collected DataFrame."""
+    return irb_pipeline_results.results.collect()
+
+
+@pytest.fixture(scope="session")
+def irb_only_results_df(irb_pipeline_results) -> pl.DataFrame:
+    """Get IRB-only results from the IRB pipeline."""
+    if irb_pipeline_results.irb_results is None:
+        return pl.DataFrame()
+    return irb_pipeline_results.irb_results.collect()
+
+
+def get_result_for_exposure(
+    results_df: pl.DataFrame,
+    exposure_reference: str,
+) -> dict | None:
+    """
+    Look up calculation result for a specific exposure.
+
+    Args:
+        results_df: DataFrame of pipeline results
+        exposure_reference: The exposure reference to find
+
+    Returns:
+        dict of result values, or None if not found
+    """
+    filtered = results_df.filter(
+        pl.col("exposure_reference") == exposure_reference
+    )
+
+    if filtered.height == 0:
+        return None
+    return filtered.row(0, named=True)
+
+
+def get_sa_result_for_exposure(
+    sa_results_df: pl.DataFrame,
+    exposure_reference: str,
+) -> dict | None:
+    """Look up SA result for a specific exposure."""
+    return get_result_for_exposure(sa_results_df, exposure_reference)
+
+
+def get_irb_result_for_exposure(
+    irb_results_df: pl.DataFrame,
+    exposure_reference: str,
+) -> dict | None:
+    """Look up IRB result for a specific exposure."""
+    return get_result_for_exposure(irb_results_df, exposure_reference)
+
+
+def get_slotting_result_for_exposure(
+    slotting_results_df: pl.DataFrame,
+    exposure_reference: str,
+) -> dict | None:
+    """Look up Slotting result for a specific exposure."""
+    return get_result_for_exposure(slotting_results_df, exposure_reference)

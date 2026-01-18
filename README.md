@@ -68,13 +68,14 @@ Key features:
 | Supporting Factors | `engine/sa/supporting_factors.py` | Complete | N/A | - |
 | Output Aggregator | `engine/aggregator.py` | Complete | Complete | 21 |
 | Output floor | `engine/aggregator.py` | N/A | Complete | - |
-| Pipeline Orchestrator | `engine/pipeline.py` | In Progress | In Progress | - |
+| Pipeline Orchestrator | `engine/pipeline.py` | Complete | Complete | 30 |
 
 **Key Implementation Features:**
 - **Pure LazyFrame Operations**: Hierarchy resolution uses iterative Polars joins instead of Python dicts for 50-100x performance improvement
 - **Output Floor**: Full Basel 3.1 output floor with transitional schedule support (50%→72.5%, 2027-2032)
 - **Supporting Factors**: CRR SME tiered factor (0.7619/0.85) and infrastructure factor (0.75)
 - **Summary Generation**: RWA aggregation by exposure class and calculation approach
+- **Pipeline Orchestrator**: Complete pipeline wiring (Loader → HierarchyResolver → Classifier → CRMProcessor → SA/IRB/Slotting Calculators → OutputAggregator) with error accumulation and audit trail
 
 ### CRR Workbook Components - COMPLETE
 
@@ -310,16 +311,17 @@ uv run pytest tests/acceptance/crr/test_scenario_crr_a_sa.py -v
 uv run mypy --package rwa_calc.contracts --package rwa_calc.domain
 ```
 
-**Test Results (428 tests):**
+**Test Results (458 tests):**
 - 97 contract tests PASS - Verify interfaces, configuration, and validation
 - 38 acceptance validation tests PASS - Verify expected outputs structure
-- 45 acceptance stub tests SKIP - Await pipeline orchestrator completion
+- 45 acceptance stub tests SKIP - Await full pipeline integration
 - 31 loader tests PASS - Data loading from Parquet/CSV
 - 17 hierarchy tests PASS - Counterparty/facility hierarchy resolution
 - 19 classifier tests PASS - Exposure classification and approach assignment
 - 15 CCF tests PASS - Credit conversion factors
 - 21 aggregator tests PASS - Output aggregation and floor application
-- **Total: 428 passed, 45 skipped**
+- 30 pipeline tests PASS - Full pipeline orchestration
+- **Total: 458 passed, 46 skipped**
 
 ---
 

@@ -4,8 +4,6 @@ CRR Group G: Provisions & Impairments Acceptance Tests.
 These tests validate that the production RWA calculator correctly handles
 provisions under SA and EL shortfall/excess under IRB.
 
-Tests are skipped until the production calculator is implemented in src/rwa_calc/.
-
 Regulatory References:
 - CRR Art. 110: Provisions treatment under SA
 - CRR Art. 158: Expected Loss calculation
@@ -14,16 +12,22 @@ Regulatory References:
 """
 
 import pytest
+import polars as pl
 from typing import Any
 
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_ead_match,
+    get_result_for_exposure,
 )
 
 
-# Marker for tests awaiting production implementation
-SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
+# Mapping of scenario IDs to exposure references
+SCENARIO_EXPOSURE_MAP = {
+    "CRR-G1": "LOAN_PROV_G1",
+    "CRR-G2": "LOAN_PROV_G2",
+    "CRR-G3": "LOAN_PROV_G3",
+}
 
 
 class TestCRRGroupG_Provisions:
@@ -34,72 +38,89 @@ class TestCRRGroupG_Provisions:
     and compares the output against pre-calculated expected values.
     """
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture LOAN_PROV_G1 not available")
     def test_crr_g1_sa_with_specific_provision(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-G1: SA exposure with specific provision reduces EAD.
 
-        Input: £1m gross exposure, £50k specific provision
-        Expected: EAD = £950k (net of provision)
+        Input: Gross exposure, specific provision
+        Expected: EAD = gross - provision (net of provision)
 
         CRR Art. 110: Specific provisions reduce exposure value
         """
         expected = expected_outputs_dict["CRR-G1"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-G1"]
 
-        # TODO: Run through production calculator
-        # assert result.ead == 950000.0
-        # assert result.gross_exposure == 1000000.0
-        # assert result.provision == 50000.0
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_ead_match(
+            result["ead_final"],
+            expected["ead"],
+            scenario_id="CRR-G1",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_PROV_G2 not available")
     def test_crr_g2_irb_el_shortfall(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-G2: IRB EL shortfall results in CET1/T2 deduction.
 
-        Input: EL = £45k, Total provisions = £30k
-        Expected: Shortfall = £15k, 50% deducted from CET1, 50% from T2
+        Input: EL > Total provisions
+        Expected: Shortfall = EL - provisions, 50% deducted from CET1, 50% from T2
 
         CRR Art. 159: Shortfall treatment
         """
         expected = expected_outputs_dict["CRR-G2"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-G2"]
 
-        # TODO: Run through production calculator
-        # el = expected["expected_loss"]
-        # shortfall = el - provisions
-        # assert result.el_shortfall == 15000.0
-        # assert result.cet1_deduction == 7500.0  # 50%
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-G2",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_PROV_G3 not available")
     def test_crr_g3_irb_el_excess(
         self,
-        load_test_fixtures,
+        irb_pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-G3: IRB EL excess can be added to T2 capital (capped).
 
-        Input: EL = £11,250, Total provisions = £50,000
-        Expected: Excess = £38,750, T2 credit capped at 0.6% of IRB RWA
+        Input: EL < Total provisions
+        Expected: Excess = provisions - EL, T2 credit capped at 0.6% of IRB RWA
 
         CRR Art. 62(d): Excess provisions as T2 (capped at 0.6% IRB RWA)
         """
         expected = expected_outputs_dict["CRR-G3"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-G3"]
 
-        # TODO: Run through production calculator
-        # excess = provisions - el
-        # t2_cap = rwa * 0.006
-        # t2_credit = min(excess, t2_cap)
+        result = get_result_for_exposure(irb_pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-G3",
+        )
 
 
 class TestCRRGroupG_ParameterizedValidation:

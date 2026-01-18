@@ -4,8 +4,6 @@ CRR Group D: Credit Risk Mitigation (CRM) Acceptance Tests.
 These tests validate that the production RWA calculator correctly applies
 CRM treatments including collateral haircuts, guarantees, and maturity mismatches.
 
-Tests are skipped until the production calculator is implemented in src/rwa_calc/.
-
 Regulatory References:
 - CRR Art. 192-241: Credit Risk Mitigation
 - CRR Art. 223-224: Financial Collateral Comprehensive Method
@@ -14,16 +12,25 @@ Regulatory References:
 """
 
 import pytest
+import polars as pl
 from typing import Any
 
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_ead_match,
+    get_result_for_exposure,
 )
 
 
-# Marker for tests awaiting production implementation
-SKIP_REASON = "Production calculator not yet implemented (Phase 3)"
+# Mapping of scenario IDs to exposure references
+SCENARIO_EXPOSURE_MAP = {
+    "CRR-D1": "LOAN_CRM_D1",
+    "CRR-D2": "LOAN_CRM_D2",
+    "CRR-D3": "LOAN_CRM_D3",
+    "CRR-D4": "LOAN_CRM_D4",
+    "CRR-D5": "LOAN_CRM_D5",
+    "CRR-D6": "LOAN_CRM_D6",
+}
 
 
 class TestCRRGroupD_CreditRiskMitigation:
@@ -34,124 +41,176 @@ class TestCRRGroupD_CreditRiskMitigation:
     and compares the output against pre-calculated expected values.
     """
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+    @pytest.mark.skip(reason="Fixture LOAN_CRM_D1 not available")
     def test_crr_d1_cash_collateral_zero_haircut(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-D1: Cash collateral has 0% supervisory haircut.
 
-        Input: £1m exposure, £500k cash collateral
-        Expected: EAD = £500k (cash reduces exposure 1:1)
+        Input: Exposure, cash collateral
+        Expected: EAD reduced (cash reduces exposure 1:1)
 
         CRR Art. 224: Cash has 0% haircut
         """
         expected = expected_outputs_dict["CRR-D1"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D1"]
 
-        # TODO: Run through production calculator
-        # assert result.ead == expected["ead"]
-        # assert result.collateral_haircut == 0.0
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_ead_match(
+            result["ead_final"],
+            expected["ead"],
+            scenario_id="CRR-D1",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CRM_D2 not available")
     def test_crr_d2_govt_bond_collateral(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-D2: Government bond collateral with supervisory haircut.
 
-        Input: £1m exposure, £600k govt bond (CQS 1, >5y maturity)
+        Input: Exposure, govt bond (CQS 1, >5y maturity)
         Expected: 4% haircut applied to collateral
 
         CRR Art. 224: CQS 1 govt bond >5y = 4% haircut
         """
         expected = expected_outputs_dict["CRR-D2"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D2"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-D2",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CRM_D3 not available")
     def test_crr_d3_equity_collateral_main_index(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-D3: Equity collateral (main index) has 15% haircut.
 
-        Input: £1m exposure, £400k FTSE 100 equity collateral
+        Input: Exposure, FTSE 100 equity collateral
         Expected: 15% haircut (vs 25% for non-main index)
 
         CRR Art. 224: Main index equity = 15% haircut
         """
         expected = expected_outputs_dict["CRR-D3"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D3"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-D3",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CRM_D4 not available")
     def test_crr_d4_bank_guarantee_substitution(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-D4: Bank guarantee allows substitution of guarantor's RW.
 
-        Input: £1m to unrated corporate, £600k guaranteed by CQS 2 bank
+        Input: Unrated corporate exposure, guaranteed by CQS 2 bank
         Expected: Split treatment - guaranteed portion at 30% RW (UK deviation)
 
         CRR Art. 213-217: Unfunded credit protection
         """
         expected = expected_outputs_dict["CRR-D4"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D4"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-D4",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CRM_D5 not available")
     def test_crr_d5_maturity_mismatch(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-D5: Maturity mismatch reduces collateral effectiveness.
 
-        Input: £1m exposure (5y), £500k collateral (2y)
+        Input: Exposure (5y), collateral (2y)
         Expected: Collateral value reduced by maturity adjustment
 
-        Formula: Adjusted = C × (t - 0.25) / (T - 0.25)
+        Formula: Adjusted = C * (t - 0.25) / (T - 0.25)
         where t = collateral maturity, T = exposure maturity
 
         CRR Art. 238: Maturity mismatch
         """
         expected = expected_outputs_dict["CRR-D5"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D5"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
 
-    @pytest.mark.skip(reason=SKIP_REASON)
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-D5",
+        )
+
+    @pytest.mark.skip(reason="Fixture LOAN_CRM_D6 not available")
     def test_crr_d6_currency_mismatch(
         self,
-        load_test_fixtures,
+        pipeline_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
-        crr_config: dict[str, Any],
     ) -> None:
         """
         CRR-D6: Currency mismatch adds 8% additional haircut.
 
-        Input: £1m GBP exposure, €500k EUR collateral
+        Input: GBP exposure, EUR collateral
         Expected: 8% FX haircut applied
 
         CRR Art. 224: Currency mismatch = 8% additional haircut
         """
         expected = expected_outputs_dict["CRR-D6"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D6"]
 
-        # TODO: Run through production calculator
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-D6",
+        )
 
 
 class TestCRRGroupD_ParameterizedValidation:

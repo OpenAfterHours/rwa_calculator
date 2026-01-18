@@ -171,7 +171,7 @@ class SACalculator:
         use_uk_deviation = config.base_currency == "GBP"
         rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
-        # Ensure ltv and has_income_cover columns exist
+        # Ensure required columns exist
         schema = exposures.collect_schema()
         if "ltv" not in schema.names():
             exposures = exposures.with_columns([
@@ -180,6 +180,10 @@ class SACalculator:
         if "has_income_cover" not in schema.names():
             exposures = exposures.with_columns([
                 pl.lit(False).alias("has_income_cover"),
+            ])
+        if "book_code" not in schema.names():
+            exposures = exposures.with_columns([
+                pl.lit("").alias("book_code"),
             ])
 
         # Prepare exposures for join
@@ -224,12 +228,9 @@ class SACalculator:
         cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
 
         exposures = exposures.with_columns([
-            pl.when(pl.col("exposure_class").str.contains("(?i)retail"))
-            # Retail exposures: 75% flat
-            .then(pl.lit(retail_rw))
-
-            .when(pl.col("exposure_class").str.contains("(?i)mortgage|residential"))
-            # Residential mortgage: LTV-based
+            # Order matters: check specific classes before generic ones
+            # 1. Residential mortgage: LTV-based (must come before retail)
+            pl.when(pl.col("exposure_class").str.contains("(?i)mortgage|residential"))
             .then(
                 pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
                 .then(pl.lit(resi_rw_low))
@@ -244,8 +245,8 @@ class SACalculator:
                 )
             )
 
+            # 2. Commercial RE: LTV + income cover based
             .when(pl.col("exposure_class").str.contains("(?i)commercial.*re|cre"))
-            # Commercial RE: LTV + income cover based
             .then(
                 pl.when(
                     (pl.col("ltv").fill_null(1.0) <= cre_threshold) &
@@ -255,7 +256,22 @@ class SACalculator:
                 .otherwise(pl.lit(cre_rw_standard))
             )
 
-            # Default: use joined CQS-based risk weight, or 100%
+            # 3. SME with retail book: 75% RW (retail SME treatment)
+            .when(
+                (pl.col("exposure_class").str.contains("(?i)sme")) &
+                (pl.col("book_code").str.contains("(?i)retail"))
+            )
+            .then(pl.lit(retail_rw))
+
+            # 4. Corporate SME: 100% RW (then reduced by SME supporting factor)
+            .when(pl.col("exposure_class").str.contains("(?i)corporate.*sme|sme.*corporate"))
+            .then(pl.lit(1.0))
+
+            # 5. Retail (non-mortgage): 75% flat
+            .when(pl.col("exposure_class").str.contains("(?i)retail"))
+            .then(pl.lit(retail_rw))
+
+            # 5. Default: use joined CQS-based risk weight, or 100%
             .otherwise(pl.col("risk_weight").fill_null(1.0))
             .alias("risk_weight"),
         ])

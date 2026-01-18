@@ -960,7 +960,7 @@ Implement in dependency order (each stage produces output consumed by next):
 |------|-----------|----------|----------|-------------|--------|
 | 3.1.C1 | Data Loader | `LoaderProtocol` | `src/rwa_calc/engine/loader.py` | Load from Parquet/CSV, returns `RawDataBundle` | Complete |
 | 3.1.C2 | Hierarchy Resolver | `HierarchyResolverProtocol` | `src/rwa_calc/engine/hierarchy.py` | Resolve org/facility hierarchies, rating inheritance | Complete |
-| 3.1.C3 | Exposure Classifier | `ClassifierProtocol` | `src/rwa_calc/engine/classifier.py` | Classify exposures, assign approach (SA/IRB) | Not Started |
+| 3.1.C3 | Exposure Classifier | `ClassifierProtocol` | `src/rwa_calc/engine/classifier.py` | Classify exposures, assign approach (SA/IRB) | Complete |
 | 3.1.C4 | CRM Processor | `CRMProcessorProtocol` | `src/rwa_calc/engine/crm/processor.py` | Apply collateral, guarantees, provisions, CCFs | Not Started |
 | 3.1.C5 | SA Calculator | `SACalculatorProtocol` | `src/rwa_calc/engine/sa/calculator.py` | SA risk weights, supporting factors | Not Started |
 | 3.1.C6 | IRB Calculator | `IRBCalculatorProtocol` | `src/rwa_calc/engine/irb/calculator.py` | F-IRB/A-IRB K formula, 1.06 scaling | Not Started |
@@ -985,7 +985,7 @@ Implement in dependency order (each stage produces output consumed by next):
 | 3.1.E1 | Data table tests | `tests/unit/crr/test_crr_tables.py` | Test lookup tables | Complete (77 tests) |
 | 3.1.E2 | Loader tests | `tests/unit/test_loader.py` | Test data loading | Complete (35 tests) |
 | 3.1.E3 | Hierarchy tests | `tests/unit/test_hierarchy.py` | Test hierarchy resolution | Complete (21 tests) |
-| 3.1.E4 | Classifier tests | `tests/unit/test_classifier.py` | Test classification logic | Not Started |
+| 3.1.E4 | Classifier tests | `tests/unit/test_classifier.py` | Test classification logic | Complete (20 tests) |
 | 3.1.E5 | CRM tests | `tests/unit/crr/test_crr_crm.py` | Test CRM processor | Not Started |
 | 3.1.E6 | SA tests | `tests/unit/crr/test_crr_sa.py` | Test SA calculator | Not Started |
 | 3.1.E7 | IRB tests | `tests/unit/crr/test_crr_irb.py` | Test IRB calculator | Not Started |
@@ -1399,7 +1399,7 @@ workbooks/
 **Phase 3.1.C - Engine Layer (in dependency order):**
 1. [x] Implement Data Loader (`engine/loader.py`) - `LoaderProtocol` - Complete (35 tests)
 2. [x] Implement Hierarchy Resolver (`engine/hierarchy.py`) - `HierarchyResolverProtocol` - Complete (21 tests)
-3. [ ] Implement Exposure Classifier (`engine/classifier.py`) - `ClassifierProtocol`
+3. [x] Implement Exposure Classifier (`engine/classifier.py`) - `ClassifierProtocol` - Complete (20 tests)
 4. [ ] Implement CRM Processor (`engine/crm/processor.py`) - `CRMProcessorProtocol`
 5. [ ] Implement SA Calculator (`engine/sa/calculator.py`) - `SACalculatorProtocol`
 6. [ ] Implement IRB Calculator (`engine/irb/calculator.py`) - `IRBCalculatorProtocol`
@@ -1418,7 +1418,7 @@ workbooks/
 1. [x] Data table tests (77 tests)
 2. [x] Loader tests (35 tests)
 3. [x] Hierarchy tests (21 tests)
-4. [ ] Classifier tests
+4. [x] Classifier tests (20 tests)
 5. [ ] CRM tests
 6. [ ] SA tests
 7. [ ] IRB tests
@@ -1428,6 +1428,148 @@ workbooks/
 **Phase 3.1.F - Acceptance Test Activation:**
 1. [ ] Remove `pytest.skip` markers as components are implemented
 2. [ ] All 45 CRR acceptance tests passing
+
+**Phase 3.1.G - Performance Benchmarks:**
+1. [ ] Set up pytest-benchmark infrastructure
+2. [ ] Implement synthetic data generators for scale testing
+3. [ ] Create hierarchy resolver benchmarks (100K, 1M, 10M counterparties)
+4. [ ] Add memory profiling benchmarks
+5. [ ] Configure CI/CD benchmark workflow (nightly/on-merge)
+
+---
+
+## Phase 3.G: Performance Benchmarks
+
+### Overview
+
+Performance is critical for production RWA calculations. This phase establishes benchmark testing infrastructure to:
+- Detect performance regressions early
+- Validate scalability to production data volumes
+- Track memory usage for large datasets
+
+### Tool Selection: pytest-benchmark
+
+**Why pytest-benchmark:**
+- Seamless integration with existing pytest infrastructure
+- Pedantic mode for long-running tests (10M+ records)
+- Statistical analysis (mean, std, min, max, IQR)
+- JSON export for CI/CD comparison
+- Regression detection with threshold failures
+
+### 3.G.1 Infrastructure Setup
+
+| Step | Task | Location | Status |
+|------|------|----------|--------|
+| 3.G.1.1 | Add pytest-benchmark dependency | `pyproject.toml` | Not Started |
+| 3.G.1.2 | Configure default benchmark settings | `pyproject.toml` | Not Started |
+| 3.G.1.3 | Create benchmark test directory | `tests/benchmarks/` | Not Started |
+| 3.G.1.4 | Add benchmark conftest.py | `tests/benchmarks/conftest.py` | Not Started |
+| 3.G.1.5 | Create data generators module | `tests/benchmarks/data_generators.py` | Not Started |
+
+### 3.G.2 Synthetic Data Generators
+
+Efficient generators using numpy vectorized operations:
+
+```python
+# tests/benchmarks/data_generators.py
+def generate_counterparties(n: int, hierarchy_depth: int = 4) -> pl.LazyFrame
+def generate_org_mappings(counterparties: pl.LazyFrame, depth: int = 4) -> pl.LazyFrame
+def generate_loans(counterparties: pl.LazyFrame, per_counterparty: int = 3) -> pl.LazyFrame
+def generate_facility_mappings(loans: pl.LazyFrame) -> pl.LazyFrame
+def generate_ratings(counterparties: pl.LazyFrame, rated_pct: float = 0.7) -> pl.LazyFrame
+```
+
+### 3.G.3 Hierarchy Resolver Benchmarks
+
+| Scale | Counterparties | Loans | Org Mappings | Target Time | Status |
+|-------|----------------|-------|--------------|-------------|--------|
+| 100K | 100,000 | 300,000 | ~95,000 | < 5s | Not Started |
+| 1M | 1,000,000 | 3,000,000 | ~950,000 | < 60s | Not Started |
+| 10M | 10,000,000 | 30,000,000 | ~9,500,000 | < 10min | Not Started |
+
+**Test Structure:**
+```
+tests/benchmarks/
+├── __init__.py
+├── conftest.py                    # Benchmark fixtures, skip markers
+├── data_generators.py             # Synthetic data generation
+├── test_hierarchy_benchmark.py    # Hierarchy resolver benchmarks
+├── test_classifier_benchmark.py   # Classifier benchmarks (later)
+├── test_crm_benchmark.py          # CRM processor benchmarks (later)
+├── test_pipeline_benchmark.py     # Full pipeline benchmarks (later)
+└── test_memory_benchmark.py       # Memory usage tracking
+```
+
+**Benchmark Categories:**
+1. **Component benchmarks** - Individual methods (e.g., `_build_parent_lookups`)
+2. **Integration benchmarks** - Full `resolve()` method
+3. **Memory benchmarks** - Peak memory usage tracking
+4. **Throughput benchmarks** - Records processed per second
+
+### 3.G.4 Configuration
+
+**pyproject.toml additions:**
+```toml
+[tool.pytest.ini_options]
+addopts = "-v --tb=short --benchmark-skip"  # Skip benchmarks by default
+markers = [
+    "benchmark: mark test as a benchmark",
+    "slow: mark test as slow (10M+ scale)",
+]
+
+[tool.pytest-benchmark]
+benchmark_disable_gc = true
+benchmark_warmup = "on"
+benchmark_min_rounds = 3
+```
+
+**Running benchmarks:**
+```bash
+# Run all benchmarks
+uv run pytest tests/benchmarks/ --benchmark-only
+
+# Run specific scale
+uv run pytest tests/benchmarks/ -k "100k" --benchmark-only
+
+# Compare against baseline
+uv run pytest tests/benchmarks/ --benchmark-only --benchmark-compare=baseline
+
+# Save new baseline
+uv run pytest tests/benchmarks/ --benchmark-only --benchmark-save=baseline
+
+# Fail if regression > 15%
+uv run pytest tests/benchmarks/ --benchmark-only --benchmark-compare-fail=min:15%
+```
+
+### 3.G.5 CI/CD Integration
+
+**GitHub Actions workflow** (`.github/workflows/benchmark.yml`):
+- Triggered on: merge to main, nightly schedule, manual dispatch
+- Timeout: 60 minutes
+- Saves results as artifacts
+- Comments on PR if regression detected
+- Fails build if regression > 15%
+
+### 3.G.6 Memory Profiling
+
+Using `tracemalloc` for cross-platform memory tracking:
+- Track peak memory during hierarchy resolution
+- Log memory per 100K counterparties
+- Alert if memory exceeds thresholds
+
+**Memory targets:**
+| Scale | Peak Memory Target |
+|-------|-------------------|
+| 100K | < 500 MB |
+| 1M | < 4 GB |
+| 10M | < 32 GB |
+
+### 3.G.7 Implementation Order
+
+1. **First:** Hierarchy resolver benchmarks (most critical for performance)
+2. **Second:** Full pipeline benchmarks
+3. **Third:** Individual component benchmarks (classifier, CRM, calculators)
+4. **Fourth:** Memory profiling benchmarks
 
 ### Later (Basel 3.1)
 1. **Phase 1.2B**: Create Basel 3.1 acceptance test shells

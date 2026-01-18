@@ -25,10 +25,13 @@ Subpackages:
 
 from .loader import ParquetLoader, CSVLoader
 from .hierarchy import HierarchyResolver, create_hierarchy_resolver
+from .aggregator import OutputAggregator, create_output_aggregator
 
 __all__ = [
     "ParquetLoader",
     "CSVLoader",
     "HierarchyResolver",
     "create_hierarchy_resolver",
+    "OutputAggregator",
+    "create_output_aggregator",
 ]

@@ -115,6 +115,115 @@ Reference implementations for expected output generation:
 
 ---
 
+---
+
+## Interactive UI
+
+The calculator includes an interactive web-based UI built with Marimo, providing three applications accessible through a unified server.
+
+### Starting the UI Server
+
+```bash
+# Start the multi-app server
+uv run python src/rwa_calc/ui/marimo/server.py
+
+# Or using uvicorn directly
+uv run uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
+```
+
+### Available Applications
+
+| Application | URL | Description |
+|-------------|-----|-------------|
+| **RWA Calculator** | `http://localhost:8000/` | Run RWA calculations with data validation, framework selection, and export |
+| **Results Explorer** | `http://localhost:8000/results` | Analyze and filter calculation results with aggregation options |
+| **Framework Reference** | `http://localhost:8000/reference` | Regulatory reference documentation for CRR and Basel 3.1 |
+
+### RWA Calculator Features
+
+- Data path validation and format selection (Parquet/CSV)
+- Framework toggle (CRR / Basel 3.1)
+- IRB approach toggle
+- Summary statistics (EAD, RWA, average risk weight, breakdown by approach)
+- Performance metrics (duration, throughput)
+- Results preview and CSV export
+
+### Results Explorer Features
+
+- Filter by exposure class, approach, and risk weight range
+- Aggregation by exposure class, approach, or risk weight band
+- Column selector for detailed view
+- Export filtered results (CSV and Parquet)
+
+---
+
+## Benchmark Tests
+
+Performance and scale testing is available through dedicated benchmark tests, validating the calculator's performance from 10K to 10M counterparties.
+
+### Running Benchmarks
+
+```bash
+# Run all benchmark tests
+uv run pytest tests/benchmarks/ -v
+
+# Run specific scale tests
+uv run pytest tests/benchmarks/ -m scale_10k -v
+uv run pytest tests/benchmarks/ -m scale_100k -v
+uv run pytest tests/benchmarks/ -m scale_1m -v
+
+# Run memory benchmarks
+uv run pytest tests/benchmarks/ -m benchmark -v
+
+# Skip slow tests (1M+ scale)
+uv run pytest tests/benchmarks/ -m "not slow" -v
+```
+
+### Hierarchy Benchmark Tests
+
+Tests for `HierarchyResolver` performance at scale:
+
+| Scale | Target Time | Test |
+|-------|-------------|------|
+| 10K | < 1 sec | Full hierarchy resolution |
+| 100K | < 5 sec | Full hierarchy resolution |
+| 1M | < 60 sec | Full hierarchy resolution |
+| 10M | < 10 min | Full hierarchy resolution |
+
+Memory benchmarks: < 100 MB for 10K, < 500 MB for 100K counterparties.
+
+### Pipeline Benchmark Tests
+
+End-to-end RWA calculation pipeline performance:
+
+| Scale | SA Only | SA + IRB | Description |
+|-------|---------|----------|-------------|
+| 10K | < 2 sec | < 3 sec | Quick validation |
+| 100K | < 10 sec | < 15 sec | Standard benchmark |
+| 1M | < 120 sec | - | Large portfolio |
+| 10M | < 20 min | - | Enterprise scale |
+
+### Approach-Specific Benchmarks (100K scale)
+
+- SA only (no IRB)
+- Full IRB (all eligible exposures)
+- IRB with Slotting
+- Partial IRB (corporate only)
+- Basel 3.1 with output floor
+
+### Test Markers
+
+| Marker | Description |
+|--------|-------------|
+| `@pytest.mark.scale_10k` | 10K counterparty tests |
+| `@pytest.mark.scale_100k` | 100K counterparty tests |
+| `@pytest.mark.scale_1m` | 1M counterparty tests |
+| `@pytest.mark.scale_10m` | 10M counterparty tests |
+| `@pytest.mark.slow` | Long-running tests (1M+) |
+| `@pytest.mark.benchmark` | Memory and performance benchmarks |
+
+---
+
 ## Key Differences Between Regimes
 
 | Area | CRR (Basel 3.0) | Basel 3.1 (PRA PS9/24) |
@@ -235,10 +344,19 @@ rwa_calculator/
 │   │   │   └── formulas.py             # K, correlation, maturity adjustment
 │   │   └── slotting/                   # Specialised Lending
 │   │       └── calculator.py           # SlottingCalculator
+│   ├── api/                            # API layer
+│   │   ├── service.py                  # RWAService facade
+│   │   ├── models.py                   # Request/response models
+│   │   └── validation.py               # Data path validation
 │   ├── reporting/                      # Output generation (planned)
 │   │   ├── pra/                        # CAP+
 │   │   └── corep/                      # COREP templates
-│   └── ui/                             # Frontend + Marimo workbooks
+│   └── ui/                             # Interactive UI
+│       └── marimo/                     # Marimo applications
+│           ├── server.py               # Multi-app ASGI server
+│           ├── rwa_app.py              # RWA Calculator app
+│           ├── results_explorer.py     # Results Explorer app
+│           └── framework_reference.py  # Regulatory reference app
 │
 ├── workbooks/                          # Reference implementations
 │   ├── shared/                         # Common utilities
@@ -272,6 +390,9 @@ rwa_calculator/
 │   │   │   ├── test_scenario_crr_b_firb.py
 │   │   │   └── ... (8 test files)
 │   │   └── basel31/                    # Basel 3.1 acceptance tests (planned)
+│   ├── benchmarks/                     # Performance & scale tests
+│   │   ├── test_hierarchy_benchmark.py # Hierarchy resolution (10K-10M)
+│   │   └── test_pipeline_benchmark.py  # End-to-end pipeline (10K-10M)
 │   ├── contracts/                      # Contract/interface tests (97 tests)
 │   │   ├── test_bundles.py             # Data bundle tests
 │   │   ├── test_config.py              # Configuration tests

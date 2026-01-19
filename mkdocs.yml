@@ -130,6 +130,8 @@ nav:
   - Development:
     - development/index.md
     - Testing Guide: development/testing.md
+    - Workbooks & UI: development/workbooks.md
+    - Benchmark Tests: development/benchmarks.md
     - Adding Features: development/extending.md
     - Code Style: development/code-style.md
   - Appendix:

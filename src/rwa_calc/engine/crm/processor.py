@@ -143,6 +143,10 @@ class CRMProcessor:
         # Step 7: Add CRM audit trail
         exposures = self._add_crm_audit(exposures)
 
+        # Strategic collect to materialize all CRM processing
+        # This breaks up the complex query plan for better downstream performance
+        exposures = exposures.collect().lazy()
+
         # Split by approach for output
         sa_exposures = exposures.filter(pl.col("approach") == ApproachType.SA.value)
         irb_exposures = exposures.filter(

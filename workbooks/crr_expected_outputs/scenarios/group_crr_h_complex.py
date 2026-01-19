@@ -97,7 +97,7 @@ def _(mo):
 def _(load_fixtures):
     """Load test fixtures."""
     fixtures = load_fixtures()
-    return (fixtures,)
+    return
 
 
 @app.cell
@@ -154,7 +154,7 @@ def _(mo):
 
 
 @app.cell
-def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw):
+def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw, rwa):
     """Calculate Scenario CRR-H1: Facility with Multiple Loans."""
     # Corporate counterparty (unrated = 100% RW)
     rw_h1 = get_corporate_rw(None)
@@ -193,15 +193,15 @@ def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw):
     exposure_details_h1 = []
 
     for exp in exposures_h1:
-        ead = exp["amount"] * exp["ccf"]
-        rwa = calculate_sa_rwa(ead, rw_h1)
-        total_ead_h1 += ead
-        total_rwa_h1 += rwa
+        ead_h1 = exp["amount"] * exp["ccf"]
+        rwa_h1 = calculate_sa_rwa(ead_h1, rw_h1)
+        total_ead_h1 += ead_h1
+        total_rwa_h1 += rwa_h1
         exposure_details_h1.append({
             "name": exp["name"],
             "nominal": float(exp["amount"]),
             "ccf": float(exp["ccf"]),
-            "ead": float(ead),
+            "ead": float(ead_h1),
             "rw": float(rw_h1),
             "rwa": float(rwa),
         })
@@ -232,8 +232,8 @@ def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw):
 
     print(f"CRR-H1: Facility with {len(exposures_h1)} exposures")
     print(f"  Total EAD=£{total_ead_h1:,.0f}, Total RWA=£{total_rwa_h1:,.0f}")
-    for e in exposure_details_h1:
-        print(f"    {e['name']}: EAD=£{e['ead']:,.0f}, RWA=£{e['rwa']:,.0f}")
+    for ee in exposure_details_h1:
+        print(f"    {ee['name']}: EAD=£{ee['ead']:,.0f}, RWA=£{ee['rwa']:,.0f}")
     return (result_crr_h1,)
 
 
@@ -339,7 +339,7 @@ def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw):
     print(f"  Total EAD=£{total_ead_h2:,.0f}, Total RWA=£{total_rwa_h2:,.0f}")
     for e in exposure_details_h2:
         print(f"    {e['entity']}: CQS={e['effective_cqs']}, RW={e['rw']*100:.0f}%, RWA=£{e['rwa']:,.0f}")
-    return (result_crr_h2,)
+    return result_crr_h2, rwa
 
 
 @app.cell
@@ -364,8 +364,8 @@ def _(mo):
 
 @app.cell
 def _(
-    CRR_SME_SUPPORTING_FACTOR,
     CRRComplexResult,
+    CRR_SME_SUPPORTING_FACTOR,
     Decimal,
     apply_sme_supporting_factor,
     calculate_sa_rwa,
@@ -381,11 +381,12 @@ def _(
     rwa_before_sf_h3 = calculate_sa_rwa(ead_h3, rw_h3)
 
     # Apply SME supporting factor
-    rwa_after_sf_h3, sf_applied_h3, sf_desc_h3 = apply_sme_supporting_factor(
+    rwa_after_sf_h3, sf_applied_h3, sf_desc_h3, sf_info = apply_sme_supporting_factor(
         rwa=rwa_before_sf_h3,
         is_sme=True,
         turnover=turnover_h3,
         currency="GBP",
+        total_exposure=ead_h3
     )
 
     # Calculate effective RW
@@ -436,6 +437,7 @@ def _(
     print(f"  RWA before SF=£{rwa_before_sf_h3:,.0f}")
     print(f"  SF={CRR_SME_SUPPORTING_FACTOR}, RWA after SF=£{rwa_after_sf_h3:,.0f}")
     print(f"  Effective RW={effective_rw_h3*100:.2f}%")
+    print(f"{sf_info}")
     return (result_crr_h3,)
 
 
@@ -639,7 +641,7 @@ def _(group_crr_h_results):
     def get_group_crr_h_results():
         """Return all Group CRR-H scenario results."""
         return group_crr_h_results
-    return (get_group_crr_h_results,)
+    return
 
 
 if __name__ == "__main__":

@@ -1178,6 +1178,10 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "mkdocs-mermaid2-plugin" },
+    { name = "mkdocstrings", extra = ["python"] },
     { name = "mypy" },
 ]
 
@@ -1203,7 +1207,13 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "mypy", specifier = ">=1.19.1" }]
+dev = [
+    { name = "mkdocs", specifier = ">=1.6.1" },
+    { name = "mkdocs-material", specifier = ">=9.7.1" },
+    { name = "mkdocs-mermaid2-plugin", specifier = ">=1.2.3" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.0" },
+    { name = "mypy", specifier = ">=1.19.1" },
+]
 
 [[package]]
 name = "scipy"

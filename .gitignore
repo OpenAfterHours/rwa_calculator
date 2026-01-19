@@ -3,4 +3,5 @@ nul
 
 # exclude datafiles
 *.parquet
-*.csv
+*.csvsite/ 
+site/

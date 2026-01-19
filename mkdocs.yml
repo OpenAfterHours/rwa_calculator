@@ -1,0 +1,136 @@
+site_name: UK Credit Risk RWA Calculator
+site_description: Documentation for the UK Credit Risk RWA Calculator - supporting CRR and Basel 3.1 frameworks
+site_author: theafterhoursclub
+repo_url: https://github.com/theafterhoursclub/repo-branch-docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mermaid2
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            members_order: source
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.mark
+  - pymdownx.critic
+  - pymdownx.keys
+  - admonition
+  - tables
+  - attr_list
+  - md_in_html
+  - def_list
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/theafterhoursclub/repo-branch-docs
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - getting-started/index.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Concepts: getting-started/concepts.md
+  - User Guide:
+    - user-guide/index.md
+    - Regulatory Frameworks:
+      - user-guide/regulatory/index.md
+      - CRR (Basel 3.0): user-guide/regulatory/crr.md
+      - Basel 3.1: user-guide/regulatory/basel31.md
+      - Framework Comparison: user-guide/regulatory/comparison.md
+    - Calculation Methodology:
+      - user-guide/methodology/index.md
+      - Standardised Approach: user-guide/methodology/standardised-approach.md
+      - IRB Approach: user-guide/methodology/irb-approach.md
+      - Specialised Lending: user-guide/methodology/specialised-lending.md
+      - Credit Risk Mitigation: user-guide/methodology/crm.md
+      - Supporting Factors: user-guide/methodology/supporting-factors.md
+    - Exposure Classes:
+      - user-guide/exposure-classes/index.md
+      - Sovereign: user-guide/exposure-classes/sovereign.md
+      - Institution: user-guide/exposure-classes/institution.md
+      - Corporate: user-guide/exposure-classes/corporate.md
+      - Retail: user-guide/exposure-classes/retail.md
+      - Other Classes: user-guide/exposure-classes/other.md
+    - Configuration: user-guide/configuration.md
+  - Architecture:
+    - architecture/index.md
+    - Design Principles: architecture/design-principles.md
+    - Pipeline Architecture: architecture/pipeline.md
+    - Data Flow: architecture/data-flow.md
+    - Component Overview: architecture/components.md
+  - Data Model:
+    - data-model/index.md
+    - Input Schemas: data-model/input-schemas.md
+    - Intermediate Schemas: data-model/intermediate-schemas.md
+    - Output Schemas: data-model/output-schemas.md
+    - Regulatory Tables: data-model/regulatory-tables.md
+  - API Reference:
+    - api/index.md
+    - Pipeline: api/pipeline.md
+    - Configuration: api/configuration.md
+    - Engine Components: api/engine.md
+    - Data Contracts: api/contracts.md
+    - Domain Enums: api/domain.md
+  - Development:
+    - development/index.md
+    - Testing Guide: development/testing.md
+    - Adding Features: development/extending.md
+    - Code Style: development/code-style.md
+  - Appendix:
+    - appendix/index.md
+    - Glossary: appendix/glossary.md
+    - Regulatory References: appendix/regulatory-references.md
+    - Changelog: appendix/changelog.md

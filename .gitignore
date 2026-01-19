@@ -4,3 +4,5 @@ nul
 # exclude datafiles
 *.parquet
 *.csv
+site
+tests/benchmarks/data/

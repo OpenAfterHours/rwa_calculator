@@ -25,6 +25,7 @@ dependencies = [
     "pyarrow",
     "pyyaml",
     "pytest",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -92,6 +93,10 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.1",
+    "mkdocs-mermaid2-plugin>=1.2.3",
+    "mkdocstrings[python]>=1.0.0",
     "mypy>=1.19.1",
     "pytest-benchmark>=5.2.3",
 ]

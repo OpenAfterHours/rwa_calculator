@@ -1185,6 +1185,7 @@ dependencies = [
     { name = "pytest" },
     { name = "pyyaml" },
     { name = "scipy" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -1201,6 +1202,10 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "mkdocs-mermaid2-plugin" },
+    { name = "mkdocstrings", extra = ["python"] },
     { name = "mypy" },
     { name = "pytest-benchmark" },
 ]
@@ -1224,6 +1229,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "scipy" },
+    { name = "uvicorn" },
 ]
 provides-extras = ["dev"]
 
@@ -1231,6 +1237,11 @@ provides-extras = ["dev"]
 dev = [
     { name = "mypy", specifier = ">=1.19.1" },
     { name = "pytest-benchmark", specifier = ">=5.2.3" },
+    { name = "mkdocs", specifier = ">=1.6.1" },
+    { name = "mkdocs-material", specifier = ">=9.7.1" },
+    { name = "mkdocs-mermaid2-plugin", specifier = ">=1.2.3" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.0" },
+    { name = "mypy", specifier = ">=1.19.1" },
 ]
 
 [[package]]

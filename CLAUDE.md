@@ -27,7 +27,7 @@ Utilise the following tooling:
 - Use Polars as the default dataframe library - prioritising LazyFrames over Eager. check the resources found here: https://docs.pola.rs/api/python/stable/reference/index.html
 - DuckDB for areas where it is more suitable than polars
 - UV and UV native commands i.e. UV add instead of UV pip install
-- Marimo for workbooks
+- Marimo for workbooks - check the resources found here: https://docs.marimo.io/api/
 - Pytest for testing
 
 ## Coding standards

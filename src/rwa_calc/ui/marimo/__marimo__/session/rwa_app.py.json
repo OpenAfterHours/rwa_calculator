@@ -1,0 +1,190 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.19.4"
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "6350c3f99e3d03e93091fc06bbeae538",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "3081b19cb664b8bbf22f924354edb531",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-sidebar ><div style='display: flex;flex: 1;flex-direction: column;justify-content: space-between;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"rwa-calculator\">RWA Calculator</h1></span><marimo-nav-menu data-items='[{&quot;label&quot;:&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;&lt;iconify-icon icon=&#x27;calculator&#x27; inline&gt;&lt;/iconify-icon&gt; Calculator&lt;/span&gt;&lt;/span&gt;&quot;,&quot;href&quot;:&quot;/rwa_app.py&quot;,&quot;description&quot;:null},{&quot;label&quot;:&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;&lt;iconify-icon icon=&#x27;table&#x27; inline&gt;&lt;/iconify-icon&gt; Results Explorer&lt;/span&gt;&lt;/span&gt;&quot;,&quot;href&quot;:&quot;/results_explorer.py&quot;,&quot;description&quot;:null},{&quot;label&quot;:&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;&lt;iconify-icon icon=&#x27;book&#x27; inline&gt;&lt;/iconify-icon&gt; Framework Reference&lt;/span&gt;&lt;/span&gt;&quot;,&quot;href&quot;:&quot;/framework_reference.py&quot;,&quot;description&quot;:null}]' data-orientation='&quot;vertical&quot;'></marimo-nav-menu><span class=\"markdown prose dark:prose-invert contents\"><hr /></span><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Quick Links</strong></span>\n<ul>\n<li><a href=\"https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2\" rel=\"noopener noreferrer\" target=\"_blank\">PRA PS9/24</a></li>\n<li><a href=\"https://www.legislation.gov.uk/eur/2013/575/contents\" rel=\"noopener noreferrer\" target=\"_blank\">UK CRR</a></li>\n<li><a href=\"https://www.bis.org/basel_framework/\" rel=\"noopener noreferrer\" target=\"_blank\">BCBS Framework</a></li>\n</ul></span></div><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><em>RWA Calculator v1.0</em></span></span></div></marimo-sidebar>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "bb125dcecb87a1dcda8c40ecb1746f35",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"data-configuration\">Data Configuration</h3></span><marimo-ui-element object-id='bkHC-0' random-id='4880e27a-3aae-c79e-c2f6-46f95e278b88'><marimo-text data-initial-value='&quot;C:&#92;&#92;Users&#92;&#92;philm&#92;&#92;PycharmProjects&#92;&#92;rwa_calculator&#92;&#92;tests&#92;&#92;fixtures&quot;' data-label='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Data Path&lt;/span&gt;&lt;/span&gt;&quot;' data-placeholder='&quot;Enter path to data directory&quot;' data-kind='&quot;text&quot;' data-full-width='true' data-disabled='false' data-debounce='true'></marimo-text></marimo-ui-element></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "df6418e35c3d46907ac080f854087f40",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: row;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 2rem'><marimo-ui-element object-id='lEQa-0' random-id='59fd4622-e237-2d2b-2aa1-b4537289346c'><marimo-dropdown data-initial-value='[&quot;CRR&quot;]' data-label='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Regulatory Framework&lt;/span&gt;&lt;/span&gt;&quot;' data-options='[&quot;CRR&quot;,&quot;BASEL_3_1&quot;]' data-allow-select-none='false' data-searchable='false' data-full-width='false'></marimo-dropdown></marimo-ui-element><marimo-ui-element object-id='lEQa-1' random-id='85128c73-b2a7-e558-0425-eea2c0533221'><marimo-dropdown data-initial-value='[&quot;parquet&quot;]' data-label='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Data Format&lt;/span&gt;&lt;/span&gt;&quot;' data-options='[&quot;parquet&quot;,&quot;csv&quot;]' data-allow-select-none='false' data-searchable='false' data-full-width='false'></marimo-dropdown></marimo-ui-element><marimo-ui-element object-id='lEQa-2' random-id='a1beb78a-fdf9-c6c9-963f-b3a6995b0a62'><marimo-switch data-initial-value='false' data-label='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Enable IRB Approaches&lt;/span&gt;&lt;/span&gt;&quot;' data-disabled='false'></marimo-switch></marimo-ui-element></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "28365339ee399857e281842ae1664bab",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='PKri-0' random-id='b171194d-2ce2-0b6b-fbb7-cde36ae5e6e8'><marimo-date data-initial-value='&quot;2026-01-19&quot;' data-label='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Reporting Date&lt;/span&gt;&lt;/span&gt;&quot;' data-start='&quot;0001-01-01&quot;' data-stop='&quot;9999-12-31&quot;' data-full-width='false' data-disabled='false'></marimo-date></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "b038e380080ac5bc886bf065a4132fd0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-callout-output data-html='&quot;&lt;span&gt;Data path valid. Found 15 required files.&lt;/span&gt;&quot;' data-kind='&quot;success&quot;'></marimo-callout-output>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "5bf517263380795da2bd4d46e652e0b7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: row;justify-content: center;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><marimo-ui-element object-id='SFPL-0' random-id='86f0b5b0-77fa-c252-0e00-a5f23c233dbe'><marimo-button data-initial-value='0' data-label='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Run Calculation&lt;/span&gt;&lt;/span&gt;&quot;' data-kind='&quot;neutral&quot;' data-disabled='false' data-full-width='false'></marimo-button></marimo-ui-element></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "78a4b4e956c73e8227ecded5ac7f151d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-callout-output data-html='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Calculation completed successfully! &lt;a href=&#92;&quot;/results_explorer.py&#92;&quot;&gt;Open Results Explorer&lt;/a&gt; to analyze.&lt;/span&gt;&lt;/span&gt;&quot;' data-kind='&quot;success&quot;'></marimo-callout-output>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "a14579a99c8085e08494165e234359d4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"summary-statistics\">Summary Statistics</h2>\n<table>\n<thead>\n<tr>\n<th>Metric</th>\n<th>Value</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><strong>Total EAD</strong></td>\n<td>378,560,966</td>\n</tr>\n<tr>\n<td><strong>Total RWA</strong></td>\n<td>205,745,015</td>\n</tr>\n<tr>\n<td><strong>Average Risk Weight</strong></td>\n<td>54.35%</td>\n</tr>\n<tr>\n<td><strong>Exposure Count</strong></td>\n<td>77</td>\n</tr>\n<tr>\n<td><strong>SA RWA</strong></td>\n<td>205,745,015</td>\n</tr>\n<tr>\n<td><strong>IRB RWA</strong></td>\n<td>0</td>\n</tr>\n<tr>\n<td><strong>Slotting RWA</strong></td>\n<td>0</td>\n</tr>\n<tr>\n<td><strong>Floor Applied</strong></td>\n<td>No</td>\n</tr>\n<tr>\n<td><strong>Floor Impact</strong></td>\n<td>0</td>\n</tr>\n</tbody>\n</table></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "66917b6e705e90823d1ef65d86f5869e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"performance\">Performance</h3>\n<ul>\n<li><strong>Duration</strong>: 0.79 seconds</li>\n<li><strong>Throughput</strong>: 97 exposures/second</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "cfa02640fbf1b0b3fc96aef01f7384e0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"results-preview-first-100-rows\">Results Preview (first 100 rows)</h2></span><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><em>For full analysis, use the <a href=\"/results_explorer.py\">Results Explorer</a></em></span></span><marimo-ui-element object-id='emfo-0' random-id='1074ddc7-8ad8-ffdd-e318-648bc4d34382'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_SOV_UK_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;sovereign&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:1000000.0,&#92;&quot;risk_weight&#92;&quot;:0.0,&#92;&quot;rwa_final&#92;&quot;:0.0},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_SOV_US_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;sovereign&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:4645136.842105263,&#92;&quot;risk_weight&#92;&quot;:0.0,&#92;&quot;rwa_final&#92;&quot;:0.0},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_SOV_BR_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;sovereign&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:2000000.0,&#92;&quot;risk_weight&#92;&quot;:0.0,&#92;&quot;rwa_final&#92;&quot;:0.0},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_INST_UK_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;institution&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:49943578.94736842,&#92;&quot;risk_weight&#92;&quot;:0.2,&#92;&quot;rwa_final&#92;&quot;:9988715.789473685},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_INST_UK_003&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;institution&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:1000000.0,&#92;&quot;risk_weight&#92;&quot;:0.3,&#92;&quot;rwa_final&#92;&quot;:300000.0},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_INST_UR_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;institution&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:9861052.631578946,&#92;&quot;risk_weight&#92;&quot;:0.29859094790777113,&#92;&quot;rwa_final&#92;&quot;:2944421.052631579},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_CORP_UR_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;corporate&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:1000000.0,&#92;&quot;risk_weight&#92;&quot;:1.0,&#92;&quot;rwa_final&#92;&quot;:1000000.0},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_CORP_UK_003&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;corporate&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:1000000.0,&#92;&quot;risk_weight&#92;&quot;:0.5,&#92;&quot;rwa_final&#92;&quot;:500000.0},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_CORP_UK_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;corporate&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:25000000.0,&#92;&quot;risk_weight&#92;&quot;:0.2,&#92;&quot;rwa_final&#92;&quot;:5000000.0},{&#92;&quot;exposure_reference&#92;&quot;:&#92;&quot;LOAN_CORP_SUB_001&#92;&quot;,&#92;&quot;exposure_class&#92;&quot;:&#92;&quot;corporate&#92;&quot;,&#92;&quot;approach_applied&#92;&quot;:&#92;&quot;SA&#92;&quot;,&#92;&quot;ead_final&#92;&quot;:3650000.0,&#92;&quot;risk_weight&#92;&quot;:0.5,&#92;&quot;rwa_final&#92;&quot;:1825000.0}]&quot;' data-total-rows='77' data-total-columns='6' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;exposure_reference&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;exposure_class&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;approach_applied&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;ead_final&quot;,[&quot;number&quot;,&quot;f64&quot;]],[&quot;risk_weight&quot;,[&quot;number&quot;,&quot;f64&quot;]],[&quot;rwa_final&quot;,[&quot;number&quot;,&quot;f64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "55fc7801d51996e0a6d28ef9867ef646",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "fdd84dbb413765e8e7a01c5e0ce8f41a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"export-results\">Export Results</h3></span><marimo-ui-element object-id='nWHF-0' random-id='d27c6251-c757-768a-6de0-7d8d1b16c366'><marimo-download data-initial-value='null' data-label='&quot;&lt;span class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&gt;&lt;span class=&#92;&quot;paragraph&#92;&quot;&gt;Download CSV&lt;/span&gt;&lt;/span&gt;&quot;' data-data='&quot;./@file/61209-68552-zJ6TtAb2.xls&quot;' data-filename='&quot;rwa_results.csv&quot;' data-disabled='false' data-lazy='false'></marimo-download></marimo-ui-element></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": null,
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}

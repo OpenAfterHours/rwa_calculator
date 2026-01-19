@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:service.betterregulation.com)",
       "Bash(uv run pytest:*)",
-      "Bash(uv run python:*)"
+      "Bash(uv run python:*)",
+      "WebFetch(domain:docs.marimo.io)"
     ]
   }
 }

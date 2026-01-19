@@ -127,6 +127,10 @@ class ExposureClassifier:
         # This must happen before splitting so metadata flows through CRM processor
         classified = self._enrich_slotting_exposures(classified)
 
+        # Strategic collect to materialize all classification processing
+        # This breaks up the complex query plan for better downstream performance
+        classified = classified.collect().lazy()
+
         # Step 8: Split by approach
         sa_exposures = self._filter_by_approach(classified, ApproachType.SA)
         irb_exposures = self._filter_irb_exposures(classified)

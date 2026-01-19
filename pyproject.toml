@@ -32,6 +32,7 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
+    "pytest-benchmark",
     "ruff",
     "mkdocs",
     "mkdocs-material",
@@ -73,7 +74,11 @@ known-first-party = ["rwa_calc"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --benchmark-skip"
+markers = [
+    "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
+    "slow: mark test as slow (10M+ scale, may take several minutes)",
+]
 
 [tool.coverage.run]
 source = ["src/rwa_calc"]
@@ -93,4 +98,5 @@ dev = [
     "mkdocs-mermaid2-plugin>=1.2.3",
     "mkdocstrings[python]>=1.0.0",
     "mypy>=1.19.1",
+    "pytest-benchmark>=5.2.3",
 ]

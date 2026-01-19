@@ -47,7 +47,6 @@ from rwa_calc.data.tables.crr_firb_lgd import (
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
     apply_irb_formulas,
-    apply_irb_formulas_numpy,
     calculate_correlation,
     calculate_irb_rwa,
     calculate_k,
@@ -153,8 +152,8 @@ class IRBCalculator:
         exposures = self._prepare_columns(exposures, config)
 
         # Step 4: Apply IRB formulas (PD floor, correlation, K, MA, RWA)
-        # Use NumPy-accelerated version for ~10x speedup
-        exposures = apply_irb_formulas_numpy(exposures, config)
+        # Uses map_batches with NumPy/SciPy for fast computation while preserving lazy evaluation
+        exposures = apply_irb_formulas(exposures, config)
 
         # Step 5: Apply supporting factors (CRR only - Art. 501)
         exposures = self._apply_supporting_factors(exposures, config)

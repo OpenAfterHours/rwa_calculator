@@ -25,6 +25,7 @@ dependencies = [
     "pyarrow",
     "pyyaml",
     "pytest",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]

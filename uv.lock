@@ -1163,6 +1163,7 @@ dependencies = [
     { name = "pytest" },
     { name = "pyyaml" },
     { name = "scipy" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -1203,6 +1204,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "scipy" },
+    { name = "uvicorn" },
 ]
 provides-extras = ["dev"]
 

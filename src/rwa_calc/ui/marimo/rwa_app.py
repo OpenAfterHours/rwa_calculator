@@ -35,16 +35,47 @@ def _():
     project_root = Path(__file__).parent.parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
-    return Decimal, Path, date, mo, project_root
+
+    # Cache directory for sharing results between apps
+    cache_dir = Path(__file__).parent / ".cache"
+    cache_dir.mkdir(exist_ok=True)
+
+    return Decimal, Path, cache_dir, date, mo, pl, project_root
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""
-    # RWA Calculator
-    ***
-    """)
+    mo.sidebar(
+        [
+            mo.md("# RWA Calculator"),
+            mo.nav_menu(
+                {
+                    "/calculator": f"{mo.icon('calculator')} Calculator",
+                    "/results": f"{mo.icon('table')} Results Explorer",
+                    "/reference": f"{mo.icon('book')} Framework Reference",
+                },
+                orientation="vertical",
+            ),
+            mo.md("---"),
+            mo.md("""
+**Quick Links**
+- [PRA PS9/24](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
+- [UK CRR](https://www.legislation.gov.uk/eur/2013/575/contents)
+- [BCBS Framework](https://www.bis.org/basel_framework/)
+            """),
+        ],
+        footer=mo.md("*RWA Calculator v1.0*"),
+    )
     return
+
+
+@app.cell
+def _(mo):
+    return mo.md("""
+# RWA Calculator
+
+Configure your calculation parameters below, then click **Run Calculation** to compute Risk-Weighted Assets.
+    """)
 
 
 @app.cell
@@ -168,6 +199,7 @@ def _(mo, validation_result):
 
 @app.cell
 def _(
+    cache_dir,
     data_path_input,
     format_dropdown,
     framework_dropdown,
@@ -178,6 +210,7 @@ def _(
 ):
     from rwa_calc.api import RWAService, CalculationRequest
     from datetime import date as date_type
+    import json
 
     calculation_response = None
     calculation_error = None
@@ -200,6 +233,25 @@ def _(
 
             calculation_response = service.calculate(request)
 
+            # Cache results for the results explorer
+            if calculation_response and calculation_response.success:
+                calculation_response.results.write_parquet(cache_dir / "last_results.parquet")
+
+                # Save metadata
+                metadata = {
+                    "framework": calculation_response.framework,
+                    "reporting_date": str(calculation_response.reporting_date),
+                    "total_ead": float(calculation_response.summary.total_ead),
+                    "total_rwa": float(calculation_response.summary.total_rwa),
+                    "exposure_count": calculation_response.summary.exposure_count,
+                }
+                (cache_dir / "last_results_meta.json").write_text(json.dumps(metadata, indent=2))
+
+                if calculation_response.summary_by_class is not None:
+                    calculation_response.summary_by_class.write_parquet(cache_dir / "last_summary_by_class.parquet")
+                if calculation_response.summary_by_approach is not None:
+                    calculation_response.summary_by_approach.write_parquet(cache_dir / "last_summary_by_approach.parquet")
+
         except Exception as e:
             calculation_error = str(e)
 
@@ -209,7 +261,12 @@ def _(
         error_msgs = [e.message for e in calculation_response.errors[:3]]
         mo.output.replace(mo.callout(f"Calculation completed with errors: {'; '.join(error_msgs)}", kind="warn"))
     elif run_button.value and calculation_response and calculation_response.success:
-        mo.output.replace(mo.callout("Calculation completed successfully!", kind="success"))
+        mo.output.replace(
+            mo.callout(
+                mo.md(f"Calculation completed successfully! [Open Results Explorer](/results) to analyze."),
+                kind="success",
+            )
+        )
     return (calculation_response,)
 
 
@@ -225,19 +282,19 @@ def _(Decimal, calculation_response, mo):
             return f"{float(val) * 100:.2f}%"
 
         mo.output.replace(mo.md(f"""
-    ## Summary Statistics
+## Summary Statistics
 
-    | Metric | Value |
-    |--------|-------|
-    | **Total EAD** | {fmt_num(summary.total_ead)} |
-    | **Total RWA** | {fmt_num(summary.total_rwa)} |
-    | **Average Risk Weight** | {fmt_pct(summary.average_risk_weight)} |
-    | **Exposure Count** | {summary.exposure_count:,} |
-    | **SA RWA** | {fmt_num(summary.total_rwa_sa)} |
-    | **IRB RWA** | {fmt_num(summary.total_rwa_irb)} |
-    | **Slotting RWA** | {fmt_num(summary.total_rwa_slotting)} |
-    | **Floor Applied** | {"Yes" if summary.floor_applied else "No"} |
-    | **Floor Impact** | {fmt_num(summary.floor_impact)} |
+| Metric | Value |
+|--------|-------|
+| **Total EAD** | {fmt_num(summary.total_ead)} |
+| **Total RWA** | {fmt_num(summary.total_rwa)} |
+| **Average Risk Weight** | {fmt_pct(summary.average_risk_weight)} |
+| **Exposure Count** | {summary.exposure_count:,} |
+| **SA RWA** | {fmt_num(summary.total_rwa_sa)} |
+| **IRB RWA** | {fmt_num(summary.total_rwa_irb)} |
+| **Slotting RWA** | {fmt_num(summary.total_rwa_slotting)} |
+| **Floor Applied** | {"Yes" if summary.floor_applied else "No"} |
+| **Floor Impact** | {fmt_num(summary.floor_impact)} |
         """))
     elif calculation_response:
         mo.output.replace(mo.md("## Summary Statistics\n\n*Calculation did not complete successfully.*"))
@@ -249,10 +306,10 @@ def _(calculation_response, mo):
     if calculation_response and calculation_response.performance:
         perf = calculation_response.performance
         mo.output.replace(mo.md(f"""
-    ### Performance
+### Performance
 
-    - **Duration**: {perf.duration_seconds:.2f} seconds
-    - **Throughput**: {perf.exposures_per_second:,.0f} exposures/second
+- **Duration**: {perf.duration_seconds:.2f} seconds
+- **Throughput**: {perf.exposures_per_second:,.0f} exposures/second
         """))
     return
 
@@ -274,49 +331,16 @@ def _(calculation_response, mo):
         ]
 
         if display_cols:
-            display_df = results_df.select(display_cols)
+            display_df = results_df.select(display_cols).head(100)
             mo.output.replace(
                 mo.vstack([
-                    mo.md("## Detailed Results"),
+                    mo.md("## Results Preview (first 100 rows)"),
+                    mo.md("*For full analysis, use the [Results Explorer](/results)*"),
                     mo.ui.table(display_df, selection=None),
                 ])
             )
     elif calculation_response:
         mo.output.replace(mo.md("## Detailed Results\n\n*No results to display.*"))
-    return
-
-
-@app.cell
-def _(calculation_response, mo):
-    if (
-        calculation_response
-        and calculation_response.success
-        and calculation_response.summary_by_class is not None
-        and calculation_response.summary_by_class.height > 0
-    ):
-        mo.output.replace(
-            mo.vstack([
-                mo.md("### Summary by Exposure Class"),
-                mo.ui.table(calculation_response.summary_by_class, selection=None),
-            ])
-        )
-    return
-
-
-@app.cell
-def _(calculation_response, mo):
-    if (
-        calculation_response
-        and calculation_response.success
-        and calculation_response.summary_by_approach is not None
-        and calculation_response.summary_by_approach.height > 0
-    ):
-        mo.output.replace(
-            mo.vstack([
-                mo.md("### Summary by Approach"),
-                mo.ui.table(calculation_response.summary_by_approach, selection=None),
-            ])
-        )
     return
 
 
@@ -337,9 +361,9 @@ def _(calculation_response, mo):
             ])
             more_errors = f"\n\n*({len(error_list) - 10} more errors)*" if len(error_list) > 10 else ""
             output_parts.append(mo.md(f"""
-    ### Errors ({len(error_list)})
+### Errors ({len(error_list)})
 
-    {error_items}{more_errors}
+{error_items}{more_errors}
             """))
 
         if warnings:
@@ -349,9 +373,9 @@ def _(calculation_response, mo):
             ])
             more_warnings = f"\n\n*({len(warnings) - 10} more warnings)*" if len(warnings) > 10 else ""
             output_parts.append(mo.md(f"""
-    ### Warnings ({len(warnings)})
+### Warnings ({len(warnings)})
 
-    {warning_items}{more_warnings}
+{warning_items}{more_warnings}
             """))
 
         if output_parts:
@@ -374,11 +398,6 @@ def _(calculation_response, mo):
                 ),
             ])
         )
-    return
-
-
-@app.cell
-def _():
     return
 
 

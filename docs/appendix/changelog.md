@@ -9,22 +9,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### IRB Namespace Extension
-- **`IRBLazyFrame` namespace**: Polars LazyFrame namespace (`.irb`) for fluent, chainable IRB calculations
-- **`IRBExpr` namespace**: Polars expression namespace for column-level IRB operations
-- Namespace methods for each calculation step: `classify_approach`, `apply_firb_lgd`, `prepare_columns`, `apply_pd_floor`, `apply_lgd_floor`, `calculate_correlation`, `calculate_k`, `calculate_maturity_adjustment`, `calculate_rwa`, `calculate_expected_loss`
-- `apply_all_formulas` convenience method for complete IRB calculation pipeline
-- `select_expected_loss` and `build_audit` for output generation
+#### Polars Namespace Extensions (8 namespaces, 139 new tests)
+
+The calculator now provides comprehensive Polars namespace extensions for fluent, chainable calculations across all approaches:
+
+**SA Namespace** (`lf.sa`, `expr.sa`)
+- `SALazyFrame` namespace for Standardised Approach calculations
+- Methods: `prepare_columns`, `apply_risk_weights`, `apply_residential_mortgage_rw`, `apply_cqs_based_rw`, `calculate_rwa`, `apply_supporting_factors`, `apply_all`
+- UK deviation handling for institution CQS 2 (30% vs 50%)
+- 29 unit tests
+
+**IRB Namespace** (`lf.irb`, `expr.irb`)
+- `IRBLazyFrame` namespace for IRB calculations
+- Methods: `classify_approach`, `apply_firb_lgd`, `prepare_columns`, `apply_pd_floor`, `apply_lgd_floor`, `calculate_correlation`, `calculate_k`, `calculate_maturity_adjustment`, `calculate_rwa`, `calculate_expected_loss`, `apply_all_formulas`
 - Expression methods: `floor_pd`, `floor_lgd`, `clip_maturity`
-- 33 unit tests for namespace functionality
+- 33 unit tests
+
+**CRM Namespace** (`lf.crm`)
+- `CRMLazyFrame` namespace for EAD waterfall processing
+- Methods: `initialize_ead_waterfall`, `apply_collateral`, `apply_guarantees`, `apply_provisions`, `finalize_ead`, `apply_all_crm`
+- SA vs IRB treatment differences handled automatically
+- 20 unit tests
+
+**Haircuts Namespace** (`lf.haircuts`)
+- `HaircutsLazyFrame` namespace for collateral haircut calculations
+- Methods: `classify_maturity_band`, `apply_collateral_haircuts`, `apply_fx_haircut`, `apply_maturity_mismatch`, `calculate_adjusted_value`, `apply_all_haircuts`
+- CRR Article 224 supervisory haircuts
+- 24 unit tests
+
+**Slotting Namespace** (`lf.slotting`, `expr.slotting`)
+- `SlottingLazyFrame` namespace for specialised lending
+- Methods: `prepare_columns`, `apply_slotting_weights`, `calculate_rwa`, `apply_all`
+- CRR vs Basel 3.1 risk weight differences
+- HVCRE treatment
+- 26 unit tests
+
+**Hierarchy Namespace** (`lf.hierarchy`)
+- `HierarchyLazyFrame` namespace for hierarchy resolution
+- Methods: `resolve_ultimate_parent`, `calculate_hierarchy_depth`, `inherit_ratings`, `coalesce_ratings`, `calculate_lending_group_totals`, `add_lending_group_reference`, `add_collateral_ltv`
+- Pure LazyFrame join-based traversal (no Python recursion)
+- 13 unit tests
+
+**Aggregator Namespace** (`lf.aggregator`)
+- `AggregatorLazyFrame` namespace for result combination
+- Methods: `combine_approach_results`, `apply_output_floor`, `calculate_floor_impact`, `generate_summary_by_class`, `generate_summary_by_approach`, `generate_supporting_factor_impact`
+- Basel 3.1 output floor support
+- 12 unit tests
+
+**Audit Namespace** (`lf.audit`, `expr.audit`)
+- `AuditLazyFrame` namespace for audit trail generation
+- Methods: `build_sa_calculation`, `build_irb_calculation`, `build_slotting_calculation`, `build_crm_calculation`, `build_haircut_calculation`, `build_floor_calculation`
+- `AuditExpr` namespace for column formatting: `format_currency`, `format_percent`, `format_ratio`, `format_bps`
+- 15 unit tests
 
 ### Changed
-- **IRBCalculator refactored** to use namespace-based fluent API instead of private methods
+- **All calculators** can now use namespace-based fluent APIs
 - Improved code readability with chainable method calls
+- Test count increased from 635 to 774 (139 new namespace tests)
 
 ### Planned
 - Basel 3.1 full implementation
-- Output floor calculation
 - Differentiated PD floors
 - A-IRB LGD floors
 - Revised SA real estate risk weights

@@ -51,6 +51,102 @@ class HierarchyResolver:
         """
 ```
 
+### Module: `rwa_calc.engine.hierarchy_namespace`
+
+The Hierarchy module provides Polars namespace extensions for counterparty and facility hierarchy resolution.
+
+#### HierarchyLazyFrame Namespace
+
+```python
+@pl.api.register_lazyframe_namespace("hierarchy")
+class HierarchyLazyFrame:
+    """LazyFrame namespace for hierarchy operations."""
+
+    def resolve_ultimate_parent(
+        self,
+        org_mappings: pl.LazyFrame,
+        max_depth: int = 10,
+    ) -> pl.LazyFrame:
+        """
+        Resolve ultimate parent for each counterparty.
+
+        Uses iterative join-based traversal (not recursive Python).
+
+        Adds columns:
+        - ultimate_parent_reference: The root parent
+        - hierarchy_depth: Number of levels to root
+        """
+
+    def calculate_hierarchy_depth(self) -> pl.LazyFrame:
+        """Calculate depth in hierarchy for each entity."""
+
+    def inherit_ratings(
+        self,
+        ratings: pl.LazyFrame,
+        ultimate_parents: pl.LazyFrame | None = None,
+    ) -> pl.LazyFrame:
+        """
+        Inherit ratings from ultimate parent.
+
+        If entity has own rating, use it.
+        Otherwise, inherit from ultimate parent.
+
+        Adds columns:
+        - cqs: Credit quality step (own or inherited)
+        - pd: Probability of default (own or inherited)
+        - rating_value: Rating value (own or inherited)
+        """
+
+    def coalesce_ratings(self) -> pl.LazyFrame:
+        """Coalesce own rating with inherited rating."""
+
+    def calculate_lending_group_totals(
+        self,
+        lending_mappings: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Calculate aggregate exposure for lending groups.
+
+        Adds columns:
+        - total_exposure: Sum of exposures in lending group
+        - exposure_count: Number of exposures in group
+        """
+
+    def add_lending_group_reference(
+        self,
+        lending_mappings: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Add lending group reference to exposures."""
+
+    def add_collateral_ltv(self, collateral: pl.LazyFrame) -> pl.LazyFrame:
+        """Add LTV from collateral to exposures."""
+```
+
+**Usage Example:**
+
+```python
+import polars as pl
+import rwa_calc.engine.hierarchy_namespace  # Registers namespace
+
+# Resolve ultimate parents
+counterparties_with_parents = (
+    counterparties
+    .hierarchy.resolve_ultimate_parent(org_mappings, max_depth=10)
+)
+
+# Inherit ratings from parents
+counterparties_with_ratings = (
+    counterparties
+    .hierarchy.inherit_ratings(ratings, ultimate_parents)
+)
+
+# Calculate lending group totals
+exposures_with_groups = (
+    exposures
+    .hierarchy.calculate_lending_group_totals(lending_mappings)
+)
+```
+
 ## Classifier
 
 ### Module: `rwa_calc.engine.classifier`
@@ -136,6 +232,103 @@ class CRMProcessor:
         """
 ```
 
+### Module: `rwa_calc.engine.crm.namespace`
+
+The CRM module provides Polars namespace extensions for fluent EAD waterfall processing.
+
+#### CRMLazyFrame Namespace
+
+```python
+@pl.api.register_lazyframe_namespace("crm")
+class CRMLazyFrame:
+    """LazyFrame namespace for CRM/EAD calculations."""
+
+    def initialize_ead_waterfall(self) -> pl.LazyFrame:
+        """
+        Initialize EAD waterfall columns.
+
+        Adds columns:
+        - ead_gross: Copy of ead_pre_crm
+        - ead_after_collateral: Initialized to ead_gross
+        - ead_after_guarantee: Initialized to ead_gross
+        - ead_final: Initialized to ead_gross
+        - collateral_adjusted_value: Initialized to 0
+        - guarantee_amount: Initialized to 0
+        - provision_allocated: Initialized to 0
+        """
+
+    def apply_collateral(
+        self,
+        collateral: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply collateral to reduce EAD (SA) or adjust LGD (IRB).
+
+        SA approach: Reduces EAD directly
+        IRB approach: Affects LGD calculation
+        """
+
+    def apply_guarantees(
+        self,
+        guarantees: pl.LazyFrame,
+        counterparty_lookup: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply guarantee substitution.
+
+        Calculates guarantee coverage and applies risk weight substitution
+        based on guarantor type and CQS.
+        """
+
+    def apply_provisions(
+        self,
+        provisions: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply provision allocation (SA only).
+
+        SA: Deducts provisions from EAD
+        IRB: No deduction (EL comparison handled separately)
+        """
+
+    def finalize_ead(self) -> pl.LazyFrame:
+        """Finalize EAD calculation ensuring non-negative values."""
+
+    def apply_all_crm(
+        self,
+        collateral: pl.LazyFrame,
+        guarantees: pl.LazyFrame,
+        provisions: pl.LazyFrame,
+        counterparty_lookup: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """Apply complete CRM pipeline."""
+```
+
+**Usage Example:**
+
+```python
+import polars as pl
+from rwa_calc.contracts.config import CalculationConfig
+import rwa_calc.engine.crm.namespace  # Registers namespace
+
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+
+# Fluent CRM pipeline
+result = (
+    exposures
+    .crm.initialize_ead_waterfall()
+    .crm.apply_collateral(collateral, config)
+    .crm.apply_guarantees(guarantees, counterparty_lookup, config)
+    .crm.apply_provisions(provisions, config)
+    .crm.finalize_ead()
+    .collect()
+)
+```
+
 ### Module: `rwa_calc.engine.crm.haircuts`
 
 ```python
@@ -155,6 +348,83 @@ def get_haircut(
     Returns:
         float: Haircut percentage (0.0 to 1.0).
     """
+```
+
+### Module: `rwa_calc.engine.crm.haircuts_namespace`
+
+The Haircuts module provides Polars namespace extensions for collateral haircut calculations.
+
+#### HaircutsLazyFrame Namespace
+
+```python
+@pl.api.register_lazyframe_namespace("haircuts")
+class HaircutsLazyFrame:
+    """LazyFrame namespace for haircut calculations."""
+
+    def classify_maturity_band(self) -> pl.LazyFrame:
+        """
+        Classify residual maturity into regulatory bands.
+
+        Bands: <=1yr, 1-3yr, 3-5yr, 5-7yr, 7-10yr, >10yr
+        """
+
+    def apply_collateral_haircuts(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply supervisory haircuts based on collateral type and CQS.
+
+        Handles:
+        - Cash: 0%
+        - Gold: 15%
+        - Government bonds: 0.5%-15% by CQS and maturity
+        - Corporate bonds: 1%-30% by CQS and maturity
+        - Equities: 15%-25%
+        - Other physical: 40%
+        """
+
+    def apply_fx_haircut(self, exposure_currency_col: str) -> pl.LazyFrame:
+        """
+        Apply FX mismatch haircut (8%) when currencies differ.
+        """
+
+    def apply_maturity_mismatch(self, exposure_maturity_col: str) -> pl.LazyFrame:
+        """
+        Apply maturity mismatch adjustment.
+
+        P_adj = P × (t - 0.25) / (T - 0.25)
+        where t = collateral maturity, T = exposure maturity
+        """
+
+    def calculate_adjusted_value(self) -> pl.LazyFrame:
+        """Calculate final adjusted collateral value after all haircuts."""
+
+    def apply_all_haircuts(
+        self,
+        exposure_currency_col: str,
+        exposure_maturity_col: str,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """Apply complete haircut pipeline."""
+```
+
+**Usage Example:**
+
+```python
+import polars as pl
+from rwa_calc.contracts.config import CalculationConfig
+import rwa_calc.engine.crm.haircuts_namespace  # Registers namespace
+
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+
+# Fluent haircut calculation
+result = (
+    collateral
+    .haircuts.classify_maturity_band()
+    .haircuts.apply_collateral_haircuts(config)
+    .haircuts.apply_fx_haircut("exposure_currency")
+    .haircuts.apply_maturity_mismatch("exposure_maturity")
+    .haircuts.calculate_adjusted_value()
+    .collect()
+)
 ```
 
 ## SA Calculator
@@ -180,6 +450,107 @@ class SACalculator:
         Returns:
             SAResultBundle: SA calculation results.
         """
+```
+
+### Module: `rwa_calc.engine.sa.namespace`
+
+The SA module provides Polars namespace extensions for fluent, chainable SA calculations.
+
+#### SALazyFrame Namespace
+
+```python
+@pl.api.register_lazyframe_namespace("sa")
+class SALazyFrame:
+    """LazyFrame namespace for SA calculations."""
+
+    def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Ensure required columns exist with sensible defaults.
+
+        Adds columns:
+        - risk_weight: Initialized to 1.0
+        - supporting_factor: Initialized to 1.0
+        """
+
+    def apply_risk_weights(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply risk weights based on exposure class and CQS.
+
+        Handles:
+        - Sovereign CQS-based weights
+        - Institution CQS-based weights (with UK deviation for CQS 2)
+        - Corporate CQS-based and unrated weights
+        - Retail flat weights
+        - Residential mortgage LTV-based weights
+        - Commercial real estate weights
+        """
+
+    def apply_residential_mortgage_rw(self, config: CalculationConfig) -> pl.LazyFrame:
+        """Apply LTV-based risk weights for residential mortgages."""
+
+    def apply_cqs_based_rw(self, config: CalculationConfig) -> pl.LazyFrame:
+        """Apply CQS-based risk weights for sovereigns, institutions, corporates."""
+
+    def calculate_rwa(self) -> pl.LazyFrame:
+        """Calculate RWA = EAD × Risk Weight."""
+
+    def apply_supporting_factors(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply SME and infrastructure supporting factors (CRR only).
+
+        SME tiered factor: 0.7619 (≤EUR 2.5m) / 0.85 (>EUR 2.5m)
+        Infrastructure factor: 0.75
+        """
+
+    def apply_all(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply complete SA calculation pipeline.
+
+        Chains: prepare_columns -> apply_risk_weights -> calculate_rwa
+        -> apply_supporting_factors
+        """
+```
+
+#### SAExpr Namespace
+
+```python
+@pl.api.register_expr_namespace("sa")
+class SAExpr:
+    """Expression namespace for column-level SA operations."""
+
+    def lookup_cqs_rw(
+        self,
+        exposure_class_col: str,
+        config: CalculationConfig,
+    ) -> pl.Expr:
+        """Look up risk weight based on CQS and exposure class."""
+
+    def apply_ltv_weight(self, ltv_thresholds: list[tuple[float, float]]) -> pl.Expr:
+        """Apply LTV-based risk weight from threshold table."""
+```
+
+**Usage Example:**
+
+```python
+import polars as pl
+from datetime import date
+from rwa_calc.contracts.config import CalculationConfig
+import rwa_calc.engine.sa.namespace  # Registers namespace
+
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+
+# Fluent SA calculation pipeline
+result = (
+    exposures
+    .sa.prepare_columns(config)
+    .sa.apply_risk_weights(config)
+    .sa.calculate_rwa()
+    .sa.apply_supporting_factors(config)
+    .collect()
+)
+
+# Or use the convenience method
+result = exposures.sa.apply_all(config).collect()
 ```
 
 ### Module: `rwa_calc.engine.sa.supporting_factors`
@@ -447,6 +818,90 @@ class SlottingCalculator:
         """
 ```
 
+### Module: `rwa_calc.engine.slotting.namespace`
+
+The Slotting module provides Polars namespace extensions for specialised lending calculations.
+
+#### SlottingLazyFrame Namespace
+
+```python
+@pl.api.register_lazyframe_namespace("slotting")
+class SlottingLazyFrame:
+    """LazyFrame namespace for slotting calculations."""
+
+    def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Ensure required columns exist with defaults.
+
+        Adds columns:
+        - slotting_category: Default "unrated"
+        - is_hvcre: Default False
+        - risk_weight: Initialized to 1.0
+        """
+
+    def apply_slotting_weights(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply slotting risk weights based on category.
+
+        CRR Risk Weights:
+        - Strong: 70% (HVCRE: 70%)
+        - Good: 90% (HVCRE: 115%)
+        - Satisfactory: 115% (HVCRE: 140%)
+        - Weak: 250%
+        - Default: 0% (deducted)
+
+        Basel 3.1 Risk Weights:
+        - Strong: 50% (HVCRE: 70%)
+        - Good: 70% (HVCRE: 95%)
+        - Satisfactory: 100% (HVCRE: 125%)
+        - Weak: 250%
+        - Default: 0%
+        """
+
+    def calculate_rwa(self) -> pl.LazyFrame:
+        """Calculate RWA = EAD × Risk Weight."""
+
+    def apply_all(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply complete slotting calculation pipeline.
+
+        Chains: prepare_columns -> apply_slotting_weights -> calculate_rwa
+        """
+```
+
+#### SlottingExpr Namespace
+
+```python
+@pl.api.register_expr_namespace("slotting")
+class SlottingExpr:
+    """Expression namespace for column-level slotting operations."""
+
+    def lookup_rw(self, is_hvcre_col: str, config: CalculationConfig) -> pl.Expr:
+        """Look up slotting risk weight based on category and HVCRE status."""
+```
+
+**Usage Example:**
+
+```python
+import polars as pl
+from rwa_calc.contracts.config import CalculationConfig
+import rwa_calc.engine.slotting.namespace  # Registers namespace
+
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+
+# Fluent slotting calculation
+result = (
+    specialised_lending
+    .slotting.prepare_columns(config)
+    .slotting.apply_slotting_weights(config)
+    .slotting.calculate_rwa()
+    .collect()
+)
+
+# Or use the convenience method
+result = specialised_lending.slotting.apply_all(config).collect()
+```
+
 ## Aggregator
 
 ### Module: `rwa_calc.engine.aggregator`
@@ -474,6 +929,206 @@ class OutputAggregator:
         Returns:
             AggregatedResultBundle: Final aggregated results.
         """
+```
+
+### Module: `rwa_calc.engine.aggregator_namespace`
+
+The Aggregator module provides Polars namespace extensions for result combination and output floor application.
+
+#### AggregatorLazyFrame Namespace
+
+```python
+@pl.api.register_lazyframe_namespace("aggregator")
+class AggregatorLazyFrame:
+    """LazyFrame namespace for result aggregation."""
+
+    def combine_approach_results(
+        self,
+        sa: pl.LazyFrame | None = None,
+        irb: pl.LazyFrame | None = None,
+        slotting: pl.LazyFrame | None = None,
+    ) -> pl.LazyFrame:
+        """
+        Combine results from all calculation approaches.
+
+        Adds column:
+        - approach_applied: SA, FIRB, AIRB, or SLOTTING
+        """
+
+    def apply_output_floor(
+        self,
+        sa_results: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply Basel 3.1 output floor.
+
+        Floor = floor_pct × SA equivalent RWA
+        Final RWA = max(IRB RWA, Floor RWA)
+
+        Adds columns:
+        - floor_rwa: Floor RWA amount
+        - is_floor_binding: Whether floor exceeds IRB RWA
+        - rwa_final: Final RWA after floor
+        """
+
+    def calculate_floor_impact(self) -> pl.LazyFrame:
+        """Calculate impact of output floor on RWA."""
+
+    def generate_summary_by_class(self) -> pl.LazyFrame:
+        """
+        Generate RWA summary by exposure class.
+
+        Returns:
+        - exposure_class: Regulatory class
+        - exposure_count: Number of exposures
+        - total_ead: Sum of EAD
+        - total_rwa: Sum of RWA
+        - average_rw: Weighted average risk weight
+        """
+
+    def generate_summary_by_approach(self) -> pl.LazyFrame:
+        """
+        Generate RWA summary by calculation approach.
+
+        Returns:
+        - approach_applied: SA, FIRB, AIRB, SLOTTING
+        - exposure_count: Number of exposures
+        - total_ead: Sum of EAD
+        - total_rwa: Sum of RWA
+        """
+
+    def generate_supporting_factor_impact(self) -> pl.LazyFrame:
+        """Generate summary of supporting factor impact on RWA."""
+```
+
+**Usage Example:**
+
+```python
+import polars as pl
+from rwa_calc.contracts.config import CalculationConfig
+import rwa_calc.engine.aggregator_namespace  # Registers namespace
+
+config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+
+# Combine results and apply output floor
+final_results = (
+    combined_results
+    .aggregator.combine_approach_results(sa=sa_results, irb=irb_results)
+    .aggregator.apply_output_floor(sa_for_floor, config)
+)
+
+# Generate summaries
+by_class = final_results.aggregator.generate_summary_by_class()
+by_approach = final_results.aggregator.generate_summary_by_approach()
+```
+
+## Audit Namespace
+
+### Module: `rwa_calc.engine.audit_namespace`
+
+The Audit module provides shared formatting utilities and audit trail builders for all calculation approaches.
+
+#### AuditLazyFrame Namespace
+
+```python
+@pl.api.register_lazyframe_namespace("audit")
+class AuditLazyFrame:
+    """LazyFrame namespace for audit trail generation."""
+
+    def build_sa_calculation(self) -> pl.LazyFrame:
+        """
+        Build SA calculation audit trail.
+
+        Format: SA: EAD={ead} × RW={rw}% × SF={sf}% → RWA={rwa}
+
+        Adds column: sa_calculation
+        """
+
+    def build_irb_calculation(self) -> pl.LazyFrame:
+        """
+        Build IRB calculation audit trail.
+
+        Format: IRB: PD={pd}%, LGD={lgd}%, R={corr}%, K={k}%, MA={ma} → RWA={rwa}
+
+        Adds column: irb_calculation
+        """
+
+    def build_slotting_calculation(self) -> pl.LazyFrame:
+        """
+        Build slotting calculation audit trail.
+
+        Format: Slotting: Category={cat} (HVCRE?), RW={rw}% → RWA={rwa}
+
+        Adds column: slotting_calculation
+        """
+
+    def build_crm_calculation(self) -> pl.LazyFrame:
+        """
+        Build CRM/EAD waterfall audit trail.
+
+        Format: EAD: gross={gross}; coll={coll}; guar={guar}; prov={prov}; final={final}
+
+        Adds column: crm_calculation
+        """
+
+    def build_haircut_calculation(self) -> pl.LazyFrame:
+        """
+        Build haircut audit trail.
+
+        Format: MV={mv}; Hc={hc}%; Hfx={hfx}%; Adj={adj}
+
+        Adds column: haircut_calculation
+        """
+
+    def build_floor_calculation(self) -> pl.LazyFrame:
+        """
+        Build output floor audit trail.
+
+        Format: Floor: IRB RWA={irb}; Floor RWA={floor} ({pct}%); Final={final}; Binding={binding}
+
+        Adds column: floor_calculation
+        """
+```
+
+#### AuditExpr Namespace
+
+```python
+@pl.api.register_expr_namespace("audit")
+class AuditExpr:
+    """Expression namespace for audit formatting."""
+
+    def format_currency(self, decimals: int = 0) -> pl.Expr:
+        """Format value as currency string (no symbol)."""
+
+    def format_percent(self, decimals: int = 1) -> pl.Expr:
+        """Format value as percentage string (e.g., '20.0%')."""
+
+    def format_ratio(self, decimals: int = 3) -> pl.Expr:
+        """Format value as ratio/decimal string."""
+
+    def format_bps(self, decimals: int = 0) -> pl.Expr:
+        """Format value as basis points string (e.g., '150 bps')."""
+```
+
+**Usage Example:**
+
+```python
+import polars as pl
+import rwa_calc.engine.audit_namespace  # Registers namespace
+
+# Build audit trails for SA exposures
+audited_sa = sa_results.audit.build_sa_calculation()
+
+# Build audit trails for IRB exposures
+audited_irb = irb_results.audit.build_irb_calculation()
+
+# Format individual columns
+formatted = df.with_columns(
+    pl.col("ead").audit.format_currency().alias("ead_formatted"),
+    pl.col("risk_weight").audit.format_percent().alias("rw_formatted"),
+    pl.col("pd").audit.format_bps().alias("pd_bps"),
+)
 ```
 
 ## Related

@@ -15,6 +15,33 @@ This document provides detailed documentation of each component in the RWA calcu
 | **Slotting Calculator** | `engine/slotting/calculator.py` | Slotting RWA |
 | **Aggregator** | `engine/aggregator.py` | Combine results |
 
+## Polars Namespace Extensions
+
+The calculator uses Polars namespace extensions to provide fluent, chainable APIs for calculations. Each namespace is registered when its module is imported.
+
+| Namespace | Module | Description |
+|-----------|--------|-------------|
+| `lf.sa` | `engine/sa/namespace.py` | SA risk weights, RWA, supporting factors |
+| `lf.irb` | `engine/irb/namespace.py` | IRB formulas, K calculation, floors |
+| `lf.crm` | `engine/crm/namespace.py` | EAD waterfall, collateral, guarantees |
+| `lf.haircuts` | `engine/crm/haircuts_namespace.py` | Supervisory haircuts, FX/maturity mismatch |
+| `lf.slotting` | `engine/slotting/namespace.py` | Slotting risk weights |
+| `lf.hierarchy` | `engine/hierarchy_namespace.py` | Parent resolution, rating inheritance |
+| `lf.aggregator` | `engine/aggregator_namespace.py` | Result combination, output floor |
+| `lf.audit` | `engine/audit_namespace.py` | Audit trail formatting |
+| `expr.audit` | `engine/audit_namespace.py` | Column formatting (currency, %, bps) |
+
+All namespaces are automatically registered when importing from `rwa_calc.engine`:
+
+```python
+from rwa_calc.engine import (
+    SALazyFrame, IRBLazyFrame, CRMLazyFrame,
+    HaircutsLazyFrame, SlottingLazyFrame,
+    HierarchyLazyFrame, AggregatorLazyFrame,
+    AuditLazyFrame, AuditExpr,
+)
+```
+
 ## Loader
 
 ### Purpose

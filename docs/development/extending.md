@@ -306,25 +306,79 @@ class TestNewTable:
 
 ## Using Polars Namespaces
 
-The calculator uses Polars namespace extensions to provide fluent, chainable APIs for complex calculations. The IRB module demonstrates this pattern.
+The calculator uses Polars namespace extensions to provide fluent, chainable APIs for complex calculations. There are 8 namespaces available:
+
+| Namespace | Purpose | Key Methods |
+|-----------|---------|-------------|
+| `lf.sa` | SA calculations | `apply_risk_weights`, `calculate_rwa`, `apply_supporting_factors` |
+| `lf.irb` | IRB calculations | `apply_all_formulas`, `calculate_k`, `calculate_correlation` |
+| `lf.crm` | CRM/EAD waterfall | `initialize_ead_waterfall`, `apply_collateral`, `apply_guarantees` |
+| `lf.haircuts` | Collateral haircuts | `apply_collateral_haircuts`, `apply_fx_haircut`, `calculate_adjusted_value` |
+| `lf.slotting` | Slotting calculations | `apply_slotting_weights`, `calculate_rwa` |
+| `lf.hierarchy` | Hierarchy resolution | `resolve_ultimate_parent`, `inherit_ratings`, `calculate_lending_group_totals` |
+| `lf.aggregator` | Result aggregation | `combine_approach_results`, `apply_output_floor`, `generate_summary_by_class` |
+| `lf.audit` / `expr.audit` | Audit formatting | `build_sa_calculation`, `format_currency`, `format_percent` |
 
 ### Using Existing Namespaces
 
+All namespaces are registered when importing from `rwa_calc.engine`:
+
 ```python
 import polars as pl
+from datetime import date
 from rwa_calc.contracts.config import CalculationConfig
-import rwa_calc.engine.irb.namespace  # Registers .irb namespace
+from rwa_calc.engine import (
+    SALazyFrame, IRBLazyFrame, CRMLazyFrame,
+    HaircutsLazyFrame, SlottingLazyFrame,
+    HierarchyLazyFrame, AggregatorLazyFrame,
+    AuditLazyFrame, AuditExpr,
+)
 
 config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-# Fluent calculation pipeline
-result = (
+# SA calculation pipeline
+sa_result = (
+    exposures
+    .sa.prepare_columns(config)
+    .sa.apply_risk_weights(config)
+    .sa.calculate_rwa()
+    .sa.apply_supporting_factors(config)
+)
+
+# IRB calculation pipeline
+irb_result = (
     exposures
     .irb.classify_approach(config)
     .irb.apply_firb_lgd(config)
     .irb.prepare_columns(config)
     .irb.apply_all_formulas(config)
 )
+
+# CRM/EAD waterfall
+crm_result = (
+    exposures
+    .crm.initialize_ead_waterfall()
+    .crm.apply_collateral(collateral, config)
+    .crm.apply_guarantees(guarantees, counterparty_lookup, config)
+    .crm.finalize_ead()
+)
+
+# Hierarchy resolution
+hierarchy_result = (
+    counterparties
+    .hierarchy.resolve_ultimate_parent(org_mappings)
+    .hierarchy.inherit_ratings(ratings)
+)
+
+# Aggregation with output floor (Basel 3.1)
+aggregated = (
+    results
+    .aggregator.combine_approach_results(sa=sa_results, irb=irb_results)
+    .aggregator.apply_output_floor(sa_for_floor, config)
+)
+
+# Audit trail formatting
+audited = exposures.audit.build_sa_calculation()
 ```
 
 ### Creating a New Namespace

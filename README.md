@@ -298,13 +298,28 @@ The calculator implements the full credit risk framework for both regimes as ado
 
 - **Dual Regulatory Compliance**: Full support for UK CRR (Basel 3.0) and PRA PS9/24 (Basel 3.1) with UK-specific deviations
 - **High Performance**: Polars-native vectorized calculations - no row-by-row iteration - utilising LazyFrame optimisations
-- **Fluent API**: Polars namespace extensions (`.irb`) for readable, chainable IRB calculations
+- **Fluent API**: Polars namespace extensions for readable, chainable calculations across all approaches
 - **Dual Approach Support**: Both Standardised (SA) and IRB (F-IRB & A-IRB) approaches
 - **Complete CRM**: Collateral at counterparty/facility/loan level with supervisory haircuts and RWA-optimized allocation
 - **Provisions/Impairments**: Full IFRS 9 ECL integration with EL comparison for IRB
 - **Complex Hierarchies**: Support for multi-level exposure and counterparty hierarchies
 - **Dynamic Classification**: Exposure class and approach determined from counterparty attributes
 - **Audit Trail**: Full calculation transparency for regulatory review
+
+### Polars Namespaces
+
+The calculator provides 8 Polars namespace extensions for fluent, chainable calculations:
+
+| Namespace | Description | Example |
+|-----------|-------------|---------|
+| `lf.sa` | Standardised Approach calculations | `exposures.sa.apply_risk_weights(config)` |
+| `lf.irb` | IRB approach calculations | `exposures.irb.apply_all_formulas(config)` |
+| `lf.crm` | Credit Risk Mitigation | `exposures.crm.apply_collateral(collateral, config)` |
+| `lf.haircuts` | Collateral haircuts | `collateral.haircuts.apply_all_haircuts(config)` |
+| `lf.slotting` | Specialised lending slotting | `exposures.slotting.apply_slotting_weights(config)` |
+| `lf.hierarchy` | Hierarchy resolution | `counterparties.hierarchy.resolve_ultimate_parent(mappings)` |
+| `lf.aggregator` | Result aggregation | `results.aggregator.apply_output_floor(sa_results, config)` |
+| `lf.audit` / `expr.audit` | Audit trail formatting | `lf.audit.build_sa_calculation()` |
 
 ### Project Structure
 
@@ -330,22 +345,29 @@ rwa_calculator/
 │   ├── engine/                         # Vectorized calculation engines
 │   │   ├── loader.py                   # ParquetLoader, CSVLoader
 │   │   ├── hierarchy.py                # HierarchyResolver (pure LazyFrame)
+│   │   ├── hierarchy_namespace.py      # HierarchyLazyFrame Polars namespace
 │   │   ├── classifier.py               # ExposureClassifier
 │   │   ├── ccf.py                      # CCFCalculator
 │   │   ├── aggregator.py               # OutputAggregator with floor application
+│   │   ├── aggregator_namespace.py     # AggregatorLazyFrame Polars namespace
+│   │   ├── audit_namespace.py          # AuditLazyFrame & AuditExpr namespaces
 │   │   ├── pipeline.py                 # RWAPipeline orchestrator
 │   │   ├── crm/                        # Credit Risk Mitigation
 │   │   │   ├── processor.py            # CRMProcessor
-│   │   │   └── haircuts.py             # Supervisory haircuts
+│   │   │   ├── namespace.py            # CRMLazyFrame Polars namespace
+│   │   │   ├── haircuts.py             # Supervisory haircuts
+│   │   │   └── haircuts_namespace.py   # HaircutsLazyFrame Polars namespace
 │   │   ├── sa/                         # Standardised Approach
 │   │   │   ├── calculator.py           # SACalculator
+│   │   │   ├── namespace.py            # SALazyFrame & SAExpr namespaces
 │   │   │   └── supporting_factors.py   # SME & infrastructure factors (CRR)
 │   │   ├── irb/                        # IRB Approach
 │   │   │   ├── calculator.py           # IRBCalculator
 │   │   │   ├── formulas.py             # K, correlation, maturity adjustment
 │   │   │   └── namespace.py            # IRBLazyFrame & IRBExpr Polars namespaces
 │   │   └── slotting/                   # Specialised Lending
-│   │       └── calculator.py           # SlottingCalculator
+│   │       ├── calculator.py           # SlottingCalculator
+│   │       └── namespace.py            # SlottingLazyFrame & SlottingExpr namespaces
 │   ├── api/                            # API layer
 │   │   ├── service.py                  # RWAService facade
 │   │   ├── models.py                   # Request/response models
@@ -457,17 +479,18 @@ uv run pytest tests/acceptance/crr/test_scenario_crr_a_sa.py -v
 uv run mypy --package rwa_calc.contracts --package rwa_calc.domain
 ```
 
-**Test Results (468 tests):**
+**Test Results (774 tests):**
 - 97 contract tests PASS - Verify interfaces, configuration, and validation
-- 48 acceptance tests PASS - Verify expected outputs and SA calculations
-- 35 acceptance tests SKIP - Await fixture data for IRB/CRM/Slotting scenarios
+- 81 acceptance tests PASS - Verify expected outputs and SA/IRB/CRM/Slotting calculations
+- 3 acceptance tests SKIP - Await fixture data for advanced scenarios
 - 31 loader tests PASS - Data loading from Parquet/CSV
 - 17 hierarchy tests PASS - Counterparty/facility hierarchy resolution
 - 19 classifier tests PASS - Exposure classification and approach assignment
 - 15 CCF tests PASS - Credit conversion factors
 - 21 aggregator tests PASS - Output aggregation and floor application
 - 30 pipeline tests PASS - Full pipeline orchestration
-- **Total: 468 passed, 36 skipped**
+- 139 namespace tests PASS - Polars namespace extensions (SA, CRM, Haircuts, Slotting, Hierarchy, Aggregator, Audit)
+- **Total: 774 passed, 4 skipped**
 
 ---
 
@@ -773,26 +796,75 @@ Where:
 
 Risk Weight = K x 12.5 (x 1.06 for CRR)
 
-### Using the IRB Namespace
+### Using the Polars Namespaces
 
-The IRB module provides a Polars namespace for fluent calculations:
+All namespaces are registered when importing from `rwa_calc.engine`. Each provides fluent, chainable methods:
 
 ```python
 import polars as pl
 from datetime import date
 from rwa_calc.contracts.config import CalculationConfig
-import rwa_calc.engine.irb.namespace  # Registers .irb namespace
+from rwa_calc.engine import (
+    SALazyFrame, IRBLazyFrame, CRMLazyFrame,
+    HaircutsLazyFrame, SlottingLazyFrame,
+    HierarchyLazyFrame, AggregatorLazyFrame, AuditLazyFrame,
+)
 
 config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-result = (
+# SA Calculation
+sa_result = (
     exposures
-    .irb.classify_approach(config)   # Determine F-IRB vs A-IRB
-    .irb.apply_firb_lgd(config)      # Apply supervisory LGD
-    .irb.prepare_columns(config)     # Set defaults
-    .irb.apply_all_formulas(config)  # Run IRB calculation
-    .collect()
+    .sa.prepare_columns(config)
+    .sa.apply_risk_weights(config)
+    .sa.calculate_rwa()
+    .sa.apply_supporting_factors(config)
 )
+
+# IRB Calculation
+irb_result = (
+    exposures
+    .irb.classify_approach(config)
+    .irb.apply_firb_lgd(config)
+    .irb.prepare_columns(config)
+    .irb.apply_all_formulas(config)
+)
+
+# CRM Processing
+crm_result = (
+    exposures
+    .crm.initialize_ead_waterfall()
+    .crm.apply_collateral(collateral, config)
+    .crm.apply_guarantees(guarantees, counterparty_lookup, config)
+    .crm.finalize_ead()
+)
+
+# Haircut Calculation
+haircut_result = (
+    collateral
+    .haircuts.classify_maturity_band()
+    .haircuts.apply_collateral_haircuts(config)
+    .haircuts.apply_fx_haircut("exposure_currency")
+    .haircuts.calculate_adjusted_value()
+)
+
+# Hierarchy Resolution
+hierarchy_result = (
+    counterparties
+    .hierarchy.resolve_ultimate_parent(org_mappings)
+    .hierarchy.inherit_ratings(ratings)
+)
+
+# Aggregation with Output Floor
+aggregated = (
+    results
+    .aggregator.combine_approach_results(sa=sa_results, irb=irb_results)
+    .aggregator.apply_output_floor(sa_for_floor, config)
+)
+
+# Audit Trail
+audited = exposures.audit.build_sa_calculation()
+
 ```
 
 ### Asset Correlation (R) by Exposure Class

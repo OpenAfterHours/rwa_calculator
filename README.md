@@ -1,3 +1,5 @@
+*This package is still in development and is not production ready*
+
 # UK Credit Risk RWA Calculator
 
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://theafterhoursclub.github.io/rwa_calculator/)

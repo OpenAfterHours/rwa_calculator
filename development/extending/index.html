@@ -3715,22 +3715,115 @@
 </span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>            <span class="n">lookup_new_table</span><span class="p">(</span><span class="s2">&quot;UNKNOWN&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="using-polars-namespaces">Using Polars Namespaces<a class="headerlink" href="#using-polars-namespaces" title="Permanent link">&para;</a></h2>
-<p>The calculator uses Polars namespace extensions to provide fluent, chainable APIs for complex calculations. The IRB module demonstrates this pattern.</p>
+<p>The calculator uses Polars namespace extensions to provide fluent, chainable APIs for complex calculations. There are 8 namespaces available:</p>
+<table>
+<thead>
+<tr>
+<th>Namespace</th>
+<th>Purpose</th>
+<th>Key Methods</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lf.sa</code></td>
+<td>SA calculations</td>
+<td><code>apply_risk_weights</code>, <code>calculate_rwa</code>, <code>apply_supporting_factors</code></td>
+</tr>
+<tr>
+<td><code>lf.irb</code></td>
+<td>IRB calculations</td>
+<td><code>apply_all_formulas</code>, <code>calculate_k</code>, <code>calculate_correlation</code></td>
+</tr>
+<tr>
+<td><code>lf.crm</code></td>
+<td>CRM/EAD waterfall</td>
+<td><code>initialize_ead_waterfall</code>, <code>apply_collateral</code>, <code>apply_guarantees</code></td>
+</tr>
+<tr>
+<td><code>lf.haircuts</code></td>
+<td>Collateral haircuts</td>
+<td><code>apply_collateral_haircuts</code>, <code>apply_fx_haircut</code>, <code>calculate_adjusted_value</code></td>
+</tr>
+<tr>
+<td><code>lf.slotting</code></td>
+<td>Slotting calculations</td>
+<td><code>apply_slotting_weights</code>, <code>calculate_rwa</code></td>
+</tr>
+<tr>
+<td><code>lf.hierarchy</code></td>
+<td>Hierarchy resolution</td>
+<td><code>resolve_ultimate_parent</code>, <code>inherit_ratings</code>, <code>calculate_lending_group_totals</code></td>
+</tr>
+<tr>
+<td><code>lf.aggregator</code></td>
+<td>Result aggregation</td>
+<td><code>combine_approach_results</code>, <code>apply_output_floor</code>, <code>generate_summary_by_class</code></td>
+</tr>
+<tr>
+<td><code>lf.audit</code> / <code>expr.audit</code></td>
+<td>Audit formatting</td>
+<td><code>build_sa_calculation</code>, <code>format_currency</code>, <code>format_percent</code></td>
+</tr>
+</tbody>
+</table>
 <h3 id="using-existing-namespaces">Using Existing Namespaces<a class="headerlink" href="#using-existing-namespaces" title="Permanent link">&para;</a></h3>
+<p>All namespaces are registered when importing from <code>rwa_calc.engine</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationConfig</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">rwa_calc.engine.irb.namespace</span>  <span class="c1"># Registers .irb namespace</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Fluent calculation pipeline</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="n">exposures</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">classify_approach</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">apply_firb_lgd</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">prepare_columns</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">apply_all_formulas</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="p">)</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationConfig</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="n">SALazyFrame</span><span class="p">,</span> <span class="n">IRBLazyFrame</span><span class="p">,</span> <span class="n">CRMLazyFrame</span><span class="p">,</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="n">HaircutsLazyFrame</span><span class="p">,</span> <span class="n">SlottingLazyFrame</span><span class="p">,</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="n">HierarchyLazyFrame</span><span class="p">,</span> <span class="n">AggregatorLazyFrame</span><span class="p">,</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">AuditLazyFrame</span><span class="p">,</span> <span class="n">AuditExpr</span><span class="p">,</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="p">)</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># SA calculation pipeline</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="n">sa_result</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>    <span class="n">exposures</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>    <span class="o">.</span><span class="n">sa</span><span class="o">.</span><span class="n">prepare_columns</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>    <span class="o">.</span><span class="n">sa</span><span class="o">.</span><span class="n">apply_risk_weights</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>    <span class="o">.</span><span class="n">sa</span><span class="o">.</span><span class="n">calculate_rwa</span><span class="p">()</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>    <span class="o">.</span><span class="n">sa</span><span class="o">.</span><span class="n">apply_supporting_factors</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="p">)</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a>
+</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="c1"># IRB calculation pipeline</span>
+</span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="n">irb_result</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-16-24"><a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a>    <span class="n">exposures</span>
+</span><span id="__span-16-25"><a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">classify_approach</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-26"><a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">apply_firb_lgd</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-27"><a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">prepare_columns</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-28"><a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a>    <span class="o">.</span><span class="n">irb</span><span class="o">.</span><span class="n">apply_all_formulas</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-29"><a id="__codelineno-16-29" name="__codelineno-16-29" href="#__codelineno-16-29"></a><span class="p">)</span>
+</span><span id="__span-16-30"><a id="__codelineno-16-30" name="__codelineno-16-30" href="#__codelineno-16-30"></a>
+</span><span id="__span-16-31"><a id="__codelineno-16-31" name="__codelineno-16-31" href="#__codelineno-16-31"></a><span class="c1"># CRM/EAD waterfall</span>
+</span><span id="__span-16-32"><a id="__codelineno-16-32" name="__codelineno-16-32" href="#__codelineno-16-32"></a><span class="n">crm_result</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-16-33"><a id="__codelineno-16-33" name="__codelineno-16-33" href="#__codelineno-16-33"></a>    <span class="n">exposures</span>
+</span><span id="__span-16-34"><a id="__codelineno-16-34" name="__codelineno-16-34" href="#__codelineno-16-34"></a>    <span class="o">.</span><span class="n">crm</span><span class="o">.</span><span class="n">initialize_ead_waterfall</span><span class="p">()</span>
+</span><span id="__span-16-35"><a id="__codelineno-16-35" name="__codelineno-16-35" href="#__codelineno-16-35"></a>    <span class="o">.</span><span class="n">crm</span><span class="o">.</span><span class="n">apply_collateral</span><span class="p">(</span><span class="n">collateral</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-36"><a id="__codelineno-16-36" name="__codelineno-16-36" href="#__codelineno-16-36"></a>    <span class="o">.</span><span class="n">crm</span><span class="o">.</span><span class="n">apply_guarantees</span><span class="p">(</span><span class="n">guarantees</span><span class="p">,</span> <span class="n">counterparty_lookup</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-37"><a id="__codelineno-16-37" name="__codelineno-16-37" href="#__codelineno-16-37"></a>    <span class="o">.</span><span class="n">crm</span><span class="o">.</span><span class="n">finalize_ead</span><span class="p">()</span>
+</span><span id="__span-16-38"><a id="__codelineno-16-38" name="__codelineno-16-38" href="#__codelineno-16-38"></a><span class="p">)</span>
+</span><span id="__span-16-39"><a id="__codelineno-16-39" name="__codelineno-16-39" href="#__codelineno-16-39"></a>
+</span><span id="__span-16-40"><a id="__codelineno-16-40" name="__codelineno-16-40" href="#__codelineno-16-40"></a><span class="c1"># Hierarchy resolution</span>
+</span><span id="__span-16-41"><a id="__codelineno-16-41" name="__codelineno-16-41" href="#__codelineno-16-41"></a><span class="n">hierarchy_result</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-16-42"><a id="__codelineno-16-42" name="__codelineno-16-42" href="#__codelineno-16-42"></a>    <span class="n">counterparties</span>
+</span><span id="__span-16-43"><a id="__codelineno-16-43" name="__codelineno-16-43" href="#__codelineno-16-43"></a>    <span class="o">.</span><span class="n">hierarchy</span><span class="o">.</span><span class="n">resolve_ultimate_parent</span><span class="p">(</span><span class="n">org_mappings</span><span class="p">)</span>
+</span><span id="__span-16-44"><a id="__codelineno-16-44" name="__codelineno-16-44" href="#__codelineno-16-44"></a>    <span class="o">.</span><span class="n">hierarchy</span><span class="o">.</span><span class="n">inherit_ratings</span><span class="p">(</span><span class="n">ratings</span><span class="p">)</span>
+</span><span id="__span-16-45"><a id="__codelineno-16-45" name="__codelineno-16-45" href="#__codelineno-16-45"></a><span class="p">)</span>
+</span><span id="__span-16-46"><a id="__codelineno-16-46" name="__codelineno-16-46" href="#__codelineno-16-46"></a>
+</span><span id="__span-16-47"><a id="__codelineno-16-47" name="__codelineno-16-47" href="#__codelineno-16-47"></a><span class="c1"># Aggregation with output floor (Basel 3.1)</span>
+</span><span id="__span-16-48"><a id="__codelineno-16-48" name="__codelineno-16-48" href="#__codelineno-16-48"></a><span class="n">aggregated</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-16-49"><a id="__codelineno-16-49" name="__codelineno-16-49" href="#__codelineno-16-49"></a>    <span class="n">results</span>
+</span><span id="__span-16-50"><a id="__codelineno-16-50" name="__codelineno-16-50" href="#__codelineno-16-50"></a>    <span class="o">.</span><span class="n">aggregator</span><span class="o">.</span><span class="n">combine_approach_results</span><span class="p">(</span><span class="n">sa</span><span class="o">=</span><span class="n">sa_results</span><span class="p">,</span> <span class="n">irb</span><span class="o">=</span><span class="n">irb_results</span><span class="p">)</span>
+</span><span id="__span-16-51"><a id="__codelineno-16-51" name="__codelineno-16-51" href="#__codelineno-16-51"></a>    <span class="o">.</span><span class="n">aggregator</span><span class="o">.</span><span class="n">apply_output_floor</span><span class="p">(</span><span class="n">sa_for_floor</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-52"><a id="__codelineno-16-52" name="__codelineno-16-52" href="#__codelineno-16-52"></a><span class="p">)</span>
+</span><span id="__span-16-53"><a id="__codelineno-16-53" name="__codelineno-16-53" href="#__codelineno-16-53"></a>
+</span><span id="__span-16-54"><a id="__codelineno-16-54" name="__codelineno-16-54" href="#__codelineno-16-54"></a><span class="c1"># Audit trail formatting</span>
+</span><span id="__span-16-55"><a id="__codelineno-16-55" name="__codelineno-16-55" href="#__codelineno-16-55"></a><span class="n">audited</span> <span class="o">=</span> <span class="n">exposures</span><span class="o">.</span><span class="n">audit</span><span class="o">.</span><span class="n">build_sa_calculation</span><span class="p">()</span>
 </span></code></pre></div>
 <h3 id="creating-a-new-namespace">Creating a New Namespace<a class="headerlink" href="#creating-a-new-namespace" title="Permanent link">&para;</a></h3>
 <p>To add a new calculation namespace (e.g., for a custom approach):</p>

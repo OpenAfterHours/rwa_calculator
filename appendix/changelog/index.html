@@ -2434,10 +2434,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#irb-namespace-extension" class="md-nav__link">
+  <a href="#polars-namespace-extensions-8-namespaces-139-new-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
-        IRB Namespace Extension
+        Polars Namespace Extensions (8 namespaces, 139 new tests)
       
     </span>
   </a>
@@ -2831,10 +2831,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#irb-namespace-extension" class="md-nav__link">
+  <a href="#polars-namespace-extensions-8-namespaces-139-new-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
-        IRB Namespace Extension
+        Polars Namespace Extensions (8 namespaces, 139 new tests)
       
     </span>
   </a>
@@ -3235,25 +3235,58 @@
 and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
-<h4 id="irb-namespace-extension">IRB Namespace Extension<a class="headerlink" href="#irb-namespace-extension" title="Permanent link">&para;</a></h4>
-<ul>
-<li><strong><code>IRBLazyFrame</code> namespace</strong>: Polars LazyFrame namespace (<code>.irb</code>) for fluent, chainable IRB calculations</li>
-<li><strong><code>IRBExpr</code> namespace</strong>: Polars expression namespace for column-level IRB operations</li>
-<li>Namespace methods for each calculation step: <code>classify_approach</code>, <code>apply_firb_lgd</code>, <code>prepare_columns</code>, <code>apply_pd_floor</code>, <code>apply_lgd_floor</code>, <code>calculate_correlation</code>, <code>calculate_k</code>, <code>calculate_maturity_adjustment</code>, <code>calculate_rwa</code>, <code>calculate_expected_loss</code></li>
-<li><code>apply_all_formulas</code> convenience method for complete IRB calculation pipeline</li>
-<li><code>select_expected_loss</code> and <code>build_audit</code> for output generation</li>
-<li>Expression methods: <code>floor_pd</code>, <code>floor_lgd</code>, <code>clip_maturity</code></li>
-<li>33 unit tests for namespace functionality</li>
-</ul>
+<h4 id="polars-namespace-extensions-8-namespaces-139-new-tests">Polars Namespace Extensions (8 namespaces, 139 new tests)<a class="headerlink" href="#polars-namespace-extensions-8-namespaces-139-new-tests" title="Permanent link">&para;</a></h4>
+<p>The calculator now provides comprehensive Polars namespace extensions for fluent, chainable calculations across all approaches:</p>
+<p><strong>SA Namespace</strong> (<code>lf.sa</code>, <code>expr.sa</code>)
+- <code>SALazyFrame</code> namespace for Standardised Approach calculations
+- Methods: <code>prepare_columns</code>, <code>apply_risk_weights</code>, <code>apply_residential_mortgage_rw</code>, <code>apply_cqs_based_rw</code>, <code>calculate_rwa</code>, <code>apply_supporting_factors</code>, <code>apply_all</code>
+- UK deviation handling for institution CQS 2 (30% vs 50%)
+- 29 unit tests</p>
+<p><strong>IRB Namespace</strong> (<code>lf.irb</code>, <code>expr.irb</code>)
+- <code>IRBLazyFrame</code> namespace for IRB calculations
+- Methods: <code>classify_approach</code>, <code>apply_firb_lgd</code>, <code>prepare_columns</code>, <code>apply_pd_floor</code>, <code>apply_lgd_floor</code>, <code>calculate_correlation</code>, <code>calculate_k</code>, <code>calculate_maturity_adjustment</code>, <code>calculate_rwa</code>, <code>calculate_expected_loss</code>, <code>apply_all_formulas</code>
+- Expression methods: <code>floor_pd</code>, <code>floor_lgd</code>, <code>clip_maturity</code>
+- 33 unit tests</p>
+<p><strong>CRM Namespace</strong> (<code>lf.crm</code>)
+- <code>CRMLazyFrame</code> namespace for EAD waterfall processing
+- Methods: <code>initialize_ead_waterfall</code>, <code>apply_collateral</code>, <code>apply_guarantees</code>, <code>apply_provisions</code>, <code>finalize_ead</code>, <code>apply_all_crm</code>
+- SA vs IRB treatment differences handled automatically
+- 20 unit tests</p>
+<p><strong>Haircuts Namespace</strong> (<code>lf.haircuts</code>)
+- <code>HaircutsLazyFrame</code> namespace for collateral haircut calculations
+- Methods: <code>classify_maturity_band</code>, <code>apply_collateral_haircuts</code>, <code>apply_fx_haircut</code>, <code>apply_maturity_mismatch</code>, <code>calculate_adjusted_value</code>, <code>apply_all_haircuts</code>
+- CRR Article 224 supervisory haircuts
+- 24 unit tests</p>
+<p><strong>Slotting Namespace</strong> (<code>lf.slotting</code>, <code>expr.slotting</code>)
+- <code>SlottingLazyFrame</code> namespace for specialised lending
+- Methods: <code>prepare_columns</code>, <code>apply_slotting_weights</code>, <code>calculate_rwa</code>, <code>apply_all</code>
+- CRR vs Basel 3.1 risk weight differences
+- HVCRE treatment
+- 26 unit tests</p>
+<p><strong>Hierarchy Namespace</strong> (<code>lf.hierarchy</code>)
+- <code>HierarchyLazyFrame</code> namespace for hierarchy resolution
+- Methods: <code>resolve_ultimate_parent</code>, <code>calculate_hierarchy_depth</code>, <code>inherit_ratings</code>, <code>coalesce_ratings</code>, <code>calculate_lending_group_totals</code>, <code>add_lending_group_reference</code>, <code>add_collateral_ltv</code>
+- Pure LazyFrame join-based traversal (no Python recursion)
+- 13 unit tests</p>
+<p><strong>Aggregator Namespace</strong> (<code>lf.aggregator</code>)
+- <code>AggregatorLazyFrame</code> namespace for result combination
+- Methods: <code>combine_approach_results</code>, <code>apply_output_floor</code>, <code>calculate_floor_impact</code>, <code>generate_summary_by_class</code>, <code>generate_summary_by_approach</code>, <code>generate_supporting_factor_impact</code>
+- Basel 3.1 output floor support
+- 12 unit tests</p>
+<p><strong>Audit Namespace</strong> (<code>lf.audit</code>, <code>expr.audit</code>)
+- <code>AuditLazyFrame</code> namespace for audit trail generation
+- Methods: <code>build_sa_calculation</code>, <code>build_irb_calculation</code>, <code>build_slotting_calculation</code>, <code>build_crm_calculation</code>, <code>build_haircut_calculation</code>, <code>build_floor_calculation</code>
+- <code>AuditExpr</code> namespace for column formatting: <code>format_currency</code>, <code>format_percent</code>, <code>format_ratio</code>, <code>format_bps</code>
+- 15 unit tests</p>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>IRBCalculator refactored</strong> to use namespace-based fluent API instead of private methods</li>
+<li><strong>All calculators</strong> can now use namespace-based fluent APIs</li>
 <li>Improved code readability with chainable method calls</li>
+<li>Test count increased from 635 to 774 (139 new namespace tests)</li>
 </ul>
 <h3 id="planned">Planned<a class="headerlink" href="#planned" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Basel 3.1 full implementation</li>
-<li>Output floor calculation</li>
 <li>Differentiated PD floors</li>
 <li>A-IRB LGD floors</li>
 <li>Revised SA real estate risk weights</li>

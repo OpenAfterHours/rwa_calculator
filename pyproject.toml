@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS9/24"
 readme = "README.md"
 requires-python = ">=3.13"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 authors = [
     {name = "OpenAfterHours"}
 ]

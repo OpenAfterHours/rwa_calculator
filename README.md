@@ -985,7 +985,7 @@ The `OutputFloorResult` provides full visibility:
 
 ## License
 
-[MIT license]
+[Apache-2.0 license](LICENSE)
 
 ## References
 

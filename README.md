@@ -282,6 +282,46 @@ To update the rate, modify `EUR_GBP_RATE` in the config file. All dependent GBP 
 
 **Note:** Basel 3.1 (PRA PS9/24) specifies thresholds directly in GBP, so FX conversion is not required for Basel 3.1 calculations.
 
+### FX Conversion for Exposures
+
+The calculator supports converting exposure amounts from their original currencies to a configurable reporting currency (default: GBP). This enables consistent RWA calculations across multi-currency portfolios.
+
+**Configuration:** `CalculationConfig` settings
+
+```python
+config = CalculationConfig(
+    framework=RegulatoryFramework.CRR,
+    reporting_date=date(2026, 12, 31),
+    base_currency="GBP",           # Target reporting currency
+    apply_fx_conversion=True,       # Enable/disable FX conversion
+)
+```
+
+**FX Rates File:** `fx_rates/fx_rates.parquet`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `currency_from` | `String` | Source currency (e.g., "USD") |
+| `currency_to` | `String` | Target currency (e.g., "GBP") |
+| `rate` | `Float64` | Multiplier: `amount_in_target = amount_in_source * rate` |
+
+**Converted Data:**
+- Exposures: `drawn_amount`, `undrawn_amount`, `nominal_amount`
+- Collateral: `market_value`, `nominal_value`
+- Guarantees: `amount_covered`
+- Provisions: `amount`
+
+**Audit Trail:** Original values are preserved in new columns:
+- `original_currency` - Currency before conversion
+- `original_amount` - Amount before conversion
+- `fx_rate_applied` - Rate used (null if no conversion needed)
+
+**Behaviour:**
+- Exposures already in target currency are unchanged
+- Missing FX rates: Original values retained, warning logged
+- `apply_fx_conversion=False`: Conversion skipped entirely
+- No `fx_rates` file: Conversion skipped
+
 ### CRR SME Supporting Factor (Tiered Approach)
 
 Per CRR2 Art. 501, the SME supporting factor uses a tiered structure:
@@ -331,6 +371,7 @@ To run an RWA calculation, you need to provide data files in Parquet or CSV form
 | | `guarantee/guarantee.parquet` | No | Guarantee protection |
 | | `provision/provision.parquet` | No | IFRS 9 provisions |
 | **Ratings** | `ratings/ratings.parquet` | No | Internal/external credit ratings |
+| **FX Rates** | `fx_rates/fx_rates.parquet` | No | Currency conversion rates |
 | **Mappings** | `mapping/org_mapping.parquet` | No | Organisation hierarchy (rating inheritance) |
 | | `mapping/lending_mapping.parquet` | No | Lending groups (retail threshold) |
 | | `exposures/facility_mapping.parquet` | No | Facility-to-loan hierarchy |
@@ -423,6 +464,7 @@ rwa_calculator/
 │   │   ├── loader.py                   # ParquetLoader, CSVLoader
 │   │   ├── hierarchy.py                # HierarchyResolver (pure LazyFrame)
 │   │   ├── hierarchy_namespace.py      # HierarchyLazyFrame Polars namespace
+│   │   ├── fx_converter.py             # FXConverter (multi-currency support)
 │   │   ├── classifier.py               # ExposureClassifier
 │   │   ├── ccf.py                      # CCFCalculator
 │   │   ├── aggregator.py               # OutputAggregator with floor application
@@ -500,6 +542,8 @@ rwa_calculator/
 │   │   ├── test_errors.py              # Error handling tests
 │   │   ├── test_protocols.py           # Protocol compliance tests
 │   │   └── test_validation.py          # Validation utility tests
+│   ├── unit/
+│   │   └── test_fx_converter.py        # FX conversion unit tests (14 tests)
 │   ├── fixtures/                       # Test data generators
 │   │   ├── counterparty/               # Sovereign, institution, corporate, retail
 │   │   ├── exposures/                  # Facilities, loans, contingents
@@ -507,7 +551,8 @@ rwa_calculator/
 │   │   ├── guarantee/                  # Guarantees
 │   │   ├── provision/                  # IFRS 9 provisions
 │   │   ├── ratings/                    # External/internal ratings
-│   │   └── mapping/                    # Org and lending hierarchies
+│   │   ├── mapping/                    # Org and lending hierarchies
+│   │   └── fx_rates/                   # FX rates for currency conversion
 │   └── expected_outputs/
 │       ├── crr/                        # CRR expected outputs
 │       │   ├── expected_rwa_crr.csv
@@ -556,7 +601,7 @@ uv run pytest tests/acceptance/crr/test_scenario_crr_a_sa.py -v
 uv run mypy --package rwa_calc.contracts --package rwa_calc.domain
 ```
 
-**Test Results (774 tests):**
+**Test Results (826 tests):**
 - 97 contract tests PASS - Verify interfaces, configuration, and validation
 - 81 acceptance tests PASS - Verify expected outputs and SA/IRB/CRM/Slotting calculations
 - 3 acceptance tests SKIP - Await fixture data for advanced scenarios
@@ -567,7 +612,8 @@ uv run mypy --package rwa_calc.contracts --package rwa_calc.domain
 - 21 aggregator tests PASS - Output aggregation and floor application
 - 30 pipeline tests PASS - Full pipeline orchestration
 - 139 namespace tests PASS - Polars namespace extensions (SA, CRM, Haircuts, Slotting, Hierarchy, Aggregator, Audit)
-- **Total: 774 passed, 4 skipped**
+- 14 FX converter tests PASS - Currency conversion for exposures, collateral, guarantees, provisions
+- **Total: 826 passed, 4 skipped**
 
 ---
 

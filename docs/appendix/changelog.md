@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### FX Conversion Support (14 new tests)
+
+Multi-currency portfolio support with configurable FX conversion:
+
+**FXConverter Module** (`src/rwa_calc/engine/fx_converter.py`)
+- `convert_exposures()` - Converts drawn, undrawn, and nominal amounts
+- `convert_collateral()` - Converts market and nominal values
+- `convert_guarantees()` - Converts covered amounts
+- `convert_provisions()` - Converts provision amounts
+- Factory function `create_fx_converter()`
+
+**Features:**
+- Configurable target currency via `CalculationConfig.base_currency`
+- Enable/disable via `CalculationConfig.apply_fx_conversion`
+- Full audit trail: `original_currency`, `original_amount`, `fx_rate_applied`
+- Graceful handling of missing FX rates (values unchanged, rate = null)
+- Early pipeline integration (HierarchyResolver) for consistent threshold calculations
+
+**Data Support:**
+- New `FX_RATES_SCHEMA` in `src/rwa_calc/data/schemas.py`
+- `fx_rates` field added to `RawDataBundle`
+- `fx_rates_file` config in `DataSourceConfig`
+- Test fixtures in `tests/fixtures/fx_rates/`
+
+**Tests:**
+- 14 unit tests covering all conversion scenarios
+- Tests for exposure, collateral, guarantee, and provision conversion
+- Multi-currency batch conversion tests
+- Alternative base currency tests (EUR, USD)
+
 #### Polars Namespace Extensions (8 namespaces, 139 new tests)
 
 The calculator now provides comprehensive Polars namespace extensions for fluent, chainable calculations across all approaches:
@@ -65,7 +95,7 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 ### Changed
 - **All calculators** can now use namespace-based fluent APIs
 - Improved code readability with chainable method calls
-- Test count increased from 635 to 774 (139 new namespace tests)
+- Test count increased from 635 to 826 (139 namespace tests + 14 FX converter tests + 38 other tests)
 
 ### Planned
 - Basel 3.1 full implementation

@@ -26,6 +26,7 @@ Define the structure of data loaded from external sources:
   - Guarantee Schema
   - Provision Schema
   - Rating Schema
+  - FX Rates Schema
   - Specialised Lending Schema
   - Equity Exposure Schema
   - Mapping Schemas (Facility, Org, Lending)

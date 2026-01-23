@@ -1,6 +1,6 @@
 [project]
 name = "rwa-calc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS9/24"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -13,7 +13,7 @@ maintainers = [
 ]
 keywords = ["basel", "rwa", "credit-risk", "pra", "regulatory", "capital", "banking", "risk-management", "polars"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Financial and Insurance Industry",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",

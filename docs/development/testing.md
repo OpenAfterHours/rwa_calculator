@@ -9,11 +9,21 @@ tests/
 ├── acceptance/           # End-to-end scenario tests
 │   ├── crr/             # CRR framework scenarios
 │   └── basel31/         # Basel 3.1 scenarios
+├── benchmarks/          # Performance and scale tests
 ├── contracts/           # Interface compliance tests
 ├── unit/                # Component unit tests
 │   ├── crr/             # CRR-specific tests
-│   └── basel31/         # Basel 3.1-specific tests
+│   ├── basel31/         # Basel 3.1-specific tests
+│   └── test_fx_converter.py  # FX conversion tests
 └── fixtures/            # Test data generators
+    ├── counterparty/    # Counterparty fixtures
+    ├── exposures/       # Facility, loan, contingent fixtures
+    ├── collateral/      # Collateral fixtures
+    ├── guarantee/       # Guarantee fixtures
+    ├── provision/       # Provision fixtures
+    ├── ratings/         # Rating fixtures
+    ├── mapping/         # Hierarchy mapping fixtures
+    └── fx_rates/        # FX rates fixtures
 ```
 
 ## Running Tests

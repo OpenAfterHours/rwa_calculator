@@ -14,6 +14,7 @@ This page documents the authoritative schemas for all input data files required 
 | [Guarantee](#guarantee-schema) | `guarantee/guarantee.parquet` | No | Credit protection |
 | [Provision](#provision-schema) | `provision/provision.parquet` | No | IFRS 9 provisions |
 | [Rating](#rating-schema) | `ratings/ratings.parquet` | No | Credit ratings |
+| [FX Rates](#fx-rates-schema) | `fx_rates/fx_rates.parquet` | No | Currency conversion rates |
 | [Specialised Lending](#specialised-lending-schema) | N/A | No | Slotting approach data |
 | [Equity Exposure](#equity-exposure-schema) | N/A | No | Equity holdings |
 
@@ -507,6 +508,55 @@ ratings = pl.DataFrame({
     "is_solicited": [True, True],
 })
 ```
+
+---
+
+## FX Rates Schema
+
+**Purpose:** Defines FX (foreign exchange) rates for converting exposure amounts from their original currencies to a reporting currency. This enables consistent RWA calculations across multi-currency portfolios.
+
+**File:** `fx_rates/fx_rates.parquet`
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `currency_from` | `String` | Yes | Source currency code (ISO 4217) |
+| `currency_to` | `String` | Yes | Target currency code (ISO 4217) |
+| `rate` | `Float64` | Yes | Conversion multiplier: `target_amount = source_amount * rate` |
+
+**Usage:**
+- Rates should be provided for all currency pairs needed (source → target)
+- Include identity rates (e.g., GBP→GBP = 1.0) for the target currency
+- The target currency should match `CalculationConfig.base_currency`
+
+**Converted Fields:**
+- Exposures: `drawn_amount`, `undrawn_amount`, `nominal_amount`
+- Collateral: `market_value`, `nominal_value`
+- Guarantees: `amount_covered`
+- Provisions: `amount`
+
+**Audit Trail:**
+After conversion, the following columns are added:
+- `original_currency` - Currency before conversion
+- `original_amount` - Amount before conversion (drawn + nominal)
+- `fx_rate_applied` - Rate used (null if no conversion needed)
+
+**Example:**
+
+```python
+from datetime import date
+import polars as pl
+
+fx_rates = pl.DataFrame({
+    "currency_from": ["GBP", "USD", "EUR", "JPY", "CHF"],
+    "currency_to": ["GBP", "GBP", "GBP", "GBP", "GBP"],
+    "rate": [1.0, 0.79, 0.88, 0.0053, 0.89],
+})
+```
+
+**Behaviour:**
+- **Missing rates:** Exposures in currencies without rates retain original values; `fx_rate_applied` is null
+- **FX disabled:** Set `apply_fx_conversion=False` in `CalculationConfig` to skip conversion
+- **No FX file:** If `fx_rates.parquet` is not provided, no conversion occurs
 
 ---
 

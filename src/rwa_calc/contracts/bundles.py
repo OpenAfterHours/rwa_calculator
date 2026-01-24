@@ -55,15 +55,15 @@ class RawDataBundle:
 
     facilities: pl.LazyFrame
     loans: pl.LazyFrame
-    contingents: pl.LazyFrame
     counterparties: pl.LazyFrame
-    collateral: pl.LazyFrame
-    guarantees: pl.LazyFrame
-    provisions: pl.LazyFrame
-    ratings: pl.LazyFrame
     facility_mappings: pl.LazyFrame
     org_mappings: pl.LazyFrame
     lending_mappings: pl.LazyFrame
+    contingents: pl.LazyFrame | None = None
+    collateral: pl.LazyFrame | None = None
+    guarantees: pl.LazyFrame | None = None
+    provisions: pl.LazyFrame | None = None
+    ratings: pl.LazyFrame | None = None
     specialised_lending: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
     fx_rates: pl.LazyFrame | None = None
@@ -104,19 +104,19 @@ class ResolvedHierarchyBundle:
         exposures: Unified exposure records (facilities, loans, contingents)
                    with hierarchy metadata added
         counterparty_lookup: Resolved counterparty information
-        collateral: Collateral with beneficiary hierarchy resolved
-        guarantees: Guarantees with beneficiary hierarchy resolved
-        provisions: Provisions with beneficiary hierarchy resolved
         lending_group_totals: Aggregated exposures by lending group
+        collateral: Collateral with beneficiary hierarchy resolved (optional)
+        guarantees: Guarantees with beneficiary hierarchy resolved (optional)
+        provisions: Provisions with beneficiary hierarchy resolved (optional)
         hierarchy_errors: Any errors encountered during resolution
     """
 
     exposures: pl.LazyFrame
     counterparty_lookup: CounterpartyLookup
-    collateral: pl.LazyFrame
-    guarantees: pl.LazyFrame
-    provisions: pl.LazyFrame
     lending_group_totals: pl.LazyFrame
+    collateral: pl.LazyFrame | None = None
+    guarantees: pl.LazyFrame | None = None
+    provisions: pl.LazyFrame | None = None
     hierarchy_errors: list = field(default_factory=list)
 
 
@@ -290,15 +290,15 @@ def create_empty_raw_data_bundle() -> RawDataBundle:
     return RawDataBundle(
         facilities=pl.LazyFrame(),
         loans=pl.LazyFrame(),
-        contingents=pl.LazyFrame(),
         counterparties=pl.LazyFrame(),
-        collateral=pl.LazyFrame(),
-        guarantees=pl.LazyFrame(),
-        provisions=pl.LazyFrame(),
-        ratings=pl.LazyFrame(),
         facility_mappings=pl.LazyFrame(),
         org_mappings=pl.LazyFrame(),
         lending_mappings=pl.LazyFrame(),
+        contingents=None,
+        collateral=None,
+        guarantees=None,
+        provisions=None,
+        ratings=None,
         fx_rates=None,
     )
 
@@ -337,10 +337,10 @@ def create_empty_resolved_hierarchy_bundle() -> ResolvedHierarchyBundle:
     return ResolvedHierarchyBundle(
         exposures=pl.LazyFrame(),
         counterparty_lookup=create_empty_counterparty_lookup(),
-        collateral=pl.LazyFrame(),
-        guarantees=pl.LazyFrame(),
-        provisions=pl.LazyFrame(),
         lending_group_totals=pl.LazyFrame(),
+        collateral=None,
+        guarantees=None,
+        provisions=None,
     )
 
 

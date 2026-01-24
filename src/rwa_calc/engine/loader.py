@@ -222,15 +222,15 @@ class ParquetLoader:
         return RawDataBundle(
             facilities=self._load_parquet(self.config.facilities_file),
             loans=self._load_parquet(self.config.loans_file),
-            contingents=self._load_parquet(self.config.contingents_file),
             counterparties=self._load_and_combine_counterparties(),
-            collateral=self._load_parquet(self.config.collateral_file),
-            guarantees=self._load_parquet(self.config.guarantees_file),
-            provisions=self._load_parquet(self.config.provisions_file),
-            ratings=self._load_parquet(self.config.ratings_file),
             facility_mappings=self._load_parquet(self.config.facility_mappings_file),
             org_mappings=self._load_parquet(self.config.org_mappings_file),
             lending_mappings=self._load_parquet(self.config.lending_mappings_file),
+            contingents=self._load_parquet_optional(self.config.contingents_file),
+            collateral=self._load_parquet_optional(self.config.collateral_file),
+            guarantees=self._load_parquet_optional(self.config.guarantees_file),
+            provisions=self._load_parquet_optional(self.config.provisions_file),
+            ratings=self._load_parquet_optional(self.config.ratings_file),
             specialised_lending=self._load_parquet_optional(
                 self.config.specialised_lending_file
             ),
@@ -381,15 +381,15 @@ class CSVLoader:
         return RawDataBundle(
             facilities=self._load_csv(self.config.facilities_file),
             loans=self._load_csv(self.config.loans_file),
-            contingents=self._load_csv(self.config.contingents_file),
             counterparties=self._load_and_combine_counterparties(),
-            collateral=self._load_csv(self.config.collateral_file),
-            guarantees=self._load_csv(self.config.guarantees_file),
-            provisions=self._load_csv(self.config.provisions_file),
-            ratings=self._load_csv(self.config.ratings_file),
             facility_mappings=self._load_csv(self.config.facility_mappings_file),
             org_mappings=self._load_csv(self.config.org_mappings_file),
             lending_mappings=self._load_csv(self.config.lending_mappings_file),
+            contingents=self._load_csv_optional(self.config.contingents_file),
+            collateral=self._load_csv_optional(self.config.collateral_file),
+            guarantees=self._load_csv_optional(self.config.guarantees_file),
+            provisions=self._load_csv_optional(self.config.provisions_file),
+            ratings=self._load_csv_optional(self.config.ratings_file),
             specialised_lending=self._load_csv_optional(
                 self.config.specialised_lending_file
             ),

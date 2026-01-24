@@ -100,9 +100,12 @@ class HierarchyResolver:
 
         if config.apply_fx_conversion and data.fx_rates is not None:
             exposures = fx_converter.convert_exposures(exposures, data.fx_rates, config)
-            collateral = fx_converter.convert_collateral(collateral, data.fx_rates, config)
-            guarantees = fx_converter.convert_guarantees(guarantees, data.fx_rates, config)
-            provisions = fx_converter.convert_provisions(provisions, data.fx_rates, config)
+            if collateral is not None:
+                collateral = fx_converter.convert_collateral(collateral, data.fx_rates, config)
+            if guarantees is not None:
+                guarantees = fx_converter.convert_guarantees(guarantees, data.fx_rates, config)
+            if provisions is not None:
+                provisions = fx_converter.convert_provisions(provisions, data.fx_rates, config)
         else:
             # Add audit trail columns with null values when no conversion
             exposures = exposures.with_columns([
@@ -142,7 +145,7 @@ class HierarchyResolver:
         self,
         counterparties: pl.LazyFrame,
         org_mappings: pl.LazyFrame,
-        ratings: pl.LazyFrame,
+        ratings: pl.LazyFrame | None,
     ) -> tuple[CounterpartyLookup, list[HierarchyError]]:
         """
         Build counterparty hierarchy lookup using pure LazyFrame operations.
@@ -154,6 +157,19 @@ class HierarchyResolver:
 
         # Build ultimate parent mapping (LazyFrame)
         ultimate_parents = self._build_ultimate_parent_lazy(org_mappings)
+
+        # If ratings is None, create empty LazyFrame with expected schema
+        if ratings is None:
+            ratings = pl.LazyFrame(schema={
+                "counterparty_reference": pl.String,
+                "rating_reference": pl.String,
+                "rating_type": pl.String,
+                "rating_agency": pl.String,
+                "rating_value": pl.String,
+                "cqs": pl.Int8,
+                "pd": pl.Float64,
+                "rating_date": pl.Date,
+            })
 
         # Build rating inheritance (LazyFrame)
         rating_info = self._build_rating_inheritance_lazy(
@@ -429,7 +445,7 @@ class HierarchyResolver:
     def _unify_exposures(
         self,
         loans: pl.LazyFrame,
-        contingents: pl.LazyFrame,
+        contingents: pl.LazyFrame | None,
         facility_mappings: pl.LazyFrame,
         counterparty_lookup: CounterpartyLookup,
     ) -> tuple[pl.LazyFrame, list[HierarchyError]]:
@@ -462,29 +478,33 @@ class HierarchyResolver:
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for loans
         ])
 
-        # Standardize contingent columns
-        contingents_unified = contingents.select([
-            pl.col("contingent_reference").alias("exposure_reference"),
-            pl.lit("contingent").alias("exposure_type"),
-            pl.col("product_type"),
-            pl.col("book_code"),
-            pl.col("counterparty_reference"),
-            pl.col("value_date"),
-            pl.col("maturity_date"),
-            pl.col("currency"),
-            pl.lit(0.0).alias("drawn_amount"),
-            pl.lit(0.0).alias("undrawn_amount"),
-            pl.col("nominal_amount"),
-            pl.col("lgd"),
-            pl.col("seniority"),
-            pl.col("ccf_category"),
-            pl.col("risk_type"),
-            pl.col("ccf_modelled"),
-            pl.col("is_short_term_trade_lc"),  # Art. 166(9) exception for F-IRB
-        ])
+        # If contingents is None, use only loans
+        if contingents is None:
+            exposures = loans_unified
+        else:
+            # Standardize contingent columns
+            contingents_unified = contingents.select([
+                pl.col("contingent_reference").alias("exposure_reference"),
+                pl.lit("contingent").alias("exposure_type"),
+                pl.col("product_type"),
+                pl.col("book_code"),
+                pl.col("counterparty_reference"),
+                pl.col("value_date"),
+                pl.col("maturity_date"),
+                pl.col("currency"),
+                pl.lit(0.0).alias("drawn_amount"),
+                pl.lit(0.0).alias("undrawn_amount"),
+                pl.col("nominal_amount"),
+                pl.col("lgd"),
+                pl.col("seniority"),
+                pl.col("ccf_category"),
+                pl.col("risk_type"),
+                pl.col("ccf_modelled"),
+                pl.col("is_short_term_trade_lc"),  # Art. 166(9) exception for F-IRB
+            ])
 
-        # Combine
-        exposures = pl.concat([loans_unified, contingents_unified], how="diagonal_relaxed")
+            # Combine
+            exposures = pl.concat([loans_unified, contingents_unified], how="diagonal_relaxed")
 
         # Join with facility mappings to get parent facility
         exposures = exposures.join(
@@ -577,7 +597,7 @@ class HierarchyResolver:
     def _add_collateral_ltv(
         self,
         exposures: pl.LazyFrame,
-        collateral: pl.LazyFrame,
+        collateral: pl.LazyFrame | None,
     ) -> pl.LazyFrame:
         """
         Add LTV from collateral to exposures for real estate risk weight calculations.
@@ -587,11 +607,17 @@ class HierarchyResolver:
 
         Args:
             exposures: Unified exposures with exposure_reference
-            collateral: Collateral data with beneficiary_reference and property_ltv
+            collateral: Collateral data with beneficiary_reference and property_ltv (optional)
 
         Returns:
             Exposures with ltv column added
         """
+        # If collateral is None, add null ltv column
+        if collateral is None:
+            return exposures.with_columns([
+                pl.lit(None).cast(pl.Float64).alias("ltv"),
+            ])
+
         # Check if collateral has the required columns
         collateral_schema = collateral.collect_schema()
         if "beneficiary_reference" not in collateral_schema or "property_ltv" not in collateral_schema:

@@ -112,11 +112,23 @@ class TestRequiredFiles:
         # Check core exposure files
         assert "exposures/facilities.parquet" in mandatory
         assert "exposures/loans.parquet" in mandatory
-        assert "exposures/contingents.parquet" in mandatory
+        assert "exposures/facility_mapping.parquet" in mandatory
 
-        # Check CRM files
-        assert "collateral/collateral.parquet" in mandatory
-        assert "guarantee/guarantee.parquet" in mandatory
+        # Check mapping files
+        assert "mapping/org_mapping.parquet" in mandatory
+        assert "mapping/lending_mapping.parquet" in mandatory
+
+    def test_optional_files_include_crm(self) -> None:
+        """Optional files should include CRM and other optional files."""
+        required = RequiredFiles.for_format("parquet")
+        optional = set(required.optional)
+
+        # Check optional CRM files
+        assert "exposures/contingents.parquet" in optional
+        assert "collateral/collateral.parquet" in optional
+        assert "guarantee/guarantee.parquet" in optional
+        assert "provision/provision.parquet" in optional
+        assert "ratings/ratings.parquet" in optional
 
     def test_counterparty_files_included(self) -> None:
         """Counterparty files should be in mandatory list."""

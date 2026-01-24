@@ -1934,6 +1934,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Credit Conversion Factors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#risk-type-categories-crr-art-111" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk Type Categories (CRR Art. 111)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#legacy-ccf-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy CCF Categories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2395,6 +2423,8 @@
       
         
       
+        
+      
     
     
     
@@ -2578,6 +2608,34 @@
     
   
     Code Style
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/documentation-conventions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Conventions
   
 
     
@@ -2870,6 +2928,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Credit Conversion Factors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#risk-type-categories-crr-art-111" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk Type Categories (CRR Art. 111)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#legacy-ccf-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy CCF Categories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3350,6 +3436,52 @@
 </tbody>
 </table>
 <h2 id="credit-conversion-factors">Credit Conversion Factors<a class="headerlink" href="#credit-conversion-factors" title="Permanent link">&para;</a></h2>
+<h3 id="risk-type-categories-crr-art-111">Risk Type Categories (CRR Art. 111)<a class="headerlink" href="#risk-type-categories-crr-art-111" title="Permanent link">&para;</a></h3>
+<p>The <code>risk_type</code> column determines CCF for all off-balance sheet exposures:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Full Value</th>
+<th>SA CCF</th>
+<th>F-IRB CCF</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FR</code></td>
+<td><code>full_risk</code></td>
+<td>100%</td>
+<td>100%</td>
+<td>Direct credit substitutes, guarantees, acceptances</td>
+</tr>
+<tr>
+<td><code>MR</code></td>
+<td><code>medium_risk</code></td>
+<td>50%</td>
+<td>75%</td>
+<td>NIFs, RUFs, standby LCs, committed undrawn</td>
+</tr>
+<tr>
+<td><code>MLR</code></td>
+<td><code>medium_low_risk</code></td>
+<td>20%</td>
+<td>75%</td>
+<td>Documentary credits, trade finance</td>
+</tr>
+<tr>
+<td><code>LR</code></td>
+<td><code>low_risk</code></td>
+<td>0%</td>
+<td>0%</td>
+<td>Unconditionally cancellable commitments</td>
+</tr>
+</tbody>
+</table>
+<p><strong>F-IRB 75% Rule (CRR Art. 166(8)):</strong> Under F-IRB, both MR and MLR categories use 75% CCF instead of SA values.</p>
+<p><strong>F-IRB Exception (CRR Art. 166(9)):</strong> Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. Flag these with <code>is_short_term_trade_lc = True</code>.</p>
+<h3 id="legacy-ccf-categories">Legacy CCF Categories<a class="headerlink" href="#legacy-ccf-categories" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>

@@ -2066,6 +2066,8 @@
       
         
       
+        
+      
     
     
     
@@ -2249,6 +2251,34 @@
     
   
     Code Style
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/documentation-conventions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Conventions
   
 
     
@@ -2492,6 +2522,45 @@
   
     <nav class="md-nav" aria-label="Added">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mandatory-risk_type-column-for-ccf-determination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mandatory risk_type Column for CCF Determination
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Removed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commitment_type-column-and-legacy-ccf-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        commitment_type Column and Legacy CCF Functions
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#fx-conversion-support-14-new-tests" class="md-nav__link">
@@ -2995,6 +3064,45 @@
   
     <nav class="md-nav" aria-label="Added">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mandatory-risk_type-column-for-ccf-determination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mandatory risk_type Column for CCF Determination
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Removed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commitment_type-column-and-legacy-ccf-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        commitment_type Column and Legacy CCF Functions
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#fx-conversion-support-14-new-tests" class="md-nav__link">
@@ -3507,6 +3615,70 @@
 and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<h4 id="mandatory-risk_type-column-for-ccf-determination">Mandatory <code>risk_type</code> Column for CCF Determination<a class="headerlink" href="#mandatory-risk_type-column-for-ccf-determination" title="Permanent link">&para;</a></h4>
+<p>The <code>risk_type</code> column is now the authoritative source for CCF (Credit Conversion Factor) determination across all facility inputs:</p>
+<p><strong>New Columns:</strong>
+- <code>risk_type</code> (mandatory) - Off-balance sheet risk category: FR, MR, MLR, LR
+- <code>ccf_modelled</code> (optional) - A-IRB modelled CCF estimate (0.0-1.5, Retail IRB can exceed 100%)
+- <code>is_short_term_trade_lc</code> (optional) - CRR Art. 166(9) exception flag</p>
+<p><strong>Risk Type Values (CRR Art. 111):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>SA CCF</th>
+<th>F-IRB CCF</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR</td>
+<td>100%</td>
+<td>100%</td>
+<td>Full risk - guarantees, credit substitutes</td>
+</tr>
+<tr>
+<td>MR</td>
+<td>50%</td>
+<td>75%</td>
+<td>Medium risk - NIFs, RUFs, committed undrawn</td>
+</tr>
+<tr>
+<td>MLR</td>
+<td>20%</td>
+<td>75%</td>
+<td>Medium-low risk - documentary credits, trade</td>
+</tr>
+<tr>
+<td>LR</td>
+<td>0%</td>
+<td>0%</td>
+<td>Low risk - unconditionally cancellable</td>
+</tr>
+</tbody>
+</table>
+<p><strong>F-IRB Rules:</strong>
+- CRR Art. 166(8): MR and MLR both become 75% CCF under F-IRB
+- CRR Art. 166(9): Short-term trade LCs for goods movement retain 20% (set <code>is_short_term_trade_lc=True</code>)</p>
+<p><strong>A-IRB Support:</strong>
+- When <code>ccf_modelled</code> is provided and approach is A-IRB, this value takes precedence</p>
+<h3 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">&para;</a></h3>
+<h4 id="commitment_type-column-and-legacy-ccf-functions"><code>commitment_type</code> Column and Legacy CCF Functions<a class="headerlink" href="#commitment_type-column-and-legacy-ccf-functions" title="Permanent link">&para;</a></h4>
+<p>The following have been removed as <code>risk_type</code> is now the authoritative CCF source:</p>
+<p><strong>Removed from schemas:</strong>
+- <code>commitment_type</code> column from FACILITY_SCHEMA and all intermediate schemas</p>
+<p><strong>Removed from <code>crr_ccf.py</code>:</strong>
+- <code>lookup_ccf()</code> function
+- <code>lookup_firb_ccf()</code> function
+- <code>calculate_ead_off_balance_sheet()</code> function
+- <code>create_ccf_type_mapping_df()</code> function</p>
+<p><strong>Removed from <code>ccf.py</code>:</strong>
+- <code>calculate_single_ccf()</code> method
+- <code>CCFResult</code> dataclass</p>
+<p><strong>Migration:</strong> Replace <code>commitment_type</code> with <code>risk_type</code>:
+- <code>unconditionally_cancellable</code> → <code>LR</code> (low_risk)
+- <code>committed_other</code> → <code>MR</code> (medium_risk) or <code>MLR</code> (medium_low_risk)</p>
 <h4 id="fx-conversion-support-14-new-tests">FX Conversion Support (14 new tests)<a class="headerlink" href="#fx-conversion-support-14-new-tests" title="Permanent link">&para;</a></h4>
 <p>Multi-currency portfolio support with configurable FX conversion:</p>
 <p><strong>FXConverter Module</strong> (<code>src/rwa_calc/engine/fx_converter.py</code>)

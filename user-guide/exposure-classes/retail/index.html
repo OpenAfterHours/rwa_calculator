@@ -1610,15 +1610,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lending-groups" class="md-nav__link">
+  <a href="#lending-groups-and-eur-1m-threshold" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Lending Groups
+        Lending Groups and EUR 1m Threshold
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Lending Groups">
+    <nav class="md-nav" aria-label="Lending Groups and EUR 1m Threshold">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1626,6 +1626,39 @@
     <span class="md-ellipsis">
       
         Retail Lending Groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#residential-property-exclusion-crr-art-123c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Residential Property Exclusion (CRR Art. 123(c))
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#treatment-when-threshold-exceeded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Treatment When Threshold Exceeded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-threshold-calculation-with-exclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Threshold Calculation with Exclusion
       
     </span>
   </a>
@@ -2449,6 +2482,8 @@
       
         
       
+        
+      
     
     
     
@@ -2632,6 +2667,34 @@
     
   
     Code Style
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../development/documentation-conventions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Conventions
   
 
     
@@ -3078,15 +3141,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lending-groups" class="md-nav__link">
+  <a href="#lending-groups-and-eur-1m-threshold" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Lending Groups
+        Lending Groups and EUR 1m Threshold
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Lending Groups">
+    <nav class="md-nav" aria-label="Lending Groups and EUR 1m Threshold">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3094,6 +3157,39 @@
     <span class="md-ellipsis">
       
         Retail Lending Groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#residential-property-exclusion-crr-art-123c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Residential Property Exclusion (CRR Art. 123(c))
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#treatment-when-threshold-exceeded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Treatment When Threshold Exceeded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-threshold-calculation-with-exclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Threshold Calculation with Exclusion
       
     </span>
   </a>
@@ -3282,13 +3378,82 @@
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">is_retail</span><span class="p">(</span><span class="n">exposure</span><span class="p">,</span> <span class="n">counterparty</span><span class="p">):</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">return</span> <span class="p">(</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">counterparty</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;INDIVIDUAL&quot;</span><span class="p">,</span> <span class="s2">&quot;SMALL_BUSINESS&quot;</span><span class="p">]</span> <span class="ow">and</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">total_exposure</span><span class="p">(</span><span class="n">counterparty</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1_000_000</span> <span class="ow">and</span>  <span class="c1"># EUR</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">is_managed_as_retail_pool</span><span class="p">(</span><span class="n">exposure</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="p">)</span>
+<div class="admonition info">
+<p class="admonition-title">Conceptual Logic</p>
+<p>The following illustrates the retail classification decision logic. For the actual implementation,
+see <a href="https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classifier.py#L285-L392"><code>classifier.py:285-392</code></a>.</p>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Conceptual overview - actual implementation in ExposureClassifier._apply_retail_classification</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">is_retail</span><span class="p">(</span><span class="n">exposure</span><span class="p">,</span> <span class="n">counterparty</span><span class="p">,</span> <span class="n">lending_group_adjusted_exposure</span><span class="p">):</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="k">return</span> <span class="p">(</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">counterparty</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;individual&quot;</span><span class="p">,</span> <span class="s2">&quot;retail&quot;</span><span class="p">,</span> <span class="s2">&quot;small_business&quot;</span><span class="p">]</span> <span class="ow">and</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">lending_group_adjusted_exposure</span> <span class="o">&lt;=</span> <span class="mi">1_000_000</span> <span class="ow">and</span>  <span class="c1"># EUR threshold</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">is_managed_as_retail_pool</span><span class="p">(</span><span class="n">exposure</span><span class="p">)</span>  <span class="c1"># cp_is_managed_as_retail flag</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="p">)</span>
 </span></code></pre></div>
+<details class="example">
+<summary>Actual Implementation (classifier.py)</summary>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_apply_retail_classification</span><span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>        <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="n">exposures</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="n">lending_group_totals</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="n">config</span><span class="p">:</span> <span class="n">CalculationConfig</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="sd">        Apply retail classification and threshold checks.</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="sd">        Retail criteria (CRR Art. 123, Basel 3.1 CRE20.65-70):</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="sd">        - Aggregated exposure to lending group &lt; threshold (EUR 1m / GBP 880k)</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="sd">        - Exposures secured by residential property are EXCLUDED from threshold</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="sd">          calculation per CRR Art. 123(c) (SA treatment only)</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="sd">        Threshold treatment by approach:</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="sd">        - SA residential mortgages: Stay as RETAIL_MORTGAGE regardless of threshold</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="sd">          (assigned to Article 112(i) residential property class)</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="sd">        - IRB SMEs exceeding threshold: Reclassify to CORPORATE_SME</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="sd">        - Other retail exceeding threshold: Reclassify to CORPORATE</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="sd">        Mortgage classification:</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="sd">        - Product type indicates mortgage/home loan</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="sd">        - Secured by residential property</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="sd">        &quot;&quot;&quot;</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>        <span class="n">max_retail_exposure</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">retail_thresholds</span><span class="o">.</span><span class="n">max_exposure_threshold</span><span class="p">)</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>        <span class="c1"># First, apply mortgage classification (needed for exclusion logic)</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>        <span class="n">exposures</span> <span class="o">=</span> <span class="n">exposures</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>                <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;product_type&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">to_uppercase</span><span class="p">()</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="s2">&quot;MORTGAGE&quot;</span><span class="p">))</span> <span class="o">|</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>                <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;product_type&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">to_uppercase</span><span class="p">()</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="s2">&quot;HOME_LOAN&quot;</span><span class="p">))</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>            <span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">True</span><span class="p">))</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>            <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>            <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;is_mortgage&quot;</span><span class="p">),</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>        <span class="p">])</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>        <span class="c1"># Check if exposure exceeds retail threshold using ADJUSTED amounts</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>        <span class="c1"># (excluding residential property collateral per CRR Art. 123(c))</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>        <span class="c1"># The columns lending_group_adjusted_exposure and exposure_for_retail_threshold</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>        <span class="c1"># already exclude residential property value from hierarchy.py</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>        <span class="n">exposures</span> <span class="o">=</span> <span class="n">exposures</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>            <span class="c1"># Check if lending group adjusted total exceeds retail threshold</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;lending_group_adjusted_exposure&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_retail_exposure</span>
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>            <span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>            <span class="o">.</span><span class="n">when</span><span class="p">(</span>
+</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>                <span class="c1"># For standalone (no lending group), check individual adjusted exposure</span>
+</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a>                <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;lending_group_adjusted_exposure&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&amp;</span>
+</span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>                <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;exposure_for_retail_threshold&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_retail_exposure</span><span class="p">)</span>
+</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>            <span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a>            <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">True</span><span class="p">))</span>
+</span><span id="__span-1-52"><a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>            <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;qualifies_as_retail&quot;</span><span class="p">),</span>
+</span><span id="__span-1-53"><a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a>
+</span><span id="__span-1-54"><a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a>            <span class="c1"># Track whether residential property exclusion was applied</span>
+</span><span id="__span-1-55"><a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-1-56"><a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a>            <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">True</span><span class="p">))</span>
+</span><span id="__span-1-57"><a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a>            <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-1-58"><a id="__codelineno-1-58" name="__codelineno-1-58" href="#__codelineno-1-58"></a>            <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;retail_threshold_exclusion_applied&quot;</span><span class="p">),</span>
+</span><span id="__span-1-59"><a id="__codelineno-1-59" name="__codelineno-1-59" href="#__codelineno-1-59"></a>        <span class="p">])</span>
+</span></code></pre></div>
+</details>
 <h2 id="retail-sub-classes">Retail Sub-Classes<a class="headerlink" href="#retail-sub-classes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3428,8 +3593,8 @@
 - PD: Bank estimate (floor 0.03% CRR / 0.05% Basel 3.1)
 - LGD: Bank estimate (floor 10% Basel 3.1)
 - Correlation: <strong>15%</strong> (fixed)</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Retail mortgage correlation (fixed)</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.15</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Retail mortgage correlation (fixed)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.15</span>
 </span></code></pre></div>
 <p><strong>No maturity adjustment</strong> for retail exposures.</p>
 <h2 id="qrre-qualifying-revolving-retail-exposures">QRRE (Qualifying Revolving Retail Exposures)<a class="headerlink" href="#qrre-qualifying-revolving-retail-exposures" title="Permanent link">&para;</a></h2>
@@ -3517,8 +3682,8 @@
   - Floor: 0.10% (Basel 3.1 revolver)
 - LGD: Bank estimate
 - Correlation: <strong>4%</strong> (fixed)</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># QRRE correlation (fixed, low due to diversification)</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.04</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># QRRE correlation (fixed, low due to diversification)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.04</span>
 </span></code></pre></div>
 <h2 id="retail-other">Retail Other<a class="headerlink" href="#retail-other" title="Permanent link">&para;</a></h2>
 <h3 id="definition_3">Definition<a class="headerlink" href="#definition_3" title="Permanent link">&para;</a></h3>
@@ -3551,9 +3716,9 @@
 - PD: Bank estimate (floor 0.03% CRR / 0.05% Basel 3.1)
 - LGD: Bank estimate (floor varies by collateral)
 - Correlation: <strong>PD-dependent</strong> (3% to 16%)</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Other retail correlation formula</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.03</span> <span class="err">×</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="n">PD</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">))</span> <span class="o">+</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="mf">0.16</span> <span class="err">×</span> <span class="p">[</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="n">PD</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">))]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Other retail correlation formula</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.03</span> <span class="err">×</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="n">PD</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">))</span> <span class="o">+</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="mf">0.16</span> <span class="err">×</span> <span class="p">[</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="n">PD</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">))]</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -3593,15 +3758,15 @@
 - LTV: 71.4%
 - Owner-occupied</p>
 <p><strong>CRR Calculation:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># LTV ≤ 80%, so 35% RW</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">35</span><span class="o">%</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">EAD</span> <span class="o">=</span> <span class="err">£</span><span class="mi">250</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">250</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">35</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">87</span><span class="p">,</span><span class="mi">500</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># LTV ≤ 80%, so 35% RW</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">35</span><span class="o">%</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">EAD</span> <span class="o">=</span> <span class="err">£</span><span class="mi">250</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">250</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">35</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">87</span><span class="p">,</span><span class="mi">500</span>
 </span></code></pre></div></p>
 <p><strong>Basel 3.1 Calculation:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># LTV 70-80% band</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">40</span><span class="o">%</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">250</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">40</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">100</span><span class="p">,</span><span class="mi">000</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># LTV 70-80% band</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">40</span><span class="o">%</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">250</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">40</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">100</span><span class="p">,</span><span class="mi">000</span>
 </span></code></pre></div></p>
 <h3 id="example-2-credit-card-qrre">Example 2: Credit Card (QRRE)<a class="headerlink" href="#example-2-credit-card-qrre" title="Permanent link">&para;</a></h3>
 <p><strong>Exposure:</strong>
@@ -3610,20 +3775,20 @@
 - Unconditionally cancellable
 - Revolver (carries balance)</p>
 <p><strong>CRR Calculation:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># QRRE 75% RW</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># CCF = 0% for unconditionally cancellable (CRR)</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">EAD</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span>  <span class="c1"># Current balance only</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">75</span><span class="o">%</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">75</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">6</span><span class="p">,</span><span class="mi">000</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># QRRE 75% RW</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># CCF = 0% for unconditionally cancellable (CRR)</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">EAD</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span>  <span class="c1"># Current balance only</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">75</span><span class="o">%</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">75</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">6</span><span class="p">,</span><span class="mi">000</span>
 </span></code></pre></div></p>
 <p><strong>Basel 3.1 Calculation:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># CCF = 10% for unconditionally cancellable</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">Undrawn</span> <span class="o">=</span> <span class="err">£</span><span class="mi">15</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="err">£</span><span class="mi">7</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">EAD</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span> <span class="o">+</span> <span class="p">(</span><span class="err">£</span><span class="mi">7</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">10</span><span class="o">%</span><span class="p">)</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">700</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Revolver = 75% RW</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">75</span><span class="o">%</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">700</span> <span class="err">×</span> <span class="mi">75</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">6</span><span class="p">,</span><span class="mi">525</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># CCF = 10% for unconditionally cancellable</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">Undrawn</span> <span class="o">=</span> <span class="err">£</span><span class="mi">15</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="err">£</span><span class="mi">7</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">EAD</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span> <span class="o">+</span> <span class="p">(</span><span class="err">£</span><span class="mi">7</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">10</span><span class="o">%</span><span class="p">)</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">700</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Revolver = 75% RW</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">Risk_Weight</span> <span class="o">=</span> <span class="mi">75</span><span class="o">%</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">8</span><span class="p">,</span><span class="mi">700</span> <span class="err">×</span> <span class="mi">75</span><span class="o">%</span> <span class="o">=</span> <span class="err">£</span><span class="mi">6</span><span class="p">,</span><span class="mi">525</span>
 </span></code></pre></div></p>
 <h3 id="example-3-retail-irb">Example 3: Retail IRB<a class="headerlink" href="#example-3-retail-irb" title="Permanent link">&para;</a></h3>
 <p><strong>Exposure:</strong>
@@ -3632,40 +3797,255 @@
 - Bank LGD: 40%
 - "Other retail" category</p>
 <p><strong>Calculation:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Correlation (PD = 2%)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.03</span> <span class="err">×</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="mf">0.02</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">))</span> <span class="o">+</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="mf">0.16</span> <span class="err">×</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="mf">0.02</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">)))</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.072</span>  <span class="c1"># 7.2%</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># K calculation (no maturity adjustment for retail)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">K</span> <span class="err">≈</span> <span class="mf">0.0285</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># RWA</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="n">RWA</span> <span class="o">=</span> <span class="n">K</span> <span class="err">×</span> <span class="mf">12.5</span> <span class="err">×</span> <span class="n">EAD</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="n">RWA</span> <span class="o">=</span> <span class="mf">0.0285</span> <span class="err">×</span> <span class="mf">12.5</span> <span class="err">×</span> <span class="err">£</span><span class="mi">50</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">17</span><span class="p">,</span><span class="mi">813</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Risk Weight equivalent</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">RW</span> <span class="o">=</span> <span class="mf">35.6</span><span class="o">%</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Correlation (PD = 2%)</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.03</span> <span class="err">×</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="mf">0.02</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">))</span> <span class="o">+</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="mf">0.16</span> <span class="err">×</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span> <span class="err">×</span> <span class="mf">0.02</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">35</span><span class="p">)))</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">R</span> <span class="o">=</span> <span class="mf">0.072</span>  <span class="c1"># 7.2%</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># K calculation (no maturity adjustment for retail)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">K</span> <span class="err">≈</span> <span class="mf">0.0285</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># RWA</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="n">RWA</span> <span class="o">=</span> <span class="n">K</span> <span class="err">×</span> <span class="mf">12.5</span> <span class="err">×</span> <span class="n">EAD</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="n">RWA</span> <span class="o">=</span> <span class="mf">0.0285</span> <span class="err">×</span> <span class="mf">12.5</span> <span class="err">×</span> <span class="err">£</span><span class="mi">50</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="n">RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">17</span><span class="p">,</span><span class="mi">813</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># Risk Weight equivalent</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="n">RW</span> <span class="o">=</span> <span class="mf">35.6</span><span class="o">%</span>
 </span></code></pre></div></p>
-<h2 id="lending-groups">Lending Groups<a class="headerlink" href="#lending-groups" title="Permanent link">&para;</a></h2>
+<h2 id="lending-groups-and-eur-1m-threshold">Lending Groups and EUR 1m Threshold<a class="headerlink" href="#lending-groups-and-eur-1m-threshold" title="Permanent link">&para;</a></h2>
 <h3 id="retail-lending-groups">Retail Lending Groups<a class="headerlink" href="#retail-lending-groups" title="Permanent link">&para;</a></h3>
 <p>For retail SME exposures, total exposure is calculated across the <strong>lending group</strong>:
 - Connected individuals/entities
 - Common ownership or control
 - Aggregated for threshold purposes</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Total exposure to lending group</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">total_group_exposure</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">exposure</span> <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="n">lending_group</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="k">for</span> <span class="n">exposure</span> <span class="ow">in</span> <span class="n">entity</span><span class="o">.</span><span class="n">exposures</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="p">)</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Must be ≤ EUR 1m for retail treatment</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="k">if</span> <span class="n">total_group_exposure</span> <span class="o">&lt;=</span> <span class="mi">1_000_000</span><span class="p">:</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">treatment</span> <span class="o">=</span> <span class="s2">&quot;RETAIL&quot;</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    <span class="n">treatment</span> <span class="o">=</span> <span class="s2">&quot;CORPORATE_SME&quot;</span>
+<h3 id="residential-property-exclusion-crr-art-123c">Residential Property Exclusion (CRR Art. 123(c))<a class="headerlink" href="#residential-property-exclusion-crr-art-123c" title="Permanent link">&para;</a></h3>
+<p><strong>Important:</strong> Exposures secured by residential property are <strong>excluded</strong> from the EUR 1m threshold calculation when they are assigned to the residential property exposure class under the Standardised Approach.</p>
+<p>This exclusion applies because:
+- Per CRR Art. 123(c), exposures "fully and completely secured on residential property collateral that have been assigned to the exposure class laid down in point (i) of Article 112" are excluded from the aggregation
+- This means the <strong>collateral value</strong> (capped at the exposure amount) is deducted from the total amount owed</p>
+<p><strong>Key Rules:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Residential Property Treatment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SA</strong></td>
+<td>Excluded from EUR 1m threshold; stays as residential mortgage</td>
+</tr>
+<tr>
+<td><strong>IRB</strong></td>
+<td>NOT excluded from EUR 1m threshold (per EBA Q&amp;A 2018_4012)</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition info">
+<p class="admonition-title">Conceptual Logic</p>
+<p>The following illustrates the residential property exclusion logic. For the actual implementation,
+see <a href="https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy.py#L692-L789"><code>hierarchy.py:692-789</code></a>.</p>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Conceptual overview - actual implementation in HierarchyResolver._calculate_residential_property_coverage</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_adjusted_exposure</span><span class="p">(</span><span class="n">exposures</span><span class="p">,</span> <span class="n">residential_collateral</span><span class="p">):</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="sd">    Per CRR Art. 123(c), residential property secured exposures (SA)</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="sd">    are excluded from the EUR 1m retail threshold calculation.</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="k">for</span> <span class="n">exposure</span> <span class="ow">in</span> <span class="n">exposures</span><span class="p">:</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>        <span class="c1"># Get residential collateral securing this exposure</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>        <span class="n">res_collateral_value</span> <span class="o">=</span> <span class="n">residential_collateral</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">exposure</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>        <span class="c1"># Cap at exposure amount (can&#39;t exclude more than exposure)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>        <span class="n">exclusion</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">res_collateral_value</span><span class="p">,</span> <span class="n">exposure</span><span class="o">.</span><span class="n">amount</span><span class="p">)</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>        <span class="c1"># Adjusted exposure for threshold</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>        <span class="n">exposure</span><span class="o">.</span><span class="n">for_retail_threshold</span> <span class="o">=</span> <span class="n">exposure</span><span class="o">.</span><span class="n">amount</span> <span class="o">-</span> <span class="n">exclusion</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>    <span class="k">return</span> <span class="n">exposures</span>
 </span></code></pre></div>
+<details class="example">
+<summary>Actual Implementation (hierarchy.py)</summary>
+<p>The real implementation uses Polars LazyFrames for efficient processing:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_residential_property_coverage</span><span class="p">(</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>        <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>        <span class="n">exposures</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="n">collateral</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="sd">        Calculate residential property collateral coverage per exposure.</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="sd">        Per CRR Art. 123(c) and Basel 3.1 CRE20.65, exposures fully and completely</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="sd">        secured by residential property (assigned to SA residential property class)</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="sd">        should be excluded from the EUR 1m retail threshold aggregation.</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="sd">        The exclusion amount is the lesser of:</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="sd">        - The residential property collateral value (after any haircuts)</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="sd">        - The exposure amount (to prevent over-exclusion)</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="sd">        Args:</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="sd">            exposures: Unified exposures with exposure_reference</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="sd">            collateral: Collateral data with property_type and market_value</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="sd">        Returns:</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="sd">            LazyFrame with columns:</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="sd">            - exposure_reference: The exposure identifier</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="sd">            - residential_collateral_value: Value of residential RE securing this exposure</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="sd">            - exposure_for_retail_threshold: Exposure amount minus residential coverage</span>
+</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="sd">        &quot;&quot;&quot;</span>
+</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>        <span class="c1"># Get exposure amounts for capping</span>
+</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a>        <span class="n">exposure_amounts</span> <span class="o">=</span> <span class="n">exposures</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
+</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;exposure_reference&quot;</span><span class="p">),</span>
+</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a>            <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;nominal_amount&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;total_exposure_amount&quot;</span><span class="p">),</span>
+</span><span id="__span-11-31"><a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a>        <span class="p">])</span>
+</span><span id="__span-11-32"><a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a>
+</span><span id="__span-11-33"><a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a>        <span class="c1"># If no collateral, return exposures with zero residential coverage</span>
+</span><span id="__span-11-34"><a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a>        <span class="k">if</span> <span class="n">collateral</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-11-35"><a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a>            <span class="k">return</span> <span class="n">exposure_amounts</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-11-36"><a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">),</span>
+</span><span id="__span-11-37"><a id="__codelineno-11-37" name="__codelineno-11-37" href="#__codelineno-11-37"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;total_exposure_amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;exposure_for_retail_threshold&quot;</span><span class="p">),</span>
+</span><span id="__span-11-38"><a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a>            <span class="p">])</span>
+</span><span id="__span-11-39"><a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a>
+</span><span id="__span-11-40"><a id="__codelineno-11-40" name="__codelineno-11-40" href="#__codelineno-11-40"></a>        <span class="c1"># Check if collateral has the required columns</span>
+</span><span id="__span-11-41"><a id="__codelineno-11-41" name="__codelineno-11-41" href="#__codelineno-11-41"></a>        <span class="n">collateral_schema</span> <span class="o">=</span> <span class="n">collateral</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span>
+</span><span id="__span-11-42"><a id="__codelineno-11-42" name="__codelineno-11-42" href="#__codelineno-11-42"></a>        <span class="n">required_cols</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;beneficiary_reference&quot;</span><span class="p">,</span> <span class="s2">&quot;collateral_type&quot;</span><span class="p">,</span> <span class="s2">&quot;market_value&quot;</span><span class="p">}</span>
+</span><span id="__span-11-43"><a id="__codelineno-11-43" name="__codelineno-11-43" href="#__codelineno-11-43"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">required_cols</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">collateral_schema</span><span class="o">.</span><span class="n">names</span><span class="p">())):</span>
+</span><span id="__span-11-44"><a id="__codelineno-11-44" name="__codelineno-11-44" href="#__codelineno-11-44"></a>            <span class="k">return</span> <span class="n">exposure_amounts</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-11-45"><a id="__codelineno-11-45" name="__codelineno-11-45" href="#__codelineno-11-45"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">),</span>
+</span><span id="__span-11-46"><a id="__codelineno-11-46" name="__codelineno-11-46" href="#__codelineno-11-46"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;total_exposure_amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;exposure_for_retail_threshold&quot;</span><span class="p">),</span>
+</span><span id="__span-11-47"><a id="__codelineno-11-47" name="__codelineno-11-47" href="#__codelineno-11-47"></a>            <span class="p">])</span>
+</span><span id="__span-11-48"><a id="__codelineno-11-48" name="__codelineno-11-48" href="#__codelineno-11-48"></a>
+</span><span id="__span-11-49"><a id="__codelineno-11-49" name="__codelineno-11-49" href="#__codelineno-11-49"></a>        <span class="c1"># Check if property_type column exists (needed to identify residential)</span>
+</span><span id="__span-11-50"><a id="__codelineno-11-50" name="__codelineno-11-50" href="#__codelineno-11-50"></a>        <span class="n">has_property_type</span> <span class="o">=</span> <span class="s2">&quot;property_type&quot;</span> <span class="ow">in</span> <span class="n">collateral_schema</span><span class="o">.</span><span class="n">names</span><span class="p">()</span>
+</span><span id="__span-11-51"><a id="__codelineno-11-51" name="__codelineno-11-51" href="#__codelineno-11-51"></a>
+</span><span id="__span-11-52"><a id="__codelineno-11-52" name="__codelineno-11-52" href="#__codelineno-11-52"></a>        <span class="c1"># Filter for residential property collateral only</span>
+</span><span id="__span-11-53"><a id="__codelineno-11-53" name="__codelineno-11-53" href="#__codelineno-11-53"></a>        <span class="c1"># Residential property = collateral_type is &#39;real_estate&#39; AND property_type is &#39;residential&#39;</span>
+</span><span id="__span-11-54"><a id="__codelineno-11-54" name="__codelineno-11-54" href="#__codelineno-11-54"></a>        <span class="k">if</span> <span class="n">has_property_type</span><span class="p">:</span>
+</span><span id="__span-11-55"><a id="__codelineno-11-55" name="__codelineno-11-55" href="#__codelineno-11-55"></a>            <span class="n">residential_collateral</span> <span class="o">=</span> <span class="n">collateral</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+</span><span id="__span-11-56"><a id="__codelineno-11-56" name="__codelineno-11-56" href="#__codelineno-11-56"></a>                <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;collateral_type&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">to_lowercase</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;real_estate&quot;</span><span class="p">)</span> <span class="o">&amp;</span>
+</span><span id="__span-11-57"><a id="__codelineno-11-57" name="__codelineno-11-57" href="#__codelineno-11-57"></a>                <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;property_type&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">to_lowercase</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;residential&quot;</span><span class="p">)</span>
+</span><span id="__span-11-58"><a id="__codelineno-11-58" name="__codelineno-11-58" href="#__codelineno-11-58"></a>            <span class="p">)</span>
+</span><span id="__span-11-59"><a id="__codelineno-11-59" name="__codelineno-11-59" href="#__codelineno-11-59"></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-11-60"><a id="__codelineno-11-60" name="__codelineno-11-60" href="#__codelineno-11-60"></a>            <span class="c1"># If no property_type, cannot identify residential - return zero coverage</span>
+</span><span id="__span-11-61"><a id="__codelineno-11-61" name="__codelineno-11-61" href="#__codelineno-11-61"></a>            <span class="k">return</span> <span class="n">exposure_amounts</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-11-62"><a id="__codelineno-11-62" name="__codelineno-11-62" href="#__codelineno-11-62"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">),</span>
+</span><span id="__span-11-63"><a id="__codelineno-11-63" name="__codelineno-11-63" href="#__codelineno-11-63"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;total_exposure_amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;exposure_for_retail_threshold&quot;</span><span class="p">),</span>
+</span><span id="__span-11-64"><a id="__codelineno-11-64" name="__codelineno-11-64" href="#__codelineno-11-64"></a>            <span class="p">])</span>
+</span><span id="__span-11-65"><a id="__codelineno-11-65" name="__codelineno-11-65" href="#__codelineno-11-65"></a>
+</span><span id="__span-11-66"><a id="__codelineno-11-66" name="__codelineno-11-66" href="#__codelineno-11-66"></a>        <span class="c1"># Sum residential collateral value per beneficiary (exposure)</span>
+</span><span id="__span-11-67"><a id="__codelineno-11-67" name="__codelineno-11-67" href="#__codelineno-11-67"></a>        <span class="n">residential_by_exposure</span> <span class="o">=</span> <span class="n">residential_collateral</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s2">&quot;beneficiary_reference&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">([</span>
+</span><span id="__span-11-68"><a id="__codelineno-11-68" name="__codelineno-11-68" href="#__codelineno-11-68"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;market_value&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">),</span>
+</span><span id="__span-11-69"><a id="__codelineno-11-69" name="__codelineno-11-69" href="#__codelineno-11-69"></a>        <span class="p">])</span>
+</span><span id="__span-11-70"><a id="__codelineno-11-70" name="__codelineno-11-70" href="#__codelineno-11-70"></a>
+</span><span id="__span-11-71"><a id="__codelineno-11-71" name="__codelineno-11-71" href="#__codelineno-11-71"></a>        <span class="c1"># Join with exposure amounts</span>
+</span><span id="__span-11-72"><a id="__codelineno-11-72" name="__codelineno-11-72" href="#__codelineno-11-72"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">exposure_amounts</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+</span><span id="__span-11-73"><a id="__codelineno-11-73" name="__codelineno-11-73" href="#__codelineno-11-73"></a>            <span class="n">residential_by_exposure</span><span class="p">,</span>
+</span><span id="__span-11-74"><a id="__codelineno-11-74" name="__codelineno-11-74" href="#__codelineno-11-74"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;exposure_reference&quot;</span><span class="p">,</span>
+</span><span id="__span-11-75"><a id="__codelineno-11-75" name="__codelineno-11-75" href="#__codelineno-11-75"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;beneficiary_reference&quot;</span><span class="p">,</span>
+</span><span id="__span-11-76"><a id="__codelineno-11-76" name="__codelineno-11-76" href="#__codelineno-11-76"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">,</span>
+</span><span id="__span-11-77"><a id="__codelineno-11-77" name="__codelineno-11-77" href="#__codelineno-11-77"></a>        <span class="p">)</span>
+</span><span id="__span-11-78"><a id="__codelineno-11-78" name="__codelineno-11-78" href="#__codelineno-11-78"></a>
+</span><span id="__span-11-79"><a id="__codelineno-11-79" name="__codelineno-11-79" href="#__codelineno-11-79"></a>        <span class="c1"># Fill nulls with 0 and cap at exposure amount</span>
+</span><span id="__span-11-80"><a id="__codelineno-11-80" name="__codelineno-11-80" href="#__codelineno-11-80"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-11-81"><a id="__codelineno-11-81" name="__codelineno-11-81" href="#__codelineno-11-81"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fill_null</span><span class="p">(</span><span class="mf">0.0</span><span class="p">),</span>
+</span><span id="__span-11-82"><a id="__codelineno-11-82" name="__codelineno-11-82" href="#__codelineno-11-82"></a>        <span class="p">])</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-11-83"><a id="__codelineno-11-83" name="__codelineno-11-83" href="#__codelineno-11-83"></a>            <span class="c1"># Cap residential coverage at exposure amount (can&#39;t exclude more than exposure)</span>
+</span><span id="__span-11-84"><a id="__codelineno-11-84" name="__codelineno-11-84" href="#__codelineno-11-84"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;total_exposure_amount&quot;</span><span class="p">))</span>
+</span><span id="__span-11-85"><a id="__codelineno-11-85" name="__codelineno-11-85" href="#__codelineno-11-85"></a>            <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;total_exposure_amount&quot;</span><span class="p">))</span>
+</span><span id="__span-11-86"><a id="__codelineno-11-86" name="__codelineno-11-86" href="#__codelineno-11-86"></a>            <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">))</span>
+</span><span id="__span-11-87"><a id="__codelineno-11-87" name="__codelineno-11-87" href="#__codelineno-11-87"></a>            <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">),</span>
+</span><span id="__span-11-88"><a id="__codelineno-11-88" name="__codelineno-11-88" href="#__codelineno-11-88"></a>        <span class="p">])</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
+</span><span id="__span-11-89"><a id="__codelineno-11-89" name="__codelineno-11-89" href="#__codelineno-11-89"></a>            <span class="c1"># Calculate exposure for retail threshold = exposure - residential coverage</span>
+</span><span id="__span-11-90"><a id="__codelineno-11-90" name="__codelineno-11-90" href="#__codelineno-11-90"></a>            <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;total_exposure_amount&quot;</span><span class="p">)</span> <span class="o">-</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">))</span>
+</span><span id="__span-11-91"><a id="__codelineno-11-91" name="__codelineno-11-91" href="#__codelineno-11-91"></a>            <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;exposure_for_retail_threshold&quot;</span><span class="p">),</span>
+</span><span id="__span-11-92"><a id="__codelineno-11-92" name="__codelineno-11-92" href="#__codelineno-11-92"></a>        <span class="p">])</span>
+</span><span id="__span-11-93"><a id="__codelineno-11-93" name="__codelineno-11-93" href="#__codelineno-11-93"></a>
+</span><span id="__span-11-94"><a id="__codelineno-11-94" name="__codelineno-11-94" href="#__codelineno-11-94"></a>        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
+</span><span id="__span-11-95"><a id="__codelineno-11-95" name="__codelineno-11-95" href="#__codelineno-11-95"></a>            <span class="s2">&quot;exposure_reference&quot;</span><span class="p">,</span>
+</span><span id="__span-11-96"><a id="__codelineno-11-96" name="__codelineno-11-96" href="#__codelineno-11-96"></a>            <span class="s2">&quot;residential_collateral_value&quot;</span><span class="p">,</span>
+</span><span id="__span-11-97"><a id="__codelineno-11-97" name="__codelineno-11-97" href="#__codelineno-11-97"></a>            <span class="s2">&quot;exposure_for_retail_threshold&quot;</span><span class="p">,</span>
+</span><span id="__span-11-98"><a id="__codelineno-11-98" name="__codelineno-11-98" href="#__codelineno-11-98"></a>        <span class="p">])</span>
+</span></code></pre></div>
+</details>
+<p><strong>Lending Group Threshold Check:</strong></p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Total adjusted exposure to lending group (from hierarchy resolver)</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">adjusted_group_exposure</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">exp</span><span class="o">.</span><span class="n">exposure_for_retail_threshold</span> <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="n">lending_group</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="k">for</span> <span class="n">exp</span> <span class="ow">in</span> <span class="n">entity</span><span class="o">.</span><span class="n">exposures</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="p">)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Must be ≤ EUR 1m for retail treatment</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="k">if</span> <span class="n">adjusted_group_exposure</span> <span class="o">&lt;=</span> <span class="mi">1_000_000</span><span class="p">:</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>    <span class="n">treatment</span> <span class="o">=</span> <span class="s2">&quot;RETAIL&quot;</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>    <span class="n">treatment</span> <span class="o">=</span> <span class="s2">&quot;CORPORATE_SME&quot;</span>  <span class="c1"># SMEs retain firm-size adjustment</span>
+</span></code></pre></div>
+<h3 id="treatment-when-threshold-exceeded">Treatment When Threshold Exceeded<a class="headerlink" href="#treatment-when-threshold-exceeded" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Counterparty Type</th>
+<th>Exceeds Threshold</th>
+<th>Treatment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Individual (mortgage)</strong></td>
+<td>Yes</td>
+<td>Stays as RETAIL_MORTGAGE (SA Art. 112(i))</td>
+</tr>
+<tr>
+<td><strong>Individual (other)</strong></td>
+<td>Yes</td>
+<td>Reclassified to CORPORATE</td>
+</tr>
+<tr>
+<td><strong>SME (any product)</strong></td>
+<td>Yes</td>
+<td>Reclassified to CORPORATE_SME</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Regulatory References:</strong>
+- CRR Art. 123(c) - Retail exclusion for residential property
+- EBA Q&amp;A 2013_72 - SA residential property exclusion clarification
+- EBA Q&amp;A 2018_4012 - IRB residential property NOT excluded</p>
+<h3 id="example-threshold-calculation-with-exclusion">Example: Threshold Calculation with Exclusion<a class="headerlink" href="#example-threshold-calculation-with-exclusion" title="Permanent link">&para;</a></h3>
+<p><strong>Scenario:</strong> Lending group with EUR 2m total exposure</p>
+<table>
+<thead>
+<tr>
+<th>Exposure</th>
+<th>Amount</th>
+<th>Residential Collateral</th>
+<th>For Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Term loan</td>
+<td>EUR 1m</td>
+<td>EUR 0</td>
+<td>EUR 1m</td>
+</tr>
+<tr>
+<td>Mortgage</td>
+<td>EUR 1m</td>
+<td>EUR 1m</td>
+<td>EUR 0</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>EUR 2m</strong></td>
+<td></td>
+<td><strong>EUR 1m</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Result:</strong> Adjusted exposure = EUR 1m (at threshold) - qualifies as retail</p>
 <h2 id="crm-for-retail">CRM for Retail<a class="headerlink" href="#crm-for-retail" title="Permanent link">&para;</a></h2>
 <h3 id="eligible-collateral">Eligible Collateral<a class="headerlink" href="#eligible-collateral" title="Permanent link">&para;</a></h3>
 <table>
@@ -3702,6 +4082,7 @@
 <th>Topic</th>
 <th>CRR Article</th>
 <th>BCBS CRE</th>
+<th>EBA Q&amp;A</th>
 </tr>
 </thead>
 <tbody>
@@ -3709,26 +4090,43 @@
 <td>Retail definition</td>
 <td>Art. 123</td>
 <td>CRE20.50-60</td>
+<td>-</td>
+</tr>
+<tr>
+<td>EUR 1m threshold</td>
+<td>Art. 123(c)</td>
+<td>CRE20.65</td>
+<td>2016_2626</td>
+</tr>
+<tr>
+<td>Residential property exclusion</td>
+<td>Art. 123(c), Art. 112(i)</td>
+<td>-</td>
+<td>2013_72, 2018_4012</td>
 </tr>
 <tr>
 <td>Retail mortgage</td>
 <td>Art. 125</td>
 <td>CRE20.70-75</td>
+<td>-</td>
 </tr>
 <tr>
 <td>QRRE</td>
 <td>Art. 154</td>
 <td>CRE31.10-12</td>
+<td>-</td>
 </tr>
 <tr>
 <td>Retail IRB</td>
 <td>Art. 154</td>
 <td>CRE31</td>
+<td>-</td>
 </tr>
 <tr>
 <td>Correlation</td>
 <td>Art. 154</td>
 <td>CRE31.13-15</td>
+<td>-</td>
 </tr>
 </tbody>
 </table>

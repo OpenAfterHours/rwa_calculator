@@ -17,8 +17,36 @@ pip install rwa-calc
 # Or with uv
 uv add rwa-calc
 
-# With optional UI dependencies (Marimo workbooks)
+# With UI support (web-based calculator interface)
 pip install rwa-calc[ui]
+```
+
+## Quick Start
+
+**Option 1: Interactive UI (recommended for exploration)**
+
+```bash
+# Install with UI support
+pip install rwa-calc[ui]
+
+# Start the web server
+rwa-calc-ui
+
+# Open http://localhost:8000 in your browser
+```
+
+**Option 2: Python API (recommended for automation)**
+
+```python
+from datetime import date
+from rwa_calc.engine.pipeline import create_pipeline
+from rwa_calc.contracts.config import CalculationConfig
+
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+pipeline = create_pipeline()
+result = pipeline.run(config)
+
+print(f"Total RWA: {result.total_rwa:,.2f}")
 ```
 
 ## Regulatory Scope
@@ -143,11 +171,14 @@ The calculator includes an interactive web-based UI built with Marimo, providing
 ### Starting the UI Server
 
 ```bash
-# Start the multi-app server
+# If installed from PyPI
+rwa-calc-ui
+
+# Or from source with uv
 uv run python src/rwa_calc/ui/marimo/server.py
 
 # Or using uvicorn directly
-uv run uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
+uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
 ```
 
 ### Available Applications

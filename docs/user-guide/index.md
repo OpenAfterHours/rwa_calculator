@@ -6,6 +6,12 @@ Welcome to the comprehensive user guide for the UK Credit Risk RWA Calculator. T
 
 This guide is organized into the following sections:
 
+### Interactive UI
+
+Run calculations without writing code using the web-based interface:
+
+- [**Interactive UI**](interactive-ui.md) - Web-based calculator, results explorer, and regulatory reference
+
 ### Regulatory Frameworks
 
 Understand the regulatory requirements that govern RWA calculations:
@@ -83,16 +89,18 @@ Understand how different exposures are classified and treated:
 ### Risk & Audit Teams
 
 Start with:
-1. [Regulatory Frameworks](regulatory/index.md) - Understand the rules
-2. [Calculation Methodology](methodology/index.md) - How calculations work
-3. [Framework Comparison](regulatory/comparison.md) - CRR vs Basel 3.1 differences
+1. [Interactive UI](interactive-ui.md) - Run calculations without code
+2. [Regulatory Frameworks](regulatory/index.md) - Understand the rules
+3. [Calculation Methodology](methodology/index.md) - How calculations work
+4. [Framework Comparison](regulatory/comparison.md) - CRR vs Basel 3.1 differences
 
 ### Business Users
 
 Start with:
-1. [Key Concepts](../getting-started/concepts.md) - Terminology
-2. [Exposure Classes](exposure-classes/index.md) - How exposures are classified
-3. [Configuration Guide](configuration.md) - Setting up calculations
+1. [Interactive UI](interactive-ui.md) - Run calculations through the web interface
+2. [Key Concepts](../getting-started/concepts.md) - Terminology
+3. [Exposure Classes](exposure-classes/index.md) - How exposures are classified
+4. [Configuration Guide](configuration.md) - Setting up calculations
 
 ### Technical Users
 

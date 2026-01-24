@@ -88,6 +88,7 @@ nav:
     - Concepts: getting-started/concepts.md
   - User Guide:
     - user-guide/index.md
+    - Interactive UI: user-guide/interactive-ui.md
     - Regulatory Frameworks:
       - user-guide/regulatory/index.md
       - CRR (Basel 3.0): user-guide/regulatory/crr.md

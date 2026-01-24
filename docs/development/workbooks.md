@@ -16,11 +16,14 @@ The calculator includes a multi-app web server providing three interactive appli
 ### Starting the Server
 
 ```bash
-# Start the multi-app server
+# If installed from PyPI
+rwa-calc-ui
+
+# From source with uv
 uv run python src/rwa_calc/ui/marimo/server.py
 
 # Or using uvicorn directly
-uv run uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
+uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
 ```
 
 ### Available Applications

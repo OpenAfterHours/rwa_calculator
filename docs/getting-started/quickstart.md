@@ -2,7 +2,52 @@
 
 This guide will help you run your first RWA calculation in just a few minutes.
 
-## Basic Usage
+## Choose Your Approach
+
+There are two ways to run RWA calculations:
+
+| Approach | Best For | Guide |
+|----------|----------|-------|
+| **Interactive UI** | Quick analysis, exploring results, non-developers | [See below](#using-the-interactive-ui) |
+| **Python API** | Automation, integration, custom workflows | [See below](#using-the-python-api) |
+
+---
+
+## Using the Interactive UI
+
+The fastest way to get started is the web-based interface.
+
+### Step 1: Install with UI Support
+
+```bash
+pip install rwa-calc[ui]
+# Or with uv
+uv add rwa-calc --extra ui
+```
+
+### Step 2: Start the Server
+
+```bash
+# If installed from PyPI
+rwa-calc-ui
+
+# Or from source
+uv run python src/rwa_calc/ui/marimo/server.py
+```
+
+### Step 3: Open Your Browser
+
+Navigate to [http://localhost:8000](http://localhost:8000) to access:
+
+- **RWA Calculator** (`/`) - Run calculations on your data
+- **Results Explorer** (`/results`) - Filter and analyze results
+- **Framework Reference** (`/reference`) - View regulatory parameters
+
+For detailed UI documentation, see the [Interactive UI Guide](../user-guide/interactive-ui.md).
+
+---
+
+## Using the Python API
 
 ### Step 1: Import the Required Modules
 

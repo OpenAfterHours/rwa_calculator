@@ -3,11 +3,14 @@ RWA Calculator Multi-App Server.
 
 Serves all Marimo applications with proper navigation between them.
 
-Usage:
+Usage (installed from PyPI):
+    rwa-calc-ui
+
+Usage (from source):
     uv run python src/rwa_calc/ui/marimo/server.py
 
-    Or with uvicorn directly:
-    uv run uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
+Or with uvicorn directly:
+    uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
 """
 
 import marimo
@@ -26,7 +29,8 @@ app = (
     .build()
 )
 
-if __name__ == "__main__":
+def main():
+    """Start the RWA Calculator UI server."""
     import uvicorn
     print("Starting RWA Calculator server...")
     print("Apps available at:")
@@ -35,3 +39,7 @@ if __name__ == "__main__":
     print("  - http://localhost:8000/results    (Results Explorer)")
     print("  - http://localhost:8000/reference  (Framework Reference)")
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,6 @@
 [project]
 name = "rwa-calc"
-version = "0.1.1"
+version = "0.1.2"
 description = "Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS9/24"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -33,6 +33,9 @@ dependencies = [
     "pyarrow>=14.0.0",
     "pyyaml>=6.0.0",
 ]
+
+[project.scripts]
+rwa-calc-ui = "rwa_calc.ui.marimo.server:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenAfterHours/rwa_calculator"

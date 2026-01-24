@@ -32,6 +32,22 @@ if TYPE_CHECKING:
     pass
 
 
+def normalize_columns(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """
+    Normalize column names to lowercase with underscores.
+
+    Converts all column names to lowercase and replaces spaces with underscores.
+    This ensures consistent column naming regardless of input data formatting.
+
+    Args:
+        lf: LazyFrame with columns to normalize
+
+    Returns:
+        LazyFrame with normalized column names
+    """
+    return lf.rename(lambda col: col.lower().replace(" ", "_"))
+
+
 @dataclass
 class DataSourceConfig:
     """
@@ -141,7 +157,7 @@ class ParquetLoader:
             raise DataLoadError(f"File not found: {full_path}", source=relative_path)
 
         try:
-            return pl.scan_parquet(full_path)
+            return normalize_columns(pl.scan_parquet(full_path))
         except Exception as e:
             raise DataLoadError(f"Failed to load parquet: {e}", source=relative_path) from e
 
@@ -163,7 +179,7 @@ class ParquetLoader:
             return None
 
         try:
-            return pl.scan_parquet(full_path)
+            return normalize_columns(pl.scan_parquet(full_path))
         except Exception:
             return None
 
@@ -179,7 +195,7 @@ class ParquetLoader:
             full_path = self.base_path / file_path
             if full_path.exists():
                 try:
-                    frames.append(pl.scan_parquet(full_path))
+                    frames.append(normalize_columns(pl.scan_parquet(full_path)))
                 except Exception as e:
                     raise DataLoadError(
                         f"Failed to load counterparty file: {e}",
@@ -302,7 +318,7 @@ class CSVLoader:
             raise DataLoadError(f"File not found: {full_path}", source=relative_path)
 
         try:
-            return pl.scan_csv(full_path, try_parse_dates=True)
+            return normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
         except Exception as e:
             raise DataLoadError(f"Failed to load CSV: {e}", source=relative_path) from e
 
@@ -324,7 +340,7 @@ class CSVLoader:
             return None
 
         try:
-            return pl.scan_csv(full_path, try_parse_dates=True)
+            return normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
         except Exception:
             return None
 
@@ -340,7 +356,7 @@ class CSVLoader:
             full_path = self.base_path / file_path
             if full_path.exists():
                 try:
-                    frames.append(pl.scan_csv(full_path, try_parse_dates=True))
+                    frames.append(normalize_columns(pl.scan_csv(full_path, try_parse_dates=True)))
                 except Exception as e:
                     raise DataLoadError(
                         f"Failed to load counterparty file: {e}",

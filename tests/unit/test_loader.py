@@ -595,6 +595,124 @@ class TestCreateTestLoader:
 
 
 # =============================================================================
+# Header Normalization Tests
+# =============================================================================
+
+
+class TestHeaderNormalization:
+    """Tests for header normalization (lowercase + spaces to underscores)."""
+
+    def test_parquet_loader_normalizes_headers_to_lowercase(self, tmp_path: Path) -> None:
+        """Headers should be converted to lowercase."""
+        (tmp_path / "counterparty").mkdir()
+        (tmp_path / "exposures").mkdir()
+        (tmp_path / "collateral").mkdir()
+        (tmp_path / "guarantee").mkdir()
+        (tmp_path / "provision").mkdir()
+        (tmp_path / "ratings").mkdir()
+        (tmp_path / "mapping").mkdir()
+
+        # Create file with uppercase headers
+        df = pl.DataFrame({
+            "Counterparty_ID": ["SOV001"],
+            "COUNTERPARTY_TYPE": ["SOVEREIGN"],
+            "Name": ["Test Sovereign"],
+        })
+        df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
+
+        loader = ParquetLoader(tmp_path, config=DataSourceConfig(
+            counterparty_files=["counterparty/sovereign.parquet"]
+        ))
+        counterparties = loader._load_and_combine_counterparties()
+        result = counterparties.collect()
+
+        assert "counterparty_id" in result.columns
+        assert "counterparty_type" in result.columns
+        assert "name" in result.columns
+        # Verify original names are not present
+        assert "Counterparty_ID" not in result.columns
+        assert "COUNTERPARTY_TYPE" not in result.columns
+        assert "Name" not in result.columns
+
+    def test_parquet_loader_replaces_spaces_with_underscores(self, tmp_path: Path) -> None:
+        """Spaces in headers should be replaced with underscores."""
+        (tmp_path / "exposures").mkdir()
+
+        # Create file with spaces in headers
+        df = pl.DataFrame({
+            "Facility ID": ["FAC001"],
+            "Counterparty ID": ["CORP001"],
+            "Facility Type": ["TERM_LOAN"],
+        })
+        df.write_parquet(tmp_path / "exposures" / "facilities.parquet")
+
+        loader = ParquetLoader(tmp_path)
+        result = loader._load_parquet("exposures/facilities.parquet").collect()
+
+        assert "facility_id" in result.columns
+        assert "counterparty_id" in result.columns
+        assert "facility_type" in result.columns
+        # Verify original names are not present
+        assert "Facility ID" not in result.columns
+
+    def test_csv_loader_normalizes_headers_to_lowercase(self, tmp_path: Path) -> None:
+        """CSV headers should be converted to lowercase."""
+        (tmp_path / "counterparty").mkdir()
+
+        # Create file with uppercase headers
+        df = pl.DataFrame({
+            "Counterparty_ID": ["SOV001"],
+            "COUNTERPARTY_TYPE": ["SOVEREIGN"],
+            "Name": ["Test Sovereign"],
+        })
+        df.write_csv(tmp_path / "counterparty" / "sovereign.csv")
+
+        loader = CSVLoader(tmp_path, config=DataSourceConfig(
+            counterparty_files=["counterparty/sovereign.csv"]
+        ))
+        counterparties = loader._load_and_combine_counterparties()
+        result = counterparties.collect()
+
+        assert "counterparty_id" in result.columns
+        assert "counterparty_type" in result.columns
+        assert "name" in result.columns
+
+    def test_csv_loader_replaces_spaces_with_underscores(self, tmp_path: Path) -> None:
+        """CSV spaces in headers should be replaced with underscores."""
+        (tmp_path / "exposures").mkdir()
+
+        # Create file with spaces in headers
+        df = pl.DataFrame({
+            "Facility ID": ["FAC001"],
+            "Counterparty ID": ["CORP001"],
+            "Facility Type": ["TERM_LOAN"],
+        })
+        df.write_csv(tmp_path / "exposures" / "facilities.csv")
+
+        loader = CSVLoader(tmp_path)
+        result = loader._load_csv("exposures/facilities.csv").collect()
+
+        assert "facility_id" in result.columns
+        assert "counterparty_id" in result.columns
+        assert "facility_type" in result.columns
+
+    def test_normalize_columns_function(self) -> None:
+        """Test the normalize_columns helper function directly."""
+        from rwa_calc.engine.loader import normalize_columns
+
+        lf = pl.LazyFrame({
+            "Column One": [1],
+            "COLUMN_TWO": [2],
+            "Column Three With Spaces": [3],
+        })
+        result = normalize_columns(lf).collect()
+
+        assert "column_one" in result.columns
+        assert "column_two" in result.columns
+        assert "column_three_with_spaces" in result.columns
+
+
+# =============================================================================
 # Edge Case Tests
 # =============================================================================
 

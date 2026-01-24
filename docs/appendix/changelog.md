@@ -103,7 +103,36 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 - A-IRB LGD floors
 - Revised SA real estate risk weights
 
-## [0.1.0] - 2024-XX-XX
+## [0.1.2] - 2025-01-24
+
+### Added
+
+#### Interactive UI Console Command
+- New `rwa-calc-ui` console script for starting the UI server when installed from PyPI
+- `main()` function added to `server.py` for entry point
+
+#### Documentation Improvements
+- New `docs/user-guide/interactive-ui.md` - comprehensive UI guide with prerequisites, all three apps, troubleshooting
+- Updated quickstart with "Choose Your Approach" section (UI vs Python API)
+- Added Interactive UI to user guide navigation and recommendations
+- Updated all server startup commands to show both PyPI and source installation methods
+
+### Changed
+- Installation instructions clarified for PyPI vs source installations
+- UI documentation moved from Development section to User Guide for better discoverability
+
+---
+
+## [0.1.1] - 2025-01-22
+
+### Added
+- FX conversion support for multi-currency portfolios
+- Polars namespace extensions (8 namespaces)
+- Retail classification flag (`cp_is_managed_as_retail`)
+
+---
+
+## [0.1.0] - 2025-01-18
 
 ### Added
 
@@ -201,7 +230,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.0 | 2024-XX-XX | Current |
+| 0.1.2 | 2025-01-24 | Current |
+| 0.1.1 | 2025-01-22 | Previous |
+| 0.1.0 | 2025-01-18 | Initial |
 
 ## Migration Notes
 

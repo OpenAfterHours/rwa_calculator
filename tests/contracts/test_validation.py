@@ -8,10 +8,13 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.validation import (
+    normalize_risk_type,
+    validate_ccf_modelled,
     validate_lgd_range,
     validate_non_negative_amounts,
     validate_pd_range,
     validate_required_columns,
+    validate_risk_type,
     validate_schema,
     validate_schema_to_errors,
 )
@@ -254,3 +257,154 @@ class TestValidateLGDRange:
         df = result.collect()
 
         assert df["_valid_lgd"].to_list() == [False, True, False]
+
+
+class TestValidateRiskType:
+    """Tests for validate_risk_type function."""
+
+    def test_valid_risk_type_codes(self):
+        """Valid risk type codes (FR, MR, MLR, LR) should pass."""
+        lf = pl.LazyFrame({"risk_type": ["FR", "MR", "MLR", "LR"]})
+
+        result = validate_risk_type(lf)
+        df = result.collect()
+
+        assert all(df["_valid_risk_type"].to_list())
+
+    def test_valid_risk_type_full_values(self):
+        """Valid full values should pass."""
+        lf = pl.LazyFrame({
+            "risk_type": ["full_risk", "medium_risk", "medium_low_risk", "low_risk"]
+        })
+
+        result = validate_risk_type(lf)
+        df = result.collect()
+
+        assert all(df["_valid_risk_type"].to_list())
+
+    def test_case_insensitive(self):
+        """Validation should be case insensitive."""
+        lf = pl.LazyFrame({"risk_type": ["fr", "Fr", "FR", "FULL_RISK", "Full_Risk"]})
+
+        result = validate_risk_type(lf)
+        df = result.collect()
+
+        assert all(df["_valid_risk_type"].to_list())
+
+    def test_invalid_values_fail(self):
+        """Invalid risk type values should fail validation."""
+        lf = pl.LazyFrame({"risk_type": ["FR", "INVALID", "HIGH", "MR"]})
+
+        result = validate_risk_type(lf)
+        df = result.collect()
+
+        assert df["_valid_risk_type"].to_list() == [True, False, False, True]
+
+    def test_missing_column(self):
+        """Should return original LazyFrame if column missing."""
+        lf = pl.LazyFrame({"other_column": [1, 2, 3]})
+
+        result = validate_risk_type(lf)
+        df = result.collect()
+
+        assert "_valid_risk_type" not in df.columns
+
+
+class TestValidateCCFModelled:
+    """Tests for validate_ccf_modelled function."""
+
+    def test_valid_range(self):
+        """Valid CCF values (0.0 to 1.5) should pass. Retail IRB can exceed 100%."""
+        lf = pl.LazyFrame({"ccf_modelled": [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5]})
+
+        result = validate_ccf_modelled(lf)
+        df = result.collect()
+
+        assert all(df["_valid_ccf_modelled"].to_list())
+
+    def test_null_is_valid(self):
+        """Null values should be valid (optional field)."""
+        lf = pl.LazyFrame({"ccf_modelled": [0.5, None, 0.75, None]})
+
+        result = validate_ccf_modelled(lf)
+        df = result.collect()
+
+        assert all(df["_valid_ccf_modelled"].to_list())
+
+    def test_out_of_range_fails(self):
+        """Values outside [0.0, 1.5] should fail."""
+        lf = pl.LazyFrame({"ccf_modelled": [-0.1, 0.5, 1.25, 1.6, 2.0]})
+
+        result = validate_ccf_modelled(lf)
+        df = result.collect()
+
+        # -0.1 fails (below 0), 0.5 passes, 1.25 passes (Retail IRB can exceed 100%), 1.6 and 2.0 fail (above 150%)
+        assert df["_valid_ccf_modelled"].to_list() == [False, True, True, False, False]
+
+    def test_missing_column(self):
+        """Should return original LazyFrame if column missing."""
+        lf = pl.LazyFrame({"other_column": [1.0, 2.0, 3.0]})
+
+        result = validate_ccf_modelled(lf)
+        df = result.collect()
+
+        assert "_valid_ccf_modelled" not in df.columns
+
+
+class TestNormalizeRiskType:
+    """Tests for normalize_risk_type function."""
+
+    def test_normalizes_codes_to_full_values(self):
+        """Should normalize codes to full values."""
+        lf = pl.LazyFrame({"risk_type": ["FR", "MR", "MLR", "LR"]})
+
+        result = normalize_risk_type(lf)
+        df = result.collect()
+
+        assert df["risk_type"].to_list() == [
+            "full_risk",
+            "medium_risk",
+            "medium_low_risk",
+            "low_risk",
+        ]
+
+    def test_preserves_full_values(self):
+        """Full values should be preserved (lowercased)."""
+        lf = pl.LazyFrame({
+            "risk_type": ["full_risk", "MEDIUM_RISK", "medium_low_risk", "LOW_RISK"]
+        })
+
+        result = normalize_risk_type(lf)
+        df = result.collect()
+
+        # Full values are lowercased and preserved
+        assert df["risk_type"].to_list() == [
+            "full_risk",
+            "medium_risk",
+            "medium_low_risk",
+            "low_risk",
+        ]
+
+    def test_case_insensitive_normalization(self):
+        """Normalization should be case insensitive."""
+        lf = pl.LazyFrame({"risk_type": ["fr", "Fr", "FR", "fR"]})
+
+        result = normalize_risk_type(lf)
+        df = result.collect()
+
+        assert df["risk_type"].to_list() == [
+            "full_risk",
+            "full_risk",
+            "full_risk",
+            "full_risk",
+        ]
+
+    def test_missing_column(self):
+        """Should return original LazyFrame if column missing."""
+        lf = pl.LazyFrame({"other_column": ["a", "b", "c"]})
+
+        result = normalize_risk_type(lf)
+        df = result.collect()
+
+        assert "other_column" in df.columns
+        assert "risk_type" not in df.columns

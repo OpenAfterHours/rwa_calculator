@@ -4,6 +4,7 @@ Credit Conversion Factor (CCF) calculator for off-balance sheet items.
 Calculates EAD for contingent exposures using regulatory CCFs:
 - SA: CRR Article 111 (0%, 20%, 50%, 100%)
 - F-IRB: CRR Article 166(8) (75% for undrawn commitments)
+- F-IRB Exception: CRR Article 166(9) (20% for short-term trade LCs)
 
 CCF is part of exposure measurement, not credit risk mitigation.
 It converts nominal/notional amounts to credit-equivalent EAD.
@@ -20,35 +21,18 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 from rwa_calc.data.tables.crr_ccf import (
-    CCF_TABLE,
-    CCF_TYPE_MAPPING,
-    FIRB_CCF_TABLE,
     get_ccf_table,
     get_firb_ccf_table,
-    lookup_ccf,
-    lookup_firb_ccf,
 )
 from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
-
-
-@dataclass
-class CCFResult:
-    """Result of CCF calculation for an exposure."""
-
-    ccf: Decimal
-    ccf_category: str
-    ead_from_undrawn: Decimal
-    description: str
 
 
 class CCFCalculator:
@@ -58,10 +42,12 @@ class CCFCalculator:
     Implements CRR CCF rules:
     - SA (Art. 111): 0%, 20%, 50%, 100% by commitment type
     - F-IRB (Art. 166(8)): 75% for undrawn commitments (except 0% for cancellable)
+    - F-IRB (Art. 166(9)): 20% for short-term trade LCs arising from goods movement
 
     The approach determines which CCF table to use:
     - SA exposures use standard CCFs (0%, 20%, 50%, 100%)
     - F-IRB exposures use 75% for most undrawn commitments
+    - F-IRB short-term trade LCs retain 20% CCF (Art. 166(9) exception)
     - A-IRB exposures use own estimates (passed through as-is)
     """
 
@@ -78,68 +64,147 @@ class CCFCalculator:
         """
         Apply CCF to calculate EAD for off-balance sheet exposures.
 
-        Uses approach-specific CCFs:
-        - SA: Standard CCFs per CRR Art. 111 (0%, 20%, 50%, 100%)
-        - F-IRB: 75% for undrawn per CRR Art. 166(8)
-        - A-IRB: Own CCF estimates (not modified here)
+        CCF determination follows CRR Art. 111 categories based on risk_type:
+        - SA: FR=100%, MR=50%, MLR=20%, LR=0%
+        - F-IRB: FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0%
+        - F-IRB Exception: MLR with is_short_term_trade_lc=True retains 20% (Art. 166(9))
+        - A-IRB: Uses ccf_modelled if provided, otherwise falls back to SA
 
         Args:
-            exposures: Exposures with nominal_amount, ccf_category, and approach columns
+            exposures: Exposures with nominal_amount, risk_type, and approach columns
             config: Calculation configuration
 
         Returns:
             LazyFrame with ead_from_ccf and ccf columns added
         """
-        # Normalize ccf_category
-        exposures = exposures.with_columns([
-            pl.col("ccf_category").fill_null("").str.to_lowercase().alias("ccf_category_normalized"),
-        ])
+        # Check if risk_type column exists
+        schema = exposures.collect_schema()
+        has_risk_type = "risk_type" in schema.names()
+        has_approach = "approach" in schema.names()
+        has_ccf_modelled = "ccf_modelled" in schema.names()
+        has_short_term_trade_lc = "is_short_term_trade_lc" in schema.names()
 
-        # Join with SA CCF table
-        sa_ccf_lookup = self._sa_ccf_table.lazy()
-        exposures = exposures.join(
-            sa_ccf_lookup.select([
-                pl.col("ccf_category").str.to_lowercase().alias("lookup_category"),
-                pl.col("ccf").alias("sa_ccf_rate"),
-            ]),
-            left_on="ccf_category_normalized",
-            right_on="lookup_category",
-            how="left",
-        )
-
-        # Join with F-IRB CCF table
-        firb_ccf_lookup = self._firb_ccf_table.lazy()
-        exposures = exposures.join(
-            firb_ccf_lookup.select([
-                pl.col("ccf_category").str.to_lowercase().alias("firb_lookup_category"),
-                pl.col("ccf").alias("firb_ccf_rate"),
-            ]),
-            left_on="ccf_category_normalized",
-            right_on="firb_lookup_category",
-            how="left",
-        )
-
-        # Check if approach column exists, default to SA if not
-        has_approach = "approach" in exposures.collect_schema().names()
-
-        if has_approach:
-            # Apply approach-specific CCF
+        # Calculate CCF from risk_type for SA approach
+        # FR=100%, MR=50%, MLR=20%, LR=0%
+        if has_risk_type:
             exposures = exposures.with_columns([
-                pl.when(pl.col("nominal_amount") == 0)
-                .then(pl.lit(0.0))  # Loans with no contingent - no CCF
-                .when(pl.col("approach") == ApproachType.FIRB.value)
-                .then(pl.col("firb_ccf_rate").fill_null(0.75))  # F-IRB: default 75%
-                .when(pl.col("approach") == ApproachType.AIRB.value)
-                .then(pl.col("sa_ccf_rate").fill_null(0.50))  # A-IRB: use SA as fallback
-                .otherwise(pl.col("sa_ccf_rate").fill_null(0.50))  # SA: default 50%
-                .alias("ccf"),
+                pl.col("risk_type").fill_null("").str.to_lowercase().alias("_risk_type_normalized"),
             ])
+
+            exposures = exposures.with_columns([
+                pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
+                .then(pl.lit(1.0))
+                .when(pl.col("_risk_type_normalized").is_in(["mr", "medium_risk"]))
+                .then(pl.lit(0.5))
+                .when(pl.col("_risk_type_normalized").is_in(["mlr", "medium_low_risk"]))
+                .then(pl.lit(0.2))
+                .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
+                .then(pl.lit(0.0))
+                .otherwise(pl.lit(0.5))  # Default to MR (50%) for SA
+                .alias("_sa_ccf_from_risk_type"),
+            ])
+
+            # Calculate CCF from risk_type for F-IRB approach
+            # FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0%
+            # Exception: Short-term trade LCs retain 20% (CRR Art. 166(9))
+            if has_short_term_trade_lc:
+                exposures = exposures.with_columns([
+                    pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
+                    .then(pl.lit(0.0))
+                    # Art. 166(9) exception: short-term trade LCs for goods movement retain 20%
+                    .when(
+                        pl.col("_risk_type_normalized").is_in(["mlr", "medium_low_risk"])
+                        & pl.col("is_short_term_trade_lc").fill_null(False)
+                    )
+                    .then(pl.lit(0.2))  # Art. 166(9) exception
+                    .when(pl.col("_risk_type_normalized").is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
+                    .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
+                    .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
+                    .alias("_firb_ccf_from_risk_type"),
+                ])
+            else:
+                exposures = exposures.with_columns([
+                    pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("_risk_type_normalized").is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
+                    .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
+                    .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
+                    .then(pl.lit(0.0))
+                    .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
+                    .alias("_firb_ccf_from_risk_type"),
+                ])
+        else:
+            # Fallback: use legacy ccf_category lookup
+            exposures = exposures.with_columns([
+                pl.col("ccf_category").fill_null("").str.to_lowercase().alias("ccf_category_normalized"),
+            ])
+
+            # Join with SA CCF table
+            sa_ccf_lookup = self._sa_ccf_table.lazy()
+            exposures = exposures.join(
+                sa_ccf_lookup.select([
+                    pl.col("ccf_category").str.to_lowercase().alias("lookup_category"),
+                    pl.col("ccf").alias("_sa_ccf_from_risk_type"),
+                ]),
+                left_on="ccf_category_normalized",
+                right_on="lookup_category",
+                how="left",
+            )
+
+            # Join with F-IRB CCF table
+            firb_ccf_lookup = self._firb_ccf_table.lazy()
+            exposures = exposures.join(
+                firb_ccf_lookup.select([
+                    pl.col("ccf_category").str.to_lowercase().alias("firb_lookup_category"),
+                    pl.col("ccf").alias("_firb_ccf_from_risk_type"),
+                ]),
+                left_on="ccf_category_normalized",
+                right_on="firb_lookup_category",
+                how="left",
+            )
+
+            exposures = exposures.with_columns([
+                pl.col("_sa_ccf_from_risk_type").fill_null(0.5),
+                pl.col("_firb_ccf_from_risk_type").fill_null(0.75),
+            ])
+
+        # Select final CCF based on approach
+        if has_approach:
+            if has_ccf_modelled:
+                # Full logic with A-IRB ccf_modelled support
+                exposures = exposures.with_columns([
+                    pl.when(pl.col("nominal_amount") == 0)
+                    .then(pl.lit(0.0))  # Loans with no contingent - no CCF
+                    .when(pl.col("approach") == ApproachType.AIRB.value)
+                    .then(
+                        # A-IRB: use ccf_modelled if provided, else fall back to SA
+                        pl.col("ccf_modelled").fill_null(pl.col("_sa_ccf_from_risk_type"))
+                    )
+                    .when(pl.col("approach") == ApproachType.FIRB.value)
+                    .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule
+                    .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
+                    .alias("ccf"),
+                ])
+            else:
+                # No ccf_modelled column
+                exposures = exposures.with_columns([
+                    pl.when(pl.col("nominal_amount") == 0)
+                    .then(pl.lit(0.0))  # Loans with no contingent - no CCF
+                    .when(pl.col("approach") == ApproachType.FIRB.value)
+                    .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule
+                    .when(pl.col("approach") == ApproachType.AIRB.value)
+                    .then(pl.col("_sa_ccf_from_risk_type"))  # A-IRB: use SA as fallback
+                    .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
+                    .alias("ccf"),
+                ])
         else:
             # Default to SA CCF when approach not specified
             exposures = exposures.with_columns([
                 pl.when(pl.col("nominal_amount") == 0)
                 .then(pl.lit(0.0))  # Loans with no contingent - no CCF
-                .otherwise(pl.col("sa_ccf_rate").fill_null(0.50))  # SA: default 50%
+                .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
                 .alias("ccf"),
             ])
 
@@ -155,59 +220,43 @@ class CCFCalculator:
         ])
 
         # Add CCF audit trail
-        exposures = exposures.with_columns([
-            pl.concat_str([
-                pl.lit("CCF="),
-                (pl.col("ccf") * 100).round(0).cast(pl.String),
-                pl.lit("%; nominal="),
-                pl.col("nominal_amount").round(0).cast(pl.String),
-                pl.lit("; ead_ccf="),
-                pl.col("ead_from_ccf").round(0).cast(pl.String),
-            ]).alias("ccf_calculation"),
-        ])
+        if has_risk_type:
+            exposures = exposures.with_columns([
+                pl.concat_str([
+                    pl.lit("CCF="),
+                    (pl.col("ccf") * 100).round(0).cast(pl.String),
+                    pl.lit("%; risk_type="),
+                    pl.col("risk_type").fill_null("unknown"),
+                    pl.lit("; nominal="),
+                    pl.col("nominal_amount").round(0).cast(pl.String),
+                    pl.lit("; ead_ccf="),
+                    pl.col("ead_from_ccf").round(0).cast(pl.String),
+                ]).alias("ccf_calculation"),
+            ])
+        else:
+            exposures = exposures.with_columns([
+                pl.concat_str([
+                    pl.lit("CCF="),
+                    (pl.col("ccf") * 100).round(0).cast(pl.String),
+                    pl.lit("%; nominal="),
+                    pl.col("nominal_amount").round(0).cast(pl.String),
+                    pl.lit("; ead_ccf="),
+                    pl.col("ead_from_ccf").round(0).cast(pl.String),
+                ]).alias("ccf_calculation"),
+            ])
 
         # Clean up temporary columns
-        exposures = exposures.drop([
+        temp_columns = [
+            "_risk_type_normalized",
+            "_sa_ccf_from_risk_type",
+            "_firb_ccf_from_risk_type",
             "ccf_category_normalized",
-            "sa_ccf_rate",
-            "firb_ccf_rate",
-        ])
+        ]
+        existing_temp_cols = [c for c in temp_columns if c in exposures.collect_schema().names()]
+        if existing_temp_cols:
+            exposures = exposures.drop(existing_temp_cols)
 
         return exposures
-
-    def calculate_single_ccf(
-        self,
-        commitment_type: str,
-        original_maturity_years: float | None = None,
-    ) -> CCFResult:
-        """
-        Calculate CCF for a single exposure (convenience method).
-
-        Args:
-            commitment_type: Type of commitment/contingent
-            original_maturity_years: Original maturity in years
-
-        Returns:
-            CCFResult with CCF details
-        """
-        ccf = lookup_ccf(commitment_type, original_maturity_years)
-
-        # Determine category
-        category = CCF_TYPE_MAPPING.get(
-            commitment_type.lower(),
-            "medium_risk" if original_maturity_years and original_maturity_years > 1 else "medium_low_risk"
-        )
-
-        description = f"CCF {ccf:.0%} for {commitment_type}"
-        if original_maturity_years:
-            description += f" (maturity: {original_maturity_years:.1f}y)"
-
-        return CCFResult(
-            ccf=ccf,
-            ccf_category=category,
-            ead_from_undrawn=Decimal("0"),  # Calculated separately
-            description=description,
-        )
 
 
 def create_ccf_calculator() -> CCFCalculator:

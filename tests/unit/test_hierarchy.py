@@ -128,6 +128,9 @@ def simple_loans() -> pl.LazyFrame:
         "lgd": [0.45, 0.45, 0.45],
         "beel": [0.01, 0.01, 0.01],
         "seniority": ["senior", "senior", "senior"],
+        "risk_type": ["FR", "FR", "FR"],  # Full risk for drawn loans
+        "ccf_modelled": [None, None, None],  # No modelled CCF
+        "is_short_term_trade_lc": [None, None, None],  # N/A for loans
     }).lazy()
 
 
@@ -148,6 +151,9 @@ def simple_contingents() -> pl.LazyFrame:
         "beel": [0.01, 0.01],
         "ccf_category": ["MEDIUM_RISK", "MEDIUM_RISK"],
         "seniority": ["senior", "senior"],
+        "risk_type": ["MR", "MR"],  # Medium risk
+        "ccf_modelled": [None, None],  # No modelled CCF
+        "is_short_term_trade_lc": [False, False],  # Not trade LCs
     }).lazy()
 
 
@@ -208,6 +214,9 @@ def lending_group_loans() -> pl.LazyFrame:
         "lgd": [0.15, 0.45, 0.45, 0.45],
         "beel": [0.01, 0.01, 0.01, 0.01],
         "seniority": ["senior", "senior", "senior", "senior"],
+        "risk_type": ["FR", "FR", "FR", "FR"],  # Full risk for drawn loans
+        "ccf_modelled": [None, None, None, None],  # No modelled CCF
+        "is_short_term_trade_lc": [None, None, None, None],  # N/A for loans
     }).lazy()
 
 
@@ -566,6 +575,9 @@ class TestLendingGroupAggregation:
                 "beel": pl.Float64,
                 "ccf_category": pl.String,
                 "seniority": pl.String,
+                "risk_type": pl.String,
+                "ccf_modelled": pl.Float64,
+                "is_short_term_trade_lc": pl.Boolean,
             }),
             pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
@@ -650,6 +662,9 @@ class TestLendingGroupAggregation:
                 "beel": pl.Float64,
                 "ccf_category": pl.String,
                 "seniority": pl.String,
+                "risk_type": pl.String,
+                "ccf_modelled": pl.Float64,
+                "is_short_term_trade_lc": pl.Boolean,
             }),
             pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
@@ -780,6 +795,9 @@ class TestEdgeCases:
                 "lgd": pl.Float64,
                 "beel": pl.Float64,
                 "seniority": pl.String,
+                "risk_type": pl.String,
+                "ccf_modelled": pl.Float64,
+                "is_short_term_trade_lc": pl.Boolean,
             }),
             contingents=pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
@@ -795,6 +813,9 @@ class TestEdgeCases:
                 "beel": pl.Float64,
                 "ccf_category": pl.String,
                 "seniority": pl.String,
+                "risk_type": pl.String,
+                "ccf_modelled": pl.Float64,
+                "is_short_term_trade_lc": pl.Boolean,
             }),
             counterparties=pl.LazyFrame(schema={
                 "counterparty_reference": pl.String,

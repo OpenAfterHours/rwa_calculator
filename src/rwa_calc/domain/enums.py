@@ -288,3 +288,30 @@ class CommitmentType(Enum):
 
     # Direct credit substitutes - 100% CCF
     DIRECT_CREDIT_SUBSTITUTE = "direct_credit_substitute"
+
+
+class RiskType(Enum):
+    """
+    Off-balance sheet risk categories for CCF determination.
+
+    Based on CRR Art. 111 CCF categories.
+    Under F-IRB (CRR Art. 166(8)), MR and MLR become 75% CCF.
+
+    Values:
+        FR (full_risk): 100% CCF under SA and F-IRB
+            Direct credit substitutes, guarantees, acceptances
+
+        MR (medium_risk): 50% CCF under SA, 75% CCF under F-IRB
+            NIFs, RUFs, standby LCs, committed undrawn facilities
+
+        MLR (medium_low_risk): 20% CCF under SA, 75% CCF under F-IRB
+            Documentary credits, trade finance, short-term self-liquidating
+
+        LR (low_risk): 0% CCF under SA and F-IRB
+            Unconditionally cancellable commitments
+    """
+
+    FR = "full_risk"
+    MR = "medium_risk"
+    MLR = "medium_low_risk"
+    LR = "low_risk"

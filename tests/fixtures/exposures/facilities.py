@@ -49,7 +49,9 @@ class Facility:
     beel: float
     is_revolving: bool
     seniority: str
-    commitment_type: str
+    risk_type: str  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    ccf_modelled: float | None = None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
+    is_short_term_trade_lc: bool | None = None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
 
     def to_dict(self) -> dict:
         return {
@@ -66,7 +68,9 @@ class Facility:
             "beel": self.beel,
             "is_revolving": self.is_revolving,
             "seniority": self.seniority,
-            "commitment_type": self.commitment_type,
+            "risk_type": self.risk_type,
+            "ccf_modelled": self.ccf_modelled,
+            "is_short_term_trade_lc": self.is_short_term_trade_lc,
         }
 
 
@@ -116,7 +120,7 @@ def _corporate_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn (50% SA, 75% F-IRB)
         ),
         # Large corporate term facility - Unilever
         Facility(
@@ -133,7 +137,7 @@ def _corporate_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=False,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # SME corporate facility
         Facility(
@@ -150,7 +154,7 @@ def _corporate_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # Subordinated facility - for LGD testing (75% vs 45%)
         Facility(
@@ -167,7 +171,7 @@ def _corporate_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=False,
             seniority="subordinated",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # Uncommitted facility - 0% CCF for unconditionally cancellable
         Facility(
@@ -184,7 +188,7 @@ def _corporate_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="unconditionally_cancellable",
+            risk_type="LR",  # Low risk - unconditionally cancellable (0% CCF)
         ),
         # Unrated corporate facility (Scenario A2)
         Facility(
@@ -201,7 +205,7 @@ def _corporate_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=False,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
     ]
 
@@ -228,7 +232,7 @@ def _institution_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # Short-term facility for preferential RW testing
         Facility(
@@ -245,7 +249,7 @@ def _institution_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=False,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
     ]
 
@@ -275,7 +279,7 @@ def _retail_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=False,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # SME retail facility
         Facility(
@@ -292,7 +296,7 @@ def _retail_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # Credit card facility (QRRE)
         Facility(
@@ -309,7 +313,7 @@ def _retail_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="unconditionally_cancellable",
+            risk_type="LR",  # Low risk - unconditionally cancellable (0% CCF)
         ),
     ]
 
@@ -342,7 +346,7 @@ def _hierarchy_test_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # =============================================================================
         # HIERARCHY TEST 2: Parent facility with sub-facility
@@ -362,7 +366,7 @@ def _hierarchy_test_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         Facility(
             facility_reference="FAC_HIER_SUB_001",
@@ -378,7 +382,7 @@ def _hierarchy_test_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         Facility(
             facility_reference="FAC_HIER_SUB_002",
@@ -394,7 +398,7 @@ def _hierarchy_test_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         # =============================================================================
         # HIERARCHY TEST 3: Lending group facilities
@@ -414,7 +418,7 @@ def _hierarchy_test_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=False,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
         Facility(
             facility_reference="FAC_LG2_COMPANY",
@@ -430,7 +434,7 @@ def _hierarchy_test_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn
         ),
     ]
 
@@ -464,7 +468,7 @@ def _complex_scenario_facilities() -> list[Facility]:
             beel=0.0,
             is_revolving=True,
             seniority="senior",
-            commitment_type="committed_other",
+            risk_type="MR",  # Medium risk - committed undrawn (50% SA, 75% F-IRB)
         ),
     ]
 

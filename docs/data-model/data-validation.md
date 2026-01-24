@@ -113,7 +113,7 @@ for error in errors:
 
 **Error:**
 ```
-[facilities] Missing column: 'commitment_type' (expected type: String)
+[facilities] Missing column: 'risk_type' (expected type: String)
 ```
 
 **Cause:** The input file is missing a required column.
@@ -125,7 +125,7 @@ import polars as pl
 
 # Add missing column with default value
 facilities = facilities.with_columns(
-    pl.lit("committed_other").alias("commitment_type")
+    pl.lit("MR").alias("risk_type")  # MR = medium risk (50% SA, 75% F-IRB)
 )
 ```
 

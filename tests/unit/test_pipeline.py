@@ -87,6 +87,9 @@ def mock_raw_data() -> RawDataBundle:
         "drawn_amount": [500000.0, 250000.0],
         "lgd": [0.45, 0.10],
         "seniority": ["senior", "senior"],
+        "risk_type": ["FR", "FR"],  # Full risk for drawn loans
+        "ccf_modelled": [None, None],  # No modelled CCF
+        "is_short_term_trade_lc": [None, None],  # N/A for loans
     })
 
     # Contingents
@@ -102,6 +105,9 @@ def mock_raw_data() -> RawDataBundle:
         "lgd": [0.45],
         "seniority": ["senior"],
         "ccf_category": ["MEDIUM"],
+        "risk_type": ["MR"],  # Medium risk
+        "ccf_modelled": [None],  # No modelled CCF
+        "is_short_term_trade_lc": [False],  # Not a trade LC
     })
 
     # Counterparties

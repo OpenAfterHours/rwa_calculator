@@ -110,7 +110,9 @@ counterparties = pl.DataFrame({
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `is_revolving` | `Boolean` | Yes | Revolving vs term facility |
 | `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
-| `commitment_type` | `String` | Yes | Commitment type (affects CCF) |
+| `risk_type` | `String` | Yes | Off-balance sheet risk category (see below) |
+| `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
+| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
 
 **Valid `product_type` values:**
 
@@ -132,12 +134,24 @@ counterparties = pl.DataFrame({
 | `senior` | 45% | Senior unsecured claims |
 | `subordinated` | 75% | Subordinated claims |
 
-**Valid `commitment_type` values:**
+**Valid `risk_type` values (CRR Art. 111 CCF Categories):**
 
-| Value | SA CCF | Description |
-|-------|--------|-------------|
-| `unconditionally_cancellable` | 0% (CRR) / 10% (Basel 3.1) | Can be cancelled without notice |
-| `committed_other` | 40% / 75% | Committed, not unconditionally cancellable |
+| Code | Full Value | SA CCF | F-IRB CCF | Description |
+|------|------------|--------|-----------|-------------|
+| `FR` | `full_risk` | 100% | 100% | Direct credit substitutes, guarantees, acceptances |
+| `MR` | `medium_risk` | 50% | 75% | NIFs, RUFs, standby LCs, committed undrawn |
+| `MLR` | `medium_low_risk` | 20% | 75% | Documentary credits, trade finance |
+| `LR` | `low_risk` | 0% | 0% | Unconditionally cancellable commitments |
+
+**Note:** Under F-IRB (CRR Art. 166(8)), MR and MLR both become 75% CCF.
+
+**F-IRB Exception (Art. 166(9)):** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. To flag these exposures, set `is_short_term_trade_lc = True` for MLR risk type items.
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `is_short_term_trade_lc` | `Boolean` | No | True for short-term trade LCs for goods movement (Art. 166(9) - retains 20% CCF under F-IRB) |
+
+**A-IRB Modelled CCF:** For A-IRB exposures, provide the bank's own modelled CCF estimate (0.0 to 1.5) in `ccf_modelled`. Retail IRB CCFs can exceed 100% due to additional drawdown behaviour. When populated and approach is A-IRB, this value takes precedence over the risk_type lookup.
 
 **Example:**
 
@@ -159,7 +173,8 @@ facilities = pl.DataFrame({
     "beel": [None, None],
     "is_revolving": [True, False],
     "seniority": ["senior", "senior"],
-    "commitment_type": ["committed_other", "committed_other"],
+    "risk_type": ["MR", "MR"],  # Medium risk - committed undrawn
+    "ccf_modelled": [None, None],  # No modelled CCF (use regulatory)
 })
 ```
 
@@ -184,6 +199,10 @@ facilities = pl.DataFrame({
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `seniority` | `String` | Yes | `senior` or `subordinated` |
+| `risk_type` | `String` | Yes | Off-balance sheet risk category (see Facility schema) |
+| `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
+
+**Note:** For drawn loans, `risk_type` is typically `FR` (full_risk) since the amount is already drawn and CCF doesn't apply. However, the field is required for schema consistency across all exposure types.
 
 **Example:**
 
@@ -203,6 +222,8 @@ loans = pl.DataFrame({
     "lgd": [None, None, None],
     "beel": [None, None, None],
     "seniority": ["senior", "senior", "senior"],
+    "risk_type": ["FR", "FR", "FR"],  # Full risk for drawn loans
+    "ccf_modelled": [None, None, None],  # N/A for drawn amounts
 })
 ```
 
@@ -227,10 +248,13 @@ loans = pl.DataFrame({
 | `nominal_amount` | `Float64` | Yes | Notional/nominal amount |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `beel` | `Float64` | No | Best estimate expected loss |
-| `ccf_category` | `String` | Yes | Category for CCF lookup |
+| `ccf_category` | `String` | Yes | Category for CCF lookup (legacy, see `risk_type`) |
 | `seniority` | `String` | Yes | `senior` or `subordinated` |
+| `risk_type` | `String` | Yes | Off-balance sheet risk category (see Facility schema) |
+| `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
+| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
 
-**Valid `ccf_category` values:**
+**Valid `ccf_category` values (legacy):**
 
 | Category | SA CCF | Description |
 |----------|--------|-------------|
@@ -239,6 +263,8 @@ loans = pl.DataFrame({
 | `medium_low_risk` | 20% | Short-term self-liquidating trade |
 | `low_risk` | 0%/10% | Unconditionally cancellable |
 
+**Note:** The `risk_type` column is the primary source for CCF determination. The `ccf_category` column is retained for backwards compatibility but `risk_type` takes precedence when both are present.
+
 **Example:**
 
 ```python
@@ -246,19 +272,22 @@ from datetime import date
 import polars as pl
 
 contingents = pl.DataFrame({
-    "contingent_reference": ["CONT_001", "CONT_002"],
-    "contract_type": ["standby_lc", "performance_guarantee"],
-    "product_type": ["trade_finance", "guarantee"],
-    "book_code": ["TRADE", "GUARANTEE"],
-    "counterparty_reference": ["CORP_001", "CORP_002"],
-    "value_date": [date(2024, 1, 1), date(2024, 2, 1)],
-    "maturity_date": [date(2025, 1, 1), date(2025, 2, 1)],
-    "currency": ["GBP", "GBP"],
-    "nominal_amount": [500_000.0, 1_000_000.0],
-    "lgd": [None, None],
-    "beel": [None, None],
-    "ccf_category": ["full_risk", "medium_risk"],
-    "seniority": ["senior", "senior"],
+    "contingent_reference": ["CONT_001", "CONT_002", "CONT_003"],
+    "contract_type": ["standby_lc", "performance_guarantee", "documentary_lc"],
+    "product_type": ["trade_finance", "guarantee", "import_lc"],
+    "book_code": ["TRADE", "GUARANTEE", "TRADE"],
+    "counterparty_reference": ["CORP_001", "CORP_002", "CORP_003"],
+    "value_date": [date(2024, 1, 1), date(2024, 2, 1), date(2024, 3, 1)],
+    "maturity_date": [date(2025, 1, 1), date(2025, 2, 1), date(2024, 6, 1)],
+    "currency": ["GBP", "GBP", "GBP"],
+    "nominal_amount": [500_000.0, 1_000_000.0, 250_000.0],
+    "lgd": [None, None, None],
+    "beel": [None, None, None],
+    "ccf_category": ["full_risk", "medium_risk", "medium_low_risk"],
+    "seniority": ["senior", "senior", "senior"],
+    "risk_type": ["FR", "MR", "MLR"],  # FR=100%, MR=50%/75%, MLR=20%/75%
+    "ccf_modelled": [None, None, None],  # No modelled CCF
+    "is_short_term_trade_lc": [False, False, True],  # Third is Art. 166(9) exception
 })
 ```
 

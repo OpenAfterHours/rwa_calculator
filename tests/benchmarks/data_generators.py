@@ -337,11 +337,18 @@ def generate_facilities(
         p=[0.90, 0.10],
     )
 
-    # VECTORIZED: Commitment type
-    commitment_types = rng.choice(
-        ["unconditionally_cancellable", "committed_other"],
-        size=n_facilities,
-        p=[0.30, 0.70],
+    # VECTORIZED: Risk type based on product type and commitment
+    # RCF = MR (medium risk), uncommitted = LR (low risk), others mostly MR
+    # 30% are uncommitted (LR), rest are committed
+    is_uncommitted = rng.random(n_facilities) < 0.30
+    risk_types = np.where(
+        is_uncommitted,
+        "LR",  # Low risk = unconditionally cancellable (0% CCF)
+        np.where(
+            product_types == "RCF",
+            "MR",  # Revolving credit = medium risk (50% SA, 75% F-IRB)
+            rng.choice(["MR", "MLR"], size=n_facilities, p=[0.70, 0.30]),
+        ),
     )
 
     # Build DataFrame using numpy arrays
@@ -359,7 +366,9 @@ def generate_facilities(
         "beel": np.zeros(n_facilities),
         "is_revolving": is_revolving,
         "seniority": seniority,
-        "commitment_type": commitment_types,
+        "risk_type": risk_types,
+        "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
+        "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
     }).cast(FACILITY_SCHEMA).lazy()
 
 
@@ -532,6 +541,9 @@ def generate_loans(
         "lgd": lgd,
         "beel": np.zeros(n_loans),
         "seniority": seniority,
+        "risk_type": np.full(n_loans, "FR"),  # Loans are already drawn, full risk
+        "ccf_modelled": np.full(n_loans, None),  # No modelled CCF for loans
+        "is_short_term_trade_lc": np.full(n_loans, None),  # N/A for loans
     }).cast(LOAN_SCHEMA)
 
     return df.lazy()
@@ -831,6 +843,20 @@ def generate_contingents(
         default="committed_other"
     )
 
+    # VECTORIZED: Risk types based on CCF category
+    risk_types = np.select(
+        [
+            ccf_categories == "trade_related",
+            ccf_categories == "direct_credit_sub",
+            ccf_categories == "committed_other",
+        ],
+        ["MLR", "FR", "MR"],  # Medium-low risk for trade, full risk for guarantees, medium for commitments
+        default="MR"
+    )
+
+    # VECTORIZED: Short-term trade LC flag (20% for LCs)
+    is_short_term_trade_lc = contract_types == "LETTER_OF_CREDIT"
+
     # Build DataFrame using numpy arrays
     return pl.DataFrame({
         "contingent_reference": [f"CONT_{i:08d}" for i in range(n_contingents)],
@@ -846,6 +872,9 @@ def generate_contingents(
         "beel": np.zeros(n_contingents),
         "ccf_category": ccf_categories,
         "seniority": np.full(n_contingents, "senior"),
+        "risk_type": risk_types,
+        "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
+        "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
     }).cast(CONTINGENTS_SCHEMA).lazy()
 
 

@@ -172,7 +172,18 @@ EAD = Gross_Carrying_Amount - Specific_Provisions
 EAD = Committed_Amount × CCF
 ```
 
-**Credit Conversion Factors:**
+**Credit Conversion Factors by Risk Type (CRR Art. 111):**
+
+The `risk_type` column determines the CCF for off-balance sheet exposures:
+
+| Risk Type | Code | SA CCF | Description |
+|-----------|------|--------|-------------|
+| Full Risk | FR | 100% | Guarantees, acceptances, credit derivatives |
+| Medium Risk | MR | 50% | NIFs, RUFs, standby LCs, committed undrawn |
+| Medium-Low Risk | MLR | 20% | Documentary credits, short-term trade finance |
+| Low Risk | LR | 0% | Unconditionally cancellable commitments |
+
+**Basel 3.1 Changes:**
 
 | Item Type | CRR CCF | Basel 3.1 CCF |
 |-----------|---------|---------------|

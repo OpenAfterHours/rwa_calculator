@@ -5,7 +5,7 @@ Supports both UK CRR (Basel 3.0, until Dec 2026) and PRA PS9/24 (Basel 3.1, from
 
 Key Data Inputs:
 - Loan                      # Drawn exposures (leaf nodes in exposure hierarchy)
-- Facility                  # Committed credit limits (parent nodes) with seniority, commitment_type
+- Facility                  # Committed credit limits (parent nodes) with seniority, risk_type
 - Contingents               # Off-balance sheet commitments with CCF category
 - Counterparty              # Borrower/obligor with entity flags (PSE, MDB, institution, etc.)
 - Collateral                # Security items with RE-specific fields (LTV, property type, ADC)
@@ -64,7 +64,9 @@ FACILITY_SCHEMA = {
     "beel": pl.Float64,
     "is_revolving": pl.Boolean,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "commitment_type": pl.String,  # unconditionally_cancellable, committed_other - affects CCF (0%/10% vs 40%/75%)
+    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.0)
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
 }
 
 LOAN_SCHEMA = {
@@ -79,6 +81,9 @@ LOAN_SCHEMA = {
     "lgd": pl.Float64,
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
+    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.0)
+    "is_short_term_trade_lc": pl.Boolean,  # N/A for loans (null), included for unified schema
 }
 
 CONTINGENTS_SCHEMA = {
@@ -95,6 +100,9 @@ CONTINGENTS_SCHEMA = {
     "beel": pl.Float64,
     "ccf_category": pl.String,  # Category for CCF lookup
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
+    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.0)
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
 }
 
 COUNTERPARTY_SCHEMA = {
@@ -341,8 +349,10 @@ RAW_EXPOSURE_SCHEMA = {
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
-    "commitment_type": pl.String,  # For CCF determination
     "ccf_category": pl.String,  # CCF lookup category
+    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,       # Currency before FX conversion
     "original_amount": pl.Float64,        # Amount before FX conversion (drawn + nominal)
@@ -365,8 +375,10 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
     "seniority": pl.String,
-    "commitment_type": pl.String,
     "ccf_category": pl.String,
+    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # Counterparty hierarchy additions
     "counterparty_has_parent": pl.Boolean,
     "parent_counterparty_reference": pl.String,
@@ -396,8 +408,10 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "drawn_amount": pl.Float64,
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
-    "commitment_type": pl.String,
     "ccf_category": pl.String,
+    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # Classification additions
     "exposure_class": pl.String,  # sovereign, institution, corporate, retail, etc.
     "exposure_class_reason": pl.String,  # Explanation of classification
@@ -599,7 +613,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     # -------------------------------------------------------------------------
     "drawn_amount": pl.Float64,  # Original drawn balance
     "undrawn_amount": pl.Float64,  # Undrawn commitment amount
-    "commitment_type": pl.String,  # "unconditionally_cancellable", "committed_other"
     "original_maturity_date": pl.Date,  # Contractual maturity
     "residual_maturity_years": pl.Float64,  # Years to maturity
 

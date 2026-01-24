@@ -48,6 +48,9 @@ class Loan:
     lgd: float
     beel: float
     seniority: str
+    risk_type: str = "FR"  # FR for drawn loans (full_risk = 100% CCF, already drawn)
+    ccf_modelled: float | None = None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
+    is_short_term_trade_lc: bool | None = None  # N/A for loans, included for unified schema
 
     def to_dict(self) -> dict:
         return {
@@ -62,6 +65,9 @@ class Loan:
             "lgd": self.lgd,
             "beel": self.beel,
             "seniority": self.seniority,
+            "risk_type": self.risk_type,
+            "ccf_modelled": self.ccf_modelled,
+            "is_short_term_trade_lc": self.is_short_term_trade_lc,
         }
 
 

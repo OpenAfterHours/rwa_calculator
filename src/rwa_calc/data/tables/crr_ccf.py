@@ -13,8 +13,6 @@ from decimal import Decimal
 
 import polars as pl
 
-from rwa_calc.domain.enums import CommitmentType
-
 
 # =============================================================================
 # SA CCF BY CATEGORY (CRR Art. 111)
@@ -157,37 +155,6 @@ def get_firb_ccf_table() -> pl.DataFrame:
     ])
 
 
-def lookup_firb_ccf(
-    commitment_type: str,
-    original_maturity_years: float | None = None,
-) -> Decimal:
-    """
-    Look up F-IRB CCF for commitment type.
-
-    Under CRR Art. 166(8), F-IRB uses 75% for most undrawn commitments.
-
-    Args:
-        commitment_type: Type of off-balance sheet commitment
-        original_maturity_years: Original maturity in years (not used for F-IRB)
-
-    Returns:
-        CCF as Decimal
-    """
-    commitment_lower = commitment_type.lower()
-
-    # Direct lookup in F-IRB CCF table
-    if commitment_lower in FIRB_CCF_TABLE:
-        return FIRB_CCF_TABLE[commitment_lower]
-
-    # Try mapping to a category
-    mapped = CCF_TYPE_MAPPING.get(commitment_lower)
-    if mapped and mapped in FIRB_CCF_TABLE:
-        return FIRB_CCF_TABLE[mapped]
-
-    # Default to 75% for F-IRB undrawn commitments
-    return Decimal("0.75")
-
-
 def _create_ccf_df() -> pl.DataFrame:
     """Create CCF lookup DataFrame."""
     rows = []
@@ -260,79 +227,3 @@ def get_ccf_by_maturity_table() -> pl.DataFrame:
     ])
 
 
-def lookup_ccf(
-    commitment_type: str,
-    original_maturity_years: float | None = None,
-) -> Decimal:
-    """
-    Look up CCF for commitment type.
-
-    This is a convenience function for single lookups. For bulk processing,
-    use the DataFrame tables with joins.
-
-    Args:
-        commitment_type: Type of off-balance sheet commitment
-        original_maturity_years: Original maturity in years (for undrawn facilities)
-
-    Returns:
-        CCF as Decimal
-    """
-    # Direct lookup in CCF table
-    if commitment_type.lower() in CCF_TABLE:
-        return CCF_TABLE[commitment_type.lower()]
-
-    # Try mapping to a category
-    mapped = CCF_TYPE_MAPPING.get(commitment_type.lower())
-    if mapped and mapped in CCF_TABLE:
-        return CCF_TABLE[mapped]
-
-    # Use maturity to determine CCF for undrawn facilities
-    if original_maturity_years is not None:
-        if original_maturity_years <= 1.0:
-            return CCF_TABLE["undrawn_short_term"]
-        else:
-            return CCF_TABLE["undrawn_long_term"]
-
-    # Default to medium risk (50%)
-    return CCF_TABLE["medium_risk"]
-
-
-def calculate_ead_off_balance_sheet(
-    nominal_amount: Decimal,
-    commitment_type: str,
-    original_maturity_years: float | None = None,
-) -> tuple[Decimal, Decimal, str]:
-    """
-    Calculate EAD for off-balance sheet item.
-
-    Args:
-        nominal_amount: Nominal/notional amount
-        commitment_type: Type of commitment
-        original_maturity_years: Original maturity in years
-
-    Returns:
-        Tuple of (ead, ccf, description)
-    """
-    ccf = lookup_ccf(commitment_type, original_maturity_years)
-    ead = nominal_amount * ccf
-    description = f"EAD = {nominal_amount:,.0f} x {ccf:.0%} CCF = {ead:,.0f}"
-    return ead, ccf, description
-
-
-def create_ccf_type_mapping_df() -> pl.DataFrame:
-    """
-    Create DataFrame mapping commitment types to CCF categories.
-
-    Useful for joining source data with CCF lookup table.
-
-    Returns:
-        DataFrame with columns: commitment_type, ccf_category
-    """
-    rows = []
-    for commit_type, category in CCF_TYPE_MAPPING.items():
-        rows.append({
-            "commitment_type": commit_type,
-            "ccf_category": category,
-        })
-
-    return pl.DataFrame(rows)

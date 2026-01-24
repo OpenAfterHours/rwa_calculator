@@ -31,8 +31,6 @@ from rwa_calc.data.tables.crr_ccf import (
     CCF_TABLE,
     CCF_TYPE_MAPPING,
     get_ccf_table,
-    lookup_ccf,
-    calculate_ead_off_balance_sheet,
 )
 from rwa_calc.data.tables.crr_haircuts import (
     COLLATERAL_HAIRCUTS,
@@ -249,24 +247,10 @@ class TestCCFTable:
         """Guarantees given get 100% CCF."""
         assert CCF_TABLE["guarantee_given"] == Decimal("1.00")
 
-    def test_lookup_by_type(self) -> None:
-        """Test CCF lookup by commitment type."""
-        assert lookup_ccf("guarantee") == Decimal("1.00")
-        assert lookup_ccf("undrawn_short_term") == Decimal("0.20")
-
-    def test_lookup_by_maturity(self) -> None:
-        """Test CCF lookup using maturity."""
-        assert lookup_ccf("unknown_type", original_maturity_years=0.5) == Decimal("0.20")
-        assert lookup_ccf("unknown_type", original_maturity_years=2.0) == Decimal("0.50")
-
-    def test_ead_calculation(self) -> None:
-        """Test EAD calculation for off-balance sheet items."""
-        ead, ccf, _ = calculate_ead_off_balance_sheet(
-            Decimal("1000000"),
-            "undrawn_long_term"
-        )
-        assert ccf == Decimal("0.50")
-        assert ead == Decimal("500000")
+    def test_type_mapping_exists(self) -> None:
+        """Test CCF type mapping has expected entries."""
+        assert "guarantee" in CCF_TYPE_MAPPING
+        assert CCF_TYPE_MAPPING["guarantee"] == "guarantee_given"
 
 
 class TestCCFDataFrame:

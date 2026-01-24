@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Mandatory `risk_type` Column for CCF Determination
+
+The `risk_type` column is now the authoritative source for CCF (Credit Conversion Factor) determination across all facility inputs:
+
+**New Columns:**
+- `risk_type` (mandatory) - Off-balance sheet risk category: FR, MR, MLR, LR
+- `ccf_modelled` (optional) - A-IRB modelled CCF estimate (0.0-1.5, Retail IRB can exceed 100%)
+- `is_short_term_trade_lc` (optional) - CRR Art. 166(9) exception flag
+
+**Risk Type Values (CRR Art. 111):**
+
+| Code | SA CCF | F-IRB CCF | Description |
+|------|--------|-----------|-------------|
+| FR | 100% | 100% | Full risk - guarantees, credit substitutes |
+| MR | 50% | 75% | Medium risk - NIFs, RUFs, committed undrawn |
+| MLR | 20% | 75% | Medium-low risk - documentary credits, trade |
+| LR | 0% | 0% | Low risk - unconditionally cancellable |
+
+**F-IRB Rules:**
+- CRR Art. 166(8): MR and MLR both become 75% CCF under F-IRB
+- CRR Art. 166(9): Short-term trade LCs for goods movement retain 20% (set `is_short_term_trade_lc=True`)
+
+**A-IRB Support:**
+- When `ccf_modelled` is provided and approach is A-IRB, this value takes precedence
+
+### Removed
+
+#### `commitment_type` Column and Legacy CCF Functions
+
+The following have been removed as `risk_type` is now the authoritative CCF source:
+
+**Removed from schemas:**
+- `commitment_type` column from FACILITY_SCHEMA and all intermediate schemas
+
+**Removed from `crr_ccf.py`:**
+- `lookup_ccf()` function
+- `lookup_firb_ccf()` function
+- `calculate_ead_off_balance_sheet()` function
+- `create_ccf_type_mapping_df()` function
+
+**Removed from `ccf.py`:**
+- `calculate_single_ccf()` method
+- `CCFResult` dataclass
+
+**Migration:** Replace `commitment_type` with `risk_type`:
+- `unconditionally_cancellable` → `LR` (low_risk)
+- `committed_other` → `MR` (medium_risk) or `MLR` (medium_low_risk)
+
 #### FX Conversion Support (14 new tests)
 
 Multi-currency portfolio support with configurable FX conversion:

@@ -429,3 +429,122 @@ def validate_lgd_range(
             .alias("_valid_lgd")
         )
     return lf
+
+
+# =============================================================================
+# RISK TYPE AND CCF VALIDATORS
+# =============================================================================
+
+# Valid risk type codes (short form)
+VALID_RISK_TYPE_CODES = {"fr", "mr", "mlr", "lr"}
+
+# Valid risk type full values
+VALID_RISK_TYPES = {"full_risk", "medium_risk", "medium_low_risk", "low_risk"}
+
+# Mapping from codes to full values
+RISK_TYPE_CODE_TO_VALUE = {
+    "fr": "full_risk",
+    "mr": "medium_risk",
+    "mlr": "medium_low_risk",
+    "lr": "low_risk",
+}
+
+
+def validate_risk_type(
+    lf: pl.LazyFrame,
+    column: str = "risk_type",
+) -> pl.LazyFrame:
+    """
+    Add validation expression for risk_type values.
+
+    Validates that risk_type is one of:
+    - Codes: FR, MR, MLR, LR (case insensitive)
+    - Full values: full_risk, medium_risk, medium_low_risk, low_risk
+
+    Args:
+        lf: LazyFrame to validate
+        column: Name of risk_type column
+
+    Returns:
+        LazyFrame with _valid_risk_type column added
+    """
+    if column not in lf.collect_schema().names():
+        return lf
+
+    # Create combined set of valid values (both codes and full values)
+    all_valid = VALID_RISK_TYPE_CODES | VALID_RISK_TYPES
+
+    return lf.with_columns(
+        pl.col(column)
+        .str.to_lowercase()
+        .is_in(all_valid)
+        .alias("_valid_risk_type")
+    )
+
+
+def validate_ccf_modelled(
+    lf: pl.LazyFrame,
+    column: str = "ccf_modelled",
+    min_ccf: float = 0.0,
+    max_ccf: float = 1.5,
+) -> pl.LazyFrame:
+    """
+    Add validation expression for ccf_modelled range.
+
+    Validates that ccf_modelled is in range [0.0, 1.5] when present.
+    Null values are considered valid (the field is optional).
+
+    Note: Retail IRB CCFs can exceed 100% due to additional drawdown
+    behaviour (borrowers may draw more than committed amounts during
+    stress). A cap of 150% is applied as a reasonable upper bound.
+
+    Args:
+        lf: LazyFrame to validate
+        column: Name of ccf_modelled column
+        min_ccf: Minimum valid CCF (default 0.0)
+        max_ccf: Maximum valid CCF (default 1.5, allowing for Retail IRB)
+
+    Returns:
+        LazyFrame with _valid_ccf_modelled column added
+    """
+    if column not in lf.collect_schema().names():
+        return lf
+
+    return lf.with_columns(
+        pl.when(pl.col(column).is_null())
+        .then(pl.lit(True))  # Null is valid (optional field)
+        .otherwise(
+            (pl.col(column) >= min_ccf) & (pl.col(column) <= max_ccf)
+        )
+        .alias("_valid_ccf_modelled")
+    )
+
+
+def normalize_risk_type(
+    lf: pl.LazyFrame,
+    column: str = "risk_type",
+) -> pl.LazyFrame:
+    """
+    Normalize risk_type codes to full values.
+
+    Converts short codes (FR, MR, MLR, LR) to full values
+    (full_risk, medium_risk, medium_low_risk, low_risk).
+    Values already in full form are preserved.
+
+    Args:
+        lf: LazyFrame with risk_type column
+        column: Name of risk_type column
+
+    Returns:
+        LazyFrame with normalized risk_type values
+    """
+    if column not in lf.collect_schema().names():
+        return lf
+
+    # Normalize to lowercase first, then map codes to full values
+    return lf.with_columns(
+        pl.col(column)
+        .str.to_lowercase()
+        .replace(RISK_TYPE_CODE_TO_VALUE)
+        .alias(column)
+    )

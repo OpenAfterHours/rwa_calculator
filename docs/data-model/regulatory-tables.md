@@ -63,6 +63,23 @@ This page documents the lookup tables used for regulatory parameters.
 
 ## Credit Conversion Factors
 
+### Risk Type Categories (CRR Art. 111)
+
+The `risk_type` column determines CCF for all off-balance sheet exposures:
+
+| Code | Full Value | SA CCF | F-IRB CCF | Description |
+|------|------------|--------|-----------|-------------|
+| `FR` | `full_risk` | 100% | 100% | Direct credit substitutes, guarantees, acceptances |
+| `MR` | `medium_risk` | 50% | 75% | NIFs, RUFs, standby LCs, committed undrawn |
+| `MLR` | `medium_low_risk` | 20% | 75% | Documentary credits, trade finance |
+| `LR` | `low_risk` | 0% | 0% | Unconditionally cancellable commitments |
+
+**F-IRB 75% Rule (CRR Art. 166(8)):** Under F-IRB, both MR and MLR categories use 75% CCF instead of SA values.
+
+**F-IRB Exception (CRR Art. 166(9)):** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. Flag these with `is_short_term_trade_lc = True`.
+
+### Legacy CCF Categories
+
 | Item Type | CRR CCF | Basel 3.1 CCF |
 |-----------|---------|---------------|
 | Unconditionally cancellable | 0% | 10% |

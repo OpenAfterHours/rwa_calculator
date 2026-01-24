@@ -151,6 +151,9 @@ Unsecured revolving credit to individuals (credit cards, overdrafts) meeting spe
 ### RGLA (Regional Government and Local Authority)
 Sub-national government entities with varying risk treatments.
 
+### Risk Type
+A classification for off-balance sheet exposures that determines the applicable CCF. Valid values: FR (full_risk, 100%), MR (medium_risk, 50%/75%), MLR (medium_low_risk, 20%/75%), LR (low_risk, 0%). See CRR Art. 111.
+
 ### Risk Weight
 A percentage applied to EAD to calculate RWA. Higher risk weights indicate higher risk.
 

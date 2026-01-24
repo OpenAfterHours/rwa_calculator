@@ -3,6 +3,7 @@
 Tests cover:
 - SA CCF calculation (0%, 20%, 50%, 100%) per CRR Art. 111
 - F-IRB CCF calculation (75%) per CRR Art. 166(8)
+- F-IRB exception for short-term trade LCs (20%) per CRR Art. 166(9)
 - EAD calculation from undrawn commitments
 - Approach-specific CCF selection
 """
@@ -298,3 +299,273 @@ class TestCCFFactory:
         """Factory should create CCFCalculator."""
         calculator = create_ccf_calculator()
         assert isinstance(calculator, CCFCalculator)
+
+
+# =============================================================================
+# Risk Type Based CCF Tests (CRR Art. 111)
+# =============================================================================
+
+
+class TestCCFFromRiskType:
+    """Tests for CCF calculation from risk_type column."""
+
+    def test_sa_ccf_from_risk_type_codes(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SA CCFs should be determined by risk_type codes."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["RT_FR", "RT_MR", "RT_MLR", "RT_LR"],
+            "drawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "nominal_amount": [100000.0, 100000.0, 100000.0, 100000.0],
+            "risk_type": ["FR", "MR", "MLR", "LR"],
+            "approach": ["standardised", "standardised", "standardised", "standardised"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # FR = 100%, MR = 50%, MLR = 20%, LR = 0%
+        expected = {
+            "RT_FR": (1.00, 100000.0),
+            "RT_MR": (0.50, 50000.0),
+            "RT_MLR": (0.20, 20000.0),
+            "RT_LR": (0.00, 0.0),
+        }
+
+        for ref, (expected_ccf, expected_ead) in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(expected_ccf), f"CCF mismatch for {ref}"
+            assert row["ead_from_ccf"][0] == pytest.approx(expected_ead), f"EAD mismatch for {ref}"
+
+    def test_sa_ccf_from_risk_type_full_values(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SA CCFs should work with full risk_type values."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["RT_FULL", "RT_MED", "RT_MEDLOW", "RT_LOW"],
+            "drawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "nominal_amount": [100000.0, 100000.0, 100000.0, 100000.0],
+            "risk_type": ["full_risk", "medium_risk", "medium_low_risk", "low_risk"],
+            "approach": ["standardised"] * 4,
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        expected = {
+            "RT_FULL": 1.00,
+            "RT_MED": 0.50,
+            "RT_MEDLOW": 0.20,
+            "RT_LOW": 0.00,
+        }
+
+        for ref, expected_ccf in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(expected_ccf), f"CCF mismatch for {ref}"
+
+    def test_firb_ccf_mr_mlr_become_75pct(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """F-IRB: MR and MLR should become 75% CCF per CRR Art. 166(8)."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["FIRB_FR", "FIRB_MR", "FIRB_MLR", "FIRB_LR"],
+            "drawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "nominal_amount": [100000.0, 100000.0, 100000.0, 100000.0],
+            "risk_type": ["FR", "MR", "MLR", "LR"],
+            "approach": ["foundation_irb"] * 4,
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # F-IRB: FR = 100%, MR = 75%, MLR = 75%, LR = 0%
+        expected = {
+            "FIRB_FR": (1.00, 100000.0),
+            "FIRB_MR": (0.75, 75000.0),   # MR becomes 75% under F-IRB
+            "FIRB_MLR": (0.75, 75000.0),  # MLR becomes 75% under F-IRB
+            "FIRB_LR": (0.00, 0.0),
+        }
+
+        for ref, (expected_ccf, expected_ead) in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(expected_ccf), f"CCF mismatch for {ref}"
+            assert row["ead_from_ccf"][0] == pytest.approx(expected_ead), f"EAD mismatch for {ref}"
+
+    def test_airb_uses_ccf_modelled(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A-IRB should use ccf_modelled when provided."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["AIRB_001"],
+            "drawn_amount": [0.0],
+            "nominal_amount": [1000000.0],
+            "risk_type": ["MR"],  # Would be 50% SA
+            "ccf_modelled": [0.65],  # Bank's own estimate
+            "approach": ["advanced_irb"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # A-IRB with ccf_modelled should use the modelled value (65%)
+        assert result["ccf"][0] == pytest.approx(0.65)
+        assert result["ead_from_ccf"][0] == pytest.approx(650000.0)
+
+    def test_airb_fallback_when_no_ccf_modelled(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A-IRB should fall back to SA CCF when ccf_modelled is null."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["AIRB_NULL"],
+            "drawn_amount": [0.0],
+            "nominal_amount": [100000.0],
+            "risk_type": ["MR"],
+            "ccf_modelled": [None],  # No modelled value
+            "approach": ["advanced_irb"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # A-IRB without ccf_modelled should fall back to SA (MR = 50%)
+        assert result["ccf"][0] == pytest.approx(0.50)
+        assert result["ead_from_ccf"][0] == pytest.approx(50000.0)
+
+    def test_risk_type_case_insensitive(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Risk type should be case insensitive."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["CASE1", "CASE2", "CASE3", "CASE4"],
+            "drawn_amount": [0.0] * 4,
+            "nominal_amount": [100000.0] * 4,
+            "risk_type": ["fr", "Mr", "MLR", "LOW_RISK"],  # Mixed case
+            "approach": ["standardised"] * 4,
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        expected = {
+            "CASE1": 1.00,   # fr -> 100%
+            "CASE2": 0.50,   # Mr -> 50%
+            "CASE3": 0.20,   # MLR -> 20%
+            "CASE4": 0.00,   # LOW_RISK -> 0%
+        }
+
+        for ref, expected_ccf in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(expected_ccf), f"CCF mismatch for {ref}"
+
+    def test_sa_vs_firb_with_risk_type(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SA and F-IRB should use different CCFs for same risk_type."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["SA_MR", "FIRB_MR", "SA_MLR", "FIRB_MLR"],
+            "drawn_amount": [0.0] * 4,
+            "nominal_amount": [100000.0] * 4,
+            "risk_type": ["MR", "MR", "MLR", "MLR"],
+            "approach": ["standardised", "foundation_irb", "standardised", "foundation_irb"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # SA: MR=50%, MLR=20%
+        # F-IRB: MR=75%, MLR=75%
+        expected = {
+            "SA_MR": 0.50,
+            "FIRB_MR": 0.75,
+            "SA_MLR": 0.20,
+            "FIRB_MLR": 0.75,
+        }
+
+        for ref, expected_ccf in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(expected_ccf), f"CCF mismatch for {ref}"
+
+    def test_firb_short_term_trade_lc_exception(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """F-IRB: Short-term trade LCs for goods movement retain 20% CCF per Art. 166(9)."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["FIRB_MLR_STANDARD", "FIRB_MLR_TRADE_LC"],
+            "drawn_amount": [0.0, 0.0],
+            "nominal_amount": [100000.0, 100000.0],
+            "risk_type": ["MLR", "MLR"],  # Both MLR (20% SA, normally 75% F-IRB)
+            "is_short_term_trade_lc": [False, True],  # Only second qualifies for exception
+            "approach": ["foundation_irb", "foundation_irb"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # Standard MLR under F-IRB = 75%
+        standard_row = result.filter(pl.col("exposure_reference") == "FIRB_MLR_STANDARD")
+        assert standard_row["ccf"][0] == pytest.approx(0.75), "Standard MLR should be 75% under F-IRB"
+        assert standard_row["ead_from_ccf"][0] == pytest.approx(75000.0)
+
+        # Short-term trade LC under F-IRB = 20% (Art. 166(9) exception)
+        trade_lc_row = result.filter(pl.col("exposure_reference") == "FIRB_MLR_TRADE_LC")
+        assert trade_lc_row["ccf"][0] == pytest.approx(0.20), "Short-term trade LC should retain 20% under F-IRB"
+        assert trade_lc_row["ead_from_ccf"][0] == pytest.approx(20000.0)
+
+    def test_firb_short_term_trade_lc_only_applies_to_mlr(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """F-IRB: Art. 166(9) exception only applies to MLR risk type."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["FIRB_MR_TRADE_LC", "FIRB_FR_TRADE_LC", "FIRB_LR_TRADE_LC"],
+            "drawn_amount": [0.0, 0.0, 0.0],
+            "nominal_amount": [100000.0, 100000.0, 100000.0],
+            "risk_type": ["MR", "FR", "LR"],  # Non-MLR risk types
+            "is_short_term_trade_lc": [True, True, True],  # Flag set but shouldn't affect these
+            "approach": ["foundation_irb", "foundation_irb", "foundation_irb"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # MR with trade_lc flag should still be 75% (exception only for MLR)
+        mr_row = result.filter(pl.col("exposure_reference") == "FIRB_MR_TRADE_LC")
+        assert mr_row["ccf"][0] == pytest.approx(0.75), "MR should still be 75% even with trade LC flag"
+
+        # FR should always be 100%
+        fr_row = result.filter(pl.col("exposure_reference") == "FIRB_FR_TRADE_LC")
+        assert fr_row["ccf"][0] == pytest.approx(1.00), "FR should be 100%"
+
+        # LR should always be 0%
+        lr_row = result.filter(pl.col("exposure_reference") == "FIRB_LR_TRADE_LC")
+        assert lr_row["ccf"][0] == pytest.approx(0.00), "LR should be 0%"
+
+    def test_sa_ignores_short_term_trade_lc_flag(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SA approach should ignore the is_short_term_trade_lc flag."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["SA_MLR_STANDARD", "SA_MLR_TRADE_LC"],
+            "drawn_amount": [0.0, 0.0],
+            "nominal_amount": [100000.0, 100000.0],
+            "risk_type": ["MLR", "MLR"],
+            "is_short_term_trade_lc": [False, True],  # Should not affect SA
+            "approach": ["standardised", "standardised"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # Both should be 20% under SA regardless of the flag
+        for ref in ["SA_MLR_STANDARD", "SA_MLR_TRADE_LC"]:
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(0.20), f"SA MLR should be 20% for {ref}"

@@ -54,6 +54,9 @@ class Contingent:
     beel: float
     ccf_category: str
     seniority: str
+    risk_type: str = "MR"  # Default to MR, should be set based on ccf_category
+    ccf_modelled: float | None = None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
+    is_short_term_trade_lc: bool | None = None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
 
     def to_dict(self) -> dict:
         return {
@@ -70,6 +73,9 @@ class Contingent:
             "beel": self.beel,
             "ccf_category": self.ccf_category,
             "seniority": self.seniority,
+            "risk_type": self.risk_type,
+            "ccf_modelled": self.ccf_modelled,
+            "is_short_term_trade_lc": self.is_short_term_trade_lc,
         }
 
 
@@ -100,7 +106,7 @@ def _trade_finance_contingents() -> list[Contingent]:
     Documentary letters of credit and trade-related items.
     """
     return [
-        # Documentary LC - short-term trade (20% CCF)
+        # Documentary LC - short-term trade (20% CCF under SA and F-IRB per Art. 166(9))
         Contingent(
             contingent_reference="CONT_TF_001",
             contract_type="documentary_lc",
@@ -115,6 +121,8 @@ def _trade_finance_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="trade_lc_short_term",
             seniority="senior",
+            risk_type="MLR",  # Medium-low risk
+            is_short_term_trade_lc=True,  # Art. 166(9) exception - retains 20% under F-IRB
         ),
         # Import LC for SME
         Contingent(
@@ -131,6 +139,8 @@ def _trade_finance_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="trade_lc_short_term",
             seniority="senior",
+            risk_type="MLR",  # Medium-low risk
+            is_short_term_trade_lc=True,  # Art. 166(9) exception - retains 20% under F-IRB
         ),
         # Shipping guarantee (50% CCF)
         Contingent(
@@ -303,7 +313,13 @@ def _ccf_test_contingents() -> list[Contingent]:
     """
     Contingents specifically for CCF testing across all categories.
 
-    Covers 0%, 20%, 40%, 50%, 100% CCF scenarios.
+    Covers 0%, 20%, 40%, 50%, 100% CCF scenarios with explicit risk_type.
+
+    Risk Type Mapping:
+    - LR (low_risk): 0% CCF - unconditionally cancellable
+    - MLR (medium_low_risk): 20% CCF - documentary credits, trade finance
+    - MR (medium_risk): 50% CCF - NIFs, RUFs, committed undrawn
+    - FR (full_risk): 100% CCF - direct credit substitutes, guarantees
     """
     return [
         # =============================================================================
@@ -323,9 +339,10 @@ def _ccf_test_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="unconditionally_cancellable",
             seniority="senior",
+            risk_type="LR",  # Low risk = 0% CCF
         ),
         # =============================================================================
-        # CCF 20%: Short-term self-liquidating trade LC
+        # CCF 20%: Short-term self-liquidating trade LC (standard MLR, no exception)
         # =============================================================================
         Contingent(
             contingent_reference="CONT_CCF_20PCT",
@@ -341,9 +358,31 @@ def _ccf_test_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="trade_lc_short_term",
             seniority="senior",
+            risk_type="MLR",  # Medium-low risk = 20% CCF (SA), 75% (F-IRB)
+            is_short_term_trade_lc=False,  # NOT a goods-movement LC, so 75% under F-IRB
         ),
         # =============================================================================
-        # CCF 40%: Committed undrawn facility
+        # CCF 20% F-IRB Exception: Short-term trade LC for goods movement (Art. 166(9))
+        # =============================================================================
+        Contingent(
+            contingent_reference="CONT_CCF_20PCT_FIRB",
+            contract_type="documentary_lc",
+            product_type="IMPORT_LC",
+            book_code="TRADE_FINANCE",
+            counterparty_reference="CORP_UK_002",
+            value_date=VALUE_DATE,
+            maturity_date=date(2026, 5, 1),
+            currency="GBP",
+            nominal_amount=4_000_000.0,
+            lgd=0.45,
+            beel=0.0,
+            ccf_category="trade_lc_short_term",
+            seniority="senior",
+            risk_type="MLR",  # Medium-low risk = 20% CCF under BOTH SA and F-IRB
+            is_short_term_trade_lc=True,  # Art. 166(9) exception - retains 20% under F-IRB
+        ),
+        # =============================================================================
+        # CCF 40%/50%: Committed undrawn facility
         # =============================================================================
         Contingent(
             contingent_reference="CONT_CCF_40PCT",
@@ -359,6 +398,7 @@ def _ccf_test_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="committed_facility",
             seniority="senior",
+            risk_type="MR",  # Medium risk = 50% CCF (SA), 75% (F-IRB)
         ),
         # =============================================================================
         # CCF 50%: Transaction-related contingent
@@ -377,6 +417,7 @@ def _ccf_test_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="transaction_related",
             seniority="senior",
+            risk_type="MR",  # Medium risk = 50% CCF (SA), 75% (F-IRB)
         ),
         # =============================================================================
         # CCF 100%: Direct credit substitute (acceptance)
@@ -395,6 +436,7 @@ def _ccf_test_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="direct_credit_substitute",
             seniority="senior",
+            risk_type="FR",  # Full risk = 100% CCF
         ),
         # Subordinated contingent for LGD testing
         Contingent(
@@ -411,6 +453,7 @@ def _ccf_test_contingents() -> list[Contingent]:
             beel=0.0,
             ccf_category="direct_credit_substitute",
             seniority="subordinated",
+            risk_type="FR",  # Full risk = 100% CCF
         ),
     ]
 

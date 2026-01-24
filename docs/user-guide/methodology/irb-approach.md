@@ -91,10 +91,24 @@ LGD is the percentage of exposure lost after recoveries.
 
 **F-IRB:**
 - On-Balance Sheet: Gross carrying amount
-- Off-Balance Sheet: Regulatory CCFs apply
+- Off-Balance Sheet: Regulatory CCFs apply based on `risk_type`:
+
+| Risk Type | SA CCF | F-IRB CCF | Notes |
+|-----------|--------|-----------|-------|
+| FR (full_risk) | 100% | 100% | Guarantees, credit substitutes |
+| MR (medium_risk) | 50% | 75% | Committed undrawn, NIFs, RUFs |
+| MLR (medium_low_risk) | 20% | 75% | Documentary credits, trade finance |
+| LR (low_risk) | 0% | 0% | Unconditionally cancellable |
+
+**CRR Art. 166(8):** Under F-IRB, MR and MLR categories both use 75% CCF.
+
+**CRR Art. 166(9) Exception:** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. Flag these exposures with `is_short_term_trade_lc = True`.
 
 **A-IRB:**
-- Bank estimates EAD (subject to CCF floors)
+- Bank estimates EAD using internal models
+- Provide modelled CCF in `ccf_modelled` column (0.0-1.5, can exceed 100% for Retail IRB)
+- When `ccf_modelled` is provided, it takes precedence over risk_type lookup
+- Subject to CCF floors under Basel 3.1
 
 ### Maturity (M)
 

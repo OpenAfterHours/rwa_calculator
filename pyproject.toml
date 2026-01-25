@@ -31,6 +31,7 @@ dependencies = [
     "pyarrow>=14.0.0",
     "pyyaml>=6.0.0",
     "scipy>=1.10.0",  # Stats backend fallback (always available)
+    "polars-normal-stats>=0.2.0",
 ]
 
 [project.scripts]
@@ -45,7 +46,7 @@ Changelog = "https://github.com/OpenAfterHours/rwa_calculator/blob/master/docs/a
 
 [project.optional-dependencies]
 fast-stats = [
-    "polars-normal-stats>=0.1.0",  # Native Polars stats (faster, streaming-compatible)
+    "polars-normal-stats>=0.2.0",  # Native Polars stats (faster, streaming-compatible)
 ]
 ui = [
     "marimo>=0.5.0",

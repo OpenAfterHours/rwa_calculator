@@ -19,7 +19,27 @@ uv add rwa-calc
 
 # With UI support (web-based calculator interface)
 pip install rwa-calc[ui]
+
+# With fast stats backend (native Polars, recommended for performance)
+pip install rwa-calc[fast-stats]
+
+# With both UI and fast stats (recommended for most users)
+pip install rwa-calc[fast-stats,ui]
+
+# Install everything (fast-stats, ui, and dev dependencies)
+pip install rwa-calc[all]
 ```
+
+### Optional Dependencies
+
+| Extra | Description |
+|-------|-------------|
+| `fast-stats` | Native Polars statistical functions via `polars-normal-stats` (faster IRB calculations) |
+| `ui` | Interactive web UI via Marimo |
+| `dev` | Development tools (pytest, mypy, mkdocs) |
+| `all` | All optional dependencies |
+
+**Note:** The calculator works without `fast-stats` by using `scipy` as a fallback. Install `fast-stats` for optimal performance in production environments.
 
 ## Quick Start
 

@@ -26,11 +26,53 @@ The simplest way to install the calculator:
 
 ### Optional Dependencies
 
-Install with UI support for Marimo workbooks:
+The calculator provides several optional dependency groups:
 
-```bash
-pip install rwa-calc[ui]
-```
+=== "pip"
+
+    ```bash
+    # UI support (Marimo web interface)
+    pip install rwa-calc[ui]
+
+    # Fast stats backend (native Polars, recommended for performance)
+    pip install rwa-calc[fast-stats]
+
+    # Both UI and fast stats (recommended for most users)
+    pip install rwa-calc[fast-stats,ui]
+
+    # Everything (fast-stats, ui, and dev dependencies)
+    pip install rwa-calc[all]
+    ```
+
+=== "uv"
+
+    ```bash
+    # UI support (Marimo web interface)
+    uv add rwa-calc[ui]
+
+    # Fast stats backend (native Polars, recommended for performance)
+    uv add rwa-calc[fast-stats]
+
+    # Both UI and fast stats (recommended for most users)
+    uv add rwa-calc[fast-stats,ui]
+
+    # Everything (fast-stats, ui, and dev dependencies)
+    uv add rwa-calc[all]
+    ```
+
+| Extra | Description |
+|-------|-------------|
+| `fast-stats` | Native Polars statistical functions via `polars-normal-stats` for faster IRB calculations |
+| `ui` | Interactive web UI via Marimo for exploration and testing |
+| `dev` | Development tools (pytest, mypy, mkdocs, etc.) |
+| `all` | All optional dependencies combined |
+
+!!! tip "Recommended Installation"
+    For most users, we recommend installing with both `fast-stats` and `ui`:
+    ```bash
+    pip install rwa-calc[fast-stats,ui]
+    ```
+    This provides optimal IRB calculation performance plus the interactive web interface.
 
 ---
 
@@ -103,10 +145,30 @@ pip install -e ".[dev]"
 |---------|---------|
 | `polars` | High-performance DataFrame operations |
 | `pydantic` | Data validation and settings management |
-| `polars-normal-stats` | Statistical functions for IRB formulas (normal CDF/PPF) |
+| `scipy` | Statistical functions fallback for IRB formulas (normal CDF/PPF) |
 | `pyarrow` | Parquet file support |
 | `pyyaml` | Configuration file parsing |
 | `duckdb` | SQL analytics engine |
+
+### Optional Performance Dependencies
+
+| Package | Extra | Purpose |
+|---------|-------|---------|
+| `polars-normal-stats` | `fast-stats` | Native Polars statistical functions (faster than scipy) |
+| `marimo` | `ui` | Interactive notebook UI |
+| `uvicorn` | `ui` | ASGI server for UI |
+
+!!! info "Stats Backend"
+    The IRB calculator uses a **stats backend abstraction** that automatically selects the best available implementation:
+
+    1. **polars-normal-stats** (if installed via `fast-stats`) - Native Polars, fastest, streaming-compatible
+    2. **scipy** (always available) - Universal fallback via `map_batches`
+
+    You can check which backend is active:
+    ```python
+    from rwa_calc.engine.irb import get_backend
+    print(f"Active backend: {get_backend()}")  # "polars-normal-stats" or "scipy"
+    ```
 
 ### Development Dependencies
 

@@ -19,7 +19,7 @@ Two IRB variants are available:
 
 ## IRB Formula
 
-The core IRB formula calculates the capital requirement (K). See [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py) for the pure Polars implementation using `polars-normal-stats`.
+The core IRB formula calculates the capital requirement (K). See [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py) for the pure Polars implementation.
 
 ```
 K = [LGD × N((1-R)^(-0.5) × G(PD) + (R/(1-R))^0.5 × G(0.999)) - LGD × PD] × MA
@@ -38,9 +38,32 @@ Then:
 RWA = K × 12.5 × EAD × Scaling Factor
 ```
 
+### Stats Backend
+
+The IRB formulas require statistical functions (normal CDF and inverse CDF). The calculator uses a **backend abstraction** that automatically selects the best available implementation:
+
+| Backend | Package | Performance | Notes |
+|---------|---------|-------------|-------|
+| **polars-normal-stats** | `rwa-calc[fast-stats]` | Fastest | Native Polars, streaming-compatible |
+| **scipy** | Core dependency | Good | Universal fallback via `map_batches` |
+
+To check which backend is active:
+
+```python
+from rwa_calc.engine.irb import get_backend
+print(f"Active backend: {get_backend()}")  # "polars-normal-stats" or "scipy"
+```
+
+!!! tip "Performance Recommendation"
+    For production environments, install with the `fast-stats` extra:
+    ```bash
+    pip install rwa-calc[fast-stats]
+    ```
+    This enables the native Polars backend which is faster and supports true streaming for large datasets.
+
 ??? example "Capital K Formula Implementation (formulas.py)"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:260:291"
+    --8<-- "src/rwa_calc/engine/irb/formulas.py:233:262"
     ```
 
 ## Risk Parameters
@@ -171,7 +194,7 @@ R = 0.03 × (1 - exp(-35 × PD)) / (1 - exp(-35)) +
 
 ??? example "Actual Correlation Implementation (formulas.py)"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:323:365"
+    --8<-- "src/rwa_calc/engine/irb/formulas.py:156:234"
     ```
 
 ## Maturity Adjustment
@@ -190,7 +213,7 @@ Where M is effective maturity in years.
 
 ??? example "Actual Maturity Adjustment (formulas.py)"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:445:457"
+    --8<-- "src/rwa_calc/engine/irb/formulas.py:268:288"
     ```
 
 **Example values:**
@@ -384,7 +407,12 @@ print(f"Expected Loss: {result.total_expected_loss:,.2f}")
 
 ### Using IRB Formulas Directly
 
-The IRB formulas are implemented in [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py). Both scalar functions and pure Polars expression functions are available, using `polars-normal-stats` for statistical operations.
+The IRB formulas are implemented in [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py). Both scalar functions and pure Polars expression functions are available.
+
+!!! info "Implementation Architecture"
+    - **Vectorized expressions**: Pure Polars expressions for bulk processing (used by namespace and calculator)
+    - **Scalar wrappers**: Thin wrappers around vectorized expressions for single-value calculations
+    - **Stats backend**: Auto-detects `polars-normal-stats` (native) or `scipy` (fallback)
 
 ```python
 from rwa_calc.engine.irb.formulas import (
@@ -422,7 +450,7 @@ print(f"RWA: {result['rwa']:,.0f}")
 
 ??? example "Scalar K Calculation (formulas.py)"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:429:443"
+    --8<-- "src/rwa_calc/engine/irb/formulas.py:446:473"
     ```
 
 ## Expected Loss Calculation

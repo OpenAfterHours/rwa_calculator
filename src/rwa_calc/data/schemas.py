@@ -106,21 +106,42 @@ CONTINGENTS_SCHEMA = {
 COUNTERPARTY_SCHEMA = {
     "counterparty_reference": pl.String,
     "counterparty_name": pl.String,
-    "entity_type": pl.String,  # corporate, individual, sovereign, institution, etc.
+    # entity_type: Single source of truth for exposure class determination.
+    # Maps directly to SA and IRB exposure classes. Valid values:
+    #   Sovereign class:
+    #     - "sovereign"           → SA: SOVEREIGN, IRB: SOVEREIGN
+    #     - "central_bank"        → SA: SOVEREIGN, IRB: SOVEREIGN
+    #   RGLA class (CRR Art. 115) - requires explicit IRB treatment:
+    #     - "rgla_sovereign"      → SA: RGLA, IRB: SOVEREIGN (has taxing powers/govt guarantee)
+    #     - "rgla_institution"    → SA: RGLA, IRB: INSTITUTION (no sovereign equivalence)
+    #   PSE class (CRR Art. 116) - requires explicit IRB treatment:
+    #     - "pse_sovereign"       → SA: PSE, IRB: SOVEREIGN (govt guaranteed)
+    #     - "pse_institution"     → SA: PSE, IRB: INSTITUTION (commercial PSE)
+    #   MDB/International org class (CRR Art. 117-118):
+    #     - "mdb"                 → SA: MDB (0% RW), IRB: SOVEREIGN
+    #     - "international_org"   → SA: MDB (0% RW), IRB: SOVEREIGN
+    #   Institution class (CRR Art. 112(d)):
+    #     - "institution"         → SA: INSTITUTION, IRB: INSTITUTION
+    #     - "bank"                → SA: INSTITUTION, IRB: INSTITUTION
+    #     - "ccp"                 → SA: INSTITUTION, IRB: INSTITUTION (CCP treatment Art. 300-311)
+    #     - "financial_institution" → SA: INSTITUTION, IRB: INSTITUTION
+    #   Corporate class (CRR Art. 112(g)):
+    #     - "corporate"           → SA: CORPORATE, IRB: CORPORATE
+    #     - "company"             → SA: CORPORATE, IRB: CORPORATE
+    #   Retail class (CRR Art. 112(h)):
+    #     - "individual"          → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
+    #     - "retail"              → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
+    #   Specialised lending (CRR Art. 147(8)):
+    #     - "specialised_lending" → SA: SPECIALISED_LENDING, IRB: SPECIALISED_LENDING
+    "entity_type": pl.String,
     "country_code": pl.String,
-    "annual_revenue": pl.Float64,  # For SME classification (£440m large corp, £50m SME)
-    "total_assets": pl.Float64,  # Alternative to revenue for large corporate threshold (CRE30.6)
+    "annual_revenue": pl.Float64,  # For SME classification (EUR 50m threshold)
+    "total_assets": pl.Float64,  # For large financial sector entity threshold (EUR 70bn, CRR Art. 4(1)(146))
     "default_status": pl.Boolean,
     "sector_code": pl.String,  # Based on SIC
-    # Entity type flags for exposure class determination (CRR Art 107, 112-118)
-    "is_financial_institution": pl.Boolean,  # Credit institution, investment firm (CRE20.16)
-    "is_regulated": pl.Boolean,  # Prudentially regulated institution (affects RW)
-    "is_pse": pl.Boolean,  # Public Sector Entity - may receive sovereign or institution RW (CRR Art 116)
-    "is_mdb": pl.Boolean,  # Multilateral Development Bank - 0% RW if on eligible list (CRR Art 117)
-    "is_international_org": pl.Boolean,  # International Organisation - 0% RW (CRR Art 118)
-    "is_central_counterparty": pl.Boolean,  # CCP exposure treatment (CRR Art 300-311)
-    "is_regional_govt_local_auth": pl.Boolean,  # RGLA - may receive sovereign RW (CRR Art 115)
-    "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis (CRR Art 123)
+    # Retained boolean flags - orthogonal to entity_type classification
+    "is_regulated": pl.Boolean,  # For FI scalar: unregulated FSE gets 1.25x correlation (CRR Art. 153(2))
+    "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
 }
 
 COLLATERAL_SCHEMA = {

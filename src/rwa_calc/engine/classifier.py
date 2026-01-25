@@ -41,6 +41,85 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
 
+# =============================================================================
+# ENTITY TYPE TO EXPOSURE CLASS MAPPINGS
+# =============================================================================
+
+# Valid entity_type values for validation
+VALID_ENTITY_TYPES: set[str] = {
+    "sovereign",
+    "central_bank",
+    "rgla_sovereign",
+    "rgla_institution",
+    "pse_sovereign",
+    "pse_institution",
+    "mdb",
+    "international_org",
+    "institution",
+    "bank",
+    "ccp",
+    "financial_institution",
+    "corporate",
+    "company",
+    "individual",
+    "retail",
+    "specialised_lending",
+}
+
+# entity_type → SA exposure class (for risk weight lookup)
+ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
+    "sovereign": ExposureClass.SOVEREIGN.value,
+    "central_bank": ExposureClass.SOVEREIGN.value,
+    "rgla_sovereign": ExposureClass.RGLA.value,
+    "rgla_institution": ExposureClass.RGLA.value,
+    "pse_sovereign": ExposureClass.PSE.value,
+    "pse_institution": ExposureClass.PSE.value,
+    "mdb": ExposureClass.MDB.value,
+    "international_org": ExposureClass.MDB.value,
+    "institution": ExposureClass.INSTITUTION.value,
+    "bank": ExposureClass.INSTITUTION.value,
+    "ccp": ExposureClass.INSTITUTION.value,
+    "financial_institution": ExposureClass.INSTITUTION.value,
+    "corporate": ExposureClass.CORPORATE.value,
+    "company": ExposureClass.CORPORATE.value,
+    "individual": ExposureClass.RETAIL_OTHER.value,
+    "retail": ExposureClass.RETAIL_OTHER.value,
+    "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
+}
+
+# entity_type → IRB exposure class (for IRB formula selection)
+ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
+    "sovereign": ExposureClass.SOVEREIGN.value,
+    "central_bank": ExposureClass.SOVEREIGN.value,
+    "rgla_sovereign": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment
+    "rgla_institution": ExposureClass.INSTITUTION.value,  # Institution IRB treatment
+    "pse_sovereign": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment
+    "pse_institution": ExposureClass.INSTITUTION.value,  # Institution IRB treatment
+    "mdb": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment (CRR Art. 147(3))
+    "international_org": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment
+    "institution": ExposureClass.INSTITUTION.value,
+    "bank": ExposureClass.INSTITUTION.value,
+    "ccp": ExposureClass.INSTITUTION.value,
+    "financial_institution": ExposureClass.INSTITUTION.value,
+    "corporate": ExposureClass.CORPORATE.value,
+    "company": ExposureClass.CORPORATE.value,
+    "individual": ExposureClass.RETAIL_OTHER.value,
+    "retail": ExposureClass.RETAIL_OTHER.value,
+    "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
+}
+
+# Financial sector entity types (for FI scalar determination per CRR Art. 153(2))
+# Note: MDB and international_org are excluded as they receive sovereign IRB treatment
+FINANCIAL_SECTOR_ENTITY_TYPES: set[str] = {
+    "institution",
+    "bank",
+    "ccp",
+    "financial_institution",
+    "pse_institution",  # PSE treated as institution = financial sector
+    "rgla_institution",  # RGLA treated as institution = financial sector
+}
+
+
 @dataclass
 class ClassificationError:
     """Error encountered during exposure classification."""
@@ -114,6 +193,9 @@ class ExposureClassifier:
         # Step 5a: Identify infrastructure exposures
         classified = self._apply_infrastructure_classification(classified)
 
+        # Step 5b: Derive FI scalar flags for IRB correlation adjustment
+        classified = self._apply_fi_scalar_classification(classified, config)
+
         # Step 6: Determine calculation approach
         classified = self._determine_approach(
             classified,
@@ -162,11 +244,13 @@ class ExposureClassifier:
         Add counterparty attributes needed for classification.
 
         Joins exposures with counterparty data to get:
-        - entity_type
+        - entity_type (single source of truth for exposure class)
         - annual_revenue (for SME check)
+        - total_assets (for large financial sector entity threshold)
         - default_status
         - country_code
-        - sector flags (is_pse, is_mdb, etc.)
+        - is_regulated (for FI scalar - unregulated FSE)
+        - is_managed_as_retail (for SME retail treatment)
         """
         # Select relevant counterparty columns
         cp_cols = counterparties.select([
@@ -174,14 +258,9 @@ class ExposureClassifier:
             pl.col("entity_type").alias("cp_entity_type"),
             pl.col("country_code").alias("cp_country_code"),
             pl.col("annual_revenue").alias("cp_annual_revenue"),
+            pl.col("total_assets").alias("cp_total_assets"),
             pl.col("default_status").alias("cp_default_status"),
-            pl.col("is_financial_institution").alias("cp_is_financial_institution"),
             pl.col("is_regulated").alias("cp_is_regulated"),
-            pl.col("is_pse").alias("cp_is_pse"),
-            pl.col("is_mdb").alias("cp_is_mdb"),
-            pl.col("is_international_org").alias("cp_is_international_org"),
-            pl.col("is_central_counterparty").alias("cp_is_central_counterparty"),
-            pl.col("is_regional_govt_local_auth").alias("cp_is_rgla"),
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ])
 
@@ -198,48 +277,32 @@ class ExposureClassifier:
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Determine exposure class based on counterparty attributes.
+        Determine exposure class based on entity_type.
 
-        Classification logic (in priority order):
-        1. Sovereign: government entities, central banks
-        2. RGLA: Regional governments and local authorities
-        3. PSE: Public sector entities
-        4. MDB: Multilateral development banks
-        5. Institution: Banks, regulated financial institutions, CCPs
-        6. Corporate: Non-financial corporates
-        7. Retail: Individuals, small businesses meeting retail criteria
-        8. Specialised Lending: Project finance, object finance, etc.
+        Uses direct mapping from entity_type to exposure class via
+        ENTITY_TYPE_TO_SA_CLASS and ENTITY_TYPE_TO_IRB_CLASS constants.
+
+        Sets:
+        - exposure_class: SA exposure class (for SA RW lookup, backwards compat)
+        - exposure_class_sa: SA exposure class (explicit)
+        - exposure_class_irb: IRB exposure class (for IRB formula selection)
         """
         return exposures.with_columns([
-            pl.when(
-                (pl.col("cp_entity_type") == "sovereign") |
-                (pl.col("cp_entity_type") == "central_bank")
-            ).then(pl.lit(ExposureClass.SOVEREIGN.value))
-            .when(pl.col("cp_is_rgla") == True)  # noqa: E712
-            .then(pl.lit(ExposureClass.RGLA.value))
-            .when(pl.col("cp_is_pse") == True)  # noqa: E712
-            .then(pl.lit(ExposureClass.PSE.value))
-            .when(pl.col("cp_is_mdb") == True)  # noqa: E712
-            .then(pl.lit(ExposureClass.MDB.value))
-            .when(pl.col("cp_is_international_org") == True)  # noqa: E712
-            .then(pl.lit(ExposureClass.MDB.value))  # Treat as MDB for RW purposes
-            .when(
-                (pl.col("cp_entity_type") == "institution") |
-                (pl.col("cp_entity_type") == "bank") |
-                (pl.col("cp_is_financial_institution") == True) |  # noqa: E712
-                (pl.col("cp_is_central_counterparty") == True)  # noqa: E712
-            ).then(pl.lit(ExposureClass.INSTITUTION.value))
-            .when(
-                (pl.col("cp_entity_type") == "individual") |
-                (pl.col("cp_entity_type") == "retail")
-            ).then(pl.lit(ExposureClass.RETAIL_OTHER.value))  # Will be refined later
-            .when(
-                (pl.col("cp_entity_type") == "corporate") |
-                (pl.col("cp_entity_type") == "company")
-            ).then(pl.lit(ExposureClass.CORPORATE.value))
-            .when(pl.col("cp_entity_type") == "specialised_lending")
-            .then(pl.lit(ExposureClass.SPECIALISED_LENDING.value))
-            .otherwise(pl.lit(ExposureClass.OTHER.value))
+            # SA exposure class (used for SA risk weight lookup)
+            pl.col("cp_entity_type")
+            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value)
+            .alias("exposure_class_sa"),
+
+            # IRB exposure class (used for IRB formula selection)
+            # Note: PSE/RGLA map to sovereign or institution based on entity_type suffix
+            # MDB/international_org map to sovereign for IRB
+            pl.col("cp_entity_type")
+            .replace_strict(ENTITY_TYPE_TO_IRB_CLASS, default=ExposureClass.OTHER.value)
+            .alias("exposure_class_irb"),
+
+            # Unified exposure_class (SA class for backwards compatibility)
+            pl.col("cp_entity_type")
+            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value)
             .alias("exposure_class"),
         ])
 
@@ -438,6 +501,57 @@ class ExposureClassifier:
             .alias("is_infrastructure"),
         ])
 
+    def _apply_fi_scalar_classification(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Derive FI scalar flags for IRB correlation adjustment.
+
+        Per CRR Article 153(2), correlation is multiplied by 1.25 for:
+        - Large financial sector entities (total assets >= EUR 70bn)
+        - Unregulated financial sector entities
+
+        Sets:
+        - is_financial_sector_entity: Entity type is in FINANCIAL_SECTOR_ENTITY_TYPES
+        - is_large_financial_sector_entity: FSE with total assets >= EUR 70bn threshold
+        - requires_fi_scalar: Either LFSE or unregulated FSE
+        """
+        # Large FSE threshold: EUR 70bn (CRR Art. 4(1)(146))
+        lfse_threshold_eur = Decimal("70_000_000_000")
+        lfse_threshold_gbp = float(lfse_threshold_eur * config.eur_gbp_rate)
+
+        return exposures.with_columns([
+            # Is this a financial sector entity type?
+            pl.col("cp_entity_type")
+            .is_in(FINANCIAL_SECTOR_ENTITY_TYPES)
+            .alias("is_financial_sector_entity"),
+        ]).with_columns([
+            # Is this a large financial sector entity? (total assets >= EUR 70bn)
+            pl.when(
+                (pl.col("is_financial_sector_entity") == True) &  # noqa: E712
+                (pl.col("cp_total_assets") >= lfse_threshold_gbp)
+            ).then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("is_large_financial_sector_entity"),
+
+            # Does this exposure require the FI scalar (1.25x correlation)?
+            # Either: Large FSE OR (FSE AND unregulated)
+            pl.when(
+                # Large FSE
+                (pl.col("is_financial_sector_entity") == True) &  # noqa: E712
+                (pl.col("cp_total_assets") >= lfse_threshold_gbp)
+            ).then(pl.lit(True))
+            .when(
+                # Unregulated FSE
+                (pl.col("is_financial_sector_entity") == True) &  # noqa: E712
+                (pl.col("cp_is_regulated") == False)  # noqa: E712
+            ).then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("requires_fi_scalar"),
+        ])
+
     def _determine_approach(
         self,
         exposures: pl.LazyFrame,
@@ -555,6 +669,10 @@ class ExposureClassifier:
             pl.concat_str([
                 pl.lit("entity_type="),
                 pl.col("cp_entity_type").fill_null("unknown"),
+                pl.lit("; exp_class_sa="),
+                pl.col("exposure_class_sa").fill_null("unknown"),
+                pl.lit("; exp_class_irb="),
+                pl.col("exposure_class_irb").fill_null("unknown"),
                 pl.lit("; is_sme="),
                 pl.col("is_sme").cast(pl.String),
                 pl.lit("; is_mortgage="),
@@ -563,10 +681,10 @@ class ExposureClassifier:
                 pl.col("is_defaulted").cast(pl.String),
                 pl.lit("; is_infrastructure="),
                 pl.col("is_infrastructure").cast(pl.String),
+                pl.lit("; requires_fi_scalar="),
+                pl.col("requires_fi_scalar").cast(pl.String),
                 pl.lit("; qualifies_as_retail="),
                 pl.col("qualifies_as_retail").cast(pl.String),
-                pl.lit("; res_prop_exclusion="),
-                pl.col("retail_threshold_exclusion_applied").cast(pl.String),
             ]).alias("classification_reason"),
         ])
 
@@ -670,10 +788,15 @@ class ExposureClassifier:
             pl.col("counterparty_reference"),
             pl.col("cp_entity_type"),
             pl.col("exposure_class"),
+            pl.col("exposure_class_sa"),
+            pl.col("exposure_class_irb"),
             pl.col("approach"),
             pl.col("is_sme"),
             pl.col("is_mortgage"),
             pl.col("is_defaulted"),
+            pl.col("is_financial_sector_entity"),
+            pl.col("is_large_financial_sector_entity"),
+            pl.col("requires_fi_scalar"),
             pl.col("qualifies_as_retail"),
             pl.col("retail_threshold_exclusion_applied"),
             pl.col("residential_collateral_value"),

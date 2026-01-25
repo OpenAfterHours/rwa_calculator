@@ -88,13 +88,7 @@ def corporate_counterparties() -> pl.LazyFrame:
         "total_assets": [500000000.0, 150000000.0, 5000000.0, 100000000.0],
         "default_status": [False, False, False, False],
         "sector_code": ["MANU", "MANU", "SERV", "TECH"],
-        "is_financial_institution": [False, False, False, False],
-        "is_regulated": [False, False, False, False],
-        "is_pse": [False, False, False, False],
-        "is_mdb": [False, False, False, False],
-        "is_international_org": [False, False, False, False],
-        "is_central_counterparty": [False, False, False, False],
-        "is_regional_govt_local_auth": [False, False, False, False],
+        "is_regulated": [True, True, True, True],
         "is_managed_as_retail": [False, False, False, False],
     }).lazy()
 
@@ -108,7 +102,7 @@ def mixed_counterparties() -> pl.LazyFrame:
             "INST_UK",     # Institution (bank)
             "CORP_UK",     # Corporate
             "RETAIL_IND",  # Individual (retail)
-            "PSE_UK",      # PSE
+            "PSE_UK",      # PSE (with institution IRB treatment)
             "MDB_001",     # MDB
         ],
         "counterparty_name": [
@@ -124,21 +118,15 @@ def mixed_counterparties() -> pl.LazyFrame:
             "bank",
             "corporate",
             "individual",
-            "corporate",
-            "institution",
+            "pse_institution",  # PSE with institution IRB treatment
+            "mdb",              # MDB entity type
         ],
         "country_code": ["GB", "GB", "GB", "GB", "GB", "INT"],
         "annual_revenue": [0.0, 5000000000.0, 50000000.0, 0.0, 0.0, 0.0],
         "total_assets": [0.0, 100000000000.0, 250000000.0, 0.0, 0.0, 0.0],
         "default_status": [False, False, False, False, False, False],
         "sector_code": ["GOVT", "BANK", "MANU", "RETAIL", "HEALTH", "MDB"],
-        "is_financial_institution": [False, True, False, False, False, True],
-        "is_regulated": [False, True, False, False, False, True],
-        "is_pse": [False, False, False, False, True, False],
-        "is_mdb": [False, False, False, False, False, True],
-        "is_international_org": [False, False, False, False, False, False],
-        "is_central_counterparty": [False, False, False, False, False, False],
-        "is_regional_govt_local_auth": [False, False, False, False, False, False],
+        "is_regulated": [True, True, True, True, True, True],
         "is_managed_as_retail": [False, False, False, False, False, False],
     }).lazy()
 
@@ -159,13 +147,7 @@ def retail_counterparties() -> pl.LazyFrame:
         "total_assets": [0.0, 0.0, 0.0],
         "default_status": [False, False, False],
         "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-        "is_financial_institution": [False, False, False],
-        "is_regulated": [False, False, False],
-        "is_pse": [False, False, False],
-        "is_mdb": [False, False, False],
-        "is_international_org": [False, False, False],
-        "is_central_counterparty": [False, False, False],
-        "is_regional_govt_local_auth": [False, False, False],
+        "is_regulated": [True, True, True],
         "is_managed_as_retail": [False, False, False],
     }).lazy()
 
@@ -182,13 +164,7 @@ def defaulted_counterparties() -> pl.LazyFrame:
         "total_assets": [50000000.0, 50000000.0],
         "default_status": [True, False],  # First one is in default
         "sector_code": ["MANU", "MANU"],
-        "is_financial_institution": [False, False],
-        "is_regulated": [False, False],
-        "is_pse": [False, False],
-        "is_mdb": [False, False],
-        "is_international_org": [False, False],
-        "is_central_counterparty": [False, False],
-        "is_regional_govt_local_auth": [False, False],
+        "is_regulated": [True, True],
         "is_managed_as_retail": [False, False],
     }).lazy()
 
@@ -479,13 +455,7 @@ class TestSMEClassification:
             "total_assets": [300000000.0],
             "default_status": [False],
             "sector_code": ["MANU"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [False],
         }).lazy()
 
@@ -539,13 +509,7 @@ class TestSMEClassification:
             "total_assets": [150000000.0],
             "default_status": [False],
             "sector_code": ["MANU"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [False],
         }).lazy()
 
@@ -601,13 +565,7 @@ class TestSMEClassification:
             "total_assets": [200000000.0],
             "default_status": [False],
             "sector_code": ["MANU"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [False],
         }).lazy()
 
@@ -670,13 +628,7 @@ class TestRetailClassification:
             "total_assets": [0.0],
             "default_status": [False],
             "sector_code": ["RETAIL"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [False],
         }).lazy()
 
@@ -730,13 +682,7 @@ class TestRetailClassification:
             "total_assets": [0.0],
             "default_status": [False],
             "sector_code": ["RETAIL"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [False],
         }).lazy()
 
@@ -797,13 +743,7 @@ class TestRetailClassification:
             "total_assets": [0.0],
             "default_status": [False],
             "sector_code": ["RETAIL"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [True],
         }).lazy()
 
@@ -870,13 +810,7 @@ class TestRetailClassification:
             "total_assets": [50000000.0],
             "default_status": [False],
             "sector_code": ["RETAIL"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [True],
         }).lazy()
 
@@ -941,13 +875,7 @@ class TestRetailClassification:
             "total_assets": [0.0],
             "default_status": [False],
             "sector_code": ["RETAIL"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [False],
         }).lazy()
 
@@ -1012,13 +940,7 @@ class TestRetailClassification:
             "total_assets": [0.0, 0.0],
             "default_status": [False, False],
             "sector_code": ["RETAIL", "RETAIL"],
-            "is_financial_institution": [False, False],
-            "is_regulated": [False, False],
-            "is_pse": [False, False],
-            "is_mdb": [False, False],
-            "is_international_org": [False, False],
-            "is_central_counterparty": [False, False],
-            "is_regional_govt_local_auth": [False, False],
+            "is_regulated": [True, True],
             "is_managed_as_retail": [True, True],
         }).lazy()
 
@@ -1168,13 +1090,7 @@ class TestApproachAssignment:
             "total_assets": [500000000.0],
             "default_status": [False],
             "sector_code": ["MANU"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
+            "is_regulated": [True],
             "is_managed_as_retail": [False],
         }).lazy()
 

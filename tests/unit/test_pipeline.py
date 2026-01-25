@@ -112,17 +112,14 @@ def mock_raw_data() -> RawDataBundle:
     # Counterparties
     counterparties = pl.LazyFrame({
         "counterparty_reference": ["CP001", "CP002"],
+        "counterparty_name": ["Corporate Customer", "Individual Customer"],
         "entity_type": ["corporate", "individual"],
         "country_code": ["GB", "GB"],
         "annual_revenue": [30000000.0, 0.0],
+        "total_assets": [50000000.0, None],
         "default_status": [False, False],
-        "is_financial_institution": [False, False],
+        "sector_code": ["62.01", None],
         "is_regulated": [False, False],
-        "is_pse": [False, False],
-        "is_mdb": [False, False],
-        "is_international_org": [False, False],
-        "is_central_counterparty": [False, False],
-        "is_regional_govt_local_auth": [False, False],
         "is_managed_as_retail": [False, False],
     })
 
@@ -248,17 +245,14 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
     # Create counterparty lookup with matching counterparties
     counterparties = pl.LazyFrame({
         "counterparty_reference": ["CP001", "CP002"],
+        "counterparty_name": ["Corporate Customer", "Individual Customer"],
         "entity_type": ["corporate", "individual"],
         "country_code": ["GB", "GB"],
         "annual_revenue": [30000000.0, 0.0],
+        "total_assets": [50000000.0, None],
         "default_status": [False, False],
-        "is_financial_institution": [False, False],
+        "sector_code": ["62.01", None],
         "is_regulated": [False, False],
-        "is_pse": [False, False],
-        "is_mdb": [False, False],
-        "is_international_org": [False, False],
-        "is_central_counterparty": [False, False],
-        "is_regional_govt_local_auth": [False, False],
         "is_managed_as_retail": [False, False],
     })
 

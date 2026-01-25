@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <!-- Gradient for the night sky background -->
+    <linearGradient id="nightGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1117"/>
+      <stop offset="50%" style="stop-color:#161b22"/>
+      <stop offset="100%" style="stop-color:#21262d"/>
+    </linearGradient>
+    
+    <!-- Glow effect for the moon/open bracket -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Subtle glow for stars -->
+    <filter id="starGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Terminal cursor blink animation -->
+    <style>
+      @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+      }
+      .cursor {
+        animation: blink 1.2s infinite;
+      }
+      @keyframes twinkle {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 1; }
+      }
+      .star {
+        animation: twinkle 2s infinite;
+      }
+      .star-delay-1 { animation-delay: 0.3s; }
+      .star-delay-2 { animation-delay: 0.7s; }
+      .star-delay-3 { animation-delay: 1.1s; }
+      .star-delay-4 { animation-delay: 0.5s; }
+      .star-delay-5 { animation-delay: 0.9s; }
+    </style>
+  </defs>
+  
+  <!-- Background circle - night sky -->
+  <circle cx="200" cy="200" r="180" fill="url(#nightGradient)"/>
+  
+  <!-- Outer ring - subtle border -->
+  <circle cx="200" cy="200" r="180" fill="none" stroke="#30363d" stroke-width="2"/>
+  
+  <!-- Stars scattered in the background -->
+  <circle class="star star-delay-1" cx="85" cy="95" r="2" fill="#58a6ff" filter="url(#starGlow)"/>
+  <circle class="star star-delay-2" cx="310" cy="80" r="1.5" fill="#58a6ff" filter="url(#starGlow)"/>
+  <circle class="star star-delay-3" cx="280" cy="130" r="2" fill="#58a6ff" filter="url(#starGlow)"/>
+  <circle class="star star-delay-4" cx="120" cy="140" r="1.5" fill="#58a6ff" filter="url(#starGlow)"/>
+  <circle class="star star-delay-5" cx="330" cy="180" r="1.5" fill="#58a6ff" filter="url(#starGlow)"/>
+  <circle class="star star-delay-1" cx="70" cy="200" r="2" fill="#58a6ff" filter="url(#starGlow)"/>
+  <circle class="star star-delay-3" cx="100" cy="280" r="1.5" fill="#58a6ff" filter="url(#starGlow)"/>
+  <circle class="star star-delay-2" cx="300" cy="290" r="2" fill="#58a6ff" filter="url(#starGlow)"/>
+  
+  <!-- Main symbol: Code brackets forming a crescent moon shape -->
+  <!-- Left bracket < styled as crescent moon -->
+  <g filter="url(#glow)">
+    <!-- Crescent moon made from bracket shape -->
+    <path d="M 170 120 
+             Q 120 200, 170 280
+             Q 140 200, 170 120" 
+          fill="#f0f6fc" 
+          stroke="none"/>
+    <!-- The < bracket overlaid -->
+    <path d="M 175 130 L 125 200 L 175 270" 
+          fill="none" 
+          stroke="#f0f6fc" 
+          stroke-width="12" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Right bracket > representing the opening/code -->
+  <path d="M 225 130 L 275 200 L 225 270" 
+        fill="none" 
+        stroke="#3fb950" 
+        stroke-width="12" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+  
+  <!-- Forward slash in the middle - representing code/closing tags -->
+  <path d="M 215 140 L 185 260" 
+        fill="none" 
+        stroke="#8b949e" 
+        stroke-width="6" 
+        stroke-linecap="round"/>
+  
+  <!-- Terminal cursor after the brackets -->
+  <rect class="cursor" x="285" y="185" width="8" height="30" fill="#3fb950"/>
+  
+  <!-- Text: "OpenAfterHours" curved along bottom -->
+  <defs>
+    <path id="textPath" d="M 60 310 Q 200 380, 340 310" fill="none"/>
+  </defs>
+  <text fill="#8b949e" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" font-size="18" font-weight="500">
+    <textPath href="#textPath" startOffset="50%" text-anchor="middle">
+      OpenAfterHours
+    </textPath>
+  </text>
+  
+  <!-- Small "open source" indicator - unlocked padlock icon, simplified -->
+  <g transform="translate(188, 305)" fill="#58a6ff" opacity="0.8">
+    <rect x="0" y="8" width="24" height="18" rx="3" fill="none" stroke="#58a6ff" stroke-width="2"/>
+    <path d="M 6 8 L 6 4 Q 6 -2, 12 -2 Q 18 -2, 18 4" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="12" cy="17" r="2" fill="#58a6ff"/>
+  </g>
+</svg>

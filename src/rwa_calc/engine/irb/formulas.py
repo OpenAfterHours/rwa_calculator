@@ -104,6 +104,11 @@ def apply_irb_formulas(
         exposures = exposures.with_columns(pl.lit(2.5).alias("maturity"))
     if "turnover_m" not in schema.names():
         exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
+    # Ensure requires_fi_scalar column exists (for FI scalar in correlation)
+    # This is normally set by the classifier, default to False if not present
+    schema = exposures.collect_schema()
+    if "requires_fi_scalar" not in schema.names():
+        exposures = exposures.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
     # Step 1: Apply PD floor (pure Polars)
     exposures = exposures.with_columns(
@@ -177,7 +182,9 @@ def _polars_correlation_expr(sme_threshold: float = 50.0) -> pl.Expr:
     - QRRE: Fixed 0.04
     - Other retail: PD-dependent (decay=35)
 
-    Includes SME firm size adjustment for corporates.
+    Includes:
+    - SME firm size adjustment for corporates
+    - FI scalar (1.25x) for large/unregulated financial sector entities (CRR Art. 153(2))
     """
     pd = pl.col("pd_floored")
     exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
@@ -220,8 +227,8 @@ def _polars_correlation_expr(sme_threshold: float = 50.0) -> pl.Expr:
         .otherwise(r_corporate)
     )
 
-    # Build correlation based on exposure class
-    return (
+    # Build base correlation based on exposure class
+    base_correlation = (
         pl.when(exp_class.str.contains("MORTGAGE") | exp_class.str.contains("RESIDENTIAL"))
         .then(pl.lit(0.15))
         .when(exp_class.str.contains("QRRE"))
@@ -230,6 +237,20 @@ def _polars_correlation_expr(sme_threshold: float = 50.0) -> pl.Expr:
         .then(r_retail_other)
         .otherwise(r_corporate_with_sme)
     )
+
+    # Apply FI scalar (1.25x) for large/unregulated financial sector entities
+    # Per CRR Article 153(2): "For all exposures to large financial sector entities,
+    # the coefficient of correlation is multiplied by 1.25. For all exposures to
+    # unregulated financial sector entities, the coefficients of correlation are
+    # multiplied by 1.25."
+    # Note: The requires_fi_scalar column is set by the classifier
+    fi_scalar = (
+        pl.when(pl.col("requires_fi_scalar").fill_null(False) == True)  # noqa: E712
+        .then(pl.lit(1.25))
+        .otherwise(pl.lit(1.0))
+    )
+
+    return base_correlation * fi_scalar
 
 
 def _polars_capital_k_expr() -> pl.Expr:
@@ -372,27 +393,47 @@ def calculate_correlation(
     exposure_class: str,
     turnover_m: float | None = None,
     sme_threshold: float = 50.0,
+    apply_fi_scalar: bool = False,
 ) -> float:
-    """Scalar correlation calculation."""
+    """
+    Scalar correlation calculation.
+
+    Args:
+        pd: Probability of default
+        exposure_class: Exposure class string
+        turnover_m: Turnover in millions (for SME adjustment)
+        sme_threshold: SME threshold in millions (default 50.0)
+        apply_fi_scalar: Whether to apply 1.25x FI scalar (CRR Art. 153(2))
+                        for large/unregulated financial sector entities
+
+    Returns:
+        Asset correlation value
+    """
     params = get_correlation_params(exposure_class)
 
     if params.correlation_type == "fixed":
-        return params.fixed
-
-    if params.decay_factor > 0:
-        numerator = 1 - math.exp(-params.decay_factor * pd)
-        denominator = 1 - math.exp(-params.decay_factor)
-        f_pd = numerator / denominator
+        correlation = params.fixed
     else:
-        f_pd = 0.5
+        if params.decay_factor > 0:
+            numerator = 1 - math.exp(-params.decay_factor * pd)
+            denominator = 1 - math.exp(-params.decay_factor)
+            f_pd = numerator / denominator
+        else:
+            f_pd = 0.5
 
-    correlation = params.r_min * f_pd + params.r_max * (1 - f_pd)
+        correlation = params.r_min * f_pd + params.r_max * (1 - f_pd)
 
+    # SME adjustment for corporates
     if turnover_m is not None and turnover_m < sme_threshold:
         if "CORPORATE" in exposure_class.upper():
             s = max(5.0, min(turnover_m, sme_threshold))
             adjustment = 0.04 * (1 - (s - 5.0) / 45.0)
             correlation = correlation - adjustment
+
+    # Apply FI scalar for large/unregulated financial sector entities
+    # Per CRR Article 153(2)
+    if apply_fi_scalar:
+        correlation = correlation * 1.25
 
     return correlation
 

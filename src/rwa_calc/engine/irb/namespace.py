@@ -280,6 +280,7 @@ class IRBLazyFrame:
         - QRRE: Fixed 0.04
         - Other retail: PD-dependent (0.03-0.16)
         - SME adjustment for corporates
+        - FI scalar (1.25x) for large/unregulated financial sector entities
 
         Args:
             config: Calculation configuration
@@ -287,7 +288,13 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with correlation column
         """
-        return self._lf.with_columns(
+        # Ensure requires_fi_scalar column exists (defaults to False if not set by classifier)
+        schema = self._lf.collect_schema()
+        lf = self._lf
+        if "requires_fi_scalar" not in schema.names():
+            lf = lf.with_columns(pl.lit(False).alias("requires_fi_scalar"))
+
+        return lf.with_columns(
             _polars_correlation_expr().alias("correlation")
         )
 
@@ -385,10 +392,10 @@ class IRBLazyFrame:
         Apply full IRB formula pipeline.
 
         Steps:
-        1. Ensure required columns exist (turnover_m, maturity)
+        1. Ensure required columns exist (turnover_m, maturity, requires_fi_scalar)
         2. Apply PD floor
         3. Apply LGD floor (Basel 3.1 only)
-        4. Calculate correlation
+        4. Calculate correlation (with FI scalar if applicable)
         5. Calculate K
         6. Calculate maturity adjustment
         7. Calculate RWA and risk weight
@@ -409,6 +416,12 @@ class IRBLazyFrame:
 
         if "maturity" not in schema.names():
             lf = lf.with_columns(pl.lit(2.5).alias("maturity"))
+
+        # Ensure requires_fi_scalar column exists (for FI scalar in correlation)
+        # This is normally set by the classifier, default to False if not present
+        schema = lf.collect_schema()
+        if "requires_fi_scalar" not in schema.names():
+            lf = lf.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
         return (lf
             .irb.apply_pd_floor(config)

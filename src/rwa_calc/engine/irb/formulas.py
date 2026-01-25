@@ -12,11 +12,7 @@ Key formulas:
 Implementation architecture:
 - Vectorized expressions: Pure Polars expressions for bulk processing
 - Scalar wrappers: Thin wrappers around vectorized expressions for single-value calculations
-- Stats backend: Auto-detects polars-normal-stats (native) or scipy (fallback)
-
-Backend priority:
-1. polars-normal-stats (native Polars, fastest, streaming-compatible)
-2. scipy (universal fallback via map_batches)
+- Stats backend: Uses polars-normal-stats for native Polars statistical functions
 
 References:
 - CRR Art. 153-154: IRB risk weight functions
@@ -33,7 +29,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.engine.irb.stats_backend import get_backend, normal_cdf, normal_ppf
+from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

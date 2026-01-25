@@ -40,7 +40,6 @@ from rwa_calc.engine.irb.formulas import (
     calculate_maturity_adjustment,
 )
 from rwa_calc.engine.irb.namespace import IRBExpr, IRBLazyFrame
-from rwa_calc.engine.irb.stats_backend import get_backend
 
 __all__ = [
     "IRBCalculator",
@@ -54,6 +53,4 @@ __all__ = [
     # Namespace classes
     "IRBLazyFrame",
     "IRBExpr",
-    # Backend diagnostics
-    "get_backend",
 ]

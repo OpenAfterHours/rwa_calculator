@@ -35,7 +35,6 @@ from rwa_calc.engine.irb import (
     calculate_k,
     calculate_maturity_adjustment,
     create_irb_calculator,
-    get_backend,
 )
 
 
@@ -672,17 +671,12 @@ class TestIRBAuditTrail:
 
 
 # =============================================================================
-# Stats Backend Tests
+# Stats Functions Tests
 # =============================================================================
 
 
-class TestStatsBackend:
-    """Tests for stats backend detection and functionality."""
-
-    def test_backend_available(self) -> None:
-        """Backend should be detected and available."""
-        backend = get_backend()
-        assert backend in ["polars-normal-stats", "scipy"]
+class TestStatsFunctions:
+    """Tests for stats functions."""
 
     def test_scalar_wrappers_use_vectorized(self) -> None:
         """Scalar wrappers should produce same results as direct calculation.

@@ -1,0 +1,231 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.19.4"
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "0b2388ea1385fc7ff804c194e0dfbd1b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "0ff9a46f4579619186bddff587b339c2",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"group-crr-h-crr-complexcombined-scenarios\">Group CRR-H: CRR Complex/Combined Scenarios</h1>\n<span class=\"paragraph\">This workbook calculates expected RWA values for complex scenarios CRR-H1 to CRR-H4.</span>\n<span class=\"paragraph\"><strong>Regulatory Framework:</strong> CRR (Capital Requirements Regulation)\n<strong>Effective:</strong> Until 31 December 2026</span>\n<span class=\"paragraph\"><strong>Complex Scenarios Cover:</strong></span>\n<ol>\n<li><strong>Facility Hierarchy</strong> - Multiple loans under one facility</li>\n<li><strong>Counterparty Groups</strong> - Parent/subsidiary rating inheritance</li>\n<li><strong>SME with Supporting Factor</strong> - Complete SME chain calculation</li>\n<li><strong>Full CRM Integration</strong> - Collateral + Guarantee + Provision combined</li>\n</ol>\n<span class=\"paragraph\">These scenarios test the integration of multiple CRR components and validate\nthat the calculation pipeline handles complex real-world structures correctly.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "04516e1a32cdf002b3382e605962f95c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "3d14b07d3b5ef91aa41733fda5c5436d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "6aaffee31a5bb31cdb536f208f9c3435",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"scenario-crr-h1-facility-with-multiple-loans\">Scenario CRR-H1: Facility with Multiple Loans</h2>\n<span class=\"paragraph\"><strong>Input:</strong> \u00a35m revolving facility with 3 drawn loans</span>\n<ul>\n<li>Loan 1: \u00a32m term loan</li>\n<li>Loan 2: \u00a31.5m trade finance</li>\n<li>Loan 3: \u00a3500k overdraft</li>\n<li>Undrawn: \u00a31m (50% CCF)</li>\n</ul>\n<span class=\"paragraph\"><strong>Expected:</strong> Aggregate RWA from all exposures under facility</span>\n<span class=\"paragraph\"><strong>Testing:</strong></span>\n<ul>\n<li>Facility-to-loan hierarchy</li>\n<li>Mixed on-balance and off-balance sheet</li>\n<li>CCF application for undrawn</li>\n</ul>\n<span class=\"paragraph\"><strong>Reference:</strong> CRR Art. 111, 113</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "95527651b7e6866e047a81a7c34d59cf",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "CRR-H1: Facility with 4 exposures\n  Total EAD=\u00a34,500,000, Total RWA=\u00a34,500,000\n    Term Loan: EAD=\u00a32,000,000, RWA=\u00a3500,000\n    Trade Finance: EAD=\u00a31,500,000, RWA=\u00a3500,000\n    Overdraft: EAD=\u00a3500,000, RWA=\u00a3500,000\n    Undrawn Commitment: EAD=\u00a3500,000, RWA=\u00a3500,000\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Xref",
+      "code_hash": "4362f412465e88f0072e265ad7282aa9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"scenario-crr-h2-counterparty-group-rating-inheritance\">Scenario CRR-H2: Counterparty Group (Rating Inheritance)</h2>\n<span class=\"paragraph\"><strong>Input:</strong> Corporate group with parent and 2 subsidiaries</span>\n<ul>\n<li>Parent: Rated A (CQS 2 = 50% RW)</li>\n<li>Sub 1: Unrated (inherits parent rating)</li>\n<li>Sub 2: Rated BBB (CQS 3 = 100% RW, own rating)</li>\n</ul>\n<span class=\"paragraph\"><strong>Expected:</strong> Unrated subsidiary uses parent's rating</span>\n<span class=\"paragraph\"><strong>Testing:</strong></span>\n<ul>\n<li>Organisation hierarchy</li>\n<li>Rating inheritance rules</li>\n<li>CQS to risk weight mapping</li>\n</ul>\n<span class=\"paragraph\"><strong>Reference:</strong> CRR Art. 142</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "8afc6a4edc1b2cb125039007c9a65faa",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "CRR-H2: Counterparty group with 3 members\n  Total EAD=\u00a35,000,000, Total RWA=\u00a32,750,000\n    Parent Corp: CQS=2, RW=50%, RWA=\u00a31,500,000\n    Subsidiary 1: CQS=2, RW=50%, RWA=\u00a3750,000\n    Subsidiary 2: CQS=3, RW=100%, RWA=\u00a3500,000\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "d27196fddf7b2d29f6a1d7ebad43efa4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"scenario-crr-h3-sme-chain-with-supporting-factor\">Scenario CRR-H3: SME Chain with Supporting Factor</h2>\n<span class=\"paragraph\"><strong>Input:</strong> \u00a32m loan to SME corporate (turnover \u00a325m)\n<strong>Expected:</strong> 100% RW \u00d7 0.7619 SME factor = 76.19% effective RW</span>\n<span class=\"paragraph\"><strong>Testing:</strong></span>\n<ul>\n<li>SME eligibility check (turnover &lt; \u00a344m)</li>\n<li>Supporting factor application</li>\n<li>End-to-end SME treatment</li>\n</ul>\n<span class=\"paragraph\"><strong>Reference:</strong> CRR Art. 501</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "ea9483b4ff02dd59e8d3b6ec7cda1d40",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "CRR-H3: SME with Supporting Factor\n  Turnover=\u00a325,000,000, EAD=\u00a32,000,000\n  RWA before SF=\u00a32,000,000\n  SF=0.7619, RWA after SF=\u00a31,523,800\n  Effective RW=76.19%\nSME factor applied: 0.7619 (Tier 1 only - exposure \u2264 \u00a32.2m)\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "2dde93e9e6fa0e66457e3e9c92a224d9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"scenario-crr-h4-full-crm-chain\">Scenario CRR-H4: Full CRM Chain</h2>\n<span class=\"paragraph\"><strong>Input:</strong> \u00a32m corporate exposure with multiple CRM techniques</span>\n<ul>\n<li>\u00a3500k cash collateral</li>\n<li>\u00a3400k bank guarantee (CQS 2 = 30% RW UK)</li>\n<li>\u00a3100k specific provision</li>\n</ul>\n<span class=\"paragraph\"><strong>Expected:</strong> Combined effect of all CRM techniques</span>\n<span class=\"paragraph\"><strong>Testing:</strong></span>\n<ul>\n<li>Collateral haircut application</li>\n<li>Guarantee substitution</li>\n<li>Provision deduction</li>\n<li>Sequential CRM application</li>\n</ul>\n<span class=\"paragraph\"><strong>Reference:</strong> CRR Art. 207-236</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "e4f246d7a09248bd9ff73b267d7a6ffc",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "CRR-H4: Full CRM Chain\n  Gross=\u00a32,000,000\n  Provision=\u00a3100,000, Cash=\u00a3500,000, Guarantee=\u00a3400,000\n  RWA pre-CRM=\u00a32,000,000\n  RWA post-CRM=\u00a31,120,000\n  Reduction=\u00a3880,000 (44.0%)\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "8e9924899c65e224d92ba88742ea74d7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"summary-group-crr-h-complex-scenario-results\">Summary: Group CRR-H Complex Scenario Results</h2>\n<span class=\"paragraph\">Key observations from complex scenarios:</span>\n<span class=\"paragraph\"><strong>H1 - Facility Hierarchy:</strong></span>\n<ul>\n<li>Correctly aggregates on-balance and off-balance sheet exposures</li>\n<li>Applies appropriate CCFs to undrawn commitments</li>\n</ul>\n<span class=\"paragraph\"><strong>H2 - Counterparty Groups:</strong></span>\n<ul>\n<li>Demonstrates rating inheritance for unrated subsidiaries</li>\n<li>Entities with own ratings use their own CQS</li>\n</ul>\n<span class=\"paragraph\"><strong>H3 - SME Chain:</strong></span>\n<ul>\n<li>Complete end-to-end SME treatment</li>\n<li>23.81% RWA reduction from supporting factor</li>\n<li>Key CRR advantage over Basel 3.1</li>\n</ul>\n<span class=\"paragraph\"><strong>H4 - Full CRM:</strong></span>\n<ul>\n<li>Sequential application of multiple CRM techniques</li>\n<li>Significant RWA reduction possible with comprehensive CRM</li>\n<li>Demonstrates substitution approach for guarantees</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "9de508539746e639bf2860140ba7ddfd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='nWHF-0' random-id='dee707f5-90d1-cfe3-bf04-8e271123fb1e'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;_marimo_row_id&#92;&quot;:0,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-H1&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Facility with multiple loans - hierarchy...&#92;&quot;,&#92;&quot;Exposures&#92;&quot;:4,&#92;&quot;Total EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;4,500,000&#92;&quot;,&#92;&quot;Total RWA (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;4,500,000&#92;&quot;,&#92;&quot;Features&#92;&quot;:&#92;&quot;Facility-loan hierarchy, On-balance sheet aggregation&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:1,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-H2&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Counterparty group - rating inheritance...&#92;&quot;,&#92;&quot;Exposures&#92;&quot;:3,&#92;&quot;Total EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;5,000,000&#92;&quot;,&#92;&quot;Total RWA (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,750,000&#92;&quot;,&#92;&quot;Features&#92;&quot;:&#92;&quot;Organisation hierarchy, Parent-subsidiary relationship&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:2,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-H3&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;SME chain - supporting factor applicatio...&#92;&quot;,&#92;&quot;Exposures&#92;&quot;:1,&#92;&quot;Total EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;2,000,000&#92;&quot;,&#92;&quot;Total RWA (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;1,523,800&#92;&quot;,&#92;&quot;Features&#92;&quot;:&#92;&quot;SME eligibility (turnover check), SME supporting factor (0.7619)&#92;&quot;},{&#92;&quot;_marimo_row_id&#92;&quot;:3,&#92;&quot;Scenario&#92;&quot;:&#92;&quot;CRR-H4&#92;&quot;,&#92;&quot;Description&#92;&quot;:&#92;&quot;Full CRM chain - collateral + guarantee ...&#92;&quot;,&#92;&quot;Exposures&#92;&quot;:1,&#92;&quot;Total EAD (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;1,400,000&#92;&quot;,&#92;&quot;Total RWA (&#92;&#92;u00a3)&#92;&quot;:&#92;&quot;1,120,000&#92;&quot;,&#92;&quot;Features&#92;&quot;:&#92;&quot;Specific provision (EAD reduction), Cash collateral (0% haircut)&#92;&quot;}]&quot;' data-total-rows='4' data-total-columns='6' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='false' data-page-size='10' data-field-types='[[&quot;Scenario&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;Description&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;Exposures&quot;,[&quot;integer&quot;,&quot;i64&quot;]],[&quot;Total EAD (\u00a3)&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;Total RWA (\u00a3)&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;Features&quot;,[&quot;string&quot;,&quot;str&quot;]]]' data-selection='&quot;multi&quot;' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='true' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "f9ad46d7df1d1f90730a245c8fa52bb2",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}

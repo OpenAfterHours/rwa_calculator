@@ -38,30 +38,78 @@ This page documents the authoritative schemas for all input data files required 
 |--------|------|----------|-------------|
 | `counterparty_reference` | `String` | Yes | Unique identifier for the counterparty |
 | `counterparty_name` | `String` | Yes | Legal name of the counterparty |
-| `entity_type` | `String` | Yes | Type of entity (see valid values below) |
+| `entity_type` | `String` | Yes | **Single source of truth** for exposure class (see valid values below) |
 | `country_code` | `String` | Yes | ISO 3166-1 alpha-2 country code |
-| `annual_revenue` | `Float64` | No | Annual revenue in EUR (for SME/large corporate classification) |
-| `total_assets` | `Float64` | No | Total assets in EUR (alternative to revenue for CRE30.6) |
+| `annual_revenue` | `Float64` | No | Annual revenue in GBP (for SME classification - EUR 50m threshold) |
+| `total_assets` | `Float64` | No | Total assets in GBP (for large FSE threshold - EUR 70bn per CRR Art. 4(1)(146)) |
 | `default_status` | `Boolean` | No | Whether counterparty is in default |
 | `sector_code` | `String` | No | Industry sector code (SIC-based) |
-| `is_financial_institution` | `Boolean` | No | Credit institution or investment firm (CRE20.16) |
-| `is_regulated` | `Boolean` | No | Prudentially regulated institution |
-| `is_pse` | `Boolean` | No | Public Sector Entity (CRR Art 116) |
-| `is_mdb` | `Boolean` | No | Multilateral Development Bank (CRR Art 117) |
-| `is_international_org` | `Boolean` | No | International Organisation (CRR Art 118) |
-| `is_central_counterparty` | `Boolean` | No | Central Counterparty (CRR Art 300-311) |
-| `is_regional_govt_local_auth` | `Boolean` | No | Regional Government/Local Authority (CRR Art 115) |
+| `is_regulated` | `Boolean` | No | Prudentially regulated (affects FI scalar - CRR Art. 153(2)) |
+| `is_managed_as_retail` | `Boolean` | No | SME managed on pooled retail basis (75% RW per CRR Art. 123) |
+
+### Entity Type: The Single Source of Truth
+
+The `entity_type` field is the **authoritative source** for determining both SA and IRB exposure classes. Each entity type maps to specific exposure classes for each approach. This design ensures consistent classification across the calculation pipeline.
 
 **Valid `entity_type` values:**
 
-| Value | Description | Typical Risk Weight |
-|-------|-------------|---------------------|
-| `corporate` | Non-financial companies | CQS-based or 100% unrated |
-| `individual` | Natural persons | Retail treatment if eligible |
-| `sovereign` | Governments, central banks | 0%-150% based on CQS |
-| `institution` | Banks, investment firms | 20%-150% based on CQS |
-| `pse` | Public sector entities | Varies by treatment |
-| `mdb` | Multilateral development banks | 0% if on eligible list |
+| Entity Type | SA Exposure Class | IRB Exposure Class | Regulatory Reference |
+|-------------|-------------------|--------------------|-----------------------|
+| **Sovereign Class** |
+| `sovereign` | SOVEREIGN | SOVEREIGN | CRR Art. 112(a) |
+| `central_bank` | SOVEREIGN | SOVEREIGN | CRR Art. 112(a) |
+| **RGLA Class** (Regional Governments/Local Authorities) |
+| `rgla_sovereign` | RGLA | SOVEREIGN | CRR Art. 115 - has taxing powers/govt guarantee |
+| `rgla_institution` | RGLA | INSTITUTION | CRR Art. 115 - no sovereign equivalence |
+| **PSE Class** (Public Sector Entities) |
+| `pse_sovereign` | PSE | SOVEREIGN | CRR Art. 116 - govt guaranteed |
+| `pse_institution` | PSE | INSTITUTION | CRR Art. 116 - commercial PSE |
+| **MDB/International Org Class** |
+| `mdb` | MDB | SOVEREIGN | CRR Art. 117 - 0% RW if on eligible list |
+| `international_org` | MDB | SOVEREIGN | CRR Art. 118 |
+| **Institution Class** |
+| `institution` | INSTITUTION | INSTITUTION | CRR Art. 112(d) |
+| `bank` | INSTITUTION | INSTITUTION | CRR Art. 112(d) |
+| `ccp` | INSTITUTION | INSTITUTION | CRR Art. 300-311 (CCP treatment) |
+| `financial_institution` | INSTITUTION | INSTITUTION | CRR Art. 112(d) |
+| **Corporate Class** |
+| `corporate` | CORPORATE | CORPORATE | CRR Art. 112(g) |
+| `company` | CORPORATE | CORPORATE | CRR Art. 112(g) |
+| **Retail Class** |
+| `individual` | RETAIL_OTHER | RETAIL_OTHER | CRR Art. 112(h) |
+| `retail` | RETAIL_OTHER | RETAIL_OTHER | CRR Art. 112(h) |
+| **Specialised Lending Class** |
+| `specialised_lending` | SPECIALISED_LENDING | SPECIALISED_LENDING | CRR Art. 147(8) |
+
+### Why SA and IRB Classes Can Differ
+
+For certain entity types, the regulatory treatment differs between SA and IRB approaches:
+
+- **RGLA/PSE with sovereign treatment**: Under SA, these use dedicated RGLA/PSE risk weight tables. Under IRB, those with government guarantees or taxing powers use the sovereign IRB formula.
+- **RGLA/PSE with institution treatment**: Under SA, these use RGLA/PSE tables. Under IRB, commercial PSEs without sovereign backing use the institution IRB formula.
+- **MDB/International Orgs**: Under SA, these typically receive 0% RW from the MDB table. Under IRB, they use the sovereign formula.
+
+### Additional Classification Flags
+
+| Column | Purpose | When Used |
+|--------|---------|-----------|
+| `is_regulated` | Determines if FI scalar (1.25x correlation) applies | Unregulated financial sector entities get FI scalar under IRB (CRR Art. 153(2)) |
+| `is_managed_as_retail` | SME managed on pooled retail basis | Can use 75% RW under SA (CRR Art. 123) |
+
+### Financial Sector Entity (FSE) Determination
+
+The following entity types are classified as Financial Sector Entities for FI scalar purposes:
+
+- `institution`
+- `bank`
+- `ccp`
+- `financial_institution`
+- `pse_institution` (PSE treated as institution)
+- `rgla_institution` (RGLA treated as institution)
+
+**FI Scalar applies when (CRR Art. 153(2)):**
+1. Large FSE: `total_assets >= EUR 70bn`, OR
+2. Unregulated FSE: `is_regulated = False`
 
 **Example:**
 
@@ -69,23 +117,31 @@ This page documents the authoritative schemas for all input data files required 
 import polars as pl
 
 counterparties = pl.DataFrame({
-    "counterparty_reference": ["CORP_001", "CORP_002", "SOV_001"],
-    "counterparty_name": ["Acme Corp Ltd", "Beta Industries PLC", "UK Treasury"],
-    "entity_type": ["corporate", "corporate", "sovereign"],
-    "country_code": ["GB", "GB", "GB"],
-    "annual_revenue": [25_000_000.0, 500_000_000.0, None],
-    "total_assets": [30_000_000.0, 600_000_000.0, None],
-    "default_status": [False, False, False],
-    "sector_code": ["62.01", "28.11", None],
-    "is_financial_institution": [False, False, False],
-    "is_regulated": [False, False, True],
-    "is_pse": [False, False, False],
-    "is_mdb": [False, False, False],
-    "is_international_org": [False, False, False],
-    "is_central_counterparty": [False, False, False],
-    "is_regional_govt_local_auth": [False, False, False],
+    "counterparty_reference": ["CORP_001", "CORP_002", "SOV_001", "BANK_001", "PSE_001"],
+    "counterparty_name": ["Acme Corp Ltd", "Beta Industries PLC", "UK Treasury", "Major Bank PLC", "Local Council"],
+    "entity_type": ["corporate", "corporate", "sovereign", "bank", "pse_sovereign"],
+    "country_code": ["GB", "GB", "GB", "GB", "GB"],
+    "annual_revenue": [25_000_000.0, 500_000_000.0, None, None, None],
+    "total_assets": [30_000_000.0, 600_000_000.0, None, 80_000_000_000.0, 500_000_000.0],
+    "default_status": [False, False, False, False, False],
+    "sector_code": ["62.01", "28.11", None, "64.19", None],
+    "is_regulated": [False, False, True, True, True],
+    "is_managed_as_retail": [False, False, False, False, False],
 })
 ```
+
+### Classification Algorithm Summary
+
+The classifier (`engine/classifier.py`) processes counterparties through these steps:
+
+1. **Entity Type Mapping**: Maps `entity_type` to both SA and IRB exposure classes
+2. **SME Classification**: Checks if `annual_revenue < EUR 50m` for corporates
+3. **Retail Threshold**: Aggregates exposures by lending group against EUR 1m threshold
+4. **Default Identification**: Checks `default_status` for defaulted treatment
+5. **FI Scalar Determination**: Identifies large/unregulated FSEs for 1.25x correlation
+6. **Approach Assignment**: Assigns SA/F-IRB/A-IRB/Slotting based on IRB permissions
+
+See [Classification](../features/classification.md) for the complete classification algorithm.
 
 ---
 

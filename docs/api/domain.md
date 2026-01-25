@@ -16,6 +16,8 @@ class RegulatoryFramework(str, Enum):
 
 ### `ExposureClass`
 
+Regulatory exposure classes for SA and IRB approaches. The exposure class is determined by the counterparty's `entity_type` field.
+
 ```python
 class ExposureClass(str, Enum):
     """Regulatory exposure classes."""
@@ -35,6 +37,12 @@ class ExposureClass(str, Enum):
     RGLA = "RGLA"  # Regional Government/Local Authority
     OTHER = "OTHER"
 ```
+
+**Note:** Each counterparty `entity_type` maps to both an SA and IRB exposure class. For example:
+- `pse_sovereign` → SA: PSE, IRB: SOVEREIGN
+- `rgla_institution` → SA: RGLA, IRB: INSTITUTION
+
+See [Classification](../features/classification.md) for the complete entity type to exposure class mapping.
 
 ### `ApproachType`
 
@@ -159,9 +167,11 @@ class FacilityType(str, Enum):
 
 ### `CounterpartyType`
 
+**Note:** This enum is used for high-level counterparty categorisation. For exposure class determination, the counterparty schema uses the `entity_type` string field which supports 17 distinct values with granular SA/IRB class mappings. See [Classification](../features/classification.md) for details.
+
 ```python
 class CounterpartyType(str, Enum):
-    """Types of counterparties."""
+    """Types of counterparties (high-level)."""
 
     SOVEREIGN = "SOVEREIGN"
     CENTRAL_BANK = "CENTRAL_BANK"

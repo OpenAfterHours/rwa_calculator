@@ -94,20 +94,33 @@ Exposures are mapped to categories (Strong, Good, Satisfactory, Weak, Default) w
 
 ## Exposure Classes
 
-Exposures are classified into regulatory categories:
+Exposures are classified into regulatory categories based on the counterparty's **entity type**:
 
 | Class | Description | Typical Risk |
 |-------|-------------|--------------|
 | **Sovereign** | Governments and central banks | Low-High |
-| **Institution** | Banks and investment firms | Medium |
+| **RGLA** | Regional governments, local authorities | Low-Medium |
+| **PSE** | Public sector entities | Low-Medium |
+| **MDB** | Multilateral development banks | Low |
+| **Institution** | Banks, CCPs, financial institutions | Medium |
 | **Corporate** | Non-retail companies | Medium-High |
-| **Corporate SME** | Small/medium enterprises | Medium |
+| **Corporate SME** | Small/medium enterprises (<EUR 50m revenue) | Medium |
 | **Retail Mortgage** | Residential mortgages | Low-Medium |
 | **Retail QRRE** | Qualifying revolving retail | Medium |
 | **Retail Other** | Other retail exposures | Medium-High |
-| **Specialised Lending** | Project finance, etc. | Variable |
+| **Specialised Lending** | Project finance, object finance, IPRE | Variable |
 | **Equity** | Equity holdings | High |
 | **Defaulted** | Non-performing exposures | Very High |
+
+### Entity Type Classification
+
+The counterparty's `entity_type` field is the **single source of truth** for exposure class determination. The calculator supports 17 entity types that map to both SA and IRB exposure classes.
+
+For example:
+- `pse_sovereign` maps to PSE for SA (uses PSE risk weight table) but SOVEREIGN for IRB (uses sovereign formula)
+- `mdb` maps to MDB for SA (typically 0% RW) but SOVEREIGN for IRB
+
+See [Classification](../features/classification.md) for the complete entity type mapping and classification algorithm.
 
 ## Key Metrics
 

@@ -156,7 +156,7 @@ class HierarchyResolver:
 
 ### Purpose
 
-Assign regulatory exposure classes and calculation approaches.
+Assign regulatory exposure classes and calculation approaches based on counterparty entity type.
 
 ### Interface
 
@@ -171,54 +171,130 @@ class ClassifierProtocol(Protocol):
         ...
 ```
 
-### Implementation
+### Entity Type Mappings
+
+The classifier uses `entity_type` as the **single source of truth** for exposure class determination. Two separate mappings exist for SA and IRB approaches:
+
+**ENTITY_TYPE_TO_SA_CLASS** - Maps to SA exposure class for risk weight lookup:
+
+| Entity Type | SA Class |
+|-------------|----------|
+| `sovereign`, `central_bank` | SOVEREIGN |
+| `rgla_sovereign`, `rgla_institution` | RGLA |
+| `pse_sovereign`, `pse_institution` | PSE |
+| `mdb`, `international_org` | MDB |
+| `institution`, `bank`, `ccp`, `financial_institution` | INSTITUTION |
+| `corporate`, `company` | CORPORATE |
+| `individual`, `retail` | RETAIL_OTHER |
+| `specialised_lending` | SPECIALISED_LENDING |
+
+**ENTITY_TYPE_TO_IRB_CLASS** - Maps to IRB exposure class for formula selection:
+
+| Entity Type | IRB Class | Notes |
+|-------------|-----------|-------|
+| `sovereign`, `central_bank` | SOVEREIGN | |
+| `rgla_sovereign`, `pse_sovereign` | SOVEREIGN | Govt-backed = sovereign IRB treatment |
+| `rgla_institution`, `pse_institution` | INSTITUTION | Commercial = institution IRB treatment |
+| `mdb`, `international_org` | SOVEREIGN | CRR Art. 147(3) |
+| `institution`, `bank`, `ccp`, `financial_institution` | INSTITUTION | |
+| `corporate`, `company` | CORPORATE | |
+| `individual`, `retail` | RETAIL_OTHER | |
+| `specialised_lending` | SPECIALISED_LENDING | |
+
+### Classification Pipeline
+
+The `classify()` method executes these steps in sequence:
+
+```
+Step 1: _add_counterparty_attributes()
+        Join exposures with counterparty data (entity_type, revenue, assets, etc.)
+
+Step 2: _classify_exposure_class()
+        Map entity_type to exposure_class_sa and exposure_class_irb
+
+Step 3: _apply_sme_classification()
+        Check annual_revenue < EUR 50m for CORPORATE -> CORPORATE_SME
+
+Step 4: _apply_retail_classification()
+        Aggregate by lending group, check EUR 1m threshold
+        Apply mortgage classification for RETAIL_MORTGAGE
+
+Step 5: _identify_defaults()
+        Check default_status, set exposure_class_for_sa = DEFAULTED
+
+Step 5a: _apply_infrastructure_classification()
+        Check product_type for infrastructure lending
+
+Step 5b: _apply_fi_scalar_classification()
+        Determine if FI scalar (1.25x correlation) applies:
+        - Large FSE: total_assets >= EUR 70bn
+        - Unregulated FSE: is_regulated = False
+
+Step 6: _determine_approach()
+        Assign SA/FIRB/AIRB/SLOTTING based on IRB permissions
+
+Step 7: _add_classification_audit()
+        Build audit trail string for traceability
+
+Step 7a: _enrich_slotting_exposures()
+        Add slotting_category, sl_type, is_hvcre for specialised lending
+
+Step 8: Split by approach
+        Filter into sa_exposures, irb_exposures, slotting_exposures
+```
+
+### Financial Sector Entity (FSE) Classification
+
+The classifier identifies Financial Sector Entities for the FI scalar (CRR Art. 153(2)):
 
 ```python
-class ExposureClassifier:
-    """Classify exposures by regulatory class and approach."""
-
-    def classify(
-        self,
-        resolved: ResolvedHierarchyBundle,
-        config: CalculationConfig
-    ) -> ClassifiedExposuresBundle:
-        # Classify each exposure
-        classified = (
-            resolved.exposures
-            .with_columns(
-                exposure_class=self._determine_exposure_class(
-                    pl.col("counterparty_type"),
-                    pl.col("is_defaulted"),
-                    pl.col("total_exposure"),
-                    pl.col("turnover"),
-                    config
-                ),
-                approach_type=self._determine_approach(
-                    pl.col("exposure_class"),
-                    pl.col("has_irb_approval"),
-                    config
-                )
-            )
-        )
-
-        # Calculate EAD
-        classified = self._calculate_ead(classified, config)
-
-        # Split by approach
-        return ClassifiedExposuresBundle(
-            sa_exposures=classified.filter(pl.col("approach_type") == "SA"),
-            irb_exposures=classified.filter(pl.col("approach_type").is_in(["FIRB", "AIRB"])),
-            slotting_exposures=classified.filter(pl.col("approach_type") == "SLOTTING"),
-        )
+FINANCIAL_SECTOR_ENTITY_TYPES = {
+    "institution",
+    "bank",
+    "ccp",
+    "financial_institution",
+    "pse_institution",   # PSE treated as institution
+    "rgla_institution",  # RGLA treated as institution
+}
 ```
+
+**FI Scalar triggers 1.25x correlation multiplier when:**
+- `is_large_financial_sector_entity`: total_assets >= EUR 70bn, OR
+- `is_financial_sector_entity` AND `is_regulated = False`
 
 ### Key Features
 
-- Exposure class determination
-- Approach selection
-- SME identification
-- Retail eligibility checking
-- EAD calculation with CCFs
+- **Dual exposure class mapping**: SA and IRB classes tracked separately
+- **Entity type as single source**: No conflicting boolean flags
+- **SME identification**: Corporate exposures with revenue < EUR 50m
+- **Retail threshold checking**: Lending group aggregation against EUR 1m
+- **Mortgage detection**: Product type pattern matching
+- **FI scalar determination**: Large or unregulated FSE identification
+- **Infrastructure classification**: For supporting factor eligibility
+- **Slotting enrichment**: Category, type, HVCRE flags from patterns
+- **Full audit trail**: Classification reasoning captured per exposure
+
+### Output Columns
+
+The classifier adds these columns to exposures:
+
+| Column | Description |
+|--------|-------------|
+| `exposure_class` | SA exposure class (backwards compatible) |
+| `exposure_class_sa` | SA exposure class (explicit) |
+| `exposure_class_irb` | IRB exposure class |
+| `is_sme` | SME classification flag |
+| `is_mortgage` | Mortgage product flag |
+| `is_defaulted` | Default status flag |
+| `is_infrastructure` | Infrastructure lending flag |
+| `is_financial_sector_entity` | FSE flag |
+| `is_large_financial_sector_entity` | Large FSE flag (>= EUR 70bn) |
+| `requires_fi_scalar` | FI scalar required (1.25x correlation) |
+| `qualifies_as_retail` | Meets retail threshold |
+| `approach` | Assigned calculation approach (SA/FIRB/AIRB/SLOTTING) |
+| `classification_reason` | Audit trail string |
+
+See [Classification](../features/classification.md) for detailed documentation of the classification algorithm.
 
 ## CRM Processor
 

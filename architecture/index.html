@@ -1434,7 +1434,7 @@
 </tbody>
 </table>
 <h3 id="benchmark-results">Benchmark Results<a class="headerlink" href="#benchmark-results" title="Permanent link">¶</a></h3>
-<p>For typical portfolio sizes:</p>
+<p>For typical portfolio sizes (full RWA pipeline with pure Polars IRB):</p>
 <table>
 <thead>
 <tr>
@@ -1447,24 +1447,25 @@
 <tbody>
 <tr>
 <td>10,000</td>
-<td>0.2s</td>
+<td>0.1s</td>
 <td>0.5s</td>
-<td>2.5x</td>
+<td>5x</td>
 </tr>
 <tr>
 <td>100,000</td>
-<td>0.8s</td>
+<td>0.4s</td>
 <td>5.2s</td>
-<td>6.5x</td>
+<td>13x</td>
 </tr>
 <tr>
 <td>1,000,000</td>
-<td>3.5s</td>
+<td>1.5s</td>
 <td>45s</td>
-<td>12.9x</td>
+<td>30x</td>
 </tr>
 </tbody>
 </table>
+<p>IRB formula calculation alone achieves 3.4M rows/second throughput using <code>polars-normal-stats</code>.</p>
 <h2 id="technology-stack">Technology Stack<a class="headerlink" href="#technology-stack" title="Permanent link">¶</a></h2>
 <table>
 <thead>

@@ -9,6 +9,7 @@ The project follows a **phased, test-first approach** prioritising CRR (Basel 3.
 ## Documents
 
 - [**Development Roadmap**](roadmap.md) - Current development status, phase tracking, and implementation progress
+- [**Implementation Plan**](implementation-plan.md) - Detailed acceptance test scenarios, contract definitions, and regulatory parameters
 
 ## Development Philosophy
 

@@ -125,7 +125,7 @@ Reference implementations for expected output generation:
 |----------|-------|--------|
 | Contract tests | 97 | PASS |
 | Acceptance tests | 81 | PASS |
-| Acceptance tests (pending fixtures) | 3 | SKIP |
+| Acceptance tests (pending fixtures) | 4 | SKIP |
 | Loader tests | 31 | PASS |
 | Hierarchy tests | 17 | PASS |
 | Classifier tests | 19 | PASS |
@@ -134,6 +134,11 @@ Reference implementations for expected output generation:
 | Pipeline tests | 30 | PASS |
 | Namespace tests | 139 | PASS |
 | FX converter tests | 14 | PASS |
+
+Run all tests:
+```bash
+uv run pytest -v
+```
 
 ---
 

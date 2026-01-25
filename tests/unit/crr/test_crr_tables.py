@@ -27,11 +27,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     calculate_residential_mortgage_rw,
     calculate_commercial_re_rw,
 )
-from rwa_calc.data.tables.crr_ccf import (
-    CCF_TABLE,
-    CCF_TYPE_MAPPING,
-    get_ccf_table,
-)
 from rwa_calc.data.tables.crr_haircuts import (
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,
@@ -222,46 +217,6 @@ class TestRiskWeightDataFrames:
         assert "SOVEREIGN" in classes
         assert "INSTITUTION" in classes
         assert "CORPORATE" in classes
-
-
-# =============================================================================
-# CCF TABLE TESTS
-# =============================================================================
-
-class TestCCFTable:
-    """Tests for Credit Conversion Factors (CRR Art. 111)."""
-
-    def test_unconditionally_cancellable_zero(self) -> None:
-        """Unconditionally cancellable commitments get 0% CCF."""
-        assert CCF_TABLE["unconditionally_cancellable"] == Decimal("0.00")
-
-    def test_undrawn_short_term_twenty(self) -> None:
-        """Undrawn facilities <= 1 year get 20% CCF."""
-        assert CCF_TABLE["undrawn_short_term"] == Decimal("0.20")
-
-    def test_undrawn_long_term_fifty(self) -> None:
-        """Undrawn facilities > 1 year get 50% CCF."""
-        assert CCF_TABLE["undrawn_long_term"] == Decimal("0.50")
-
-    def test_guarantee_hundred(self) -> None:
-        """Guarantees given get 100% CCF."""
-        assert CCF_TABLE["guarantee_given"] == Decimal("1.00")
-
-    def test_type_mapping_exists(self) -> None:
-        """Test CCF type mapping has expected entries."""
-        assert "guarantee" in CCF_TYPE_MAPPING
-        assert CCF_TYPE_MAPPING["guarantee"] == "guarantee_given"
-
-
-class TestCCFDataFrame:
-    """Tests for CCF DataFrame generation."""
-
-    def test_ccf_table_schema(self) -> None:
-        """CCF table has expected columns."""
-        df = get_ccf_table()
-        assert "ccf_category" in df.columns
-        assert "ccf" in df.columns
-        assert "description" in df.columns
 
 
 # =============================================================================

@@ -25,10 +25,6 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_ccf import (
-    get_ccf_table,
-    get_firb_ccf_table,
-)
 from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
@@ -52,9 +48,8 @@ class CCFCalculator:
     """
 
     def __init__(self) -> None:
-        """Initialize CCF calculator with lookup tables."""
-        self._sa_ccf_table = get_ccf_table()
-        self._firb_ccf_table = get_firb_ccf_table()
+        """Initialize CCF calculator."""
+        pass
 
     def apply_ccf(
         self,

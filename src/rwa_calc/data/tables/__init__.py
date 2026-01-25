@@ -7,7 +7,6 @@ as onshored into UK law.
 
 Modules:
     crr_risk_weights: SA risk weights by exposure class and CQS
-    crr_ccf: Credit conversion factors for off-balance sheet items
     crr_haircuts: CRM supervisory haircuts
     crr_slotting: Specialised lending slotting risk weights
     crr_firb_lgd: F-IRB supervisory LGD values
@@ -22,11 +21,6 @@ from .crr_risk_weights import (
     COMMERCIAL_RE_PARAMS,
     RETAIL_RISK_WEIGHT,
     get_all_risk_weight_tables,
-)
-from .crr_ccf import (
-    CCF_TABLE,
-    CCF_TYPE_MAPPING,
-    get_ccf_table,
 )
 from .crr_haircuts import (
     COLLATERAL_HAIRCUTS,
@@ -53,10 +47,6 @@ __all__ = [
     "COMMERCIAL_RE_PARAMS",
     "RETAIL_RISK_WEIGHT",
     "get_all_risk_weight_tables",
-    # CCF
-    "CCF_TABLE",
-    "CCF_TYPE_MAPPING",
-    "get_ccf_table",
     # Haircuts
     "COLLATERAL_HAIRCUTS",
     "FX_HAIRCUT",

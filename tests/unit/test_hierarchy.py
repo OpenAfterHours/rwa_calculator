@@ -139,7 +139,6 @@ def simple_contingents() -> pl.LazyFrame:
     """Simple contingents for testing."""
     return pl.DataFrame({
         "contingent_reference": ["CONT001", "CONT002"],
-        "contract_type": ["GUARANTEE", "LC"],
         "product_type": ["FINANCIAL_GUARANTEE", "LETTER_OF_CREDIT"],
         "book_code": ["CORP", "CORP"],
         "counterparty_reference": ["CP002", "CP004"],
@@ -149,7 +148,6 @@ def simple_contingents() -> pl.LazyFrame:
         "nominal_amount": [250000.0, 100000.0],
         "lgd": [0.45, 0.45],
         "beel": [0.01, 0.01],
-        "ccf_category": ["MEDIUM_RISK", "MEDIUM_RISK"],
         "seniority": ["senior", "senior"],
         "risk_type": ["MR", "MR"],  # Medium risk
         "ccf_modelled": [None, None],  # No modelled CCF
@@ -563,7 +561,6 @@ class TestLendingGroupAggregation:
             lending_group_loans,
             pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
-                "contract_type": pl.String,
                 "product_type": pl.String,
                 "book_code": pl.String,
                 "counterparty_reference": pl.String,
@@ -573,7 +570,6 @@ class TestLendingGroupAggregation:
                 "nominal_amount": pl.Float64,
                 "lgd": pl.Float64,
                 "beel": pl.Float64,
-                "ccf_category": pl.String,
                 "seniority": pl.String,
                 "risk_type": pl.String,
                 "ccf_modelled": pl.Float64,
@@ -659,7 +655,6 @@ class TestLendingGroupAggregation:
             lending_group_loans,
             pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
-                "contract_type": pl.String,
                 "product_type": pl.String,
                 "book_code": pl.String,
                 "counterparty_reference": pl.String,
@@ -669,7 +664,6 @@ class TestLendingGroupAggregation:
                 "nominal_amount": pl.Float64,
                 "lgd": pl.Float64,
                 "beel": pl.Float64,
-                "ccf_category": pl.String,
                 "seniority": pl.String,
                 "risk_type": pl.String,
                 "ccf_modelled": pl.Float64,
@@ -818,7 +812,6 @@ class TestEdgeCases:
             }),
             contingents=pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
-                "contract_type": pl.String,
                 "product_type": pl.String,
                 "book_code": pl.String,
                 "counterparty_reference": pl.String,
@@ -828,7 +821,6 @@ class TestEdgeCases:
                 "nominal_amount": pl.Float64,
                 "lgd": pl.Float64,
                 "beel": pl.Float64,
-                "ccf_category": pl.String,
                 "seniority": pl.String,
                 "risk_type": pl.String,
                 "ccf_modelled": pl.Float64,

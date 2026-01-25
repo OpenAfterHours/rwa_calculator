@@ -136,38 +136,10 @@ class CCFCalculator:
                     .alias("_firb_ccf_from_risk_type"),
                 ])
         else:
-            # Fallback: use legacy ccf_category lookup
+            # No risk_type column - use default CCFs
             exposures = exposures.with_columns([
-                pl.col("ccf_category").fill_null("").str.to_lowercase().alias("ccf_category_normalized"),
-            ])
-
-            # Join with SA CCF table
-            sa_ccf_lookup = self._sa_ccf_table.lazy()
-            exposures = exposures.join(
-                sa_ccf_lookup.select([
-                    pl.col("ccf_category").str.to_lowercase().alias("lookup_category"),
-                    pl.col("ccf").alias("_sa_ccf_from_risk_type"),
-                ]),
-                left_on="ccf_category_normalized",
-                right_on="lookup_category",
-                how="left",
-            )
-
-            # Join with F-IRB CCF table
-            firb_ccf_lookup = self._firb_ccf_table.lazy()
-            exposures = exposures.join(
-                firb_ccf_lookup.select([
-                    pl.col("ccf_category").str.to_lowercase().alias("firb_lookup_category"),
-                    pl.col("ccf").alias("_firb_ccf_from_risk_type"),
-                ]),
-                left_on="ccf_category_normalized",
-                right_on="firb_lookup_category",
-                how="left",
-            )
-
-            exposures = exposures.with_columns([
-                pl.col("_sa_ccf_from_risk_type").fill_null(0.5),
-                pl.col("_firb_ccf_from_risk_type").fill_null(0.75),
+                pl.lit(0.5).alias("_sa_ccf_from_risk_type"),   # Default to MR (50%) for SA
+                pl.lit(0.75).alias("_firb_ccf_from_risk_type"),  # Default to 75% for F-IRB
             ])
 
         # Select final CCF based on approach
@@ -250,7 +222,6 @@ class CCFCalculator:
             "_risk_type_normalized",
             "_sa_ccf_from_risk_type",
             "_firb_ccf_from_risk_type",
-            "ccf_category_normalized",
         ]
         existing_temp_cols = [c for c in temp_columns if c in exposures.collect_schema().names()]
         if existing_temp_cols:

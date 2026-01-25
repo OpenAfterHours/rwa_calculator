@@ -104,7 +104,6 @@ def mock_raw_data() -> RawDataBundle:
         "nominal_amount": [100000.0],
         "lgd": [0.45],
         "seniority": ["senior"],
-        "ccf_category": ["MEDIUM"],
         "risk_type": ["MR"],  # Medium risk
         "ccf_modelled": [None],  # No modelled CCF
         "is_short_term_trade_lc": [False],  # Not a trade LC
@@ -318,7 +317,6 @@ def mock_classified_bundle() -> ClassifiedExposuresBundle:
         "is_mortgage": [False, True],
         "is_defaulted": [False, False],
         "qualifies_as_retail": [True, True],
-        "ccf_category": [None, None],
     })
 
     sa_exposures = all_exposures.filter(pl.col("approach") == "SA")

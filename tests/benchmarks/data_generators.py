@@ -801,22 +801,11 @@ def generate_contingents(
     # VECTORIZED: Assign to counterparties
     cp_assignments = rng.choice(n_cp, size=n_contingents)
 
-    # VECTORIZED: Contract types
-    contract_types = rng.choice(
-        ["LETTER_OF_CREDIT", "GUARANTEE", "COMMITMENT"],
+    # VECTORIZED: Product types
+    product_types = rng.choice(
+        ["TRADE_LC", "FINANCIAL_GUARANTEE", "UNDRAWN_COMMITMENT"],
         size=n_contingents,
         p=[0.30, 0.30, 0.40],
-    )
-
-    # VECTORIZED: Product types using numpy select
-    product_types = np.select(
-        [
-            contract_types == "LETTER_OF_CREDIT",
-            contract_types == "GUARANTEE",
-            contract_types == "COMMITMENT",
-        ],
-        ["TRADE_LC", "FINANCIAL_GUARANTEE", "UNDRAWN_COMMITMENT"],
-        default="UNDRAWN_COMMITMENT"
     )
 
     # VECTORIZED: Maturity dates
@@ -832,35 +821,24 @@ def generate_contingents(
     nominal_multiplier = rng.uniform(0.005, 0.02, size=n_contingents)
     nominal_amounts = np.maximum(cp_revenues * nominal_multiplier, 50_000)
 
-    # VECTORIZED: CCF categories using numpy select
-    ccf_categories = np.select(
-        [
-            contract_types == "LETTER_OF_CREDIT",
-            contract_types == "GUARANTEE",
-            contract_types == "COMMITMENT",
-        ],
-        ["trade_related", "direct_credit_sub", "committed_other"],
-        default="committed_other"
-    )
-
-    # VECTORIZED: Risk types based on CCF category
+    # VECTORIZED: Risk types based on product type
+    # MLR for trade LCs, FR for guarantees, MR for commitments
     risk_types = np.select(
         [
-            ccf_categories == "trade_related",
-            ccf_categories == "direct_credit_sub",
-            ccf_categories == "committed_other",
+            product_types == "TRADE_LC",
+            product_types == "FINANCIAL_GUARANTEE",
+            product_types == "UNDRAWN_COMMITMENT",
         ],
         ["MLR", "FR", "MR"],  # Medium-low risk for trade, full risk for guarantees, medium for commitments
         default="MR"
     )
 
-    # VECTORIZED: Short-term trade LC flag (20% for LCs)
-    is_short_term_trade_lc = contract_types == "LETTER_OF_CREDIT"
+    # VECTORIZED: Short-term trade LC flag (True for LCs)
+    is_short_term_trade_lc = product_types == "TRADE_LC"
 
     # Build DataFrame using numpy arrays
     return pl.DataFrame({
         "contingent_reference": [f"CONT_{i:08d}" for i in range(n_contingents)],
-        "contract_type": contract_types,
         "product_type": product_types,
         "book_code": np.full(n_contingents, "CONTINGENT"),
         "counterparty_reference": cp_refs_arr[cp_assignments],
@@ -870,7 +848,6 @@ def generate_contingents(
         "nominal_amount": nominal_amounts,
         "lgd": np.full(n_contingents, 0.45),
         "beel": np.zeros(n_contingents),
-        "ccf_category": ccf_categories,
         "seniority": np.full(n_contingents, "senior"),
         "risk_type": risk_types,
         "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks

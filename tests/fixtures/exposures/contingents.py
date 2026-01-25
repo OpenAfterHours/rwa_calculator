@@ -42,7 +42,6 @@ class Contingent:
     """An off-balance sheet contingent exposure."""
 
     contingent_reference: str
-    contract_type: str
     product_type: str
     book_code: str
     counterparty_reference: str
@@ -52,16 +51,14 @@ class Contingent:
     nominal_amount: float
     lgd: float
     beel: float
-    ccf_category: str
     seniority: str
-    risk_type: str = "MR"  # Default to MR, should be set based on ccf_category
+    risk_type: str = "MR"  # Default to MR (medium risk)
     ccf_modelled: float | None = None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
     is_short_term_trade_lc: bool | None = None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
 
     def to_dict(self) -> dict:
         return {
             "contingent_reference": self.contingent_reference,
-            "contract_type": self.contract_type,
             "product_type": self.product_type,
             "book_code": self.book_code,
             "counterparty_reference": self.counterparty_reference,
@@ -71,7 +68,6 @@ class Contingent:
             "nominal_amount": self.nominal_amount,
             "lgd": self.lgd,
             "beel": self.beel,
-            "ccf_category": self.ccf_category,
             "seniority": self.seniority,
             "risk_type": self.risk_type,
             "ccf_modelled": self.ccf_modelled,
@@ -109,7 +105,6 @@ def _trade_finance_contingents() -> list[Contingent]:
         # Documentary LC - short-term trade (20% CCF under SA and F-IRB per Art. 166(9))
         Contingent(
             contingent_reference="CONT_TF_001",
-            contract_type="documentary_lc",
             product_type="TRADE_LC",
             book_code="TRADE_FINANCE",
             counterparty_reference="CORP_UK_001",
@@ -119,7 +114,6 @@ def _trade_finance_contingents() -> list[Contingent]:
             nominal_amount=2_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="trade_lc_short_term",
             seniority="senior",
             risk_type="MLR",  # Medium-low risk
             is_short_term_trade_lc=True,  # Art. 166(9) exception - retains 20% under F-IRB
@@ -127,7 +121,6 @@ def _trade_finance_contingents() -> list[Contingent]:
         # Import LC for SME
         Contingent(
             contingent_reference="CONT_TF_002",
-            contract_type="documentary_lc",
             product_type="IMPORT_LC",
             book_code="TRADE_FINANCE",
             counterparty_reference="CORP_SME_001",
@@ -137,7 +130,6 @@ def _trade_finance_contingents() -> list[Contingent]:
             nominal_amount=500_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="trade_lc_short_term",
             seniority="senior",
             risk_type="MLR",  # Medium-low risk
             is_short_term_trade_lc=True,  # Art. 166(9) exception - retains 20% under F-IRB
@@ -145,7 +137,6 @@ def _trade_finance_contingents() -> list[Contingent]:
         # Shipping guarantee (50% CCF)
         Contingent(
             contingent_reference="CONT_TF_003",
-            contract_type="shipping_guarantee",
             product_type="SHIPPING_GUAR",
             book_code="TRADE_FINANCE",
             counterparty_reference="CORP_UK_002",
@@ -155,8 +146,8 @@ def _trade_finance_contingents() -> list[Contingent]:
             nominal_amount=1_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="trade_related",
             seniority="senior",
+            risk_type="MR",  # Medium risk
         ),
     ]
 
@@ -171,7 +162,6 @@ def _guarantee_contingents() -> list[Contingent]:
         # Financial guarantee (100% CCF - direct credit substitute)
         Contingent(
             contingent_reference="CONT_GUAR_001",
-            contract_type="financial_guarantee",
             product_type="FIN_GUARANTEE",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_UK_003",
@@ -181,13 +171,12 @@ def _guarantee_contingents() -> list[Contingent]:
             nominal_amount=5_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="direct_credit_substitute",
             seniority="senior",
+            risk_type="FR",  # Full risk
         ),
         # Standby LC (100% CCF)
         Contingent(
             contingent_reference="CONT_GUAR_002",
-            contract_type="standby_lc",
             product_type="STANDBY_LC",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_UK_001",
@@ -197,13 +186,12 @@ def _guarantee_contingents() -> list[Contingent]:
             nominal_amount=10_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="direct_credit_substitute",
             seniority="senior",
+            risk_type="FR",  # Full risk
         ),
         # Performance bond (50% CCF)
         Contingent(
             contingent_reference="CONT_GUAR_003",
-            contract_type="performance_bond",
             product_type="PERF_BOND",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_SME_001",
@@ -213,13 +201,12 @@ def _guarantee_contingents() -> list[Contingent]:
             nominal_amount=1_500_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="transaction_related",
             seniority="senior",
+            risk_type="MR",  # Medium risk
         ),
         # Bid bond (50% CCF)
         Contingent(
             contingent_reference="CONT_GUAR_004",
-            contract_type="bid_bond",
             product_type="BID_BOND",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_UK_002",
@@ -229,8 +216,8 @@ def _guarantee_contingents() -> list[Contingent]:
             nominal_amount=500_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="transaction_related",
             seniority="senior",
+            risk_type="MR",  # Medium risk
         ),
     ]
 
@@ -242,10 +229,9 @@ def _commitment_contingents() -> list[Contingent]:
     Note: These are separate from facility undrawn amounts.
     """
     return [
-        # Committed undrawn facility >1yr (40% CCF)
+        # Committed undrawn facility >1yr (50% CCF under SA)
         Contingent(
             contingent_reference="CONT_COMMIT_001",
-            contract_type="committed_facility",
             product_type="UNDRAWN_COMMIT",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_UK_004",
@@ -255,13 +241,12 @@ def _commitment_contingents() -> list[Contingent]:
             nominal_amount=3_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="committed_facility",
             seniority="senior",
+            risk_type="MR",  # Medium risk
         ),
-        # Note issuance facility (40% CCF)
+        # Note issuance facility (50% CCF under SA)
         Contingent(
             contingent_reference="CONT_COMMIT_002",
-            contract_type="note_issuance_facility",
             product_type="NIF",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_UK_001",
@@ -271,13 +256,12 @@ def _commitment_contingents() -> list[Contingent]:
             nominal_amount=20_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="nif_ruf",
             seniority="senior",
+            risk_type="MR",  # Medium risk
         ),
         # Unconditionally cancellable commitment (0% CCF)
         Contingent(
             contingent_reference="CONT_COMMIT_003",
-            contract_type="uncommitted_facility",
             product_type="UNCOMMIT_LINE",
             book_code="RETAIL_CARDS",
             counterparty_reference="RTL_QRRE_001",
@@ -287,13 +271,12 @@ def _commitment_contingents() -> list[Contingent]:
             nominal_amount=5_000.0,  # Undrawn credit card limit
             lgd=0.85,
             beel=0.0,
-            ccf_category="unconditionally_cancellable",
             seniority="senior",
+            risk_type="LR",  # Low risk (unconditionally cancellable)
         ),
         # SME retail undrawn commitment
         Contingent(
             contingent_reference="CONT_COMMIT_004",
-            contract_type="uncommitted_facility",
             product_type="UNCOMMIT_LINE",
             book_code="SME_RETAIL",
             counterparty_reference="RTL_SME_001",
@@ -303,8 +286,8 @@ def _commitment_contingents() -> list[Contingent]:
             nominal_amount=100_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="unconditionally_cancellable",
             seniority="senior",
+            risk_type="LR",  # Low risk (unconditionally cancellable)
         ),
     ]
 
@@ -313,7 +296,7 @@ def _ccf_test_contingents() -> list[Contingent]:
     """
     Contingents specifically for CCF testing across all categories.
 
-    Covers 0%, 20%, 40%, 50%, 100% CCF scenarios with explicit risk_type.
+    Covers 0%, 20%, 50%, 100% CCF scenarios with explicit risk_type.
 
     Risk Type Mapping:
     - LR (low_risk): 0% CCF - unconditionally cancellable
@@ -327,7 +310,6 @@ def _ccf_test_contingents() -> list[Contingent]:
         # =============================================================================
         Contingent(
             contingent_reference="CONT_CCF_0PCT",
-            contract_type="uncommitted_facility",
             product_type="UNCOMMIT_OVERDRAFT",
             book_code="RETAIL_UNSECURED",
             counterparty_reference="RTL_IND_001",
@@ -337,7 +319,6 @@ def _ccf_test_contingents() -> list[Contingent]:
             nominal_amount=2_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="unconditionally_cancellable",
             seniority="senior",
             risk_type="LR",  # Low risk = 0% CCF
         ),
@@ -346,7 +327,6 @@ def _ccf_test_contingents() -> list[Contingent]:
         # =============================================================================
         Contingent(
             contingent_reference="CONT_CCF_20PCT",
-            contract_type="documentary_lc",
             product_type="EXPORT_LC",
             book_code="TRADE_FINANCE",
             counterparty_reference="CORP_UK_002",
@@ -356,7 +336,6 @@ def _ccf_test_contingents() -> list[Contingent]:
             nominal_amount=3_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="trade_lc_short_term",
             seniority="senior",
             risk_type="MLR",  # Medium-low risk = 20% CCF (SA), 75% (F-IRB)
             is_short_term_trade_lc=False,  # NOT a goods-movement LC, so 75% under F-IRB
@@ -366,7 +345,6 @@ def _ccf_test_contingents() -> list[Contingent]:
         # =============================================================================
         Contingent(
             contingent_reference="CONT_CCF_20PCT_FIRB",
-            contract_type="documentary_lc",
             product_type="IMPORT_LC",
             book_code="TRADE_FINANCE",
             counterparty_reference="CORP_UK_002",
@@ -376,17 +354,15 @@ def _ccf_test_contingents() -> list[Contingent]:
             nominal_amount=4_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="trade_lc_short_term",
             seniority="senior",
             risk_type="MLR",  # Medium-low risk = 20% CCF under BOTH SA and F-IRB
             is_short_term_trade_lc=True,  # Art. 166(9) exception - retains 20% under F-IRB
         ),
         # =============================================================================
-        # CCF 40%/50%: Committed undrawn facility
+        # CCF 50%: Committed undrawn facility
         # =============================================================================
         Contingent(
-            contingent_reference="CONT_CCF_40PCT",
-            contract_type="committed_facility",
+            contingent_reference="CONT_CCF_50PCT_COMMIT",
             product_type="UNDRAWN_RCF",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_GRP1_PARENT",
@@ -396,7 +372,6 @@ def _ccf_test_contingents() -> list[Contingent]:
             nominal_amount=500_000.0,  # Undrawn portion of FAC_HIER_001
             lgd=0.45,
             beel=0.0,
-            ccf_category="committed_facility",
             seniority="senior",
             risk_type="MR",  # Medium risk = 50% CCF (SA), 75% (F-IRB)
         ),
@@ -405,7 +380,6 @@ def _ccf_test_contingents() -> list[Contingent]:
         # =============================================================================
         Contingent(
             contingent_reference="CONT_CCF_50PCT",
-            contract_type="advance_payment_guarantee",
             product_type="APG",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_GRP2_OPSUB1",
@@ -415,7 +389,6 @@ def _ccf_test_contingents() -> list[Contingent]:
             nominal_amount=2_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="transaction_related",
             seniority="senior",
             risk_type="MR",  # Medium risk = 50% CCF (SA), 75% (F-IRB)
         ),
@@ -424,7 +397,6 @@ def _ccf_test_contingents() -> list[Contingent]:
         # =============================================================================
         Contingent(
             contingent_reference="CONT_CCF_100PCT",
-            contract_type="acceptance",
             product_type="BANKERS_ACCEPT",
             book_code="FI_LENDING",
             counterparty_reference="INST_UK_001",
@@ -434,14 +406,12 @@ def _ccf_test_contingents() -> list[Contingent]:
             nominal_amount=5_000_000.0,
             lgd=0.45,
             beel=0.0,
-            ccf_category="direct_credit_substitute",
             seniority="senior",
             risk_type="FR",  # Full risk = 100% CCF
         ),
         # Subordinated contingent for LGD testing
         Contingent(
             contingent_reference="CONT_SUB_001",
-            contract_type="financial_guarantee",
             product_type="FIN_GUARANTEE",
             book_code="CORP_LENDING",
             counterparty_reference="CORP_UK_003",
@@ -451,7 +421,6 @@ def _ccf_test_contingents() -> list[Contingent]:
             nominal_amount=2_000_000.0,
             lgd=0.75,
             beel=0.0,
-            ccf_category="direct_credit_substitute",
             seniority="subordinated",
             risk_type="FR",  # Full risk = 100% CCF
         ),
@@ -485,29 +454,29 @@ def print_summary(output_path: Path) -> None:
     print(f"Saved contingents to: {output_path}")
     print(f"\nCreated {len(df)} contingents:")
 
-    print("\nBy contract type:")
-    type_counts = df.group_by("contract_type").len().sort("len", descending=True)
+    print("\nBy product type:")
+    type_counts = df.group_by("product_type").len().sort("len", descending=True)
     for row in type_counts.iter_rows(named=True):
-        print(f"  {row['contract_type']}: {row['len']}")
+        print(f"  {row['product_type']}: {row['len']}")
 
-    print("\nBy CCF category:")
-    ccf_counts = df.group_by("ccf_category").len().sort("ccf_category")
-    for row in ccf_counts.iter_rows(named=True):
-        print(f"  {row['ccf_category']}: {row['len']}")
+    print("\nBy risk type:")
+    risk_counts = df.group_by("risk_type").len().sort("risk_type")
+    for row in risk_counts.iter_rows(named=True):
+        print(f"  {row['risk_type']}: {row['len']}")
 
     print("\nBy book code:")
     book_counts = df.group_by("book_code").len().sort("book_code")
     for row in book_counts.iter_rows(named=True):
         print(f"  {row['book_code']}: {row['len']}")
 
-    print("\nTotal nominal by CCF category:")
-    ccf_totals = (
-        df.group_by("ccf_category")
+    print("\nTotal nominal by risk type:")
+    risk_totals = (
+        df.group_by("risk_type")
         .agg(pl.col("nominal_amount").sum().alias("total_nominal"))
-        .sort("ccf_category")
+        .sort("risk_type")
     )
-    for row in ccf_totals.iter_rows(named=True):
-        print(f"  {row['ccf_category']}: GBP {row['total_nominal']:,.0f}")
+    for row in risk_totals.iter_rows(named=True):
+        print(f"  {row['risk_type']}: GBP {row['total_nominal']:,.0f}")
 
 
 if __name__ == "__main__":

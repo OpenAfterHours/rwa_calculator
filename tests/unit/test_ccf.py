@@ -54,13 +54,7 @@ def contingent_exposures() -> pl.LazyFrame:
         "nominal_amount": [100000.0, 200000.0, 500000.0, 150000.0, 300000.0],
         "lgd": [0.45] * 5,
         "seniority": ["senior"] * 5,
-        "ccf_category": [
-            "medium_risk",       # 50% CCF
-            "full_risk",         # 100% CCF
-            "undrawn_long_term", # 50% CCF
-            "documentary_credit",# 20% CCF
-            "low_risk",          # 0% CCF
-        ],
+        "risk_type": ["MR", "FR", "MR", "MLR", "LR"],  # 50%, 100%, 50%, 20%, 0% CCF
         "approach": ["standardised"] * 5,
     }).lazy()
 
@@ -83,7 +77,7 @@ class TestSACCF:
             "exposure_reference": ["CONT001"],
             "drawn_amount": [0.0],
             "nominal_amount": [100000.0],
-            "ccf_category": ["medium_risk"],
+            "risk_type": ["MR"],
         }).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
@@ -101,7 +95,7 @@ class TestSACCF:
             "exposure_reference": ["CONT001"],
             "drawn_amount": [0.0],
             "nominal_amount": [200000.0],
-            "ccf_category": ["full_risk"],
+            "risk_type": ["FR"],
         }).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
@@ -119,7 +113,7 @@ class TestSACCF:
             "exposure_reference": ["CONT001"],
             "drawn_amount": [0.0],
             "nominal_amount": [300000.0],
-            "ccf_category": ["low_risk"],
+            "risk_type": ["LR"],
         }).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
@@ -127,17 +121,17 @@ class TestSACCF:
         assert result["ccf"][0] == pytest.approx(0.00)
         assert result["ead_from_ccf"][0] == pytest.approx(0.0)
 
-    def test_documentary_credit_ccf_20_percent(
+    def test_medium_low_risk_ccf_20_percent(
         self,
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """Documentary credits should get 20% CCF."""
+        """Medium-low risk (documentary credits) should get 20% CCF."""
         exposures = pl.DataFrame({
             "exposure_reference": ["CONT001"],
             "drawn_amount": [0.0],
             "nominal_amount": [150000.0],
-            "ccf_category": ["documentary_credit"],
+            "risk_type": ["MLR"],
         }).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
@@ -155,11 +149,11 @@ class TestSACCF:
         result = ccf_calculator.apply_ccf(contingent_exposures, crr_config).collect()
 
         expected_ccfs = {
-            "CONT001": 0.50,   # medium_risk
-            "CONT002": 1.00,   # full_risk
-            "CONT003": 0.50,   # undrawn_long_term
-            "CONT004": 0.20,   # documentary_credit
-            "CONT005": 0.00,   # low_risk
+            "CONT001": 0.50,   # MR (medium_risk)
+            "CONT002": 1.00,   # FR (full_risk)
+            "CONT003": 0.50,   # MR (medium_risk)
+            "CONT004": 0.20,   # MLR (medium_low_risk)
+            "CONT005": 0.00,   # LR (low_risk)
         }
 
         for ref, expected_ccf in expected_ccfs.items():
@@ -185,7 +179,7 @@ class TestFIRBCCF:
             "exposure_reference": ["FIRB_CONT001"],
             "drawn_amount": [0.0],
             "nominal_amount": [1000000.0],
-            "ccf_category": ["undrawn_long_term"],  # Would be 50% for SA
+            "risk_type": ["MR"],  # Would be 50% for SA, 75% for F-IRB
             "approach": ["foundation_irb"],
         }).lazy()
 
@@ -205,7 +199,7 @@ class TestFIRBCCF:
             "exposure_reference": ["FIRB_CANCEL001"],
             "drawn_amount": [0.0],
             "nominal_amount": [500000.0],
-            "ccf_category": ["unconditionally_cancellable"],
+            "risk_type": ["LR"],  # Low risk = 0% CCF
             "approach": ["foundation_irb"],
         }).lazy()
 
@@ -224,7 +218,7 @@ class TestFIRBCCF:
             "exposure_reference": ["SA_EXP", "FIRB_EXP"],
             "drawn_amount": [0.0, 0.0],
             "nominal_amount": [1000000.0, 1000000.0],
-            "ccf_category": ["undrawn_long_term", "undrawn_long_term"],
+            "risk_type": ["MR", "MR"],  # Medium risk
             "approach": ["standardised", "foundation_irb"],
         }).lazy()
 
@@ -259,7 +253,7 @@ class TestEADCalculation:
             "exposure_reference": ["EXP001"],
             "drawn_amount": [500000.0],  # Drawn portion
             "nominal_amount": [200000.0],  # Undrawn portion
-            "ccf_category": ["medium_risk"],  # 50% CCF
+            "risk_type": ["MR"],  # 50% CCF
         }).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
@@ -277,7 +271,7 @@ class TestEADCalculation:
             "exposure_reference": ["LOAN001"],
             "drawn_amount": [1000000.0],
             "nominal_amount": [0.0],
-            "ccf_category": [None],
+            "risk_type": [None],  # No risk type for fully drawn
         }).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()

@@ -88,7 +88,6 @@ LOAN_SCHEMA = {
 
 CONTINGENTS_SCHEMA = {
     "contingent_reference": pl.String,
-    "contract_type": pl.String,
     "product_type": pl.String,
     "book_code": pl.String,
     "counterparty_reference": pl.String,
@@ -98,7 +97,6 @@ CONTINGENTS_SCHEMA = {
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
     "beel": pl.Float64,
-    "ccf_category": pl.String,  # Category for CCF lookup
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.0)
@@ -349,7 +347,6 @@ RAW_EXPOSURE_SCHEMA = {
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
-    "ccf_category": pl.String,  # CCF lookup category
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -375,7 +372,6 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
     "seniority": pl.String,
-    "ccf_category": pl.String,
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -412,7 +408,6 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "drawn_amount": pl.Float64,
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
-    "ccf_category": pl.String,
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -623,7 +618,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     # -------------------------------------------------------------------------
     # CCF APPLICATION (Off-balance sheet conversion)
     # -------------------------------------------------------------------------
-    "ccf_category": pl.String,  # Category used for CCF lookup
     "ccf_applied": pl.Float64,  # CCF percentage (0%, 20%, 40%, 50%, 100%)
     "ccf_source": pl.String,  # Reference to regulatory article
     "converted_undrawn": pl.Float64,  # undrawn_amount × ccf_applied
@@ -770,8 +764,6 @@ CRR_OUTPUT_SCHEMA_ADDITIONS = {
     # CRR exposure classes (Art. 112)
     "crr_exposure_class": pl.String,  # CRR-specific classification
     "crr_exposure_subclass": pl.String,  # Sub-classification where applicable
-    # CCF categories (Art. 111)
-    "crr_ccf_category": pl.String,  # low_risk, medium_low, medium, full_risk
     # Residential mortgage treatment (Art. 125)
     "crr_mortgage_treatment": pl.String,  # "35_pct" or "split_treatment"
     "crr_mortgage_ltv_threshold": pl.Float64,  # 80% LTV threshold

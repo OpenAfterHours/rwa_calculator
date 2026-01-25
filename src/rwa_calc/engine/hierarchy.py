@@ -482,7 +482,6 @@ class HierarchyResolver:
             pl.lit(0.0).alias("nominal_amount"),
             pl.col("lgd"),
             pl.col("seniority"),
-            pl.lit(None).cast(pl.String).alias("ccf_category"),
             pl.col("risk_type"),
             pl.col("ccf_modelled"),
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for loans
@@ -507,7 +506,6 @@ class HierarchyResolver:
                 pl.col("nominal_amount"),
                 pl.col("lgd"),
                 pl.col("seniority"),
-                pl.col("ccf_category"),
                 pl.col("risk_type"),
                 pl.col("ccf_modelled"),
                 pl.col("is_short_term_trade_lc"),  # Art. 166(9) exception for F-IRB

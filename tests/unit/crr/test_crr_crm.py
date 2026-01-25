@@ -82,7 +82,7 @@ def basic_exposures() -> pl.LazyFrame:
         "nominal_amount": [0.0, 0.0, 500000.0, 250000.0],
         "lgd": [0.45, 0.15, 0.45, 0.45],
         "seniority": ["senior", "senior", "senior", "senior"],
-        "ccf_category": [None, None, "medium_risk", "full_risk"],
+        "risk_type": [None, None, "MR", "FR"],  # MR = 50% CCF, FR = 100% CCF
         "approach": ["standardised", "standardised", "standardised", "standardised"],
         "exposure_class": ["corporate", "retail_mortgage", "corporate", "corporate"],
         "is_sme": [False, False, False, False],
@@ -320,7 +320,7 @@ class TestCRMProcessor:
             "drawn_amount": [1000000.0],
             "nominal_amount": [0.0],
             "lgd": [0.45],
-            "ccf_category": [None],
+            "risk_type": [None],
             "approach": ["standardised"],
             "exposure_class": ["corporate"],
             "is_sme": [False],
@@ -355,7 +355,7 @@ class TestCRMProcessor:
             "drawn_amount": [0.0],
             "nominal_amount": [500000.0],
             "lgd": [0.45],
-            "ccf_category": ["medium_risk"],  # 50% CCF
+            "risk_type": ["MR"],  # MR = 50% CCF
             "approach": ["standardised"],
             "exposure_class": ["corporate"],
             "is_sme": [False],
@@ -407,7 +407,7 @@ class TestCRMProcessor:
             "drawn_amount": [1000000.0, 500000.0],
             "nominal_amount": [0.0, 0.0],
             "lgd": [0.45, 0.45],
-            "ccf_category": [None, None],
+            "risk_type": [None, None],
             "approach": ["standardised", "standardised"],
             "exposure_class": ["corporate", "corporate"],
             "is_sme": [False, False],

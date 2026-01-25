@@ -6,7 +6,8 @@ Provides fluent API for IRB RWA calculations via registered namespaces:
 - `lf.irb.classify_approach(config)` - F-IRB vs A-IRB classification
 - `pl.col("pd").irb.floor_pd(0.0003)` - Column-level PD flooring
 
-Delegates to NumPy/SciPy batch functions in formulas.py for performance.
+Uses pure Polars expressions with polars-normal-stats for statistical functions,
+enabling full lazy evaluation, query optimization, and streaming.
 
 Usage:
     import polars as pl
@@ -36,9 +37,9 @@ import polars as pl
 from rwa_calc.data.tables.crr_firb_lgd import FIRB_SUPERVISORY_LGD
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
-    _numpy_correlation,
-    _numpy_capital_k,
-    _numpy_maturity_adjustment,
+    _polars_correlation_expr,
+    _polars_capital_k_expr,
+    _polars_maturity_adjustment_expr,
 )
 
 if TYPE_CHECKING:
@@ -271,7 +272,7 @@ class IRBLazyFrame:
 
     def calculate_correlation(self, config: CalculationConfig) -> pl.LazyFrame:
         """
-        Calculate asset correlation using NumPy batch processing.
+        Calculate asset correlation using pure Polars expressions.
 
         Supports:
         - Corporate/Institution/Sovereign: PD-dependent (0.12-0.24)
@@ -286,21 +287,13 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with correlation column
         """
-        def calc_correlation(struct_series: pl.Series) -> pl.Series:
-            pd_arr = struct_series.struct.field("pd_floored").to_numpy()
-            exp_arr = struct_series.struct.field("exposure_class").to_numpy()
-            turnover_arr = struct_series.struct.field("turnover_m").to_numpy()
-            return pl.Series(_numpy_correlation(pd_arr, exp_arr, turnover_arr))
-
         return self._lf.with_columns(
-            pl.struct(["pd_floored", "exposure_class", "turnover_m"])
-            .map_batches(calc_correlation, return_dtype=pl.Float64)
-            .alias("correlation")
+            _polars_correlation_expr().alias("correlation")
         )
 
     def calculate_k(self, config: CalculationConfig) -> pl.LazyFrame:
         """
-        Calculate capital requirement (K) using NumPy/SciPy.
+        Calculate capital requirement (K) using pure Polars with polars-normal-stats.
 
         K = LGD × N[(1-R)^(-0.5) × G(PD) + (R/(1-R))^(0.5) × G(0.999)] - PD × LGD
 
@@ -310,16 +303,8 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with k column
         """
-        def calc_k(struct_series: pl.Series) -> pl.Series:
-            pd_arr = struct_series.struct.field("pd_floored").to_numpy()
-            lgd_arr = struct_series.struct.field("lgd_floored").to_numpy()
-            corr_arr = struct_series.struct.field("correlation").to_numpy()
-            return pl.Series(_numpy_capital_k(pd_arr, lgd_arr, corr_arr))
-
         return self._lf.with_columns(
-            pl.struct(["pd_floored", "lgd_floored", "correlation"])
-            .map_batches(calc_k, return_dtype=pl.Float64)
-            .alias("k")
+            _polars_capital_k_expr().alias("k")
         )
 
     def calculate_maturity_adjustment(self, config: CalculationConfig) -> pl.LazyFrame:
@@ -337,11 +322,6 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with maturity_adjustment column
         """
-        def calc_ma(struct_series: pl.Series) -> pl.Series:
-            pd_arr = struct_series.struct.field("pd_floored").to_numpy()
-            mat_arr = struct_series.struct.field("maturity").to_numpy()
-            return pl.Series(_numpy_maturity_adjustment(pd_arr, mat_arr))
-
         is_retail = (
             pl.col("exposure_class")
             .cast(pl.String)
@@ -353,10 +333,7 @@ class IRBLazyFrame:
         return self._lf.with_columns(
             pl.when(is_retail)
             .then(pl.lit(1.0))
-            .otherwise(
-                pl.struct(["pd_floored", "maturity"])
-                .map_batches(calc_ma, return_dtype=pl.Float64)
-            )
+            .otherwise(_polars_maturity_adjustment_expr())
             .alias("maturity_adjustment")
         )
 

@@ -245,7 +245,7 @@ from decimal import Decimal
 
 # Third-party
 import polars as pl
-from scipy.stats import norm
+from polars_normal_stats import normal_cdf, normal_ppf
 
 # Local - contracts first
 from rwa_calc.contracts.bundles import ResultBundle

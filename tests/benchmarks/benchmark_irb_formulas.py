@@ -1,9 +1,10 @@
 """
 Benchmark for IRB formulas implementation.
 
-The IRB formulas use a hybrid approach combining:
-- Polars lazy evaluation (query optimization, streaming)
-- NumPy/SciPy via map_batches (fast statistical functions)
+The IRB formulas use pure Polars expressions with polars-normal-stats:
+- Full Polars lazy evaluation (query optimization, streaming)
+- polars-normal-stats for statistical functions (normal_cdf, normal_ppf)
+- No scipy/numpy dependency in production code
 
 This benchmark demonstrates performance at various scales.
 
@@ -18,7 +19,7 @@ import time
 from dataclasses import dataclass
 from datetime import date
 
-import numpy as np
+import numpy as np  # For test data generation only
 import polars as pl
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -131,14 +132,14 @@ def run_benchmark(
 def main():
     """Run the IRB formulas benchmark."""
     print("=" * 70)
-    print("IRB Formulas Benchmark (map_batches with NumPy/SciPy)")
+    print("IRB Formulas Benchmark (Pure Polars with polars-normal-stats)")
     print("=" * 70)
     print()
-    print("Implementation: Polars lazy evaluation + NumPy/SciPy via map_batches")
+    print("Implementation: Pure Polars expressions + polars-normal-stats")
     print("Benefits:")
-    print("  - Preserves lazy evaluation (query optimization)")
-    print("  - Fast NumPy/SciPy statistical functions")
-    print("  - ~1.5x faster than full collect-compute-lazy pattern")
+    print("  - Full lazy evaluation (query optimization, streaming)")
+    print("  - No scipy/numpy dependency in production code")
+    print("  - Enables streaming for large datasets")
     print()
 
     row_counts = [1_000, 10_000, 100_000]
@@ -174,10 +175,11 @@ def main():
 
     print()
     print("Implementation details:")
-    print("  - Correlation: NumPy vectorized (exposure class dependent)")
-    print("  - Capital K: SciPy norm.ppf/cdf for statistical functions")
-    print("  - Maturity Adjustment: NumPy vectorized")
+    print("  - Correlation: Pure Polars expressions (exposure class dependent)")
+    print("  - Capital K: polars-normal-stats (normal_ppf/normal_cdf)")
+    print("  - Maturity Adjustment: Pure Polars expressions")
     print("  - RWA/Risk Weight/EL: Pure Polars expressions")
+    print("  - Full lazy evaluation preserved throughout")
 
 
 if __name__ == "__main__":

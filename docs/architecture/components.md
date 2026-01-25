@@ -422,10 +422,11 @@ The `.irb` namespace provides chainable methods for each calculation step:
 ### Key Features
 
 - **Fluent API**: Namespace enables readable, chainable method calls
-- **NumPy/SciPy performance**: Vectorized batch calculations via `map_batches`
+- **Pure Polars expressions**: Full lazy evaluation with `polars-normal-stats` for statistical functions
+- **Streaming-capable**: No data materialization required, enabling large dataset processing
 - PD and LGD floor application
 - Correlation calculation with SME adjustment
-- K formula implementation (scipy.special.ndtr for normal CDF)
+- K formula implementation using `normal_cdf` and `normal_ppf`
 - Maturity adjustment
 - Expected loss calculation
 - CRR 1.06 scaling factor

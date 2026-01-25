@@ -103,8 +103,7 @@ pip install -e ".[dev]"
 |---------|---------|
 | `polars` | High-performance DataFrame operations |
 | `pydantic` | Data validation and settings management |
-| `scipy` | Scientific computing (IRB formulas) |
-| `numpy` | Numerical operations |
+| `polars-normal-stats` | Statistical functions for IRB formulas (normal CDF/PPF) |
 | `pyarrow` | Parquet file support |
 | `pyyaml` | Configuration file parsing |
 | `duckdb` | SQL analytics engine |

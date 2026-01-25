@@ -203,7 +203,7 @@ from pathlib import Path
 
 # 2. Third-party
 import polars as pl
-from scipy.stats import norm
+from polars_normal_stats import normal_cdf, normal_ppf
 
 # 3. Local - contracts first
 from rwa_calc.contracts.bundles import ResultBundle

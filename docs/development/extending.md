@@ -446,31 +446,29 @@ from rwa_calc.engine.custom.namespace import CustomLazyFrame, CustomExpr
 __all__ = ["CustomLazyFrame", "CustomExpr"]
 ```
 
-#### Step 3: Use Vectorized NumPy for Performance
+#### Step 3: Use Pure Polars Expressions for Performance
 
-For computationally intensive formulas, use `map_batches` with NumPy:
+For computationally intensive formulas, use pure Polars expressions with `polars-normal-stats`:
 
 ```python
-import numpy as np
-from scipy import special
+from polars_normal_stats import normal_cdf, normal_ppf
 
-def _numpy_custom_formula(values: np.ndarray) -> np.ndarray:
-    """Vectorized calculation using NumPy/SciPy."""
-    return special.ndtr(values)  # Example: normal CDF
+def _custom_formula_expr() -> pl.Expr:
+    """Pure Polars expression for custom calculation."""
+    # Example: normal CDF of input values
+    return normal_cdf(pl.col("input_value"))
 
 def apply_custom_formula(self, config: CalculationConfig) -> pl.LazyFrame:
-    """Apply custom calculation using NumPy for performance."""
-    def calc_batch(series: pl.Series) -> pl.Series:
-        arr = series.to_numpy()
-        result = _numpy_custom_formula(arr)
-        return pl.Series(result)
-
+    """Apply custom calculation using pure Polars expressions."""
     return self._lf.with_columns(
-        pl.col("input_value")
-        .map_batches(calc_batch, return_dtype=pl.Float64)
-        .alias("output_value")
+        _custom_formula_expr().alias("output_value")
     )
 ```
+
+This approach:
+- Preserves full lazy evaluation (query optimization, streaming)
+- Enables processing of datasets larger than memory
+- Achieves 3M+ rows/second throughput
 
 #### Step 4: Add Tests
 
@@ -516,10 +514,11 @@ class TestCustomNamespace:
 
 1. **Return `pl.LazyFrame`** from all LazyFrame namespace methods for chaining
 2. **Accept `CalculationConfig`** to handle framework-specific logic
-3. **Use `map_batches`** with NumPy for vectorized performance
-4. **Check column existence** before operations using `collect_schema()`
-5. **Provide sensible defaults** for optional columns
-6. **Document added columns** in method docstrings
+3. **Use pure Polars expressions** with `polars-normal-stats` for statistical functions
+4. **Preserve lazy evaluation** - avoid `.collect()` or `.to_numpy()` in formulas
+5. **Check column existence** before operations using `collect_schema()`
+6. **Provide sensible defaults** for optional columns
+7. **Document added columns** in method docstrings
 
 ## Best Practices
 

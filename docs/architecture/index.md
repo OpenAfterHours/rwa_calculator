@@ -228,7 +228,7 @@ For typical portfolio sizes:
 |-----------|------------|---------|
 | Data Processing | Polars | High-performance DataFrames |
 | Validation | Pydantic | Type-safe data validation |
-| Numerics | SciPy/NumPy | IRB formulas |
+| Numerics | polars-normal-stats | IRB formulas (pure Polars) |
 | Testing | Pytest | Comprehensive testing |
 | Documentation | MkDocs | This documentation |
 

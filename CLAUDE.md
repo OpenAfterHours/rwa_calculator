@@ -28,6 +28,7 @@ Utilise the following tooling:
 - DuckDB for areas where it is more suitable than polars
 - UV and UV native commands i.e. UV add instead of UV pip install
 - Marimo for workbooks - check the resources found here: https://docs.marimo.io/api/
+- For CF, PPF and PDF use polars-normal-stats package rather than scipy or numpy. This integrates with polars. check the resources here: https://pypi.org/project/polars-normal-stats/
 - Pytest for testing
 
 ## Coding standards

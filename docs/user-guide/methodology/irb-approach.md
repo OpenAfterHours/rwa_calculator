@@ -19,7 +19,7 @@ Two IRB variants are available:
 
 ## IRB Formula
 
-The core IRB formula calculates the capital requirement (K). See [`irb/formulas.py:260-291`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py#L260-L291) for the vectorized NumPy implementation.
+The core IRB formula calculates the capital requirement (K). See [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py) for the pure Polars implementation using `polars-normal-stats`.
 
 ```
 K = [LGD × N((1-R)^(-0.5) × G(PD) + (R/(1-R))^0.5 × G(0.999)) - LGD × PD] × MA
@@ -129,7 +129,7 @@ M = max(1, min(5, weighted_average_life))
 
 ## Asset Correlation
 
-Asset correlation (R) determines how sensitive the exposure is to systematic risk. See [`irb/formulas.py:190-257`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py#L190-L257) for the vectorized implementation.
+Asset correlation (R) determines how sensitive the exposure is to systematic risk. See [`_polars_correlation_expr()`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py) for the pure Polars implementation.
 
 ### Corporate/Bank Correlation
 
@@ -176,7 +176,7 @@ R = 0.03 × (1 - exp(-35 × PD)) / (1 - exp(-35)) +
 
 ## Maturity Adjustment
 
-For non-retail exposures. See [`irb/formulas.py:293-316`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py#L293-L316) for implementation.
+For non-retail exposures. See [`_polars_maturity_adjustment_expr()`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py) for the pure Polars implementation.
 
 ```python
 # Maturity factor b
@@ -384,7 +384,7 @@ print(f"Expected Loss: {result.total_expected_loss:,.2f}")
 
 ### Using IRB Formulas Directly
 
-The IRB formulas are implemented in [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py). Both scalar and vectorized (NumPy/Polars) versions are available.
+The IRB formulas are implemented in [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py). Both scalar functions and pure Polars expression functions are available, using `polars-normal-stats` for statistical operations.
 
 ```python
 from rwa_calc.engine.irb.formulas import (

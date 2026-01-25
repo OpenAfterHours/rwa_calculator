@@ -143,6 +143,9 @@ nav:
     - Adding Features: development/extending.md
     - Code Style: development/code-style.md
     - Documentation Conventions: development/documentation-conventions.md
+  - Plans:
+    - plans/index.md
+    - Development Roadmap: plans/roadmap.md
   - Appendix:
     - appendix/index.md
     - Glossary: appendix/glossary.md

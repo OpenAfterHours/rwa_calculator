@@ -198,6 +198,31 @@ Individual component performance at 100K scale:
 | `test_classifier_100k` | Exposure classifier performance |
 | `test_sa_calculator_100k` | SA calculator performance |
 
+### IRB Formula Benchmarks
+
+The IRB formula implementation uses pure Polars expressions with `polars-normal-stats` for statistical functions, enabling full lazy evaluation and streaming.
+
+#### Performance Results
+
+| Scale | Mean Time | Throughput |
+|------:|----------:|-----------:|
+| 10,000 | 7.2 ms | 1.4M rows/s |
+| 100,000 | 32.3 ms | 3.1M rows/s |
+| 1,000,000 | 298 ms | 3.4M rows/s |
+
+Key benefits of the pure Polars implementation:
+
+- **Full lazy evaluation**: Query optimization preserved throughout
+- **Streaming-capable**: Datasets larger than memory can be processed
+- **No data conversion**: No NumPy/SciPy overhead
+- **Sub-second for 1M rows**: 1 million IRB exposures processed in ~300ms
+
+Run the IRB formula benchmark:
+
+```bash
+uv run python tests/benchmarks/benchmark_irb_formulas.py
+```
+
 ### Memory Benchmarks
 
 #### `TestPipelineMemoryBenchmark`

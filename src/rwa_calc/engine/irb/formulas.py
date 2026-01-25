@@ -9,10 +9,10 @@ Key formulas:
 - Maturity adjustment MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
 - RWA = K × 12.5 × [1.06] × EAD × MA (1.06 for CRR only)
 
-Implementation uses Polars map_batches with NumPy/SciPy for optimal performance:
-- Preserves Polars lazy evaluation (query optimization)
-- Uses fast SciPy statistical functions for heavy math
-- ~1.5x faster than full collect-compute-lazy pattern
+Implementation uses pure Polars expressions with polars-normal-stats:
+- Full lazy evaluation preserved (query optimization, streaming)
+- Uses polars-normal-stats for statistical functions (normal_cdf, normal_ppf)
+- No NumPy/SciPy dependency - enables true streaming for large datasets
 
 References:
 - CRR Art. 153-154: IRB risk weight functions
@@ -27,9 +27,8 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import numpy as np
 import polars as pl
-from scipy import stats
+from polars_normal_stats import normal_cdf, normal_ppf
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -68,7 +67,7 @@ _PPF_P_HIGH = 1 - _PPF_P_LOW
 
 
 # =============================================================================
-# MAIN VECTORIZED FUNCTION (using map_batches for NumPy acceleration)
+# MAIN VECTORIZED FUNCTION (pure Polars with polars-normal-stats)
 # =============================================================================
 
 
@@ -77,10 +76,10 @@ def apply_irb_formulas(
     config: CalculationConfig,
 ) -> pl.LazyFrame:
     """
-    Apply IRB formulas to exposures using map_batches with NumPy/SciPy.
+    Apply IRB formulas to exposures using pure Polars expressions.
 
-    This preserves Polars lazy evaluation while using fast NumPy/SciPy
-    for the computationally intensive statistical functions.
+    Uses polars-normal-stats for statistical functions (normal_cdf, normal_ppf),
+    enabling full lazy evaluation, query optimization, and streaming.
 
     Expects columns: pd, lgd, ead_final, exposure_class
     Optional: maturity, turnover_m (for SME correlation adjustment)
@@ -106,7 +105,7 @@ def apply_irb_formulas(
     if "turnover_m" not in schema.names():
         exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
 
-    # Step 1: Apply PD floor (pure Polars - fast)
+    # Step 1: Apply PD floor (pure Polars)
     exposures = exposures.with_columns(
         pl.col("pd").clip(lower_bound=pd_floor).alias("pd_floored")
     )
@@ -122,52 +121,33 @@ def apply_irb_formulas(
             pl.col("lgd").alias("lgd_floored")
         )
 
-    # Step 3: Calculate correlation using map_batches with NumPy
-    def calc_correlation(struct_series: pl.Series) -> pl.Series:
-        pd_arr = struct_series.struct.field("pd_floored").to_numpy()
-        exp_arr = struct_series.struct.field("exposure_class").to_numpy()
-        turnover_arr = struct_series.struct.field("turnover_m").to_numpy()
-        return pl.Series(_numpy_correlation(pd_arr, exp_arr, turnover_arr))
-
+    # Step 3: Calculate correlation using pure Polars expressions
     exposures = exposures.with_columns(
-        pl.struct(["pd_floored", "exposure_class", "turnover_m"])
-        .map_batches(calc_correlation, return_dtype=pl.Float64)
-        .alias("correlation")
+        _polars_correlation_expr().alias("correlation")
     )
 
-    # Step 4: Calculate K using map_batches with NumPy/SciPy
-    def calc_k(struct_series: pl.Series) -> pl.Series:
-        pd_arr = struct_series.struct.field("pd_floored").to_numpy()
-        lgd_arr = struct_series.struct.field("lgd_floored").to_numpy()
-        corr_arr = struct_series.struct.field("correlation").to_numpy()
-        return pl.Series(_numpy_capital_k(pd_arr, lgd_arr, corr_arr))
-
+    # Step 4: Calculate K using pure Polars with polars-normal-stats
     exposures = exposures.with_columns(
-        pl.struct(["pd_floored", "lgd_floored", "correlation"])
-        .map_batches(calc_k, return_dtype=pl.Float64)
-        .alias("k")
+        _polars_capital_k_expr().alias("k")
     )
 
-    # Step 5: Calculate maturity adjustment using map_batches
-    # Only for non-retail exposures
-    def calc_ma(struct_series: pl.Series) -> pl.Series:
-        pd_arr = struct_series.struct.field("pd_floored").to_numpy()
-        mat_arr = struct_series.struct.field("maturity").to_numpy()
-        return pl.Series(_numpy_maturity_adjustment(pd_arr, mat_arr))
-
-    is_retail = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase().str.contains("RETAIL")
+    # Step 5: Calculate maturity adjustment (only for non-retail)
+    is_retail = (
+        pl.col("exposure_class")
+        .cast(pl.String)
+        .fill_null("CORPORATE")
+        .str.to_uppercase()
+        .str.contains("RETAIL")
+    )
 
     exposures = exposures.with_columns(
         pl.when(is_retail)
         .then(pl.lit(1.0))
-        .otherwise(
-            pl.struct(["pd_floored", "maturity"])
-            .map_batches(calc_ma, return_dtype=pl.Float64)
-        )
+        .otherwise(_polars_maturity_adjustment_expr())
         .alias("maturity_adjustment")
     )
 
-    # Step 6-9: Final calculations (pure Polars expressions - fast)
+    # Step 6-9: Final calculations (pure Polars expressions)
     exposures = exposures.with_columns([
         pl.lit(scaling_factor).alias("scaling_factor"),
         (pl.col("k") * 12.5 * scaling_factor * pl.col("ead_final") * pl.col("maturity_adjustment")).alias("rwa"),
@@ -183,37 +163,35 @@ apply_irb_formulas_numpy = apply_irb_formulas
 
 
 # =============================================================================
-# NUMPY BATCH FUNCTIONS (used by map_batches)
+# PURE POLARS EXPRESSION FUNCTIONS
 # =============================================================================
 
 
-def _numpy_correlation(
-    pd_arr: np.ndarray,
-    exposure_class_arr: np.ndarray,
-    turnover_m_arr: np.ndarray | None = None,
-    sme_threshold: float = 50.0,
-) -> np.ndarray:
+def _polars_correlation_expr(sme_threshold: float = 50.0) -> pl.Expr:
     """
-    NumPy vectorized correlation calculation.
+    Pure Polars expression for correlation calculation.
 
     Supports all exposure classes with proper correlation formulas:
     - Corporate/Institution/Sovereign: PD-dependent (decay=50)
     - Retail mortgage: Fixed 0.15
     - QRRE: Fixed 0.04
     - Other retail: PD-dependent (decay=35)
-    """
-    n = len(pd_arr)
-    correlation = np.zeros(n, dtype=np.float64)
 
-    # Pre-calculate decay denominators
-    corporate_denom = 1.0 - np.exp(-50.0)
-    retail_denom = 1.0 - np.exp(-35.0)
+    Includes SME firm size adjustment for corporates.
+    """
+    pd = pl.col("pd_floored")
+    exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
+    turnover = pl.col("turnover_m")
+
+    # Pre-calculate decay denominators (constants)
+    corporate_denom = 1.0 - math.exp(-50.0)
+    retail_denom = 1.0 - math.exp(-35.0)
 
     # f(PD) for corporate (decay = 50)
-    f_pd_corp = (1.0 - np.exp(-50.0 * pd_arr)) / corporate_denom
+    f_pd_corp = (1.0 - (-50.0 * pd).exp()) / corporate_denom
 
     # f(PD) for retail (decay = 35)
-    f_pd_retail = (1.0 - np.exp(-35.0 * pd_arr)) / retail_denom
+    f_pd_retail = (1.0 - (-35.0 * pd).exp()) / retail_denom
 
     # Corporate correlation: 0.12 × f(PD) + 0.24 × (1 - f(PD))
     r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)
@@ -221,95 +199,88 @@ def _numpy_correlation(
     # Retail other correlation: 0.03 × f(PD) + 0.16 × (1 - f(PD))
     r_retail_other = 0.03 * f_pd_retail + 0.16 * (1.0 - f_pd_retail)
 
-    # Classify by exposure class
-    exp_upper = np.char.upper(exposure_class_arr.astype(str))
+    # SME adjustment for corporates: reduce correlation based on turnover
+    # s_clamped = max(5, min(turnover, 50))
+    # adjustment = 0.04 × (1 - (s_clamped - 5) / 45)
+    # Cast to Float64 first to handle null dtype, then clip
+    turnover_float = turnover.cast(pl.Float64)
+    s_clamped = turnover_float.clip(5.0, sme_threshold)
+    sme_adjustment = 0.04 * (1.0 - (s_clamped - 5.0) / 45.0)
 
-    # Mortgage: fixed 0.15
-    is_mortgage = np.char.find(exp_upper, "MORTGAGE") >= 0
-    is_residential = np.char.find(exp_upper, "RESIDENTIAL") >= 0
-    correlation[is_mortgage | is_residential] = 0.15
+    # Corporate with SME adjustment (when turnover < threshold and is corporate)
+    is_corporate = exp_class.str.contains("CORPORATE")
+    # Use is_not_null() and is_finite() to check for valid turnover values
+    # is_finite() returns false for NaN and infinities, handles null dtype gracefully
+    has_valid_turnover = turnover_float.is_not_null() & turnover_float.is_finite()
+    is_sme = has_valid_turnover & (turnover_float < sme_threshold)
 
-    # QRRE: fixed 0.04
-    is_qrre = np.char.find(exp_upper, "QRRE") >= 0
-    correlation[is_qrre] = 0.04
+    r_corporate_with_sme = (
+        pl.when(is_corporate & is_sme)
+        .then(r_corporate - sme_adjustment)
+        .otherwise(r_corporate)
+    )
 
-    # Retail (non-mortgage, non-QRRE): PD-dependent
-    is_retail = np.char.find(exp_upper, "RETAIL") >= 0
-    is_retail_other = is_retail & ~is_mortgage & ~is_qrre
-    correlation[is_retail_other] = r_retail_other[is_retail_other]
-
-    # Corporate/Institution/Sovereign: PD-dependent (default)
-    is_non_retail = ~is_retail
-    correlation[is_non_retail] = r_corporate[is_non_retail]
-
-    # Apply SME firm size adjustment for corporates
-    if turnover_m_arr is not None:
-        is_corporate = np.char.find(exp_upper, "CORPORATE") >= 0
-        has_turnover = ~np.isnan(turnover_m_arr)
-        is_sme = has_turnover & (turnover_m_arr < sme_threshold)
-        sme_mask = is_corporate & is_sme
-
-        if np.any(sme_mask):
-            s_clamped = np.clip(turnover_m_arr[sme_mask], 5.0, sme_threshold)
-            sme_adjustment = 0.04 * (1.0 - (s_clamped - 5.0) / 45.0)
-            correlation[sme_mask] = correlation[sme_mask] - sme_adjustment
-
-    return correlation
+    # Build correlation based on exposure class
+    return (
+        pl.when(exp_class.str.contains("MORTGAGE") | exp_class.str.contains("RESIDENTIAL"))
+        .then(pl.lit(0.15))
+        .when(exp_class.str.contains("QRRE"))
+        .then(pl.lit(0.04))
+        .when(exp_class.str.contains("RETAIL"))
+        .then(r_retail_other)
+        .otherwise(r_corporate_with_sme)
+    )
 
 
-def _numpy_capital_k(
-    pd_arr: np.ndarray,
-    lgd_arr: np.ndarray,
-    correlation_arr: np.ndarray,
-) -> np.ndarray:
+def _polars_capital_k_expr() -> pl.Expr:
     """
-    NumPy vectorized capital requirement (K) calculation using SciPy.
+    Pure Polars expression for capital requirement (K) calculation.
 
     K = LGD × N[(1-R)^(-0.5) × G(PD) + (R/(1-R))^(0.5) × G(0.999)] - PD × LGD
 
-    Uses scipy.stats.norm for fast statistical functions.
+    Uses polars-normal-stats for normal_cdf and normal_ppf functions.
     """
-    # Clamp PD to avoid edge cases
-    pd_safe = np.clip(pd_arr, 1e-10, 0.9999)
+    # Safe PD to avoid edge cases
+    pd_safe = pl.col("pd_floored").clip(1e-10, 0.9999)
+    lgd = pl.col("lgd_floored")
+    correlation = pl.col("correlation")
 
-    # G(PD) = inverse normal CDF of PD (using scipy)
-    g_pd = stats.norm.ppf(pd_safe)
+    # G(PD) = inverse normal CDF of PD
+    g_pd = normal_ppf(pd_safe)
 
-    # Calculate conditional default probability
-    one_minus_r = 1.0 - correlation_arr
-    term1 = np.sqrt(1.0 / one_minus_r) * g_pd
-    term2 = np.sqrt(correlation_arr / one_minus_r) * G_999
+    # Calculate conditional default probability terms
+    one_minus_r = 1.0 - correlation
+    term1 = (1.0 / one_minus_r).sqrt() * g_pd
+    term2 = (correlation / one_minus_r).sqrt() * G_999
 
-    # Conditional PD = N(term1 + term2) (using scipy)
-    conditional_pd = stats.norm.cdf(term1 + term2)
+    # Conditional PD = N(term1 + term2)
+    conditional_pd = normal_cdf(term1 + term2)
 
     # K = LGD × conditional_pd - PD × LGD
-    k = lgd_arr * conditional_pd - pd_safe * lgd_arr
+    k = lgd * conditional_pd - pd_safe * lgd
 
     # Floor at 0
-    return np.maximum(k, 0.0)
+    return pl.max_horizontal(k, pl.lit(0.0))
 
 
-def _numpy_maturity_adjustment(
-    pd_arr: np.ndarray,
-    maturity_arr: np.ndarray,
+def _polars_maturity_adjustment_expr(
     maturity_floor: float = 1.0,
     maturity_cap: float = 5.0,
-) -> np.ndarray:
+) -> pl.Expr:
     """
-    NumPy vectorized maturity adjustment calculation.
+    Pure Polars expression for maturity adjustment calculation.
 
     b = (0.11852 - 0.05478 × ln(PD))²
     MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
     """
     # Clamp maturity to bounds
-    m = np.clip(maturity_arr, maturity_floor, maturity_cap)
+    m = pl.col("maturity").clip(maturity_floor, maturity_cap)
 
     # Safe PD for log calculation
-    pd_safe = np.maximum(pd_arr, 1e-10)
+    pd_safe = pl.col("pd_floored").clip(lower_bound=1e-10)
 
     # b = (0.11852 - 0.05478 × ln(PD))²
-    b = (0.11852 - 0.05478 * np.log(pd_safe)) ** 2
+    b = (0.11852 - 0.05478 * pd_safe.log()) ** 2
 
     # MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
     return (1.0 + (m - 2.5) * b) / (1.0 - 1.5 * b)

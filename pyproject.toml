@@ -27,11 +27,10 @@ classifiers = [
 dependencies = [
     "polars>=1.0.0",
     "pydantic>=2.0.0",
-    "scipy>=1.11.0",
-    "numpy>=1.26.0",
     "duckdb>=0.9.0",
     "pyarrow>=14.0.0",
     "pyyaml>=6.0.0",
+    "polars-normal-stats>=0.1.0",
 ]
 
 [project.scripts]
@@ -59,6 +58,7 @@ dev = [
     "mkdocs-material>=9.5.0",
     "mkdocs-mermaid2-plugin>=1.1.0",
     "mkdocstrings[python]>=0.24.0",
+    "numpy>=1.26.0",  # For benchmark data generation only
 ]
 all = [
     "rwa-calc[ui,dev]",
@@ -123,4 +123,5 @@ dev = [
     "mkdocstrings[python]>=1.0.0",
     "mypy>=1.19.1",
     "pytest-benchmark>=5.2.3",
+    "numpy>=1.26.0",  # For benchmark data generation only
 ]

@@ -32,14 +32,15 @@ import rwa_calc.engine.irb.namespace  # noqa: F401
 
 from rwa_calc.engine.irb.calculator import IRBCalculator, create_irb_calculator
 from rwa_calc.engine.irb.formulas import (
+    apply_irb_formulas,
     calculate_correlation,
+    calculate_expected_loss,
+    calculate_irb_rwa,
     calculate_k,
     calculate_maturity_adjustment,
-    calculate_irb_rwa,
-    calculate_expected_loss,
-    apply_irb_formulas,
 )
-from rwa_calc.engine.irb.namespace import IRBLazyFrame, IRBExpr
+from rwa_calc.engine.irb.namespace import IRBExpr, IRBLazyFrame
+from rwa_calc.engine.irb.stats_backend import get_backend
 
 __all__ = [
     "IRBCalculator",
@@ -53,4 +54,6 @@ __all__ = [
     # Namespace classes
     "IRBLazyFrame",
     "IRBExpr",
+    # Backend diagnostics
+    "get_backend",
 ]

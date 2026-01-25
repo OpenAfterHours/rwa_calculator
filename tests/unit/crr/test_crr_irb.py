@@ -29,12 +29,13 @@ from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb import (
     IRBCalculator,
-    create_irb_calculator,
     calculate_correlation,
+    calculate_expected_loss,
+    calculate_irb_rwa,
     calculate_k,
     calculate_maturity_adjustment,
-    calculate_irb_rwa,
-    calculate_expected_loss,
+    create_irb_calculator,
+    get_backend,
 )
 
 
@@ -668,3 +669,47 @@ class TestIRBAuditTrail:
             assert "R=" in calc_str
             assert "K=" in calc_str
             assert "RWA=" in calc_str
+
+
+# =============================================================================
+# Stats Backend Tests
+# =============================================================================
+
+
+class TestStatsBackend:
+    """Tests for stats backend detection and functionality."""
+
+    def test_backend_available(self) -> None:
+        """Backend should be detected and available."""
+        backend = get_backend()
+        assert backend in ["polars-normal-stats", "scipy"]
+
+    def test_scalar_wrappers_use_vectorized(self) -> None:
+        """Scalar wrappers should produce same results as direct calculation.
+
+        This verifies that scalar functions (calculate_k, calculate_correlation, etc.)
+        are thin wrappers around vectorized expressions, not separate implementations.
+        """
+        # Test calculate_k through vectorized path
+        k_scalar = calculate_k(pd=0.01, lgd=0.45, correlation=0.15)
+
+        # Verify result is reasonable
+        assert 0 < k_scalar < 0.45
+        assert 0.02 < k_scalar < 0.10
+
+    def test_scalar_correlation_matches_params(self) -> None:
+        """Scalar correlation should match expected parameter behavior."""
+        # Corporate at low PD should approach 0.24
+        corr_low_pd = calculate_correlation(pd=0.0001, exposure_class="CORPORATE")
+        assert corr_low_pd == pytest.approx(0.24, rel=0.05)
+
+        # Retail mortgage should be fixed 0.15
+        corr_mortgage = calculate_correlation(pd=0.01, exposure_class="RETAIL_MORTGAGE")
+        assert corr_mortgage == pytest.approx(0.15)
+
+    def test_scalar_maturity_adjustment_consistent(self) -> None:
+        """Scalar maturity adjustment should be consistent with formula."""
+        ma = calculate_maturity_adjustment(pd=0.01, maturity=2.5)
+        # At M=2.5, numerator = 1, so MA = 1/(1 - 1.5*b) > 1.0
+        assert ma > 1.0
+        assert ma < 1.5

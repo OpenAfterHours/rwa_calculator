@@ -1,24 +1,33 @@
-# BDD Acceptance Test Specification
+# BDD Testing Guide
 
-This document describes the Behavior-Driven Development (BDD) test structure for the RWA Calculator using Gherkin syntax.
+This document describes how to implement and run BDD tests for the RWA Calculator using `pytest-bdd`.
 
-## Feature File Structure
+## Feature File Location
+
+Feature files are located in `docs/specifications/` to serve as living documentation accessible to both risk users and developers. See the [Specifications Index](../specifications/index.md) for the full list.
 
 ```
-tests/features/
-├── crr/                           # CRR (Basel 3.0) Framework Features
-│   ├── sa_risk_weights.feature    # Standardised Approach risk weights
-│   ├── supporting_factors.feature # SME and infrastructure factors
-│   ├── firb_calculation.feature   # Foundation IRB calculations
-│   ├── airb_calculation.feature   # Advanced IRB calculations
-│   ├── credit_conversion_factors.feature  # CCF for off-balance sheet
-│   ├── credit_risk_mitigation.feature     # Collateral and guarantees
-│   ├── slotting_approach.feature  # Specialised lending slotting
-│   └── provisions.feature         # Provision treatment and EL comparison
-├── basel31/                       # Basel 3.1 Framework Features
-│   └── framework_differences.feature  # Key differences from CRR
-└── common/                        # Framework-agnostic features
-    └── hierarchy_classification.feature  # Hierarchy and classification
+docs/specifications/
+├── crr/                           # CRR (Basel 3.0) Framework
+│   ├── sa_risk_weights.feature
+│   ├── supporting_factors.feature
+│   ├── firb_calculation.feature
+│   ├── airb_calculation.feature
+│   ├── credit_conversion_factors.feature
+│   ├── credit_risk_mitigation.feature
+│   ├── slotting_approach.feature
+│   └── provisions.feature
+├── basel31/                       # Basel 3.1 Framework
+│   └── framework_differences.feature
+└── common/                        # Framework-agnostic
+    └── hierarchy_classification.feature
+
+tests/bdd/
+└── step_definitions/              # Step implementations
+    ├── conftest.py
+    ├── sa_steps.py
+    ├── irb_steps.py
+    └── ...
 ```
 
 ## Test Scenario Groups
@@ -108,9 +117,14 @@ uv add pytest-bdd
 ### Example Step Definitions
 
 ```python
-from pytest_bdd import scenarios, given, when, then, parsers
+# tests/bdd/step_definitions/sa_steps.py
 
-scenarios('features/crr/sa_risk_weights.feature')
+from pytest_bdd import scenarios, given, when, then, parsers
+from pathlib import Path
+
+# Reference feature files from docs/specifications/
+SPECS_DIR = Path(__file__).parent.parent.parent.parent / "docs" / "specifications"
+scenarios(str(SPECS_DIR / "crr" / "sa_risk_weights.feature"))
 
 @given(parsers.parse('a counterparty "{id}" of type "{cpty_type}"'))
 def counterparty_setup(id: str, cpty_type: str, context):
@@ -130,13 +144,13 @@ def verify_risk_weight(context, rw: str):
 
 ```bash
 # Run all BDD tests
-uv run pytest tests/features/
+uv run pytest tests/bdd/
 
 # Run specific feature file
-uv run pytest tests/features/crr/sa_risk_weights.feature
+uv run pytest --feature docs/specifications/crr/sa_risk_weights.feature
 
 # Run by tag
-uv run pytest -m "crr and sa"
+uv run pytest tests/bdd/ -m "crr and sa"
 ```
 
 ## Gherkin Syntax Reference

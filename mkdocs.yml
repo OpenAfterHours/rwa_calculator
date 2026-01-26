@@ -135,9 +135,25 @@ nav:
     - Engine Components: api/engine.md
     - Data Contracts: api/contracts.md
     - Domain Enums: api/domain.md
+  - Specifications:
+    - specifications/index.md
+    - CRR Framework:
+      - SA Risk Weights: specifications/crr/sa-risk-weights.md
+      - Supporting Factors: specifications/crr/supporting-factors.md
+      - Foundation IRB: specifications/crr/firb-calculation.md
+      - Advanced IRB: specifications/crr/airb-calculation.md
+      - Credit Conversion Factors: specifications/crr/credit-conversion-factors.md
+      - Credit Risk Mitigation: specifications/crr/credit-risk-mitigation.md
+      - Slotting Approach: specifications/crr/slotting-approach.md
+      - Provisions: specifications/crr/provisions.md
+    - Basel 3.1 Framework:
+      - Framework Differences: specifications/basel31/framework-differences.md
+    - Common:
+      - Hierarchy & Classification: specifications/common/hierarchy-classification.md
   - Development:
     - development/index.md
     - Testing Guide: development/testing.md
+    - BDD Testing: development/bdd.md
     - Workbooks & UI: development/workbooks.md
     - Benchmark Tests: development/benchmarks.md
     - Adding Features: development/extending.md

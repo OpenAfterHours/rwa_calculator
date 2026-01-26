@@ -468,6 +468,8 @@ class HierarchyResolver:
         errors: list[HierarchyError] = []
 
         # Standardize loan columns
+        # Note: Loans are drawn exposures - CCF fields are N/A since EAD = drawn_amount directly.
+        # CCF only applies to off-balance sheet items (undrawn commitments, contingents).
         loans_unified = loans.select([
             pl.col("loan_reference").alias("exposure_reference"),
             pl.lit("loan").alias("exposure_type"),
@@ -482,9 +484,9 @@ class HierarchyResolver:
             pl.lit(0.0).alias("nominal_amount"),
             pl.col("lgd"),
             pl.col("seniority"),
-            pl.col("risk_type"),
-            pl.col("ccf_modelled"),
-            pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for loans
+            pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
+            pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
+            pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
         ])
 
         # If contingents is None, use only loans

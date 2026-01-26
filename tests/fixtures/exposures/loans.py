@@ -35,7 +35,13 @@ def main() -> None:
 
 @dataclass(frozen=True)
 class Loan:
-    """A drawn loan exposure."""
+    """
+    A drawn loan exposure.
+
+    Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
+    because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
+    Drawn loans are already on-balance sheet, so EAD = drawn_amount directly.
+    """
 
     loan_reference: str
     product_type: str
@@ -45,12 +51,9 @@ class Loan:
     maturity_date: date
     currency: str
     drawn_amount: float
-    lgd: float
-    beel: float
-    seniority: str
-    risk_type: str = "FR"  # FR for drawn loans (full_risk = 100% CCF, already drawn)
-    ccf_modelled: float | None = None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
-    is_short_term_trade_lc: bool | None = None  # N/A for loans, included for unified schema
+    lgd: float  # A-IRB modelled LGD (optional)
+    beel: float  # Best estimate expected loss
+    seniority: str  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
 
     def to_dict(self) -> dict:
         return {
@@ -65,9 +68,6 @@ class Loan:
             "lgd": self.lgd,
             "beel": self.beel,
             "seniority": self.seniority,
-            "risk_type": self.risk_type,
-            "ccf_modelled": self.ccf_modelled,
-            "is_short_term_trade_lc": self.is_short_term_trade_lc,
         }
 
 

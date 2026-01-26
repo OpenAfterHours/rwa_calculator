@@ -65,7 +65,7 @@ FACILITY_SCHEMA = {
     "is_revolving": pl.Boolean,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
-    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.0)
+    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
 }
 
@@ -78,12 +78,12 @@ LOAN_SCHEMA = {
     "maturity_date": pl.Date,
     "currency": pl.String,
     "drawn_amount": pl.Float64,
-    "lgd": pl.Float64,
-    "beel": pl.Float64,
+    "lgd": pl.Float64,  # A-IRB modelled LGD (optional)
+    "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
-    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.0)
-    "is_short_term_trade_lc": pl.Boolean,  # N/A for loans (null), included for unified schema
+    # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
+    # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
+    # Drawn loans are already on-balance sheet, so EAD = drawn_amount directly.
 }
 
 CONTINGENTS_SCHEMA = {
@@ -99,7 +99,7 @@ CONTINGENTS_SCHEMA = {
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
-    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.0)
+    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
 }
 
@@ -369,7 +369,7 @@ RAW_EXPOSURE_SCHEMA = {
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
-    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
+    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,       # Currency before FX conversion
@@ -394,7 +394,7 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "lgd": pl.Float64,
     "seniority": pl.String,
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
-    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
+    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # Counterparty hierarchy additions
     "counterparty_has_parent": pl.Boolean,
@@ -430,7 +430,7 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
-    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.0)
+    "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # Classification additions
     "exposure_class": pl.String,  # sovereign, institution, corporate, retail, etc.

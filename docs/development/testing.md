@@ -415,6 +415,7 @@ exclude_lines = [
 
 ## Next Steps
 
+- [BDD Specification](bdd.md) - Gherkin feature files and scenarios
 - [Adding Features](extending.md) - Extending the calculator
 - [Code Style](code-style.md) - Coding conventions
 - [Architecture](../architecture/index.md) - System design

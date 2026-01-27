@@ -57,8 +57,8 @@ class RawDataBundle:
     loans: pl.LazyFrame
     counterparties: pl.LazyFrame
     facility_mappings: pl.LazyFrame
-    org_mappings: pl.LazyFrame
     lending_mappings: pl.LazyFrame
+    org_mappings: pl.LazyFrame | None = None
     contingents: pl.LazyFrame | None = None
     collateral: pl.LazyFrame | None = None
     guarantees: pl.LazyFrame | None = None
@@ -292,8 +292,8 @@ def create_empty_raw_data_bundle() -> RawDataBundle:
         loans=pl.LazyFrame(),
         counterparties=pl.LazyFrame(),
         facility_mappings=pl.LazyFrame(),
-        org_mappings=pl.LazyFrame(),
         lending_mappings=pl.LazyFrame(),
+        org_mappings=None,
         contingents=None,
         collateral=None,
         guarantees=None,

@@ -171,6 +171,20 @@ def get_fixture_path() -> Path:
     return project_root / "tests" / "fixtures"
 
 
+def _load_optional_parquet(path: Path) -> pl.LazyFrame | None:
+    """Load a parquet file as LazyFrame if it exists, otherwise return None."""
+    if path.exists():
+        return pl.scan_parquet(path)
+    return None
+
+
+def _load_optional_parquet_eager(path: Path) -> pl.DataFrame | None:
+    """Load a parquet file as DataFrame if it exists, otherwise return None."""
+    if path.exists():
+        return pl.read_parquet(path)
+    return None
+
+
 def load_fixtures() -> FixtureData:
     """
     Load all fixture parquet files into a FixtureData container.
@@ -203,8 +217,8 @@ def load_fixtures() -> FixtureData:
         ratings=pl.scan_parquet(fixture_path / "ratings" / "ratings.parquet"),
 
         # Mappings
-        org_mappings=pl.scan_parquet(fixture_path / "mapping" / "org_mapping.parquet"),
         lending_mappings=pl.scan_parquet(fixture_path / "mapping" / "lending_mapping.parquet"),
+        org_mappings=_load_optional_parquet(fixture_path / "mapping" / "org_mapping.parquet"),
     )
 
 
@@ -240,6 +254,6 @@ def load_fixtures_eager() -> dict[str, pl.DataFrame]:
         "ratings": pl.read_parquet(fixture_path / "ratings" / "ratings.parquet"),
 
         # Mappings
-        "org_mappings": pl.read_parquet(fixture_path / "mapping" / "org_mapping.parquet"),
         "lending_mappings": pl.read_parquet(fixture_path / "mapping" / "lending_mapping.parquet"),
+        "org_mappings": _load_optional_parquet_eager(fixture_path / "mapping" / "org_mapping.parquet"),
     }

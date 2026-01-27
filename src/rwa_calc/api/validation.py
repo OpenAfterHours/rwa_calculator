@@ -50,7 +50,6 @@ class RequiredFiles:
             f"exposures/facilities.{ext}",
             f"exposures/loans.{ext}",
             f"exposures/facility_mapping.{ext}",
-            f"mapping/org_mapping.{ext}",
             f"mapping/lending_mapping.{ext}",
         ]
 
@@ -69,6 +68,7 @@ class RequiredFiles:
             f"ratings/ratings.{ext}",
             f"counterparty/specialised_lending.{ext}",
             f"equity/equity_exposures.{ext}",
+            f"mapping/org_mapping.{ext}",
         ]
 
         return cls(

@@ -31,6 +31,7 @@ dependencies = [
     "pyarrow>=14.0.0",
     "pyyaml>=6.0.0",
     "polars-normal-stats>=0.2.0",  # Required for IRB statistical functions
+    "fastexcel>=0.19.0",
 ]
 
 [project.scripts]

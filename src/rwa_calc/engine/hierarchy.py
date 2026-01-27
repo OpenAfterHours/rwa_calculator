@@ -190,7 +190,7 @@ class HierarchyResolver:
     def _build_counterparty_lookup(
         self,
         counterparties: pl.LazyFrame,
-        org_mappings: pl.LazyFrame,
+        org_mappings: pl.LazyFrame | None,
         ratings: pl.LazyFrame | None,
     ) -> tuple[CounterpartyLookup, list[HierarchyError]]:
         """
@@ -200,6 +200,13 @@ class HierarchyResolver:
             Tuple of (CounterpartyLookup, list of errors)
         """
         errors: list[HierarchyError] = []
+
+        # If org_mappings is None, create empty LazyFrame with expected schema
+        if org_mappings is None:
+            org_mappings = pl.LazyFrame(schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            })
 
         # Build ultimate parent mapping (LazyFrame)
         ultimate_parents = self._build_ultimate_parent_lazy(org_mappings)

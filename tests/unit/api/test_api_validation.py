@@ -115,7 +115,6 @@ class TestRequiredFiles:
         assert "exposures/facility_mapping.parquet" in mandatory
 
         # Check mapping files
-        assert "mapping/org_mapping.parquet" in mandatory
         assert "mapping/lending_mapping.parquet" in mandatory
 
     def test_optional_files_include_crm(self) -> None:
@@ -129,6 +128,9 @@ class TestRequiredFiles:
         assert "guarantee/guarantee.parquet" in optional
         assert "provision/provision.parquet" in optional
         assert "ratings/ratings.parquet" in optional
+
+        # Check optional mapping files
+        assert "mapping/org_mapping.parquet" in optional
 
     def test_counterparty_files_included(self) -> None:
         """Counterparty files should be in mandatory list."""

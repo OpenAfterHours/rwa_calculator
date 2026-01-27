@@ -26,8 +26,11 @@ if TYPE_CHECKING:
         AggregatedResultBundle,
         ClassifiedExposuresBundle,
         CRMAdjustedBundle,
+        IRBResultBundle,
         RawDataBundle,
         ResolvedHierarchyBundle,
+        SAResultBundle,
+        SlottingResultBundle,
     )
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import LazyFrameResult
@@ -331,16 +334,18 @@ class OutputAggregatorProtocol(Protocol):
 
     def aggregate_with_audit(
         self,
-        sa_results: pl.LazyFrame,
-        irb_results: pl.LazyFrame,
+        sa_bundle: SAResultBundle | None,
+        irb_bundle: IRBResultBundle | None,
+        slotting_bundle: SlottingResultBundle | None,
         config: CalculationConfig,
     ) -> AggregatedResultBundle:
         """
         Aggregate with full audit trail.
 
         Args:
-            sa_results: Standardised Approach calculations
-            irb_results: IRB approach calculations
+            sa_bundle: SA calculation results bundle
+            irb_bundle: IRB calculation results bundle
+            slotting_bundle: Slotting calculation results bundle
             config: Calculation configuration
 
         Returns:

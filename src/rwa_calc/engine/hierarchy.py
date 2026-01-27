@@ -57,6 +57,42 @@ class HierarchyResolver:
     All operations use Polars LazyFrames for deferred execution.
     """
 
+    def _is_valid_optional_data(
+        self,
+        data: pl.LazyFrame | None,
+        required_columns: set[str] | None = None,
+    ) -> bool:
+        """
+        Check if optional data is valid for processing.
+
+        This provides defense-in-depth validation to ensure data:
+        - Is not None
+        - Has at least one row
+        - Has all required columns (if specified)
+
+        Args:
+            data: Optional LazyFrame to validate
+            required_columns: Set of column names that must be present (optional)
+
+        Returns:
+            True if data is valid for processing, False otherwise
+        """
+        if data is None:
+            return False
+
+        try:
+            schema = data.collect_schema()
+
+            # Check required columns if specified
+            if required_columns is not None:
+                if not required_columns.issubset(set(schema.names())):
+                    return False
+
+            # Check if there's at least one row
+            return data.head(1).collect().height > 0
+        except Exception:
+            return False
+
     def resolve(
         self,
         data: RawDataBundle,
@@ -652,16 +688,11 @@ class HierarchyResolver:
         Returns:
             Exposures with ltv column added
         """
-        # If collateral is None, add null ltv column
-        if collateral is None:
-            return exposures.with_columns([
-                pl.lit(None).cast(pl.Float64).alias("ltv"),
-            ])
-
-        # Check if collateral has the required columns
-        collateral_schema = collateral.collect_schema()
-        if "beneficiary_reference" not in collateral_schema or "property_ltv" not in collateral_schema:
-            # No LTV data available, add null ltv column
+        # Check if collateral is valid for LTV processing
+        # Requires beneficiary_reference and property_ltv columns
+        required_cols = {"beneficiary_reference", "property_ltv"}
+        if not self._is_valid_optional_data(collateral, required_cols):
+            # No valid LTV data available, add null ltv column
             return exposures.with_columns([
                 pl.lit(None).cast(pl.Float64).alias("ltv"),
             ])
@@ -721,38 +752,23 @@ class HierarchyResolver:
             (pl.col("drawn_amount") + pl.col("nominal_amount")).alias("total_exposure_amount"),
         ])
 
-        # If no collateral, return exposures with zero residential coverage
-        if collateral is None:
+        # Check if collateral is valid for residential property coverage calculation
+        # Requires beneficiary_reference, collateral_type, market_value, and property_type
+        required_cols = {"beneficiary_reference", "collateral_type", "market_value", "property_type"}
+        if not self._is_valid_optional_data(collateral, required_cols):
+            # No valid collateral data, return exposures with zero residential coverage
             return exposure_amounts.with_columns([
                 pl.lit(0.0).alias("residential_collateral_value"),
                 pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
             ])
-
-        # Check if collateral has the required columns
-        collateral_schema = collateral.collect_schema()
-        required_cols = {"beneficiary_reference", "collateral_type", "market_value"}
-        if not required_cols.issubset(set(collateral_schema.names())):
-            return exposure_amounts.with_columns([
-                pl.lit(0.0).alias("residential_collateral_value"),
-                pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
-            ])
-
-        # Check if property_type column exists (needed to identify residential)
-        has_property_type = "property_type" in collateral_schema.names()
 
         # Filter for residential property collateral only
         # Residential property = collateral_type is 'real_estate' AND property_type is 'residential'
-        if has_property_type:
-            residential_collateral = collateral.filter(
-                (pl.col("collateral_type").str.to_lowercase() == "real_estate") &
-                (pl.col("property_type").str.to_lowercase() == "residential")
-            )
-        else:
-            # If no property_type, cannot identify residential - return zero coverage
-            return exposure_amounts.with_columns([
-                pl.lit(0.0).alias("residential_collateral_value"),
-                pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
-            ])
+        # Note: property_type existence is already validated above
+        residential_collateral = collateral.filter(
+            (pl.col("collateral_type").str.to_lowercase() == "real_estate") &
+            (pl.col("property_type").str.to_lowercase() == "residential")
+        )
 
         # Sum residential collateral value per beneficiary (exposure)
         residential_by_exposure = residential_collateral.group_by("beneficiary_reference").agg([

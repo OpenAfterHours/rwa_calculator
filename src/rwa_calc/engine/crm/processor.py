@@ -65,10 +65,48 @@ class CRMProcessor:
     4. Deduct provisions from EAD
     """
 
+    # Required columns for each CRM data type
+    COLLATERAL_REQUIRED_COLUMNS = {"beneficiary_reference", "market_value"}
+    GUARANTEE_REQUIRED_COLUMNS = {"beneficiary_reference", "amount_covered", "guarantor"}
+    PROVISION_REQUIRED_COLUMNS = {"beneficiary_reference", "amount"}
+
     def __init__(self) -> None:
         """Initialize CRM processor with sub-calculators."""
         self._ccf_calculator = CCFCalculator()
         self._haircut_calculator = HaircutCalculator()
+
+    def _is_valid_for_processing(
+        self,
+        data: pl.LazyFrame | None,
+        required_columns: set[str],
+    ) -> bool:
+        """
+        Check if optional CRM data is valid for processing.
+
+        This provides defense-in-depth validation to ensure data has:
+        - At least one row
+        - All required columns for the CRM operation
+
+        Args:
+            data: Optional LazyFrame to validate
+            required_columns: Set of column names that must be present
+
+        Returns:
+            True if data is valid for processing, False otherwise
+        """
+        if data is None:
+            return False
+
+        try:
+            # Check schema has required columns
+            schema = data.collect_schema()
+            if not required_columns.issubset(set(schema.names())):
+                return False
+
+            # Check if there's at least one row
+            return data.head(1).collect().height > 0
+        except Exception:
+            return False
 
     def apply_crm(
         self,
@@ -119,12 +157,15 @@ class CRMProcessor:
         # Step 2: Initialize EAD columns
         exposures = self._initialize_ead(exposures)
 
-        # Step 3: Apply collateral (if available)
-        if data.collateral is not None:
+        # Step 3: Apply collateral (if available and valid)
+        if self._is_valid_for_processing(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, data.collateral, config)
 
-        # Step 4: Apply guarantees (if available)
-        if data.guarantees is not None and data.counterparty_lookup is not None:
+        # Step 4: Apply guarantees (if available and valid)
+        if (
+            self._is_valid_for_processing(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
+            and data.counterparty_lookup is not None
+        ):
             exposures = self.apply_guarantees(
                 exposures,
                 data.guarantees,
@@ -133,8 +174,8 @@ class CRMProcessor:
                 data.counterparty_lookup.rating_inheritance,
             )
 
-        # Step 5: Apply provisions (if available)
-        if data.provisions is not None:
+        # Step 5: Apply provisions (if available and valid)
+        if self._is_valid_for_processing(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
             exposures = self.apply_provisions(exposures, data.provisions, config)
 
         # Step 6: Calculate final EAD after all CRM adjustments

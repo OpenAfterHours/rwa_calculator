@@ -794,3 +794,100 @@ class TestEdgeCases:
         # Both extra columns should be present (diagonal_relaxed behavior)
         assert "country_code" in df.columns
         assert "industry_code" in df.columns
+
+    def test_empty_optional_parquet_file_returns_none(self, tmp_path: Path) -> None:
+        """Empty optional parquet file should return None, not empty LazyFrame.
+
+        This ensures downstream code can rely on a simple `is not None` check
+        to determine if valid data is available for processing.
+        """
+        (tmp_path / "collateral").mkdir()
+
+        # Create empty parquet file with schema but no rows
+        empty_df = pl.DataFrame({
+            "collateral_reference": pl.Series([], dtype=pl.String),
+            "beneficiary_reference": pl.Series([], dtype=pl.String),
+            "market_value": pl.Series([], dtype=pl.Float64),
+        })
+        empty_df.write_parquet(tmp_path / "collateral" / "collateral.parquet")
+
+        loader = ParquetLoader(tmp_path)
+        result = loader._load_parquet_optional("collateral/collateral.parquet")
+
+        # Should return None for empty file
+        assert result is None
+
+    def test_empty_optional_csv_file_returns_none(self, tmp_path: Path) -> None:
+        """Empty optional CSV file should return None, not empty LazyFrame."""
+        (tmp_path / "collateral").mkdir()
+
+        # Create CSV file with header only (no data rows)
+        csv_content = "collateral_reference,beneficiary_reference,market_value\n"
+        (tmp_path / "collateral" / "collateral.csv").write_text(csv_content)
+
+        loader = CSVLoader(tmp_path)
+        result = loader._load_csv_optional("collateral/collateral.csv")
+
+        # Should return None for empty file
+        assert result is None
+
+    def test_optional_parquet_file_with_data_returns_lazyframe(self, tmp_path: Path) -> None:
+        """Optional parquet file with data should return LazyFrame."""
+        (tmp_path / "collateral").mkdir()
+
+        # Create parquet file with data
+        df = pl.DataFrame({
+            "collateral_reference": ["COLL001"],
+            "beneficiary_reference": ["LOAN001"],
+            "market_value": [100000.0],
+        })
+        df.write_parquet(tmp_path / "collateral" / "collateral.parquet")
+
+        loader = ParquetLoader(tmp_path)
+        result = loader._load_parquet_optional("collateral/collateral.parquet")
+
+        # Should return LazyFrame for file with data
+        assert result is not None
+        assert isinstance(result, pl.LazyFrame)
+        assert result.collect().height == 1
+
+    def test_optional_csv_file_with_data_returns_lazyframe(self, tmp_path: Path) -> None:
+        """Optional CSV file with data should return LazyFrame."""
+        (tmp_path / "collateral").mkdir()
+
+        # Create CSV file with data
+        csv_content = "collateral_reference,beneficiary_reference,market_value\nCOLL001,LOAN001,100000.0\n"
+        (tmp_path / "collateral" / "collateral.csv").write_text(csv_content)
+
+        loader = CSVLoader(tmp_path)
+        result = loader._load_csv_optional("collateral/collateral.csv")
+
+        # Should return LazyFrame for file with data
+        assert result is not None
+        assert isinstance(result, pl.LazyFrame)
+        assert result.collect().height == 1
+
+    def test_has_rows_returns_false_for_empty_frame(self, tmp_path: Path) -> None:
+        """_has_rows should return False for empty LazyFrame."""
+        loader = ParquetLoader(tmp_path)
+
+        empty_lf = pl.LazyFrame({
+            "col": pl.Series([], dtype=pl.String),
+        })
+        assert loader._has_rows(empty_lf) is False
+
+    def test_has_rows_returns_true_for_non_empty_frame(self, tmp_path: Path) -> None:
+        """_has_rows should return True for non-empty LazyFrame."""
+        loader = ParquetLoader(tmp_path)
+
+        non_empty_lf = pl.LazyFrame({
+            "col": ["value"],
+        })
+        assert loader._has_rows(non_empty_lf) is True
+
+    def test_has_rows_returns_false_for_empty_schema(self, tmp_path: Path) -> None:
+        """_has_rows should return False for LazyFrame with empty schema."""
+        loader = ParquetLoader(tmp_path)
+
+        empty_schema_lf = pl.LazyFrame(schema={})
+        assert loader._has_rows(empty_schema_lf) is False

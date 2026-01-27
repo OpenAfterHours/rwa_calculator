@@ -165,11 +165,20 @@ class ParquetLoader:
         """
         Load an optional Parquet file.
 
+        Returns None if:
+        - relative_path is None
+        - File doesn't exist
+        - File exists but has no rows
+        - File cannot be loaded
+
+        This ensures downstream code can rely on a simple `is not None` check
+        to determine if valid data is available for processing.
+
         Args:
             relative_path: Path relative to base_path, or None
 
         Returns:
-            LazyFrame if file exists and loads, None otherwise
+            LazyFrame if file exists, loads, and has data; None otherwise
         """
         if relative_path is None:
             return None
@@ -179,9 +188,33 @@ class ParquetLoader:
             return None
 
         try:
-            return normalize_columns(pl.scan_parquet(full_path))
+            lf = normalize_columns(pl.scan_parquet(full_path))
+            # Check if file has any rows - return None for empty files
+            if not self._has_rows(lf):
+                return None
+            return lf
         except Exception:
             return None
+
+    def _has_rows(self, lf: pl.LazyFrame) -> bool:
+        """
+        Check if a LazyFrame has any rows.
+
+        Args:
+            lf: LazyFrame to check
+
+        Returns:
+            True if LazyFrame has at least one row, False otherwise
+        """
+        try:
+            # Check schema first - empty schema means no data
+            schema = lf.collect_schema()
+            if len(schema) == 0:
+                return False
+            # Fetch just one row to check if data exists
+            return lf.head(1).collect().height > 0
+        except Exception:
+            return False
 
     def _load_and_combine_counterparties(self) -> pl.LazyFrame:
         """
@@ -326,11 +359,20 @@ class CSVLoader:
         """
         Load an optional CSV file.
 
+        Returns None if:
+        - relative_path is None
+        - File doesn't exist
+        - File exists but has no rows
+        - File cannot be loaded
+
+        This ensures downstream code can rely on a simple `is not None` check
+        to determine if valid data is available for processing.
+
         Args:
             relative_path: Path relative to base_path, or None
 
         Returns:
-            LazyFrame if file exists and loads, None otherwise
+            LazyFrame if file exists, loads, and has data; None otherwise
         """
         if relative_path is None:
             return None
@@ -340,9 +382,31 @@ class CSVLoader:
             return None
 
         try:
-            return normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
+            lf = normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
+            # Check if file has any rows - return None for empty files
+            if not self._has_rows(lf):
+                return None
+            return lf
         except Exception:
             return None
+
+    def _has_rows(self, lf: pl.LazyFrame) -> bool:
+        """
+        Check if a LazyFrame has any rows.
+
+        Args:
+            lf: LazyFrame to check
+
+        Returns:
+            True if LazyFrame has at least one row, False otherwise
+        """
+        try:
+            schema = lf.collect_schema()
+            if len(schema) == 0:
+                return False
+            return lf.head(1).collect().height > 0
+        except Exception:
+            return False
 
     def _load_and_combine_counterparties(self) -> pl.LazyFrame:
         """

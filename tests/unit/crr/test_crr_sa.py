@@ -522,6 +522,128 @@ class TestSupportingFactorPriority:
         assert result["supporting_factor"] == pytest.approx(Decimal("0.75"))
 
 
+class TestSMESupportingFactorCounterpartyAggregation:
+    """Tests for SME factor counterparty-level aggregation (CRR2 Art. 501).
+
+    The EUR 2.5m threshold for the tiered SME factor is applied at the
+    counterparty level, not per-exposure. All exposures to the same
+    counterparty are aggregated before determining the blended factor.
+    """
+
+    def test_multiple_exposures_same_counterparty_aggregated(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Multiple exposures to same counterparty should use aggregated EAD for factor."""
+        # Two exposures of £1.5m each to same counterparty = £3m total
+        # Threshold is ~£2.183m (EUR 2.5m * 0.8732)
+        # Factor should be blended, not pure Tier 1 (0.7619)
+        exposures = pl.DataFrame({
+            "exposure_reference": ["EXP001", "EXP002"],
+            "counterparty_reference": ["CP001", "CP001"],  # Same counterparty
+            "ead_final": [1500000.0, 1500000.0],  # £1.5m each
+            "exposure_class": ["CORPORATE", "CORPORATE"],
+            "cqs": [None, None],
+            "is_sme": [True, True],
+            "is_infrastructure": [False, False],
+        }).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        # Both exposures should have the same blended factor
+        # Total = £3m, threshold = £2,183,000
+        # tier1 = £2,183,000 * 0.7619 = £1,663,277.70
+        # tier2 = £817,000 * 0.85 = £694,450.00
+        # weighted_factor = (1,663,277.70 + 694,450) / 3,000,000 = ~0.7859
+        exp1_factor = df.filter(pl.col("exposure_reference") == "EXP001")["supporting_factor"][0]
+        exp2_factor = df.filter(pl.col("exposure_reference") == "EXP002")["supporting_factor"][0]
+
+        # Both should have same factor (blended based on total counterparty exposure)
+        assert exp1_factor == pytest.approx(exp2_factor, rel=0.001)
+
+        # Factor should be between 0.7619 and 0.85 (blended)
+        assert 0.7619 < exp1_factor < 0.85
+
+    def test_different_counterparties_use_individual_totals(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Exposures to different counterparties should use their own totals."""
+        # CP001: £1m (small, gets pure 0.7619)
+        # CP002: £5m (larger, gets blended factor closer to 0.85)
+        exposures = pl.DataFrame({
+            "exposure_reference": ["EXP001", "EXP002"],
+            "counterparty_reference": ["CP001", "CP002"],  # Different counterparties
+            "ead_final": [1000000.0, 5000000.0],
+            "exposure_class": ["CORPORATE", "CORPORATE"],
+            "cqs": [None, None],
+            "is_sme": [True, True],
+            "is_infrastructure": [False, False],
+        }).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        exp1_factor = df.filter(pl.col("exposure_reference") == "EXP001")["supporting_factor"][0]
+        exp2_factor = df.filter(pl.col("exposure_reference") == "EXP002")["supporting_factor"][0]
+
+        # CP001 (£1m) should get pure Tier 1 factor
+        assert exp1_factor == pytest.approx(0.7619, rel=0.001)
+
+        # CP002 (£5m) should get blended factor (closer to 0.85)
+        assert 0.7619 < exp2_factor < 0.85
+
+    def test_null_counterparty_falls_back_to_individual_ead(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Exposures with null counterparty should use individual EAD."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["EXP001", "EXP002"],
+            "counterparty_reference": [None, None],  # No counterparty reference
+            "ead_final": [1000000.0, 5000000.0],
+            "exposure_class": ["CORPORATE", "CORPORATE"],
+            "cqs": [None, None],
+            "is_sme": [True, True],
+            "is_infrastructure": [False, False],
+        }).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        exp1_factor = df.filter(pl.col("exposure_reference") == "EXP001")["supporting_factor"][0]
+        exp2_factor = df.filter(pl.col("exposure_reference") == "EXP002")["supporting_factor"][0]
+
+        # Both should use individual EAD for factor calculation
+        # EXP001 (£1m) - small, gets pure Tier 1
+        assert exp1_factor == pytest.approx(0.7619, rel=0.001)
+
+        # EXP002 (£5m) - gets blended factor
+        assert 0.7619 < exp2_factor < 0.85
+
+
 # =============================================================================
 # Bundle Processing Tests
 # =============================================================================

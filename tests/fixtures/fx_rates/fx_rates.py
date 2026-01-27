@@ -7,7 +7,7 @@ to a reporting currency (default: GBP). The rate represents a multiplier:
 
 Example rates (approximate as of Jan 2026):
     USD to GBP: 0.79 (1 USD = 0.79 GBP)
-    EUR to GBP: 0.88 (1 EUR = 0.88 GBP)
+    EUR to GBP: 0.8732 (1 EUR = 0.8732 GBP, i.e. 1 GBP = 1.14523 EUR)
     GBP to GBP: 1.00 (identity)
 
 Usage:

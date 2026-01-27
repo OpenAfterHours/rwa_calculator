@@ -371,7 +371,7 @@ class CalculationConfig:
     retail_thresholds: RetailThresholds = field(default_factory=RetailThresholds.crr)
     irb_permissions: IRBPermissions = field(default_factory=IRBPermissions.sa_only)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
-    eur_gbp_rate: Decimal = Decimal("0.88")  # FX rate for EUR threshold conversion
+    eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     collect_engine: PolarsEngine = "streaming"  # Default to streaming for memory efficiency
 
     @property
@@ -393,7 +393,7 @@ class CalculationConfig:
         cls,
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
-        eur_gbp_rate: Decimal = Decimal("0.88"),
+        eur_gbp_rate: Decimal = Decimal("0.8732"),
         collect_engine: PolarsEngine = "streaming",
     ) -> CalculationConfig:
         """
@@ -469,6 +469,6 @@ class CalculationConfig:
             retail_thresholds=RetailThresholds.basel_3_1(),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
             scaling_factor=Decimal("1.06"),
-            eur_gbp_rate=Decimal("0.88"),  # Not used for Basel 3.1 (GBP thresholds)
+            eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             collect_engine=collect_engine,
         )

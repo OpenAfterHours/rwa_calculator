@@ -155,16 +155,23 @@ class SupportingFactorCalculator:
         """
         Apply supporting factors to exposures LazyFrame.
 
+        The SME supporting factor threshold (EUR 2.5m) is applied at the
+        counterparty level, not per-exposure. This means all exposures to
+        the same counterparty are aggregated before determining the tiered
+        factor, and that blended factor is applied to each exposure.
+
         Expects columns:
         - is_sme: bool
         - is_infrastructure: bool
         - ead_final: float (exposure amount for tier calculation)
         - rwa_pre_factor: float (RWA before supporting factor)
+        - counterparty_reference: str (optional, for aggregation)
 
         Adds columns:
         - supporting_factor: float
         - rwa_post_factor: float (RWA after supporting factor)
         - supporting_factor_applied: bool
+        - total_cp_ead: float (total counterparty EAD, for SME exposures)
 
         Args:
             exposures: Exposures with RWA calculated
@@ -193,21 +200,45 @@ class SupportingFactorCalculator:
         schema = exposures.collect_schema()
         has_sme = "is_sme" in schema.names()
         has_infra = "is_infrastructure" in schema.names()
+        has_counterparty = "counterparty_reference" in schema.names()
 
-        # Build SME factor expression inline
+        # Build SME factor expression with counterparty-level aggregation
         if has_sme:
-            tier1_expr = pl.when(pl.col("ead_final") <= threshold_gbp).then(
-                pl.col("ead_final")
+            if has_counterparty:
+                # Calculate total EAD at counterparty level using window function
+                # Only aggregate SME exposures with valid counterparty references
+                total_cp_ead_expr = pl.when(
+                    pl.col("is_sme") & pl.col("counterparty_reference").is_not_null()
+                ).then(
+                    pl.col("ead_final").sum().over("counterparty_reference")
+                ).otherwise(
+                    # Fall back to individual EAD if no counterparty ref or not SME
+                    pl.col("ead_final")
+                )
+
+                exposures = exposures.with_columns([
+                    total_cp_ead_expr.alias("total_cp_ead")
+                ])
+
+                # Use counterparty total for tier calculation
+                ead_for_tier = pl.col("total_cp_ead")
+            else:
+                # No counterparty reference column - use individual EAD
+                ead_for_tier = pl.col("ead_final")
+
+            # Calculate tiered factor based on aggregated exposure
+            tier1_expr = pl.when(ead_for_tier <= threshold_gbp).then(
+                ead_for_tier
             ).otherwise(pl.lit(threshold_gbp))
 
-            tier2_expr = pl.when(pl.col("ead_final") > threshold_gbp).then(
-                pl.col("ead_final") - threshold_gbp
+            tier2_expr = pl.when(ead_for_tier > threshold_gbp).then(
+                ead_for_tier - threshold_gbp
             ).otherwise(pl.lit(0.0))
 
             sme_factor_expr = pl.when(
-                pl.col("is_sme") & (pl.col("ead_final") > 0)
+                pl.col("is_sme") & (ead_for_tier > 0)
             ).then(
-                (tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / pl.col("ead_final")
+                (tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier
             ).otherwise(pl.lit(1.0))
         else:
             sme_factor_expr = pl.lit(1.0)

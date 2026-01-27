@@ -51,7 +51,7 @@ class CalculationRequest:
     base_currency: str = "GBP"
     enable_irb: bool = False
     data_format: Literal["parquet", "csv"] = "parquet"
-    eur_gbp_rate: Decimal = field(default_factory=lambda: Decimal("0.88"))
+    eur_gbp_rate: Decimal = field(default_factory=lambda: Decimal("0.8732"))
 
     @property
     def path(self) -> Path:

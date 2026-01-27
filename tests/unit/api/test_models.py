@@ -60,7 +60,7 @@ class TestCalculationRequest:
         assert request.base_currency == "GBP"
         assert request.enable_irb is False
         assert request.data_format == "parquet"
-        assert request.eur_gbp_rate == Decimal("0.88")
+        assert request.eur_gbp_rate == Decimal("0.8732")
 
     def test_path_property_returns_path_object(self) -> None:
         """Path property should return Path object."""

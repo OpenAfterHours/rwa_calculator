@@ -124,6 +124,11 @@ class IRBLazyFrame:
             lf = lf.with_columns([
                 pl.lit(None).cast(pl.Float64).alias("lgd"),
             ])
+        elif schema["lgd"] != pl.Float64:
+            # Cast lgd to Float64 if it's not already (handles String type from Excel imports)
+            lf = lf.with_columns([
+                pl.col("lgd").cast(pl.Float64, strict=False).alias("lgd"),
+            ])
 
         default_lgd = float(FIRB_SUPERVISORY_LGD["unsecured_senior"])
         sub_lgd = float(FIRB_SUPERVISORY_LGD["subordinated"])

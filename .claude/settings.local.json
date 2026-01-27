@@ -6,7 +6,8 @@
       "Bash(uv run python:*)",
       "WebFetch(domain:docs.marimo.io)",
       "WebFetch(domain:www.prarulebook.co.uk)",
-      "WebFetch(domain:www.bis.org)"
+      "WebFetch(domain:www.bis.org)",
+      "Bash(python:*)"
     ]
   }
 }

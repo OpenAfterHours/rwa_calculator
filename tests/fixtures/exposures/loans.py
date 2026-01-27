@@ -24,7 +24,11 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.config.fx_rates import get_crr_threshold_gbp
 from rwa_calc.data.schemas import LOAN_SCHEMA
+
+# SME exposure threshold in GBP (derived from EUR 2.5m using FX rate)
+SME_EXPOSURE_THRESHOLD_GBP = float(get_crr_threshold_gbp("sme_exposure"))
 
 
 def main() -> None:
@@ -1078,7 +1082,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
         ),
         # =============================================================================
         # CRR-F7: At Exposure Threshold Boundary
-        # £2.2m exposure (exactly at threshold) = Tier 1 only (0.7619)
+        # Exposure exactly at threshold = Tier 1 only (0.7619)
         # =============================================================================
         Loan(
             loan_reference="LOAN_SME_BOUNDARY",
@@ -1088,7 +1092,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             value_date=VALUE_DATE,
             maturity_date=date(2029, 6, 30),
             currency="GBP",
-            drawn_amount=2_200_000.0,  # £2.2m exactly
+            drawn_amount=SME_EXPOSURE_THRESHOLD_GBP,  # Exactly at threshold
             lgd=0.45,
             beel=0.0,
             seniority="senior",

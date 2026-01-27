@@ -43,7 +43,7 @@ from typing import Literal
 # This rate should be periodically reviewed and updated.
 # Rate represents: 1 EUR = X GBP
 # Example: 0.88 means 1 EUR = 0.88 GBP
-EUR_GBP_RATE: Decimal = Decimal("0.88")
+EUR_GBP_RATE: Decimal = Decimal("0.8732")
 
 
 # =============================================================================

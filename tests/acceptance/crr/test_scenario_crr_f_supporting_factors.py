@@ -331,12 +331,17 @@ class TestCRRGroupF_ParameterizedValidation:
         from workbooks.crr_expected_outputs.calculations.crr_supporting_factors import (
             calculate_sme_supporting_factor,
         )
+        from workbooks.crr_expected_outputs.data.crr_params import (
+            CRR_SME_EXPOSURE_THRESHOLD_GBP,
+        )
 
         # Test various exposure amounts
+        # Use dynamic threshold value from config
+        threshold = CRR_SME_EXPOSURE_THRESHOLD_GBP
         test_cases = [
             # (exposure_gbp, expected_factor)
             (Decimal("1000000"), Decimal("0.7619")),      # Small - Tier 1 only
-            (Decimal("2200000"), Decimal("0.7619")),      # At threshold
+            (threshold, Decimal("0.7619")),               # At threshold
             (Decimal("4000000"), None),                    # Blended (calculate)
             (Decimal("10000000"), None),                   # Tier 2 dominant
         ]

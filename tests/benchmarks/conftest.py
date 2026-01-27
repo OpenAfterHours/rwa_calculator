@@ -29,7 +29,7 @@ import logging
 import pytest
 import polars as pl
 
-from .data_generators import (
+from tests.benchmarks.data_generators import (
     BenchmarkDataConfig,
     generate_benchmark_dataset,
     get_dataset_statistics,

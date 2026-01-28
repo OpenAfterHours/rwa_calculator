@@ -30,6 +30,7 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -41,6 +42,64 @@ from rwa_calc.engine.irb.formulas import (
     _polars_capital_k_expr,
     _polars_maturity_adjustment_expr,
 )
+
+
+def _exact_fractional_years_expr(
+    start_date: date,
+    end_col: str,
+) -> pl.Expr:
+    """
+    Calculate exact fractional years between a fixed start date and an end date column.
+
+    Accounts for leap years by using ordinal day positions within each year.
+
+    Uses the formula:
+        years = (end_year - start_year) + (end_ordinal/end_days) - (start_ordinal/start_days)
+
+    Where:
+        - ordinal = day of year (1-365 or 1-366)
+        - days = 366 for leap year, 365 otherwise
+
+    This correctly handles:
+        - Same year periods
+        - Cross-year periods
+        - Multi-year periods
+        - Leap years
+
+    Works with LazyFrames and streaming (pure expression-based).
+
+    Args:
+        start_date: The fixed start date (e.g., reporting_date from config)
+        end_col: Name of the end date column
+
+    Returns:
+        Polars expression calculating exact fractional years
+    """
+    end = pl.col(end_col)
+
+    # Pre-compute start date components (these are scalar values)
+    start_year = start_date.year
+    start_ordinal = start_date.timetuple().tm_yday
+    start_year_days = 366.0 if _is_leap_year(start_year) else 365.0
+    start_frac = start_ordinal / start_year_days
+
+    # End date components (from column)
+    end_year = end.dt.year()
+    end_ordinal = end.dt.ordinal_day()
+
+    # Days in end year (366 for leap year, 365 otherwise)
+    end_year_days = pl.when(end.dt.is_leap_year()).then(366.0).otherwise(365.0)
+
+    # Fractional position within end year
+    end_frac = end_ordinal.cast(pl.Float64) / end_year_days
+
+    # Total years = year difference + ordinal adjustment
+    return (end_year - start_year).cast(pl.Float64) + (end_frac - pl.lit(start_frac))
+
+
+def _is_leap_year(year: int) -> bool:
+    """Check if a year is a leap year."""
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -188,7 +247,7 @@ class IRBLazyFrame:
         # Refresh schema after potential changes
         schema = lf.collect_schema()
 
-        # Maturity
+        # Maturity - calculated using exact fractional years accounting for leap years
         maturity_floor = 1.0
         maturity_cap = 5.0
         default_maturity = 5.0
@@ -199,7 +258,7 @@ class IRBLazyFrame:
                 lf = lf.with_columns([
                     pl.when(pl.col("maturity_date").is_not_null())
                     .then(
-                        ((pl.col("maturity_date") - pl.lit(reporting_date)).dt.total_days() / 365.0)
+                        _exact_fractional_years_expr(reporting_date, "maturity_date")
                         .clip(maturity_floor, maturity_cap)
                     )
                     .otherwise(pl.lit(default_maturity))

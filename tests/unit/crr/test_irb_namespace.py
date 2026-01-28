@@ -369,6 +369,129 @@ class TestCalculateMaturityAdjustment:
 
 
 # =============================================================================
+# Exact Fractional Years Tests
+# =============================================================================
+
+
+class TestExactFractionalYears:
+    """Tests for exact fractional years calculation from maturity_date.
+
+    The calculation uses ordinal days and accounts for leap years:
+        years = (end_year - start_year) + (end_ordinal/end_days) - (start_ordinal/start_days)
+    """
+
+    def test_same_year_calculation(self, crr_config: CalculationConfig) -> None:
+        """Fractional years within same year should be accurate."""
+        # reporting_date is 2024-12-31 (leap year)
+        # maturity_date is 2024-03-15 would be negative, so use a future date
+        # Let's create a config with earlier reporting date
+        config = CalculationConfig.crr(reporting_date=date(2024, 3, 15))
+
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead": [1_000_000.0],
+            "maturity_date": [date(2024, 6, 15)],  # 92 days later
+            "exposure_class": ["CORPORATE"],
+            "approach": ["foundation_irb"],
+        })
+
+        result = (lf
+            .irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .collect()
+        )
+
+        # 2024 is a leap year (366 days)
+        # March 15 = day 75, June 15 = day 167
+        # Expected: (167 - 75) / 366 = 92 / 366 = 0.2514
+        # But floored to 1.0
+        assert result["maturity"][0] == pytest.approx(1.0)  # Floored
+
+    def test_cross_year_calculation(self, crr_config: CalculationConfig) -> None:
+        """Fractional years crossing year boundary should be accurate."""
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 15))
+
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead": [1_000_000.0],
+            "maturity_date": [date(2027, 3, 15)],  # ~2.25 years
+            "exposure_class": ["CORPORATE"],
+            "approach": ["foundation_irb"],
+        })
+
+        result = (lf
+            .irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .collect()
+        )
+
+        # 2024-12-15 to 2027-03-15
+        # Start: 2024 (leap), ordinal 350, 350/366 = 0.9563
+        # End: 2027 (non-leap), ordinal 74, 74/365 = 0.2027
+        # Years = (2027 - 2024) + 0.2027 - 0.9563 = 3 - 0.7536 = 2.2464
+        assert result["maturity"][0] == pytest.approx(2.2464, rel=0.01)
+
+    def test_leap_year_handling(self) -> None:
+        """Leap years should be handled correctly in calculation."""
+        # Use a reporting date in a non-leap year
+        config = CalculationConfig.crr(reporting_date=date(2025, 6, 15))
+
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead": [1_000_000.0],
+            "maturity_date": [date(2028, 6, 15)],  # Exactly 3 years (2028 is leap)
+            "exposure_class": ["CORPORATE"],
+            "approach": ["foundation_irb"],
+        })
+
+        result = (lf
+            .irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .collect()
+        )
+
+        # 2025-06-15 to 2028-06-15
+        # Start: 2025 (non-leap), ordinal 166, 166/365 = 0.4548
+        # End: 2028 (leap), ordinal 167, 167/366 = 0.4563
+        # Years = (2028 - 2025) + 0.4563 - 0.4548 = 3.0015
+        assert result["maturity"][0] == pytest.approx(3.0, rel=0.01)
+
+    def test_maturity_from_date_vs_direct(self, crr_config: CalculationConfig) -> None:
+        """Maturity calculated from date should work in full pipeline."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead": [1_000_000.0],
+            "maturity_date": [date(2027, 12, 31)],  # 3 years from reporting_date
+            "exposure_class": ["CORPORATE"],
+            "approach": ["foundation_irb"],
+        })
+
+        result = (lf
+            .irb.classify_approach(crr_config)
+            .irb.apply_firb_lgd(crr_config)
+            .irb.prepare_columns(crr_config)
+            .irb.apply_all_formulas(crr_config)
+            .collect()
+        )
+
+        # Should have valid RWA
+        assert result["rwa"][0] > 0
+        # Maturity should be approximately 3 years
+        assert 2.9 < result["maturity"][0] < 3.1
+
+
+# =============================================================================
 # RWA Calculation Tests
 # =============================================================================
 

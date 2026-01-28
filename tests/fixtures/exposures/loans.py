@@ -44,7 +44,7 @@ class Loan:
 
     Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
-    Drawn loans are already on-balance sheet, so EAD = drawn_amount directly.
+    Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
     """
 
     loan_reference: str
@@ -55,6 +55,7 @@ class Loan:
     maturity_date: date
     currency: str
     drawn_amount: float
+    interest: float  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     lgd: float  # A-IRB modelled LGD (optional)
     beel: float  # Best estimate expected loss
     seniority: str  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
@@ -69,6 +70,7 @@ class Loan:
             "maturity_date": self.maturity_date,
             "currency": self.currency,
             "drawn_amount": self.drawn_amount,
+            "interest": self.interest,
             "lgd": self.lgd,
             "beel": self.beel,
             "seniority": self.seniority,
@@ -122,6 +124,7 @@ def _sovereign_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -136,6 +139,7 @@ def _sovereign_loans() -> list[Loan]:
             maturity_date=date(2030, 6, 30),
             currency="USD",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -150,6 +154,7 @@ def _sovereign_loans() -> list[Loan]:
             maturity_date=date(2028, 12, 31),
             currency="USD",
             drawn_amount=2_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -174,6 +179,7 @@ def _institution_loans() -> list[Loan]:
             maturity_date=date(2028, 1, 1),
             currency="GBP",
             drawn_amount=50_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -188,6 +194,7 @@ def _institution_loans() -> list[Loan]:
             maturity_date=date(2027, 6, 30),
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -202,6 +209,7 @@ def _institution_loans() -> list[Loan]:
             maturity_date=date(2027, 12, 31),
             currency="GBP",
             drawn_amount=10_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -227,6 +235,7 @@ def _corporate_standalone_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -241,6 +250,7 @@ def _corporate_standalone_loans() -> list[Loan]:
             maturity_date=date(2028, 6, 30),
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -255,6 +265,7 @@ def _corporate_standalone_loans() -> list[Loan]:
             maturity_date=date(2030, 3, 31),
             currency="GBP",
             drawn_amount=25_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -269,6 +280,7 @@ def _corporate_standalone_loans() -> list[Loan]:
             maturity_date=date(2030, 3, 31),
             currency="GBP",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.75,
             beel=0.0,
             seniority="subordinated",
@@ -283,6 +295,7 @@ def _corporate_standalone_loans() -> list[Loan]:
             maturity_date=date(2028, 12, 31),
             currency="GBP",
             drawn_amount=2_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -307,6 +320,7 @@ def _corporate_facility_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),
             currency="GBP",
             drawn_amount=20_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -321,6 +335,7 @@ def _corporate_facility_loans() -> list[Loan]:
             maturity_date=date(2029, 6, 30),
             currency="GBP",
             drawn_amount=30_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -335,6 +350,7 @@ def _corporate_facility_loans() -> list[Loan]:
             maturity_date=date(2028, 12, 31),
             currency="GBP",
             drawn_amount=3_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -370,6 +386,7 @@ def _firb_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),  # 3 year maturity
             currency="GBP",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -388,6 +405,7 @@ def _firb_scenario_loans() -> list[Loan]:
             maturity_date=date(2030, 1, 1),  # 4 year maturity
             currency="GBP",
             drawn_amount=2_000_000.0,
+            interest=0.0,
             lgd=0.75,  # Subordinated LGD per CRR Art. 161
             beel=0.0,
             seniority="subordinated",
@@ -406,6 +424,7 @@ def _firb_scenario_loans() -> list[Loan]:
             maturity_date=date(2028, 6, 30),  # 2.5 year maturity
             currency="GBP",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.225,  # Blended: 50% × 0% + 50% × 45%
             beel=0.0,
             seniority="senior",
@@ -424,6 +443,7 @@ def _firb_scenario_loans() -> list[Loan]:
             maturity_date=date(2028, 1, 1),  # 2 year maturity
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -442,6 +462,7 @@ def _firb_scenario_loans() -> list[Loan]:
             maturity_date=date(2033, 1, 1),  # 7 year maturity (capped at 5)
             currency="GBP",
             drawn_amount=8_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -469,6 +490,7 @@ def _retail_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),
             currency="GBP",
             drawn_amount=50_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -483,6 +505,7 @@ def _retail_loans() -> list[Loan]:
             maturity_date=date(2051, 1, 1),
             currency="GBP",
             drawn_amount=500_000.0,  # Property value £833,333, LTV 60%
+            interest=0.0,
             lgd=0.10,
             beel=0.0,
             seniority="senior",
@@ -497,6 +520,7 @@ def _retail_loans() -> list[Loan]:
             maturity_date=date(2051, 1, 1),
             currency="GBP",
             drawn_amount=850_000.0,  # Property value £1,000,000, LTV 85%
+            interest=0.0,
             lgd=0.10,
             beel=0.0,
             seniority="senior",
@@ -511,6 +535,7 @@ def _retail_loans() -> list[Loan]:
             maturity_date=date(2028, 12, 31),
             currency="GBP",
             drawn_amount=500_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -525,6 +550,7 @@ def _retail_loans() -> list[Loan]:
             maturity_date=date(2027, 1, 1),
             currency="GBP",
             drawn_amount=5_000.0,
+            interest=0.0,
             lgd=0.85,
             beel=0.0,
             seniority="senior",
@@ -553,6 +579,7 @@ def _hierarchy_test_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=1_500_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -566,6 +593,7 @@ def _hierarchy_test_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=2_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -579,6 +607,7 @@ def _hierarchy_test_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -596,6 +625,7 @@ def _hierarchy_test_loans() -> list[Loan]:
             maturity_date=date(2030, 6, 30),
             currency="GBP",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -609,6 +639,7 @@ def _hierarchy_test_loans() -> list[Loan]:
             maturity_date=date(2030, 6, 30),
             currency="GBP",
             drawn_amount=3_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -626,6 +657,7 @@ def _hierarchy_test_loans() -> list[Loan]:
             maturity_date=date(2028, 6, 30),
             currency="GBP",
             drawn_amount=80_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -639,6 +671,7 @@ def _hierarchy_test_loans() -> list[Loan]:
             maturity_date=date(2028, 6, 30),
             currency="GBP",
             drawn_amount=350_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -676,6 +709,7 @@ def _airb_scenario_loans() -> list[Loan]:
             maturity_date=date(2028, 6, 30),  # 2.5 year maturity
             currency="GBP",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.35,  # Bank's own LGD estimate (below F-IRB 45%)
             beel=0.0,
             seniority="senior",
@@ -695,6 +729,7 @@ def _airb_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),  # No maturity adjustment for retail
             currency="GBP",
             drawn_amount=100_000.0,
+            interest=0.0,
             lgd=0.15,  # Bank's own LGD estimate (low loss history)
             beel=0.0,
             seniority="senior",
@@ -713,6 +748,7 @@ def _airb_scenario_loans() -> list[Loan]:
             maturity_date=date(2030, 1, 1),  # 4 year maturity
             currency="GBP",
             drawn_amount=10_000_000.0,
+            interest=0.0,
             lgd=0.25,  # Bank's own LGD estimate (strong collateral)
             beel=0.0,
             seniority="senior",
@@ -736,6 +772,7 @@ def _defaulted_loans() -> list[Loan]:
             maturity_date=date(2027, 12, 31),
             currency="GBP",
             drawn_amount=500_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -749,6 +786,7 @@ def _defaulted_loans() -> list[Loan]:
             maturity_date=date(2027, 6, 30),
             currency="GBP",
             drawn_amount=25_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -780,6 +818,7 @@ def _crm_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),  # 3yr maturity
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,  # Not used for SA
             beel=0.0,
             seniority="senior",
@@ -794,6 +833,7 @@ def _crm_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),  # 3yr maturity
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -808,6 +848,7 @@ def _crm_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),  # 3yr maturity
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -822,6 +863,7 @@ def _crm_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),  # 3yr maturity
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -836,6 +878,7 @@ def _crm_scenario_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),  # 5yr maturity for mismatch test
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -850,6 +893,7 @@ def _crm_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),  # 3yr maturity
             currency="GBP",
             drawn_amount=1_000_000.0,
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -894,6 +938,7 @@ def _slotting_scenario_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),  # 5yr maturity
             currency="GBP",
             drawn_amount=10_000_000.0,
+            interest=0.0,
             lgd=0.45,  # Not used for slotting
             beel=0.0,
             seniority="senior",
@@ -911,6 +956,7 @@ def _slotting_scenario_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),  # 5yr maturity
             currency="GBP",
             drawn_amount=10_000_000.0,
+            interest=0.0,
             lgd=0.45,  # Not used for slotting
             beel=0.0,
             seniority="senior",
@@ -928,6 +974,7 @@ def _slotting_scenario_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),  # 5yr maturity
             currency="GBP",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.45,  # Not used for slotting
             beel=0.0,
             seniority="senior",
@@ -946,6 +993,7 @@ def _slotting_scenario_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),  # 5yr maturity
             currency="GBP",
             drawn_amount=5_000_000.0,
+            interest=0.0,
             lgd=0.45,  # Not used for slotting
             beel=0.0,
             seniority="senior",
@@ -990,6 +1038,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             maturity_date=date(2031, 1, 1),
             currency="GBP",
             drawn_amount=2_000_000.0,  # £2m
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1007,6 +1056,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             maturity_date=date(2030, 6, 30),
             currency="GBP",
             drawn_amount=4_000_000.0,  # £4m
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1024,6 +1074,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=10_000_000.0,  # £10m
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1042,6 +1093,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             maturity_date=date(2028, 1, 1),
             currency="GBP",
             drawn_amount=500_000.0,  # £500k
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1059,6 +1111,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             maturity_date=date(2040, 1, 1),  # Long-term infrastructure
             currency="GBP",
             drawn_amount=50_000_000.0,  # £50m
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1076,6 +1129,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             maturity_date=date(2030, 1, 1),
             currency="GBP",
             drawn_amount=20_000_000.0,  # £20m
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1093,6 +1147,7 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 6, 30),
             currency="GBP",
             drawn_amount=SME_EXPOSURE_THRESHOLD_GBP,  # Exactly at threshold
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1135,6 +1190,7 @@ def _provision_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 1, 1),
             currency="GBP",
             drawn_amount=1_000_000.0,  # £1m gross
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1155,6 +1211,7 @@ def _provision_scenario_loans() -> list[Loan]:
             maturity_date=date(2028, 6, 30),
             currency="GBP",
             drawn_amount=5_000_000.0,  # £5m gross
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1176,6 +1233,7 @@ def _provision_scenario_loans() -> list[Loan]:
             maturity_date=date(2028, 6, 30),
             currency="GBP",
             drawn_amount=5_000_000.0,  # £5m gross
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1217,6 +1275,7 @@ def _complex_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=4_500_000.0,  # £4.5m aggregated EAD
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1239,6 +1298,7 @@ def _complex_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=5_000_000.0,  # £5m aggregated EAD
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1257,6 +1317,7 @@ def _complex_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=2_000_000.0,  # £2m
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",
@@ -1277,6 +1338,7 @@ def _complex_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=2_000_000.0,  # £2m gross
+            interest=0.0,
             lgd=0.45,
             beel=0.0,
             seniority="senior",

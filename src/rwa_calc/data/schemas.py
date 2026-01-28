@@ -78,12 +78,13 @@ LOAN_SCHEMA = {
     "maturity_date": pl.Date,
     "currency": pl.String,
     "drawn_amount": pl.Float64,
+    "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "lgd": pl.Float64,  # A-IRB modelled LGD (optional)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
-    # Drawn loans are already on-balance sheet, so EAD = drawn_amount directly.
+    # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
 }
 
 CONTINGENTS_SCHEMA = {
@@ -363,6 +364,7 @@ RAW_EXPOSURE_SCHEMA = {
     "maturity_date": pl.Date,
     "currency": pl.String,
     "drawn_amount": pl.Float64,  # Drawn balance (0 for facilities without loans)
+    "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,  # Undrawn commitment (limit - drawn for facilities)
     "nominal_amount": pl.Float64,  # Total nominal (for contingents)
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
@@ -373,7 +375,7 @@ RAW_EXPOSURE_SCHEMA = {
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,       # Currency before FX conversion
-    "original_amount": pl.Float64,        # Amount before FX conversion (drawn + nominal)
+    "original_amount": pl.Float64,        # Amount before FX conversion (drawn + interest + nominal)
     "fx_rate_applied": pl.Float64,        # Rate used (null if no conversion needed)
 }
 
@@ -389,6 +391,7 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "maturity_date": pl.Date,
     "currency": pl.String,
     "drawn_amount": pl.Float64,
+    "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
@@ -427,6 +430,7 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "counterparty_reference": pl.String,
     "currency": pl.String,
     "drawn_amount": pl.Float64,
+    "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
@@ -462,6 +466,7 @@ CRM_ADJUSTED_SCHEMA = {
     "seniority": pl.String,
     # EAD calculation
     "drawn_amount": pl.Float64,
+    "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,
     "ccf_applied": pl.Float64,  # Credit conversion factor
     "converted_undrawn": pl.Float64,  # undrawn × CCF

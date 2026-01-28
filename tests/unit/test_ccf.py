@@ -716,3 +716,109 @@ class TestFacilityUndrawnCCF:
         assert result["ccf"][0] == pytest.approx(0.50)
         assert result["ead_from_ccf"][0] == pytest.approx(375000.0)
         assert result["ead_pre_crm"][0] == pytest.approx(375000.0)
+
+
+# =============================================================================
+# Accrued Interest in EAD Tests
+# =============================================================================
+
+
+class TestInterestInEAD:
+    """Tests for accrued interest inclusion in EAD calculation."""
+
+    def test_ead_includes_interest_for_drawn_loan(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """EAD should include accrued interest for drawn loans."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["LOAN_WITH_INTEREST"],
+            "drawn_amount": [500.0],
+            "interest": [10.0],  # Accrued interest
+            "nominal_amount": [0.0],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # EAD = drawn (500) + interest (10) + CCF portion (0) = 510
+        assert result["ead_pre_crm"][0] == pytest.approx(510.0)
+
+    def test_ead_includes_interest_plus_ccf(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """EAD should be drawn + interest + CCF-adjusted undrawn."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["LOAN_WITH_UNDRAWN"],
+            "drawn_amount": [500.0],
+            "interest": [10.0],
+            "nominal_amount": [500.0],  # Undrawn commitment
+            "risk_type": ["MR"],  # 50% CCF
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # EAD = drawn (500) + interest (10) + (nominal * CCF) = 500 + 10 + 250 = 760
+        assert result["ccf"][0] == pytest.approx(0.50)
+        assert result["ead_from_ccf"][0] == pytest.approx(250.0)
+        assert result["ead_pre_crm"][0] == pytest.approx(760.0)
+
+    def test_null_interest_treated_as_zero(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Null interest should be treated as zero."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["LOAN_NULL_INTEREST"],
+            "drawn_amount": [1000.0],
+            "interest": [None],  # Null interest
+            "nominal_amount": [0.0],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # EAD = drawn (1000) + interest (0) = 1000
+        assert result["ead_pre_crm"][0] == pytest.approx(1000.0)
+
+    def test_zero_interest_no_impact(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Zero interest should not change EAD."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["LOAN_ZERO_INTEREST"],
+            "drawn_amount": [2000.0],
+            "interest": [0.0],
+            "nominal_amount": [0.0],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # EAD = drawn (2000) + interest (0) = 2000
+        assert result["ead_pre_crm"][0] == pytest.approx(2000.0)
+
+    def test_facility_undrawn_excludes_interest(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Facility undrawn (pure contingent) has no interest component."""
+        # This tests that facility_undrawn exposures have interest = 0
+        exposures = pl.DataFrame({
+            "exposure_reference": ["FAC_UNDRAWN_001"],
+            "exposure_type": ["facility_undrawn"],
+            "drawn_amount": [0.0],
+            "interest": [0.0],  # Facility undrawn has no interest
+            "undrawn_amount": [1000.0],
+            "nominal_amount": [1000.0],
+            "risk_type": ["MR"],  # 50% CCF
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # EAD = 0 + 0 + (1000 * 0.5) = 500
+        assert result["ead_pre_crm"][0] == pytest.approx(500.0)

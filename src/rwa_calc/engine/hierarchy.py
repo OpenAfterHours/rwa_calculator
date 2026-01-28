@@ -153,7 +153,7 @@ class HierarchyResolver:
             # Add audit trail columns with null values when no conversion
             exposures = exposures.with_columns([
                 pl.col("currency").alias("original_currency"),
-                (pl.col("drawn_amount") + pl.col("nominal_amount")).alias("original_amount"),
+                (pl.col("drawn_amount") + pl.col("interest").fill_null(0.0) + pl.col("nominal_amount")).alias("original_amount"),
                 pl.lit(None).cast(pl.Float64).alias("fx_rate_applied"),
             ])
 
@@ -539,6 +539,7 @@ class HierarchyResolver:
                 "maturity_date": pl.Date,
                 "currency": pl.String,
                 "drawn_amount": pl.Float64,
+                "interest": pl.Float64,
                 "undrawn_amount": pl.Float64,
                 "nominal_amount": pl.Float64,
                 "lgd": pl.Float64,
@@ -617,6 +618,7 @@ class HierarchyResolver:
             pl.col("maturity_date") if "maturity_date" in facility_cols else pl.lit(None).cast(pl.Date).alias("maturity_date"),
             pl.col("currency") if "currency" in facility_cols else pl.lit(None).cast(pl.String).alias("currency"),
             pl.lit(0.0).alias("drawn_amount"),
+            pl.lit(0.0).alias("interest"),  # Facility undrawn has no accrued interest
             pl.col("undrawn_amount"),
             pl.col("undrawn_amount").alias("nominal_amount"),  # CCF uses nominal_amount
             pl.col("lgd").cast(pl.Float64, strict=False) if "lgd" in facility_cols else pl.lit(None).cast(pl.Float64).alias("lgd"),
@@ -656,9 +658,14 @@ class HierarchyResolver:
         errors: list[HierarchyError] = []
 
         # Standardize loan columns
-        # Note: Loans are drawn exposures - CCF fields are N/A since EAD = drawn_amount directly.
+        # Note: Loans are drawn exposures - CCF fields are N/A since EAD = drawn_amount + interest directly.
         # CCF only applies to off-balance sheet items (undrawn commitments, contingents).
-        loans_unified = loans.select([
+        loan_schema = loans.collect_schema()
+        loan_cols = set(loan_schema.names())
+        has_interest_col = "interest" in loan_cols
+
+        # Build loan select expressions
+        loan_select_exprs = [
             pl.col("loan_reference").alias("exposure_reference"),
             pl.lit("loan").alias("exposure_type"),
             pl.col("product_type"),
@@ -668,6 +675,7 @@ class HierarchyResolver:
             pl.col("maturity_date"),
             pl.col("currency"),
             pl.col("drawn_amount"),
+            pl.col("interest").fill_null(0.0) if has_interest_col else pl.lit(0.0).alias("interest"),
             pl.lit(0.0).alias("undrawn_amount"),
             pl.lit(0.0).alias("nominal_amount"),
             pl.col("lgd").cast(pl.Float64, strict=False),
@@ -675,7 +683,8 @@ class HierarchyResolver:
             pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
-        ])
+        ]
+        loans_unified = loans.select(loan_select_exprs)
 
         # Build list of exposure frames to concatenate
         exposure_frames = [loans_unified]
@@ -693,6 +702,7 @@ class HierarchyResolver:
                 pl.col("maturity_date"),
                 pl.col("currency"),
                 pl.lit(0.0).alias("drawn_amount"),
+                pl.lit(0.0).alias("interest"),  # Contingents have no accrued interest
                 pl.lit(0.0).alias("undrawn_amount"),
                 pl.col("nominal_amount"),
                 pl.col("lgd").cast(pl.Float64, strict=False),

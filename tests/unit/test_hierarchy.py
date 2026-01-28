@@ -1362,3 +1362,99 @@ class TestFacilityUndrawnInUnifyExposures:
         # Check facility_undrawn amounts
         facility_undrawn = df.filter(pl.col("exposure_type") == "facility_undrawn")
         assert facility_undrawn["undrawn_amount"][0] == pytest.approx(1500000.0)  # 2M - 500k
+
+    def test_facility_undrawn_excludes_interest_from_calculation(
+        self,
+        resolver: HierarchyResolver,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Facility undrawn should be limit - drawn_amount (excluding interest).
+
+        Per the plan:
+        - Facility limit: 1000
+        - Drawn loan: 500
+        - Interest: 10
+        - Undrawn = 1000 - 500 = 500 (interest excluded from undrawn calc)
+        - On-balance-sheet = 500 + 10 = 510
+        """
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_INT"],
+            "product_type": ["RCF"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_INT"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "limit": [1000.0],  # Limit = 1000
+            "lgd": [0.45],
+            "seniority": ["senior"],
+            "risk_type": ["MR"],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN_INT"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_INT"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [500.0],  # Drawn = 500
+            "interest": [10.0],  # Interest = 10 (should NOT reduce undrawn)
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        counterparties = pl.DataFrame({
+            "counterparty_reference": ["CP_INT"],
+            "counterparty_name": ["Interest Test Corp"],
+            "entity_type": ["corporate"],
+            "country_code": ["GB"],
+            "annual_revenue": [50000000.0],
+            "total_assets": [100000000.0],
+            "default_status": [False],
+            "sector_code": ["MANU"],
+            "is_regulated": [False],
+            "is_managed_as_retail": [False],
+        }).lazy()
+
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_INT"],
+            "child_reference": ["LOAN_INT"],
+            "child_type": ["loan"],
+        }).lazy()
+
+        bundle = RawDataBundle(
+            facilities=facilities,
+            loans=loans,
+            contingents=None,
+            counterparties=counterparties,
+            collateral=None,
+            guarantees=None,
+            provisions=None,
+            ratings=None,
+            facility_mappings=facility_mappings,
+            org_mappings=None,
+            lending_mappings=pl.LazyFrame(schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }),
+        )
+
+        result = resolver.resolve(bundle, crr_config)
+        df = result.exposures.collect()
+
+        # Should have loan + facility_undrawn = 2 exposures
+        assert len(df) == 2
+
+        # Check the loan exposure has interest included
+        loan_exp = df.filter(pl.col("exposure_type") == "loan")
+        assert loan_exp["drawn_amount"][0] == pytest.approx(500.0)
+        assert loan_exp["interest"][0] == pytest.approx(10.0)
+
+        # Check facility_undrawn uses only drawn_amount (not interest)
+        # Undrawn = limit (1000) - drawn (500) = 500
+        facility_undrawn = df.filter(pl.col("exposure_type") == "facility_undrawn")
+        assert facility_undrawn["undrawn_amount"][0] == pytest.approx(500.0)
+        # Facility undrawn should have interest = 0
+        assert facility_undrawn["interest"][0] == pytest.approx(0.0)

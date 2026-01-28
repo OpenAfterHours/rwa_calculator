@@ -72,12 +72,13 @@ class CCFCalculator:
         Returns:
             LazyFrame with ead_from_ccf and ccf columns added
         """
-        # Check if risk_type column exists
+        # Check if columns exist
         schema = exposures.collect_schema()
         has_risk_type = "risk_type" in schema.names()
         has_approach = "approach" in schema.names()
         has_ccf_modelled = "ccf_modelled" in schema.names()
         has_short_term_trade_lc = "is_short_term_trade_lc" in schema.names()
+        has_interest = "interest" in schema.names()
 
         # Calculate CCF from risk_type for SA approach
         # FR=100%, MR=50%, MLR=20%, LR=0%
@@ -184,19 +185,60 @@ class CCFCalculator:
             (pl.col("nominal_amount") * pl.col("ccf")).alias("ead_from_ccf"),
         ])
 
-        # Calculate total EAD (drawn + CCF-adjusted undrawn)
-        exposures = exposures.with_columns([
-            (pl.col("drawn_amount") + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
-        ])
+        # Calculate total EAD (drawn + interest + CCF-adjusted undrawn)
+        # Interest is included in on-balance-sheet EAD but not in facility undrawn calculation
+        if has_interest:
+            exposures = exposures.with_columns([
+                (pl.col("drawn_amount")
+                 + pl.col("interest").fill_null(0.0)
+                 + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+            ])
+        else:
+            # Legacy: no interest column, EAD = drawn + CCF-adjusted undrawn
+            exposures = exposures.with_columns([
+                (pl.col("drawn_amount") + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+            ])
 
         # Add CCF audit trail
-        if has_risk_type:
+        if has_risk_type and has_interest:
             exposures = exposures.with_columns([
                 pl.concat_str([
                     pl.lit("CCF="),
                     (pl.col("ccf") * 100).round(0).cast(pl.String),
                     pl.lit("%; risk_type="),
                     pl.col("risk_type").fill_null("unknown"),
+                    pl.lit("; drawn="),
+                    pl.col("drawn_amount").round(0).cast(pl.String),
+                    pl.lit("; interest="),
+                    pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
+                    pl.lit("; nominal="),
+                    pl.col("nominal_amount").round(0).cast(pl.String),
+                    pl.lit("; ead_ccf="),
+                    pl.col("ead_from_ccf").round(0).cast(pl.String),
+                ]).alias("ccf_calculation"),
+            ])
+        elif has_risk_type:
+            exposures = exposures.with_columns([
+                pl.concat_str([
+                    pl.lit("CCF="),
+                    (pl.col("ccf") * 100).round(0).cast(pl.String),
+                    pl.lit("%; risk_type="),
+                    pl.col("risk_type").fill_null("unknown"),
+                    pl.lit("; nominal="),
+                    pl.col("nominal_amount").round(0).cast(pl.String),
+                    pl.lit("; ead_ccf="),
+                    pl.col("ead_from_ccf").round(0).cast(pl.String),
+                ]).alias("ccf_calculation"),
+            ])
+        elif has_interest:
+            exposures = exposures.with_columns([
+                pl.concat_str([
+                    pl.lit("CCF="),
+                    (pl.col("ccf") * 100).round(0).cast(pl.String),
+                    pl.lit("%; drawn="),
+                    pl.col("drawn_amount").round(0).cast(pl.String),
+                    pl.lit("; interest="),
+                    pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
                     pl.lit("; nominal="),
                     pl.col("nominal_amount").round(0).cast(pl.String),
                     pl.lit("; ead_ccf="),

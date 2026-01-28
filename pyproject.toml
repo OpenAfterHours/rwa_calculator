@@ -1,6 +1,6 @@
 [project]
 name = "rwa-calc"
-version = "0.1.10"
+version = "0.1.11"
 description = "Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS9/24"
 readme = "README.md"
 requires-python = ">=3.13"

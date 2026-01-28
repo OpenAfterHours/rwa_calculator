@@ -11,3 +11,4 @@ tests/benchmarks/data/
 site/
 .pypirc
 dist/
+*.xlsx

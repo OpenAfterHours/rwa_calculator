@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "polars-mcp": {
+      "command": "uvx.exe",
+      "args": ["polars-mcp"]
+    }
+  }
+}

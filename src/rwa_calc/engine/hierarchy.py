@@ -854,6 +854,11 @@ class HierarchyResolver:
         Joins collateral property_ltv to exposures where collateral is linked via
         beneficiary_reference. For mortgages and commercial RE, LTV determines risk weight.
 
+        Supports three levels of collateral linking based on beneficiary_type:
+        1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
+        2. Facility: beneficiary_reference matches parent_facility_reference
+        3. Counterparty: beneficiary_reference matches counterparty_reference
+
         Args:
             exposures: Unified exposures with exposure_reference
             collateral: Collateral data with beneficiary_reference and property_ltv (optional)
@@ -870,26 +875,78 @@ class HierarchyResolver:
                 pl.lit(None).cast(pl.Float64).alias("ltv"),
             ])
 
-        # Select only the LTV column from collateral
-        ltv_lookup = collateral.select([
-            pl.col("beneficiary_reference"),
-            pl.col("property_ltv").alias("ltv"),
-        ]).filter(
-            # Only include collateral with LTV data
-            pl.col("ltv").is_not_null()
-        ).unique(
-            # Take first match if multiple collaterals
-            subset=["beneficiary_reference"],
-            keep="first",
-        )
+        # Check if beneficiary_type column exists for multi-level linking
+        collateral_schema = collateral.collect_schema()
+        has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
 
-        # Join LTV to exposures
+        # Filter for collateral with LTV data
+        ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
+
+        if not has_beneficiary_type:
+            # Legacy behavior: assume direct exposure linking
+            ltv_lookup = ltv_collateral.select([
+                pl.col("beneficiary_reference"),
+                pl.col("property_ltv").alias("ltv"),
+            ]).unique(subset=["beneficiary_reference"], keep="first")
+
+            return exposures.join(
+                ltv_lookup,
+                left_on="exposure_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            )
+
+        # Multi-level linking: separate collateral by beneficiary_type
+        # 1. Direct/exposure-level collateral
+        direct_ltv = ltv_collateral.filter(
+            pl.col("beneficiary_type").str.to_lowercase().is_in(["exposure", "loan"])
+        ).select([
+            pl.col("beneficiary_reference").alias("direct_ref"),
+            pl.col("property_ltv").alias("direct_ltv"),
+        ]).unique(subset=["direct_ref"], keep="first")
+
+        # 2. Facility-level collateral
+        facility_ltv = ltv_collateral.filter(
+            pl.col("beneficiary_type").str.to_lowercase() == "facility"
+        ).select([
+            pl.col("beneficiary_reference").alias("facility_ref"),
+            pl.col("property_ltv").alias("facility_ltv"),
+        ]).unique(subset=["facility_ref"], keep="first")
+
+        # 3. Counterparty-level collateral
+        counterparty_ltv = ltv_collateral.filter(
+            pl.col("beneficiary_type").str.to_lowercase() == "counterparty"
+        ).select([
+            pl.col("beneficiary_reference").alias("cp_ref"),
+            pl.col("property_ltv").alias("cp_ltv"),
+        ]).unique(subset=["cp_ref"], keep="first")
+
+        # Join all three levels
         exposures = exposures.join(
-            ltv_lookup,
+            direct_ltv,
             left_on="exposure_reference",
-            right_on="beneficiary_reference",
+            right_on="direct_ref",
+            how="left",
+        ).join(
+            facility_ltv,
+            left_on="parent_facility_reference",
+            right_on="facility_ref",
+            how="left",
+        ).join(
+            counterparty_ltv,
+            left_on="counterparty_reference",
+            right_on="cp_ref",
             how="left",
         )
+
+        # Coalesce LTV: prefer direct, then facility, then counterparty
+        exposures = exposures.with_columns([
+            pl.coalesce(
+                pl.col("direct_ltv"),
+                pl.col("facility_ltv"),
+                pl.col("cp_ltv"),
+            ).alias("ltv"),
+        ]).drop(["direct_ltv", "facility_ltv", "cp_ltv"])
 
         return exposures
 
@@ -899,15 +956,29 @@ class HierarchyResolver:
         collateral: pl.LazyFrame | None,
     ) -> pl.LazyFrame:
         """
-        Calculate residential property collateral coverage per exposure.
+        Calculate property collateral coverage per exposure.
+
+        Calculates two separate values:
+        1. residential_collateral_value: For CRR Art. 123(c) retail threshold exclusion
+           (only residential property counts for threshold exclusion)
+        2. property_collateral_value: For retail_mortgage classification
+           (both residential AND commercial property qualify for mortgage treatment)
 
         Per CRR Art. 123(c) and Basel 3.1 CRE20.65, exposures fully and completely
         secured by residential property (assigned to SA residential property class)
         should be excluded from the EUR 1m retail threshold aggregation.
 
-        The exclusion amount is the lesser of:
-        - The residential property collateral value (after any haircuts)
-        - The exposure amount (to prevent over-exclusion)
+        For retail classification (CRE30.17-18), exposures secured by ANY immovable
+        property (residential or commercial) are treated as retail mortgages with
+        fixed 0.15 correlation, not retail other with PD-dependent correlation.
+
+        Supports three levels of collateral linking based on beneficiary_type:
+        1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
+        2. Facility: beneficiary_reference matches parent_facility_reference
+        3. Counterparty: beneficiary_reference matches counterparty_reference
+
+        For facility/counterparty level collateral, values are allocated proportionally
+        across exposures based on their share of total exposure amount.
 
         Args:
             exposures: Unified exposures with exposure_reference
@@ -916,57 +987,93 @@ class HierarchyResolver:
         Returns:
             LazyFrame with columns:
             - exposure_reference: The exposure identifier
-            - residential_collateral_value: Value of residential RE securing this exposure
+            - residential_collateral_value: Value of residential RE (for threshold exclusion)
+            - property_collateral_value: Value of all RE (residential + commercial)
             - exposure_for_retail_threshold: Exposure amount minus residential coverage
         """
-        # Get exposure amounts for capping
+        # Get exposure amounts with linkage keys for capping and allocation
         exposure_amounts = exposures.select([
             pl.col("exposure_reference"),
+            pl.col("counterparty_reference"),
+            pl.col("parent_facility_reference"),
             (pl.col("drawn_amount") + pl.col("nominal_amount")).alias("total_exposure_amount"),
         ])
 
-        # Check if collateral is valid for residential property coverage calculation
+        # Check if collateral is valid for property coverage calculation
         # Requires beneficiary_reference, collateral_type, market_value, and property_type
         required_cols = {"beneficiary_reference", "collateral_type", "market_value", "property_type"}
         if not self._is_valid_optional_data(collateral, required_cols):
-            # No valid collateral data, return exposures with zero residential coverage
-            return exposure_amounts.with_columns([
+            # No valid collateral data, return exposures with zero coverage
+            return exposure_amounts.select([
+                pl.col("exposure_reference"),
                 pl.lit(0.0).alias("residential_collateral_value"),
+                pl.lit(0.0).alias("property_collateral_value"),
                 pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
             ])
 
-        # Filter for residential property collateral only
+        # Check if beneficiary_type column exists for multi-level linking
+        collateral_schema = collateral.collect_schema()
+        has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
+
+        # Filter for residential property collateral only (for threshold exclusion)
         # Residential property = collateral_type is 'real_estate' AND property_type is 'residential'
-        # Note: property_type existence is already validated above
         residential_collateral = collateral.filter(
             (pl.col("collateral_type").str.to_lowercase() == "real_estate") &
             (pl.col("property_type").str.to_lowercase() == "residential")
         )
 
-        # Sum residential collateral value per beneficiary (exposure)
-        residential_by_exposure = residential_collateral.group_by("beneficiary_reference").agg([
-            pl.col("market_value").sum().alias("residential_collateral_value"),
-        ])
-
-        # Join with exposure amounts
-        result = exposure_amounts.join(
-            residential_by_exposure,
-            left_on="exposure_reference",
-            right_on="beneficiary_reference",
-            how="left",
+        # Filter for ALL property collateral (residential + commercial) for mortgage classification
+        # Property collateral = collateral_type is 'real_estate' (any property_type)
+        all_property_collateral = collateral.filter(
+            pl.col("collateral_type").str.to_lowercase() == "real_estate"
         )
+
+        if not has_beneficiary_type:
+            # Legacy behavior: assume direct exposure linking only
+            residential_by_exposure = residential_collateral.group_by("beneficiary_reference").agg([
+                pl.col("market_value").sum().alias("residential_collateral_value"),
+            ])
+            property_by_exposure = all_property_collateral.group_by("beneficiary_reference").agg([
+                pl.col("market_value").sum().alias("property_collateral_value"),
+            ])
+
+            result = exposure_amounts.join(
+                residential_by_exposure,
+                left_on="exposure_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            ).join(
+                property_by_exposure,
+                left_on="exposure_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            )
+        else:
+            # Multi-level linking: handle direct, facility, and counterparty levels
+            result = self._aggregate_property_collateral_multi_level(
+                exposure_amounts,
+                residential_collateral,
+                all_property_collateral,
+            )
 
         # Fill nulls with 0 and cap at exposure amount
         result = result.with_columns([
             pl.col("residential_collateral_value").fill_null(0.0),
+            pl.col("property_collateral_value").fill_null(0.0),
         ]).with_columns([
             # Cap residential coverage at exposure amount (can't exclude more than exposure)
             pl.when(pl.col("residential_collateral_value") > pl.col("total_exposure_amount"))
             .then(pl.col("total_exposure_amount"))
             .otherwise(pl.col("residential_collateral_value"))
             .alias("residential_collateral_value"),
+            # Cap property coverage at exposure amount
+            pl.when(pl.col("property_collateral_value") > pl.col("total_exposure_amount"))
+            .then(pl.col("total_exposure_amount"))
+            .otherwise(pl.col("property_collateral_value"))
+            .alias("property_collateral_value"),
         ]).with_columns([
             # Calculate exposure for retail threshold = exposure - residential coverage
+            # Note: Only RESIDENTIAL property is excluded from threshold, not commercial
             (pl.col("total_exposure_amount") - pl.col("residential_collateral_value"))
             .alias("exposure_for_retail_threshold"),
         ])
@@ -974,7 +1081,145 @@ class HierarchyResolver:
         return result.select([
             "exposure_reference",
             "residential_collateral_value",
+            "property_collateral_value",
             "exposure_for_retail_threshold",
+        ])
+
+    def _aggregate_property_collateral_multi_level(
+        self,
+        exposure_amounts: pl.LazyFrame,
+        residential_collateral: pl.LazyFrame,
+        all_property_collateral: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Aggregate property collateral values across direct, facility, and counterparty levels.
+
+        For facility/counterparty level collateral, values are allocated proportionally
+        across exposures based on their share of total exposure amount at that level.
+
+        Args:
+            exposure_amounts: Exposures with exposure_reference, counterparty_reference,
+                            parent_facility_reference, and total_exposure_amount
+            residential_collateral: Filtered residential property collateral
+            all_property_collateral: All property collateral (residential + commercial)
+
+        Returns:
+            LazyFrame with exposure_reference, residential_collateral_value,
+            property_collateral_value, and total_exposure_amount
+        """
+        # Helper to aggregate collateral by beneficiary type and level
+        def aggregate_by_level(
+            coll: pl.LazyFrame,
+            level: str,
+            value_alias: str,
+        ) -> pl.LazyFrame:
+            """Aggregate collateral values for a specific beneficiary level."""
+            level_filter = ["exposure", "loan"] if level == "direct" else [level]
+            return coll.filter(
+                pl.col("beneficiary_type").str.to_lowercase().is_in(level_filter)
+            ).group_by("beneficiary_reference").agg([
+                pl.col("market_value").sum().alias(value_alias),
+            ])
+
+        # Aggregate residential collateral at each level
+        res_direct = aggregate_by_level(residential_collateral, "direct", "res_direct")
+        res_facility = aggregate_by_level(residential_collateral, "facility", "res_facility")
+        res_counterparty = aggregate_by_level(residential_collateral, "counterparty", "res_cp")
+
+        # Aggregate all property collateral at each level
+        prop_direct = aggregate_by_level(all_property_collateral, "direct", "prop_direct")
+        prop_facility = aggregate_by_level(all_property_collateral, "facility", "prop_facility")
+        prop_counterparty = aggregate_by_level(all_property_collateral, "counterparty", "prop_cp")
+
+        # Calculate allocation weights for facility-level collateral
+        # (exposure's share of total exposure under that facility)
+        facility_totals = exposure_amounts.group_by("parent_facility_reference").agg([
+            pl.col("total_exposure_amount").sum().alias("facility_total"),
+        ])
+
+        # Calculate allocation weights for counterparty-level collateral
+        # (exposure's share of total exposure for that counterparty)
+        counterparty_totals = exposure_amounts.group_by("counterparty_reference").agg([
+            pl.col("total_exposure_amount").sum().alias("cp_total"),
+        ])
+
+        # Join all levels of collateral to exposures
+        result = exposure_amounts.join(
+            res_direct,
+            left_on="exposure_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            prop_direct,
+            left_on="exposure_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            res_facility,
+            left_on="parent_facility_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            prop_facility,
+            left_on="parent_facility_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            facility_totals,
+            on="parent_facility_reference",
+            how="left",
+        ).join(
+            res_counterparty,
+            left_on="counterparty_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            prop_counterparty,
+            left_on="counterparty_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            counterparty_totals,
+            on="counterparty_reference",
+            how="left",
+        )
+
+        # Calculate pro-rata allocation weights
+        result = result.with_columns([
+            # Facility allocation weight (handle division by zero)
+            pl.when(pl.col("facility_total") > 0)
+            .then(pl.col("total_exposure_amount") / pl.col("facility_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("facility_weight"),
+            # Counterparty allocation weight (handle division by zero)
+            pl.when(pl.col("cp_total") > 0)
+            .then(pl.col("total_exposure_amount") / pl.col("cp_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("cp_weight"),
+        ])
+
+        # Combine values from all levels with pro-rata allocation
+        result = result.with_columns([
+            # Residential: direct + (facility * weight) + (counterparty * weight)
+            (
+                pl.col("res_direct").fill_null(0.0) +
+                (pl.col("res_facility").fill_null(0.0) * pl.col("facility_weight")) +
+                (pl.col("res_cp").fill_null(0.0) * pl.col("cp_weight"))
+            ).alias("residential_collateral_value"),
+            # Property: direct + (facility * weight) + (counterparty * weight)
+            (
+                pl.col("prop_direct").fill_null(0.0) +
+                (pl.col("prop_facility").fill_null(0.0) * pl.col("facility_weight")) +
+                (pl.col("prop_cp").fill_null(0.0) * pl.col("cp_weight"))
+            ).alias("property_collateral_value"),
+        ])
+
+        # Drop intermediate columns
+        return result.select([
+            "exposure_reference",
+            "total_exposure_amount",
+            "residential_collateral_value",
+            "property_collateral_value",
         ])
 
     def _add_lending_group_totals_to_exposures(
@@ -1030,11 +1275,12 @@ class HierarchyResolver:
             how="left",
         )
 
-        # Join residential coverage per exposure (for audit trail)
+        # Join property coverage per exposure (for audit trail and mortgage classification)
         exposures = exposures.join(
             residential_coverage.select([
                 pl.col("exposure_reference").alias("_res_exp_ref"),
                 pl.col("residential_collateral_value"),
+                pl.col("property_collateral_value"),
                 pl.col("exposure_for_retail_threshold"),
             ]),
             left_on="exposure_reference",
@@ -1042,11 +1288,12 @@ class HierarchyResolver:
             how="left",
         )
 
-        # Fill nulls with 0 for non-grouped exposures and exposures without residential coverage
+        # Fill nulls with 0 for non-grouped exposures and exposures without property coverage
         exposures = exposures.with_columns([
             pl.col("lending_group_total_exposure").fill_null(0.0),
             pl.col("lending_group_adjusted_exposure").fill_null(0.0),
             pl.col("residential_collateral_value").fill_null(0.0),
+            pl.col("property_collateral_value").fill_null(0.0),
             pl.col("exposure_for_retail_threshold").fill_null(
                 pl.col("drawn_amount") + pl.col("nominal_amount")
             ),

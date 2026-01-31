@@ -342,6 +342,54 @@ class TestPropertyCollateralReclassification:
         assert df["has_property_collateral"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
+    def test_corporate_with_commercial_property_becomes_retail_mortgage(
+        self,
+        classifier: ExposureClassifier,
+        hybrid_config: CalculationConfig,
+    ) -> None:
+        """Corporate with COMMERCIAL property collateral should become RETAIL_MORTGAGE.
+
+        This tests that commercial property (not just residential) qualifies an
+        exposure for retail_mortgage treatment, which has a fixed 0.15 correlation
+        instead of the PD-dependent correlation for retail_other.
+        """
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [500000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "product_type": ["TERM_LOAN"],  # Not a mortgage product type
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],  # No residential property
+                "property_collateral_value": [400000.0],  # But has commercial property
+                "lending_group_adjusted_exposure": [500000.0],  # Full exposure for threshold
+                "exposure_for_retail_threshold": [500000.0],
+                "collateral_type": ["commercial"],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10000000.0],
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "is_regulated": [False],
+                "is_managed_as_retail": [True],
+            },
+        )
+
+        result = classifier.classify(bundle, hybrid_config)
+        df = result.all_exposures.collect()
+
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
+        assert df["reclassified_to_retail"][0] is True
+        assert df["has_property_collateral"][0] is True
+        assert df["approach"][0] == ApproachType.AIRB.value
+
     def test_corporate_without_property_collateral_becomes_retail_other(
         self,
         classifier: ExposureClassifier,
@@ -359,7 +407,8 @@ class TestPropertyCollateralReclassification:
                 "value_date": [date(2024, 1, 1)],
                 "maturity_date": [date(2029, 1, 1)],
                 "currency": ["GBP"],
-                "residential_collateral_value": [0.0],  # No property collateral
+                "residential_collateral_value": [0.0],  # No residential property
+                "property_collateral_value": [0.0],  # No property collateral at all
                 "lending_group_adjusted_exposure": [500000.0],
                 "exposure_for_retail_threshold": [500000.0],
                 "collateral_type": ["financial"],  # Not property
@@ -499,34 +548,38 @@ class TestMixedPortfolioReclassification:
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": [
-                    "CORP_RETAIL_PROP",   # Should become RETAIL_MORTGAGE
+                    "CORP_RETAIL_PROP",   # Should become RETAIL_MORTGAGE (residential)
+                    "CORP_RETAIL_COMM",   # Should become RETAIL_MORTGAGE (commercial)
                     "CORP_RETAIL_OTHER",  # Should become RETAIL_OTHER
                     "CORP_NO_LGD",        # Should stay CORPORATE (no LGD)
                     "CORP_LARGE",         # Should stay CORPORATE (> threshold)
                     "CORP_NOT_MANAGED",   # Should stay CORPORATE (not managed as retail)
                 ],
-                "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005"],
-                "drawn_amount": [300000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
-                "nominal_amount": [0.0, 0.0, 0.0, 0.0, 0.0],
-                "lgd": [0.35, 0.45, None, 0.40, 0.45],
-                "product_type": ["MORTGAGE", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN"],
-                "value_date": [date(2024, 1, 1)] * 5,
-                "maturity_date": [date(2029, 1, 1)] * 5,
-                "currency": ["GBP"] * 5,
-                "residential_collateral_value": [250000.0, 0.0, 0.0, 0.0, 0.0],
-                "lending_group_adjusted_exposure": [50000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
-                "exposure_for_retail_threshold": [50000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
-                "collateral_type": ["residential", "financial", "financial", "financial", "financial"],
+                "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005", "CP006"],
+                "drawn_amount": [300000.0, 350000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
+                "nominal_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                "lgd": [0.35, 0.40, 0.45, None, 0.40, 0.45],
+                "product_type": ["MORTGAGE", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)] * 6,
+                "maturity_date": [date(2029, 1, 1)] * 6,
+                "currency": ["GBP"] * 6,
+                # residential_collateral_value only for residential property (threshold exclusion)
+                "residential_collateral_value": [250000.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                # property_collateral_value for both residential AND commercial (mortgage classification)
+                "property_collateral_value": [250000.0, 300000.0, 0.0, 0.0, 0.0, 0.0],
+                "lending_group_adjusted_exposure": [50000.0, 350000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
+                "exposure_for_retail_threshold": [50000.0, 350000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
+                "collateral_type": ["residential", "commercial", "financial", "financial", "financial", "financial"],
             },
             counterparties_data={
-                "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005"],
-                "entity_type": ["corporate"] * 5,
-                "country_code": ["GB"] * 5,
-                "annual_revenue": [10000000.0] * 5,
-                "total_assets": [5000000.0] * 5,
-                "default_status": [False] * 5,
-                "is_regulated": [False] * 5,
-                "is_managed_as_retail": [True, True, True, True, False],
+                "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005", "CP006"],
+                "entity_type": ["corporate"] * 6,
+                "country_code": ["GB"] * 6,
+                "annual_revenue": [10000000.0] * 6,
+                "total_assets": [5000000.0] * 6,
+                "default_status": [False] * 6,
+                "is_regulated": [False] * 6,
+                "is_managed_as_retail": [True, True, True, True, True, False],
             },
         )
 
@@ -557,8 +610,16 @@ class TestMixedPortfolioReclassification:
         assert row["reclassified_to_retail"][0] is True
         assert row["approach"][0] == ApproachType.AIRB.value
 
-        # CORP_RETAIL_PROP: becomes RETAIL_MORTGAGE (has property collateral)
+        # CORP_RETAIL_PROP: becomes RETAIL_MORTGAGE (has residential property collateral)
         row = df.filter(pl.col("exposure_reference") == "CORP_RETAIL_PROP")
         assert row["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
         assert row["reclassified_to_retail"][0] is True
+        assert row["approach"][0] == ApproachType.AIRB.value
+
+        # CORP_RETAIL_COMM: becomes RETAIL_MORTGAGE (has COMMERCIAL property collateral)
+        # This verifies that commercial property also qualifies for retail_mortgage treatment
+        row = df.filter(pl.col("exposure_reference") == "CORP_RETAIL_COMM")
+        assert row["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
+        assert row["reclassified_to_retail"][0] is True
+        assert row["has_property_collateral"][0] is True
         assert row["approach"][0] == ApproachType.AIRB.value

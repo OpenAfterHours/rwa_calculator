@@ -373,20 +373,38 @@ class ExposureClassifier:
         - Other retail exceeding threshold: Reclassify to CORPORATE
 
         Mortgage classification:
-        - Product type indicates mortgage/home loan
-        - Secured by residential property
+        - Product type indicates mortgage/home loan, OR
+        - Secured by immovable property (residential or commercial)
         """
         max_retail_exposure = float(config.retail_thresholds.max_exposure_threshold)
 
+        # Check schema for property collateral column
+        schema = exposures.collect_schema()
+        has_property_col = "property_collateral_value" in schema.names()
+
         # First, apply mortgage classification (needed for exclusion logic)
-        exposures = exposures.with_columns([
-            pl.when(
-                (pl.col("product_type").str.to_uppercase().str.contains("MORTGAGE")) |
-                (pl.col("product_type").str.to_uppercase().str.contains("HOME_LOAN"))
-            ).then(pl.lit(True))
-            .otherwise(pl.lit(False))
-            .alias("is_mortgage"),
-        ])
+        # An exposure is a "mortgage" if:
+        # 1. Product type indicates mortgage/home loan, OR
+        # 2. Secured by immovable property (property_collateral_value > 0)
+        if has_property_col:
+            exposures = exposures.with_columns([
+                pl.when(
+                    (pl.col("product_type").str.to_uppercase().str.contains("MORTGAGE")) |
+                    (pl.col("product_type").str.to_uppercase().str.contains("HOME_LOAN")) |
+                    (pl.col("property_collateral_value") > 0)
+                ).then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("is_mortgage"),
+            ])
+        else:
+            exposures = exposures.with_columns([
+                pl.when(
+                    (pl.col("product_type").str.to_uppercase().str.contains("MORTGAGE")) |
+                    (pl.col("product_type").str.to_uppercase().str.contains("HOME_LOAN"))
+                ).then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("is_mortgage"),
+            ])
 
         # Check if exposure exceeds retail threshold using ADJUSTED amounts
         # (excluding residential property collateral per CRR Art. 123(c))
@@ -523,13 +541,20 @@ class ExposureClassifier:
             .alias("reclassified_to_retail"),
         ])
 
-        # Determine if exposure has property collateral
-        # Check residential_collateral_value (from hierarchy) or collateral_type
+        # Determine if exposure has property collateral (residential OR commercial)
+        # Check property_collateral_value (from hierarchy) which includes both types
+        # For retail_mortgage classification, ANY immovable property qualifies
         has_property_expr = pl.lit(False)
 
+        # Primary check: property_collateral_value includes both residential and commercial
+        if "property_collateral_value" in schema.names():
+            has_property_expr = has_property_expr | (pl.col("property_collateral_value") > 0)
+
+        # Fallback: check residential_collateral_value (for backwards compatibility)
         if "residential_collateral_value" in schema.names():
             has_property_expr = has_property_expr | (pl.col("residential_collateral_value") > 0)
 
+        # Fallback: check collateral_type at exposure level if available
         if "collateral_type" in schema.names():
             has_property_expr = has_property_expr | (
                 pl.col("collateral_type").is_in(["immovable", "residential", "commercial"])

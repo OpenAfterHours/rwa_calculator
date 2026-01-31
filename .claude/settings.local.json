@@ -8,7 +8,8 @@
       "WebFetch(domain:www.prarulebook.co.uk)",
       "WebFetch(domain:www.bis.org)",
       "Bash(python:*)",
-      "WebFetch(domain:www.eba.europa.eu)"
+      "WebFetch(domain:www.eba.europa.eu)",
+      "WebFetch(domain:www.legislation.gov.uk)"
     ]
   },
   "enabledMcpjsonServers": [

@@ -49,22 +49,17 @@ def _exact_fractional_years_expr(
     end_col: str,
 ) -> pl.Expr:
     """
-    Calculate exact fractional years between a fixed start date and an end date column.
+    Calculate fractional years between a fixed start date and an end date column.
 
-    Accounts for leap years by using ordinal day positions within each year.
+    Uses the year fraction method where each day represents 1/365 of a year,
+    regardless of leap years. This provides consistent treatment across all
+    periods and is standard for regulatory maturity calculations (CRR Article 162).
 
-    Uses the formula:
-        years = (end_year - start_year) + (end_ordinal/end_days) - (start_ordinal/start_days)
+    Formula:
+        years = (end_year - start_year) + (end_ordinal/365) - (start_ordinal/365)
 
-    Where:
-        - ordinal = day of year (1-365 or 1-366)
-        - days = 366 for leap year, 365 otherwise
-
-    This correctly handles:
-        - Same year periods
-        - Cross-year periods
-        - Multi-year periods
-        - Leap years
+    This treats each day-of-year as a fraction of 365, ensuring leap days don't
+    cause inconsistencies in maturity calculations.
 
     Works with LazyFrames and streaming (pure expression-based).
 
@@ -73,33 +68,23 @@ def _exact_fractional_years_expr(
         end_col: Name of the end date column
 
     Returns:
-        Polars expression calculating exact fractional years
+        Polars expression calculating fractional years
     """
     end = pl.col(end_col)
 
-    # Pre-compute start date components (these are scalar values)
+    # Pre-compute start date components (scalar values)
     start_year = start_date.year
     start_ordinal = start_date.timetuple().tm_yday
-    start_year_days = 366.0 if _is_leap_year(start_year) else 365.0
-    start_frac = start_ordinal / start_year_days
+    start_frac = start_ordinal / 365.0
 
     # End date components (from column)
     end_year = end.dt.year()
     end_ordinal = end.dt.ordinal_day()
+    end_frac = end_ordinal.cast(pl.Float64) / 365.0
 
-    # Days in end year (366 for leap year, 365 otherwise)
-    end_year_days = pl.when(end.dt.is_leap_year()).then(366.0).otherwise(365.0)
-
-    # Fractional position within end year
-    end_frac = end_ordinal.cast(pl.Float64) / end_year_days
-
-    # Total years = year difference + ordinal adjustment
+    # Year fraction = year difference + ordinal adjustment
     return (end_year - start_year).cast(pl.Float64) + (end_frac - pl.lit(start_frac))
 
-
-def _is_leap_year(year: int) -> bool:
-    """Check if a year is a leap year."""
-    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

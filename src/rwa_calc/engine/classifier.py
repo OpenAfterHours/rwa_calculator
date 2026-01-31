@@ -705,6 +705,14 @@ class ExposureClassifier:
             ExposureClass.SOVEREIGN, ApproachType.FIRB
         )
 
+        # Identify exposures managed as retail but without internal LGD
+        # These must use SA (cannot use FIRB without own LGD models)
+        managed_as_retail_without_lgd = (
+            (pl.col("cp_is_managed_as_retail") == True) &  # noqa: E712
+            (pl.col("qualifies_as_retail") == True) &  # noqa: E712
+            (pl.col("lgd").is_null())
+        )
+
         return exposures.with_columns([
             # Determine if F-IRB permitted for this exposure class
             pl.when(
@@ -760,6 +768,11 @@ class ExposureClassifier:
         ]).with_columns([
             # Assign approach
             pl.when(
+                # Exposures managed as retail but without internal LGD must use SA
+                # They cannot use FIRB (no own LGD models) and don't qualify for retail AIRB
+                managed_as_retail_without_lgd
+            ).then(pl.lit(ApproachType.SA.value))
+            .when(
                 # Specialised lending with A-IRB permission (models for PD/LGD available)
                 # A-IRB takes precedence over slotting when SPECIFICALLY permitted for SL
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) &

@@ -251,7 +251,7 @@ class TestReclassificationEligibility:
         classifier: ExposureClassifier,
         hybrid_config: CalculationConfig,
     ) -> None:
-        """Corporate without modelled LGD should NOT be reclassified."""
+        """Corporate without modelled LGD should NOT be reclassified and must use SA."""
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": ["CORP001"],
@@ -283,12 +283,13 @@ class TestReclassificationEligibility:
         df = result.all_exposures.collect()
 
         # Should stay as corporate due to missing LGD
+        # Must use SA (not FIRB) because managed as retail without own LGD models
         assert df["exposure_class"][0] in [
             ExposureClass.CORPORATE.value,
             ExposureClass.CORPORATE_SME.value,
         ]
         assert df["reclassified_to_retail"][0] is False
-        assert df["approach"][0] == ApproachType.FIRB.value
+        assert df["approach"][0] == ApproachType.SA.value
 
 
 # =============================================================================
@@ -545,10 +546,10 @@ class TestMixedPortfolioReclassification:
         assert row["reclassified_to_retail"][0] is False
         assert row["approach"][0] == ApproachType.FIRB.value
 
-        # CORP_NO_LGD: stays CORPORATE (no modelled LGD)
+        # CORP_NO_LGD: stays CORPORATE (no modelled LGD) - must use SA
         row = df.filter(pl.col("exposure_reference") == "CORP_NO_LGD")
         assert row["reclassified_to_retail"][0] is False
-        assert row["approach"][0] == ApproachType.FIRB.value
+        assert row["approach"][0] == ApproachType.SA.value
 
         # CORP_RETAIL_OTHER: becomes RETAIL_OTHER (no property collateral)
         row = df.filter(pl.col("exposure_reference") == "CORP_RETAIL_OTHER")

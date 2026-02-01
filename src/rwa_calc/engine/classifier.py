@@ -209,6 +209,10 @@ class ExposureClassifier:
             config,
         )
 
+        # Step 6a: Clear internal LGD for FIRB exposures
+        # FIRB uses supervisory LGD values, not internal models
+        classified = self._clear_lgd_for_firb(classified)
+
         # Step 7: Add classification audit trail
         classified = self._add_classification_audit(classified)
 
@@ -897,6 +901,31 @@ class ExposureClassifier:
         ):
             return pl.lit(True)
         return pl.lit(False)
+
+    def _clear_lgd_for_firb(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Clear internal LGD for F-IRB exposures.
+
+        F-IRB uses supervisory LGD values per CRR Art. 161, not internal models.
+        This ensures that exposures reclassified from retail (which may have
+        internal LGD from retail models) use the correct supervisory LGD
+        when treated as F-IRB corporate exposures.
+
+        The CRM processor will apply the appropriate supervisory LGD based on:
+        - Collateral type (financial: 0%, real estate: 35%, receivables: 35%, other: 40%)
+        - Seniority (senior unsecured: 45%, subordinated: 75%)
+
+        A-IRB exposures retain their internal LGD estimates.
+        """
+        return exposures.with_columns([
+            pl.when(pl.col("approach") == ApproachType.FIRB.value)
+            .then(pl.lit(None).cast(pl.Float64))
+            .otherwise(pl.col("lgd"))
+            .alias("lgd"),
+        ])
 
     def _add_classification_audit(
         self,

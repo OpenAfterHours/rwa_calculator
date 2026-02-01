@@ -763,3 +763,159 @@ class TestMixedPortfolioReclassification:
         assert row["reclassified_to_retail"][0] is True
         assert row["has_property_collateral"][0] is True
         assert row["approach"][0] == ApproachType.AIRB.value
+
+
+# =============================================================================
+# FIRB LGD Clearing Tests
+# =============================================================================
+
+
+class TestFIRBLGDClearing:
+    """Tests for clearing internal LGD when exposure is assigned to FIRB.
+
+    When a counterparty is managed as retail but exceeds the EUR 1M threshold,
+    the exposure is classified as FIRB corporate. In this case, the internal
+    LGD (from retail models) must be cleared so that the CRM processor applies
+    the correct supervisory LGD based on collateral type and seniority.
+    """
+
+    def test_firb_exposure_has_lgd_cleared(
+        self,
+        classifier: ExposureClassifier,
+        hybrid_config: CalculationConfig,
+    ) -> None:
+        """FIRB exposure should have internal LGD cleared for supervisory LGD."""
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [1500000.0],  # > EUR 1m threshold
+                "nominal_amount": [0.0],
+                "lgd": [0.20],  # Internal LGD from retail models
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [1500000.0],
+                "exposure_for_retail_threshold": [1500000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10000000.0],
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "is_regulated": [False],
+                "is_managed_as_retail": [True],  # Managed as retail but exceeds threshold
+            },
+        )
+
+        result = classifier.classify(bundle, hybrid_config)
+        df = result.all_exposures.collect()
+
+        # Should be FIRB corporate
+        assert df["approach"][0] == ApproachType.FIRB.value
+        # LGD should be cleared (NULL) for supervisory LGD application
+        assert df["lgd"][0] is None
+
+    def test_airb_exposure_keeps_internal_lgd(
+        self,
+        classifier: ExposureClassifier,
+        hybrid_config: CalculationConfig,
+    ) -> None:
+        """AIRB exposure should keep internal LGD (modelled LGD)."""
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [500000.0],  # < EUR 1m threshold
+                "nominal_amount": [0.0],
+                "lgd": [0.20],  # Internal LGD
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [500000.0],
+                "exposure_for_retail_threshold": [500000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10000000.0],
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "is_regulated": [False],
+                "is_managed_as_retail": [True],  # Managed as retail and qualifies
+            },
+        )
+
+        result = classifier.classify(bundle, hybrid_config)
+        df = result.all_exposures.collect()
+
+        # Should be AIRB retail (reclassified)
+        assert df["approach"][0] == ApproachType.AIRB.value
+        assert df["reclassified_to_retail"][0] is True
+        # LGD should be preserved for AIRB
+        assert df["lgd"][0] == 0.20
+
+    def test_firb_lgd_cleared_for_retail_exceeding_threshold(
+        self,
+        classifier: ExposureClassifier,
+        hybrid_config: CalculationConfig,
+    ) -> None:
+        """Retail individual exceeding EUR 1M should have LGD cleared for FIRB treatment.
+
+        This is the key scenario: a retail individual with internal LGD exceeds
+        the threshold and gets reclassified to corporate FIRB. The internal LGD
+        must be cleared so the CRM processor applies supervisory LGD.
+
+        Note: Individuals with property collateral become RETAIL_MORTGAGE which
+        stays as retail regardless of threshold. This test uses an unsecured loan
+        to trigger the retail-to-corporate reclassification.
+        """
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["RETAIL001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [1500000.0],  # > EUR 1m threshold
+                "nominal_amount": [0.0],
+                "lgd": [0.25],  # Internal retail LGD
+                "product_type": ["TERM_LOAN"],  # Not a mortgage
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],  # No residential property
+                "property_collateral_value": [0.0],  # No property collateral
+                "lending_group_adjusted_exposure": [1500000.0],
+                "exposure_for_retail_threshold": [1500000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["individual"],  # Retail individual
+                "country_code": ["GB"],
+                "annual_revenue": [100000.0],  # Low revenue (individual)
+                "total_assets": [2000000.0],
+                "default_status": [False],
+                "is_regulated": [False],
+                "is_managed_as_retail": [True],
+            },
+        )
+
+        result = classifier.classify(bundle, hybrid_config)
+        df = result.all_exposures.collect()
+
+        # Should be reclassified to CORPORATE due to exceeding threshold
+        # (qualifies_as_retail=False triggers retail → corporate reclassification)
+        assert df["exposure_class"][0] in [
+            ExposureClass.CORPORATE.value,
+            ExposureClass.CORPORATE_SME.value,
+        ]
+        # Should use FIRB approach
+        assert df["approach"][0] == ApproachType.FIRB.value
+        # LGD should be cleared for supervisory LGD to be applied by CRM
+        # (e.g., 45% senior unsecured per CRR Art. 161)
+        assert df["lgd"][0] is None

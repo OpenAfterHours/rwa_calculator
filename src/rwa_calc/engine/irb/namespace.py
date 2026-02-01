@@ -152,6 +152,10 @@ class IRBLazyFrame:
         - Senior unsecured: 45%
         - Subordinated: 75%
 
+        For F-IRB exposures with collateral, the CRM processor calculates
+        the effective LGD (lgd_post_crm) based on collateral type and coverage.
+        This method uses lgd_post_crm as the input LGD for risk weight calculation.
+
         A-IRB exposures retain their own LGD estimates.
 
         Args:
@@ -162,6 +166,7 @@ class IRBLazyFrame:
         """
         schema = self._lf.collect_schema()
         has_seniority = "seniority" in schema.names()
+        has_lgd_post_crm = "lgd_post_crm" in schema.names()
 
         lf = self._lf
         if "lgd" not in schema.names():
@@ -194,9 +199,19 @@ class IRBLazyFrame:
             .alias("lgd"),
         ])
 
-        return lf.with_columns([
-            pl.col("lgd").alias("lgd_input"),
-        ])
+        # For lgd_input, use lgd_post_crm (from CRM processor) if available
+        # This ensures collateral-adjusted LGD is used for F-IRB risk weight calculation
+        if has_lgd_post_crm:
+            return lf.with_columns([
+                pl.when(pl.col("approach") == ApproachType.FIRB.value)
+                .then(pl.col("lgd_post_crm"))
+                .otherwise(pl.col("lgd"))
+                .alias("lgd_input"),
+            ])
+        else:
+            return lf.with_columns([
+                pl.col("lgd").alias("lgd_input"),
+            ])
 
     def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -301,6 +316,9 @@ class IRBLazyFrame:
         """
         Apply LGD floor for Basel 3.1 A-IRB.
 
+        Uses lgd_input (which contains collateral-adjusted LGD for F-IRB)
+        as the base for flooring.
+
         CRR: No LGD floor
         Basel 3.1: 25% unsecured, varies by collateral
 
@@ -310,13 +328,17 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with lgd_floored column
         """
+        # Use lgd_input which has collateral-adjusted LGD for F-IRB
+        schema = self._lf.collect_schema()
+        lgd_col = "lgd_input" if "lgd_input" in schema.names() else "lgd"
+
         if config.is_basel_3_1:
             lgd_floor = float(config.lgd_floors.unsecured)
             return self._lf.with_columns(
-                pl.col("lgd").clip(lower_bound=lgd_floor).alias("lgd_floored")
+                pl.col(lgd_col).clip(lower_bound=lgd_floor).alias("lgd_floored")
             )
         return self._lf.with_columns(
-            pl.col("lgd").alias("lgd_floored")
+            pl.col(lgd_col).alias("lgd_floored")
         )
 
     def calculate_correlation(self, config: CalculationConfig) -> pl.LazyFrame:

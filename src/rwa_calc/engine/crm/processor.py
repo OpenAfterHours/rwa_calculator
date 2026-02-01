@@ -776,6 +776,7 @@ class CRMProcessor:
             "beneficiary_reference"
         ).agg([
             pl.col("amount_covered").sum().alias("total_guarantee_amount"),
+            pl.col("percentage_covered").first().alias("percentage_covered"),
             pl.col("guarantor").first().alias("primary_guarantor"),
             pl.len().alias("guarantee_count"),
         ])
@@ -788,9 +789,18 @@ class CRMProcessor:
             how="left",
         )
 
-        # Fill nulls
+        # Calculate effective guarantee amount
+        # If amount_covered is null/0 but percentage_covered is provided, derive from EAD
+        # percentage_covered: 1 = 100%, 0.5 = 50%
         exposures = exposures.with_columns([
-            pl.col("total_guarantee_amount").fill_null(0.0).alias("guarantee_amount"),
+            pl.when(
+                (pl.col("total_guarantee_amount").is_null() | (pl.col("total_guarantee_amount") == 0)) &
+                (pl.col("percentage_covered").is_not_null()) &
+                (pl.col("percentage_covered") > 0)
+            )
+            .then(pl.col("percentage_covered") * pl.col("ead_after_collateral"))
+            .otherwise(pl.col("total_guarantee_amount").fill_null(0.0))
+            .alias("guarantee_amount"),
             pl.col("primary_guarantor").alias("guarantor_reference"),
         ])
 

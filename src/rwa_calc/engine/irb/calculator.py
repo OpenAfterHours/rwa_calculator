@@ -148,6 +148,7 @@ class IRBCalculator:
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
+            .irb.apply_guarantee_substitution(config)
         )
 
         # Apply supporting factors (CRR only - Art. 501)

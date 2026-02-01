@@ -457,6 +457,117 @@ class IRBLazyFrame:
         )
 
     # =========================================================================
+    # GUARANTEE SUBSTITUTION
+    # =========================================================================
+
+    def apply_guarantee_substitution(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply guarantee substitution for IRB exposures with unfunded credit protection.
+
+        For guaranteed portions with eligible guarantors (e.g., sovereign CQS 1),
+        the RWA for the guaranteed portion is calculated using the guarantor's
+        risk characteristics instead of the borrower's.
+
+        Under CRR Art. 215-217 for IRB:
+        - For sovereign guarantors with CQS 1: apply 0% RW to guaranteed portion
+        - For other guarantors: apply SA risk weight based on guarantor entity type/CQS
+        - Unguaranteed portion uses borrower's IRB-calculated RWA
+
+        The final RWA is a blend of:
+        - Unguaranteed portion × borrower's IRB RWA
+        - Guaranteed portion × guarantor's equivalent RWA (0 for sovereign CQS 1)
+
+        Args:
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with guarantee-adjusted RWA
+        """
+        schema = self._lf.collect_schema()
+        cols = schema.names()
+
+        # Check if guarantee columns exist
+        if "guaranteed_portion" not in cols or "guarantor_entity_type" not in cols:
+            # No guarantee data, return as-is
+            return self._lf
+
+        # Store original IRB RWA before substitution
+        lf = self._lf.with_columns([
+            pl.col("rwa").alias("rwa_irb_original"),
+            pl.col("risk_weight").alias("risk_weight_irb_original"),
+        ])
+
+        # Calculate guarantor's risk weight based on entity type and CQS
+        # Using SA risk weights for substitution (per CRR Art. 215-217)
+        use_uk_deviation = config.base_currency == "GBP"
+
+        lf = lf.with_columns([
+            pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
+            .then(pl.lit(None).cast(pl.Float64))
+            # Sovereign guarantors - CQS 1 gets 0%
+            .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)sovereign"))
+            .then(
+                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.0))
+                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.20))
+                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
+                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
+                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
+                .otherwise(pl.lit(1.0))  # Unrated
+            )
+            # Institution guarantors (UK deviation: CQS 2 = 30%)
+            .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)institution"))
+            .then(
+                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
+                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
+                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
+                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
+                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
+                .otherwise(pl.lit(0.40))  # Unrated
+            )
+            # Corporate guarantors
+            .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)corporate"))
+            .then(
+                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
+                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.50))
+                .when(pl.col("guarantor_cqs").is_in([3, 4])).then(pl.lit(1.0))
+                .when(pl.col("guarantor_cqs").is_in([5, 6])).then(pl.lit(1.50))
+                .otherwise(pl.lit(1.0))  # Unrated
+            )
+            # Unknown entity type - no substitution
+            .otherwise(pl.lit(None).cast(pl.Float64))
+            .alias("guarantor_rw"),
+        ])
+
+        # Determine EAD column
+        ead_col = "ead_final" if "ead_final" in cols else "ead"
+
+        # Calculate blended RWA using substitution approach
+        # For guaranteed portion: use guarantor_rw × guaranteed_portion
+        # For unguaranteed portion: use IRB-calculated RWA proportionally
+        lf = lf.with_columns([
+            # Calculate RWA for guaranteed portion using guarantor RW
+            pl.when(
+                (pl.col("guaranteed_portion").fill_null(0) > 0) &
+                (pl.col("guarantor_rw").is_not_null())
+            ).then(
+                # Blended RWA = unguaranteed_IRB_RWA + guaranteed_portion × guarantor_RW
+                # The IRB RWA is for the full exposure, so we need to pro-rate it
+                pl.col("rwa_irb_original") * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0) +
+                pl.col("guaranteed_portion") * pl.col("guarantor_rw")
+            )
+            # No guarantee or no guarantor RW - use original IRB RWA
+            .otherwise(pl.col("rwa_irb_original"))
+            .alias("rwa"),
+        ])
+
+        # Calculate blended risk weight for reporting
+        lf = lf.with_columns([
+            (pl.col("rwa") / pl.col(ead_col)).fill_null(0.0).alias("risk_weight"),
+        ])
+
+        return lf
+
+    # =========================================================================
     # CONVENIENCE / PIPELINE METHODS
     # =========================================================================
 

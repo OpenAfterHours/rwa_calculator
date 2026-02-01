@@ -758,3 +758,192 @@ class TestBackwardCompatibility:
             for i in range(len(result_function)):
                 assert result_function[col][i] == pytest.approx(result_namespace[col][i], rel=1e-6), \
                     f"Mismatch in {col} at row {i}"
+
+
+# =============================================================================
+# Guarantee Substitution Tests
+# =============================================================================
+
+
+class TestApplyGuaranteeSubstitution:
+    """Tests for IRB guarantee substitution logic."""
+
+    def test_sovereign_cqs1_guarantee_gives_zero_rwa(self, crr_config: CalculationConfig) -> None:
+        """Exposure fully guaranteed by sovereign CQS 1 should have 0% RWA for guaranteed portion."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "maturity": [2.5],
+            "exposure_class": ["CORPORATE"],
+            "rwa": [100_000.0],  # Pre-guarantee IRB RWA
+            "risk_weight": [0.10],  # Pre-guarantee risk weight
+            "guaranteed_portion": [1_000_000.0],  # Fully guaranteed
+            "unguaranteed_portion": [0.0],
+            "guarantor_entity_type": ["sovereign"],
+            "guarantor_cqs": [1],  # CQS 1 = 0% RW
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # With 100% sovereign CQS 1 guarantee, RWA should be 0
+        assert result["rwa"][0] == pytest.approx(0.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_partial_sovereign_guarantee_gives_blended_rwa(self, crr_config: CalculationConfig) -> None:
+        """Partial sovereign guarantee should blend IRB RWA with guarantor RW."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "maturity": [2.5],
+            "exposure_class": ["CORPORATE"],
+            "rwa": [100_000.0],  # Pre-guarantee IRB RWA (10% RW)
+            "risk_weight": [0.10],
+            "guaranteed_portion": [500_000.0],  # 50% guaranteed
+            "unguaranteed_portion": [500_000.0],  # 50% unguaranteed
+            "guarantor_entity_type": ["sovereign"],
+            "guarantor_cqs": [1],  # CQS 1 = 0% RW
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # Blended RWA = (unguaranteed_portion / ead) * irb_rwa + guaranteed_portion * guarantor_rw
+        # = (500k / 1m) * 100k + 500k * 0.0 = 50k
+        expected_rwa = 50_000.0
+        assert result["rwa"][0] == pytest.approx(expected_rwa)
+
+    def test_no_guarantee_keeps_original_rwa(self, crr_config: CalculationConfig) -> None:
+        """Exposure without guarantee should keep original IRB RWA."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "maturity": [2.5],
+            "exposure_class": ["CORPORATE"],
+            "rwa": [100_000.0],
+            "risk_weight": [0.10],
+            "guaranteed_portion": [0.0],  # No guarantee
+            "unguaranteed_portion": [1_000_000.0],
+            "guarantor_entity_type": [None],
+            "guarantor_cqs": [None],
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # RWA should remain unchanged
+        assert result["rwa"][0] == pytest.approx(100_000.0)
+
+    def test_sovereign_cqs2_guarantee_gives_20_percent_rw(self, crr_config: CalculationConfig) -> None:
+        """Sovereign CQS 2 guarantor should result in 20% risk weight for guaranteed portion."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "maturity": [2.5],
+            "exposure_class": ["CORPORATE"],
+            "rwa": [100_000.0],
+            "risk_weight": [0.10],
+            "guaranteed_portion": [1_000_000.0],  # Fully guaranteed
+            "unguaranteed_portion": [0.0],
+            "guarantor_entity_type": ["sovereign"],
+            "guarantor_cqs": [2],  # CQS 2 = 20% RW
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # With 100% sovereign CQS 2 guarantee: RWA = 1m * 0.20 = 200k
+        assert result["rwa"][0] == pytest.approx(200_000.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+    def test_institution_cqs1_guarantee_gives_20_percent_rw(self, crr_config: CalculationConfig) -> None:
+        """Institution CQS 1 guarantor should result in 20% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "maturity": [2.5],
+            "exposure_class": ["CORPORATE"],
+            "rwa": [100_000.0],
+            "risk_weight": [0.10],
+            "guaranteed_portion": [1_000_000.0],
+            "unguaranteed_portion": [0.0],
+            "guarantor_entity_type": ["institution"],
+            "guarantor_cqs": [1],  # Institution CQS 1 = 20% RW
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        assert result["rwa"][0] == pytest.approx(200_000.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+    def test_uk_deviation_institution_cqs2_gives_30_percent(self, crr_config: CalculationConfig) -> None:
+        """Under UK deviation, institution CQS 2 should get 30% RW (not 50%)."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "maturity": [2.5],
+            "exposure_class": ["CORPORATE"],
+            "rwa": [100_000.0],
+            "risk_weight": [0.10],
+            "guaranteed_portion": [1_000_000.0],
+            "unguaranteed_portion": [0.0],
+            "guarantor_entity_type": ["institution"],
+            "guarantor_cqs": [2],  # Institution CQS 2 = 30% under UK deviation
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # CRR config has GBP base currency, so UK deviation applies: 30% for institution CQS 2
+        assert result["rwa"][0] == pytest.approx(300_000.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.30)
+
+    def test_missing_guarantee_columns_returns_unchanged(self, crr_config: CalculationConfig) -> None:
+        """Without guarantee columns, should return data unchanged."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "rwa": [100_000.0],
+            "risk_weight": [0.10],
+            # No guarantee columns
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # Should return unchanged
+        assert result["rwa"][0] == pytest.approx(100_000.0)
+        assert "guarantor_rw" not in result.columns
+
+    def test_stores_original_irb_values(self, crr_config: CalculationConfig) -> None:
+        """Should store original IRB RWA and risk weight before substitution."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["EXP001"],
+            "pd": [0.01],
+            "lgd": [0.45],
+            "ead_final": [1_000_000.0],
+            "maturity": [2.5],
+            "exposure_class": ["CORPORATE"],
+            "rwa": [100_000.0],
+            "risk_weight": [0.10],
+            "guaranteed_portion": [1_000_000.0],
+            "unguaranteed_portion": [0.0],
+            "guarantor_entity_type": ["sovereign"],
+            "guarantor_cqs": [1],
+        })
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # Should have original values stored
+        assert "rwa_irb_original" in result.columns
+        assert "risk_weight_irb_original" in result.columns
+        assert result["rwa_irb_original"][0] == pytest.approx(100_000.0)
+        assert result["risk_weight_irb_original"][0] == pytest.approx(0.10)

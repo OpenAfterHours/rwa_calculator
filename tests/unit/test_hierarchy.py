@@ -1867,10 +1867,11 @@ class TestSameFacilityAndLoanReference:
         assert loan_exp["exposure_has_parent"][0] is True
         assert loan_exp["parent_facility_reference"][0] == "REF001"
 
-        # Facility undrawn should NOT have a parent (it IS the facility)
+        # Facility undrawn SHOULD have parent_facility_reference set to its source facility
+        # This enables facility-level collateral to be allocated to undrawn amounts
         undrawn_exp = df.filter(pl.col("exposure_type") == "facility_undrawn")
-        assert undrawn_exp["exposure_has_parent"][0] is False
-        assert undrawn_exp["parent_facility_reference"][0] is None
+        assert undrawn_exp["exposure_has_parent"][0] is True
+        assert undrawn_exp["parent_facility_reference"][0] == "REF001"
 
     def test_full_resolve_with_same_reference(
         self,

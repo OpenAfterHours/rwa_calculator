@@ -610,6 +610,8 @@ class HierarchyResolver:
         facility_cols = set(facility_schema.names())
 
         # Build select expressions with defaults for missing columns
+        # Note: parent_facility_reference is set to the source facility to enable
+        # facility-level collateral allocation to undrawn amounts
         select_exprs = [
             (pl.col("facility_reference") + "_UNDRAWN").alias("exposure_reference"),
             pl.lit("facility_undrawn").alias("exposure_type"),
@@ -629,6 +631,9 @@ class HierarchyResolver:
             pl.col("ccf_modelled").cast(pl.Float64, strict=False) if "ccf_modelled" in facility_cols else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
             (pl.col("is_short_term_trade_lc").fill_null(False) if "is_short_term_trade_lc" in facility_cols
              else pl.lit(False).alias("is_short_term_trade_lc")),
+            # Propagate facility reference for collateral allocation
+            # This allows facility-level collateral to be linked to undrawn exposures
+            pl.col("facility_reference").alias("source_facility_reference"),
         ]
 
         # Create exposure records for facilities with undrawn > 0
@@ -729,7 +734,7 @@ class HierarchyResolver:
         exposures = exposures.join(
             facility_mappings.select([
                 pl.col("child_reference"),
-                pl.col("parent_facility_reference"),
+                pl.col("parent_facility_reference").alias("mapped_parent_facility"),
             ]),
             left_on="exposure_reference",
             right_on="child_reference",
@@ -737,6 +742,22 @@ class HierarchyResolver:
         )
 
         # Add facility hierarchy fields
+        # For facility_undrawn exposures, use source_facility_reference as parent_facility_reference
+        # This enables facility-level collateral to be allocated to undrawn amounts
+        schema_names = set(exposures.collect_schema().names())
+        if "source_facility_reference" in schema_names:
+            exposures = exposures.with_columns([
+                # parent_facility_reference: prefer mapped value, then source_facility (for undrawn)
+                pl.coalesce(
+                    pl.col("mapped_parent_facility"),
+                    pl.col("source_facility_reference"),
+                ).alias("parent_facility_reference"),
+            ])
+        else:
+            exposures = exposures.with_columns([
+                pl.col("mapped_parent_facility").alias("parent_facility_reference"),
+            ])
+
         exposures = exposures.with_columns([
             pl.col("parent_facility_reference").is_not_null().alias("exposure_has_parent"),
             pl.col("parent_facility_reference").alias("root_facility_reference"),  # Simplified
@@ -821,9 +842,10 @@ class HierarchyResolver:
             how="left",
         ).with_columns([
             # Fill nulls for exposures without residential coverage data
+            # Per CRR Article 147, "total amount owed" = drawn amount only (not undrawn)
             pl.col("residential_collateral_value").fill_null(0.0),
             pl.col("exposure_for_retail_threshold").fill_null(
-                pl.col("drawn_amount") + pl.col("nominal_amount")
+                pl.col("drawn_amount")
             ),
         ])
 
@@ -992,11 +1014,12 @@ class HierarchyResolver:
             - exposure_for_retail_threshold: Exposure amount minus residential coverage
         """
         # Get exposure amounts with linkage keys for capping and allocation
+        # Per CRR Article 147, "total amount owed" = drawn amount only (not undrawn commitments)
         exposure_amounts = exposures.select([
             pl.col("exposure_reference"),
             pl.col("counterparty_reference"),
             pl.col("parent_facility_reference"),
-            (pl.col("drawn_amount") + pl.col("nominal_amount")).alias("total_exposure_amount"),
+            pl.col("drawn_amount").alias("total_exposure_amount"),
         ])
 
         # Check if collateral is valid for property coverage calculation
@@ -1078,12 +1101,25 @@ class HierarchyResolver:
             .alias("exposure_for_retail_threshold"),
         ])
 
-        return result.select([
+        # Add has_facility_property_collateral flag if available
+        # (it will be added by _aggregate_property_collateral_multi_level)
+        schema_names = set(result.collect_schema().names())
+        output_cols = [
             "exposure_reference",
             "residential_collateral_value",
             "property_collateral_value",
             "exposure_for_retail_threshold",
-        ])
+        ]
+        if "has_facility_property_collateral" in schema_names:
+            output_cols.append("has_facility_property_collateral")
+        else:
+            # For legacy non-multi-level case, derive from property_collateral_value
+            result = result.with_columns([
+                (pl.col("property_collateral_value") > 0).alias("has_facility_property_collateral"),
+            ])
+            output_cols.append("has_facility_property_collateral")
+
+        return result.select(output_cols)
 
     def _aggregate_property_collateral_multi_level(
         self,
@@ -1212,6 +1248,13 @@ class HierarchyResolver:
                 (pl.col("prop_facility").fill_null(0.0) * pl.col("facility_weight")) +
                 (pl.col("prop_cp").fill_null(0.0) * pl.col("cp_weight"))
             ).alias("property_collateral_value"),
+            # Boolean flag: does the exposure or its parent facility have property collateral?
+            # Used for mortgage classification of undrawn exposures (which have 0 drawn_amount)
+            (
+                (pl.col("prop_direct").fill_null(0.0) > 0) |
+                (pl.col("prop_facility").fill_null(0.0) > 0) |
+                (pl.col("prop_cp").fill_null(0.0) > 0)
+            ).alias("has_facility_property_collateral"),
         ])
 
         # Drop intermediate columns
@@ -1220,6 +1263,7 @@ class HierarchyResolver:
             "total_exposure_amount",
             "residential_collateral_value",
             "property_collateral_value",
+            "has_facility_property_collateral",
         ])
 
     def _add_lending_group_totals_to_exposures(
@@ -1276,28 +1320,47 @@ class HierarchyResolver:
         )
 
         # Join property coverage per exposure (for audit trail and mortgage classification)
+        # Dynamically select columns that exist in residential_coverage
+        res_coverage_schema = set(residential_coverage.collect_schema().names())
+        res_select_cols = [
+            pl.col("exposure_reference").alias("_res_exp_ref"),
+            pl.col("residential_collateral_value"),
+            pl.col("property_collateral_value"),
+            pl.col("exposure_for_retail_threshold"),
+        ]
+        if "has_facility_property_collateral" in res_coverage_schema:
+            res_select_cols.append(pl.col("has_facility_property_collateral"))
+
         exposures = exposures.join(
-            residential_coverage.select([
-                pl.col("exposure_reference").alias("_res_exp_ref"),
-                pl.col("residential_collateral_value"),
-                pl.col("property_collateral_value"),
-                pl.col("exposure_for_retail_threshold"),
-            ]),
+            residential_coverage.select(res_select_cols),
             left_on="exposure_reference",
             right_on="_res_exp_ref",
             how="left",
         )
 
         # Fill nulls with 0 for non-grouped exposures and exposures without property coverage
-        exposures = exposures.with_columns([
+        # Per CRR Article 147, "total amount owed" = drawn amount only (not undrawn)
+        fill_null_exprs = [
             pl.col("lending_group_total_exposure").fill_null(0.0),
             pl.col("lending_group_adjusted_exposure").fill_null(0.0),
             pl.col("residential_collateral_value").fill_null(0.0),
             pl.col("property_collateral_value").fill_null(0.0),
             pl.col("exposure_for_retail_threshold").fill_null(
-                pl.col("drawn_amount") + pl.col("nominal_amount")
+                pl.col("drawn_amount")
             ),
-        ])
+        ]
+        # Add has_facility_property_collateral if it exists
+        exp_schema = set(exposures.collect_schema().names())
+        if "has_facility_property_collateral" in exp_schema:
+            fill_null_exprs.append(
+                pl.col("has_facility_property_collateral").fill_null(False)
+            )
+        else:
+            # Derive from property_collateral_value if not available
+            fill_null_exprs.append(
+                (pl.col("property_collateral_value").fill_null(0.0) > 0).alias("has_facility_property_collateral")
+            )
+        exposures = exposures.with_columns(fill_null_exprs)
 
         return exposures
 

@@ -33,6 +33,7 @@ from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.ccf import CCFCalculator
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -160,6 +161,9 @@ class CRMProcessor:
         # Step 3: Apply collateral (if available and valid)
         if self._is_valid_for_processing(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, data.collateral, config)
+        else:
+            # No collateral: still need to set F-IRB supervisory LGD based on seniority
+            exposures = self._apply_firb_supervisory_lgd_no_collateral(exposures)
 
         # Step 4: Apply guarantees (if available and valid)
         if (
@@ -366,9 +370,380 @@ class CRMProcessor:
             .then(
                 (pl.col("ead_gross") - pl.col("collateral_adjusted_value")).clip(lower_bound=0)
             )
-            # For IRB: Keep EAD, but collateral affects LGD (handled elsewhere)
+            # For IRB: Keep EAD, collateral affects LGD (handled below)
             .otherwise(pl.col("ead_gross"))
             .alias("ead_after_collateral"),
+        ])
+
+        # For F-IRB: Calculate effective LGD with collateral
+        # A-IRB uses modelled LGD, so no adjustment needed
+        exposures = self._calculate_irb_lgd_with_collateral(
+            exposures, adjusted_collateral, config
+        )
+
+        return exposures
+
+    def _calculate_irb_lgd_with_collateral(
+        self,
+        exposures: pl.LazyFrame,
+        collateral: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate effective LGD for F-IRB exposures with collateral.
+
+        For F-IRB, collateral reduces LGD using supervisory values (CRR Art. 161):
+        - Financial collateral: 0% LGD
+        - Receivables: 35% LGD
+        - Real estate (residential/commercial): 35% LGD
+        - Other physical: 40% LGD
+        - Unsecured senior: 45% LGD
+        - Subordinated: 75% LGD
+
+        For partially secured exposures, effective LGD is the weighted average:
+        LGD_eff = (LGD_secured * secured_portion + LGD_unsecured * unsecured_portion) / EAD
+
+        Note: A-IRB uses internally modelled LGD - no adjustment is made here.
+
+        Args:
+            exposures: Exposures with ead_gross and lgd_pre_crm
+            collateral: All collateral (not just financial) with haircut-adjusted values
+            config: Calculation configuration
+
+        Returns:
+            Exposures with lgd_post_crm updated for F-IRB
+        """
+        # Check if collateral has required columns
+        collateral_schema = collateral.collect_schema()
+        if "collateral_type" not in collateral_schema.names():
+            # No collateral type info, cannot calculate LGD adjustment
+            return exposures
+
+        # Categorize collateral types for LGD lookup
+        # Map to F-IRB supervisory LGD categories
+        collateral_with_lgd = collateral.with_columns([
+            pl.when(
+                pl.col("collateral_type").str.to_lowercase().is_in([
+                    "cash", "deposit", "gold", "financial_collateral",
+                    "government_bond", "corporate_bond", "equity"
+                ])
+            ).then(pl.lit(0.0))  # Financial collateral: 0%
+            .when(
+                pl.col("collateral_type").str.to_lowercase().is_in([
+                    "receivables", "trade_receivables"
+                ])
+            ).then(pl.lit(0.35))  # Receivables: 35%
+            .when(
+                pl.col("collateral_type").str.to_lowercase().is_in([
+                    "real_estate", "property", "rre", "cre",
+                    "residential_re", "commercial_re",
+                    "residential", "commercial",
+                    "residential_property", "commercial_property"
+                ])
+            ).then(pl.lit(0.35))  # Real estate: 35%
+            .when(
+                pl.col("collateral_type").str.to_lowercase().is_in([
+                    "other_physical", "equipment", "inventory", "other"
+                ])
+            ).then(pl.lit(0.40))  # Other physical: 40%
+            .otherwise(pl.lit(0.45))  # Unknown: treat as unsecured
+            .alias("collateral_lgd"),
+        ])
+
+        # Get adjusted collateral value (prefer maturity-adjusted, then haircut)
+        collateral_with_lgd = collateral_with_lgd.with_columns([
+            pl.coalesce(
+                pl.col("value_after_maturity_adj") if "value_after_maturity_adj" in collateral_schema.names() else pl.lit(None),
+                pl.col("value_after_haircut") if "value_after_haircut" in collateral_schema.names() else pl.lit(None),
+                pl.col("market_value"),
+            ).alias("adjusted_value"),
+        ])
+
+        # Aggregate collateral by beneficiary with weighted LGD at each linking level
+        # Supports three levels: direct (exposure), facility, counterparty
+
+        # Check for beneficiary_type column for multi-level linking
+        has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
+
+        if has_beneficiary_type:
+            # Multi-level collateral allocation
+            exposures = self._allocate_collateral_multi_level_for_lgd(
+                exposures, collateral_with_lgd
+            )
+        else:
+            # Legacy: direct linking only
+            collateral_by_exposure = collateral_with_lgd.group_by(
+                "beneficiary_reference"
+            ).agg([
+                pl.col("adjusted_value").sum().alias("total_collateral_for_lgd"),
+                (pl.col("adjusted_value") * pl.col("collateral_lgd")).sum().alias("weighted_lgd_sum"),
+            ])
+
+            collateral_by_exposure = collateral_by_exposure.with_columns([
+                pl.when(pl.col("total_collateral_for_lgd") > 0)
+                .then(pl.col("weighted_lgd_sum") / pl.col("total_collateral_for_lgd"))
+                .otherwise(pl.lit(0.45))
+                .alias("lgd_secured"),
+            ])
+
+            exposures = exposures.join(
+                collateral_by_exposure.select([
+                    pl.col("beneficiary_reference"),
+                    pl.col("total_collateral_for_lgd"),
+                    pl.col("lgd_secured"),
+                ]),
+                left_on="exposure_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            )
+
+            exposures = exposures.with_columns([
+                pl.col("total_collateral_for_lgd").fill_null(0.0),
+                pl.col("lgd_secured").fill_null(0.45),
+            ])
+
+        # Determine LGD for unsecured portion based on seniority
+        exposures = exposures.with_columns([
+            pl.when(
+                pl.col("seniority").str.to_lowercase().is_in(["subordinated", "junior"])
+            ).then(pl.lit(0.75))
+            .otherwise(pl.lit(0.45))  # Senior unsecured
+            .alias("lgd_unsecured"),
+        ])
+
+        # Calculate effective LGD for F-IRB exposures
+        # LGD_eff = (LGD_secured * secured_portion + LGD_unsecured * unsecured_portion) / EAD
+        exposures = exposures.with_columns([
+            pl.when(
+                (pl.col("approach") == ApproachType.FIRB.value) &
+                (pl.col("ead_gross") > 0) &
+                (pl.col("total_collateral_for_lgd") > 0)
+            ).then(
+                # Weighted average LGD
+                (
+                    (pl.col("lgd_secured") * pl.col("total_collateral_for_lgd").clip(upper_bound=pl.col("ead_gross"))) +
+                    (pl.col("lgd_unsecured") * (pl.col("ead_gross") - pl.col("total_collateral_for_lgd")).clip(lower_bound=0))
+                ) / pl.col("ead_gross")
+            )
+            .when(
+                (pl.col("approach") == ApproachType.FIRB.value) &
+                (pl.col("ead_gross") > 0)
+            ).then(
+                # No collateral: use unsecured LGD
+                pl.col("lgd_unsecured")
+            )
+            .otherwise(
+                # A-IRB or other: keep modelled LGD
+                pl.col("lgd_pre_crm")
+            )
+            .alias("lgd_post_crm"),
+        ])
+
+        # Add audit columns for LGD calculation
+        exposures = exposures.with_columns([
+            # Secured percentage for audit
+            pl.when(pl.col("ead_gross") > 0)
+            .then(
+                (pl.col("total_collateral_for_lgd").clip(upper_bound=pl.col("ead_gross")) / pl.col("ead_gross") * 100)
+            )
+            .otherwise(pl.lit(0.0))
+            .alias("collateral_coverage_pct"),
+        ])
+
+        return exposures
+
+    def _apply_firb_supervisory_lgd_no_collateral(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Apply F-IRB supervisory LGD when no collateral is available.
+
+        For F-IRB exposures without collateral, uses supervisory LGD values:
+        - Senior unsecured: 45%
+        - Subordinated: 75%
+
+        A-IRB exposures keep their modelled LGD.
+
+        Args:
+            exposures: Exposures with lgd_pre_crm
+
+        Returns:
+            Exposures with lgd_post_crm set for F-IRB
+        """
+        # Add collateral-related columns with zero values for consistency
+        exposures = exposures.with_columns([
+            pl.lit(0.0).alias("total_collateral_for_lgd"),
+            pl.lit(0.0).alias("collateral_coverage_pct"),
+        ])
+
+        # Check if seniority column exists
+        schema_names = set(exposures.collect_schema().names())
+        if "seniority" in schema_names:
+            # Determine LGD based on seniority for F-IRB
+            exposures = exposures.with_columns([
+                pl.when(
+                    (pl.col("approach") == ApproachType.FIRB.value) &
+                    (pl.col("seniority").fill_null("").str.to_lowercase().is_in(["subordinated", "junior"]))
+                ).then(pl.lit(0.75))  # Subordinated
+                .when(pl.col("approach") == ApproachType.FIRB.value)
+                .then(pl.lit(0.45))  # Senior unsecured
+                .otherwise(pl.col("lgd_pre_crm"))  # A-IRB or SA: keep existing
+                .alias("lgd_post_crm"),
+            ])
+        else:
+            # No seniority column: use 45% for all F-IRB (senior unsecured default)
+            exposures = exposures.with_columns([
+                pl.when(pl.col("approach") == ApproachType.FIRB.value)
+                .then(pl.lit(0.45))  # Senior unsecured
+                .otherwise(pl.col("lgd_pre_crm"))  # A-IRB or SA: keep existing
+                .alias("lgd_post_crm"),
+            ])
+
+        return exposures
+
+    def _allocate_collateral_multi_level_for_lgd(
+        self,
+        exposures: pl.LazyFrame,
+        collateral: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Allocate collateral from multiple linking levels for LGD calculation.
+
+        Supports three levels of collateral linking based on beneficiary_type:
+        1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
+        2. Facility: beneficiary_reference matches parent_facility_reference
+        3. Counterparty: beneficiary_reference matches counterparty_reference
+
+        For facility/counterparty level collateral, values are allocated pro-rata
+        across exposures based on their EAD share at that level.
+
+        Args:
+            exposures: Exposures with ead_gross, parent_facility_reference, counterparty_reference
+            collateral: Collateral with beneficiary_type, adjusted_value, collateral_lgd
+
+        Returns:
+            Exposures with total_collateral_for_lgd and lgd_secured columns
+        """
+        # Helper to aggregate collateral by level
+        def aggregate_by_level(coll: pl.LazyFrame, level: str) -> pl.LazyFrame:
+            """Aggregate collateral values and weighted LGD for a specific beneficiary level."""
+            level_filter = ["exposure", "loan"] if level == "direct" else [level]
+            return coll.filter(
+                pl.col("beneficiary_type").str.to_lowercase().is_in(level_filter)
+            ).group_by("beneficiary_reference").agg([
+                pl.col("adjusted_value").sum().alias(f"coll_{level}"),
+                (pl.col("adjusted_value") * pl.col("collateral_lgd")).sum().alias(f"wlgd_{level}"),
+            ])
+
+        # Aggregate at each level
+        coll_direct = aggregate_by_level(collateral, "direct")
+        coll_facility = aggregate_by_level(collateral, "facility")
+        coll_counterparty = aggregate_by_level(collateral, "counterparty")
+
+        # Calculate EAD totals for pro-rata allocation
+        # Facility total: sum of EAD for all exposures under each facility
+        facility_ead_totals = exposures.filter(
+            pl.col("parent_facility_reference").is_not_null()
+        ).group_by("parent_facility_reference").agg([
+            pl.col("ead_gross").sum().alias("facility_ead_total"),
+        ])
+
+        # Counterparty total: sum of EAD for all exposures for each counterparty
+        counterparty_ead_totals = exposures.group_by("counterparty_reference").agg([
+            pl.col("ead_gross").sum().alias("cp_ead_total"),
+        ])
+
+        # Join direct-level collateral (full value to that exposure)
+        exposures = exposures.join(
+            coll_direct,
+            left_on="exposure_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        )
+
+        # Join facility-level collateral and totals
+        exposures = exposures.join(
+            coll_facility,
+            left_on="parent_facility_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            facility_ead_totals,
+            on="parent_facility_reference",
+            how="left",
+        )
+
+        # Join counterparty-level collateral and totals
+        exposures = exposures.join(
+            coll_counterparty,
+            left_on="counterparty_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            counterparty_ead_totals,
+            on="counterparty_reference",
+            how="left",
+        )
+
+        # Fill nulls
+        exposures = exposures.with_columns([
+            pl.col("coll_direct").fill_null(0.0),
+            pl.col("wlgd_direct").fill_null(0.0),
+            pl.col("coll_facility").fill_null(0.0),
+            pl.col("wlgd_facility").fill_null(0.0),
+            pl.col("coll_counterparty").fill_null(0.0),
+            pl.col("wlgd_counterparty").fill_null(0.0),
+            pl.col("facility_ead_total").fill_null(0.0),
+            pl.col("cp_ead_total").fill_null(0.0),
+        ])
+
+        # Calculate allocation weights for pro-rata distribution
+        exposures = exposures.with_columns([
+            # Facility allocation weight (exposure's EAD / facility total EAD)
+            pl.when(pl.col("facility_ead_total") > 0)
+            .then(pl.col("ead_gross") / pl.col("facility_ead_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("facility_weight"),
+            # Counterparty allocation weight (exposure's EAD / counterparty total EAD)
+            pl.when(pl.col("cp_ead_total") > 0)
+            .then(pl.col("ead_gross") / pl.col("cp_ead_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("cp_weight"),
+        ])
+
+        # Calculate total allocated collateral and weighted LGD sum
+        exposures = exposures.with_columns([
+            # Total collateral: direct + (facility * weight) + (counterparty * weight)
+            (
+                pl.col("coll_direct") +
+                (pl.col("coll_facility") * pl.col("facility_weight")) +
+                (pl.col("coll_counterparty") * pl.col("cp_weight"))
+            ).alias("total_collateral_for_lgd"),
+            # Weighted LGD sum for calculating average LGD of secured portion
+            (
+                pl.col("wlgd_direct") +
+                (pl.col("wlgd_facility") * pl.col("facility_weight")) +
+                (pl.col("wlgd_counterparty") * pl.col("cp_weight"))
+            ).alias("total_weighted_lgd_sum"),
+        ])
+
+        # Calculate average LGD for secured portion
+        exposures = exposures.with_columns([
+            pl.when(pl.col("total_collateral_for_lgd") > 0)
+            .then(pl.col("total_weighted_lgd_sum") / pl.col("total_collateral_for_lgd"))
+            .otherwise(pl.lit(0.45))  # Default to unsecured if no collateral
+            .alias("lgd_secured"),
+        ])
+
+        # Drop intermediate columns
+        exposures = exposures.drop([
+            "coll_direct", "wlgd_direct",
+            "coll_facility", "wlgd_facility",
+            "coll_counterparty", "wlgd_counterparty",
+            "facility_ead_total", "cp_ead_total",
+            "facility_weight", "cp_weight",
+            "total_weighted_lgd_sum",
         ])
 
         return exposures

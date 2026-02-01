@@ -378,15 +378,30 @@ class ExposureClassifier:
         """
         max_retail_exposure = float(config.retail_thresholds.max_exposure_threshold)
 
-        # Check schema for property collateral column
+        # Check schema for property collateral columns
         schema = exposures.collect_schema()
-        has_property_col = "property_collateral_value" in schema.names()
+        schema_names = set(schema.names())
+        has_property_col = "property_collateral_value" in schema_names
+        has_facility_property_flag = "has_facility_property_collateral" in schema_names
 
         # First, apply mortgage classification (needed for exclusion logic)
         # An exposure is a "mortgage" if:
         # 1. Product type indicates mortgage/home loan, OR
-        # 2. Secured by immovable property (property_collateral_value > 0)
-        if has_property_col:
+        # 2. Secured by immovable property (property_collateral_value > 0), OR
+        # 3. Parent facility has property collateral (for undrawn exposures which have 0 drawn_amount)
+        if has_property_col and has_facility_property_flag:
+            # Best case: use both property_collateral_value and the facility flag
+            exposures = exposures.with_columns([
+                pl.when(
+                    (pl.col("product_type").str.to_uppercase().str.contains("MORTGAGE")) |
+                    (pl.col("product_type").str.to_uppercase().str.contains("HOME_LOAN")) |
+                    (pl.col("property_collateral_value") > 0) |
+                    (pl.col("has_facility_property_collateral") == True)  # noqa: E712
+                ).then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("is_mortgage"),
+            ])
+        elif has_property_col:
             exposures = exposures.with_columns([
                 pl.when(
                     (pl.col("product_type").str.to_uppercase().str.contains("MORTGAGE")) |
@@ -492,6 +507,7 @@ class ExposureClassifier:
         1. Managed as part of a retail pool (is_managed_as_retail=True)
         2. Aggregated exposure < EUR 1m (qualifies_as_retail=True)
         3. Has internally modelled LGD (lgd IS NOT NULL)
+        4. Turnover < EUR 50m (SME definition per CRR Art. 501)
 
         Reclassification target:
         - With property collateral → RETAIL_MORTGAGE
@@ -522,8 +538,13 @@ class ExposureClassifier:
         # Check schema for available columns
         schema = exposures.collect_schema()
 
+        # Get SME turnover threshold (EUR 50m converted to GBP)
+        sme_turnover_threshold = float(
+            config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
+        )
+
         # Add flag for reclassification eligibility
-        # All conditions must be met: managed as retail, below threshold, has LGD
+        # All conditions must be met: managed as retail, below threshold, has LGD, SME turnover
         reclassification_expr = (
             (pl.col("exposure_class").is_in([
                 ExposureClass.CORPORATE.value,
@@ -531,7 +552,9 @@ class ExposureClassifier:
             ])) &
             (pl.col("cp_is_managed_as_retail") == True) &  # noqa: E712
             (pl.col("qualifies_as_retail") == True) &  # noqa: E712
-            (pl.col("lgd").is_not_null())
+            (pl.col("lgd").is_not_null()) &
+            (pl.col("cp_annual_revenue") < sme_turnover_threshold) &  # SME turnover check
+            (pl.col("cp_annual_revenue") > 0)  # Exclude missing/zero revenue
         )
 
         exposures = exposures.with_columns([
@@ -545,17 +568,22 @@ class ExposureClassifier:
         # Check property_collateral_value (from hierarchy) which includes both types
         # For retail_mortgage classification, ANY immovable property qualifies
         has_property_expr = pl.lit(False)
+        schema_names = set(schema.names())
 
         # Primary check: property_collateral_value includes both residential and commercial
-        if "property_collateral_value" in schema.names():
+        if "property_collateral_value" in schema_names:
             has_property_expr = has_property_expr | (pl.col("property_collateral_value") > 0)
 
+        # Check facility-level property collateral flag (for undrawn exposures)
+        if "has_facility_property_collateral" in schema_names:
+            has_property_expr = has_property_expr | (pl.col("has_facility_property_collateral") == True)  # noqa: E712
+
         # Fallback: check residential_collateral_value (for backwards compatibility)
-        if "residential_collateral_value" in schema.names():
+        if "residential_collateral_value" in schema_names:
             has_property_expr = has_property_expr | (pl.col("residential_collateral_value") > 0)
 
         # Fallback: check collateral_type at exposure level if available
-        if "collateral_type" in schema.names():
+        if "collateral_type" in schema_names:
             has_property_expr = has_property_expr | (
                 pl.col("collateral_type").is_in(["immovable", "residential", "commercial"])
             )

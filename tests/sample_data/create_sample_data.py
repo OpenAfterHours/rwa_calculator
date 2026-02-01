@@ -8,11 +8,12 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import polars as pl
-    return (pl,)
+    from pathlib import Path
+    return Path, pl
 
 
 @app.cell
-def _(pl):
+def _(Path, pl):
     files = [
         ('counterparty', 'corporate'), 
         ('exposures', 'loans'), 
@@ -24,8 +25,15 @@ def _(pl):
     ]
 
     for folder, file_name in files:
-        df = pl.read_excel(r"C:\Users\philm\PycharmProjects\rwa_calculator\tests\sample_data\sample_data_4.xlsx", sheet_name=file_name)
-        df.write_parquet(rf"C:\Users\philm\PycharmProjects\rwa_calculator\tests\sample_data\{folder}\{file_name}.parquet")
+        output_path = Path(rf"C:\Users\philm\PycharmProjects\rwa_calculator\tests\sample_data\{folder}\{file_name}.parquet")
+        try:
+            df = pl.read_excel(r"C:\Users\philm\PycharmProjects\rwa_calculator\tests\sample_data\sample_data_5.xlsx", sheet_name=file_name)
+            df.write_parquet(output_path)
+        except Exception as e:
+            print(f"Error processing {file_name}: {e}")
+            if output_path.exists():
+                output_path.unlink()
+                print(f"Deleted {output_path}")
     return
 
 

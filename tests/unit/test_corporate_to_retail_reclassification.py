@@ -1,10 +1,11 @@
 """Unit tests for corporate-to-retail reclassification in classifier.
 
 Tests cover:
-- Reclassification criteria: managed_as_retail, < EUR 1m, has LGD
+- Reclassification criteria: managed_as_retail, < EUR 1m, has LGD, turnover < EUR 50m
 - Property collateral detection → RETAIL_MORTGAGE vs RETAIL_OTHER
 - QRRE exclusion (reclassified corporates never become QRRE)
 - Reclassification only applies with hybrid IRB permissions
+- Turnover threshold for SME definition per CRR Art. 501
 """
 
 from __future__ import annotations
@@ -290,6 +291,145 @@ class TestReclassificationEligibility:
         ]
         assert df["reclassified_to_retail"][0] is False
         assert df["approach"][0] == ApproachType.SA.value
+
+    def test_corporate_not_reclassified_when_turnover_exceeds_sme_threshold(
+        self,
+        classifier: ExposureClassifier,
+        hybrid_config: CalculationConfig,
+    ) -> None:
+        """Corporate with turnover >= EUR 50m should NOT be reclassified.
+
+        Per CRR Art. 501, SME definition requires turnover < EUR 50m.
+        Large corporates cannot be reclassified to retail even if they meet
+        all other conditions (managed_as_retail, < EUR 1m, has LGD).
+        """
+        # EUR 50m = GBP 44m at 0.88 FX rate
+        # Annual revenue of GBP 50m exceeds this threshold
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [500000.0],  # < EUR 1m threshold
+                "nominal_amount": [0.0],
+                "lgd": [0.45],  # Has modelled LGD
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [500000.0],
+                "exposure_for_retail_threshold": [500000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],  # GBP 50m - exceeds SME threshold
+                "total_assets": [100000000.0],
+                "default_status": [False],
+                "is_regulated": [False],
+                "is_managed_as_retail": [True],  # Managed as retail
+            },
+        )
+
+        result = classifier.classify(bundle, hybrid_config)
+        df = result.all_exposures.collect()
+
+        # Should stay as CORPORATE (not CORPORATE_SME since > EUR 50m)
+        # and NOT be reclassified to retail
+        assert df["exposure_class"][0] == ExposureClass.CORPORATE.value
+        assert df["reclassified_to_retail"][0] is False
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_corporate_not_reclassified_when_turnover_is_zero(
+        self,
+        classifier: ExposureClassifier,
+        hybrid_config: CalculationConfig,
+    ) -> None:
+        """Corporate with zero/missing turnover should NOT be reclassified.
+
+        Missing revenue data means we cannot verify SME status,
+        so the exposure should not qualify for retail reclassification.
+        """
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [500000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],  # Has modelled LGD
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [500000.0],
+                "exposure_for_retail_threshold": [500000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [0.0],  # Zero revenue
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "is_regulated": [False],
+                "is_managed_as_retail": [True],  # Managed as retail
+            },
+        )
+
+        result = classifier.classify(bundle, hybrid_config)
+        df = result.all_exposures.collect()
+
+        # Should stay as CORPORATE and NOT be reclassified
+        assert df["exposure_class"][0] == ExposureClass.CORPORATE.value
+        assert df["reclassified_to_retail"][0] is False
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_sme_corporate_with_turnover_below_threshold_reclassified(
+        self,
+        classifier: ExposureClassifier,
+        hybrid_config: CalculationConfig,
+    ) -> None:
+        """SME corporate with turnover < EUR 50m should be reclassified when all conditions met.
+
+        This confirms that the turnover check works correctly at the boundary.
+        EUR 50m = GBP 44m at 0.88 FX rate.
+        """
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [500000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],  # Has modelled LGD
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [500000.0],
+                "exposure_for_retail_threshold": [500000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [40000000.0],  # GBP 40m - below EUR 50m threshold
+                "total_assets": [30000000.0],
+                "default_status": [False],
+                "is_regulated": [False],
+                "is_managed_as_retail": [True],  # Managed as retail
+            },
+        )
+
+        result = classifier.classify(bundle, hybrid_config)
+        df = result.all_exposures.collect()
+
+        # Should be reclassified to RETAIL_OTHER
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
+        assert df["approach"][0] == ApproachType.AIRB.value
 
 
 # =============================================================================

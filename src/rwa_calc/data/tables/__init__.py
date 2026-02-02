@@ -10,6 +10,7 @@ Modules:
     crr_haircuts: CRM supervisory haircuts
     crr_slotting: Specialised lending slotting risk weights
     crr_firb_lgd: F-IRB supervisory LGD values
+    crr_equity_rw: Equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
 """
 
 from .crr_risk_weights import (
@@ -36,6 +37,14 @@ from .crr_firb_lgd import (
     FIRB_SUPERVISORY_LGD,
     get_firb_lgd_table,
 )
+from .crr_equity_rw import (
+    SA_EQUITY_RISK_WEIGHTS,
+    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
+    get_equity_risk_weights,
+    lookup_equity_rw,
+    get_equity_rw_table,
+    get_combined_equity_rw_table,
+)
 
 __all__ = [
     # Risk weights
@@ -58,4 +67,11 @@ __all__ = [
     # F-IRB LGD
     "FIRB_SUPERVISORY_LGD",
     "get_firb_lgd_table",
+    # Equity risk weights
+    "SA_EQUITY_RISK_WEIGHTS",
+    "IRB_SIMPLE_EQUITY_RISK_WEIGHTS",
+    "get_equity_risk_weights",
+    "lookup_equity_rw",
+    "get_equity_rw_table",
+    "get_combined_equity_rw_table",
 ]

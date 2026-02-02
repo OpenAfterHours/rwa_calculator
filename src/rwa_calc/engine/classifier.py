@@ -64,6 +64,7 @@ VALID_ENTITY_TYPES: set[str] = {
     "individual",
     "retail",
     "specialised_lending",
+    "equity",
 }
 
 # entity_type → SA exposure class (for risk weight lookup)
@@ -85,6 +86,7 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "individual": ExposureClass.RETAIL_OTHER.value,
     "retail": ExposureClass.RETAIL_OTHER.value,
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
+    "equity": ExposureClass.EQUITY.value,
 }
 
 # entity_type → IRB exposure class (for IRB formula selection)
@@ -106,6 +108,7 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "individual": ExposureClass.RETAIL_OTHER.value,
     "retail": ExposureClass.RETAIL_OTHER.value,
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
+    "equity": ExposureClass.EQUITY.value,
 }
 
 # Financial sector entity types (for FI scalar determination per CRR Art. 153(2))

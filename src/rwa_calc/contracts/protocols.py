@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         AggregatedResultBundle,
         ClassifiedExposuresBundle,
         CRMAdjustedBundle,
+        EquityResultBundle,
         IRBResultBundle,
         RawDataBundle,
         ResolvedHierarchyBundle,
@@ -298,6 +299,55 @@ class SlottingCalculatorProtocol(Protocol):
 
 
 @runtime_checkable
+class EquityCalculatorProtocol(Protocol):
+    """
+    Protocol for equity exposure calculations.
+
+    Responsible for:
+    - Determining equity risk weights under SA (Art. 133) or IRB Simple (Art. 155)
+    - Calculating RWA = EAD x RW
+    - Handling diversified portfolio treatment for private equity
+
+    Input: CRMAdjustedBundle (equity exposures)
+    Output: LazyFrameResult with equity calculations
+    """
+
+    def calculate(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> LazyFrameResult:
+        """
+        Calculate RWA for equity exposures.
+
+        Args:
+            data: CRM-adjusted exposures (uses equity_exposures)
+            config: Calculation configuration
+
+        Returns:
+            LazyFrameResult with equity RWA calculations
+        """
+        ...
+
+    def get_equity_result_bundle(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> EquityResultBundle:
+        """
+        Calculate equity RWA and return as bundle.
+
+        Args:
+            data: CRM-adjusted exposures
+            config: Calculation configuration
+
+        Returns:
+            EquityResultBundle with results and audit trail
+        """
+        ...
+
+
+@runtime_checkable
 class OutputAggregatorProtocol(Protocol):
     """
     Protocol for aggregating final results.
@@ -338,6 +388,7 @@ class OutputAggregatorProtocol(Protocol):
         irb_bundle: IRBResultBundle | None,
         slotting_bundle: SlottingResultBundle | None,
         config: CalculationConfig,
+        equity_bundle: EquityResultBundle | None = None,
     ) -> AggregatedResultBundle:
         """
         Aggregate with full audit trail.
@@ -347,6 +398,7 @@ class OutputAggregatorProtocol(Protocol):
             irb_bundle: IRB calculation results bundle
             slotting_bundle: Slotting calculation results bundle
             config: Calculation configuration
+            equity_bundle: Equity calculation results bundle
 
         Returns:
             AggregatedResultBundle with audit information

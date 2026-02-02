@@ -172,6 +172,7 @@ class CRMAdjustedBundle:
         sa_exposures: SA exposures after CRM
         irb_exposures: IRB exposures after CRM
         slotting_exposures: Specialised lending exposures for slotting approach
+        equity_exposures: Equity exposures (passed through, no CRM)
         crm_audit: Detailed audit trail of CRM application
         collateral_allocation: How collateral was allocated to exposures
         crm_errors: Any errors during CRM processing
@@ -181,6 +182,7 @@ class CRMAdjustedBundle:
     sa_exposures: pl.LazyFrame
     irb_exposures: pl.LazyFrame
     slotting_exposures: pl.LazyFrame | None = None
+    equity_exposures: pl.LazyFrame | None = None
     crm_audit: pl.LazyFrame | None = None
     collateral_allocation: pl.LazyFrame | None = None
     crm_errors: list = field(default_factory=list)
@@ -243,6 +245,28 @@ class SlottingResultBundle:
 
 
 @dataclass(frozen=True)
+class EquityResultBundle:
+    """
+    Output from the Equity calculator component.
+
+    Contains equity exposure RWA calculations under either:
+    - Article 133 (Standardised Approach)
+    - Article 155 (IRB Simple Risk Weight)
+
+    Attributes:
+        results: Equity calculation results with risk weights and RWA
+        calculation_audit: Detailed calculation breakdown
+        approach: The approach used ("sa" or "irb_simple")
+        errors: Any errors during equity calculation
+    """
+
+    results: pl.LazyFrame
+    calculation_audit: pl.LazyFrame | None = None
+    approach: str = "sa"
+    errors: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class AggregatedResultBundle:
     """
     Final aggregated output from the output aggregator.
@@ -255,6 +279,7 @@ class AggregatedResultBundle:
         sa_results: Original SA results (for floor comparison)
         irb_results: Original IRB results (before floor)
         slotting_results: Original slotting results
+        equity_results: Equity calculation results
         floor_impact: Output floor impact analysis
         supporting_factor_impact: Supporting factor impact (CRR only)
         summary_by_class: RWA summarised by exposure class
@@ -269,6 +294,7 @@ class AggregatedResultBundle:
     sa_results: pl.LazyFrame | None = None
     irb_results: pl.LazyFrame | None = None
     slotting_results: pl.LazyFrame | None = None
+    equity_results: pl.LazyFrame | None = None
     floor_impact: pl.LazyFrame | None = None
     supporting_factor_impact: pl.LazyFrame | None = None
     summary_by_class: pl.LazyFrame | None = None

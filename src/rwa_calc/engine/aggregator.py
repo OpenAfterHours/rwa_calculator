@@ -36,6 +36,7 @@ from rwa_calc.contracts.bundles import (
     SAResultBundle,
     IRBResultBundle,
     SlottingResultBundle,
+    EquityResultBundle,
 )
 from rwa_calc.contracts.errors import (
     CalculationError,
@@ -124,6 +125,7 @@ class OutputAggregator:
         irb_bundle: IRBResultBundle | None,
         slotting_bundle: SlottingResultBundle | None,
         config: CalculationConfig,
+        equity_bundle: EquityResultBundle | None = None,
     ) -> AggregatedResultBundle:
         """
         Aggregate with full audit trail.
@@ -133,6 +135,7 @@ class OutputAggregator:
             irb_bundle: IRB calculation results bundle
             slotting_bundle: Slotting calculation results bundle
             config: Calculation configuration
+            equity_bundle: Equity calculation results bundle
 
         Returns:
             AggregatedResultBundle with full audit trail
@@ -143,12 +146,14 @@ class OutputAggregator:
         sa_results = sa_bundle.results if sa_bundle else None
         irb_results = irb_bundle.results if irb_bundle else None
         slotting_results = slotting_bundle.results if slotting_bundle else None
+        equity_results = equity_bundle.results if equity_bundle else None
 
         # Combine all results
         combined = self._combine_results(
             sa_results=sa_results,
             irb_results=irb_results,
             slotting_results=slotting_results,
+            equity_results=equity_results,
             config=config,
         )
 
@@ -183,12 +188,15 @@ class OutputAggregator:
             all_errors.extend(irb_bundle.errors)
         if slotting_bundle:
             all_errors.extend(slotting_bundle.errors)
+        if equity_bundle:
+            all_errors.extend(equity_bundle.errors)
 
         return AggregatedResultBundle(
             results=combined,
             sa_results=sa_results,
             irb_results=irb_results,
             slotting_results=slotting_results,
+            equity_results=equity_results,
             floor_impact=floor_impact,
             supporting_factor_impact=supporting_factor_impact,
             summary_by_class=summary_by_class,
@@ -272,9 +280,10 @@ class OutputAggregator:
         irb_results: pl.LazyFrame | None,
         slotting_results: pl.LazyFrame | None,
         config: CalculationConfig,
+        equity_results: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """
-        Combine SA, IRB, and Slotting results into a unified LazyFrame.
+        Combine SA, IRB, Slotting, and Equity results into a unified LazyFrame.
 
         Adds approach identification and standardizes column names.
         """
@@ -291,6 +300,10 @@ class OutputAggregator:
         if slotting_results is not None and self._has_rows(slotting_results):
             slotting_prepared = self._prepare_slotting_results(slotting_results)
             frames.append(slotting_prepared)
+
+        if equity_results is not None and self._has_rows(equity_results):
+            equity_prepared = self._prepare_equity_results(equity_results)
+            frames.append(equity_prepared)
 
         if not frames:
             # Return empty frame with expected schema
@@ -355,6 +368,25 @@ class OutputAggregator:
 
         return slotting_results.with_columns([
             pl.lit("SLOTTING").alias("approach_applied"),
+            pl.col(rwa_col).alias("rwa_final"),
+        ])
+
+    def _prepare_equity_results(self, equity_results: pl.LazyFrame) -> pl.LazyFrame:
+        """Prepare Equity results with standard columns."""
+        schema = equity_results.collect_schema()
+
+        # Determine RWA column
+        rwa_col = "rwa" if "rwa" in schema.names() else "rwa_final"
+
+        # Add exposure_class if not present
+        result = equity_results
+        if "exposure_class" not in schema.names():
+            result = result.with_columns([
+                pl.lit("equity").alias("exposure_class"),
+            ])
+
+        return result.with_columns([
+            pl.lit("EQUITY").alias("approach_applied"),
             pl.col(rwa_col).alias("rwa_final"),
         ])
 

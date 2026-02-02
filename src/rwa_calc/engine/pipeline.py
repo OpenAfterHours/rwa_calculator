@@ -41,6 +41,7 @@ from rwa_calc.contracts.bundles import (
     SAResultBundle,
     IRBResultBundle,
     SlottingResultBundle,
+    EquityResultBundle,
 )
 from rwa_calc.contracts.protocols import (
     LoaderProtocol,
@@ -50,6 +51,7 @@ from rwa_calc.contracts.protocols import (
     SACalculatorProtocol,
     IRBCalculatorProtocol,
     SlottingCalculatorProtocol,
+    EquityCalculatorProtocol,
     OutputAggregatorProtocol,
 )
 
@@ -120,6 +122,7 @@ class PipelineOrchestrator:
         sa_calculator: SACalculatorProtocol | None = None,
         irb_calculator: IRBCalculatorProtocol | None = None,
         slotting_calculator: SlottingCalculatorProtocol | None = None,
+        equity_calculator: EquityCalculatorProtocol | None = None,
         aggregator: OutputAggregatorProtocol | None = None,
     ) -> None:
         """
@@ -136,6 +139,7 @@ class PipelineOrchestrator:
             sa_calculator: SA calculator
             irb_calculator: IRB calculator
             slotting_calculator: Slotting calculator
+            equity_calculator: Equity calculator
             aggregator: Output aggregator
         """
         self._loader = loader
@@ -145,6 +149,7 @@ class PipelineOrchestrator:
         self._sa_calculator = sa_calculator
         self._irb_calculator = irb_calculator
         self._slotting_calculator = slotting_calculator
+        self._equity_calculator = equity_calculator
         self._aggregator = aggregator
         self._errors: list[PipelineError] = []
 
@@ -227,16 +232,18 @@ class PipelineOrchestrator:
         if crm_adjusted is None:
             return self._create_error_result()
 
-        # Stage 5-7: Run calculators in parallel (conceptually)
+        # Stage 5-8: Run calculators in parallel (conceptually)
         sa_bundle = self._run_sa_calculator(crm_adjusted, config)
         irb_bundle = self._run_irb_calculator(crm_adjusted, config)
         slotting_bundle = self._run_slotting_calculator(crm_adjusted, config)
+        equity_bundle = self._run_equity_calculator(crm_adjusted, config)
 
-        # Stage 8: Aggregate results
+        # Stage 9: Aggregate results
         result = self._run_aggregator(
             sa_bundle,
             irb_bundle,
             slotting_bundle,
+            equity_bundle,
             config,
         )
 
@@ -250,6 +257,7 @@ class PipelineOrchestrator:
                 sa_results=result.sa_results,
                 irb_results=result.irb_results,
                 slotting_results=result.slotting_results,
+                equity_results=result.equity_results,
                 floor_impact=result.floor_impact,
                 supporting_factor_impact=result.supporting_factor_impact,
                 summary_by_class=result.summary_by_class,
@@ -271,6 +279,7 @@ class PipelineOrchestrator:
         from rwa_calc.engine.sa.calculator import SACalculator
         from rwa_calc.engine.irb.calculator import IRBCalculator
         from rwa_calc.engine.slotting.calculator import SlottingCalculator
+        from rwa_calc.engine.equity.calculator import EquityCalculator
         from rwa_calc.engine.aggregator import OutputAggregator
 
         if self._hierarchy_resolver is None:
@@ -285,6 +294,8 @@ class PipelineOrchestrator:
             self._irb_calculator = IRBCalculator()
         if self._slotting_calculator is None:
             self._slotting_calculator = SlottingCalculator()
+        if self._equity_calculator is None:
+            self._equity_calculator = EquityCalculator()
         if self._aggregator is None:
             self._aggregator = OutputAggregator()
 
@@ -483,11 +494,51 @@ class PipelineOrchestrator:
                 errors=[],
             )
 
+    def _run_equity_calculator(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> EquityResultBundle | None:
+        """Run Equity calculation stage."""
+        try:
+            # Check if there are equity exposures
+            if data.equity_exposures is None or not self._has_rows(data.equity_exposures):
+                return EquityResultBundle(
+                    results=self._create_empty_equity_frame(),
+                    calculation_audit=self._create_empty_equity_frame(),
+                    approach="sa",
+                    errors=[],
+                )
+
+            result = self._equity_calculator.get_equity_result_bundle(data, config)
+            # Accumulate Equity errors
+            if result.errors:
+                for error in result.errors:
+                    self._errors.append(PipelineError(
+                        stage="equity_calculator",
+                        error_type=getattr(error, "error_type", "unknown"),
+                        message=getattr(error, "message", str(error)),
+                    ))
+            return result
+        except Exception as e:
+            self._errors.append(PipelineError(
+                stage="equity_calculator",
+                error_type="equity_calculation_error",
+                message=str(e),
+            ))
+            return EquityResultBundle(
+                results=self._create_empty_equity_frame(),
+                calculation_audit=self._create_empty_equity_frame(),
+                approach="sa",
+                errors=[],
+            )
+
     def _run_aggregator(
         self,
         sa_bundle: SAResultBundle | None,
         irb_bundle: IRBResultBundle | None,
         slotting_bundle: SlottingResultBundle | None,
+        equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
     ) -> AggregatedResultBundle:
         """Run output aggregation stage."""
@@ -497,6 +548,7 @@ class PipelineOrchestrator:
                 irb_bundle=irb_bundle,
                 slotting_bundle=slotting_bundle,
                 config=config,
+                equity_bundle=equity_bundle,
             )
             # Accumulate aggregation errors
             if result.errors:
@@ -577,6 +629,16 @@ class PipelineOrchestrator:
             "exposure_reference": pl.Series([], dtype=pl.String),
             "slotting_category": pl.Series([], dtype=pl.String),
             "is_hvcre": pl.Series([], dtype=pl.Boolean),
+            "ead_final": pl.Series([], dtype=pl.Float64),
+            "risk_weight": pl.Series([], dtype=pl.Float64),
+            "rwa": pl.Series([], dtype=pl.Float64),
+        })
+
+    def _create_empty_equity_frame(self) -> pl.LazyFrame:
+        """Create empty Equity results frame."""
+        return pl.LazyFrame({
+            "exposure_reference": pl.Series([], dtype=pl.String),
+            "equity_type": pl.Series([], dtype=pl.String),
             "ead_final": pl.Series([], dtype=pl.Float64),
             "risk_weight": pl.Series([], dtype=pl.Float64),
             "rwa": pl.Series([], dtype=pl.Float64),

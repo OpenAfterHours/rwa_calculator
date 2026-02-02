@@ -348,3 +348,57 @@ class IRBApproachOption(Enum):
     AIRB = "airb"
     FULL_IRB = "full_irb"
     RETAIL_AIRB_CORPORATE_FIRB = "retail_airb_corporate_firb"
+
+
+class EquityType(Enum):
+    """
+    Types of equity exposures for risk weight determination.
+
+    Used for both Article 133 (SA) and Article 155 (IRB Simple) approaches.
+
+    Values:
+        CENTRAL_BANK: Central bank equity - 0% SA (Art. 133(6))
+        LISTED: Listed equity on recognised exchange - 100% SA / 290% IRB
+        EXCHANGE_TRADED: Explicitly exchange-traded - 100% SA / 290% IRB
+        GOVERNMENT_SUPPORTED: Government programme equity - 100% SA / 190% IRB
+        UNLISTED: Unlisted equity - 250% SA / 370% IRB
+        SPECULATIVE: Speculative unlisted/venture capital - 400% SA / 370% IRB
+        PRIVATE_EQUITY: Private equity holdings - 250% SA / 370% IRB
+        PRIVATE_EQUITY_DIVERSIFIED: Private equity in diversified portfolio - 250% SA / 190% IRB
+        CIU: Collective investment undertakings - 250% SA / 370% IRB (or look-through)
+        OTHER: Other equity exposures - 250% SA / 370% IRB
+    """
+
+    CENTRAL_BANK = "central_bank"
+    LISTED = "listed"
+    EXCHANGE_TRADED = "exchange_traded"
+    GOVERNMENT_SUPPORTED = "government_supported"
+    UNLISTED = "unlisted"
+    SPECULATIVE = "speculative"
+    PRIVATE_EQUITY = "private_equity"
+    PRIVATE_EQUITY_DIVERSIFIED = "private_equity_diversified"
+    CIU = "ciu"
+    OTHER = "other"
+
+
+class EquityApproach(Enum):
+    """
+    Equity exposure calculation approach.
+
+    Determines which regulatory article applies for equity risk weights.
+
+    Values:
+        SA: Article 133 Standardised Approach
+            - 0% for central bank
+            - 100% for listed/government-supported
+            - 250% for unlisted
+            - 400% for speculative
+
+        IRB_SIMPLE: Article 155 IRB Simple Risk Weight Method
+            - 190% for diversified private equity
+            - 290% for exchange-traded
+            - 370% for other equity
+    """
+
+    SA = "sa"
+    IRB_SIMPLE = "irb_simple"

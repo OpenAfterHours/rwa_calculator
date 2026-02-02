@@ -219,6 +219,7 @@ class CRMProcessor:
             sa_exposures=sa_exposures,
             irb_exposures=irb_exposures,
             slotting_exposures=slotting_exposures,
+            equity_exposures=data.equity_exposures,  # Pass through equity (no CRM)
             crm_audit=self._build_crm_audit(exposures),
             collateral_allocation=None,  # Would be populated from collateral processing
             crm_errors=errors,

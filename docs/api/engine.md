@@ -1336,6 +1336,82 @@ formatted = df.with_columns(
 )
 ```
 
+## FX Converter
+
+### Module: `rwa_calc.engine.fx_converter`
+
+```python
+class FXConverter:
+    """Convert monetary values to base currency."""
+
+    def convert_exposures(
+        self,
+        exposures: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        base_currency: str = "GBP",
+    ) -> pl.LazyFrame:
+        """
+        Convert exposure amounts to base currency.
+
+        Converts drawn_amount, undrawn_amount, nominal_amount.
+        Preserves original values in audit columns.
+
+        Args:
+            exposures: Exposures with currency column.
+            fx_rates: FX rate lookup table.
+            base_currency: Target currency.
+
+        Returns:
+            LazyFrame with converted amounts.
+        """
+
+    def convert_collateral(
+        self,
+        collateral: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        base_currency: str = "GBP",
+    ) -> pl.LazyFrame:
+        """
+        Convert collateral values to base currency.
+
+        Converts market_value, nominal_value.
+        """
+
+    def convert_guarantees(
+        self,
+        guarantees: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        base_currency: str = "GBP",
+    ) -> pl.LazyFrame:
+        """Convert guarantee covered amounts to base currency."""
+
+    def convert_provisions(
+        self,
+        provisions: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        base_currency: str = "GBP",
+    ) -> pl.LazyFrame:
+        """Convert provision amounts to base currency."""
+```
+
+**Usage Example:**
+
+```python
+from rwa_calc.engine.fx_converter import create_fx_converter
+
+converter = create_fx_converter()
+
+# Convert all monetary values to GBP
+converted_exposures = converter.convert_exposures(
+    exposures, fx_rates, base_currency="GBP"
+)
+converted_collateral = converter.convert_collateral(
+    collateral, fx_rates, base_currency="GBP"
+)
+```
+
+**Audit Trail:** Each conversion adds `original_currency`, `original_amount`, and `fx_rate_applied` columns for traceability.
+
 ## Related
 
 - [Pipeline API](pipeline.md)

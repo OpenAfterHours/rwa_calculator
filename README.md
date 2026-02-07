@@ -116,7 +116,7 @@ uv run pytest --cov=src/rwa_calc
 uv run pytest tests/benchmarks/ -v
 ```
 
-**Test Results:** 826 passed, 4 skipped
+**Test Results:** 1,081 tests
 
 ## License
 

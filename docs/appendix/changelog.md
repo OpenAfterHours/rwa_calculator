@@ -17,13 +17,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.14] - 2026-02-07
 
+### Added
+
+#### Overcollateralisation Requirements (CRR Art. 230 / CRE32.9-12)
+Non-financial collateral now requires overcollateralisation to receive CRM benefit:
+
+| Collateral Type | Overcollateralisation Ratio | Minimum Threshold |
+|----------------|---------------------------|-------------------|
+| Financial | 1.0x | No minimum |
+| Receivables | 1.25x | No minimum |
+| Real estate | 1.4x | 30% of EAD |
+| Other physical | 1.4x | 30% of EAD |
+
+- `effectively_secured = adjusted_value / overcollateralisation_ratio`
+- Financial vs non-financial collateral tracked separately for threshold checks
+- Multi-level allocation respects overcollateralisation at each level
+
 ### Changed
-- Version bump for PyPI release
+- Standardized `collateral_type` casing and descriptions across codebase
 
 ## [0.1.13] - 2026-02-07
 
-### Changed
-- Version bump for PyPI release
+### Added
+
+#### Input Value Validation
+- `validate_bundle_values()` validates all categorical columns against `COLUMN_VALUE_CONSTRAINTS`
+- Error code `DQ006` for invalid column values
+- Pipeline calls `_validate_input_data()` as non-blocking step (errors collected, not raised)
+
+### Fixed
+- Prevented row duplication in exposure joins when `facility_reference = loan_reference` (#71)
 
 ## [0.1.12] - 2026-02-02
 

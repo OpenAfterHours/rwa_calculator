@@ -73,13 +73,7 @@ result = pipeline.run_with_data(raw_data, config)
 
 ### Pipeline Implementation
 
-::: rwa_calc.engine.pipeline.PipelineOrchestrator
-    options:
-      show_root_heading: true
-      members:
-        - run
-        - run_with_data
-      show_source: false
+For full API documentation, see [Pipeline API Reference](../api/pipeline.md#pipelineorchestrator).
 
 ??? example "Full Implementation (pipeline.py)"
     ```python

@@ -153,6 +153,52 @@ Physical collateral (real estate, equipment) provides CRM for IRB:
 - Proper documentation
 - Insurance where appropriate
 
+## Overcollateralisation (CRR Art. 230)
+
+Non-financial collateral must meet overcollateralisation requirements before it can provide CRM benefit. This ensures sufficient excess coverage to absorb valuation uncertainty.
+
+### Overcollateralisation Ratios
+
+| Collateral Type | Required Ratio | Effectively Secured |
+|----------------|---------------|-------------------|
+| Financial | 1.0x | Full adjusted value |
+| Receivables | 1.25x | Adjusted value / 1.25 |
+| Real estate | 1.4x | Adjusted value / 1.4 |
+| Other physical | 1.4x | Adjusted value / 1.4 |
+
+```python
+# Example: £1.4m of real estate collateral (after haircuts)
+overcoll_ratio = 1.4
+effectively_secured = 1_400_000 / 1.4  # = £1,000,000 of CRM benefit
+```
+
+### Minimum Coverage Thresholds
+
+Physical collateral must cover a minimum portion of EAD to provide any benefit:
+
+| Collateral Type | Minimum Coverage |
+|----------------|-----------------|
+| Financial | No minimum |
+| Receivables | No minimum |
+| Real estate | 30% of EAD |
+| Other physical | 30% of EAD |
+
+If the minimum threshold is not met, the non-financial collateral value is **zeroed** (no CRM benefit at all).
+
+```python
+# Example: EAD = £1,000,000, RE collateral adjusted value = £200,000
+# Coverage = 200,000 / 1,000,000 = 20% < 30% threshold
+# Result: collateral value set to £0 (threshold not met)
+```
+
+### Multi-Level Treatment
+
+Financial and non-financial collateral are tracked separately through the multi-level allocation process (exposure, facility, counterparty levels). This ensures:
+
+- Overcollateralisation ratios are applied per collateral type
+- Minimum thresholds are checked against the total non-financial coverage
+- Financial collateral is unaffected by the overcollateralisation requirements
+
 ## Guarantees
 
 ### Substitution Approach
@@ -455,6 +501,7 @@ provision = {
 | Guarantees | Art. 213-216 | CRE22.71-85 |
 | Maturity mismatch | Art. 238-239 | CRE22.90-95 |
 | Physical collateral | Art. 199 | CRE22.100-120 |
+| Overcollateralisation | Art. 230 | CRE32.9-12 |
 
 ## Next Steps
 

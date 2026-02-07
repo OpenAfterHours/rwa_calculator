@@ -9,9 +9,6 @@ tests/
 ├── acceptance/           # End-to-end scenario tests
 │   ├── crr/             # CRR framework scenarios
 │   └── basel31/         # Basel 3.1 scenarios
-├── bdd/                 # BDD step definitions (features in docs/specifications/)
-│   ├── conftest.py      # BDD fixtures
-│   └── step_definitions/# Step implementations
 ├── benchmarks/          # Performance and scale tests
 ├── contracts/           # Interface compliance tests
 ├── unit/                # Component unit tests
@@ -28,7 +25,7 @@ tests/
     ├── mapping/         # Hierarchy mapping fixtures
     └── fx_rates/        # FX rates fixtures
 
-docs/specifications/      # Gherkin feature files (living documentation)
+docs/specifications/      # Regulatory specifications (plain markdown)
 ├── crr/                 # CRR framework specifications
 ├── basel31/             # Basel 3.1 specifications
 └── common/              # Framework-agnostic specifications
@@ -423,7 +420,7 @@ exclude_lines = [
 
 ## Next Steps
 
-- [BDD Specification](bdd.md) - Gherkin feature files and scenarios
+- [Specifications](../specifications/index.md) - Regulatory specifications and scenarios
 - [Adding Features](extending.md) - Extending the calculator
 - [Code Style](code-style.md) - Coding conventions
 - [Architecture](../architecture/index.md) - System design

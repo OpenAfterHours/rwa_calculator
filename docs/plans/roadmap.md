@@ -122,21 +122,7 @@ Reference implementations for expected output generation:
 
 ## Test Results Summary
 
-**Total: 826 passed, 4 skipped**
-
-| Category | Tests | Status |
-|----------|-------|--------|
-| Contract tests | 97 | PASS |
-| Acceptance tests | 81 | PASS |
-| Acceptance tests (pending fixtures) | 4 | SKIP |
-| Loader tests | 31 | PASS |
-| Hierarchy tests | 17 | PASS |
-| Classifier tests | 19 | PASS |
-| CCF tests | 15 | PASS |
-| Aggregator tests | 21 | PASS |
-| Pipeline tests | 30 | PASS |
-| Namespace tests | 139 | PASS |
-| FX converter tests | 14 | PASS |
+**Total: 1,081 tests**
 
 Run all tests:
 ```bash
@@ -145,8 +131,17 @@ uv run pytest -v
 
 ---
 
-## Recent Completions (v0.1.12)
+## Recent Completions
 
+### v0.1.14
+- [x] **Overcollateralisation**: CRR Art. 230 / CRE32.9-12 overcollateralisation ratios and minimum thresholds
+- [x] **Collateral standardization**: Consistent `collateral_type` casing and descriptions
+
+### v0.1.13
+- [x] **Input Value Validation**: `validate_bundle_values()` with error code DQ006
+- [x] **Row Duplication Fix**: Prevented duplicate exposures when `facility_reference = loan_reference` (#71)
+
+### v0.1.12
 - [x] **Equity Calculator**: Article 133 (SA) and Article 155 (IRB Simple) risk weight methods
 - [x] **Equity Namespace**: Polars LazyFrame namespace (`lf.equity`) for fluent calculations
 - [x] **Pre/Post CRM Tracking**: Guarantee impact tracking with `rwa_pre_crm`, `rwa_post_crm`, `guarantee_rwa_benefit`

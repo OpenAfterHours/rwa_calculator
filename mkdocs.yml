@@ -102,8 +102,10 @@ nav:
       - Standardised Approach: user-guide/methodology/standardised-approach.md
       - IRB Approach: user-guide/methodology/irb-approach.md
       - Specialised Lending: user-guide/methodology/specialised-lending.md
+      - Equity: user-guide/methodology/equity.md
       - Credit Risk Mitigation: user-guide/methodology/crm.md
       - Supporting Factors: user-guide/methodology/supporting-factors.md
+      - FX Conversion: user-guide/methodology/fx-conversion.md
     - Exposure Classes:
       - user-guide/exposure-classes/index.md
       - Sovereign: user-guide/exposure-classes/sovereign.md
@@ -153,7 +155,6 @@ nav:
   - Development:
     - development/index.md
     - Testing Guide: development/testing.md
-    - BDD Testing: development/bdd.md
     - Workbooks & UI: development/workbooks.md
     - Benchmark Tests: development/benchmarks.md
     - Adding Features: development/extending.md
@@ -163,6 +164,7 @@ nav:
     - plans/index.md
     - Development Roadmap: plans/roadmap.md
     - Implementation Plan: plans/implementation-plan.md
+    - Retail A-IRB / Corporate F-IRB Plan: plans/retail_airb_corporate_firb_plan.md
   - Appendix:
     - appendix/index.md
     - Glossary: appendix/glossary.md

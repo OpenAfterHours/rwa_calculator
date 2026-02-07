@@ -10,13 +10,14 @@ Risk-Weighted Assets represent the risk-adjusted value of exposures, used to det
 Capital Requirement = RWA × Capital Ratio (typically 8%)
 ```
 
-The calculator supports three main approaches:
+The calculator supports four main approaches:
 
 | Approach | Description | Applicable To |
 |----------|-------------|---------------|
 | [**Standardised (SA)**](standardised-approach.md) | Regulatory risk weights | All exposure classes |
 | [**IRB**](irb-approach.md) | Internal ratings-based | Approved portfolios |
 | [**Slotting**](specialised-lending.md) | Category-based weights | Specialised lending |
+| [**Equity**](equity.md) | Dedicated equity treatment | Equity holdings |
 
 ## Calculation Pipeline
 
@@ -209,5 +210,7 @@ Explore each calculation approach in detail:
 - [**Standardised Approach**](standardised-approach.md) - SA methodology and risk weights
 - [**IRB Approach**](irb-approach.md) - F-IRB and A-IRB formulas
 - [**Specialised Lending**](specialised-lending.md) - Slotting approach
+- [**Equity**](equity.md) - Equity exposure treatment
 - [**Credit Risk Mitigation**](crm.md) - CRM techniques
 - [**Supporting Factors**](supporting-factors.md) - SME and infrastructure factors
+- [**FX Conversion**](fx-conversion.md) - Multi-currency portfolio support

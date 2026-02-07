@@ -52,7 +52,10 @@ The number of days a payment is overdue.
 ## E
 
 ### EAD (Exposure at Default)
-The expected exposure amount at the time of default. For on-balance sheet items, typically the gross carrying amount.
+The expected exposure amount at the time of default. For on-balance sheet items, typically the gross carrying amount. For off-balance sheet: `EAD = Drawn + (Undrawn x CCF)`.
+
+### Equity Exposure
+Holdings of equity instruments (shares, funds) receiving dedicated risk weight treatment under CRR Art. 133 (SA) or Art. 155 (IRB Simple).
 
 ### ECRA (External Credit Risk Assessment Approach)
 Basel 3.1 approach for institutions using external ratings.
@@ -68,8 +71,14 @@ A regulatory classification of exposures (Sovereign, Institution, Corporate, Ret
 ### F-IRB (Foundation Internal Ratings-Based)
 An IRB approach where the bank estimates PD but uses supervisory values for LGD and CCF.
 
+### FI Scalar
+A 1.25x multiplier applied to the IRB capital requirement for large or unregulated financial sector entities (CRR Art. 153(2)).
+
 ### Financial Collateral
 Liquid assets (cash, bonds, equity) used as security for credit exposures.
+
+### FX Mismatch Haircut
+An 8% additional haircut applied when collateral currency differs from exposure currency (CRR Art. 233).
 
 ## G
 
@@ -126,6 +135,9 @@ An adjustment factor in the IRB formula accounting for increased risk of longer-
 International financial institutions (World Bank, EIB, etc.) that may receive preferential risk weights.
 
 ## O
+
+### Overcollateralisation
+The requirement that non-financial collateral must exceed the exposure value by a regulatory ratio to receive full CRM benefit. Ratios: financial 1.0x, receivables 1.25x, real estate/other physical 1.4x (CRR Art. 230).
 
 ### Output Floor
 Basel 3.1 requirement that IRB RWA cannot fall below 72.5% of the equivalent SA RWA.
@@ -201,3 +213,22 @@ Supplementary capital including subordinated debt and general provisions.
 
 ### Unexpected Loss (UL)
 Losses above expected levels, covered by regulatory capital. UL = RWA × 8%.
+
+---
+
+## Key Formulas Reference
+
+| Formula | Expression | Reference |
+|---------|------------|-----------|
+| **SA RWA** | `EAD x RW x SF` | CRR Art. 113 |
+| **IRB RWA** | `K x 12.5 x EAD x MA x [1.06]` | CRR Art. 153 |
+| **IRB K** | `LGD x N[(1-R)^(-0.5) x G(PD) + (R/(1-R))^(0.5) x G(0.999)] - PD x LGD` | CRR Art. 153 |
+| **Corporate Correlation** | `0.12 x f(PD) + 0.24 x (1 - f(PD))` where `f(PD) = (1-e^(-50xPD))/(1-e^(-50))` | CRR Art. 153 |
+| **SME Adjustment** | `0.04 x (1 - (max(5,min(S,50)) - 5) / 45)` | CRR Art. 153 |
+| **Maturity Adjustment** | `(1 + (M-2.5) x b) / (1 - 1.5 x b)` where `b = (0.11852 - 0.05478 x ln(PD))^2` | CRR Art. 153 |
+| **Expected Loss** | `PD x LGD x EAD` | CRR Art. 158 |
+| **EAD (off-BS)** | `Drawn + Undrawn x CCF` | CRR Art. 111, 166 |
+| **Effectively Secured** | `Adjusted Collateral Value / Overcollateralisation Ratio` | CRR Art. 230 |
+| **Maturity Mismatch** | `(t - 0.25) / (T - 0.25)` | CRR Art. 238 |
+| **Output Floor** | `max(RWA_IRB, floor% x RWA_SA)` | PRA PS9/24 |
+| **SME SF (Blended)** | `[min(E,T) x 0.7619 + max(E-T,0) x 0.85] / E` | CRR Art. 501 |

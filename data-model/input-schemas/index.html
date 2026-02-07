@@ -5121,64 +5121,36 @@
 <thead>
 <tr>
 <th>Value</th>
-<th>Haircut</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>cash</code></td>
-<td>0%</td>
-<td>Cash collateral</td>
+<td>Cash collateral (0% haircut)</td>
 </tr>
 <tr>
 <td><code>gold</code></td>
-<td>15%</td>
-<td>Gold collateral</td>
+<td>Gold collateral (15% haircut)</td>
 </tr>
 <tr>
-<td><code>government_bond</code></td>
-<td>0%-15%</td>
-<td>Government/sovereign bonds</td>
+<td><code>bond</code></td>
+<td>Bond securities — haircut depends on <code>issuer_type</code>, <code>issuer_cqs</code>, and <code>residual_maturity_years</code></td>
 </tr>
 <tr>
-<td><code>corporate_bond</code></td>
-<td>1%-25%</td>
-<td>Corporate bonds</td>
+<td><code>equity</code></td>
+<td>Equity securities</td>
 </tr>
 <tr>
-<td><code>covered_bond</code></td>
-<td>1%-8%</td>
-<td>Covered bonds</td>
-</tr>
-<tr>
-<td><code>equity_main_index</code></td>
-<td>15%</td>
-<td>Main index equities</td>
-</tr>
-<tr>
-<td><code>equity_other</code></td>
-<td>25%</td>
-<td>Other listed equities</td>
-</tr>
-<tr>
-<td><code>residential_real_estate</code></td>
-<td>N/A</td>
-<td>Residential property (RW approach)</td>
-</tr>
-<tr>
-<td><code>commercial_real_estate</code></td>
-<td>N/A</td>
-<td>Commercial property (RW approach)</td>
+<td><code>real_estate</code></td>
+<td>Real estate — use <code>property_type</code> for residential/commercial classification</td>
 </tr>
 <tr>
 <td><code>receivables</code></td>
-<td>N/A</td>
 <td>Trade receivables</td>
 </tr>
 <tr>
 <td><code>other_physical</code></td>
-<td>N/A</td>
 <td>Other physical collateral</td>
 </tr>
 </tbody>
@@ -5216,7 +5188,7 @@
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">collateral</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="s2">&quot;collateral_reference&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;COLL_001&quot;</span><span class="p">,</span> <span class="s2">&quot;COLL_002&quot;</span><span class="p">],</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="s2">&quot;collateral_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;cash&quot;</span><span class="p">,</span> <span class="s2">&quot;residential_real_estate&quot;</span><span class="p">],</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="s2">&quot;collateral_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;cash&quot;</span><span class="p">,</span> <span class="s2">&quot;real_estate&quot;</span><span class="p">],</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="s2">&quot;currency&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">],</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="s2">&quot;maturity_date&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="s2">&quot;market_value&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1_000_000.0</span><span class="p">,</span> <span class="mf">500_000.0</span><span class="p">],</span>

@@ -454,42 +454,74 @@ class CRMProcessor:
 
         # Categorize collateral types for LGD lookup
         # Map to F-IRB supervisory LGD categories
+        # Also assign overcollateralisation ratio and min threshold per CRR Art. 230 / CRE32.9-12
+        _financial_types = [
+            "cash", "deposit", "gold", "financial_collateral",
+            "government_bond", "corporate_bond", "equity"
+        ]
+        _receivable_types = ["receivables", "trade_receivables"]
+        _real_estate_types = [
+            "real_estate", "property", "rre", "cre",
+            "residential_re", "commercial_re",
+            "residential", "commercial",
+            "residential_property", "commercial_property"
+        ]
+        _other_physical_types = ["other_physical", "equipment", "inventory", "other"]
+
+        coll_type_lower = pl.col("collateral_type").str.to_lowercase()
+
         collateral_with_lgd = collateral.with_columns([
-            pl.when(
-                pl.col("collateral_type").str.to_lowercase().is_in([
-                    "cash", "deposit", "gold", "financial_collateral",
-                    "government_bond", "corporate_bond", "equity"
-                ])
-            ).then(pl.lit(0.0))  # Financial collateral: 0%
-            .when(
-                pl.col("collateral_type").str.to_lowercase().is_in([
-                    "receivables", "trade_receivables"
-                ])
-            ).then(pl.lit(0.35))  # Receivables: 35%
-            .when(
-                pl.col("collateral_type").str.to_lowercase().is_in([
-                    "real_estate", "property", "rre", "cre",
-                    "residential_re", "commercial_re",
-                    "residential", "commercial",
-                    "residential_property", "commercial_property"
-                ])
-            ).then(pl.lit(0.35))  # Real estate: 35%
-            .when(
-                pl.col("collateral_type").str.to_lowercase().is_in([
-                    "other_physical", "equipment", "inventory", "other"
-                ])
-            ).then(pl.lit(0.40))  # Other physical: 40%
-            .otherwise(pl.lit(0.45))  # Unknown: treat as unsecured
+            pl.when(coll_type_lower.is_in(_financial_types))
+            .then(pl.lit(0.0))
+            .when(coll_type_lower.is_in(_receivable_types))
+            .then(pl.lit(0.35))
+            .when(coll_type_lower.is_in(_real_estate_types))
+            .then(pl.lit(0.35))
+            .when(coll_type_lower.is_in(_other_physical_types))
+            .then(pl.lit(0.40))
+            .otherwise(pl.lit(0.45))
             .alias("collateral_lgd"),
+
+            # Overcollateralisation ratio (CRR Art. 230 / CRE32.9-12)
+            pl.when(coll_type_lower.is_in(_financial_types))
+            .then(pl.lit(1.0))
+            .when(coll_type_lower.is_in(_receivable_types))
+            .then(pl.lit(1.25))
+            .when(coll_type_lower.is_in(_real_estate_types))
+            .then(pl.lit(1.40))
+            .when(coll_type_lower.is_in(_other_physical_types))
+            .then(pl.lit(1.40))
+            .otherwise(pl.lit(1.0))
+            .alias("overcollateralisation_ratio"),
+
+            # Minimum collateralisation threshold
+            pl.when(coll_type_lower.is_in(_financial_types))
+            .then(pl.lit(0.0))
+            .when(coll_type_lower.is_in(_receivable_types))
+            .then(pl.lit(0.0))
+            .when(coll_type_lower.is_in(_real_estate_types))
+            .then(pl.lit(0.30))
+            .when(coll_type_lower.is_in(_other_physical_types))
+            .then(pl.lit(0.30))
+            .otherwise(pl.lit(0.0))
+            .alias("min_collateralisation_threshold"),
+
+            # Flag for financial vs non-financial (for min threshold split)
+            coll_type_lower.is_in(_financial_types).alias("is_financial_collateral_type"),
         ])
 
         # Get adjusted collateral value (prefer maturity-adjusted, then haircut)
+        # Then calculate effectively_secured = adjusted_value / overcollateralisation_ratio
         collateral_with_lgd = collateral_with_lgd.with_columns([
             pl.coalesce(
                 pl.col("value_after_maturity_adj") if "value_after_maturity_adj" in collateral_schema.names() else pl.lit(None),
                 pl.col("value_after_haircut") if "value_after_haircut" in collateral_schema.names() else pl.lit(None),
                 pl.col("market_value"),
             ).alias("adjusted_value"),
+        ])
+        collateral_with_lgd = collateral_with_lgd.with_columns([
+            (pl.col("adjusted_value") / pl.col("overcollateralisation_ratio"))
+            .alias("effectively_secured"),
         ])
 
         # Aggregate collateral by beneficiary with weighted LGD at each linking level
@@ -505,34 +537,77 @@ class CRMProcessor:
             )
         else:
             # Legacy: direct linking only
+            # Aggregate financial and non-financial separately for min threshold check
             collateral_by_exposure = collateral_with_lgd.group_by(
                 "beneficiary_reference"
             ).agg([
-                pl.col("adjusted_value").sum().alias("total_collateral_for_lgd"),
-                (pl.col("adjusted_value") * pl.col("collateral_lgd")).sum().alias("weighted_lgd_sum"),
-            ])
+                # Financial collateral aggregates
+                pl.col("effectively_secured")
+                .filter(pl.col("is_financial_collateral_type"))
+                .sum().alias("eff_fin"),
+                (pl.col("effectively_secured") * pl.col("collateral_lgd"))
+                .filter(pl.col("is_financial_collateral_type"))
+                .sum().alias("wlgd_fin"),
 
-            collateral_by_exposure = collateral_by_exposure.with_columns([
-                pl.when(pl.col("total_collateral_for_lgd") > 0)
-                .then(pl.col("weighted_lgd_sum") / pl.col("total_collateral_for_lgd"))
-                .otherwise(pl.lit(0.45))
-                .alias("lgd_secured"),
+                # Non-financial collateral aggregates
+                pl.col("effectively_secured")
+                .filter(~pl.col("is_financial_collateral_type"))
+                .sum().alias("eff_nf"),
+                (pl.col("effectively_secured") * pl.col("collateral_lgd"))
+                .filter(~pl.col("is_financial_collateral_type"))
+                .sum().alias("wlgd_nf"),
+
+                # Raw non-financial adjusted_value for min threshold check
+                pl.col("adjusted_value")
+                .filter(~pl.col("is_financial_collateral_type"))
+                .sum().alias("raw_nf"),
             ])
 
             exposures = exposures.join(
-                collateral_by_exposure.select([
-                    pl.col("beneficiary_reference"),
-                    pl.col("total_collateral_for_lgd"),
-                    pl.col("lgd_secured"),
-                ]),
+                collateral_by_exposure,
                 left_on="exposure_reference",
                 right_on="beneficiary_reference",
                 how="left",
             )
 
             exposures = exposures.with_columns([
-                pl.col("total_collateral_for_lgd").fill_null(0.0),
-                pl.col("lgd_secured").fill_null(0.45),
+                pl.col("eff_fin").fill_null(0.0),
+                pl.col("wlgd_fin").fill_null(0.0),
+                pl.col("eff_nf").fill_null(0.0),
+                pl.col("wlgd_nf").fill_null(0.0),
+                pl.col("raw_nf").fill_null(0.0),
+            ])
+
+            # Apply min threshold: if raw non-financial < 30% of EAD, zero it out
+            exposures = exposures.with_columns([
+                pl.when(pl.col("raw_nf") >= 0.30 * pl.col("ead_gross"))
+                .then(pl.col("eff_nf"))
+                .otherwise(pl.lit(0.0))
+                .alias("eff_nf_final"),
+                pl.when(pl.col("raw_nf") >= 0.30 * pl.col("ead_gross"))
+                .then(pl.col("wlgd_nf"))
+                .otherwise(pl.lit(0.0))
+                .alias("wlgd_nf_final"),
+            ])
+
+            # Combine financial + non-financial
+            exposures = exposures.with_columns([
+                (pl.col("eff_fin") + pl.col("eff_nf_final")).alias("total_collateral_for_lgd"),
+                (pl.col("wlgd_fin") + pl.col("wlgd_nf_final")).alias("total_weighted_lgd_sum"),
+            ])
+
+            exposures = exposures.with_columns([
+                pl.when(pl.col("total_collateral_for_lgd") > 0)
+                .then(pl.col("total_weighted_lgd_sum") / pl.col("total_collateral_for_lgd"))
+                .otherwise(pl.lit(0.45))
+                .alias("lgd_secured"),
+            ])
+
+            # Drop intermediate columns
+            exposures = exposures.drop([
+                "eff_fin", "wlgd_fin", "eff_nf", "wlgd_nf",
+                "raw_nf", "eff_nf_final", "wlgd_nf_final",
+                "total_weighted_lgd_sum",
             ])
 
         # Determine LGD for unsecured portion based on seniority
@@ -648,25 +723,34 @@ class CRMProcessor:
         2. Facility: beneficiary_reference matches parent_facility_reference
         3. Counterparty: beneficiary_reference matches counterparty_reference
 
-        For facility/counterparty level collateral, values are allocated pro-rata
-        across exposures based on their EAD share at that level.
+        Tracks financial and non-financial collateral separately to apply:
+        - Overcollateralisation ratios (CRR Art. 230 / CRE32.9-12)
+        - Minimum collateralisation thresholds (30% for RE/other physical)
 
         Args:
             exposures: Exposures with ead_gross, parent_facility_reference, counterparty_reference
-            collateral: Collateral with beneficiary_type, adjusted_value, collateral_lgd
+            collateral: Collateral with beneficiary_type, adjusted_value, effectively_secured,
+                        collateral_lgd, is_financial_collateral_type
 
         Returns:
             Exposures with total_collateral_for_lgd and lgd_secured columns
         """
-        # Helper to aggregate collateral by level
+        # Helper to aggregate collateral by level, split by financial/non-financial
         def aggregate_by_level(coll: pl.LazyFrame, level: str) -> pl.LazyFrame:
             """Aggregate collateral values and weighted LGD for a specific beneficiary level."""
             level_filter = ["exposure", "loan"] if level == "direct" else [level]
+            is_fin = pl.col("is_financial_collateral_type")
             return coll.filter(
                 pl.col("beneficiary_type").str.to_lowercase().is_in(level_filter)
             ).group_by("beneficiary_reference").agg([
-                pl.col("adjusted_value").sum().alias(f"coll_{level}"),
-                (pl.col("adjusted_value") * pl.col("collateral_lgd")).sum().alias(f"wlgd_{level}"),
+                # Financial collateral
+                pl.col("effectively_secured").filter(is_fin).sum().alias(f"eff_fin_{level}"),
+                (pl.col("effectively_secured") * pl.col("collateral_lgd")).filter(is_fin).sum().alias(f"wlgd_fin_{level}"),
+                # Non-financial collateral
+                pl.col("effectively_secured").filter(~is_fin).sum().alias(f"eff_nf_{level}"),
+                (pl.col("effectively_secured") * pl.col("collateral_lgd")).filter(~is_fin).sum().alias(f"wlgd_nf_{level}"),
+                # Raw non-financial (for min threshold check)
+                pl.col("adjusted_value").filter(~is_fin).sum().alias(f"raw_nf_{level}"),
             ])
 
         # Aggregate at each level
@@ -675,19 +759,17 @@ class CRMProcessor:
         coll_counterparty = aggregate_by_level(collateral, "counterparty")
 
         # Calculate EAD totals for pro-rata allocation
-        # Facility total: sum of EAD for all exposures under each facility
         facility_ead_totals = exposures.filter(
             pl.col("parent_facility_reference").is_not_null()
         ).group_by("parent_facility_reference").agg([
             pl.col("ead_gross").sum().alias("facility_ead_total"),
         ])
 
-        # Counterparty total: sum of EAD for all exposures for each counterparty
         counterparty_ead_totals = exposures.group_by("counterparty_reference").agg([
             pl.col("ead_gross").sum().alias("cp_ead_total"),
         ])
 
-        # Join direct-level collateral (full value to that exposure)
+        # Join direct-level collateral
         exposures = exposures.join(
             coll_direct,
             left_on="exposure_reference",
@@ -719,65 +801,105 @@ class CRMProcessor:
             how="left",
         )
 
-        # Fill nulls
-        exposures = exposures.with_columns([
-            pl.col("coll_direct").fill_null(0.0),
-            pl.col("wlgd_direct").fill_null(0.0),
-            pl.col("coll_facility").fill_null(0.0),
-            pl.col("wlgd_facility").fill_null(0.0),
-            pl.col("coll_counterparty").fill_null(0.0),
-            pl.col("wlgd_counterparty").fill_null(0.0),
+        # Fill nulls for all aggregate columns
+        fill_cols = []
+        for level in ["direct", "facility", "counterparty"]:
+            for prefix in ["eff_fin_", "wlgd_fin_", "eff_nf_", "wlgd_nf_", "raw_nf_"]:
+                fill_cols.append(pl.col(f"{prefix}{level}").fill_null(0.0))
+        fill_cols.extend([
             pl.col("facility_ead_total").fill_null(0.0),
             pl.col("cp_ead_total").fill_null(0.0),
         ])
+        exposures = exposures.with_columns(fill_cols)
 
         # Calculate allocation weights for pro-rata distribution
         exposures = exposures.with_columns([
-            # Facility allocation weight (exposure's EAD / facility total EAD)
             pl.when(pl.col("facility_ead_total") > 0)
             .then(pl.col("ead_gross") / pl.col("facility_ead_total"))
             .otherwise(pl.lit(0.0))
             .alias("facility_weight"),
-            # Counterparty allocation weight (exposure's EAD / counterparty total EAD)
             pl.when(pl.col("cp_ead_total") > 0)
             .then(pl.col("ead_gross") / pl.col("cp_ead_total"))
             .otherwise(pl.lit(0.0))
             .alias("cp_weight"),
         ])
 
-        # Calculate total allocated collateral and weighted LGD sum
+        # Allocate financial collateral (no min threshold)
         exposures = exposures.with_columns([
-            # Total collateral: direct + (facility * weight) + (counterparty * weight)
             (
-                pl.col("coll_direct") +
-                (pl.col("coll_facility") * pl.col("facility_weight")) +
-                (pl.col("coll_counterparty") * pl.col("cp_weight"))
-            ).alias("total_collateral_for_lgd"),
-            # Weighted LGD sum for calculating average LGD of secured portion
+                pl.col("eff_fin_direct") +
+                (pl.col("eff_fin_facility") * pl.col("facility_weight")) +
+                (pl.col("eff_fin_counterparty") * pl.col("cp_weight"))
+            ).alias("eff_fin_allocated"),
             (
-                pl.col("wlgd_direct") +
-                (pl.col("wlgd_facility") * pl.col("facility_weight")) +
-                (pl.col("wlgd_counterparty") * pl.col("cp_weight"))
-            ).alias("total_weighted_lgd_sum"),
+                pl.col("wlgd_fin_direct") +
+                (pl.col("wlgd_fin_facility") * pl.col("facility_weight")) +
+                (pl.col("wlgd_fin_counterparty") * pl.col("cp_weight"))
+            ).alias("wlgd_fin_allocated"),
+        ])
+
+        # Allocate non-financial collateral
+        exposures = exposures.with_columns([
+            (
+                pl.col("eff_nf_direct") +
+                (pl.col("eff_nf_facility") * pl.col("facility_weight")) +
+                (pl.col("eff_nf_counterparty") * pl.col("cp_weight"))
+            ).alias("eff_nf_allocated"),
+            (
+                pl.col("wlgd_nf_direct") +
+                (pl.col("wlgd_nf_facility") * pl.col("facility_weight")) +
+                (pl.col("wlgd_nf_counterparty") * pl.col("cp_weight"))
+            ).alias("wlgd_nf_allocated"),
+            # Raw non-financial for min threshold check
+            (
+                pl.col("raw_nf_direct") +
+                (pl.col("raw_nf_facility") * pl.col("facility_weight")) +
+                (pl.col("raw_nf_counterparty") * pl.col("cp_weight"))
+            ).alias("raw_nf_allocated"),
+        ])
+
+        # Apply min threshold: if raw non-financial < 30% of EAD, zero out non-financial
+        exposures = exposures.with_columns([
+            pl.when(pl.col("raw_nf_allocated") >= 0.30 * pl.col("ead_gross"))
+            .then(pl.col("eff_nf_allocated"))
+            .otherwise(pl.lit(0.0))
+            .alias("eff_nf_final"),
+            pl.when(pl.col("raw_nf_allocated") >= 0.30 * pl.col("ead_gross"))
+            .then(pl.col("wlgd_nf_allocated"))
+            .otherwise(pl.lit(0.0))
+            .alias("wlgd_nf_final"),
+        ])
+
+        # Combine financial + non-financial
+        exposures = exposures.with_columns([
+            (pl.col("eff_fin_allocated") + pl.col("eff_nf_final"))
+            .alias("total_collateral_for_lgd"),
+            (pl.col("wlgd_fin_allocated") + pl.col("wlgd_nf_final"))
+            .alias("total_weighted_lgd_sum"),
         ])
 
         # Calculate average LGD for secured portion
         exposures = exposures.with_columns([
             pl.when(pl.col("total_collateral_for_lgd") > 0)
             .then(pl.col("total_weighted_lgd_sum") / pl.col("total_collateral_for_lgd"))
-            .otherwise(pl.lit(0.45))  # Default to unsecured if no collateral
+            .otherwise(pl.lit(0.45))
             .alias("lgd_secured"),
         ])
 
         # Drop intermediate columns
-        exposures = exposures.drop([
-            "coll_direct", "wlgd_direct",
-            "coll_facility", "wlgd_facility",
-            "coll_counterparty", "wlgd_counterparty",
+        drop_cols = []
+        for level in ["direct", "facility", "counterparty"]:
+            for prefix in ["eff_fin_", "wlgd_fin_", "eff_nf_", "wlgd_nf_", "raw_nf_"]:
+                drop_cols.append(f"{prefix}{level}")
+        drop_cols.extend([
             "facility_ead_total", "cp_ead_total",
             "facility_weight", "cp_weight",
+            "eff_fin_allocated", "wlgd_fin_allocated",
+            "eff_nf_allocated", "wlgd_nf_allocated",
+            "raw_nf_allocated", "eff_nf_final", "wlgd_nf_final",
             "total_weighted_lgd_sum",
         ])
+        exposures = exposures.drop(drop_cols)
 
         return exposures
 

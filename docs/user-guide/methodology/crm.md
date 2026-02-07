@@ -417,7 +417,7 @@ The calculator accepts CRM data at multiple levels:
 collateral = {
     "collateral_id": "COL001",
     "counterparty_id": "CP001",  # Or facility_id, loan_id
-    "collateral_type": "CASH",
+    "collateral_type": "cash",
     "value": 1_000_000,
     "currency": "GBP",
     "issuer_cqs": None,  # For bonds

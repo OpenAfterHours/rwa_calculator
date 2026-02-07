@@ -380,19 +380,15 @@ contingents = pl.DataFrame({
 
 **Valid `collateral_type` values:**
 
-| Value | Haircut | Description |
-|-------|---------|-------------|
-| `cash` | 0% | Cash collateral |
-| `gold` | 15% | Gold collateral |
-| `government_bond` | 0%-15% | Government/sovereign bonds |
-| `corporate_bond` | 1%-25% | Corporate bonds |
-| `covered_bond` | 1%-8% | Covered bonds |
-| `equity_main_index` | 15% | Main index equities |
-| `equity_other` | 25% | Other listed equities |
-| `residential_real_estate` | N/A | Residential property (RW approach) |
-| `commercial_real_estate` | N/A | Commercial property (RW approach) |
-| `receivables` | N/A | Trade receivables |
-| `other_physical` | N/A | Other physical collateral |
+| Value | Description |
+|-------|-------------|
+| `cash` | Cash collateral (0% haircut) |
+| `gold` | Gold collateral (15% haircut) |
+| `bond` | Bond securities — haircut depends on `issuer_type`, `issuer_cqs`, and `residual_maturity_years` |
+| `equity` | Equity securities |
+| `real_estate` | Real estate — use `property_type` for residential/commercial classification |
+| `receivables` | Trade receivables |
+| `other_physical` | Other physical collateral |
 
 **Valid `beneficiary_type` values:**
 
@@ -411,7 +407,7 @@ import polars as pl
 
 collateral = pl.DataFrame({
     "collateral_reference": ["COLL_001", "COLL_002"],
-    "collateral_type": ["cash", "residential_real_estate"],
+    "collateral_type": ["cash", "real_estate"],
     "currency": ["GBP", "GBP"],
     "maturity_date": [None, None],
     "market_value": [1_000_000.0, 500_000.0],

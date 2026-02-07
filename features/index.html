@@ -995,6 +995,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1142,6 +1146,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../user-guide/methodology/equity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-guide/methodology/crm/" class="md-nav__link">
         
   
@@ -1178,6 +1210,34 @@
     
   
     Supporting Factors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/methodology/fx-conversion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FX Conversion
   
 
     
@@ -2817,8 +2877,6 @@
       
         
       
-        
-      
     
     
     
@@ -2890,34 +2948,6 @@
     
   
     Testing Guide
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../development/bdd/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    BDD Testing
   
 
     
@@ -3095,6 +3125,8 @@
       
         
       
+        
+      
     
     
     
@@ -3194,6 +3226,34 @@
     
   
     Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/retail_airb_corporate_firb_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retail A-IRB / Corporate F-IRB Plan
   
 
     
@@ -3407,10 +3467,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#feature-documentation" class="md-nav__link">
+  <a href="#core-calculation-features" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Feature Documentation
+        Core Calculation Features
       
     </span>
   </a>
@@ -3418,41 +3478,46 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#credit-risk-mitigation-features" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Overview">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#classification" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Classification
+        Credit Risk Mitigation Features
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#future-documentation" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-infrastructure-features" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Future Documentation
+        Pipeline &amp; Infrastructure Features
       
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#dual-framework-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dual-Framework Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance
+      
+    </span>
+  </a>
   
 </li>
       
@@ -3525,41 +3590,141 @@
 
 
 <h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
-<p>This section documents the key features and algorithms of the RWA calculator.</p>
-<h2 id="feature-documentation">Feature Documentation<a class="headerlink" href="#feature-documentation" title="Permanent link">&para;</a></h2>
+<p>This section provides an overview of all implemented features in the RWA calculator with links to detailed documentation.</p>
+<h2 id="core-calculation-features">Core Calculation Features<a class="headerlink" href="#core-calculation-features" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th>Feature</th>
 <th>Description</th>
+<th>Documentation</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><a href="classification/">Classification</a></td>
-<td>Exposure classification system - entity types, exposure classes, and the classification algorithm</td>
+<td><strong>Standardised Approach (SA)</strong></td>
+<td>CQS-based risk weights for all exposure classes, including UK CRR deviations</td>
+<td><a href="../user-guide/methodology/standardised-approach/">Methodology</a>, <a href="../specifications/crr/sa-risk-weights/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Foundation IRB (F-IRB)</strong></td>
+<td>Supervisory LGD, PD floors, correlation formulas, maturity adjustment</td>
+<td><a href="../user-guide/methodology/irb-approach/">Methodology</a>, <a href="../specifications/crr/firb-calculation/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Advanced IRB (A-IRB)</strong></td>
+<td>Internal LGD/CCF estimates with Basel 3.1 LGD floors</td>
+<td><a href="../user-guide/methodology/irb-approach/">Methodology</a>, <a href="../specifications/crr/airb-calculation/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Slotting Approach</strong></td>
+<td>Category-based risk weights for specialised lending (PF, OF, CF, IPRE, HVCRE)</td>
+<td><a href="../user-guide/methodology/specialised-lending/">Methodology</a>, <a href="../specifications/crr/slotting-approach/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Equity Calculator</strong></td>
+<td>Article 133 (SA) and Article 155 (IRB Simple) equity risk weights</td>
+<td><a href="../user-guide/methodology/equity/">Methodology</a>, <a href="../api/engine/#equity-calculator">API</a></td>
 </tr>
 </tbody>
 </table>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>The RWA calculator implements sophisticated algorithms for credit risk capital calculation. This section provides detailed documentation of these features beyond the basic API and schema documentation.</p>
-<h3 id="classification">Classification<a class="headerlink" href="#classification" title="Permanent link">&para;</a></h3>
-<p>The <a href="classification/">classification system</a> is the foundation of the RWA calculation:</p>
-<ul>
-<li><strong>Entity Type Mapping</strong>: 17 entity types map to SA and IRB exposure classes</li>
-<li><strong>Dual Class System</strong>: SA and IRB classes tracked separately for regulatory compliance</li>
-<li><strong>SME/Retail Classification</strong>: Revenue and exposure threshold checks</li>
-<li><strong>FI Scalar Determination</strong>: Large and unregulated financial sector entity identification</li>
-<li><strong>Audit Trail</strong>: Full traceability of classification decisions</li>
-</ul>
-<h3 id="future-documentation">Future Documentation<a class="headerlink" href="#future-documentation" title="Permanent link">&para;</a></h3>
-<p>Additional feature documentation planned:</p>
-<ul>
-<li>Credit Risk Mitigation (CRM) waterfall</li>
-<li>IRB formula implementation</li>
-<li>Output floor calculation</li>
-<li>Supporting factor application</li>
-</ul>
+<h2 id="credit-risk-mitigation-features">Credit Risk Mitigation Features<a class="headerlink" href="#credit-risk-mitigation-features" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+<th>Documentation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Collateral Haircuts</strong></td>
+<td>CRR Art. 224 supervisory haircuts for financial and physical collateral</td>
+<td><a href="../user-guide/methodology/crm/#collateral">Methodology</a>, <a href="../specifications/crr/credit-risk-mitigation/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Overcollateralisation</strong></td>
+<td>CRR Art. 230 overcollateralisation ratios and minimum thresholds</td>
+<td><a href="../user-guide/methodology/crm/#overcollateralisation-crr-art-230">Methodology</a>, <a href="../specifications/crr/credit-risk-mitigation/#overcollateralisation-crr-art-230">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Guarantee Substitution</strong></td>
+<td>Risk weight substitution for beneficial guarantees with pre/post CRM tracking</td>
+<td><a href="../user-guide/methodology/crm/#guarantees">Methodology</a>, <a href="../specifications/crr/credit-risk-mitigation/#guarantee-substitution-crr-art-213-217">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Provisions</strong></td>
+<td>SA provision deduction and IRB expected loss comparison</td>
+<td><a href="../user-guide/methodology/crm/#provisions">Methodology</a>, <a href="../specifications/crr/provisions/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Maturity Mismatch</strong></td>
+<td>CRR Art. 238 adjustment for collateral/guarantee maturity shorter than exposure</td>
+<td><a href="../user-guide/methodology/crm/#maturity-mismatch">Methodology</a>, <a href="../specifications/crr/credit-risk-mitigation/#maturity-mismatch-adjustment-crr-art-238">Specification</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="pipeline-infrastructure-features">Pipeline &amp; Infrastructure Features<a class="headerlink" href="#pipeline-infrastructure-features" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+<th>Documentation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Classification</strong></td>
+<td>Entity type mapping, SME/retail detection, approach assignment</td>
+<td><a href="classification/">Detail</a>, <a href="../specifications/common/hierarchy-classification/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Hierarchy Resolution</strong></td>
+<td>Parent-child traversal, rating inheritance, lending group aggregation</td>
+<td><a href="../architecture/pipeline/">Architecture</a>, <a href="../specifications/common/hierarchy-classification/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>FX Conversion</strong></td>
+<td>Multi-currency support with configurable base currency and audit trail</td>
+<td><a href="../user-guide/methodology/fx-conversion/">Methodology</a>, <a href="../api/engine/#fx-converter">API</a></td>
+</tr>
+<tr>
+<td><strong>Credit Conversion Factors</strong></td>
+<td>SA and F-IRB CCFs for off-balance sheet exposures</td>
+<td><a href="../specifications/crr/credit-conversion-factors/">Specification</a>, <a href="../api/engine/#ccf-calculator">API</a></td>
+</tr>
+<tr>
+<td><strong>Supporting Factors</strong></td>
+<td>CRR SME tiered factor (0.7619/0.85) and infrastructure factor (0.75)</td>
+<td><a href="../user-guide/methodology/supporting-factors/">Methodology</a>, <a href="../specifications/crr/supporting-factors/">Specification</a></td>
+</tr>
+<tr>
+<td><strong>Output Floor</strong></td>
+<td>Basel 3.1 output floor (72.5% of SA) with transitional schedule</td>
+<td><a href="../specifications/basel31/framework-differences/#output-floor">Specification</a>, <a href="../api/engine/#aggregator">API</a></td>
+</tr>
+<tr>
+<td><strong>Input Validation</strong></td>
+<td>Categorical value validation with DQ006 error codes</td>
+<td><a href="../data-model/data-validation/">Data Model</a></td>
+</tr>
+<tr>
+<td><strong>Audit Trail</strong></td>
+<td>Full calculation transparency with formatted audit strings for every approach</td>
+<td><a href="../api/engine/#audit-namespace">API</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="dual-framework-support">Dual-Framework Support<a class="headerlink" href="#dual-framework-support" title="Permanent link">&para;</a></h2>
+<p>The calculator supports both CRR and Basel 3.1 via a single configuration toggle:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>     <span class="c1"># CRR</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">basel_3_1</span><span class="p">(</span><span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2027</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># Basel 3.1</span>
+</span></code></pre></div>
+<p>Key differences are documented in the <a href="../specifications/basel31/framework-differences/">Framework Differences</a> specification.</p>
+<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h2>
+<p>All calculations use Polars LazyFrames for vectorized performance (50-100x improvement over row-by-row iteration). Eight custom Polars namespace extensions provide fluent, chainable APIs. See <a href="../architecture/design-principles/">Design Principles</a> for details.</p>
 
 
 

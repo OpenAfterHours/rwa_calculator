@@ -995,6 +995,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1142,6 +1146,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../user-guide/methodology/equity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-guide/methodology/crm/" class="md-nav__link">
         
   
@@ -1178,6 +1210,34 @@
     
   
     Supporting Factors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/methodology/fx-conversion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FX Conversion
   
 
     
@@ -2826,8 +2886,6 @@
       
         
       
-        
-      
     
     
     
@@ -2899,34 +2957,6 @@
     
   
     Testing Guide
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../development/bdd/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    BDD Testing
   
 
     
@@ -3104,6 +3134,8 @@
       
         
       
+        
+      
     
     
     
@@ -3203,6 +3235,34 @@
     
   
     Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/retail_airb_corporate_firb_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retail A-IRB / Corporate F-IRB Plan
   
 
     
@@ -3414,17 +3474,6 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#how-to-read-feature-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How to Read Feature Files
-      
-    </span>
-  </a>
-  
-</li>
       
         <li class="md-nav__item">
   <a href="#specification-index" class="md-nav__link">
@@ -3672,21 +3721,12 @@
 
 
 <h1 id="rwa-calculator-specifications">RWA Calculator Specifications<a class="headerlink" href="#rwa-calculator-specifications" title="Permanent link">&para;</a></h1>
-<p>This section contains the formal specifications for the RWA Calculator, written in Gherkin syntax. These specifications serve as:</p>
+<p>This section contains the formal specifications for the RWA Calculator. These specifications serve as:</p>
 <ol>
 <li><strong>Living documentation</strong> - Human-readable descriptions of business rules and regulatory treatments</li>
 <li><strong>Acceptance criteria</strong> - Clear definition of expected behaviour for each scenario</li>
-<li><strong>Executable tests</strong> - Automated verification that the calculator meets requirements</li>
+<li><strong>Traceability</strong> - Each scenario maps to acceptance tests via scenario IDs</li>
 </ol>
-<h2 id="how-to-read-feature-files">How to Read Feature Files<a class="headerlink" href="#how-to-read-feature-files" title="Permanent link">&para;</a></h2>
-<p>Feature files use Gherkin syntax, designed to be readable by both technical and non-technical stakeholders:</p>
-<div class="language-gherkin highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">Feature:</span><span class="nf"> Brief description of the capability</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nf">  </span><span class="k">Scenario:</span><span class="nf"> Description of a specific case</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">    Given </span><span class="nf">[initial context/preconditions]</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nf">    </span><span class="k">When </span><span class="nf">[action is performed]</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nf">    </span><span class="k">Then </span><span class="nf">[expected outcome]</span>
-</span></code></pre></div>
 <h2 id="specification-index">Specification Index<a class="headerlink" href="#specification-index" title="Permanent link">&para;</a></h2>
 <h3 id="crr-framework-current-until-december-2026">CRR Framework (Current - Until December 2026)<a class="headerlink" href="#crr-framework-current-until-december-2026" title="Permanent link">&para;</a></h3>
 <table>
@@ -3725,7 +3765,7 @@
 </tr>
 <tr>
 <td><a href="crr/credit-risk-mitigation/">Credit Risk Mitigation</a></td>
-<td>Collateral haircuts and guarantees</td>
+<td>Collateral haircuts, guarantees, and overcollateralisation</td>
 <td>CRR Art. 192-241</td>
 </tr>
 <tr>
@@ -3774,53 +3814,72 @@
 </table>
 <h2 id="scenario-coverage-by-test-group">Scenario Coverage by Test Group<a class="headerlink" href="#scenario-coverage-by-test-group" title="Permanent link">&para;</a></h2>
 <h3 id="group-a-standardised-approach">Group A: Standardised Approach<a class="headerlink" href="#group-a-standardised-approach" title="Permanent link">&para;</a></h3>
-<p>Covers risk weight determination for all SA exposure classes:
-- Sovereigns (CQS 1-6)
-- Institutions (including UK 30% deviation)
-- Corporates (rated and unrated)
-- Retail (fixed 75%)
-- Residential mortgages (LTV-based)
-- Commercial real estate</p>
+<p>Covers risk weight determination for all SA exposure classes:</p>
+<ul>
+<li>Sovereigns (CQS 1-6 and unrated)</li>
+<li>Institutions (including UK 30% CQS 2 deviation)</li>
+<li>Corporates (rated and unrated)</li>
+<li>Retail (fixed 75%)</li>
+<li>Residential mortgages (LTV-based split at 80%)</li>
+<li>Commercial real estate (LTV-based with income cover test)</li>
+</ul>
 <h3 id="group-b-foundation-irb">Group B: Foundation IRB<a class="headerlink" href="#group-b-foundation-irb" title="Permanent link">&para;</a></h3>
-<p>Covers F-IRB calculation components:
-- PD floor (0.03%)
-- Supervisory LGD (45% senior, 75% subordinated)
-- Corporate correlation formula
-- SME firm-size adjustment
-- Maturity adjustment
-- Expected loss</p>
+<p>Covers F-IRB calculation components:</p>
+<ul>
+<li>PD floor (0.03%)</li>
+<li>Supervisory LGD (45% senior, 75% subordinated)</li>
+<li>Corporate correlation formula with PD-dependent decay</li>
+<li>SME firm-size correlation adjustment</li>
+<li>Maturity adjustment</li>
+<li>Expected loss calculation</li>
+<li>1.06 scaling factor</li>
+</ul>
 <h3 id="group-c-advanced-irb">Group C: Advanced IRB<a class="headerlink" href="#group-c-advanced-irb" title="Permanent link">&para;</a></h3>
-<p>Covers A-IRB with internal estimates:
-- Internal LGD application
-- Internal CCF application
-- FI scalar (1.25×) for large financials</p>
+<p>Covers A-IRB with internal estimates:</p>
+<ul>
+<li>Internal LGD application</li>
+<li>Internal CCF application</li>
+<li>FI scalar (1.25x) for large financial institutions</li>
+</ul>
 <h3 id="group-d-credit-risk-mitigation">Group D: Credit Risk Mitigation<a class="headerlink" href="#group-d-credit-risk-mitigation" title="Permanent link">&para;</a></h3>
-<p>Covers CRM techniques:
-- Credit conversion factors
-- Financial collateral haircuts
-- FX mismatch haircut (8%)
-- Guarantee substitution</p>
+<p>Covers CRM techniques:</p>
+<ul>
+<li>Financial collateral haircuts (CRR Art. 224)</li>
+<li>FX mismatch haircut (8%)</li>
+<li>Overcollateralisation requirements (CRR Art. 230)</li>
+<li>Guarantee substitution (CRR Art. 213-217)</li>
+<li>Multi-level collateral allocation (exposure, facility, counterparty)</li>
+<li>Maturity mismatch adjustment (CRR Art. 238)</li>
+</ul>
 <h3 id="group-e-slotting">Group E: Slotting<a class="headerlink" href="#group-e-slotting" title="Permanent link">&para;</a></h3>
-<p>Covers specialised lending:
-- Slotting categories (Strong to Default)
-- HVCRE elevated risk weights
-- Project/Object/Commodities finance</p>
+<p>Covers specialised lending:</p>
+<ul>
+<li>Slotting categories (Strong to Default)</li>
+<li>HVCRE elevated risk weights</li>
+<li>Project/Object/Commodities/IPRE finance types</li>
+</ul>
 <h3 id="group-f-supporting-factors">Group F: Supporting Factors<a class="headerlink" href="#group-f-supporting-factors" title="Permanent link">&para;</a></h3>
-<p>Covers CRR-specific factors:
-- SME supporting factor
-- Infrastructure supporting factor</p>
+<p>Covers CRR-specific factors:</p>
+<ul>
+<li>SME supporting factor (tiered: 0.7619 / 0.85)</li>
+<li>Infrastructure supporting factor (0.75)</li>
+</ul>
 <h3 id="group-g-provisions">Group G: Provisions<a class="headerlink" href="#group-g-provisions" title="Permanent link">&para;</a></h3>
-<p>Covers provision treatment:
-- SA deduction from exposure
-- IRB expected loss comparison
-- IFRS 9 stage recognition</p>
+<p>Covers provision treatment:</p>
+<ul>
+<li>SA provision deduction from exposure</li>
+<li>IRB expected loss comparison</li>
+</ul>
 <h3 id="group-h-basel-31-differences">Group H: Basel 3.1 Differences<a class="headerlink" href="#group-h-basel-31-differences" title="Permanent link">&para;</a></h3>
-<p>Covers framework changes:
-- Removal of supporting factors
-- Removal of 1.06 scaling factor
-- Output floor (72.5% of SA)
-- Differentiated PD floors
-- LGD floors for A-IRB</p>
+<p>Covers framework changes:</p>
+<ul>
+<li>Removal of supporting factors</li>
+<li>Removal of 1.06 scaling factor</li>
+<li>Output floor (72.5% of SA)</li>
+<li>Differentiated PD floors</li>
+<li>LGD floors for A-IRB</li>
+<li>Revised slotting risk weights</li>
+</ul>
 <h2 id="scenario-id-convention">Scenario ID Convention<a class="headerlink" href="#scenario-id-convention" title="Permanent link">&para;</a></h2>
 <p>Each scenario is tagged with an identifier for traceability:</p>
 <table>
@@ -3874,7 +3933,7 @@
 </tbody>
 </table>
 <h2 id="for-developers">For Developers<a class="headerlink" href="#for-developers" title="Permanent link">&para;</a></h2>
-<p>These specifications are executable using <code>pytest-bdd</code>. See the <a href="../development/bdd/">BDD Testing Guide</a> for implementation details.</p>
+<p>These specifications are verified through acceptance tests in <code>tests/acceptance/</code>. See the <a href="../development/testing/">Testing Guide</a> for details on running tests.</p>
 
 
 

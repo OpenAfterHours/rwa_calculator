@@ -2019,6 +2019,99 @@ class TestSameFacilityAndLoanReference:
         fac_b_undrawn = undrawn_df.filter(pl.col("exposure_reference") == "FAC_B_UNDRAWN")
         assert fac_b_undrawn["undrawn_amount"][0] == pytest.approx(300000.0)  # 800k - 500k
 
+    def test_same_ref_with_sub_facility_no_row_duplication(
+        self,
+        resolver: HierarchyResolver,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Loan should not be duplicated when sub-facility shares the same reference.
+
+        Scenario:
+            FAC_PARENT (parent facility, limit=2M)
+              |-- SUB001 (child_type="facility")   <- sub-facility
+              |-- SUB001 (child_type="loan")       <- loan with same ref
+
+        facility_mappings has TWO rows with child_reference="SUB001".
+        Without the fix, the left join in _unify_exposures produces a cartesian
+        product, duplicating the loan exposure row.
+        """
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_PARENT"],
+            "product_type": ["RCF"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_SUB"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "limit": [2000000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+            "risk_type": ["MR"],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["SUB001"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_SUB"],
+            "value_date": [date(2023, 6, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [500000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        # Two rows for SUB001: one as a sub-facility, one as a loan
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_PARENT", "FAC_PARENT"],
+            "child_reference": ["SUB001", "SUB001"],
+            "child_type": ["facility", "loan"],
+        }).lazy()
+
+        counterparties = pl.DataFrame({
+            "counterparty_reference": ["CP_SUB"],
+            "counterparty_name": ["Sub-Facility Corp"],
+            "entity_type": ["corporate"],
+            "country_code": ["GB"],
+            "annual_revenue": [50000000.0],
+            "total_assets": [100000000.0],
+            "default_status": [False],
+            "sector_code": ["MANU"],
+            "is_regulated": [False],
+            "is_managed_as_retail": [False],
+        }).lazy()
+
+        bundle = RawDataBundle(
+            facilities=facilities,
+            loans=loans,
+            contingents=None,
+            counterparties=counterparties,
+            collateral=None,
+            guarantees=None,
+            provisions=None,
+            ratings=None,
+            facility_mappings=facility_mappings,
+            org_mappings=None,
+            lending_mappings=pl.LazyFrame(schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }),
+        )
+
+        result = resolver.resolve(bundle, crr_config)
+        df = result.exposures.collect()
+
+        # Loan SUB001 should appear exactly once (not duplicated by the facility mapping row)
+        loan_rows = df.filter(
+            (pl.col("exposure_type") == "loan") &
+            (pl.col("exposure_reference") == "SUB001")
+        )
+        assert len(loan_rows) == 1, (
+            f"Expected 1 loan row for SUB001, got {len(loan_rows)}. "
+            f"Facility mapping join likely caused duplication."
+        )
+
     def test_same_reference_fully_drawn_no_undrawn_exposure(
         self,
         resolver: HierarchyResolver,
@@ -2097,3 +2190,210 @@ class TestSameFacilityAndLoanReference:
         assert df["exposure_type"][0] == "loan"
         assert df["exposure_reference"][0] == "FULL_DRAW"
         assert df["drawn_amount"][0] == pytest.approx(500000.0)
+
+
+# =============================================================================
+# Lending Group Duplicate Membership Tests
+# =============================================================================
+
+
+class TestLendingGroupDuplicateMembership:
+    """Tests for lending group duplication when counterparty appears in multiple groups.
+
+    Bug 2: When a counterparty appears in multiple lending groups or as both
+    a parent and child across groups, the pl.concat of lending_groups and
+    parent_as_member can produce duplicate member_counterparty_reference entries,
+    causing row duplication when joined to exposures.
+    """
+
+    def _build_counterparty_lookup(
+        self, counterparties: pl.LazyFrame
+    ) -> CounterpartyLookup:
+        """Helper to build a minimal counterparty lookup for lending group tests."""
+        enriched = counterparties.with_columns([
+            pl.lit(False).alias("counterparty_has_parent"),
+            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
+            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
+            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
+            pl.lit(None).cast(pl.Int8).alias("cqs"),
+            pl.lit(None).cast(pl.Float64).alias("pd"),
+            pl.lit(None).cast(pl.String).alias("rating_value"),
+            pl.lit(None).cast(pl.String).alias("rating_agency"),
+            pl.lit(False).alias("rating_inherited"),
+            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
+            pl.lit("unrated").alias("rating_inheritance_reason"),
+        ])
+        return CounterpartyLookup(
+            counterparties=enriched,
+            parent_mappings=pl.LazyFrame(schema={
+                "child_counterparty_reference": pl.String,
+                "parent_counterparty_reference": pl.String,
+            }),
+            ultimate_parent_mappings=pl.LazyFrame(schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }),
+            rating_inheritance=pl.LazyFrame(schema={
+                "counterparty_reference": pl.String,
+                "cqs": pl.Int8,
+                "pd": pl.Float64,
+                "rating_value": pl.String,
+                "inherited": pl.Boolean,
+                "source_counterparty": pl.String,
+                "inheritance_reason": pl.String,
+            }),
+        )
+
+    def test_counterparty_in_multiple_groups_no_row_duplication(
+        self,
+        resolver: HierarchyResolver,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Counterparty in multiple lending groups should not duplicate exposure rows.
+
+        Scenario:
+            LG_A -> SHARED_CP (child)
+            LG_B -> SHARED_CP (child)
+
+        SHARED_CP appears in all_members twice (once per group). Without the fix,
+        joining exposures to all_members duplicates the loan row.
+        """
+        counterparties = pl.DataFrame({
+            "counterparty_reference": ["LG_A", "LG_B", "SHARED_CP"],
+            "counterparty_name": ["Group A", "Group B", "Shared CP"],
+            "entity_type": ["individual", "individual", "individual"],
+            "country_code": ["GB", "GB", "GB"],
+            "annual_revenue": [0.0, 0.0, 0.0],
+            "total_assets": [0.0, 0.0, 0.0],
+            "default_status": [False, False, False],
+            "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
+            "is_regulated": [False, False, False],
+            "is_managed_as_retail": [False, False, False],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN_SHARED"],
+            "product_type": ["PERSONAL"],
+            "book_code": ["RETAIL"],
+            "counterparty_reference": ["SHARED_CP"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [100000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        lending_mappings = pl.DataFrame({
+            "parent_counterparty_reference": ["LG_A", "LG_B"],
+            "child_counterparty_reference": ["SHARED_CP", "SHARED_CP"],
+        }).lazy()
+
+        bundle = RawDataBundle(
+            facilities=None,
+            loans=loans,
+            contingents=None,
+            counterparties=counterparties,
+            collateral=None,
+            guarantees=None,
+            provisions=None,
+            ratings=None,
+            facility_mappings=pl.LazyFrame(schema={
+                "parent_facility_reference": pl.String,
+                "child_reference": pl.String,
+                "child_type": pl.String,
+            }),
+            org_mappings=None,
+            lending_mappings=lending_mappings,
+        )
+
+        result = resolver.resolve(bundle, crr_config)
+        df = result.exposures.collect()
+
+        # SHARED_CP's loan should appear exactly once
+        loan_rows = df.filter(pl.col("exposure_reference") == "LOAN_SHARED")
+        assert len(loan_rows) == 1, (
+            f"Expected 1 row for LOAN_SHARED, got {len(loan_rows)}. "
+            f"Lending group join likely caused duplication."
+        )
+
+    def test_counterparty_as_parent_and_child_in_different_group(
+        self,
+        resolver: HierarchyResolver,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Counterparty that is both a child in one group and parent of another.
+
+        Scenario:
+            LG_A -> CP_DUAL (child)
+            CP_DUAL -> CP_OTHER (parent of its own group)
+
+        CP_DUAL appears in all_members twice: once from lending_groups (as child of
+        LG_A) and once from parent_as_member (as parent of the CP_DUAL group).
+        Without the fix, LOAN_DUAL is duplicated.
+        """
+        counterparties = pl.DataFrame({
+            "counterparty_reference": ["LG_A", "CP_DUAL", "CP_OTHER"],
+            "counterparty_name": ["Group A", "Dual Role CP", "Other CP"],
+            "entity_type": ["individual", "individual", "individual"],
+            "country_code": ["GB", "GB", "GB"],
+            "annual_revenue": [0.0, 0.0, 0.0],
+            "total_assets": [0.0, 0.0, 0.0],
+            "default_status": [False, False, False],
+            "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
+            "is_regulated": [False, False, False],
+            "is_managed_as_retail": [False, False, False],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN_DUAL", "LOAN_OTHER"],
+            "product_type": ["PERSONAL", "PERSONAL"],
+            "book_code": ["RETAIL", "RETAIL"],
+            "counterparty_reference": ["CP_DUAL", "CP_OTHER"],
+            "value_date": [date(2023, 1, 1), date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1), date(2028, 1, 1)],
+            "currency": ["GBP", "GBP"],
+            "drawn_amount": [200000.0, 150000.0],
+            "lgd": [0.45, 0.45],
+            "seniority": ["senior", "senior"],
+        }).lazy()
+
+        # CP_DUAL is a child of LG_A, AND CP_DUAL is a parent of CP_OTHER
+        lending_mappings = pl.DataFrame({
+            "parent_counterparty_reference": ["LG_A", "CP_DUAL"],
+            "child_counterparty_reference": ["CP_DUAL", "CP_OTHER"],
+        }).lazy()
+
+        bundle = RawDataBundle(
+            facilities=None,
+            loans=loans,
+            contingents=None,
+            counterparties=counterparties,
+            collateral=None,
+            guarantees=None,
+            provisions=None,
+            ratings=None,
+            facility_mappings=pl.LazyFrame(schema={
+                "parent_facility_reference": pl.String,
+                "child_reference": pl.String,
+                "child_type": pl.String,
+            }),
+            org_mappings=None,
+            lending_mappings=lending_mappings,
+        )
+
+        result = resolver.resolve(bundle, crr_config)
+        df = result.exposures.collect()
+
+        # LOAN_DUAL should appear exactly once
+        dual_rows = df.filter(pl.col("exposure_reference") == "LOAN_DUAL")
+        assert len(dual_rows) == 1, (
+            f"Expected 1 row for LOAN_DUAL, got {len(dual_rows)}. "
+            f"Lending group parent_as_member caused duplication."
+        )
+
+        # Total should be 2 rows (LOAN_DUAL + LOAN_OTHER)
+        assert len(df) == 2, (
+            f"Expected 2 total rows, got {len(df)}."
+        )

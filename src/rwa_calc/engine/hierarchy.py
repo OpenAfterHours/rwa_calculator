@@ -730,12 +730,37 @@ class HierarchyResolver:
         # Combine all exposure types
         exposures = pl.concat(exposure_frames, how="diagonal_relaxed")
 
-        # Join with facility mappings to get parent facility
-        exposures = exposures.join(
-            facility_mappings.select([
+        # Filter out child_type="facility" entries since unified exposures contain only
+        # loans, contingents, and facility_undrawn (never raw facilities).
+        # Without this filter, when facility_reference = loan_reference AND the facility
+        # is a sub-facility, child_reference has duplicate values causing row duplication.
+        mapping_schema = facility_mappings.collect_schema()
+        mapping_cols = set(mapping_schema.names())
+
+        if "child_type" in mapping_cols:
+            type_col = "child_type"
+        elif "node_type" in mapping_cols:
+            type_col = "node_type"
+        else:
+            type_col = None
+
+        if type_col is not None:
+            exposure_level_mappings = facility_mappings.filter(
+                pl.col(type_col).fill_null("").str.to_lowercase() != "facility"
+            ).select([
                 pl.col("child_reference"),
                 pl.col("parent_facility_reference").alias("mapped_parent_facility"),
-            ]),
+            ])
+        else:
+            # No type column available - use all mappings as-is
+            exposure_level_mappings = facility_mappings.select([
+                pl.col("child_reference"),
+                pl.col("parent_facility_reference").alias("mapped_parent_facility"),
+            ])
+
+        # Join with facility mappings to get parent facility
+        exposures = exposures.join(
+            exposure_level_mappings,
             left_on="exposure_reference",
             right_on="child_reference",
             how="left",
@@ -820,7 +845,9 @@ class HierarchyResolver:
             pl.col("parent_counterparty_reference").alias("member_counterparty_reference"),
         ]).unique()
 
-        all_members = pl.concat([lending_groups, parent_as_member], how="vertical")
+        all_members = pl.concat(
+            [lending_groups, parent_as_member], how="vertical"
+        ).unique(subset=["member_counterparty_reference"], keep="first")
 
         # Join exposures to get lending group for each counterparty
         exposures_with_group = exposures.join(
@@ -1297,7 +1324,9 @@ class HierarchyResolver:
             pl.col("parent_counterparty_reference").alias("member_counterparty_reference"),
         ]).unique()
 
-        all_members = pl.concat([lending_groups, parent_as_member], how="vertical")
+        all_members = pl.concat(
+            [lending_groups, parent_as_member], how="vertical"
+        ).unique(subset=["member_counterparty_reference"], keep="first")
 
         # Join to get lending group reference
         exposures = exposures.join(

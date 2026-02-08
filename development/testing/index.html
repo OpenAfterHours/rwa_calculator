@@ -1345,7 +1345,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/exposure-classes/sovereign/" class="md-nav__link">
+      <a href="../../user-guide/exposure-classes/sovereign.md" class="md-nav__link">
         
   
   
@@ -4302,7 +4302,7 @@
 </span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>
 </span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>        <span class="k">assert</span> <span class="n">result</span><span class="o">.</span><span class="n">total_rwa</span> <span class="o">==</span> <span class="mi">0</span>
 </span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">()</span>
-</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>        <span class="k">assert</span> <span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;exposure_class&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;SOVEREIGN&quot;</span><span class="p">)[</span><span class="s2">&quot;risk_weight&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mf">0.0</span>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>        <span class="k">assert</span> <span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;exposure_class&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;CENTRAL_GOVT_CENTRAL_BANK&quot;</span><span class="p">)[</span><span class="s2">&quot;risk_weight&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mf">0.0</span>
 </span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a>
 </span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_crr_a02_corporate_unrated_100_percent</span><span class="p">(</span>
 </span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">crr_config</span><span class="p">,</span> <span class="n">corporate_unrated_exposure</span>

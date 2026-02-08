@@ -845,7 +845,7 @@
           </label>
 <ul class="md-nav__list" data-md-scrollfix="">
 <li class="md-nav__item">
-<a class="md-nav__link" href="../../user-guide/exposure-classes/sovereign/">
+<a class="md-nav__link" href="../../user-guide/exposure-classes/sovereign.md">
 <span class="md-ellipsis">
     
   
@@ -2061,7 +2061,7 @@
 </thead>
 <tbody>
 <tr>
-<td><strong>Sovereign</strong></td>
+<td><strong>Central Govt / Central Bank</strong></td>
 <td>Governments and central banks</td>
 <td>Low-High</td>
 </tr>
@@ -2130,8 +2130,8 @@
 <h3 id="entity-type-classification">Entity Type Classification<a class="headerlink" href="#entity-type-classification" title="Permanent link">¶</a></h3>
 <p>The counterparty's <code>entity_type</code> field is the <strong>single source of truth</strong> for exposure class determination. The calculator supports 17 entity types that map to both SA and IRB exposure classes.</p>
 <p>For example:
-- <code>pse_sovereign</code> maps to PSE for SA (uses PSE risk weight table) but SOVEREIGN for IRB (uses sovereign formula)
-- <code>mdb</code> maps to MDB for SA (typically 0% RW) but SOVEREIGN for IRB</p>
+- <code>pse_sovereign</code> maps to PSE for SA (uses PSE risk weight table) but CENTRAL_GOVT_CENTRAL_BANK for IRB (uses central govt/central bank formula)
+- <code>mdb</code> maps to MDB for SA (typically 0% RW) but CENTRAL_GOVT_CENTRAL_BANK for IRB</p>
 <p>See <a href="../../features/classification/">Classification</a> for the complete entity type mapping and classification algorithm.</p>
 <h2 id="key-metrics">Key Metrics<a class="headerlink" href="#key-metrics" title="Permanent link">¶</a></h2>
 <h3 id="ead-exposure-at-default">EAD (Exposure at Default)<a class="headerlink" href="#ead-exposure-at-default" title="Permanent link">¶</a></h3>

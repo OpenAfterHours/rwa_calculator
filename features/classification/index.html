@@ -1345,7 +1345,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/exposure-classes/sovereign/" class="md-nav__link">
+      <a href="../../user-guide/exposure-classes/sovereign.md" class="md-nav__link">
         
   
   
@@ -4166,12 +4166,12 @@
 <tbody>
 <tr>
 <td><code>sovereign</code></td>
-<td>SOVEREIGN</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
 <td>CRR Art. 112(a)</td>
 </tr>
 <tr>
 <td><code>central_bank</code></td>
-<td>SOVEREIGN</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
 <td>CRR Art. 112(a)</td>
 </tr>
 <tr>
@@ -4264,18 +4264,18 @@
 <tbody>
 <tr>
 <td><code>sovereign</code></td>
-<td>SOVEREIGN</td>
-<td>Standard sovereign treatment</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
+<td>Standard central govt/central bank treatment</td>
 </tr>
 <tr>
 <td><code>central_bank</code></td>
-<td>SOVEREIGN</td>
-<td>Standard sovereign treatment</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
+<td>Standard central govt/central bank treatment</td>
 </tr>
 <tr>
 <td><code>rgla_sovereign</code></td>
-<td>SOVEREIGN</td>
-<td>Sovereign IRB formula</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
+<td>Central govt/central bank IRB formula</td>
 </tr>
 <tr>
 <td><code>rgla_institution</code></td>
@@ -4284,8 +4284,8 @@
 </tr>
 <tr>
 <td><code>pse_sovereign</code></td>
-<td>SOVEREIGN</td>
-<td>Sovereign IRB formula</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
+<td>Central govt/central bank IRB formula</td>
 </tr>
 <tr>
 <td><code>pse_institution</code></td>
@@ -4294,12 +4294,12 @@
 </tr>
 <tr>
 <td><code>mdb</code></td>
-<td>SOVEREIGN</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
 <td>CRR Art. 147(3)</td>
 </tr>
 <tr>
 <td><code>international_org</code></td>
-<td>SOVEREIGN</td>
+<td>CENTRAL_GOVT_CENTRAL_BANK</td>
 <td>CRR Art. 147(3)</td>
 </tr>
 <tr>
@@ -4353,9 +4353,9 @@
 <p>The SA and IRB exposure classes differ for RGLA, PSE, and MDB entity types because:</p>
 <ul>
 <li><strong>SA treatment</strong>: Uses specific risk weight tables for RGLA, PSE, and MDB</li>
-<li><strong>IRB treatment</strong>: Uses the underlying IRB formula (sovereign or institution) based on the nature of the entity's credit support</li>
+<li><strong>IRB treatment</strong>: Uses the underlying IRB formula (central govt/central bank or institution) based on the nature of the entity's credit support</li>
 </ul>
-<p>For example, a government-guaranteed PSE (<code>pse_sovereign</code>) uses the PSE risk weight table under SA but the sovereign IRB formula because its credit risk is backed by the government.</p>
+<p>For example, a government-guaranteed PSE (<code>pse_sovereign</code>) uses the PSE risk weight table under SA but the central govt/central bank IRB formula because its credit risk is backed by the government.</p>
 <h2 id="classification-pipeline">Classification Pipeline<a class="headerlink" href="#classification-pipeline" title="Permanent link">&para;</a></h2>
 <p>The <code>ExposureClassifier.classify()</code> method processes exposures through a defined sequence of steps:</p>
 <h3 id="step-1-add-counterparty-attributes">Step 1: Add Counterparty Attributes<a class="headerlink" href="#step-1-add-counterparty-attributes" title="Permanent link">&para;</a></h3>
@@ -4463,7 +4463,7 @@
 <td>AIRB</td>
 </tr>
 <tr>
-<td>Corporate/Institution/Sovereign + F-IRB (no A-IRB)</td>
+<td>Corporate/Institution/Central Govt/Central Bank + F-IRB (no A-IRB)</td>
 <td>FIRB</td>
 </tr>
 <tr>
@@ -4629,28 +4629,28 @@
 </thead>
 <tbody>
 <tr>
-<td><code>SOVEREIGN</code></td>
+<td><code>CENTRAL_GOVT_CENTRAL_BANK</code></td>
 <td>Central governments, central banks</td>
 <td>CQS-based (0%-150%)</td>
-<td>Sovereign formula</td>
+<td>Central govt/central bank formula</td>
 </tr>
 <tr>
 <td><code>RGLA</code></td>
 <td>Regional govts, local authorities</td>
 <td>CQS-based</td>
-<td>Sovereign or Institution</td>
+<td>Central govt/central bank or Institution</td>
 </tr>
 <tr>
 <td><code>PSE</code></td>
 <td>Public sector entities</td>
 <td>CQS-based</td>
-<td>Sovereign or Institution</td>
+<td>Central govt/central bank or Institution</td>
 </tr>
 <tr>
 <td><code>MDB</code></td>
 <td>Multilateral development banks</td>
 <td>0% (eligible) or CQS</td>
-<td>Sovereign formula</td>
+<td>Central govt/central bank formula</td>
 </tr>
 <tr>
 <td><code>INSTITUTION</code></td>

@@ -17,7 +17,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.ccf import CCFCalculator, create_ccf_calculator
+from rwa_calc.engine.ccf import CCFCalculator, create_ccf_calculator, sa_ccf_expression
 
 
 # =============================================================================
@@ -822,3 +822,83 @@ class TestInterestInEAD:
 
         # EAD = 0 + 0 + (1000 * 0.5) = 500
         assert result["ead_pre_crm"][0] == pytest.approx(500.0)
+
+
+# =============================================================================
+# SA CCF Expression Tests
+# =============================================================================
+
+
+class TestSACCFExpression:
+    """Tests for the standalone sa_ccf_expression() function."""
+
+    def test_fr_returns_100_percent(self) -> None:
+        """Full risk should return 1.0 (100% CCF)."""
+        df = pl.DataFrame({"risk_type": ["FR"]}).select(
+            sa_ccf_expression().alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(1.0)
+
+    def test_mr_returns_50_percent(self) -> None:
+        """Medium risk should return 0.5 (50% CCF)."""
+        df = pl.DataFrame({"risk_type": ["MR"]}).select(
+            sa_ccf_expression().alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.5)
+
+    def test_mlr_returns_20_percent(self) -> None:
+        """Medium-low risk should return 0.2 (20% CCF)."""
+        df = pl.DataFrame({"risk_type": ["MLR"]}).select(
+            sa_ccf_expression().alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.2)
+
+    def test_lr_returns_0_percent(self) -> None:
+        """Low risk should return 0.0 (0% CCF)."""
+        df = pl.DataFrame({"risk_type": ["LR"]}).select(
+            sa_ccf_expression().alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.0)
+
+    def test_full_value_names(self) -> None:
+        """Full risk_type names should map correctly."""
+        df = pl.DataFrame({
+            "risk_type": ["full_risk", "medium_risk", "medium_low_risk", "low_risk"]
+        }).select(sa_ccf_expression().alias("ccf"))
+        assert df["ccf"].to_list() == pytest.approx([1.0, 0.5, 0.2, 0.0])
+
+    def test_case_insensitive(self) -> None:
+        """Risk type matching should be case insensitive."""
+        df = pl.DataFrame({
+            "risk_type": ["fr", "Fr", "FR", "FULL_RISK"]
+        }).select(sa_ccf_expression().alias("ccf"))
+        assert df["ccf"].to_list() == pytest.approx([1.0, 1.0, 1.0, 1.0])
+
+    def test_null_defaults_to_mr(self) -> None:
+        """Null risk_type should default to MR (50%)."""
+        df = pl.DataFrame({"risk_type": [None]}).select(
+            sa_ccf_expression().alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.5)
+
+    def test_unknown_defaults_to_mr(self) -> None:
+        """Unknown risk_type should default to MR (50%)."""
+        df = pl.DataFrame({"risk_type": ["UNKNOWN"]}).select(
+            sa_ccf_expression().alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.5)
+
+    def test_custom_column_name(self) -> None:
+        """Custom risk_type column name should work."""
+        df = pl.DataFrame({"my_risk_type": ["FR", "LR"]}).select(
+            sa_ccf_expression(risk_type_col="my_risk_type").alias("ccf")
+        )
+        assert df["ccf"].to_list() == pytest.approx([1.0, 0.0])
+
+    def test_all_risk_types_batch(self) -> None:
+        """Verify all SA CCFs in a single batch."""
+        df = pl.DataFrame({
+            "risk_type": ["FR", "MR", "MLR", "LR"]
+        }).select(sa_ccf_expression().alias("ccf"))
+        expected = [1.0, 0.5, 0.2, 0.0]
+        assert df["ccf"].to_list() == pytest.approx(expected)

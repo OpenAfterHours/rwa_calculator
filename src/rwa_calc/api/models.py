@@ -106,6 +106,9 @@ class SummaryStatistics:
         total_rwa: Total Risk-Weighted Assets
         exposure_count: Number of exposures processed
         average_risk_weight: Average risk weight (RWA / EAD)
+        total_ead_sa: Total EAD from Standardised Approach
+        total_ead_irb: Total EAD from IRB approaches
+        total_ead_slotting: Total EAD from Slotting approach
         total_rwa_sa: Total RWA from Standardised Approach
         total_rwa_irb: Total RWA from IRB approaches
         total_rwa_slotting: Total RWA from Slotting approach
@@ -117,6 +120,9 @@ class SummaryStatistics:
     total_rwa: Decimal
     exposure_count: int
     average_risk_weight: Decimal
+    total_ead_sa: Decimal = field(default_factory=lambda: Decimal("0"))
+    total_ead_irb: Decimal = field(default_factory=lambda: Decimal("0"))
+    total_ead_slotting: Decimal = field(default_factory=lambda: Decimal("0"))
     total_rwa_sa: Decimal = field(default_factory=lambda: Decimal("0"))
     total_rwa_irb: Decimal = field(default_factory=lambda: Decimal("0"))
     total_rwa_slotting: Decimal = field(default_factory=lambda: Decimal("0"))

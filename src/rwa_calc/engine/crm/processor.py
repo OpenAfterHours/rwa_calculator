@@ -31,7 +31,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.ccf import CCFCalculator
+from rwa_calc.engine.ccf import CCFCalculator, sa_ccf_expression
 from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table
@@ -300,6 +300,13 @@ class CRMProcessor:
             pl.col("counterparty_reference").alias("post_crm_counterparty_guaranteed"),
             pl.col("exposure_class").alias("post_crm_exposure_class_guaranteed"),
             pl.lit("").alias("guarantor_exposure_class"),
+
+            # Cross-approach CCF substitution columns
+            pl.col("ccf").alias("ccf_original"),
+            pl.col("ccf").alias("ccf_guaranteed"),
+            pl.col("ccf").alias("ccf_unguaranteed"),
+            pl.lit(0.0).alias("guarantee_ratio"),
+            pl.lit("").alias("guarantor_approach"),
         ])
 
     def _finalize_ead(
@@ -987,20 +994,31 @@ class CRMProcessor:
             how="left",
         )
 
-        # Look up guarantor's CQS from ratings
+        # Look up guarantor's CQS and rating type from ratings
         if rating_inheritance is not None:
+            ri_schema = rating_inheritance.collect_schema()
+            ri_cols = [
+                pl.col("counterparty_reference"),
+                pl.col("cqs").alias("guarantor_cqs"),
+            ]
+            if "rating_type" in ri_schema.names():
+                ri_cols.append(pl.col("rating_type").alias("guarantor_rating_type"))
+
             exposures = exposures.join(
-                rating_inheritance.select([
-                    pl.col("counterparty_reference"),
-                    pl.col("cqs").alias("guarantor_cqs"),
-                ]),
+                rating_inheritance.select(ri_cols),
                 left_on="guarantor_reference",
                 right_on="counterparty_reference",
                 how="left",
             )
+
+            if "rating_type" not in ri_schema.names():
+                exposures = exposures.with_columns([
+                    pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                ])
         else:
             exposures = exposures.with_columns([
                 pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
+                pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
             ])
 
         # Fill nulls for exposures without guarantees
@@ -1016,6 +1034,34 @@ class CRMProcessor:
             .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
             .alias("guarantor_exposure_class"),
         ])
+
+        # Determine guarantor approach from IRB permissions AND rating type.
+        # A guarantor is treated under IRB only if:
+        # 1. The firm has IRB permission for the guarantor's exposure class, AND
+        # 2. The guarantor has an internal rating (PD) — indicating the firm
+        #    actively rates this counterparty under its IRB model.
+        # Counterparties with only external ratings (CQS) are treated under SA.
+        irb_exposure_class_values = set()
+        for ec, approaches in config.irb_permissions.permissions.items():
+            if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
+                irb_exposure_class_values.add(ec.value)
+
+        exposures = exposures.with_columns([
+            pl.when(
+                (pl.col("guarantor_exposure_class") != "") &
+                pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values)) &
+                (pl.col("guarantor_rating_type").fill_null("") == "internal")
+            )
+            .then(pl.lit("irb"))
+            .when(pl.col("guarantor_exposure_class") != "")
+            .then(pl.lit("sa"))
+            .otherwise(pl.lit(""))
+            .alias("guarantor_approach"),
+        ])
+
+        # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
+        # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed portion
+        exposures = self._apply_cross_approach_ccf(exposures)
 
         # Add post-CRM composite attributes for regulatory reporting
         # For the guaranteed portion, the post-CRM counterparty is the guarantor
@@ -1042,6 +1088,107 @@ class CRMProcessor:
         # Note: Transient columns (guarantor_entity_type, guarantor_cqs, etc.) are kept
         # because downstream SA/IRB calculators need them for risk weight substitution.
         # They can be dropped in the final output aggregation if needed.
+
+        return exposures
+
+    def _apply_cross_approach_ccf(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Apply cross-approach CCF substitution for guaranteed exposures.
+
+        When an IRB exposure (F-IRB or A-IRB) is guaranteed by an SA counterparty,
+        the guaranteed portion must use SA CCFs for COREP C07 reporting.
+        If the guarantor is also IRB, the original IRB CCF is retained.
+
+        This recalculates EAD by splitting on-balance-sheet and off-balance-sheet
+        amounts proportionally by guarantee_ratio, applying the appropriate CCF
+        to each nominal split.
+
+        Returns:
+            Exposures with CCF-adjusted guaranteed/unguaranteed portions
+        """
+        schema = exposures.collect_schema()
+        has_interest = "interest" in schema.names()
+        has_risk_type = "risk_type" in schema.names()
+
+        if not has_risk_type:
+            return exposures
+
+        # Compute guarantee ratio
+        exposures = exposures.with_columns([
+            pl.when(pl.col("ead_after_collateral") > 0)
+            .then(
+                (pl.col("guaranteed_portion") / pl.col("ead_after_collateral"))
+                .clip(upper_bound=1.0)
+            )
+            .otherwise(pl.lit(0.0))
+            .alias("guarantee_ratio"),
+        ])
+
+        # Determine if cross-approach substitution is needed
+        # Only IRB exposures with SA guarantors and off-balance-sheet items
+        needs_ccf_sub = (
+            pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value]) &
+            (pl.col("guarantor_approach") == "sa") &
+            (pl.col("guaranteed_portion") > 0) &
+            (pl.col("nominal_amount") > 0)
+        )
+
+        # Compute SA CCF for the guaranteed portion
+        sa_ccf = sa_ccf_expression()
+
+        exposures = exposures.with_columns([
+            # Preserve original CCF
+            pl.col("ccf").alias("ccf_original"),
+            # CCF for guaranteed portion: SA CCF if cross-approach, else original
+            pl.when(needs_ccf_sub)
+            .then(sa_ccf)
+            .otherwise(pl.col("ccf"))
+            .alias("ccf_guaranteed"),
+            # CCF for unguaranteed portion: always original
+            pl.col("ccf").alias("ccf_unguaranteed"),
+        ])
+
+        # Recalculate EAD with split CCFs when cross-approach substitution applies
+        on_bal = pl.col("drawn_amount") + (
+            pl.col("interest").fill_null(0.0) if has_interest else pl.lit(0.0)
+        )
+        ratio = pl.col("guarantee_ratio")
+
+        new_guaranteed = (on_bal * ratio) + (pl.col("nominal_amount") * ratio * pl.col("ccf_guaranteed"))
+        new_unguaranteed = (on_bal * (pl.lit(1.0) - ratio)) + (
+            pl.col("nominal_amount") * (pl.lit(1.0) - ratio) * pl.col("ccf_unguaranteed")
+        )
+
+        exposures = exposures.with_columns([
+            pl.when(needs_ccf_sub)
+            .then(new_guaranteed)
+            .otherwise(pl.col("guaranteed_portion"))
+            .alias("guaranteed_portion"),
+
+            pl.when(needs_ccf_sub)
+            .then(new_unguaranteed)
+            .otherwise(pl.col("unguaranteed_portion"))
+            .alias("unguaranteed_portion"),
+        ])
+
+        # Update ead_after_collateral and ead_from_ccf when substitution occurs
+        exposures = exposures.with_columns([
+            pl.when(needs_ccf_sub)
+            .then(pl.col("guaranteed_portion") + pl.col("unguaranteed_portion"))
+            .otherwise(pl.col("ead_after_collateral"))
+            .alias("ead_after_collateral"),
+
+            pl.when(needs_ccf_sub)
+            .then(
+                pl.col("nominal_amount") * ratio * pl.col("ccf_guaranteed")
+                + pl.col("nominal_amount") * (pl.lit(1.0) - ratio) * pl.col("ccf_unguaranteed")
+            )
+            .otherwise(pl.col("ead_from_ccf"))
+            .alias("ead_from_ccf"),
+        ])
 
         return exposures
 
@@ -1144,6 +1291,12 @@ class CRMProcessor:
             pl.col("guaranteed_portion"),
             pl.col("unguaranteed_portion"),
             pl.col("guarantor_reference"),
+            # Cross-approach CCF columns
+            pl.col("ccf_original"),
+            pl.col("ccf_guaranteed"),
+            pl.col("ccf_unguaranteed"),
+            pl.col("guarantee_ratio"),
+            pl.col("guarantor_approach"),
         ])
 
 

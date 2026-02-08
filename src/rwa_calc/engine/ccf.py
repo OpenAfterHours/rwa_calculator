@@ -31,6 +31,36 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
 
+def sa_ccf_expression(risk_type_col: str = "risk_type") -> pl.Expr:
+    """
+    Return a Polars expression that maps risk_type to SA CCFs.
+
+    SA CCF values per CRR Art. 111:
+    - FR / full_risk: 100%
+    - MR / medium_risk: 50%
+    - MLR / medium_low_risk: 20%
+    - LR / low_risk: 0%
+
+    Args:
+        risk_type_col: Name of the risk_type column (default "risk_type")
+
+    Returns:
+        Polars expression resolving to Float64 SA CCF values
+    """
+    normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
+    return (
+        pl.when(normalized.is_in(["fr", "full_risk"]))
+        .then(pl.lit(1.0))
+        .when(normalized.is_in(["mr", "medium_risk"]))
+        .then(pl.lit(0.5))
+        .when(normalized.is_in(["mlr", "medium_low_risk"]))
+        .then(pl.lit(0.2))
+        .when(normalized.is_in(["lr", "low_risk"]))
+        .then(pl.lit(0.0))
+        .otherwise(pl.lit(0.5))  # Default to MR (50%) for SA
+    )
+
+
 class CCFCalculator:
     """
     Calculate credit conversion factors for off-balance sheet items.
@@ -88,16 +118,7 @@ class CCFCalculator:
             ])
 
             exposures = exposures.with_columns([
-                pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
-                .then(pl.lit(1.0))
-                .when(pl.col("_risk_type_normalized").is_in(["mr", "medium_risk"]))
-                .then(pl.lit(0.5))
-                .when(pl.col("_risk_type_normalized").is_in(["mlr", "medium_low_risk"]))
-                .then(pl.lit(0.2))
-                .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
-                .then(pl.lit(0.0))
-                .otherwise(pl.lit(0.5))  # Default to MR (50%) for SA
-                .alias("_sa_ccf_from_risk_type"),
+                sa_ccf_expression().alias("_sa_ccf_from_risk_type"),
             ])
 
             # Calculate CCF from risk_type for F-IRB approach

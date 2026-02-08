@@ -36,6 +36,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.ccf import sa_ccf_expression
+from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -358,26 +360,117 @@ class CRMLazyFrame:
             how="left",
         )
 
-        # Look up guarantor's CQS from ratings
+        # Look up guarantor's CQS and rating type from ratings
         if rating_inheritance is not None:
+            ri_schema = rating_inheritance.collect_schema()
+            ri_cols = [
+                pl.col("counterparty_reference"),
+                pl.col("cqs").alias("guarantor_cqs"),
+            ]
+            if "rating_type" in ri_schema.names():
+                ri_cols.append(pl.col("rating_type").alias("guarantor_rating_type"))
+
             lf = lf.join(
-                rating_inheritance.select([
-                    pl.col("counterparty_reference"),
-                    pl.col("cqs").alias("guarantor_cqs"),
-                ]),
+                rating_inheritance.select(ri_cols),
                 left_on="guarantor_reference",
                 right_on="counterparty_reference",
                 how="left",
             )
+
+            if "rating_type" not in ri_schema.names():
+                lf = lf.with_columns([
+                    pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                ])
         else:
             lf = lf.with_columns([
                 pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
+                pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
             ])
 
         # Fill nulls
         lf = lf.with_columns([
             pl.col("guarantor_entity_type").fill_null("").alias("guarantor_entity_type"),
         ])
+
+        # Derive guarantor exposure class and approach
+        lf = lf.with_columns([
+            pl.col("guarantor_entity_type")
+            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+            .alias("guarantor_exposure_class"),
+        ])
+
+        # Determine guarantor approach from IRB permissions AND rating type.
+        # IRB only if: firm has IRB permission AND guarantor has internal rating.
+        irb_exposure_class_values = set()
+        for ec, approaches in config.irb_permissions.permissions.items():
+            if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
+                irb_exposure_class_values.add(ec.value)
+
+        lf = lf.with_columns([
+            pl.when(
+                (pl.col("guarantor_exposure_class") != "") &
+                pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values)) &
+                (pl.col("guarantor_rating_type").fill_null("") == "internal")
+            )
+            .then(pl.lit("irb"))
+            .when(pl.col("guarantor_exposure_class") != "")
+            .then(pl.lit("sa"))
+            .otherwise(pl.lit(""))
+            .alias("guarantor_approach"),
+        ])
+
+        # Cross-approach CCF substitution
+        has_risk_type = "risk_type" in schema.names()
+        has_nominal = "nominal_amount" in schema.names()
+        has_approach = "approach" in schema.names()
+        has_interest = "interest" in schema.names()
+
+        if has_risk_type and has_nominal and has_approach:
+            # Compute guarantee ratio
+            lf = lf.with_columns([
+                pl.when(pl.col(ead_col) > 0)
+                .then(
+                    (pl.col("guaranteed_portion") / pl.col(ead_col))
+                    .clip(upper_bound=1.0)
+                )
+                .otherwise(pl.lit(0.0))
+                .alias("guarantee_ratio"),
+            ])
+
+            needs_ccf_sub = (
+                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value]) &
+                (pl.col("guarantor_approach") == "sa") &
+                (pl.col("guaranteed_portion") > 0) &
+                (pl.col("nominal_amount") > 0)
+            )
+
+            sa_ccf = sa_ccf_expression()
+            lf = lf.with_columns([
+                pl.col("ccf").alias("ccf_original"),
+                pl.when(needs_ccf_sub).then(sa_ccf).otherwise(pl.col("ccf")).alias("ccf_guaranteed"),
+                pl.col("ccf").alias("ccf_unguaranteed"),
+            ])
+
+            on_bal = pl.col("drawn_amount") + (
+                pl.col("interest").fill_null(0.0) if has_interest else pl.lit(0.0)
+            )
+            ratio = pl.col("guarantee_ratio")
+            new_guaranteed = (on_bal * ratio) + (pl.col("nominal_amount") * ratio * pl.col("ccf_guaranteed"))
+            new_unguaranteed = (on_bal * (pl.lit(1.0) - ratio)) + (
+                pl.col("nominal_amount") * (pl.lit(1.0) - ratio) * pl.col("ccf_unguaranteed")
+            )
+
+            lf = lf.with_columns([
+                pl.when(needs_ccf_sub).then(new_guaranteed).otherwise(pl.col("guaranteed_portion")).alias("guaranteed_portion"),
+                pl.when(needs_ccf_sub).then(new_unguaranteed).otherwise(pl.col("unguaranteed_portion")).alias("unguaranteed_portion"),
+            ])
+
+            lf = lf.with_columns([
+                pl.when(needs_ccf_sub)
+                .then(pl.col("guaranteed_portion") + pl.col("unguaranteed_portion"))
+                .otherwise(pl.col(ead_col))
+                .alias("ead_after_collateral" if "ead_after_collateral" in schema.names() else "ead_final"),
+            ])
 
         return lf
 

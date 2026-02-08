@@ -250,6 +250,10 @@ class ResultFormatter:
 
         avg_rw = total_rwa / total_ead if total_ead > 0 else Decimal("0")
 
+        total_ead_sa = self._sum_ead_from_lazyframe(sa_results)
+        total_ead_irb = self._sum_ead_from_lazyframe(irb_results)
+        total_ead_slotting = self._sum_ead_from_lazyframe(slotting_results)
+
         total_rwa_sa = self._sum_rwa_from_lazyframe(sa_results)
         total_rwa_irb = self._sum_rwa_from_lazyframe(irb_results)
         total_rwa_slotting = self._sum_rwa_from_lazyframe(slotting_results)
@@ -271,6 +275,9 @@ class ResultFormatter:
             total_rwa=total_rwa,
             exposure_count=results_df.height,
             average_risk_weight=avg_rw,
+            total_ead_sa=total_ead_sa,
+            total_ead_irb=total_ead_irb,
+            total_ead_slotting=total_ead_slotting,
             total_rwa_sa=total_rwa_sa,
             total_rwa_irb=total_rwa_irb,
             total_rwa_slotting=total_rwa_slotting,
@@ -322,6 +329,35 @@ class ResultFormatter:
             )
             if rwa_col:
                 return Decimal(str(df[rwa_col].sum() or 0))
+        except Exception:
+            pass
+
+        return Decimal("0")
+
+    def _sum_ead_from_lazyframe(
+        self,
+        lazy_frame: pl.LazyFrame | None,
+    ) -> Decimal:
+        """
+        Sum EAD from a LazyFrame.
+
+        Args:
+            lazy_frame: Optional LazyFrame with EAD column
+
+        Returns:
+            Total EAD as Decimal
+        """
+        if lazy_frame is None:
+            return Decimal("0")
+
+        try:
+            df = lazy_frame.collect()
+            ead_col = self._find_column(
+                df,
+                ["ead_final", "ead", "exposure_at_default"],
+            )
+            if ead_col:
+                return Decimal(str(df[ead_col].sum() or 0))
         except Exception:
             pass
 

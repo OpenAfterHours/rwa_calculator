@@ -297,8 +297,11 @@ def _(Decimal, calculation_response, mo):
 | **Total RWA** | {fmt_num(summary.total_rwa)} |
 | **Average Risk Weight** | {fmt_pct(summary.average_risk_weight)} |
 | **Exposure Count** | {summary.exposure_count:,} |
+| **SA EAD** | {fmt_num(summary.total_ead_sa)} |
 | **SA RWA** | {fmt_num(summary.total_rwa_sa)} |
+| **IRB EAD** | {fmt_num(summary.total_ead_irb)} |
 | **IRB RWA** | {fmt_num(summary.total_rwa_irb)} |
+| **Slotting EAD** | {fmt_num(summary.total_ead_slotting)} |
 | **Slotting RWA** | {fmt_num(summary.total_rwa_slotting)} |
 | **Floor Applied** | {"Yes" if summary.floor_applied else "No"} |
 | **Floor Impact** | {fmt_num(summary.floor_impact)} |
@@ -330,7 +333,9 @@ def _(calculation_response, mo):
             col for col in [
                 "exposure_reference",
                 "exposure_class",
+                "post_crm_exposure_class_guaranteed",
                 "approach_applied",
+                "is_guaranteed",
                 "ead_final",
                 "risk_weight",
                 "rwa_final",

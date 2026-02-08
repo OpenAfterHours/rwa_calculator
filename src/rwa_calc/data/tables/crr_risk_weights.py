@@ -5,7 +5,7 @@ Provides risk weight lookup tables as Polars DataFrames for efficient joins
 in the RWA calculation pipeline.
 
 References:
-    - CRR Art. 114: Sovereign risk weights
+    - CRR Art. 114: Central govt/central bank risk weights
     - CRR Art. 120-121: Institution risk weights
     - CRR Art. 122: Corporate risk weights
     - CRR Art. 123: Retail risk weights
@@ -22,10 +22,10 @@ from rwa_calc.domain.enums import CQS, ExposureClass
 
 
 # =============================================================================
-# SOVEREIGN RISK WEIGHTS (CRR Art. 114)
+# CENTRAL GOVT / CENTRAL BANK RISK WEIGHTS (CRR Art. 114)
 # =============================================================================
 
-SOVEREIGN_RISK_WEIGHTS: dict[CQS, Decimal] = {
+CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS: dict[CQS, Decimal] = {
     CQS.CQS1: Decimal("0.00"),     # AAA to AA-
     CQS.CQS2: Decimal("0.20"),     # A+ to A-
     CQS.CQS3: Decimal("0.50"),     # BBB+ to BBB-
@@ -36,12 +36,12 @@ SOVEREIGN_RISK_WEIGHTS: dict[CQS, Decimal] = {
 }
 
 
-def _create_sovereign_df() -> pl.DataFrame:
-    """Create sovereign risk weight lookup DataFrame."""
+def _create_cgcb_df() -> pl.DataFrame:
+    """Create central govt/central bank risk weight lookup DataFrame."""
     return pl.DataFrame({
         "cqs": [1, 2, 3, 4, 5, 6, None],
         "risk_weight": [0.00, 0.20, 0.50, 1.00, 1.00, 1.50, 1.00],
-        "exposure_class": ["SOVEREIGN"] * 7,
+        "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK"] * 7,
     }).with_columns([
         pl.col("cqs").cast(pl.Int8),
         pl.col("risk_weight").cast(pl.Float64),
@@ -232,7 +232,7 @@ def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.Da
         Dictionary of DataFrames keyed by exposure class type
     """
     return {
-        "sovereign": _create_sovereign_df(),
+        "central_govt_central_bank": _create_cgcb_df(),
         "institution": _create_institution_df(use_uk_deviation),
         "corporate": _create_corporate_df(),
         "retail": _create_retail_df(),
@@ -255,7 +255,7 @@ def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame
         Combined DataFrame with columns: exposure_class, cqs, risk_weight
     """
     return pl.concat([
-        _create_sovereign_df().select(["exposure_class", "cqs", "risk_weight"]),
+        _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
         _create_institution_df(use_uk_deviation).select(["exposure_class", "cqs", "risk_weight"]),
         _create_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
     ])
@@ -273,7 +273,7 @@ def lookup_risk_weight(
     use the DataFrame tables with joins.
 
     Args:
-        exposure_class: Exposure class (SOVEREIGN, INSTITUTION, CORPORATE, RETAIL)
+        exposure_class: Exposure class (CENTRAL_GOVT_CENTRAL_BANK, INSTITUTION, CORPORATE, RETAIL)
         cqs: Credit quality step (1-6 or None/0 for unrated)
         use_uk_deviation: Whether to use UK-specific institution weights
 
@@ -288,9 +288,9 @@ def lookup_risk_weight(
             return CQS.UNRATED
         return CQS(cqs_val)
 
-    if exposure_upper == "SOVEREIGN":
+    if exposure_upper == "CENTRAL_GOVT_CENTRAL_BANK":
         cqs_enum = _get_cqs_enum(cqs)
-        return SOVEREIGN_RISK_WEIGHTS.get(cqs_enum, SOVEREIGN_RISK_WEIGHTS[CQS.UNRATED])
+        return CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS.get(cqs_enum, CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED])
 
     if exposure_upper == "INSTITUTION":
         table = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD

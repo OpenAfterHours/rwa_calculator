@@ -314,7 +314,7 @@ class CorrelationParams:
 CORRELATION_PARAMS: dict[str, CorrelationParams] = {
     "CORPORATE": CorrelationParams("pd_dependent", 0.12, 0.24, 0.0, 50.0),
     "CORPORATE_SME": CorrelationParams("pd_dependent", 0.12, 0.24, 0.0, 50.0),
-    "SOVEREIGN": CorrelationParams("pd_dependent", 0.12, 0.24, 0.0, 50.0),
+    "CENTRAL_GOVT_CENTRAL_BANK": CorrelationParams("pd_dependent", 0.12, 0.24, 0.0, 50.0),
     "INSTITUTION": CorrelationParams("pd_dependent", 0.12, 0.24, 0.0, 50.0),
     "RETAIL_MORTGAGE": CorrelationParams("fixed", 0.15, 0.15, 0.15, 0.0),
     "RETAIL_QRRE": CorrelationParams("fixed", 0.04, 0.04, 0.04, 0.0),
@@ -337,8 +337,8 @@ def get_correlation_params(exposure_class: str) -> CorrelationParams:
         return CORRELATION_PARAMS["RETAIL_QRRE"]
     if "RETAIL" in class_upper:
         return CORRELATION_PARAMS["RETAIL"]
-    if "SOVEREIGN" in class_upper or "GOVERNMENT" in class_upper:
-        return CORRELATION_PARAMS["SOVEREIGN"]
+    if "CENTRAL_GOVT" in class_upper or "GOVERNMENT" in class_upper:
+        return CORRELATION_PARAMS["CENTRAL_GOVT_CENTRAL_BANK"]
     if "INSTITUTION" in class_upper:
         return CORRELATION_PARAMS["INSTITUTION"]
 

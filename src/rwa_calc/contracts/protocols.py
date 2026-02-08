@@ -103,7 +103,7 @@ class ClassifierProtocol(Protocol):
     Protocol for exposure classification components.
 
     Responsible for:
-    - Determining exposure class (sovereign, institution, corporate, etc.)
+    - Determining exposure class (central_govt_central_bank, institution, corporate, etc.)
     - Assigning calculation approach (SA, F-IRB, A-IRB, slotting)
     - Mapping external ratings to CQS
     - Splitting exposures by approach

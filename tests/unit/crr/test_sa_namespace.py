@@ -82,7 +82,7 @@ def basic_lazyframe() -> pl.LazyFrame:
     return pl.LazyFrame({
         "exposure_reference": ["EXP001", "EXP002", "EXP003"],
         "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
-        "exposure_class": ["CORPORATE", "SOVEREIGN", "INSTITUTION"],
+        "exposure_class": ["CORPORATE", "CENTRAL_GOVT_CENTRAL_BANK", "INSTITUTION"],
         "cqs": [2, 1, 3],
     })
 
@@ -234,7 +234,7 @@ class TestApplyRiskWeights:
         lf = pl.LazyFrame({
             "exposure_reference": ["EXP001"],
             "ead_final": [1_000_000.0],
-            "exposure_class": ["SOVEREIGN"],
+            "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK"],
             "cqs": [1],
         })
         result = lf.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
@@ -519,7 +519,7 @@ class TestExprNamespace:
         """lookup_cqs_rw should return correct sovereign weights."""
         df = pl.DataFrame({"cqs": [1, 2, 3, 4, 5, 6]})
         result = df.with_columns(
-            pl.col("cqs").sa.lookup_cqs_rw("SOVEREIGN").alias("risk_weight")
+            pl.col("cqs").sa.lookup_cqs_rw("CENTRAL_GOVT_CENTRAL_BANK").alias("risk_weight")
         )
 
         assert result["risk_weight"][0] == pytest.approx(0.0)   # CQS 1

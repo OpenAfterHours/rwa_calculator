@@ -41,8 +41,8 @@ class ExposureClass(Enum):
     Used for determining applicable risk weights and IRB parameters.
     """
 
-    # Sovereign and central bank exposures (CRR Art. 112(a), CRE20.7-15)
-    SOVEREIGN = "sovereign"
+    # Central government and central bank exposures (CRR Art. 112(a), CRE20.7-15)
+    CENTRAL_GOVT_CENTRAL_BANK = "central_govt_central_bank"
 
     # Exposures to institutions (CRR Art. 112(d), CRE20.16-21)
     INSTITUTION = "institution"

@@ -348,7 +348,7 @@ class TestExposureClassDetermination:
         df = result.all_exposures.collect()
         sov = df.filter(pl.col("exposure_reference") == "SOV_EXP")
 
-        assert sov["exposure_class"][0] == ExposureClass.SOVEREIGN.value
+        assert sov["exposure_class"][0] == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
 
     def test_institution_classification(
         self,

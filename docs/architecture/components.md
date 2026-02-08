@@ -179,7 +179,7 @@ The classifier uses `entity_type` as the **single source of truth** for exposure
 
 | Entity Type | SA Class |
 |-------------|----------|
-| `sovereign`, `central_bank` | SOVEREIGN |
+| `sovereign`, `central_bank` | CENTRAL_GOVT_CENTRAL_BANK |
 | `rgla_sovereign`, `rgla_institution` | RGLA |
 | `pse_sovereign`, `pse_institution` | PSE |
 | `mdb`, `international_org` | MDB |
@@ -192,10 +192,10 @@ The classifier uses `entity_type` as the **single source of truth** for exposure
 
 | Entity Type | IRB Class | Notes |
 |-------------|-----------|-------|
-| `sovereign`, `central_bank` | SOVEREIGN | |
-| `rgla_sovereign`, `pse_sovereign` | SOVEREIGN | Govt-backed = sovereign IRB treatment |
+| `sovereign`, `central_bank` | CENTRAL_GOVT_CENTRAL_BANK | |
+| `rgla_sovereign`, `pse_sovereign` | CENTRAL_GOVT_CENTRAL_BANK | Govt-backed = central govt IRB treatment |
 | `rgla_institution`, `pse_institution` | INSTITUTION | Commercial = institution IRB treatment |
-| `mdb`, `international_org` | SOVEREIGN | CRR Art. 147(3) |
+| `mdb`, `international_org` | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 147(3) |
 | `institution`, `bank`, `ccp`, `financial_institution` | INSTITUTION | |
 | `corporate`, `company` | CORPORATE | |
 | `individual`, `retail` | RETAIL_OTHER | |

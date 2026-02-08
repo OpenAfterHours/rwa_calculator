@@ -7,7 +7,7 @@ Exposures are classified into regulatory categories that determine their treatme
 ```mermaid
 flowchart TD
     A[Exposure] --> B{Classification}
-    B --> C[Sovereign]
+    B --> C[Central Govt / Central Bank]
     B --> D[Institution]
     B --> E[Corporate]
     B --> F[Retail]
@@ -21,7 +21,7 @@ flowchart TD
 
 | Class | Description | SA | F-IRB | A-IRB | Slotting |
 |-------|-------------|:--:|:-----:|:-----:|:--------:|
-| [**Sovereign**](sovereign.md) | Governments and central banks | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
+| [**Central Govt / Central Bank**](central-govt-central-bank.md) | Governments and central banks | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | [**Institution**](institution.md) | Banks and investment firms | :white_check_mark: | :white_check_mark: | :white_check_mark:* | |
 | [**Corporate**](corporate.md) | Non-financial companies | :white_check_mark: | :white_check_mark: | :white_check_mark:* | |
 | **Corporate SME** | Small/medium enterprises | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
@@ -66,7 +66,7 @@ flowchart TD
     A[Counterparty] --> B{Is Defaulted?}
     B -->|Yes| C[DEFAULTED]
     B -->|No| D{Counterparty Type}
-    D -->|Government| E[SOVEREIGN]
+    D -->|Government| E[CENTRAL_GOVT_CENTRAL_BANK]
     D -->|Central Bank| E
     D -->|Bank| F[INSTITUTION]
     D -->|Investment Firm| F
@@ -135,7 +135,7 @@ if (days_past_due > 90 and past_due_amount > materiality_threshold) or
 
 | Class | SA Risk Weight Range | IRB Availability |
 |-------|---------------------|------------------|
-| Sovereign | 0% - 150% | F-IRB, A-IRB |
+| Central Govt / Central Bank | 0% - 150% | F-IRB, A-IRB |
 | Institution | 20% - 150% | F-IRB, A-IRB* |
 | Corporate | 20% - 150% | F-IRB, A-IRB* |
 | Corporate SME | 20% - 150% (+ factor) | F-IRB, A-IRB |
@@ -148,7 +148,7 @@ if (days_past_due > 90 and past_due_amount > materiality_threshold) or
 
 | Class | Financial Collateral | Physical Collateral | Guarantees |
 |-------|:--------------------:|:-------------------:|:----------:|
-| Sovereign | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Central Govt / Central Bank | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Institution | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Corporate | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Retail | :white_check_mark: | :white_check_mark: | Limited |
@@ -171,7 +171,7 @@ if (days_past_due > 90 and past_due_amount > materiality_threshold) or
 from rwa_calc.domain.enums import ExposureClass
 
 # Available classes
-ExposureClass.SOVEREIGN
+ExposureClass.CENTRAL_GOVT_CENTRAL_BANK
 ExposureClass.INSTITUTION
 ExposureClass.CORPORATE
 ExposureClass.CORPORATE_SME
@@ -204,7 +204,7 @@ config = CalculationConfig.crr(
 
 ## Detailed Documentation
 
-- [**Sovereign**](sovereign.md) - Government and central bank exposures
+- [**Central Govt / Central Bank**](central-govt-central-bank.md) - Government and central bank exposures
 - [**Institution**](institution.md) - Bank and investment firm exposures
 - [**Corporate**](corporate.md) - Corporate and SME exposures
 - [**Retail**](retail.md) - Retail mortgage, QRRE, and other retail

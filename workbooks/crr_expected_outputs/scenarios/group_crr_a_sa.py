@@ -42,7 +42,7 @@ def _():
 
     from workbooks.shared.fixture_loader import load_fixtures
     from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
-        get_sovereign_rw,
+        get_cgcb_rw,
         get_institution_rw,
         get_corporate_rw,
         get_retail_rw,
@@ -69,7 +69,7 @@ def _():
         get_institution_rw,
         get_residential_mortgage_rw,
         get_retail_rw,
-        get_sovereign_rw,
+        get_cgcb_rw,
         is_sme_eligible,
         load_fixtures,
         mo,
@@ -164,7 +164,7 @@ def _(mo):
 
 
 @app.cell
-def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_sovereign_rw):
+def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_cgcb_rw):
     """Calculate Scenario CRR-A1: UK Sovereign."""
     # Load data
     loan_a1 = fixtures.get_loan("LOAN_SOV_UK_001")
@@ -176,7 +176,7 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_sovereign_rw):
 
     # Calculate
     ead_a1 = Decimal(str(loan_a1["drawn_amount"]))
-    rw_a1 = get_sovereign_rw(cqs_a1)
+    rw_a1 = get_cgcb_rw(cqs_a1)
     rwa_a1 = calculate_sa_rwa(ead_a1, rw_a1)
 
     # Create result (no SME factor for sovereign)
@@ -187,7 +187,7 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_sovereign_rw):
         exposure_reference="LOAN_SOV_UK_001",
         counterparty_reference="SOV_UK_001",
         approach="SA",
-        exposure_class="SOVEREIGN",
+        exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
         ead=float(ead_a1),
         risk_weight=float(rw_a1),
         rwa_before_sf=float(rwa_a1),

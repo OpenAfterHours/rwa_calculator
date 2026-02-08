@@ -6,7 +6,7 @@ For CRR (Basel 3.0) parameters, see workbooks/crr_expected_outputs/data/.
 
 from .regulatory_params import (
     # SA risk weights
-    SOVEREIGN_RISK_WEIGHTS,
+    CGCB_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS_UK,
     CORPORATE_RISK_WEIGHTS,
@@ -42,7 +42,7 @@ __all__ = [
     "load_fixtures_eager",
     "FixtureData",
     # SA risk weights
-    "SOVEREIGN_RISK_WEIGHTS",
+    "CGCB_RISK_WEIGHTS",
     "INSTITUTION_RISK_WEIGHTS",
     "INSTITUTION_RISK_WEIGHTS_UK",
     "CORPORATE_RISK_WEIGHTS",

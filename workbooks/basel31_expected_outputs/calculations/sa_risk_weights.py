@@ -15,7 +15,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from workbooks.rwa_expected_outputs.data.regulatory_params import (
-    SOVEREIGN_RISK_WEIGHTS,
+    CGCB_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS_UK,
     CORPORATE_RISK_WEIGHTS,
@@ -29,9 +29,9 @@ from workbooks.rwa_expected_outputs.data.regulatory_params import (
 )
 
 
-def get_sovereign_risk_weight(cqs: int | None) -> float:
+def get_cgcb_risk_weight(cqs: int | None) -> float:
     """
-    Get SA risk weight for sovereign exposure.
+    Get SA risk weight for central govt/central bank exposure.
 
     Args:
         cqs: Credit Quality Step (1-6), or None/0 for unrated
@@ -42,8 +42,8 @@ def get_sovereign_risk_weight(cqs: int | None) -> float:
     Reference: CRE20.7
     """
     if cqs is None or cqs == 0:
-        return SOVEREIGN_RISK_WEIGHTS[0]
-    return SOVEREIGN_RISK_WEIGHTS.get(cqs, SOVEREIGN_RISK_WEIGHTS[0])
+        return CGCB_RISK_WEIGHTS[0]
+    return CGCB_RISK_WEIGHTS.get(cqs, CGCB_RISK_WEIGHTS[0])
 
 
 def get_institution_risk_weight(

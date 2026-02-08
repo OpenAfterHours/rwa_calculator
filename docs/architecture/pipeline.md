@@ -198,7 +198,7 @@ The classifier assigns exposure classes and calculation approaches. See [`classi
       show_source: false
 
 !!! info "Classification Priority Order"
-    1. **Sovereign**: Government entities, central banks
+    1. **Central Govt / Central Bank**: Government entities, central banks
     2. **RGLA**: Regional governments and local authorities
     3. **PSE**: Public sector entities
     4. **MDB**: Multilateral development banks

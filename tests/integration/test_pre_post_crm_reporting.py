@@ -53,7 +53,7 @@ class TestPostCRMDetailedView:
             "pre_crm_counterparty_reference": ["CP001"],
             "pre_crm_exposure_class": ["CORPORATE"],
             "post_crm_counterparty_guaranteed": ["GUAR001"],
-            "post_crm_exposure_class_guaranteed": ["SOVEREIGN"],
+            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
             "is_guaranteed": [True],
             "guaranteed_portion": [600_000.0],
             "unguaranteed_portion": [400_000.0],
@@ -89,7 +89,7 @@ class TestPostCRMDetailedView:
         guar_row = detailed_df.filter(pl.col("crm_portion_type") == "guaranteed")
         assert len(guar_row) == 1
         assert guar_row["reporting_counterparty"][0] == "GUAR001"
-        assert guar_row["reporting_exposure_class"][0] == "SOVEREIGN"
+        assert guar_row["reporting_exposure_class"][0] == "CENTRAL_GOVT_CENTRAL_BANK"
         assert guar_row["reporting_ead"][0] == pytest.approx(600_000.0)
 
     def test_non_guaranteed_exposure_single_row(
@@ -152,7 +152,7 @@ class TestPreCRMSummary:
             "pre_crm_counterparty_reference": ["CP001", "CP002"],
             "pre_crm_exposure_class": ["CORPORATE", "CORPORATE"],
             "post_crm_counterparty_guaranteed": ["GUAR001", "CP002"],
-            "post_crm_exposure_class_guaranteed": ["SOVEREIGN", "CORPORATE"],
+            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK", "CORPORATE"],
             "is_guaranteed": [True, False],
             "guaranteed_portion": [600_000.0, 0.0],
             "unguaranteed_portion": [400_000.0, 500_000.0],
@@ -202,7 +202,7 @@ class TestPostCRMSummary:
             "pre_crm_counterparty_reference": ["CP001"],
             "pre_crm_exposure_class": ["CORPORATE"],
             "post_crm_counterparty_guaranteed": ["GUAR001"],
-            "post_crm_exposure_class_guaranteed": ["SOVEREIGN"],
+            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
             "is_guaranteed": [True],
             "guaranteed_portion": [600_000.0],
             "unguaranteed_portion": [400_000.0],
@@ -234,7 +234,7 @@ class TestPostCRMSummary:
         assert corp_row["total_rwa"][0] == pytest.approx(400_000.0)  # 400k * 100%
 
         # SOVEREIGN row (guaranteed portion)
-        sov_row = summary_df.filter(pl.col("reporting_exposure_class") == "SOVEREIGN")
+        sov_row = summary_df.filter(pl.col("reporting_exposure_class") == "CENTRAL_GOVT_CENTRAL_BANK")
         assert len(sov_row) == 1
         assert sov_row["total_ead"][0] == pytest.approx(600_000.0)
         assert sov_row["total_rwa"][0] == pytest.approx(0.0)  # 600k * 0%
@@ -277,7 +277,7 @@ class TestMixedSAIRBPortfolio:
             "risk_weight": [0.3],
             "rwa": [300_000.0],
             "pre_crm_exposure_class": ["CORPORATE"],
-            "post_crm_exposure_class_guaranteed": ["SOVEREIGN"],
+            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
             "is_guaranteed": [True],
             "guaranteed_portion": [500_000.0],
             "unguaranteed_portion": [500_000.0],

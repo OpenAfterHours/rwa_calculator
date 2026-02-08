@@ -64,7 +64,7 @@ Basel 3.1 approach for institutions using external ratings.
 The anticipated loss on a portfolio. Calculated as PD × LGD × EAD.
 
 ### Exposure Class
-A regulatory classification of exposures (Sovereign, Institution, Corporate, Retail, etc.) that determines applicable risk weights.
+A regulatory classification of exposures (Central Govt / Central Bank, Institution, Corporate, Retail, etc.) that determines applicable risk weights.
 
 ## F
 
@@ -195,8 +195,8 @@ Companies with turnover ≤ EUR 50m qualifying for preferential treatment.
 ### SME Supporting Factor
 CRR capital relief factor (0.7619/0.85) for SME exposures. Removed under Basel 3.1.
 
-### Sovereign
-Exposure to a government or central bank.
+### Central Govt / Central Bank (Sovereign)
+Exposure to a government or central bank. The exposure class formerly known as "Sovereign".
 
 ### Specialised Lending
 Project finance, object finance, commodities finance, and real estate exposures with specific treatments.

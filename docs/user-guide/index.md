@@ -37,7 +37,7 @@ Learn how RWA is calculated under different approaches:
 Understand how different exposures are classified and treated:
 
 - [**Overview**](exposure-classes/index.md) - Exposure classification
-- [**Sovereign**](exposure-classes/sovereign.md) - Government and central bank exposures
+- [**Central Govt / Central Bank**](exposure-classes/central-govt-central-bank.md) - Government and central bank exposures
 - [**Institution**](exposure-classes/institution.md) - Bank and investment firm exposures
 - [**Corporate**](exposure-classes/corporate.md) - Corporate and SME exposures
 - [**Retail**](exposure-classes/retail.md) - Retail mortgage, QRRE, and other retail
@@ -75,7 +75,7 @@ Understand how different exposures are classified and treated:
 
 | Exposure Class | SA | F-IRB | A-IRB | Slotting |
 |----------------|:--:|:-----:|:-----:|:--------:|
-| Sovereign | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
+| Central Govt / Central Bank | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | Institution | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | Corporate | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | Corporate SME | :white_check_mark: | :white_check_mark: | :white_check_mark: | |

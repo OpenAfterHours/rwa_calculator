@@ -63,7 +63,7 @@ def sa_results() -> pl.LazyFrame:
     return pl.LazyFrame({
         "exposure_reference": ["EXP001", "EXP002", "EXP003"],
         "counterparty_reference": ["CP001", "CP002", "CP003"],
-        "exposure_class": ["CORPORATE", "RETAIL", "SOVEREIGN"],
+        "exposure_class": ["CORPORATE", "RETAIL", "CENTRAL_GOVT_CENTRAL_BANK"],
         "ead_final": [1000000.0, 500000.0, 2000000.0],
         "risk_weight": [1.0, 0.75, 0.0],
         "rwa_pre_factor": [1000000.0, 375000.0, 0.0],
@@ -520,7 +520,7 @@ class TestSummaryGeneration:
         classes = summary["exposure_class"].to_list()
         assert "CORPORATE" in classes
         assert "RETAIL" in classes
-        assert "SOVEREIGN" in classes
+        assert "CENTRAL_GOVT_CENTRAL_BANK" in classes
 
     def test_summary_by_approach_generated(
         self,

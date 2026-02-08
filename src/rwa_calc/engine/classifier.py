@@ -2,7 +2,7 @@
 Exposure classification for RWA calculator.
 
 Classifies exposures by exposure class and calculation approach:
-- Determines exposure class (sovereign, institution, corporate, retail, etc.)
+- Determines exposure class (central_govt_central_bank, institution, corporate, retail, etc.)
 - Assigns calculation approach (SA, F-IRB, A-IRB, slotting)
 - Checks SME and retail thresholds
 - Identifies defaulted exposures
@@ -50,8 +50,8 @@ from rwa_calc.data.schemas import VALID_ENTITY_TYPES
 
 # entity_type → SA exposure class (for risk weight lookup)
 ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
-    "sovereign": ExposureClass.SOVEREIGN.value,
-    "central_bank": ExposureClass.SOVEREIGN.value,
+    "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+    "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
     "rgla_sovereign": ExposureClass.RGLA.value,
     "rgla_institution": ExposureClass.RGLA.value,
     "pse_sovereign": ExposureClass.PSE.value,
@@ -72,14 +72,14 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
 
 # entity_type → IRB exposure class (for IRB formula selection)
 ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
-    "sovereign": ExposureClass.SOVEREIGN.value,
-    "central_bank": ExposureClass.SOVEREIGN.value,
-    "rgla_sovereign": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment
+    "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+    "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+    "rgla_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,  # Central govt IRB treatment
     "rgla_institution": ExposureClass.INSTITUTION.value,  # Institution IRB treatment
-    "pse_sovereign": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment
+    "pse_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,  # Central govt IRB treatment
     "pse_institution": ExposureClass.INSTITUTION.value,  # Institution IRB treatment
-    "mdb": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment (CRR Art. 147(3))
-    "international_org": ExposureClass.SOVEREIGN.value,  # Sovereign IRB treatment
+    "mdb": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,  # Central govt IRB treatment (CRR Art. 147(3))
+    "international_org": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,  # Central govt IRB treatment
     "institution": ExposureClass.INSTITUTION.value,
     "bank": ExposureClass.INSTITUTION.value,
     "ccp": ExposureClass.INSTITUTION.value,
@@ -728,8 +728,8 @@ class ExposureClassifier:
         airb_institution = config.irb_permissions.is_permitted(
             ExposureClass.INSTITUTION, ApproachType.AIRB
         )
-        airb_sovereign = config.irb_permissions.is_permitted(
-            ExposureClass.SOVEREIGN, ApproachType.AIRB
+        airb_cgcb = config.irb_permissions.is_permitted(
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.AIRB
         )
 
         # Check FIRB permissions per exposure class
@@ -742,8 +742,8 @@ class ExposureClassifier:
         firb_institution = config.irb_permissions.is_permitted(
             ExposureClass.INSTITUTION, ApproachType.FIRB
         )
-        firb_sovereign = config.irb_permissions.is_permitted(
-            ExposureClass.SOVEREIGN, ApproachType.FIRB
+        firb_cgcb = config.irb_permissions.is_permitted(
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.FIRB
         )
 
         # Identify exposures managed as retail but without internal LGD
@@ -769,8 +769,8 @@ class ExposureClassifier:
                 pl.lit(firb_institution)
             ).then(pl.lit(True))
             .when(
-                (pl.col("exposure_class") == ExposureClass.SOVEREIGN.value) &
-                pl.lit(firb_sovereign)
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value) &
+                pl.lit(firb_cgcb)
             ).then(pl.lit(True))
             .otherwise(pl.lit(False))
             .alias("firb_permitted"),
@@ -801,8 +801,8 @@ class ExposureClassifier:
                 pl.lit(airb_institution)
             ).then(pl.lit(True))
             .when(
-                (pl.col("exposure_class") == ExposureClass.SOVEREIGN.value) &
-                pl.lit(airb_sovereign)
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value) &
+                pl.lit(airb_cgcb)
             ).then(pl.lit(True))
             .otherwise(pl.lit(False))
             .alias("airb_permitted"),
@@ -847,7 +847,7 @@ class ExposureClassifier:
                     ExposureClass.CORPORATE.value,
                     ExposureClass.CORPORATE_SME.value,
                     ExposureClass.INSTITUTION.value,
-                    ExposureClass.SOVEREIGN.value,
+                    ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
                 ])) &
                 (pl.col("firb_permitted") == True)  # noqa: E712
             ).then(pl.lit(ApproachType.FIRB.value))

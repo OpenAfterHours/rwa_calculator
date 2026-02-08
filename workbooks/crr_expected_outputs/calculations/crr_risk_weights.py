@@ -14,7 +14,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from workbooks.crr_expected_outputs.data.crr_params import (
-    CRR_SOVEREIGN_RW,
+    CRR_CGCB_RW,
     CRR_INSTITUTION_RW_UK,
     CRR_INSTITUTION_RW_STANDARD,
     CRR_CORPORATE_RW,
@@ -30,9 +30,9 @@ from workbooks.crr_expected_outputs.data.crr_params import (
 )
 
 
-def get_sovereign_rw(cqs: int | None) -> Decimal:
+def get_cgcb_rw(cqs: int | None) -> Decimal:
     """
-    Get risk weight for sovereign exposure (CRR Art. 114).
+    Get risk weight for central govt/central bank exposure (CRR Art. 114).
 
     Args:
         cqs: Credit Quality Step (1-6) or None for unrated
@@ -40,7 +40,7 @@ def get_sovereign_rw(cqs: int | None) -> Decimal:
     Returns:
         Risk weight as Decimal
     """
-    return CRR_SOVEREIGN_RW.get(cqs, CRR_SOVEREIGN_RW[None])
+    return CRR_CGCB_RW.get(cqs, CRR_CGCB_RW[None])
 
 
 def get_institution_rw(

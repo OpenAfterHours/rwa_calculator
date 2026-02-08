@@ -36,7 +36,7 @@ from src.rwa_calc.config.fx_rates import (
 # =============================================================================
 
 # Sovereign risk weights by Credit Quality Step (CRR Art. 114)
-CRR_SOVEREIGN_RW: dict[int | None, Decimal] = {
+CRR_CGCB_RW: dict[int | None, Decimal] = {
     1: Decimal("0.00"),   # AAA to AA-
     2: Decimal("0.20"),   # A+ to A-
     3: Decimal("0.50"),   # BBB+ to BBB-

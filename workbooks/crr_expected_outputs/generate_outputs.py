@@ -25,7 +25,7 @@ if str(project_root) not in sys.path:
 
 from workbooks.shared.fixture_loader import load_fixtures
 from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
-    get_sovereign_rw,
+    get_cgcb_rw,
     get_institution_rw,
     get_corporate_rw,
     get_retail_rw,
@@ -121,7 +121,7 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
     rating_a1 = fixtures.get_rating("SOV_UK_001")
     cqs_a1 = rating_a1["cqs"] if rating_a1 else 1
     ead_a1 = Decimal(str(loan_a1["drawn_amount"]))
-    rw_a1 = get_sovereign_rw(cqs_a1)
+    rw_a1 = get_cgcb_rw(cqs_a1)
     rwa_a1 = calculate_sa_rwa(ead_a1, rw_a1)
 
     scenarios.append(CRRScenarioOutput(
@@ -130,7 +130,7 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
         description="UK Sovereign exposure - 0% RW",
         regulatory_framework="CRR",
         approach="SA",
-        exposure_class="SOVEREIGN",
+        exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
         exposure_reference="LOAN_SOV_UK_001",
         counterparty_reference="SOV_UK_001",
         ead=float(ead_a1),

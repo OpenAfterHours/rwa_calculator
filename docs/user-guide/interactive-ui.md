@@ -115,7 +115,7 @@ The Results Explorer at [http://localhost:8000/results](http://localhost:8000/re
 
 | Filter | Description |
 |--------|-------------|
-| **Exposure Class** | Filter by class (Corporate, Retail, Sovereign, etc.) |
+| **Exposure Class** | Filter by class (Corporate, Retail, Central Govt / Central Bank, etc.) |
 | **Approach** | Filter by calculation approach (SA, F-IRB, A-IRB, Slotting) |
 | **Risk Weight Range** | Set minimum and maximum risk weight bounds |
 

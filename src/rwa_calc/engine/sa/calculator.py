@@ -198,8 +198,8 @@ class SACalculator:
         # Use sentinel value -1 for null CQS to allow join (null != null in joins)
         exposures = exposures.with_columns([
             # Map detailed classes to lookup classes
-            pl.when(pl.col("exposure_class").str.contains("(?i)sovereign"))
-            .then(pl.lit("SOVEREIGN"))
+            pl.when(pl.col("exposure_class").str.contains("(?i)central_govt"))
+            .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
             .when(pl.col("exposure_class").str.contains("(?i)institution"))
             .then(pl.lit("INSTITUTION"))
             .when(pl.col("exposure_class").str.contains("(?i)corporate"))

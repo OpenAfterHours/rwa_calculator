@@ -5,7 +5,7 @@ For Basel 3.1 calculations, see workbooks/basel31_expected_outputs/calculations/
 """
 
 from .crr_risk_weights import (
-    get_sovereign_rw,
+    get_cgcb_rw,
     get_institution_rw,
     get_corporate_rw,
     get_retail_rw,
@@ -40,7 +40,7 @@ from workbooks.shared.correlation import calculate_correlation
 
 __all__ = [
     # SA risk weights
-    "get_sovereign_rw",
+    "get_cgcb_rw",
     "get_institution_rw",
     "get_corporate_rw",
     "get_retail_rw",

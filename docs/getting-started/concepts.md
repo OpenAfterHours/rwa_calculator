@@ -98,7 +98,7 @@ Exposures are classified into regulatory categories based on the counterparty's 
 
 | Class | Description | Typical Risk |
 |-------|-------------|--------------|
-| **Sovereign** | Governments and central banks | Low-High |
+| **Central Govt / Central Bank** | Governments and central banks | Low-High |
 | **RGLA** | Regional governments, local authorities | Low-Medium |
 | **PSE** | Public sector entities | Low-Medium |
 | **MDB** | Multilateral development banks | Low |
@@ -117,8 +117,8 @@ Exposures are classified into regulatory categories based on the counterparty's 
 The counterparty's `entity_type` field is the **single source of truth** for exposure class determination. The calculator supports 17 entity types that map to both SA and IRB exposure classes.
 
 For example:
-- `pse_sovereign` maps to PSE for SA (uses PSE risk weight table) but SOVEREIGN for IRB (uses sovereign formula)
-- `mdb` maps to MDB for SA (typically 0% RW) but SOVEREIGN for IRB
+- `pse_sovereign` maps to PSE for SA (uses PSE risk weight table) but CENTRAL_GOVT_CENTRAL_BANK for IRB (uses central govt/central bank formula)
+- `mdb` maps to MDB for SA (typically 0% RW) but CENTRAL_GOVT_CENTRAL_BANK for IRB
 
 See [Classification](../features/classification.md) for the complete entity type mapping and classification algorithm.
 

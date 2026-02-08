@@ -424,7 +424,7 @@ class TestComponentBenchmarks100K:
 def create_irb_with_slotting_permissions() -> IRBPermissions:
     """Create IRB permissions that include slotting for specialised lending."""
     permissions = {
-        ExposureClass.SOVEREIGN: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+        ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
         ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
         ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
         ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},

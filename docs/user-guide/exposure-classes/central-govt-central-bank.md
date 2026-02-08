@@ -1,6 +1,6 @@
-# Sovereign Exposures
+# Central Government and Central Bank Exposures
 
-**Sovereign exposures** are claims on governments, central banks, and certain public sector entities treated as sovereigns.
+**Central government and central bank exposures** are claims on governments, central banks, and certain public sector entities treated as sovereigns.
 
 ## Definition
 

@@ -239,7 +239,7 @@ def get_scenarios():
             "description": "Sovereign CQS1 - 0% RW",
             "exposure_ref": "EXP_SOV_CQS1",
             "expected": {
-                "exposure_class": "SOVEREIGN",
+                "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK",
                 "approach": "SA",
                 "risk_weight": 0.0,
                 "ead": 1_000_000,

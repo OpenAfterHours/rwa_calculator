@@ -24,7 +24,7 @@ The system provides accurate, auditable RWA calculations across all major exposu
 
 - **Dual-Framework Support**: Single codebase supporting both CRR and Basel 3.1 regulations
 - **High Performance**: Built on Polars LazyFrames for vectorized operations, achieving 50-100x performance improvements
-- **Full Regulatory Coverage**: Implements all exposure classes including Sovereign, Institution, Corporate, Retail, and Specialised Lending
+- **Full Regulatory Coverage**: Implements all exposure classes including Central Govt / Central Bank, Institution, Corporate, Retail, and Specialised Lending
 - **Credit Risk Mitigation**: Complete CRM support including collateral, guarantees, and provisions
 - **Audit Trail**: Error accumulation and full traceability for regulatory compliance
 - **Extensible Architecture**: Protocol-based design enabling easy customization
@@ -124,7 +124,7 @@ graph LR
 
 | Class | SA | F-IRB | A-IRB | Slotting |
 |-------|:--:|:-----:|:-----:|:--------:|
-| Sovereign | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
+| Central Govt / Central Bank | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | Institution | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | Corporate | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | Corporate SME | :white_check_mark: | :white_check_mark: | :white_check_mark: | |

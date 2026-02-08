@@ -119,7 +119,7 @@ CCFs convert off-balance sheet exposures to EAD:
 ### Risk Weights
 
 Risk weights depend on:
-1. **Exposure class** (Sovereign, Institution, Corporate, Retail, etc.)
+1. **Exposure class** (Central Govt / Central Bank, Institution, Corporate, Retail, etc.)
 2. **Credit quality** (CQS 1-6 or internal rating)
 3. **Collateral** (secured vs unsecured)
 4. **Maturity** (for certain exposures)
@@ -152,7 +152,7 @@ The calculation approach is determined by:
 
 | Exposure Class | SA | F-IRB | A-IRB | Slotting |
 |----------------|:--:|:-----:|:-----:|:--------:|
-| Sovereign | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
+| Central Govt / Central Bank | :white_check_mark: | :white_check_mark: | :white_check_mark: | |
 | Institution | :white_check_mark: | :white_check_mark: | :white_check_mark:* | |
 | Corporate | :white_check_mark: | :white_check_mark: | :white_check_mark:* | |
 | Retail | :white_check_mark: | | :white_check_mark: | |

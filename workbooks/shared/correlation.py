@@ -45,7 +45,7 @@ CORRELATION_PARAMS: dict[str, CorrelationParams] = {
         "fixed": 0.0,
         "decay_factor": 50.0,
     },
-    "SOVEREIGN": {
+    "CENTRAL_GOVT_CENTRAL_BANK": {
         "type": "pd_dependent",
         "r_min": 0.12,
         "r_max": 0.24,

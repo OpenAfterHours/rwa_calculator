@@ -218,7 +218,7 @@ class TestGuarantorExposureClassDerivation:
 
         assert "post_crm_exposure_class_guaranteed" in df.columns
         # Entity type mapping produces lowercase class names
-        assert df["post_crm_exposure_class_guaranteed"][0] == "sovereign"
+        assert df["post_crm_exposure_class_guaranteed"][0] == "central_govt_central_bank"
 
     def test_institution_guarantor_maps_to_institution_class(
         self,

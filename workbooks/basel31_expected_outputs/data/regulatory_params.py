@@ -21,7 +21,7 @@ from typing import TypedDict
 
 # Sovereign risk weights by Credit Quality Step (CRE20.7)
 # CQS 0 represents unrated
-SOVEREIGN_RISK_WEIGHTS: dict[int, float] = {
+CGCB_RISK_WEIGHTS: dict[int, float] = {
     1: 0.00,   # AAA to AA-
     2: 0.20,   # A+ to A-
     3: 0.50,   # BBB+ to BBB-
@@ -130,7 +130,7 @@ HVCRE_MULTIPLIER: float = 1.25  # 25% higher than standard slotting
 PD_FLOORS: dict[str, float] = {
     "CORPORATE": 0.0003,           # 0.03% = 3 basis points
     "CORPORATE_SME": 0.0003,       # 0.03%
-    "SOVEREIGN": 0.0003,           # 0.03%
+    "CENTRAL_GOVT_CENTRAL_BANK": 0.0003,  # 0.03%
     "INSTITUTION": 0.0003,         # 0.03%
     "RETAIL": 0.0005,              # 0.05%
     "RETAIL_MORTGAGE": 0.0005,     # 0.05%
@@ -204,7 +204,7 @@ CORRELATION_PARAMS: dict[str, CorrelationParams] = {
         "fixed": 0.0,
         "decay_factor": 50.0,
     },
-    "SOVEREIGN": {
+    "CENTRAL_GOVT_CENTRAL_BANK": {
         "type": "pd_dependent",
         "r_min": 0.12,
         "r_max": 0.24,

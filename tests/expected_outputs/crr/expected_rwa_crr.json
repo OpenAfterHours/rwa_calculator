@@ -64,7 +64,7 @@
       "description": "UK Sovereign exposure - 0% RW",
       "regulatory_framework": "CRR",
       "approach": "SA",
-      "exposure_class": "SOVEREIGN",
+      "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK",
       "exposure_reference": "LOAN_SOV_UK_001",
       "counterparty_reference": "SOV_UK_001",
       "ead": 1000000.0,

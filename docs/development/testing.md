@@ -180,7 +180,7 @@ class TestCRRStandardisedApproach:
 
         assert result.total_rwa == 0
         df = result.to_dataframe()
-        assert df.filter(pl.col("exposure_class") == "SOVEREIGN")["risk_weight"][0] == 0.0
+        assert df.filter(pl.col("exposure_class") == "CENTRAL_GOVT_CENTRAL_BANK")["risk_weight"][0] == 0.0
 
     def test_crr_a02_corporate_unrated_100_percent(
         self, pipeline, crr_config, corporate_unrated_exposure

@@ -116,7 +116,7 @@ def _(ScenarioResult):
 
     # Group A: SA Scenarios
     group_a = [
-        ScenarioResult("A1", "A", "UK Sovereign - 0% RW", "LOAN_SOV_UK_001", "SOV_UK_001", "SA", "SOVEREIGN", 1000000, 0.00, 0, {"cqs": 1}, "CRE20.7"),
+        ScenarioResult("A1", "A", "UK Sovereign - 0% RW", "LOAN_SOV_UK_001", "SOV_UK_001", "SA", "CENTRAL_GOVT_CENTRAL_BANK", 1000000, 0.00, 0, {"cqs": 1}, "CRE20.7"),
         ScenarioResult("A2", "A", "Unrated corporate - 100% RW", "LOAN_CORP_UR_001", "CORP_UR_001", "SA", "CORPORATE", 1000000, 1.00, 1000000, {"cqs": 0}, "CRE20.26"),
         ScenarioResult("A3", "A", "Rated corporate CQS 2 - 50% RW", "LOAN_CORP_UK_003", "CORP_UK_003", "SA", "CORPORATE", 1000000, 0.50, 500000, {"cqs": 2}, "CRE20.25"),
         ScenarioResult("A4", "A", "UK Institution CQS 2 - 30% RW", "LOAN_INST_UK_003", "INST_UK_003", "SA", "INSTITUTION", 1000000, 0.30, 300000, {"cqs": 2, "uk_deviation": True}, "CRE20.16"),

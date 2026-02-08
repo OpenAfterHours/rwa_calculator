@@ -321,7 +321,7 @@ class IRBPermissions:
         """Full IRB permissions for all applicable classes."""
         return cls(
             permissions={
-                ExposureClass.SOVEREIGN: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
@@ -345,7 +345,7 @@ class IRBPermissions:
         """
         return cls(
             permissions={
-                ExposureClass.SOVEREIGN: {ApproachType.SA, ApproachType.FIRB},
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB},
                 ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB},
                 ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB},
                 ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB},
@@ -369,7 +369,7 @@ class IRBPermissions:
         """
         return cls(
             permissions={
-                ExposureClass.SOVEREIGN: {ApproachType.SA, ApproachType.AIRB},
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.AIRB},
@@ -403,7 +403,7 @@ class IRBPermissions:
         """
         return cls(
             permissions={
-                ExposureClass.SOVEREIGN: {ApproachType.SA, ApproachType.FIRB},
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB},
                 ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB},
                 ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB},
                 ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB},

@@ -56,17 +56,17 @@ The `entity_type` field is the **authoritative source** for determining both SA 
 | Entity Type | SA Exposure Class | IRB Exposure Class | Regulatory Reference |
 |-------------|-------------------|--------------------|-----------------------|
 | **Sovereign Class** |
-| `sovereign` | SOVEREIGN | SOVEREIGN | CRR Art. 112(a) |
-| `central_bank` | SOVEREIGN | SOVEREIGN | CRR Art. 112(a) |
+| `sovereign` | CENTRAL_GOVT_CENTRAL_BANK | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 112(a) |
+| `central_bank` | CENTRAL_GOVT_CENTRAL_BANK | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 112(a) |
 | **RGLA Class** (Regional Governments/Local Authorities) |
-| `rgla_sovereign` | RGLA | SOVEREIGN | CRR Art. 115 - has taxing powers/govt guarantee |
+| `rgla_sovereign` | RGLA | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 115 - has taxing powers/govt guarantee |
 | `rgla_institution` | RGLA | INSTITUTION | CRR Art. 115 - no sovereign equivalence |
 | **PSE Class** (Public Sector Entities) |
-| `pse_sovereign` | PSE | SOVEREIGN | CRR Art. 116 - govt guaranteed |
+| `pse_sovereign` | PSE | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 116 - govt guaranteed |
 | `pse_institution` | PSE | INSTITUTION | CRR Art. 116 - commercial PSE |
 | **MDB/International Org Class** |
-| `mdb` | MDB | SOVEREIGN | CRR Art. 117 - 0% RW if on eligible list |
-| `international_org` | MDB | SOVEREIGN | CRR Art. 118 |
+| `mdb` | MDB | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 117 - 0% RW if on eligible list |
+| `international_org` | MDB | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 118 |
 | **Institution Class** |
 | `institution` | INSTITUTION | INSTITUTION | CRR Art. 112(d) |
 | `bank` | INSTITUTION | INSTITUTION | CRR Art. 112(d) |
@@ -85,9 +85,9 @@ The `entity_type` field is the **authoritative source** for determining both SA 
 
 For certain entity types, the regulatory treatment differs between SA and IRB approaches:
 
-- **RGLA/PSE with sovereign treatment**: Under SA, these use dedicated RGLA/PSE risk weight tables. Under IRB, those with government guarantees or taxing powers use the sovereign IRB formula.
+- **RGLA/PSE with sovereign treatment**: Under SA, these use dedicated RGLA/PSE risk weight tables. Under IRB, those with government guarantees or taxing powers use the central govt/central bank IRB formula.
 - **RGLA/PSE with institution treatment**: Under SA, these use RGLA/PSE tables. Under IRB, commercial PSEs without sovereign backing use the institution IRB formula.
-- **MDB/International Orgs**: Under SA, these typically receive 0% RW from the MDB table. Under IRB, they use the sovereign formula.
+- **MDB/International Orgs**: Under SA, these typically receive 0% RW from the MDB table. Under IRB, they use the central govt/central bank formula.
 
 ### Additional Classification Flags
 

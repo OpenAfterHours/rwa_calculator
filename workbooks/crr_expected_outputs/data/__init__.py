@@ -9,7 +9,7 @@ from workbooks.shared.fixture_loader import load_fixtures, load_fixtures_eager, 
 
 from .crr_params import (
     # SA risk weights
-    CRR_SOVEREIGN_RW,
+    CRR_CGCB_RW,
     CRR_INSTITUTION_RW_UK,
     CRR_INSTITUTION_RW_STANDARD,
     CRR_CORPORATE_RW,
@@ -47,7 +47,7 @@ __all__ = [
     "load_fixtures_eager",
     "FixtureData",
     # SA risk weights
-    "CRR_SOVEREIGN_RW",
+    "CRR_CGCB_RW",
     "CRR_INSTITUTION_RW_UK",
     "CRR_INSTITUTION_RW_STANDARD",
     "CRR_CORPORATE_RW",

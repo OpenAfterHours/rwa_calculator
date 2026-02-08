@@ -29,7 +29,7 @@ Mappings:
 - Exposure_class_mapping    # Mapping of counterparty/exposure attributes to SA/IRB exposure classes
 
 Reference/Lookup Data:
-- Sovereign_risk_weights    # CQS to risk weight mapping for sovereigns (0%-150%)
+- Central_govt_central_bank_risk_weights  # CQS to risk weight mapping for central govts/central banks (0%-150%)
 - Institution_risk_weights  # CQS to risk weight mapping (ECRA) with UK CQS2=30% deviation
 - Corporate_risk_weights    # CQS to risk weight mapping for corporates
 - Mortgage_risk_weights     # LTV band to risk weight mapping (residential: 20%-70%)
@@ -112,18 +112,18 @@ COUNTERPARTY_SCHEMA = {
     "counterparty_name": pl.String,
     # entity_type: Single source of truth for exposure class determination.
     # Maps directly to SA and IRB exposure classes. Valid values:
-    #   Sovereign class:
-    #     - "sovereign"           → SA: SOVEREIGN, IRB: SOVEREIGN
-    #     - "central_bank"        → SA: SOVEREIGN, IRB: SOVEREIGN
+    #   Central govt/central bank class:
+    #     - "sovereign"           → SA: CENTRAL_GOVT_CENTRAL_BANK, IRB: CENTRAL_GOVT_CENTRAL_BANK
+    #     - "central_bank"        → SA: CENTRAL_GOVT_CENTRAL_BANK, IRB: CENTRAL_GOVT_CENTRAL_BANK
     #   RGLA class (CRR Art. 115) - requires explicit IRB treatment:
-    #     - "rgla_sovereign"      → SA: RGLA, IRB: SOVEREIGN (has taxing powers/govt guarantee)
+    #     - "rgla_sovereign"      → SA: RGLA, IRB: CENTRAL_GOVT_CENTRAL_BANK (has taxing powers/govt guarantee)
     #     - "rgla_institution"    → SA: RGLA, IRB: INSTITUTION (no sovereign equivalence)
     #   PSE class (CRR Art. 116) - requires explicit IRB treatment:
-    #     - "pse_sovereign"       → SA: PSE, IRB: SOVEREIGN (govt guaranteed)
+    #     - "pse_sovereign"       → SA: PSE, IRB: CENTRAL_GOVT_CENTRAL_BANK (govt guaranteed)
     #     - "pse_institution"     → SA: PSE, IRB: INSTITUTION (commercial PSE)
     #   MDB/International org class (CRR Art. 117-118):
-    #     - "mdb"                 → SA: MDB (0% RW), IRB: SOVEREIGN
-    #     - "international_org"   → SA: MDB (0% RW), IRB: SOVEREIGN
+    #     - "mdb"                 → SA: MDB (0% RW), IRB: CENTRAL_GOVT_CENTRAL_BANK
+    #     - "international_org"   → SA: MDB (0% RW), IRB: CENTRAL_GOVT_CENTRAL_BANK
     #   Institution class (CRR Art. 112(d)):
     #     - "institution"         → SA: INSTITUTION, IRB: INSTITUTION
     #     - "bank"                → SA: INSTITUTION, IRB: INSTITUTION
@@ -285,7 +285,7 @@ EXPOSURE_CLASS_MAPPING_SCHEMA = {
 # REFERENCE / LOOKUP DATA SCHEMAS
 # =============================================================================
 
-SOVEREIGN_RISK_WEIGHT_SCHEMA = {
+CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHT_SCHEMA = {
     "cqs": pl.Int8,  # 1-6, 0 for unrated
     "risk_weight": pl.Float64,  # 0%, 20%, 50%, 100%, 150%
 }
@@ -533,7 +533,7 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     # Classification additions
-    "exposure_class": pl.String,  # sovereign, institution, corporate, retail, etc.
+    "exposure_class": pl.String,  # central_govt_central_bank, institution, corporate, retail, etc.
     "exposure_class_reason": pl.String,  # Explanation of classification
     "approach_permitted": pl.String,  # SA, FIRB, AIRB based on permissions
     "approach_applied": pl.String,  # Actual approach used
@@ -755,7 +755,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     # -------------------------------------------------------------------------
     # EXPOSURE CLASSIFICATION
     # -------------------------------------------------------------------------
-    "exposure_class": pl.String,  # Determined class (central_govt, institution, corporate, retail, etc.)
+    "exposure_class": pl.String,  # Determined class (central_govt_central_bank, institution, corporate, retail, etc.)
     "exposure_class_reason": pl.String,  # Explanation of classification decision
     "approach_permitted": pl.String,  # "SA", "FIRB", "AIRB" based on permissions
     "approach_applied": pl.String,  # Actual approach used

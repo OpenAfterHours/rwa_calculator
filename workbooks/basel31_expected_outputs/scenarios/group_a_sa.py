@@ -31,7 +31,7 @@ def _():
 
     from workbooks.rwa_expected_outputs.data.fixture_loader import load_fixtures
     from workbooks.rwa_expected_outputs.calculations.sa_risk_weights import (
-        get_sovereign_risk_weight,
+        get_cgcb_risk_weight,
         get_institution_risk_weight,
         get_corporate_risk_weight,
         get_retail_risk_weight,
@@ -49,7 +49,7 @@ def _():
         get_institution_risk_weight,
         get_mortgage_risk_weight,
         get_retail_risk_weight,
-        get_sovereign_risk_weight,
+        get_cgcb_risk_weight,
         load_fixtures,
         mo,
         pl,
@@ -134,7 +134,7 @@ def _(mo):
 
 
 @app.cell
-def _(ScenarioResult, calculate_sa_rwa, fixtures, get_sovereign_risk_weight):
+def _(ScenarioResult, calculate_sa_rwa, fixtures, get_cgcb_risk_weight):
     """Calculate Scenario A1: UK Sovereign."""
     # Load data
     loan_a1 = fixtures.get_loan("LOAN_SOV_UK_001")
@@ -146,7 +146,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_sovereign_risk_weight):
 
     # Calculate
     ead_a1 = loan_a1["drawn_amount"]
-    rw_a1 = get_sovereign_risk_weight(cqs_a1)
+    rw_a1 = get_cgcb_risk_weight(cqs_a1)
     rwa_a1 = calculate_sa_rwa(ead_a1, rw_a1)
 
     # Create result
@@ -157,7 +157,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_sovereign_risk_weight):
         exposure_reference="LOAN_SOV_UK_001",
         counterparty_reference="SOV_UK_001",
         approach="SA",
-        exposure_class="SOVEREIGN",
+        exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
         ead=ead_a1,
         risk_weight=rw_a1,
         rwa=rwa_a1,

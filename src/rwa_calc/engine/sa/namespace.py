@@ -166,8 +166,8 @@ class SALazyFrame:
         # Prepare exposures for join
         lf = self._lf.with_columns([
             # Map detailed classes to lookup classes
-            pl.when(pl.col("exposure_class").str.contains("(?i)sovereign"))
-            .then(pl.lit("SOVEREIGN"))
+            pl.when(pl.col("exposure_class").str.contains("(?i)central_govt"))
+            .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
             .when(pl.col("exposure_class").str.contains("(?i)institution"))
             .then(pl.lit("INSTITUTION"))
             .when(pl.col("exposure_class").str.contains("(?i)corporate"))
@@ -633,7 +633,7 @@ class SAExpr:
         Look up CQS-based risk weight.
 
         Args:
-            exposure_class: Exposure class (SOVEREIGN, INSTITUTION, CORPORATE)
+            exposure_class: Exposure class (CENTRAL_GOVT_CENTRAL_BANK, INSTITUTION, CORPORATE)
             use_uk_deviation: Whether to use UK deviation for institutions
 
         Returns:
@@ -645,7 +645,7 @@ class SAExpr:
         class_rw = rw_table.filter(pl.col("exposure_class") == exposure_class)
 
         # Build lookup
-        if exposure_class == "SOVEREIGN":
+        if exposure_class == "CENTRAL_GOVT_CENTRAL_BANK":
             return (
                 pl.when(self._expr == 1).then(pl.lit(0.0))
                 .when(self._expr == 2).then(pl.lit(0.20))

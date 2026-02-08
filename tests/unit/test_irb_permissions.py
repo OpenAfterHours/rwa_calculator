@@ -62,7 +62,7 @@ class TestFIRBOnlyPermissions:
 
         # Non-retail classes should have FIRB permitted
         non_retail_irb_classes = [
-            ExposureClass.SOVEREIGN,
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK,
             ExposureClass.INSTITUTION,
             ExposureClass.CORPORATE,
             ExposureClass.CORPORATE_SME,
@@ -128,7 +128,7 @@ class TestAIRBOnlyPermissions:
         permissions = IRBPermissions.airb_only()
 
         airb_classes = [
-            ExposureClass.SOVEREIGN,
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK,
             ExposureClass.INSTITUTION,
             ExposureClass.CORPORATE,
             ExposureClass.CORPORATE_SME,
@@ -181,7 +181,7 @@ class TestFullIRBPermissions:
         permissions = IRBPermissions.full_irb()
 
         corporate_classes = [
-            ExposureClass.SOVEREIGN,
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK,
             ExposureClass.INSTITUTION,
             ExposureClass.CORPORATE,
             ExposureClass.CORPORATE_SME,
@@ -334,7 +334,7 @@ class TestRetailAIRBCorporateFIRBPermissions:
         """Hybrid should allow FIRB for sovereign and institution."""
         permissions = IRBPermissions.retail_airb_corporate_firb()
 
-        for exposure_class in [ExposureClass.SOVEREIGN, ExposureClass.INSTITUTION]:
+        for exposure_class in [ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ExposureClass.INSTITUTION]:
             assert permissions.is_permitted(exposure_class, ApproachType.SA)
             assert permissions.is_permitted(exposure_class, ApproachType.FIRB)
             assert not permissions.is_permitted(exposure_class, ApproachType.AIRB)

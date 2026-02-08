@@ -14,7 +14,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.data.tables.crr_risk_weights import (
-    SOVEREIGN_RISK_WEIGHTS,
+    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS_UK,
     INSTITUTION_RISK_WEIGHTS_STANDARD,
     CORPORATE_RISK_WEIGHTS,
@@ -65,34 +65,34 @@ class TestSovereignRiskWeights:
 
     def test_cqs1_zero_risk_weight(self) -> None:
         """CQS 1 sovereigns (AAA-AA) get 0% RW."""
-        assert SOVEREIGN_RISK_WEIGHTS[CQS.CQS1] == Decimal("0.00")
+        assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.CQS1] == Decimal("0.00")
 
     def test_cqs2_twenty_percent(self) -> None:
         """CQS 2 sovereigns (A) get 20% RW."""
-        assert SOVEREIGN_RISK_WEIGHTS[CQS.CQS2] == Decimal("0.20")
+        assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.CQS2] == Decimal("0.20")
 
     def test_cqs3_fifty_percent(self) -> None:
         """CQS 3 sovereigns (BBB) get 50% RW."""
-        assert SOVEREIGN_RISK_WEIGHTS[CQS.CQS3] == Decimal("0.50")
+        assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.CQS3] == Decimal("0.50")
 
     def test_cqs4_5_hundred_percent(self) -> None:
         """CQS 4-5 sovereigns get 100% RW."""
-        assert SOVEREIGN_RISK_WEIGHTS[CQS.CQS4] == Decimal("1.00")
-        assert SOVEREIGN_RISK_WEIGHTS[CQS.CQS5] == Decimal("1.00")
+        assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.CQS4] == Decimal("1.00")
+        assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.CQS5] == Decimal("1.00")
 
     def test_cqs6_one_fifty_percent(self) -> None:
         """CQS 6 sovereigns get 150% RW."""
-        assert SOVEREIGN_RISK_WEIGHTS[CQS.CQS6] == Decimal("1.50")
+        assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.CQS6] == Decimal("1.50")
 
     def test_unrated_hundred_percent(self) -> None:
         """Unrated sovereigns get 100% RW."""
-        assert SOVEREIGN_RISK_WEIGHTS[CQS.UNRATED] == Decimal("1.00")
+        assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED] == Decimal("1.00")
 
     def test_lookup_function(self) -> None:
         """Test lookup_risk_weight for sovereigns."""
-        assert lookup_risk_weight("SOVEREIGN", 1) == Decimal("0.00")
-        assert lookup_risk_weight("SOVEREIGN", 2) == Decimal("0.20")
-        assert lookup_risk_weight("SOVEREIGN", None) == Decimal("1.00")
+        assert lookup_risk_weight("CENTRAL_GOVT_CENTRAL_BANK", 1) == Decimal("0.00")
+        assert lookup_risk_weight("CENTRAL_GOVT_CENTRAL_BANK", 2) == Decimal("0.20")
+        assert lookup_risk_weight("CENTRAL_GOVT_CENTRAL_BANK", None) == Decimal("1.00")
 
 
 class TestInstitutionRiskWeights:
@@ -204,7 +204,7 @@ class TestRiskWeightDataFrames:
         """get_all_risk_weight_tables returns dictionary of DataFrames."""
         tables = get_all_risk_weight_tables()
         assert isinstance(tables, dict)
-        assert "sovereign" in tables
+        assert "central_govt_central_bank" in tables
         assert "institution" in tables
         assert "corporate" in tables
         assert "retail" in tables
@@ -214,7 +214,7 @@ class TestRiskWeightDataFrames:
         df = get_combined_cqs_risk_weights()
         assert isinstance(df, pl.DataFrame)
         classes = df["exposure_class"].unique().to_list()
-        assert "SOVEREIGN" in classes
+        assert "CENTRAL_GOVT_CENTRAL_BANK" in classes
         assert "INSTITUTION" in classes
         assert "CORPORATE" in classes
 

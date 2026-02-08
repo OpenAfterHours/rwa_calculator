@@ -104,7 +104,7 @@ def retail_airb_corporate_firb(cls) -> IRBPermissions:
     """
     return cls(
         permissions={
-            ExposureClass.SOVEREIGN: {ApproachType.SA, ApproachType.FIRB},
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB},
             ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB},
             ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB},
             ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB},

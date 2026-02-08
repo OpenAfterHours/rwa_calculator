@@ -22,7 +22,7 @@ Regulatory exposure classes for SA and IRB approaches. The exposure class is det
 class ExposureClass(str, Enum):
     """Regulatory exposure classes."""
 
-    SOVEREIGN = "SOVEREIGN"
+    CENTRAL_GOVT_CENTRAL_BANK = "CENTRAL_GOVT_CENTRAL_BANK"
     INSTITUTION = "INSTITUTION"
     CORPORATE = "CORPORATE"
     CORPORATE_SME = "CORPORATE_SME"
@@ -39,7 +39,7 @@ class ExposureClass(str, Enum):
 ```
 
 **Note:** Each counterparty `entity_type` maps to both an SA and IRB exposure class. For example:
-- `pse_sovereign` → SA: PSE, IRB: SOVEREIGN
+- `pse_sovereign` → SA: PSE, IRB: CENTRAL_GOVT_CENTRAL_BANK
 - `rgla_institution` → SA: RGLA, IRB: INSTITUTION
 
 See [Classification](../features/classification.md) for the complete entity type to exposure class mapping.

@@ -45,7 +45,7 @@ After classification, each exposure has regulatory attributes.
 | `is_infrastructure` | `Boolean` | Infrastructure indicator |
 
 **Valid `exposure_class` values:**
-- `SOVEREIGN`
+- `CENTRAL_GOVT_CENTRAL_BANK`
 - `INSTITUTION`
 - `CORPORATE`
 - `CORPORATE_SME`

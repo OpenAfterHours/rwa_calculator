@@ -1,7 +1,7 @@
 """Calculation modules for RWA computations."""
 
 from .sa_risk_weights import (
-    get_sovereign_risk_weight,
+    get_cgcb_risk_weight,
     get_institution_risk_weight,
     get_corporate_risk_weight,
     get_retail_risk_weight,
@@ -34,7 +34,7 @@ from .ccf import (
 
 __all__ = [
     # SA
-    "get_sovereign_risk_weight",
+    "get_cgcb_risk_weight",
     "get_institution_risk_weight",
     "get_corporate_risk_weight",
     "get_retail_risk_weight",

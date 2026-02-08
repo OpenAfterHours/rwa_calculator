@@ -408,7 +408,7 @@ def crr_slotting_calculation_config():
         irb_permissions=IRBPermissions(
             permissions={
                 # Full IRB for normal exposure classes
-                ExposureClass.SOVEREIGN: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},

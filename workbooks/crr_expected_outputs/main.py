@@ -141,7 +141,7 @@ def _():
     # For now, provide structure for expected output format
 
     crr_a_expected = [
-        {"scenario_id": "CRR-A1", "exposure_class": "SOVEREIGN", "rw": 0.00, "sf": 1.0},
+        {"scenario_id": "CRR-A1", "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK", "rw": 0.00, "sf": 1.0},
         {"scenario_id": "CRR-A2", "exposure_class": "CORPORATE", "rw": 1.00, "sf": 1.0},
         {"scenario_id": "CRR-A3", "exposure_class": "CORPORATE", "rw": 0.50, "sf": 1.0},
         {"scenario_id": "CRR-A4", "exposure_class": "INSTITUTION", "rw": 0.30, "sf": 1.0},
@@ -217,7 +217,7 @@ def _(mo):
                 "scenario_group": "CRR-A",
                 "description": "UK Sovereign exposure - 0% RW",
                 "approach": "SA",
-                "exposure_class": "SOVEREIGN",
+                "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK",
                 "inputs": {
                     "ead": 1000000,
                     "cqs": 1

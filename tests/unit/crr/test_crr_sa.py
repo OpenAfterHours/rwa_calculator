@@ -78,7 +78,7 @@ class TestSovereignRiskWeights:
         """CQS 1 sovereign (e.g., UK Govt) should get 0% RW."""
         result = sa_calculator.calculate_single_exposure(
             ead=Decimal("1000000"),
-            exposure_class="SOVEREIGN",
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=1,
             config=crr_config,
         )
@@ -94,7 +94,7 @@ class TestSovereignRiskWeights:
         """CQS 2 sovereign should get 20% RW."""
         result = sa_calculator.calculate_single_exposure(
             ead=Decimal("1000000"),
-            exposure_class="SOVEREIGN",
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
             config=crr_config,
         )
@@ -110,7 +110,7 @@ class TestSovereignRiskWeights:
         """Unrated sovereign should get 100% RW."""
         result = sa_calculator.calculate_single_exposure(
             ead=Decimal("1000000"),
-            exposure_class="SOVEREIGN",
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=None,
             config=crr_config,
         )
@@ -714,7 +714,7 @@ class TestSACalculatorBundleProcessing:
         exposures = pl.DataFrame({
             "exposure_reference": ["EXP001", "EXP002", "EXP003"],
             "ead_final": [1000000.0, 500000.0, 100000.0],
-            "exposure_class": ["SOVEREIGN", "INSTITUTION", "RETAIL"],
+            "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK", "INSTITUTION", "RETAIL"],
             "cqs": [1, 2, None],
             "is_sme": [False, False, False],
             "is_infrastructure": [False, False, False],

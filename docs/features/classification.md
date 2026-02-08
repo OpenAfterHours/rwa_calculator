@@ -67,8 +67,8 @@ Used for SA risk weight table lookups:
 
 | Entity Type | SA Exposure Class | Regulatory Reference |
 |-------------|-------------------|---------------------|
-| `sovereign` | SOVEREIGN | CRR Art. 112(a) |
-| `central_bank` | SOVEREIGN | CRR Art. 112(a) |
+| `sovereign` | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 112(a) |
+| `central_bank` | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 112(a) |
 | `rgla_sovereign` | RGLA | CRR Art. 115 |
 | `rgla_institution` | RGLA | CRR Art. 115 |
 | `pse_sovereign` | PSE | CRR Art. 116 |
@@ -91,14 +91,14 @@ Used for IRB formula selection:
 
 | Entity Type | IRB Exposure Class | Notes |
 |-------------|-------------------|-------|
-| `sovereign` | SOVEREIGN | Standard sovereign treatment |
-| `central_bank` | SOVEREIGN | Standard sovereign treatment |
-| `rgla_sovereign` | SOVEREIGN | Sovereign IRB formula |
+| `sovereign` | CENTRAL_GOVT_CENTRAL_BANK | Standard central govt/central bank treatment |
+| `central_bank` | CENTRAL_GOVT_CENTRAL_BANK | Standard central govt/central bank treatment |
+| `rgla_sovereign` | CENTRAL_GOVT_CENTRAL_BANK | Central govt/central bank IRB formula |
 | `rgla_institution` | INSTITUTION | Institution IRB formula |
-| `pse_sovereign` | SOVEREIGN | Sovereign IRB formula |
+| `pse_sovereign` | CENTRAL_GOVT_CENTRAL_BANK | Central govt/central bank IRB formula |
 | `pse_institution` | INSTITUTION | Institution IRB formula |
-| `mdb` | SOVEREIGN | CRR Art. 147(3) |
-| `international_org` | SOVEREIGN | CRR Art. 147(3) |
+| `mdb` | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 147(3) |
+| `international_org` | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 147(3) |
 | `institution` | INSTITUTION | Standard institution treatment |
 | `bank` | INSTITUTION | Standard institution treatment |
 | `ccp` | INSTITUTION | Standard institution treatment |
@@ -114,9 +114,9 @@ Used for IRB formula selection:
 The SA and IRB exposure classes differ for RGLA, PSE, and MDB entity types because:
 
 - **SA treatment**: Uses specific risk weight tables for RGLA, PSE, and MDB
-- **IRB treatment**: Uses the underlying IRB formula (sovereign or institution) based on the nature of the entity's credit support
+- **IRB treatment**: Uses the underlying IRB formula (central govt/central bank or institution) based on the nature of the entity's credit support
 
-For example, a government-guaranteed PSE (`pse_sovereign`) uses the PSE risk weight table under SA but the sovereign IRB formula because its credit risk is backed by the government.
+For example, a government-guaranteed PSE (`pse_sovereign`) uses the PSE risk weight table under SA but the central govt/central bank IRB formula because its credit risk is backed by the government.
 
 ## Classification Pipeline
 
@@ -247,7 +247,7 @@ Assigns calculation approach based on IRB permissions:
 | Specialised lending + Slotting permission | SLOTTING |
 | Retail classes + A-IRB permission | AIRB |
 | Corporate classes + A-IRB permission | AIRB |
-| Corporate/Institution/Sovereign + F-IRB (no A-IRB) | FIRB |
+| Corporate/Institution/Central Govt/Central Bank + F-IRB (no A-IRB) | FIRB |
 | Default / No IRB permission | SA |
 
 ### Step 7: Add Classification Audit
@@ -328,10 +328,10 @@ The system supports these exposure classes (defined in `domain/enums.py`):
 
 | Class | Description | SA Treatment | IRB Treatment |
 |-------|-------------|--------------|---------------|
-| `SOVEREIGN` | Central governments, central banks | CQS-based (0%-150%) | Sovereign formula |
-| `RGLA` | Regional govts, local authorities | CQS-based | Sovereign or Institution |
-| `PSE` | Public sector entities | CQS-based | Sovereign or Institution |
-| `MDB` | Multilateral development banks | 0% (eligible) or CQS | Sovereign formula |
+| `CENTRAL_GOVT_CENTRAL_BANK` | Central governments, central banks | CQS-based (0%-150%) | Central govt/central bank formula |
+| `RGLA` | Regional govts, local authorities | CQS-based | Central govt/central bank or Institution |
+| `PSE` | Public sector entities | CQS-based | Central govt/central bank or Institution |
+| `MDB` | Multilateral development banks | 0% (eligible) or CQS | Central govt/central bank formula |
 | `INSTITUTION` | Banks, investment firms | CQS-based (20%-150%) | Institution formula |
 | `CORPORATE` | Non-financial corporates | CQS-based or 100% | Corporate formula |
 | `CORPORATE_SME` | SME corporates (<EUR 50m) | As corporate | SME adjustment |

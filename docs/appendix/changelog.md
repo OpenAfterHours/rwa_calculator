@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.16] - 2026-02-09
+
+### Changed
+- Version bump for PyPI release
+
 ## [0.1.15] - 2026-02-08
 
 ### Changed
@@ -421,8 +426,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.15 | 2026-02-08 | Current |
-| 0.1.14 | 2026-02-08 | Previous |
+| 0.1.16 | 2026-02-09 | Current |
+| 0.1.15 | 2026-02-09 | Previous |
+| 0.1.14 | 2026-02-08 | - |
 | 0.1.13 | 2026-02-07 | - |
 | 0.1.12 | 2026-02-07 | - |
 | 0.1.11 | 2026-02-02 | - |

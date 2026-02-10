@@ -48,6 +48,14 @@ if TYPE_CHECKING:
     pass
 
 
+def _default_bs_type(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Fill missing bs_type with OFB for backward compatibility."""
+    cols = set(lf.collect_schema().names())
+    if "bs_type" not in cols:
+        return lf.with_columns(pl.lit("OFB").alias("bs_type"))
+    return lf.with_columns(pl.col("bs_type").fill_null("OFB"))
+
+
 def enforce_schema(
     lf: pl.LazyFrame,
     schema: dict[str, pl.DataType],
@@ -371,6 +379,12 @@ class ParquetLoader:
         Raises:
             DataLoadError: If required data cannot be loaded
         """
+        contingents = self._load_parquet_optional(
+            self.config.contingents_file, CONTINGENTS_SCHEMA
+        )
+        if contingents is not None:
+            contingents = _default_bs_type(contingents)
+
         return RawDataBundle(
             facilities=self._load_parquet(
                 self.config.facilities_file, FACILITY_SCHEMA
@@ -388,9 +402,7 @@ class ParquetLoader:
             lending_mappings=self._load_parquet(
                 self.config.lending_mappings_file, LENDING_MAPPING_SCHEMA
             ),
-            contingents=self._load_parquet_optional(
-                self.config.contingents_file, CONTINGENTS_SCHEMA
-            ),
+            contingents=contingents,
             collateral=self._load_parquet_optional(
                 self.config.collateral_file, COLLATERAL_SCHEMA
             ),
@@ -620,6 +632,12 @@ class CSVLoader:
         Raises:
             DataLoadError: If required data cannot be loaded
         """
+        contingents = self._load_csv_optional(
+            self.config.contingents_file, CONTINGENTS_SCHEMA
+        )
+        if contingents is not None:
+            contingents = _default_bs_type(contingents)
+
         return RawDataBundle(
             facilities=self._load_csv(
                 self.config.facilities_file, FACILITY_SCHEMA
@@ -637,9 +655,7 @@ class CSVLoader:
             lending_mappings=self._load_csv(
                 self.config.lending_mappings_file, LENDING_MAPPING_SCHEMA
             ),
-            contingents=self._load_csv_optional(
-                self.config.contingents_file, CONTINGENTS_SCHEMA
-            ),
+            contingents=contingents,
             collateral=self._load_csv_optional(
                 self.config.collateral_file, COLLATERAL_SCHEMA
             ),

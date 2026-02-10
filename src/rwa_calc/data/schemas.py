@@ -105,6 +105,7 @@ CONTINGENTS_SCHEMA = {
     "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
 }
 
 COUNTERPARTY_SCHEMA = {
@@ -398,6 +399,8 @@ VALID_EQUITY_TYPES = {
 
 VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent"}
 
+VALID_BS_TYPES = {"ONB", "OFB"}
+
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 
 # Registry: maps table_name -> {column_name -> valid_values_set}
@@ -411,6 +414,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "contingents": {
         "seniority": VALID_SENIORITY,
+        "bs_type": VALID_BS_TYPES,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,

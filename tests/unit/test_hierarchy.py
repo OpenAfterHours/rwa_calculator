@@ -2973,3 +2973,435 @@ class TestLargerDatasetFacilityUndrawn:
             f"Expected 4 loan rows, got {len(loan_rows)}. "
             f"Duplicate mappings caused loan row duplication."
         )
+
+
+# =============================================================================
+# Facility Root Lookup Tests (multi-level facility hierarchy)
+# =============================================================================
+
+
+class TestBuildFacilityRootLookup:
+    """Tests for _build_facility_root_lookup method."""
+
+    def test_single_level_returns_parent_as_root(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Sub-facility → parent: root = parent, depth = 1."""
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_PARENT"],
+            "child_reference": ["FAC_CHILD"],
+            "child_type": ["facility"],
+        }).lazy()
+
+        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        df = lookup.collect()
+
+        assert len(df) == 1
+        row = df.row(0, named=True)
+        assert row["child_facility_reference"] == "FAC_CHILD"
+        assert row["root_facility_reference"] == "FAC_PARENT"
+        assert row["facility_hierarchy_depth"] == 1
+
+    def test_two_level_hierarchy_resolves_to_root(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """sub2 → sub1 → root: root = root, depth = 2."""
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_ROOT", "FAC_SUB1"],
+            "child_reference": ["FAC_SUB1", "FAC_SUB2"],
+            "child_type": ["facility", "facility"],
+        }).lazy()
+
+        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        df = lookup.collect()
+
+        # Both sub1 and sub2 should be in lookup
+        assert len(df) == 2
+
+        sub1 = df.filter(pl.col("child_facility_reference") == "FAC_SUB1")
+        assert sub1["root_facility_reference"][0] == "FAC_ROOT"
+        assert sub1["facility_hierarchy_depth"][0] == 1
+
+        sub2 = df.filter(pl.col("child_facility_reference") == "FAC_SUB2")
+        assert sub2["root_facility_reference"][0] == "FAC_ROOT"
+        assert sub2["facility_hierarchy_depth"][0] == 2
+
+    def test_multiple_branches_same_root(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Two sub-facilities under one parent both resolve to same root."""
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_ROOT", "FAC_ROOT"],
+            "child_reference": ["SUB_A", "SUB_B"],
+            "child_type": ["facility", "facility"],
+        }).lazy()
+
+        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        df = lookup.collect()
+
+        assert len(df) == 2
+        roots = df["root_facility_reference"].unique().to_list()
+        assert roots == ["FAC_ROOT"]
+
+    def test_no_facility_type_column_returns_empty(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """No child_type/node_type column → cannot detect sub-facilities, return empty."""
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_ROOT"],
+            "child_reference": ["SUB_A"],
+        }).lazy()
+
+        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        df = lookup.collect()
+
+        assert len(df) == 0
+
+    def test_empty_mappings(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Empty facility mappings → empty lookup."""
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": pl.Series([], dtype=pl.String),
+            "child_reference": pl.Series([], dtype=pl.String),
+            "child_type": pl.Series([], dtype=pl.String),
+        }).lazy()
+
+        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        df = lookup.collect()
+
+        assert len(df) == 0
+
+
+class TestMultiLevelFacilityUndrawn:
+    """Tests for multi-level facility undrawn aggregation."""
+
+    def test_multi_level_undrawn_aggregates_to_root(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Parent (limit=2M) with two sub-facilities containing loans.
+
+        FAC_PARENT (limit=2M)
+        ├── SUB001 (limit=1M) → LOAN01 (drawn=0.5M)
+        └── SUB002 (limit=0.5M) → LOAN02 (drawn=0.25M)
+
+        Expected: FAC_PARENT_UNDRAWN = 2M - 0.75M = 1.25M
+        """
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_PARENT", "SUB001", "SUB002"],
+            "product_type": ["RCF", "RCF", "RCF"],
+            "book_code": ["CORP", "CORP", "CORP"],
+            "counterparty_reference": ["CP001", "CP001", "CP001"],
+            "value_date": [date(2023, 1, 1)] * 3,
+            "maturity_date": [date(2028, 1, 1)] * 3,
+            "currency": ["GBP"] * 3,
+            "limit": [2000000.0, 1000000.0, 500000.0],
+            "lgd": [0.45] * 3,
+            "seniority": ["senior"] * 3,
+            "risk_type": ["MR"] * 3,
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN01", "LOAN02"],
+            "product_type": ["TERM_LOAN", "TERM_LOAN"],
+            "book_code": ["CORP", "CORP"],
+            "counterparty_reference": ["CP001", "CP001"],
+            "value_date": [date(2023, 6, 1)] * 2,
+            "maturity_date": [date(2028, 1, 1)] * 2,
+            "currency": ["GBP"] * 2,
+            "drawn_amount": [500000.0, 250000.0],
+            "lgd": [0.45] * 2,
+            "seniority": ["senior"] * 2,
+        }).lazy()
+
+        # Mappings: sub-facilities under parent, loans under sub-facilities
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": [
+                "FAC_PARENT", "FAC_PARENT",  # sub-facilities under parent
+                "SUB001", "SUB002",           # loans under sub-facilities
+            ],
+            "child_reference": [
+                "SUB001", "SUB002",
+                "LOAN01", "LOAN02",
+            ],
+            "child_type": [
+                "facility", "facility",
+                "loan", "loan",
+            ],
+        }).lazy()
+
+        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+
+        facility_undrawn = resolver._calculate_facility_undrawn(
+            facilities, loans, facility_mappings, facility_root_lookup,
+        )
+        df = facility_undrawn.collect()
+
+        # Only root facility should produce undrawn exposure
+        parent_undrawn = df.filter(
+            pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN"
+        )
+        assert len(parent_undrawn) == 1
+        assert parent_undrawn["undrawn_amount"][0] == pytest.approx(1250000.0)
+
+    def test_sub_facilities_excluded_from_undrawn(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Sub-facilities should NOT produce their own undrawn exposures."""
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_PARENT", "SUB001"],
+            "product_type": ["RCF", "RCF"],
+            "book_code": ["CORP", "CORP"],
+            "counterparty_reference": ["CP001", "CP001"],
+            "value_date": [date(2023, 1, 1)] * 2,
+            "maturity_date": [date(2028, 1, 1)] * 2,
+            "currency": ["GBP"] * 2,
+            "limit": [2000000.0, 1000000.0],
+            "lgd": [0.45] * 2,
+            "seniority": ["senior"] * 2,
+            "risk_type": ["MR"] * 2,
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN01"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 6, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [500000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_PARENT", "SUB001"],
+            "child_reference": ["SUB001", "LOAN01"],
+            "child_type": ["facility", "loan"],
+        }).lazy()
+
+        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+
+        facility_undrawn = resolver._calculate_facility_undrawn(
+            facilities, loans, facility_mappings, facility_root_lookup,
+        )
+        df = facility_undrawn.collect()
+
+        # SUB001 should NOT have its own undrawn exposure
+        sub_undrawn = df.filter(
+            pl.col("exposure_reference") == "SUB001_UNDRAWN"
+        )
+        assert len(sub_undrawn) == 0
+
+        # Only FAC_PARENT should have undrawn
+        assert len(df) == 1
+        assert df["exposure_reference"][0] == "FAC_PARENT_UNDRAWN"
+
+    def test_single_level_undrawn_unchanged(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """No regression: simple facility→loan (no sub-facilities) still works."""
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC001"],
+            "product_type": ["RCF"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "limit": [1000000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+            "risk_type": ["MR"],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN01"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 6, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [600000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC001"],
+            "child_reference": ["LOAN01"],
+            "child_type": ["loan"],
+        }).lazy()
+
+        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+
+        facility_undrawn = resolver._calculate_facility_undrawn(
+            facilities, loans, facility_mappings, facility_root_lookup,
+        )
+        df = facility_undrawn.collect()
+
+        assert len(df) == 1
+        assert df["exposure_reference"][0] == "FAC001_UNDRAWN"
+        assert df["undrawn_amount"][0] == pytest.approx(400000.0)
+
+
+class TestMultiLevelUnifyExposures:
+    """Integration tests for multi-level facility hierarchy in _unify_exposures."""
+
+    def test_multi_level_root_facility_reference_correct(
+        self,
+        resolver: HierarchyResolver,
+        simple_counterparties: pl.LazyFrame,
+        simple_org_mappings: pl.LazyFrame,
+        simple_ratings: pl.LazyFrame,
+    ) -> None:
+        """Loan under sub-facility gets root = parent facility."""
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN01"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [500000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_ROOT", "SUB001"],
+            "product_type": ["RCF", "RCF"],
+            "book_code": ["CORP", "CORP"],
+            "counterparty_reference": ["CP001", "CP001"],
+            "value_date": [date(2023, 1, 1)] * 2,
+            "maturity_date": [date(2028, 1, 1)] * 2,
+            "currency": ["GBP"] * 2,
+            "limit": [2000000.0, 1000000.0],
+            "lgd": [0.45] * 2,
+            "seniority": ["senior"] * 2,
+            "risk_type": ["MR"] * 2,
+        }).lazy()
+
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_ROOT", "SUB001"],
+            "child_reference": ["SUB001", "LOAN01"],
+            "child_type": ["facility", "loan"],
+        }).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            simple_counterparties, simple_org_mappings, simple_ratings,
+        )
+
+        exposures, errors = resolver._unify_exposures(
+            loans, None, facilities, facility_mappings, counterparty_lookup,
+        )
+        df = exposures.collect()
+
+        # Loan's root_facility_reference should be the ultimate root
+        loan_row = df.filter(pl.col("exposure_reference") == "LOAN01")
+        assert loan_row["root_facility_reference"][0] == "FAC_ROOT"
+
+    def test_multi_level_facility_hierarchy_depth_correct(
+        self,
+        resolver: HierarchyResolver,
+        simple_counterparties: pl.LazyFrame,
+        simple_org_mappings: pl.LazyFrame,
+        simple_ratings: pl.LazyFrame,
+    ) -> None:
+        """Loan under sub-facility → depth=2 for two-level hierarchy."""
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN01"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [500000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_ROOT", "SUB001"],
+            "product_type": ["RCF", "RCF"],
+            "book_code": ["CORP", "CORP"],
+            "counterparty_reference": ["CP001", "CP001"],
+            "value_date": [date(2023, 1, 1)] * 2,
+            "maturity_date": [date(2028, 1, 1)] * 2,
+            "currency": ["GBP"] * 2,
+            "limit": [2000000.0, 1000000.0],
+            "lgd": [0.45] * 2,
+            "seniority": ["senior"] * 2,
+            "risk_type": ["MR"] * 2,
+        }).lazy()
+
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_ROOT", "SUB001"],
+            "child_reference": ["SUB001", "LOAN01"],
+            "child_type": ["facility", "loan"],
+        }).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            simple_counterparties, simple_org_mappings, simple_ratings,
+        )
+
+        exposures, errors = resolver._unify_exposures(
+            loans, None, facilities, facility_mappings, counterparty_lookup,
+        )
+        df = exposures.collect()
+
+        # Loan under sub-facility should have depth 2
+        loan_row = df.filter(pl.col("exposure_reference") == "LOAN01")
+        assert loan_row["facility_hierarchy_depth"][0] == 2
+
+    def test_standalone_loan_depth_is_zero(
+        self,
+        resolver: HierarchyResolver,
+        simple_counterparties: pl.LazyFrame,
+        simple_org_mappings: pl.LazyFrame,
+        simple_ratings: pl.LazyFrame,
+    ) -> None:
+        """Loan with no facility parent gets depth=0."""
+        loans = pl.DataFrame({
+            "loan_reference": ["STANDALONE_LOAN"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [100000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": pl.Series([], dtype=pl.String),
+            "child_reference": pl.Series([], dtype=pl.String),
+            "child_type": pl.Series([], dtype=pl.String),
+        }).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            simple_counterparties, simple_org_mappings, simple_ratings,
+        )
+
+        exposures, errors = resolver._unify_exposures(
+            loans, None, None, facility_mappings, counterparty_lookup,
+        )
+        df = exposures.collect()
+
+        loan_row = df.filter(pl.col("exposure_reference") == "STANDALONE_LOAN")
+        assert loan_row["facility_hierarchy_depth"][0] == 0
+        assert loan_row["root_facility_reference"][0] is None

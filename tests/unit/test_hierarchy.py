@@ -2644,3 +2644,332 @@ class TestNegativeDrawnAmountInHierarchy:
         assert df["total_drawn"][0] == pytest.approx(700000.0)
         # total_exposure should also floor: (300k+0) + (0+0) + (400k+0) = 700k
         assert df["total_exposure"][0] == pytest.approx(700000.0)
+
+
+# =============================================================================
+# Duplicate Mapping Bug Fix Tests
+# =============================================================================
+
+
+class TestDuplicateMappingBugFixes:
+    """Tests for bugs where duplicate facility_mappings rows cause:
+    - Drawn total inflation (Bug 1) — silently drops facility_undrawn
+    - Row duplication in _unify_exposures (Bug 2)
+    - Missing type column fallback crash (Bug 3)
+    """
+
+    def test_duplicate_loan_mappings_do_not_inflate_drawn_total(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Duplicate (child_reference, parent_facility_reference) pairs in
+        facility_mappings must not double-count drawn amounts.
+
+        1 facility (limit=1M), 1 loan (drawn=600k), duplicate mapping row.
+        Without the fix: total_drawn=1.2M, undrawn=0, facility silently dropped.
+        With the fix: total_drawn=600k, undrawn=400k.
+        """
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_DUP"],
+            "product_type": ["RCF"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_DUP"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "limit": [1000000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+            "risk_type": ["MR"],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN_DUP"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_DUP"],
+            "value_date": [date(2023, 6, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [600000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        # Duplicate mapping row for the same loan → facility link
+        mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_DUP", "FAC_DUP"],
+            "child_reference": ["LOAN_DUP", "LOAN_DUP"],
+            "child_type": ["loan", "loan"],
+        }).lazy()
+
+        facility_undrawn = resolver._calculate_facility_undrawn(
+            facilities, loans, mappings
+        )
+        df = facility_undrawn.collect()
+
+        # Should produce 1 undrawn row with correct amount
+        fac = df.filter(pl.col("exposure_reference") == "FAC_DUP_UNDRAWN")
+        assert len(fac) == 1, (
+            f"Expected 1 facility_undrawn row, got {len(fac)}. "
+            f"Duplicate mappings likely inflated drawn total."
+        )
+        assert fac["undrawn_amount"][0] == pytest.approx(400000.0)  # 1M - 600k
+
+    def test_duplicate_exposure_mappings_do_not_duplicate_rows(
+        self,
+        resolver: HierarchyResolver,
+        simple_counterparties: pl.LazyFrame,
+        simple_org_mappings: pl.LazyFrame,
+        simple_ratings: pl.LazyFrame,
+    ) -> None:
+        """Duplicate child_reference rows in facility_mappings must not
+        duplicate exposure rows in _unify_exposures.
+
+        1 facility, 1 loan, duplicate mapping row.
+        Without the fix: loan appears twice, total rows = 3.
+        With the fix: loan appears once, total rows = 2 (loan + facility_undrawn).
+        """
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_EXPDUP"],
+            "product_type": ["RCF"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "limit": [1000000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+            "risk_type": ["MR"],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN_EXPDUP"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP001"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [600000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        # Duplicate mapping: same child_reference appears twice
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_EXPDUP", "FAC_EXPDUP"],
+            "child_reference": ["LOAN_EXPDUP", "LOAN_EXPDUP"],
+            "child_type": ["loan", "loan"],
+        }).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
+        )
+
+        exposures, errors = resolver._unify_exposures(
+            loans,
+            None,
+            facilities,
+            facility_mappings,
+            counterparty_lookup,
+        )
+
+        df = exposures.collect()
+
+        # Loan should appear exactly once
+        loan_rows = df.filter(pl.col("exposure_type") == "loan")
+        assert len(loan_rows) == 1, (
+            f"Expected 1 loan row, got {len(loan_rows)}. "
+            f"Duplicate mapping rows caused row duplication in _unify_exposures."
+        )
+
+        # Total rows = loan + facility_undrawn
+        assert len(df) == 2
+
+    def test_facility_undrawn_with_no_type_column(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """facility_mappings with neither child_type nor node_type column
+        should still produce correct facility_undrawn rows (Bug 3 fallback).
+        """
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_NOTYPE"],
+            "product_type": ["RCF"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_NOTYPE"],
+            "value_date": [date(2023, 1, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "limit": [1000000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+            "risk_type": ["MR"],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LOAN_NOTYPE"],
+            "product_type": ["TERM_LOAN"],
+            "book_code": ["CORP"],
+            "counterparty_reference": ["CP_NOTYPE"],
+            "value_date": [date(2023, 6, 1)],
+            "maturity_date": [date(2028, 1, 1)],
+            "currency": ["GBP"],
+            "drawn_amount": [300000.0],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+        }).lazy()
+
+        # No child_type or node_type column at all
+        mappings = pl.DataFrame({
+            "parent_facility_reference": ["FAC_NOTYPE"],
+            "child_reference": ["LOAN_NOTYPE"],
+        }).lazy()
+
+        facility_undrawn = resolver._calculate_facility_undrawn(
+            facilities, loans, mappings
+        )
+        df = facility_undrawn.collect()
+
+        fac = df.filter(pl.col("exposure_reference") == "FAC_NOTYPE_UNDRAWN")
+        assert len(fac) == 1
+        assert fac["undrawn_amount"][0] == pytest.approx(700000.0)  # 1M - 300k
+
+
+class TestLargerDatasetFacilityUndrawn:
+    """Integration test: facility_undrawn survives in a multi-group dataset
+    with org hierarchy, lending groups, and duplicate mappings.
+    """
+
+    def test_facility_undrawn_survives_in_multi_group_dataset(
+        self,
+        resolver: HierarchyResolver,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """All facility_undrawn rows should be present with correct amounts
+        in a realistic dataset with:
+        - 4 counterparties in org hierarchy
+        - 3 facilities with undrawn headroom
+        - 4 loans
+        - Lending groups
+        - Duplicate mapping rows
+        """
+        counterparties = pl.DataFrame({
+            "counterparty_reference": ["CP_PAR", "CP_CH1", "CP_CH2", "CP_CH3"],
+            "counterparty_name": ["Parent Corp", "Child 1", "Child 2", "Child 3"],
+            "entity_type": ["corporate", "corporate", "corporate", "corporate"],
+            "country_code": ["GB", "GB", "GB", "GB"],
+            "annual_revenue": [100e6, 20e6, 30e6, 15e6],
+            "total_assets": [500e6, 100e6, 150e6, 75e6],
+            "default_status": [False, False, False, False],
+            "sector_code": ["MANU", "MANU", "MANU", "MANU"],
+            "is_financial_institution": [False, False, False, False],
+            "is_regulated": [False, False, False, False],
+            "is_pse": [False, False, False, False],
+            "is_mdb": [False, False, False, False],
+            "is_international_org": [False, False, False, False],
+            "is_central_counterparty": [False, False, False, False],
+            "is_regional_govt_local_auth": [False, False, False, False],
+            "is_managed_as_retail": [False, False, False, False],
+        }).lazy()
+
+        org_mappings = pl.DataFrame({
+            "parent_counterparty_reference": ["CP_PAR", "CP_PAR", "CP_PAR"],
+            "child_counterparty_reference": ["CP_CH1", "CP_CH2", "CP_CH3"],
+        }).lazy()
+
+        facilities = pl.DataFrame({
+            "facility_reference": ["FAC_A", "FAC_B", "FAC_C"],
+            "product_type": ["RCF", "RCF", "TERM"],
+            "book_code": ["CORP", "CORP", "CORP"],
+            "counterparty_reference": ["CP_CH1", "CP_CH2", "CP_CH3"],
+            "value_date": [date(2023, 1, 1)] * 3,
+            "maturity_date": [date(2028, 1, 1)] * 3,
+            "currency": ["GBP"] * 3,
+            "limit": [2000000.0, 1500000.0, 800000.0],
+            "lgd": [0.45] * 3,
+            "seniority": ["senior"] * 3,
+            "risk_type": ["MR", "MR", "MR"],
+        }).lazy()
+
+        loans = pl.DataFrame({
+            "loan_reference": ["LN_1", "LN_2", "LN_3", "LN_4"],
+            "product_type": ["TERM_LOAN"] * 4,
+            "book_code": ["CORP"] * 4,
+            "counterparty_reference": ["CP_CH1", "CP_CH1", "CP_CH2", "CP_CH3"],
+            "value_date": [date(2023, 6, 1)] * 4,
+            "maturity_date": [date(2028, 1, 1)] * 4,
+            "currency": ["GBP"] * 4,
+            "drawn_amount": [800000.0, 400000.0, 1000000.0, 300000.0],
+            "lgd": [0.45] * 4,
+            "seniority": ["senior"] * 4,
+        }).lazy()
+
+        # Duplicate mapping rows for LN_1 (simulating real-world data issue)
+        facility_mappings = pl.DataFrame({
+            "parent_facility_reference": [
+                "FAC_A", "FAC_A", "FAC_A",  # LN_1 duplicate + LN_2
+                "FAC_B",                      # LN_3
+                "FAC_C",                      # LN_4
+            ],
+            "child_reference": [
+                "LN_1", "LN_1", "LN_2",  # LN_1 appears twice
+                "LN_3",
+                "LN_4",
+            ],
+            "child_type": ["loan", "loan", "loan", "loan", "loan"],
+        }).lazy()
+
+        lending_mappings = pl.DataFrame({
+            "parent_counterparty_reference": ["LG_01", "LG_01"],
+            "child_counterparty_reference": ["CP_CH1", "CP_CH2"],
+        }).lazy()
+
+        bundle = RawDataBundle(
+            facilities=facilities,
+            loans=loans,
+            contingents=None,
+            counterparties=counterparties,
+            collateral=None,
+            guarantees=None,
+            provisions=None,
+            ratings=None,
+            facility_mappings=facility_mappings,
+            org_mappings=org_mappings,
+            lending_mappings=lending_mappings,
+        )
+
+        result = resolver.resolve(bundle, crr_config)
+        df = result.exposures.collect()
+
+        # All 3 facility_undrawn rows must be present
+        undrawn = df.filter(pl.col("exposure_type") == "facility_undrawn").sort(
+            "exposure_reference"
+        )
+        assert len(undrawn) == 3, (
+            f"Expected 3 facility_undrawn rows, got {len(undrawn)}. "
+            f"Refs present: {undrawn['exposure_reference'].to_list()}"
+        )
+
+        # FAC_A: limit=2M, drawn=800k+400k=1.2M, undrawn=800k
+        fac_a = undrawn.filter(pl.col("exposure_reference") == "FAC_A_UNDRAWN")
+        assert fac_a["undrawn_amount"][0] == pytest.approx(800000.0)
+
+        # FAC_B: limit=1.5M, drawn=1M, undrawn=500k
+        fac_b = undrawn.filter(pl.col("exposure_reference") == "FAC_B_UNDRAWN")
+        assert fac_b["undrawn_amount"][0] == pytest.approx(500000.0)
+
+        # FAC_C: limit=800k, drawn=300k, undrawn=500k
+        fac_c = undrawn.filter(pl.col("exposure_reference") == "FAC_C_UNDRAWN")
+        assert fac_c["undrawn_amount"][0] == pytest.approx(500000.0)
+
+        # 4 loan rows should not be duplicated
+        loan_rows = df.filter(pl.col("exposure_type") == "loan")
+        assert len(loan_rows) == 4, (
+            f"Expected 4 loan rows, got {len(loan_rows)}. "
+            f"Duplicate mappings caused loan row duplication."
+        )

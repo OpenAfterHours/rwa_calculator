@@ -573,10 +573,21 @@ class HierarchyResolver:
             # Support both child_type and node_type column names
             mapping_schema = facility_mappings.collect_schema()
             mapping_cols = set(mapping_schema.names())
-            type_col = "child_type" if "child_type" in mapping_cols else "node_type"
-            loan_mappings = facility_mappings.filter(
-                pl.col(type_col).fill_null("").str.to_lowercase() == "loan"
-            )
+            if "child_type" in mapping_cols:
+                type_col = "child_type"
+            elif "node_type" in mapping_cols:
+                type_col = "node_type"
+            else:
+                type_col = None
+
+            if type_col is not None:
+                loan_mappings = facility_mappings.filter(
+                    pl.col(type_col).fill_null("").str.to_lowercase() == "loan"
+                ).unique(subset=["child_reference", "parent_facility_reference"])
+            else:
+                loan_mappings = facility_mappings.unique(
+                    subset=["child_reference", "parent_facility_reference"]
+                )
 
             # Sum drawn amounts by parent facility
             # Clamp negative drawn amounts to 0 before summing - negative balances
@@ -750,13 +761,13 @@ class HierarchyResolver:
             ).select([
                 pl.col("child_reference"),
                 pl.col("parent_facility_reference").alias("mapped_parent_facility"),
-            ])
+            ]).unique(subset=["child_reference"], keep="first")
         else:
             # No type column available - use all mappings as-is
             exposure_level_mappings = facility_mappings.select([
                 pl.col("child_reference"),
                 pl.col("parent_facility_reference").alias("mapped_parent_facility"),
-            ])
+            ]).unique(subset=["child_reference"], keep="first")
 
         # Join with facility mappings to get parent facility
         exposures = exposures.join(

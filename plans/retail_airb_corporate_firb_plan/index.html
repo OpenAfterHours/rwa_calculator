@@ -4248,6 +4248,10 @@
 
 
 <h1 id="plan-corporate-to-retail-reclassification-with-hybrid-irb-permissions">Plan: Corporate-to-Retail Reclassification with Hybrid IRB Permissions<a class="headerlink" href="#plan-corporate-to-retail-reclassification-with-hybrid-irb-permissions" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status: Implemented</strong> (v0.1.11) — All components below have been built and are wired end-to-end: enum (<code>IRBApproachOption.RETAIL_AIRB_CORPORATE_FIRB</code>), config factory (<code>IRBPermissions.retail_airb_corporate_firb()</code>), classifier reclassification logic, API model, service layer, and Marimo UI dropdown. See <code>tests/unit/test_corporate_to_retail_reclassification.py</code> and <code>tests/unit/test_irb_permissions.py</code> for test coverage.</p>
+</blockquote>
+<hr />
 <h2 id="problem-statement">Problem Statement<a class="headerlink" href="#problem-statement" title="Permanent link">&para;</a></h2>
 <p>A firm has the following IRB approvals:
 - <strong>AIRB</strong> for retail exposures (including corporates that qualify as "regulatory retail")

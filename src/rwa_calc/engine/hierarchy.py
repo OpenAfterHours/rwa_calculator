@@ -659,6 +659,7 @@ class HierarchyResolver:
                 "risk_type": pl.String,
                 "ccf_modelled": pl.Float64,
                 "is_short_term_trade_lc": pl.Boolean,
+                "is_buy_to_let": pl.Boolean,
             })
 
         # Check if facility_mappings is valid
@@ -859,6 +860,8 @@ class HierarchyResolver:
             pl.col("ccf_modelled").cast(pl.Float64, strict=False) if "ccf_modelled" in facility_cols else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
             (pl.col("is_short_term_trade_lc").fill_null(False) if "is_short_term_trade_lc" in facility_cols
              else pl.lit(False).alias("is_short_term_trade_lc")),
+            (pl.col("is_buy_to_let").fill_null(False) if "is_buy_to_let" in facility_cols
+             else pl.lit(False).alias("is_buy_to_let")),
             # Propagate facility reference for collateral allocation
             # This allows facility-level collateral to be linked to undrawn exposures
             pl.col("facility_reference").alias("source_facility_reference"),
@@ -918,6 +921,8 @@ class HierarchyResolver:
             pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
+            (pl.col("is_buy_to_let").fill_null(False) if "is_buy_to_let" in loan_cols
+             else pl.lit(False).alias("is_buy_to_let")),
         ]
         loans_unified = loans.select(loan_select_exprs)
 
@@ -961,6 +966,7 @@ class HierarchyResolver:
                 .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False)).alias("ccf_modelled"),
                 pl.when(is_drawn).then(pl.lit(None).cast(pl.Boolean))
                 .otherwise(pl.col("is_short_term_trade_lc")).alias("is_short_term_trade_lc"),
+                pl.lit(False).alias("is_buy_to_let"),  # BTL is a property lending characteristic, not for contingents
             ])
             exposure_frames.append(contingents_unified)
 

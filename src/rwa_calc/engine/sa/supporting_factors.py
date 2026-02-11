@@ -201,6 +201,7 @@ class SupportingFactorCalculator:
         has_sme = "is_sme" in schema.names()
         has_infra = "is_infrastructure" in schema.names()
         has_counterparty = "counterparty_reference" in schema.names()
+        has_btl = "is_buy_to_let" in schema.names()
 
         # Build SME factor expression with counterparty-level aggregation
         if has_sme:
@@ -235,8 +236,12 @@ class SupportingFactorCalculator:
                 ead_for_tier - threshold_gbp
             ).otherwise(pl.lit(0.0))
 
+            # BTL exposures are excluded from the SME factor but still
+            # contribute to total_cp_ead for tier calculation (CRR Art. 501)
+            is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
+
             sme_factor_expr = pl.when(
-                pl.col("is_sme") & (ead_for_tier > 0)
+                pl.col("is_sme") & (ead_for_tier > 0) & ~is_btl
             ).then(
                 (tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier
             ).otherwise(pl.lit(1.0))

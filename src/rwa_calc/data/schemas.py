@@ -70,6 +70,7 @@ FACILITY_SCHEMA = {
     "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
 }
 
 LOAN_SCHEMA = {
@@ -85,6 +86,7 @@ LOAN_SCHEMA = {
     "lgd": pl.Float64,  # A-IRB modelled LGD (optional)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
+    "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -473,6 +475,7 @@ RAW_EXPOSURE_SCHEMA = {
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,       # Currency before FX conversion
     "original_amount": pl.Float64,        # Amount before FX conversion (drawn + interest + nominal)
@@ -499,6 +502,7 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # Counterparty hierarchy additions
     "counterparty_has_parent": pl.Boolean,
     "parent_counterparty_reference": pl.String,
@@ -536,6 +540,7 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # Classification additions
     "exposure_class": pl.String,  # central_govt_central_bank, institution, corporate, retail, etc.
     "exposure_class_reason": pl.String,  # Explanation of classification

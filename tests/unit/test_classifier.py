@@ -944,8 +944,10 @@ class TestRetailClassification:
             "is_managed_as_retail": [True, True],
         }).lazy()
 
-        # Lending group total = 2.2m GBP (2.5m EUR)
-        # Adjusted = 880k GBP (1m EUR) after excluding residential
+        # Lending group total = EUR 2.5m in GBP at 0.8732 rate
+        # Member 1: EUR 1m = 873,200 GBP (term loan, no residential)
+        # Member 2: EUR 1.5m = 1,309,800 GBP (mortgage, fully secured by residential RE)
+        # Adjusted = 873,200 GBP (at threshold) after excluding residential
         exposures = pl.DataFrame({
             "exposure_reference": ["LG_EXP_1", "LG_EXP_2"],
             "exposure_type": ["loan", "loan"],
@@ -955,7 +957,7 @@ class TestRetailClassification:
             "value_date": [date(2023, 1, 1), date(2023, 1, 1)],
             "maturity_date": [date(2028, 1, 1), date(2048, 1, 1)],
             "currency": ["GBP", "GBP"],
-            "drawn_amount": [880000.0, 1320000.0],  # 1m EUR + 1.5m EUR
+            "drawn_amount": [873200.0, 1309800.0],  # EUR 1m + EUR 1.5m at 0.8732
             "undrawn_amount": [0.0, 0.0],
             "nominal_amount": [0.0, 0.0],
             "lgd": [0.45, 0.15],
@@ -971,11 +973,11 @@ class TestRetailClassification:
             "ultimate_parent_reference": [None, None],
             "counterparty_hierarchy_depth": [1, 1],
             "lending_group_reference": ["LG_PARENT", "LG_PARENT"],
-            "lending_group_total_exposure": [2200000.0, 2200000.0],  # 2.5m EUR
+            "lending_group_total_exposure": [2183000.0, 2183000.0],  # EUR 2.5m at 0.8732
             # Residential exclusion: mortgage fully secured
-            "residential_collateral_value": [0.0, 1320000.0],
-            "exposure_for_retail_threshold": [880000.0, 0.0],
-            "lending_group_adjusted_exposure": [880000.0, 880000.0],  # At threshold
+            "residential_collateral_value": [0.0, 1309800.0],
+            "exposure_for_retail_threshold": [873200.0, 0.0],
+            "lending_group_adjusted_exposure": [873200.0, 873200.0],  # At threshold
         }).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)

@@ -140,6 +140,7 @@ class HierarchyResolver:
         collateral = data.collateral
         guarantees = data.guarantees
         provisions = data.provisions
+        equity_exposures = data.equity_exposures
 
         if config.apply_fx_conversion and data.fx_rates is not None:
             exposures = fx_converter.convert_exposures(exposures, data.fx_rates, config)
@@ -149,6 +150,8 @@ class HierarchyResolver:
                 guarantees = fx_converter.convert_guarantees(guarantees, data.fx_rates, config)
             if provisions is not None:
                 provisions = fx_converter.convert_provisions(provisions, data.fx_rates, config)
+            if equity_exposures is not None:
+                equity_exposures = fx_converter.convert_equity_exposures(equity_exposures, data.fx_rates, config)
         else:
             # Add audit trail columns with null values when no conversion
             exposures = exposures.with_columns([
@@ -190,6 +193,7 @@ class HierarchyResolver:
             collateral=collateral,
             guarantees=guarantees,
             provisions=provisions,
+            equity_exposures=equity_exposures,
             lending_group_totals=lending_group_totals,
             hierarchy_errors=errors,
         )

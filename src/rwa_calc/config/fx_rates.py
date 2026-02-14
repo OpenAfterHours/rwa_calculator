@@ -94,6 +94,9 @@ def gbp_to_eur(gbp_amount: Decimal) -> Decimal:
 ThresholdKey = Literal[
     "sme_exposure",
     "sme_turnover",
+    "retail_exposure",
+    "qrre_limit",
+    "lfse_total_assets",
 ]
 
 CRR_REGULATORY_THRESHOLDS_EUR: dict[ThresholdKey, Decimal] = {
@@ -105,6 +108,17 @@ CRR_REGULATORY_THRESHOLDS_EUR: dict[ThresholdKey, Decimal] = {
     # SME turnover threshold for eligibility (CRR Art. 501)
     # Counterparties with turnover below this qualify as SME
     "sme_turnover": Decimal("50000000"),  # EUR 50m
+
+    # Retail exposure threshold (CRR Art. 123(c))
+    # Aggregated exposure to lending group must be below this
+    "retail_exposure": Decimal("1000000"),  # EUR 1m
+
+    # QRRE maximum limit per exposure (CRR Art. 123)
+    "qrre_limit": Decimal("100000"),  # EUR 100k
+
+    # Large financial sector entity total assets threshold (CRR Art. 4(1)(146))
+    # Entities with total assets >= this threshold are LFSE
+    "lfse_total_assets": Decimal("70000000000"),  # EUR 70bn
 }
 
 

@@ -67,6 +67,7 @@ def usd_exposures() -> pl.LazyFrame:
         "exposure_type": ["loan", "loan"],
         "currency": ["USD", "USD"],
         "drawn_amount": [1000000.0, 500000.0],
+        "interest": [5000.0, 2500.0],
         "undrawn_amount": [200000.0, 100000.0],
         "nominal_amount": [0.0, 0.0],
     })
@@ -80,6 +81,7 @@ def gbp_exposures() -> pl.LazyFrame:
         "exposure_type": ["loan"],
         "currency": ["GBP"],
         "drawn_amount": [1000000.0],
+        "interest": [3000.0],
         "undrawn_amount": [200000.0],
         "nominal_amount": [0.0],
     })
@@ -93,6 +95,7 @@ def multi_currency_exposures() -> pl.LazyFrame:
         "exposure_type": ["loan", "loan", "loan", "loan"],
         "currency": ["GBP", "USD", "EUR", "ZAR"],  # ZAR has no rate
         "drawn_amount": [1000000.0, 1000000.0, 1000000.0, 1000000.0],
+        "interest": [1000.0, 2000.0, 3000.0, 4000.0],
         "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
         "nominal_amount": [0.0, 0.0, 0.0, 0.0],
     })
@@ -183,8 +186,8 @@ class TestConvertExposures:
 
         # Original currency should be preserved
         assert df["original_currency"][0] == "USD"
-        # Original amount should be drawn + nominal
-        assert df["original_amount"][0] == 1000000.0
+        # Original amount should be drawn + interest + nominal
+        assert df["original_amount"][0] == pytest.approx(1000000.0 + 5000.0)
         # FX rate applied should be recorded
         assert df["fx_rate_applied"][0] == pytest.approx(0.79)
 
@@ -386,6 +389,7 @@ class TestFXConverterIntegration:
             "exposure_type": ["loan"] * 5,
             "currency": ["GBP", "USD", "EUR", "JPY", "CHF"],
             "drawn_amount": [1000.0, 1000.0, 1000.0, 100000.0, 1000.0],  # JPY needs larger amount
+            "interest": [0.0] * 5,
             "undrawn_amount": [0.0] * 5,
             "nominal_amount": [0.0] * 5,
         })
@@ -435,6 +439,7 @@ class TestFXConverterIntegration:
             "exposure_type": ["loan", "loan"],
             "currency": ["GBP", "USD"],
             "drawn_amount": [1000.0, 1000.0],
+            "interest": [0.0, 0.0],
             "undrawn_amount": [0.0, 0.0],
             "nominal_amount": [0.0, 0.0],
         })
@@ -450,3 +455,243 @@ class TestFXConverterIntegration:
 
         usd_row = df.filter(pl.col("exposure_reference") == "EXP_USD")
         assert usd_row["drawn_amount"][0] == pytest.approx(1000.0 * 0.90)
+
+
+# =============================================================================
+# INTEREST CONVERSION TESTS
+# =============================================================================
+
+
+class TestConvertInterest:
+    """Tests for interest column conversion."""
+
+    def test_interest_converted_with_fx_rate(
+        self,
+        fx_converter: FXConverter,
+        usd_exposures: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that interest column is converted using FX rate."""
+        result = fx_converter.convert_exposures(usd_exposures, fx_rates, config)
+        df = result.collect()
+
+        # USD rate to GBP is 0.79; interest was 5000 and 2500
+        assert df["interest"][0] == pytest.approx(5000.0 * 0.79)
+        assert df["interest"][1] == pytest.approx(2500.0 * 0.79)
+
+    def test_interest_included_in_original_amount(
+        self,
+        fx_converter: FXConverter,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that original_amount includes interest."""
+        exposures = pl.LazyFrame({
+            "exposure_reference": ["EXP_001"],
+            "exposure_type": ["loan"],
+            "currency": ["USD"],
+            "drawn_amount": [100000.0],
+            "interest": [5000.0],
+            "undrawn_amount": [0.0],
+            "nominal_amount": [10000.0],
+        })
+        result = fx_converter.convert_exposures(exposures, fx_rates, config)
+        df = result.collect()
+
+        # original_amount = drawn + interest + nominal = 100000 + 5000 + 10000
+        assert df["original_amount"][0] == pytest.approx(115000.0)
+
+    def test_null_interest_handled_gracefully(
+        self,
+        fx_converter: FXConverter,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that null interest is preserved as null after conversion."""
+        exposures = pl.LazyFrame({
+            "exposure_reference": ["EXP_001", "EXP_002"],
+            "exposure_type": ["loan", "loan"],
+            "currency": ["USD", "USD"],
+            "drawn_amount": [100000.0, 200000.0],
+            "interest": [None, 3000.0],
+            "undrawn_amount": [0.0, 0.0],
+            "nominal_amount": [0.0, 0.0],
+        })
+        result = fx_converter.convert_exposures(exposures, fx_rates, config)
+        df = result.collect()
+
+        # Null interest should remain null
+        assert df["interest"][0] is None
+        # Non-null interest should be converted
+        assert df["interest"][1] == pytest.approx(3000.0 * 0.79)
+
+    def test_interest_not_converted_for_gbp(
+        self,
+        fx_converter: FXConverter,
+        gbp_exposures: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that GBP interest remains unchanged."""
+        result = fx_converter.convert_exposures(gbp_exposures, fx_rates, config)
+        df = result.collect()
+
+        assert df["interest"][0] == 3000.0
+
+    def test_null_interest_in_original_amount_fallback(
+        self,
+        fx_converter: FXConverter,
+        config_fx_disabled: CalculationConfig,
+    ) -> None:
+        """Test original_amount with null interest when FX disabled."""
+        exposures = pl.LazyFrame({
+            "exposure_reference": ["EXP_001"],
+            "exposure_type": ["loan"],
+            "currency": ["USD"],
+            "drawn_amount": [100000.0],
+            "interest": [None],
+            "undrawn_amount": [0.0],
+            "nominal_amount": [10000.0],
+        })
+        result = fx_converter.convert_exposures(exposures, None, config_fx_disabled)
+        df = result.collect()
+
+        # original_amount = drawn + fill_null(interest, 0) + nominal = 100000 + 0 + 10000
+        assert df["original_amount"][0] == pytest.approx(110000.0)
+
+
+# =============================================================================
+# EQUITY CONVERSION TESTS
+# =============================================================================
+
+
+class TestConvertEquityExposures:
+    """Tests for equity exposure conversion."""
+
+    @pytest.fixture
+    def equity_exposures(self) -> pl.LazyFrame:
+        """Create sample equity exposures."""
+        return pl.LazyFrame({
+            "equity_reference": ["EQ_001", "EQ_002", "EQ_003"],
+            "currency": ["USD", "EUR", "GBP"],
+            "carrying_value": [500000.0, 300000.0, 200000.0],
+            "fair_value": [550000.0, 310000.0, 200000.0],
+        })
+
+    def test_equity_values_converted(
+        self,
+        fx_converter: FXConverter,
+        equity_exposures: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that carrying_value and fair_value are converted."""
+        result = fx_converter.convert_equity_exposures(equity_exposures, fx_rates, config)
+        df = result.collect()
+
+        # USD: rate 0.79
+        usd_row = df.filter(pl.col("equity_reference") == "EQ_001")
+        assert usd_row["carrying_value"][0] == pytest.approx(500000.0 * 0.79)
+        assert usd_row["fair_value"][0] == pytest.approx(550000.0 * 0.79)
+
+        # EUR: rate 0.88
+        eur_row = df.filter(pl.col("equity_reference") == "EQ_002")
+        assert eur_row["carrying_value"][0] == pytest.approx(300000.0 * 0.88)
+        assert eur_row["fair_value"][0] == pytest.approx(310000.0 * 0.88)
+
+    def test_equity_currency_updated_to_target(
+        self,
+        fx_converter: FXConverter,
+        equity_exposures: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that currency is updated to target after conversion."""
+        result = fx_converter.convert_equity_exposures(equity_exposures, fx_rates, config)
+        df = result.collect()
+
+        assert df["currency"].to_list() == ["GBP", "GBP", "GBP"]
+
+    def test_equity_gbp_unchanged(
+        self,
+        fx_converter: FXConverter,
+        equity_exposures: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that GBP equity exposures remain unchanged."""
+        result = fx_converter.convert_equity_exposures(equity_exposures, fx_rates, config)
+        df = result.collect()
+
+        gbp_row = df.filter(pl.col("equity_reference") == "EQ_003")
+        assert gbp_row["carrying_value"][0] == 200000.0
+        assert gbp_row["fair_value"][0] == 200000.0
+
+    def test_equity_fx_disabled_skips_conversion(
+        self,
+        fx_converter: FXConverter,
+        equity_exposures: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config_fx_disabled: CalculationConfig,
+    ) -> None:
+        """Test that equity conversion is skipped when disabled."""
+        result = fx_converter.convert_equity_exposures(equity_exposures, fx_rates, config_fx_disabled)
+        df = result.collect()
+
+        assert df["carrying_value"][0] == 500000.0
+        assert df["currency"][0] == "USD"
+
+    def test_equity_none_fx_rates_skips_conversion(
+        self,
+        fx_converter: FXConverter,
+        equity_exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """Test that equity conversion is skipped when fx_rates is None."""
+        result = fx_converter.convert_equity_exposures(equity_exposures, None, config)
+        df = result.collect()
+
+        assert df["carrying_value"][0] == 500000.0
+
+
+# =============================================================================
+# RETAIL THRESHOLD DYNAMIC RATE TESTS
+# =============================================================================
+
+
+class TestRetailThresholdsDynamicRate:
+    """Tests for dynamic EUR/GBP rate in RetailThresholds."""
+
+    def test_crr_retail_thresholds_use_dynamic_rate(self) -> None:
+        """Test RetailThresholds.crr() uses the provided eur_gbp_rate."""
+        from rwa_calc.contracts.config import RetailThresholds
+
+        rate = Decimal("0.90")
+        thresholds = RetailThresholds.crr(eur_gbp_rate=rate)
+
+        # EUR 1m * 0.90 = GBP 900k
+        assert thresholds.max_exposure_threshold == Decimal("1000000") * rate
+        # EUR 100k * 0.90 = GBP 90k
+        assert thresholds.qrre_max_limit == Decimal("100000") * rate
+
+    def test_crr_retail_thresholds_default_rate(self) -> None:
+        """Test RetailThresholds.crr() with default rate."""
+        from rwa_calc.contracts.config import RetailThresholds
+
+        thresholds = RetailThresholds.crr()
+
+        # Default rate is 0.8732
+        assert thresholds.max_exposure_threshold == Decimal("1000000") * Decimal("0.8732")
+        assert thresholds.qrre_max_limit == Decimal("100000") * Decimal("0.8732")
+
+    def test_crr_config_passes_rate_to_retail_thresholds(self) -> None:
+        """Test CalculationConfig.crr() passes eur_gbp_rate to RetailThresholds."""
+        rate = Decimal("0.85")
+        config = CalculationConfig.crr(
+            reporting_date=date(2026, 1, 1),
+            eur_gbp_rate=rate,
+        )
+
+        assert config.retail_thresholds.max_exposure_threshold == Decimal("1000000") * rate
+        assert config.retail_thresholds.qrre_max_limit == Decimal("100000") * rate

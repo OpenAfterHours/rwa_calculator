@@ -30,6 +30,7 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.config.fx_rates import CRR_REGULATORY_THRESHOLDS_EUR
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
@@ -221,7 +222,7 @@ class ExposureClassifier:
             sa_exposures=sa_exposures,
             irb_exposures=irb_exposures,
             slotting_exposures=slotting_exposures,
-            equity_exposures=None,  # TODO: Add equity exposure handling
+            equity_exposures=data.equity_exposures,
             collateral=data.collateral,
             guarantees=data.guarantees,
             provisions=data.provisions,
@@ -661,8 +662,9 @@ class ExposureClassifier:
         - requires_fi_scalar: Either LFSE or unregulated FSE
         """
         # Large FSE threshold: EUR 70bn (CRR Art. 4(1)(146))
-        lfse_threshold_eur = Decimal("70_000_000_000")
-        lfse_threshold_gbp = float(lfse_threshold_eur * config.eur_gbp_rate)
+        lfse_threshold_gbp = float(
+            CRR_REGULATORY_THRESHOLDS_EUR["lfse_total_assets"] * config.eur_gbp_rate
+        )
 
         return exposures.with_columns([
             # Is this a financial sector entity type?

@@ -273,11 +273,16 @@ class RetailThresholds:
     qrre_max_limit: Decimal = Decimal("100000")  # GBP 100k limit per exposure
 
     @classmethod
-    def crr(cls) -> RetailThresholds:
-        """CRR retail thresholds (converted from EUR)."""
+    def crr(cls, eur_gbp_rate: Decimal = Decimal("0.8732")) -> RetailThresholds:
+        """
+        CRR retail thresholds (converted from EUR dynamically).
+
+        Args:
+            eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
+        """
         return cls(
-            max_exposure_threshold=Decimal("880000"),  # EUR 1m * 0.88
-            qrre_max_limit=Decimal("88000"),  # EUR 100k * 0.88
+            max_exposure_threshold=Decimal("1000000") * eur_gbp_rate,  # EUR 1m
+            qrre_max_limit=Decimal("100000") * eur_gbp_rate,  # EUR 100k
         )
 
     @classmethod
@@ -507,7 +512,7 @@ class CalculationConfig:
             lgd_floors=LGDFloors.crr(),
             supporting_factors=SupportingFactors.crr(),
             output_floor=OutputFloorConfig.crr(),
-            retail_thresholds=RetailThresholds.crr(),
+            retail_thresholds=RetailThresholds.crr(eur_gbp_rate=eur_gbp_rate),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
             scaling_factor=Decimal("1.06"),
             eur_gbp_rate=eur_gbp_rate,

@@ -117,6 +117,7 @@ class ResolvedHierarchyBundle:
     collateral: pl.LazyFrame | None = None
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
+    equity_exposures: pl.LazyFrame | None = None
     hierarchy_errors: list = field(default_factory=list)
 
 

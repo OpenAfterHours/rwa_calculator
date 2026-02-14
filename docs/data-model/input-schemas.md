@@ -361,8 +361,9 @@ contingents = pl.DataFrame({
 | `collateral_type` | `String` | Yes | Type of collateral (see valid values) |
 | `currency` | `String` | Yes | ISO 4217 currency code |
 | `maturity_date` | `Date` | No | Collateral maturity (if applicable) |
-| `market_value` | `Float64` | Yes | Current market value |
+| `market_value` | `Float64` | Conditional | Current market value (required unless `pledge_percentage` provided) |
 | `nominal_value` | `Float64` | No | Nominal/face value |
+| `pledge_percentage` | `Float64` | Conditional | Fraction of beneficiary EAD (0.5 = 50%). Used when `market_value` not provided. Resolved to absolute `market_value` before haircuts. |
 | `beneficiary_type` | `String` | Yes | Level of allocation |
 | `beneficiary_reference` | `String` | Yes | Reference to counterparty/facility/loan |
 | `issuer_cqs` | `Int8` | No | CQS of issuer (for securities) |

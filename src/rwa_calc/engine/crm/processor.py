@@ -332,6 +332,117 @@ class CRMProcessor:
             pl.col("ead_after_collateral").alias("ead_after_guarantee"),
         ])
 
+    def _resolve_pledge_percentages(
+        self,
+        collateral: pl.LazyFrame,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Resolve percentage-based collateral pledges to absolute market values.
+
+        When collateral has pledge_percentage set instead of market_value, computes
+        market_value = pledge_percentage * beneficiary_total_ead. The base EAD depends
+        on the beneficiary level:
+        - Direct (exposure/loan/contingent): that exposure's ead_gross
+        - Facility: sum of ead_gross for all exposures under that facility
+        - Counterparty: sum of ead_gross for all exposures of that counterparty
+
+        market_value takes precedence when non-null and non-zero.
+
+        Args:
+            collateral: Collateral data, may or may not have pledge_percentage column
+            exposures: Exposures with ead_gross, parent_facility_reference, counterparty_reference
+
+        Returns:
+            Collateral with market_value resolved from pledge_percentage where applicable
+        """
+        coll_schema = collateral.collect_schema()
+        if "pledge_percentage" not in coll_schema.names():
+            return collateral
+
+        # Determine which rows need resolution:
+        # market_value is null or 0, AND pledge_percentage is set and > 0
+        needs_resolve = (
+            (pl.col("market_value").is_null() | (pl.col("market_value") == 0.0)) &
+            pl.col("pledge_percentage").is_not_null() &
+            (pl.col("pledge_percentage") > 0.0)
+        )
+
+        has_beneficiary_type = "beneficiary_type" in coll_schema.names()
+
+        # Build EAD lookups at each level
+        # Direct: exposure_reference → ead_gross
+        direct_ead = exposures.select([
+            pl.col("exposure_reference").alias("_ben_ref"),
+            pl.col("ead_gross").alias("_beneficiary_ead"),
+        ])
+
+        # Facility: parent_facility_reference → sum(ead_gross)
+        exp_schema = exposures.collect_schema()
+        if "parent_facility_reference" in exp_schema.names():
+            facility_ead = exposures.filter(
+                pl.col("parent_facility_reference").is_not_null()
+            ).group_by("parent_facility_reference").agg(
+                pl.col("ead_gross").sum().alias("_beneficiary_ead"),
+            ).select(
+                pl.col("parent_facility_reference").cast(pl.String).alias("_ben_ref"),
+                pl.col("_beneficiary_ead"),
+            )
+        else:
+            facility_ead = pl.LazyFrame(
+                schema={"_ben_ref": pl.String, "_beneficiary_ead": pl.Float64}
+            )
+
+        # Counterparty: counterparty_reference → sum(ead_gross)
+        counterparty_ead = exposures.group_by("counterparty_reference").agg(
+            pl.col("ead_gross").sum().alias("_beneficiary_ead"),
+        ).rename({"counterparty_reference": "_ben_ref"})
+
+        if has_beneficiary_type:
+            # Split by beneficiary_type, join to correct lookup, concat back
+            bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+
+            direct_types = ["exposure", "loan", "contingent"]
+            coll_direct = collateral.filter(bt_lower.is_in(direct_types))
+            coll_facility = collateral.filter(bt_lower == "facility")
+            coll_counterparty = collateral.filter(bt_lower == "counterparty")
+
+            # Join each split to its EAD lookup
+            coll_direct = coll_direct.join(
+                direct_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
+            )
+            coll_facility = coll_facility.join(
+                facility_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
+            )
+            coll_counterparty = coll_counterparty.join(
+                counterparty_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
+            )
+
+            collateral = pl.concat([coll_direct, coll_facility, coll_counterparty], how="diagonal_relaxed")
+        else:
+            # Legacy: join beneficiary_reference to exposure_reference
+            collateral = collateral.join(
+                direct_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
+            )
+
+        # Fill null EAD (no match found)
+        collateral = collateral.with_columns(
+            pl.col("_beneficiary_ead").fill_null(0.0),
+        )
+
+        # Resolve: when needs_resolve, set market_value = pledge_percentage * beneficiary_ead
+        collateral = collateral.with_columns(
+            pl.when(needs_resolve)
+            .then(pl.col("pledge_percentage") * pl.col("_beneficiary_ead"))
+            .otherwise(pl.col("market_value"))
+            .alias("market_value"),
+        )
+
+        # Drop helper column
+        collateral = collateral.drop("_beneficiary_ead")
+
+        return collateral
+
     def apply_collateral(
         self,
         exposures: pl.LazyFrame,
@@ -349,6 +460,9 @@ class CRMProcessor:
         Returns:
             Exposures with collateral effects applied
         """
+        # Resolve percentage-based collateral to absolute market values
+        collateral = self._resolve_pledge_percentages(collateral, exposures)
+
         # Apply haircuts to collateral
         adjusted_collateral = self._haircut_calculator.apply_haircuts(
             collateral, exposures, config

@@ -103,9 +103,11 @@ graph LR
     F -->|SA| G[SA Calculator]
     F -->|IRB| H[IRB Calculator]
     F -->|Slotting| I[Slotting Calculator]
+    F -->|Equity| L[Equity Calculator]
     G --> J[Aggregator]
     H --> J
     I --> J
+    L --> J
     J --> K[Final RWA]
 ```
 
@@ -119,6 +121,7 @@ graph LR
 | **Foundation IRB (F-IRB)** | Bank-estimated PD, supervisory LGD | CRR, Basel 3.1 |
 | **Advanced IRB (A-IRB)** | Bank-estimated PD, LGD, and EAD | CRR, Basel 3.1 |
 | **Slotting** | Category-based approach for specialised lending | CRR, Basel 3.1 |
+| **Equity** | Risk weights for equity holdings (Art. 133 SA / Art. 155 IRB Simple) | CRR, Basel 3.1 |
 
 ### By Exposure Class
 
@@ -142,7 +145,7 @@ The calculator is built using modern, high-performance technologies:
 - **Polars** - Vectorized DataFrame operations with LazyFrame optimization
 - **Pydantic** - Data validation and type safety
 - **polars-normal-stats** - Pure Polars statistical functions for IRB formulas
-- **Pytest** - Comprehensive test coverage (800+ tests)
+- **Pytest** - Comprehensive test coverage (1,188+ tests)
 
 ## Regulatory References
 

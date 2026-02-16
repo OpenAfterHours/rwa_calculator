@@ -843,10 +843,10 @@ class SlottingLazyFrame:
         """
         Apply slotting risk weights based on category.
 
-        CRR Risk Weights:
-        - Strong: 70% (HVCRE: 70%)
-        - Good: 90% (HVCRE: 115%)
-        - Satisfactory: 115% (HVCRE: 140%)
+        CRR Risk Weights (Strong=Good=70%, HVCRE same as standard):
+        - Strong: 70%
+        - Good: 70%
+        - Satisfactory: 115%
         - Weak: 250%
         - Default: 0% (deducted)
 

@@ -198,28 +198,32 @@ This page provides a comprehensive comparison between CRR (Basel 3.0) and Basel 
 
 ### Project Finance
 
-| Category | CRR | Basel 3.1 |
-|----------|-----|-----------|
-| Strong (Pre-Op) | 70% | **80%** |
-| Strong (Operational) | 70% | 70% |
-| Good (Pre-Op) | 90% | **100%** |
-| Good (Operational) | 90% | 90% |
-| Satisfactory (Pre-Op) | 115% | **120%** |
-| Satisfactory (Operational) | 115% | 115% |
-| Weak | 250% | **350%** |
+| Category | CRR | Basel 3.1 (Pre-Op) | Basel 3.1 (Operational) |
+|----------|-----|---------------------|------------------------|
+| Strong | 70% | **80%** | 70% |
+| Good | 70% | **100%** | 70% |
+| Satisfactory | 115% | **120%** | 115% |
+| Weak | 250% | **350%** | 250% |
 
 ### Other Specialised Lending
 
 | Category | CRR | Basel 3.1 |
 |----------|-----|-----------|
 | Strong | 70% | 70% |
-| Good | 90% | 90% |
+| Good | 70% | 70% |
 | Satisfactory | 115% | 115% |
 | Weak | 250% | 250% |
-| HVCRE Strong | 95% | 95% |
-| HVCRE Good | 120% | 120% |
-| HVCRE Satisfactory | 140% | 140% |
-| HVCRE Weak | 250% | 250% |
+
+### HVCRE
+
+| Category | CRR | Basel 3.1 |
+|----------|-----|-----------|
+| Strong | 70% | 95% |
+| Good | 70% | 120% |
+| Satisfactory | 115% | 140% |
+| Weak | 250% | 250% |
+
+**Note:** Under CRR, HVCRE uses the same weights as standard specialised lending (Strong=Good=70%).
 
 ## Impact Analysis
 

@@ -222,7 +222,7 @@ The calculation flows through distinct stages:
 2. **Hierarchy Resolver**: Resolves parent-child relationships and inherits attributes
 3. **Classifier**: Assigns exposure classes and calculation approaches
 4. **CRM Processor**: Applies collateral, guarantees, and provisions
-5. **Calculators**: Compute RWA using SA, IRB, or Slotting
+5. **Calculators**: Compute RWA using SA, IRB, Slotting, or Equity
 6. **Aggregator**: Combines results and applies floors/factors
 
 ## Next Steps

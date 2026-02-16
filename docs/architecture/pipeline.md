@@ -34,9 +34,11 @@ flowchart TD
         F[SA Calculator]
         G[IRB Calculator]
         H[Slotting Calculator]
+        L[Equity Calculator]
         F1[SAResultBundle]
         G1[IRBResultBundle]
         H1[SlottingResultBundle]
+        L1[EquityResultBundle]
     end
 
     subgraph Stage6[Stage 6: Aggregation]
@@ -51,7 +53,8 @@ flowchart TD
     E1 --> F --> F1
     E1 --> G --> G1
     E1 --> H --> H1
-    F1 & G1 & H1 --> I --> I1
+    E1 --> L --> L1
+    F1 & G1 & H1 & L1 --> I --> I1
 ```
 
 ## Pipeline Orchestration

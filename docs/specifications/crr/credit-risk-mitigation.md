@@ -135,6 +135,32 @@ The calculator tracks pre- and post-CRM values for audit:
 - `guaranteed_portion` / `unguaranteed_portion`
 - `is_guarantee_beneficial`
 
+## Cross-Approach CCF Substitution (CRR Art. 153(3))
+
+When an IRB exposure is guaranteed by a counterparty under the Standardised Approach, the guaranteed portion uses SA CCFs instead of IRB supervisory CCFs.
+
+### Guarantor Approach Determination
+
+The guarantor's approach is "sa" when:
+- The firm lacks IRB permission for the guarantor's exposure class, OR
+- The guarantor has only an external rating (no internal PD)
+
+The guarantor's approach is "irb" only when both conditions are met:
+- The firm has IRB permission for the guarantor's exposure class, AND
+- The guarantor has an internal rating with PD
+
+### EAD Split
+
+```
+ead_guaranteed = guarantee_ratio × (drawn + undrawn × ccf_sa)
+ead_unguaranteed = (1 - guarantee_ratio) × (drawn + undrawn × ccf_irb)
+```
+
+### Output Fields
+
+- `ccf_original`, `ccf_guaranteed`, `ccf_unguaranteed`
+- `guarantee_ratio`, `guarantor_approach`, `guarantor_rating_type`
+
 ## Key Scenarios
 
 | Scenario ID | Description |

@@ -120,6 +120,14 @@ class SlottingResultBundle:
     """Slotting calculation results."""
     data: pl.LazyFrame
     errors: list[CalculationError] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class EquityResultBundle:
+    """Equity calculation results."""
+    results: pl.LazyFrame
+    calculation_audit: pl.LazyFrame | None = None
+    approach: str = "sa"  # "sa" (Article 133) or "irb_simple" (Article 155)
+    errors: list = field(default_factory=list)
 ```
 
 #### `AggregatedResultBundle`
@@ -274,6 +282,25 @@ class SlottingCalculatorProtocol(Protocol):
         """Calculate Slotting RWA."""
         ...
 
+class EquityCalculatorProtocol(Protocol):
+    """Protocol for Equity calculators."""
+
+    def calculate(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> LazyFrameResult:
+        """Calculate equity RWA."""
+        ...
+
+    def get_equity_result_bundle(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> EquityResultBundle:
+        """Calculate equity RWA and return as bundle."""
+        ...
+
 class OutputAggregatorProtocol(Protocol):
     """Protocol for output aggregators."""
 
@@ -282,6 +309,7 @@ class OutputAggregatorProtocol(Protocol):
         sa_result: SAResultBundle,
         irb_result: IRBResultBundle,
         slotting_result: SlottingResultBundle,
+        equity_result: EquityResultBundle,
         config: CalculationConfig,
     ) -> AggregatedResultBundle:
         """Aggregate results."""

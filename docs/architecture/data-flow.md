@@ -23,7 +23,7 @@ flowchart TD
     end
 
     subgraph Calculation
-        H[SA/IRB/Slotting]
+        H[SA/IRB/Slotting/Equity]
     end
 
     subgraph Output
@@ -59,18 +59,22 @@ flowchart TD
 
 ## Schema Definitions
 
+Schemas are defined in `data/schemas.py`. The key column names use `_reference` suffixes (e.g., `counterparty_reference`, `facility_reference`) rather than `_id`.
+
 ### Counterparty Schema
 
 ```python
 COUNTERPARTY_SCHEMA = {
-    "counterparty_id": pl.Utf8,           # Required: Unique identifier
-    "counterparty_name": pl.Utf8,         # Required: Legal name
-    "counterparty_type": pl.Utf8,         # Required: SOVEREIGN/INSTITUTION/CORPORATE/INDIVIDUAL
-    "country_code": pl.Utf8,              # Required: ISO country code
-    "annual_turnover": pl.Float64,        # Optional: For SME classification
-    "total_assets": pl.Float64,           # Optional: For SME classification
-    "is_sme": pl.Boolean,                 # Optional: Explicit SME flag
-    "parent_counterparty_id": pl.Utf8,    # Optional: Parent for hierarchy
+    "counterparty_reference": pl.String,  # Unique identifier
+    "counterparty_name": pl.String,       # Legal name
+    "entity_type": pl.String,             # Single source of truth: sovereign, institution, corporate, etc.
+    "country_code": pl.String,            # ISO country code
+    "annual_revenue": pl.Float64,         # For SME classification (EUR 50m threshold)
+    "total_assets": pl.Float64,           # For large FSE threshold (EUR 70bn)
+    "default_status": pl.Boolean,         # Default indicator
+    "sector_code": pl.String,             # Based on SIC
+    "is_regulated": pl.Boolean,           # For FI scalar: unregulated FSE gets 1.25x correlation
+    "is_managed_as_retail": pl.Boolean,   # SME managed on pooled retail basis - 75% RW
 }
 ```
 
@@ -78,15 +82,23 @@ COUNTERPARTY_SCHEMA = {
 
 ```python
 FACILITY_SCHEMA = {
-    "facility_id": pl.Utf8,               # Required: Unique identifier
-    "counterparty_id": pl.Utf8,           # Required: Link to counterparty
-    "facility_type": pl.Utf8,             # Required: RCF/TERM/MORTGAGE/etc.
-    "committed_amount": pl.Float64,       # Required: Total commitment
-    "drawn_amount": pl.Float64,           # Required: Current utilization
-    "currency": pl.Utf8,                  # Required: ISO currency code
-    "start_date": pl.Date,                # Required: Facility start
-    "maturity_date": pl.Date,             # Required: Final maturity
-    "is_unconditionally_cancellable": pl.Boolean,  # Required: For CCF
+    "facility_reference": pl.String,      # Unique identifier
+    "product_type": pl.String,            # Product classification
+    "book_code": pl.String,               # Book identifier
+    "counterparty_reference": pl.String,  # Link to counterparty
+    "value_date": pl.Date,                # Facility start
+    "maturity_date": pl.Date,             # Final maturity
+    "currency": pl.String,                # ISO currency code
+    "limit": pl.Float64,                  # Total commitment
+    "committed": pl.Boolean,              # Committed flag
+    "lgd": pl.Float64,                    # A-IRB modelled LGD
+    "beel": pl.Float64,                   # Best estimate expected loss
+    "is_revolving": pl.Boolean,           # Revolving facility flag
+    "seniority": pl.String,              # senior/subordinated - affects F-IRB LGD
+    "risk_type": pl.String,              # FR/MR/MLR/LR - determines CCF
+    "ccf_modelled": pl.Float64,          # A-IRB modelled CCF (0.0-1.5)
+    "is_short_term_trade_lc": pl.Boolean, # 20% CCF under F-IRB (Art. 166(9))
+    "is_buy_to_let": pl.Boolean,         # BTL - excluded from SME supporting factor
 }
 ```
 
@@ -94,25 +106,33 @@ FACILITY_SCHEMA = {
 
 ```python
 LOAN_SCHEMA = {
-    "loan_id": pl.Utf8,                   # Required: Unique identifier
-    "facility_id": pl.Utf8,               # Required: Link to facility
-    "principal_amount": pl.Float64,       # Required: Outstanding principal
-    "interest_rate": pl.Float64,          # Optional: Interest rate
-    "is_defaulted": pl.Boolean,           # Required: Default indicator
-    "days_past_due": pl.Int32,            # Required: DPD count
+    "loan_reference": pl.String,          # Unique identifier
+    "product_type": pl.String,            # Product classification
+    "book_code": pl.String,               # Book identifier
+    "counterparty_reference": pl.String,  # Link to counterparty
+    "value_date": pl.Date,                # Loan start
+    "maturity_date": pl.Date,             # Final maturity
+    "currency": pl.String,                # ISO currency code
+    "drawn_amount": pl.Float64,           # Outstanding principal
+    "interest": pl.Float64,              # Accrued interest (adds to EAD)
+    "lgd": pl.Float64,                   # A-IRB modelled LGD
+    "beel": pl.Float64,                  # Best estimate expected loss
+    "seniority": pl.String,             # senior/subordinated
+    "is_buy_to_let": pl.Boolean,        # BTL property lending
 }
 ```
 
 ### Rating Schema
 
 ```python
-RATING_SCHEMA = {
-    "rating_id": pl.Utf8,                 # Required: Unique identifier
-    "counterparty_id": pl.Utf8,           # Required: Link to counterparty
-    "rating_agency": pl.Utf8,             # Required: S&P/MOODYS/FITCH/INTERNAL
-    "rating": pl.Utf8,                    # Required: Rating value
-    "rating_date": pl.Date,               # Required: As-of date
-    "pd": pl.Float64,                     # Optional: Associated PD (for internal)
+RATINGS_SCHEMA = {
+    "rating_reference": pl.String,        # Unique identifier
+    "counterparty_reference": pl.String,  # Link to counterparty
+    "rating_type": pl.String,             # internal/external
+    "rating_agency": pl.String,           # internal, S&P, Moodys, Fitch, DBRS, etc.
+    "rating_value": pl.String,            # AAA, AA+, Aa1, etc.
+    "cqs": pl.Int8,                       # Credit Quality Step 1-6
+    "pd": pl.Float64,                     # Probability of Default (for internal ratings)
 }
 ```
 
@@ -120,15 +140,22 @@ RATING_SCHEMA = {
 
 ```python
 COLLATERAL_SCHEMA = {
-    "collateral_id": pl.Utf8,             # Required: Unique identifier
-    "counterparty_id": pl.Utf8,           # Optional: Counterparty-level allocation
-    "facility_id": pl.Utf8,               # Optional: Facility-level allocation
-    "loan_id": pl.Utf8,                   # Optional: Loan-level allocation
-    "collateral_type": pl.Utf8,           # Required: CASH/BOND/EQUITY/RE/etc.
-    "value": pl.Float64,                  # Required: Current value
-    "currency": pl.Utf8,                  # Required: ISO currency code
-    "issuer_cqs": pl.Int32,               # Optional: For bond collateral
-    "residual_maturity_years": pl.Float64,  # Optional: For haircut calculation
+    "collateral_reference": pl.String,    # Unique identifier
+    "collateral_type": pl.String,         # cash, gold, equity, bond, real_estate, etc.
+    "currency": pl.String,                # ISO currency code
+    "maturity_date": pl.Date,             # Collateral maturity
+    "market_value": pl.Float64,           # Current market value
+    "nominal_value": pl.Float64,          # Nominal value
+    "pledge_percentage": pl.Float64,      # Fraction of beneficiary EAD (0.5 = 50%)
+    "beneficiary_type": pl.String,        # counterparty/loan/facility/contingent
+    "beneficiary_reference": pl.String,   # Reference to linked entity
+    "issuer_cqs": pl.Int8,               # CQS of issuer (1-6) for haircut lookup
+    "issuer_type": pl.String,            # sovereign/pse/corporate/securitisation
+    "residual_maturity_years": pl.Float64, # For haircut bands
+    "property_type": pl.String,          # residential/commercial (RE collateral)
+    "property_ltv": pl.Float64,          # Loan-to-value ratio
+    "is_income_producing": pl.Boolean,   # Material income dependence
+    "is_adc": pl.Boolean,               # Acquisition/Development/Construction
 }
 ```
 
@@ -410,19 +437,20 @@ df = result.to_dataframe()
 
 ## Data Lineage
 
-Every result can be traced back:
+Each calculator produces an audit trail LazyFrame alongside results. The audit trail captures the full calculation reasoning per exposure, including classification decisions, CRM adjustments, and formula parameters. Access audit data via the result bundles:
 
 ```python
-# Access calculation details
-details = result.get_calculation_details(exposure_id="E001")
+# Access audit trails from result bundles
+result = pipeline.run_with_data(raw_data, config)
 
-print(f"Exposure: {details.exposure_id}")
-print(f"Input EAD: {details.input_ead}")
-print(f"CRM Adjustment: {details.crm_adjustment}")
-print(f"Final EAD: {details.final_ead}")
-print(f"Risk Weight: {details.risk_weight}")
-print(f"Supporting Factor: {details.supporting_factor}")
-print(f"Final RWA: {details.rwa}")
+# SA audit
+sa_audit = result.sa_result.calculation_audit
+
+# IRB audit
+irb_audit = result.irb_result.calculation_audit
+
+# Materialize results with full detail
+df = result.to_dataframe()
 ```
 
 ## Next Steps

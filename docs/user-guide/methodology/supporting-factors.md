@@ -17,6 +17,7 @@ The SME Supporting Factor (Article 501 CRR) provides capital relief for exposure
 | **Exposure class** | Corporate, Retail, or Secured by Real Estate |
 | **Approach** | SA or IRB |
 | **Exposure type** | Not in default |
+| **Not buy-to-let** | `is_buy_to_let = False` (BTL exposures excluded per CRR Art. 501) |
 
 ### Calculation
 
@@ -155,7 +156,7 @@ Additional criteria for maximum benefit:
 **Exposure:**
 - Infrastructure project finance
 - Toll road concession
-- Base RWA: £15m (slotting category "Good", 90% RW)
+- Base RWA: £15m (slotting category "Satisfactory", 115% RW)
 - Qualifies for infrastructure factor
 
 **Calculation:**
@@ -252,7 +253,7 @@ from rwa_calc.engine.sa.supporting_factors import (
 sme_factor = calculate_sme_factor(
     total_exposure=8_000_000,
     counterparty_turnover=30_000_000,
-    eur_gbp_rate=0.88
+    eur_gbp_rate=0.8732
 )
 
 # Infrastructure check
@@ -268,15 +269,15 @@ infra_eligible = is_qualifying_infrastructure(
 Thresholds are defined in EUR and converted to GBP:
 
 ```python
-# Default rate
-EUR_GBP_RATE = 0.88
+# Default rate (matches CalculationConfig.eur_gbp_rate)
+EUR_GBP_RATE = 0.8732
 
 # Thresholds
 SME_TURNOVER_EUR = 50_000_000
-SME_TURNOVER_GBP = 50_000_000 × 0.88 = 44_000_000
+SME_TURNOVER_GBP = 50_000_000 × 0.8732 ≈ 43_660_000
 
 SME_EXPOSURE_EUR = 2_500_000
-SME_EXPOSURE_GBP = 2_500_000 × 0.88 = 2_200_000
+SME_EXPOSURE_GBP = 2_500_000 × 0.8732 ≈ 2_183_000
 ```
 
 ### Configuring FX Rate

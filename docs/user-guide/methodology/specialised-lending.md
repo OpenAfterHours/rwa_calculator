@@ -72,31 +72,28 @@ Each exposure is assessed against supervisory criteria:
 
 ### CRR Risk Weights
 
+Under CRR, all specialised lending types (including HVCRE) use the same risk weights, with Strong and Good both at 70%:
+
 | Category | Strong | Good | Satisfactory | Weak | Default |
 |----------|--------|------|--------------|------|---------|
-| Project Finance | 70% | 90% | 115% | 250% | 0%* |
-| Object Finance | 70% | 90% | 115% | 250% | 0%* |
-| Commodities Finance | 70% | 90% | 115% | 250% | 0%* |
-| IPRE | 70% | 90% | 115% | 250% | 0%* |
-| HVCRE | 95% | 120% | 140% | 250% | 0%* |
+| All types (incl. HVCRE) | 70% | 70% | 115% | 250% | 0%* |
 
 *Default exposures: 0% RW with 50% EL deduction
 
 ### Basel 3.1 Risk Weights
 
+Basel 3.1 introduces differentiated weights for HVCRE and pre-operational project finance:
+
 | Category | Strong | Good | Satisfactory | Weak | Default |
 |----------|--------|------|--------------|------|---------|
 | PF (Pre-Operational) | **80%** | **100%** | **120%** | **350%** | 0%* |
-| PF (Operational) | 70% | 90% | 115% | 250% | 0%* |
-| Object Finance | 70% | 90% | 115% | 250% | 0%* |
-| Commodities Finance | 70% | 90% | 115% | 250% | 0%* |
-| IPRE | 70% | 90% | 115% | 250% | 0%* |
+| Standard (PF Operational, OF, CF, IPRE) | 70% | 70% | 115% | 250% | 0%* |
 | HVCRE | 95% | 120% | 140% | 250% | 0%* |
 
 !!! note "Basel 3.1 Project Finance Changes"
     Pre-operational project finance receives higher risk weights under Basel 3.1:
     - Strong: 70% → 80%
-    - Good: 90% → 100%
+    - Good: 70% → 100%
     - Satisfactory: 115% → 120%
     - Weak: 250% → 350%
 
@@ -248,10 +245,10 @@ if framework == "BASEL_3_1" and lending_type == "PROJECT_FINANCE":
 
 **Risk Weights:**
 
-| Category | Standard SL | HVCRE |
-|----------|-------------|-------|
+| Category | CRR (all types) | Basel 3.1 HVCRE |
+|----------|-----------------|-----------------|
 | Strong | 70% | 95% |
-| Good | 90% | 120% |
+| Good | 70% | 120% |
 | Satisfactory | 115% | 140% |
 | Weak | 250% | 250% |
 

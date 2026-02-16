@@ -309,6 +309,63 @@ adjustment = (3 - 0.25) / (5 - 0.25) = 2.75 / 4.75 = 0.579
 # £4m guarantee provides £2.32m effective protection
 ```
 
+## Cross-Approach CCF Substitution
+
+When an IRB exposure is guaranteed by a counterparty that falls under the Standardised Approach, the guaranteed portion uses **SA CCFs** instead of the IRB supervisory CCFs. This reflects the principle that the risk of the guaranteed portion should be treated consistently with the guarantor's approach.
+
+### When It Applies
+
+Cross-approach CCF substitution triggers when:
+
+1. The exposure is under **F-IRB or A-IRB**
+2. The guarantor's approach is determined to be **SA** — either because:
+   - The firm does not have IRB permission for the guarantor's exposure class, OR
+   - The guarantor only has an external rating (no internal PD estimate)
+
+### Guarantor Approach Determination
+
+The guarantor's approach depends on three factors:
+
+| Condition | Guarantor Approach |
+|-----------|-------------------|
+| Firm has IRB permission for guarantor's class AND guarantor has internal rating (PD) | IRB |
+| Firm lacks IRB permission for guarantor's class | SA |
+| Guarantor has external rating only (no PD) | SA |
+
+For example, a sovereign guarantor rated CQS 1 with no internal PD will always be treated as SA, even if the firm has F-IRB permission for sovereign exposures.
+
+### EAD Recalculation
+
+When the guarantor approach is SA, the exposure's EAD is recalculated with a split:
+
+```python
+# Original EAD uses IRB CCF
+ead_original = drawn + undrawn × ccf_irb
+
+# Guaranteed portion recalculated with SA CCF
+ead_guaranteed = guarantee_ratio × (drawn + undrawn × ccf_sa)
+
+# Unguaranteed portion retains IRB CCF
+ead_unguaranteed = (1 - guarantee_ratio) × (drawn + undrawn × ccf_irb)
+```
+
+### Output Columns
+
+The cross-approach CCF process adds these columns:
+
+| Column | Description |
+|--------|-------------|
+| `ccf_original` | Original IRB CCF |
+| `ccf_guaranteed` | CCF for guaranteed portion (SA if cross-approach) |
+| `ccf_unguaranteed` | CCF for unguaranteed portion (IRB) |
+| `guarantee_ratio` | Proportion guaranteed |
+| `guarantor_approach` | "sa" or "irb" |
+| `guarantor_rating_type` | "internal" or "external" |
+
+### Regulatory Reference
+
+CRR Article 153(3) and CRE31.4 — when a guarantee provides credit protection, the CCF applicable to the protected portion should be consistent with the guarantor's treatment.
+
 ## Provisions
 
 ### SA Treatment

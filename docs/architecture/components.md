@@ -13,6 +13,7 @@ This document provides detailed documentation of each component in the RWA calcu
 | **SA Calculator** | `engine/sa/calculator.py` | Standardised RWA |
 | **IRB Calculator** | `engine/irb/calculator.py` | IRB RWA |
 | **Slotting Calculator** | `engine/slotting/calculator.py` | Slotting RWA |
+| **Equity Calculator** | `engine/equity/calculator.py` | Equity RWA |
 | **Aggregator** | `engine/aggregator.py` | Combine results |
 
 ## Polars Namespace Extensions
@@ -584,6 +585,77 @@ class SlottingCalculator:
 - HVCRE treatment
 - Infrastructure factor application
 
+## Equity Calculator
+
+### Purpose
+
+Calculate RWA for equity exposures using SA (Article 133) or IRB Simple (Article 155) risk weights.
+
+### Interface
+
+```python
+class EquityCalculatorProtocol(Protocol):
+    def calculate(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> LazyFrameResult:
+        """Calculate RWA for equity exposures."""
+        ...
+
+    def get_equity_result_bundle(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> EquityResultBundle:
+        """Calculate equity RWA and return as bundle."""
+        ...
+```
+
+### Implementation
+
+The approach is determined by the firm's IRB permissions:
+
+- **SA (Article 133)**: Default approach. Risk weights based on equity type (central bank 0%, listed 100%, unlisted 250%, speculative 400%).
+- **IRB Simple (Article 155)**: When IRB is permitted. Risk weights differ (private equity diversified 190%, exchange-traded 290%, other 370%).
+
+```python
+class EquityCalculator:
+    """Calculate equity exposure RWA."""
+
+    def get_equity_result_bundle(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig
+    ) -> EquityResultBundle:
+        approach = self._determine_approach(config)
+        exposures = self._prepare_columns(data.equity_exposures, config)
+
+        if approach == "sa":
+            exposures = self._apply_equity_weights_sa(exposures, config)
+        else:
+            exposures = self._apply_equity_weights_irb_simple(exposures, config)
+
+        exposures = self._calculate_rwa(exposures)
+        audit = self._build_audit(exposures, approach)
+
+        return EquityResultBundle(
+            results=exposures,
+            calculation_audit=audit,
+            approach=approach,
+            errors=[],
+        )
+```
+
+### Key Features
+
+- Approach determination from IRB permissions
+- SA Article 133 risk weight assignment
+- IRB Simple Article 155 risk weight assignment
+- Diversified portfolio treatment for private equity
+- Equity exposures bypass CRM (no collateral applied)
+- Full audit trail
+
 ## Aggregator
 
 ### Purpose
@@ -599,6 +671,7 @@ class OutputAggregatorProtocol(Protocol):
         sa_result: SAResultBundle,
         irb_result: IRBResultBundle,
         slotting_result: SlottingResultBundle,
+        equity_result: EquityResultBundle,
         config: CalculationConfig
     ) -> AggregatedResultBundle:
         """Aggregate results and apply final adjustments."""
@@ -616,6 +689,7 @@ class OutputAggregator:
         sa_result: SAResultBundle,
         irb_result: IRBResultBundle,
         slotting_result: SlottingResultBundle,
+        equity_result: EquityResultBundle,
         config: CalculationConfig
     ) -> AggregatedResultBundle:
         # Combine all results
@@ -623,6 +697,7 @@ class OutputAggregator:
             sa_result.data.with_columns(approach=pl.lit("SA")),
             irb_result.data.with_columns(approach=pl.lit("IRB")),
             slotting_result.data.with_columns(approach=pl.lit("SLOTTING")),
+            equity_result.results.with_columns(approach=pl.lit("EQUITY")),
         ])
 
         # Apply output floor (Basel 3.1)

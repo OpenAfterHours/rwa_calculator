@@ -118,9 +118,11 @@ The `risk_type` column determines CCF for all off-balance sheet exposures:
 | Category | CRR | Basel 3.1 |
 |----------|-----|-----------|
 | Strong | 70% | 70% |
-| Good | 90% | 90% |
+| Good | 70% | 70% |
 | Satisfactory | 115% | 115% |
 | Weak | 250% | 250% |
+
+**Note:** Under CRR, Strong and Good both receive 70% RW.
 
 ### Project Finance Pre-Operational (Basel 3.1)
 
@@ -133,12 +135,14 @@ The `risk_type` column determines CCF for all off-balance sheet exposures:
 
 ### HVCRE
 
-| Category | Risk Weight |
-|----------|-------------|
-| Strong | 95% |
-| Good | 120% |
-| Satisfactory | 140% |
-| Weak | 250% |
+| Category | CRR | Basel 3.1 |
+|----------|-----|-----------|
+| Strong | 70% | 95% |
+| Good | 70% | 120% |
+| Satisfactory | 115% | 140% |
+| Weak | 250% | 250% |
+
+**Note:** Under CRR, HVCRE uses the same weights as standard specialised lending. Basel 3.1 introduces elevated weights for HVCRE.
 
 ## F-IRB Supervisory LGD
 
@@ -158,10 +162,10 @@ The `risk_type` column determines CCF for all off-balance sheet exposures:
 | Unsecured senior | 25% |
 | Unsecured subordinated | 50% |
 | Financial collateral | 0% |
-| Receivables | 15% |
-| Commercial real estate | 15% |
-| Residential real estate | 10% |
-| Other physical | 20% |
+| Receivables | 10% |
+| Commercial real estate | 10% |
+| Residential real estate | 5% |
+| Other physical | 15% |
 
 ## PD Floors
 

@@ -169,6 +169,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `risk_type` | `String` | Yes | Off-balance sheet risk category (see below) |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
+| `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
 
 **Valid `product_type` values:**
 
@@ -252,13 +253,13 @@ facilities = pl.DataFrame({
 | `maturity_date` | `Date` | Yes | Loan maturity date |
 | `currency` | `String` | Yes | ISO 4217 currency code |
 | `drawn_amount` | `Float64` | Yes | Outstanding principal balance |
+| `interest` | `Float64` | No | Accrued interest (adds to on-balance-sheet EAD) |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `beel` | `Float64` | No | Best estimate expected loss |
-| `seniority` | `String` | Yes | `senior` or `subordinated` |
-| `risk_type` | `String` | Yes | Off-balance sheet risk category (see Facility schema) |
-| `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
+| `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
+| `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
 
-**Note:** For drawn loans, `risk_type` is typically `FR` (full_risk) since the amount is already drawn and CCF doesn't apply. However, the field is required for schema consistency across all exposure types.
+**Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
 
 **Example:**
 
@@ -665,13 +666,13 @@ fx_rates = pl.DataFrame({
 
 **Valid `slotting_category` values:**
 
-| Category | RW (>=2.5yr) | RW (<2.5yr) | Description |
-|----------|--------------|-------------|-------------|
-| `strong` | 70% | 50% | Excellent risk profile |
-| `good` | 90% | 70% | Good risk profile |
-| `satisfactory` | 115% | 115% | Acceptable risk profile |
-| `weak` | 250% | 250% | Higher risk profile |
-| `default` | 0% | 0% | In default (provisions apply) |
+| Category | CRR RW | Description |
+|----------|--------|-------------|
+| `strong` | 70% | Excellent risk profile |
+| `good` | 70% | Good risk profile (same as Strong under CRR) |
+| `satisfactory` | 115% | Acceptable risk profile |
+| `weak` | 250% | Higher risk profile |
+| `default` | 0% | In default (provisions apply) |
 
 ---
 

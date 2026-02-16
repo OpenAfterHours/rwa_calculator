@@ -20,7 +20,7 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 | Output Floor | None | 72.5% of SA | PRA PS9/24 |
 | PD Floor | 0.03% (all classes) | Differentiated | CRE30.55 |
 | A-IRB LGD Floors | None | Yes (by collateral type) | CRE30.41 |
-| Slotting Risk Weights | Non-differentiated | HVCRE differentiated | PRA PS9/24 |
+| Slotting Risk Weights | Maturity-differentiated | HVCRE + PF pre-op differentiated | PRA PS9/24 |
 
 ## Differentiated PD Floors (Basel 3.1)
 
@@ -37,12 +37,26 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 
 | Collateral Type | LGD Floor |
 |----------------|-----------|
-| Unsecured | 25% |
+| Unsecured (Senior) | 25% |
+| Unsecured (Subordinated) | 50% |
 | Financial collateral | 0% |
-| Receivables | 10% |
-| Commercial real estate | 10% |
-| Residential real estate | 5% |
-| Other physical | 15% |
+| Receivables | 10%* |
+| Commercial real estate | 10%* |
+| Residential real estate | 5%* |
+| Other physical | 15%* |
+
+*Values reflect PRA implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%). Verify against PRA PS1/26 final rules.
+
+## F-IRB Supervisory LGD (CRE32)
+
+| Exposure Type | CRR | Basel 3.1 |
+|---------------|-----|-----------|
+| Corporate/Institution (Senior) | 45% | 40% |
+| Corporate/Institution (Subordinated) | 75% | 75% |
+| Secured - Financial Collateral | 0% | 0% |
+| Secured - Receivables | 35% | 20% |
+| Secured - CRE/RRE | 35% | 20% |
+| Secured - Other Physical | 40% | 25% |
 
 ## Output Floor
 
@@ -65,17 +79,47 @@ RWA_final = max(RWA_IRB, floor_percentage x RWA_SA)
 
 ## Slotting Risk Weights (Basel 3.1)
 
-HVCRE exposures receive elevated risk weights under Basel 3.1:
+Basel 3.1 (BCBS CRE33) introduces three distinct slotting weight tables:
 
-| Category | Non-HVCRE | HVCRE |
-|----------|-----------|-------|
-| Strong | 50% | 100% |
-| Good | 70% | 70% |
-| Satisfactory | 100% | 150% |
-| Weak | 150% | 150% |
-| Default | 350% | 350% |
+### Non-HVCRE Operational (OF, CF, IPRE, PF Operational)
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 70% |
+| Good | 90% |
+| Satisfactory | 115% |
+| Weak | 250% |
+| Default | 0% (EL) |
+
+### Project Finance Pre-Operational
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 80% |
+| Good | 100% |
+| Satisfactory | 120% |
+| Weak | 350% |
+| Default | 0% (EL) |
+
+### HVCRE
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 95% |
+| Good | 120% |
+| Satisfactory | 140% |
+| Weak | 250% |
+| Default | 0% (EL) |
 
 Compare with CRR slotting weights in the [Slotting Approach](../crr/slotting-approach.md) specification.
+
+## Large Corporate Correlation Multiplier (CRE31.5)
+
+Large corporates (consolidated revenue > £500m) receive a **1.25x** multiplier on their asset correlation under F-IRB.
+
+## A-IRB CCF Floor (CRE32.27)
+
+A-IRB own-estimate CCFs must be at least **50% of the SA CCF** for the same item type.
 
 ## Configuration
 

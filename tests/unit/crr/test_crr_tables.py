@@ -337,9 +337,9 @@ class TestSlottingRiskWeights:
         """Strong category gets 70% RW."""
         assert SLOTTING_RISK_WEIGHTS[SlottingCategory.STRONG] == Decimal("0.70")
 
-    def test_good_seventy_percent(self) -> None:
-        """Good category gets 70% RW (same as Strong under CRR)."""
-        assert SLOTTING_RISK_WEIGHTS[SlottingCategory.GOOD] == Decimal("0.70")
+    def test_good_ninety_percent(self) -> None:
+        """Good category gets 90% RW (>=2.5yr, non-HVCRE)."""
+        assert SLOTTING_RISK_WEIGHTS[SlottingCategory.GOOD] == Decimal("0.90")
 
     def test_satisfactory_one_fifteen(self) -> None:
         """Satisfactory category gets 115% RW."""
@@ -353,10 +353,15 @@ class TestSlottingRiskWeights:
         """Default category gets 0% RW (100% provisioned)."""
         assert SLOTTING_RISK_WEIGHTS[SlottingCategory.DEFAULT] == Decimal("0.00")
 
-    def test_hvcre_same_as_standard(self) -> None:
-        """Under CRR, HVCRE uses same weights as non-HVCRE."""
-        for cat in SlottingCategory:
-            assert SLOTTING_RISK_WEIGHTS[cat] == SLOTTING_RISK_WEIGHTS_HVCRE[cat]
+    def test_hvcre_different_from_standard(self) -> None:
+        """Under CRR Art. 153(5), HVCRE has higher weights than non-HVCRE."""
+        # HVCRE Table 2 (>=2.5yr): Strong=95%, Good=120%, Satisfactory=140%
+        assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.STRONG] == Decimal("0.95")
+        assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.GOOD] == Decimal("1.20")
+        assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.SATISFACTORY] == Decimal("1.40")
+        # Weak and Default are same across both tables
+        assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.WEAK] == SLOTTING_RISK_WEIGHTS[SlottingCategory.WEAK]
+        assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.DEFAULT] == SLOTTING_RISK_WEIGHTS[SlottingCategory.DEFAULT]
 
 
 class TestSlottingLookup:
@@ -381,13 +386,13 @@ class TestSlottingLookup:
 class TestSlottingDataFrame:
     """Tests for slotting DataFrame generation."""
 
-    def test_table_has_both_types(self) -> None:
-        """Table includes both HVCRE and non-HVCRE entries."""
+    def test_table_has_both_types_and_maturities(self) -> None:
+        """Table includes HVCRE/non-HVCRE and maturity splits (5 categories × 2 × 2 = 20)."""
         df = get_slotting_table()
         hvcre_count = df.filter(pl.col("is_hvcre") == True).height
         non_hvcre_count = df.filter(pl.col("is_hvcre") == False).height
-        assert hvcre_count == 5
-        assert non_hvcre_count == 5
+        assert hvcre_count == 10  # 5 categories × 2 maturities
+        assert non_hvcre_count == 10  # 5 categories × 2 maturities
 
 
 # =============================================================================

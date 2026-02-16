@@ -239,10 +239,10 @@ def crr_ccf() -> dict[str, Decimal]:
 
 @pytest.fixture
 def crr_slotting_rw() -> dict[str, Decimal]:
-    """CRR slotting risk weights."""
+    """CRR slotting risk weights (non-HVCRE, >=2.5yr maturity)."""
     return {
         "strong": Decimal("0.70"),
-        "good": Decimal("0.70"),
+        "good": Decimal("0.90"),
         "satisfactory": Decimal("1.15"),
         "weak": Decimal("2.50"),
         "default": Decimal("0.00"),

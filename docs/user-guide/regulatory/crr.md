@@ -185,15 +185,29 @@ Where:
 - t = Residual maturity of collateral (years, min 0.25)
 - T = Residual maturity of exposure (years, min 0.25)
 
-## Slotting Risk Weights
+## Slotting Risk Weights (Art. 153(5))
 
-| Category | Strong | Good | Satisfactory | Weak |
-|----------|--------|------|--------------|------|
-| Project Finance | 70% | 90% | 115% | 250% |
-| Object Finance | 70% | 90% | 115% | 250% |
-| Commodities Finance | 70% | 90% | 115% | 250% |
-| IPRE | 70% | 90% | 115% | 250% |
-| HVCRE | 95% | 120% | 140% | 250% |
+CRR Art. 153(5) defines two risk weight tables with maturity-based splits.
+
+### Non-HVCRE (Table 1 — PF, OF, CF, IPRE)
+
+| Category | Remaining Maturity ≥ 2.5yr | Remaining Maturity < 2.5yr |
+|----------|---------------------------|---------------------------|
+| Strong | 70% | 50% |
+| Good | 90% | 70% |
+| Satisfactory | 115% | 115% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
+
+### HVCRE (Table 2)
+
+| Category | Remaining Maturity ≥ 2.5yr | Remaining Maturity < 2.5yr |
+|----------|---------------------------|---------------------------|
+| Strong | 95% | 70% |
+| Good | 120% | 95% |
+| Satisfactory | 140% | 140% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
 
 ## IRB Formulas
 

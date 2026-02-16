@@ -108,6 +108,7 @@ class LGDFloors:
     """
 
     unsecured: Decimal = Decimal("0.25")  # 25%
+    subordinated_unsecured: Decimal = Decimal("0.50")  # 50%
     financial_collateral: Decimal = Decimal("0.0")  # 0%
     receivables: Decimal = Decimal("0.10")  # 10%
     commercial_real_estate: Decimal = Decimal("0.10")  # 10%
@@ -130,6 +131,7 @@ class LGDFloors:
         """CRR: No LGD floors (all zero)."""
         return cls(
             unsecured=Decimal("0.0"),
+            subordinated_unsecured=Decimal("0.0"),
             financial_collateral=Decimal("0.0"),
             receivables=Decimal("0.0"),
             commercial_real_estate=Decimal("0.0"),
@@ -139,9 +141,16 @@ class LGDFloors:
 
     @classmethod
     def basel_3_1(cls) -> LGDFloors:
-        """Basel 3.1 LGD floors (CRE30.41)."""
+        """
+        Basel 3.1 LGD floors (CRE30.41).
+
+        Note: Values reflect PRA implementation. BCBS standard values differ
+        for some collateral types (Receivables: 15%, RRE: 10%, Other Physical: 20%).
+        TODO: Verify against PRA PS1/26 final rules when published.
+        """
         return cls(
             unsecured=Decimal("0.25"),  # 25%
+            subordinated_unsecured=Decimal("0.50"),  # 50%
             financial_collateral=Decimal("0.0"),  # 0%
             receivables=Decimal("0.10"),  # 10%
             commercial_real_estate=Decimal("0.10"),  # 10%
@@ -441,7 +450,7 @@ class CalculationConfig:
         output_floor: Output floor configuration
         retail_thresholds: Retail classification thresholds
         irb_permissions: IRB approach permissions
-        scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153)
+        scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
         correlation_multiplier: SME correlation adjustment multiplier
         collect_engine: Polars engine for .collect() - 'streaming' (default)
             processes in batches for lower memory usage, 'cpu' for in-memory
@@ -534,7 +543,7 @@ class CalculationConfig:
         - LGD floors for A-IRB by collateral type
         - No supporting factors (SME/infrastructure)
         - Output floor (72.5%, transitional)
-        - 1.06 scaling factor retained for IRB K
+        - 1.06 scaling factor removed (PRA CP16/22 confirms)
 
         Args:
             reporting_date: As-of date for calculation
@@ -555,7 +564,7 @@ class CalculationConfig:
             output_floor=OutputFloorConfig.basel_3_1(),
             retail_thresholds=RetailThresholds.basel_3_1(),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
-            scaling_factor=Decimal("1.06"),
+            scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA CP16/22)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             collect_engine=collect_engine,
         )

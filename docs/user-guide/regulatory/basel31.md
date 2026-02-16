@@ -85,12 +85,27 @@ New minimum LGD values for Advanced IRB:
 | Unsecured - Senior | 25% |
 | Unsecured - Subordinated | 50% |
 | Secured - Financial Collateral | 0% |
-| Secured - Receivables | 15% |
-| Secured - Commercial Real Estate | 15% |
-| Secured - Residential Real Estate | 10% |
-| Secured - Other Physical | 20% |
+| Secured - Receivables | 10%* |
+| Secured - Commercial Real Estate | 10%* |
+| Secured - Residential Real Estate | 5%* |
+| Secured - Other Physical | 15%* |
 
-### 6. Revised SA Risk Weights
+*Values reflect PRA implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%). Verify against PRA PS1/26 final rules.
+
+### 6. F-IRB Supervisory LGD Changes (CRE32)
+
+Basel 3.1 recalibrates F-IRB supervisory LGD values:
+
+| Exposure Type | CRR | Basel 3.1 |
+|---------------|-----|-----------|
+| Corporate/Institution (Senior) | 45% | **40%** |
+| Corporate/Institution (Subordinated) | 75% | **75%** |
+| Secured - Financial Collateral | 0% | **0%** |
+| Secured - Receivables | 35% | **20%** |
+| Secured - CRE/RRE | 35% | **20%** |
+| Secured - Other Physical | 40% | **25%** |
+
+### 7. Revised SA Risk Weights
 
 Standardised Approach risk weights are recalibrated:
 
@@ -100,11 +115,18 @@ Standardised Approach risk weights are recalibrated:
 |-----|-----|-----------|
 | CQS 1 (AAA to AA-) | 20% | 20% |
 | CQS 2 (A+ to A-) | 50% | 50% |
-| CQS 3 (BBB+ to BBB-) | 75% | 75% |
+| CQS 3 (BBB+ to BBB-) | 100% | **75%** |
 | CQS 4 (BB+ to BB-) | 100% | 100% |
-| CQS 5 (B+ to B-) | 150% | 100% |
+| CQS 5 (B+ to B-) | 150% | **100%** |
 | CQS 6 (CCC+/Below) | 150% | 150% |
 | Unrated | 100% | 100% |
+
+#### New Corporate Sub-Categories (CRE20.47-49)
+
+| Sub-Category | Risk Weight | Criteria |
+|-------------|-------------|----------|
+| Investment Grade | **65%** | Publicly traded + investment grade rating |
+| SME Corporate | **85%** | Turnover ≤ EUR 50m, unrated |
 
 #### Real Estate Exposures
 
@@ -129,19 +151,43 @@ New LTV-based risk weights for real estate:
 | ≤ 60% | 70% |
 | > 60% | 110% |
 
-### 7. Input Floors for IRB
+#### ADC Exposures (CRE20.85)
+
+Acquisition, Development and Construction exposures receive a **150%** risk weight (up from 100% under CRR).
+
+#### Retail Exposures
+
+| Type | CRR | Basel 3.1 |
+|------|-----|-----------|
+| QRRE (Transactors) | 75% | **45%** |
+| QRRE (Revolvers) | 75% | 75% |
+| Retail Other | 75% | 75% |
+
+#### Defaulted Exposures (CRE20.87-90)
+
+| Provision Coverage | Unsecured | RE-Secured |
+|-------------------|-----------|------------|
+| < 20% provisions | 150% | 100% |
+| ≥ 20% provisions | 100% | 50% |
+
+### 8. Input Floors for IRB
 
 Beyond PD and LGD floors, Basel 3.1 introduces:
 
 **EAD Floors:**
 - CCF cannot be lower than SA values for comparable exposures
+- A-IRB CCFs must be at least **50% of the SA CCF** (CRE32.27)
 - Minimum 10% CCF for unconditionally cancellable facilities (vs 0% CRR)
 
 **Maturity:**
 - Effective maturity floor: 1 year
 - Cap remains: 5 years
 
-### 8. Due Diligence Requirements
+### 9. Large Corporate Correlation Multiplier (CRE31.5)
+
+Large corporates (consolidated revenue > £500m) receive a **1.25x** multiplier on their asset correlation under F-IRB. This increases capital requirements for exposures to large financial and non-financial corporates.
+
+### 10. Due Diligence Requirements
 
 Enhanced requirements for unrated exposures:
 - Institutions must perform internal assessment
@@ -242,13 +288,13 @@ from rwa_calc.contracts.config import CalculationConfig
 
 config = CalculationConfig.basel_3_1(
     reporting_date=date(2027, 1, 1),
-
-    # Output floor (72.5% fully phased in, or transitional)
-    output_floor_percentage=0.725,
-
-    # Transitional year (for phase-in calculation)
-    transitional_floor_year=2027,  # 50% in 2027
 )
+
+# Internally sets:
+# - scaling_factor: 1.0 (removed)
+# - output_floor: 72.5% (with transitional schedule)
+# - pd_floors: differentiated by class
+# - lgd_floors: by collateral type
 ```
 
 ## Implementation Timeline
@@ -280,6 +326,8 @@ gantt
 | Real estate | CRE20.70-90 |
 | PD/LGD floors | CRE32 |
 | Specialised lending | CRE33 |
+| Large corporate correlation | CRE31.5 |
+| A-IRB CCF floor | CRE32.27 |
 
 ## Next Steps
 

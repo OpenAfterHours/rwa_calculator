@@ -3,16 +3,16 @@
 Tests cover:
 - Namespace registration and availability
 - Column preparation
-- CRR slotting weights
-- Basel 3.1 slotting weights (non-HVCRE and HVCRE)
+- CRR slotting weights (non-HVCRE and HVCRE, maturity-based)
+- Basel 3.1 slotting weights (non-HVCRE, HVCRE, PF pre-operational)
 - RWA calculation
 - Full pipeline (apply_all)
 - Method chaining
 - Expression namespace methods
 
 References:
-- CRR Art. 153(5): Supervisory slotting approach
-- CRR Art. 147(8): Specialised lending definition
+- CRR Art. 153(5): Supervisory slotting approach (Tables 1 & 2)
+- BCBS CRE33: Basel 3.1 specialised lending slotting
 """
 
 from __future__ import annotations
@@ -118,6 +118,8 @@ class TestPrepareColumns:
         assert "slotting_category" in result.columns
         assert "is_hvcre" in result.columns
         assert "sl_type" in result.columns
+        assert "is_short_maturity" in result.columns
+        assert "is_pre_operational" in result.columns
 
     def test_preserves_existing_columns(self, basic_slotting_exposures: pl.LazyFrame, crr_config: CalculationConfig) -> None:
         """prepare_columns should preserve existing columns."""
@@ -128,154 +130,401 @@ class TestPrepareColumns:
 
 
 # =============================================================================
-# CRR Slotting Weight Tests
+# CRR Slotting Weight Tests — Non-HVCRE >= 2.5yr (default)
 # =============================================================================
 
 
 class TestCRRSlottingWeights:
-    """Tests for CRR slotting weights."""
+    """Tests for CRR slotting weights (non-HVCRE, >= 2.5yr maturity)."""
 
     def test_crr_strong_70_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR Strong category should get 70% risk weight."""
+        """CRR Strong (>=2.5yr) should get 70% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["strong"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
 
-    def test_crr_good_70_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR Good category should get 70% risk weight."""
+    def test_crr_good_90_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR Good (>=2.5yr) should get 90% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["good"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.70)
+        assert result["risk_weight"][0] == pytest.approx(0.90)
 
     def test_crr_satisfactory_115_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR Satisfactory category should get 115% risk weight."""
+        """CRR Satisfactory should get 115% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["satisfactory"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.15)
 
     def test_crr_weak_250_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR Weak category should get 250% risk weight."""
+        """CRR Weak should get 250% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["weak"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(2.50)
 
     def test_crr_default_0_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR Default category should get 0% risk weight (fully provisioned)."""
+        """CRR Default should get 0% risk weight (fully provisioned)."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["default"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.0)
 
-    def test_crr_hvcre_same_weights(self, crr_config: CalculationConfig) -> None:
-        """CRR HVCRE should have same weights as non-HVCRE."""
+
+# =============================================================================
+# CRR Slotting Weight Tests — Non-HVCRE < 2.5yr
+# =============================================================================
+
+
+class TestCRRSlottingWeightsShortMaturity:
+    """Tests for CRR slotting weights (non-HVCRE, < 2.5yr maturity)."""
+
+    def test_crr_short_strong_50_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR Strong (<2.5yr) should get 50% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["strong"],
+            "is_hvcre": [False],
+            "is_short_maturity": [True],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(0.50)
+
+    def test_crr_short_good_70_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR Good (<2.5yr) should get 70% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["good"],
+            "is_hvcre": [False],
+            "is_short_maturity": [True],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(0.70)
+
+
+# =============================================================================
+# CRR Slotting Weight Tests — HVCRE
+# =============================================================================
+
+
+class TestCRRSlottingWeightsHVCRE:
+    """Tests for CRR HVCRE slotting weights (different from non-HVCRE)."""
+
+    def test_crr_hvcre_strong_95_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Strong (>=2.5yr) should get 95% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["strong"],
             "is_hvcre": [True],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
-        # HVCRE strong should still be 70% under CRR
+        assert result["risk_weight"][0] == pytest.approx(0.95)
+
+    def test_crr_hvcre_good_120_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Good (>=2.5yr) should get 120% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["good"],
+            "is_hvcre": [True],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(1.20)
+
+    def test_crr_hvcre_satisfactory_140_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Satisfactory (>=2.5yr) should get 140% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["satisfactory"],
+            "is_hvcre": [True],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(1.40)
+
+    def test_crr_hvcre_short_strong_70_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Strong (<2.5yr) should get 70% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["strong"],
+            "is_hvcre": [True],
+            "is_short_maturity": [True],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
+
+    def test_crr_hvcre_short_good_95_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Good (<2.5yr) should get 95% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["good"],
+            "is_hvcre": [True],
+            "is_short_maturity": [True],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(0.95)
 
 
 # =============================================================================
-# Basel 3.1 Slotting Weight Tests
+# Basel 3.1 Slotting Weight Tests — Non-HVCRE Operational
 # =============================================================================
 
 
 class TestBasel31SlottingWeights:
-    """Tests for Basel 3.1 slotting weights."""
+    """Tests for Basel 3.1 slotting weights (non-HVCRE operational)."""
 
-    def test_basel31_strong_50_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 Strong (non-HVCRE) should get 50% risk weight."""
+    def test_basel31_strong_70_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Strong (non-HVCRE operational) should get 70% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["strong"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.50)
+        assert result["risk_weight"][0] == pytest.approx(0.70)
 
-    def test_basel31_good_70_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 Good (non-HVCRE) should get 70% risk weight."""
+    def test_basel31_good_90_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Good (non-HVCRE operational) should get 90% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["good"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.70)
+        assert result["risk_weight"][0] == pytest.approx(0.90)
 
-    def test_basel31_satisfactory_100_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 Satisfactory (non-HVCRE) should get 100% risk weight."""
+    def test_basel31_satisfactory_115_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Satisfactory (non-HVCRE operational) should get 115% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["satisfactory"],
             "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(1.00)
+        assert result["risk_weight"][0] == pytest.approx(1.15)
 
-    def test_basel31_hvcre_strong_70_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 Strong (HVCRE) should get 70% risk weight."""
+    def test_basel31_weak_250_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Weak (non-HVCRE operational) should get 250% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["weak"],
+            "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(2.50)
+
+    def test_basel31_default_0_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Default should get 0% risk weight (EL covered by provisions)."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["default"],
+            "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(0.0)
+
+
+# =============================================================================
+# Basel 3.1 Slotting Weight Tests — HVCRE
+# =============================================================================
+
+
+class TestBasel31SlottingWeightsHVCRE:
+    """Tests for Basel 3.1 HVCRE slotting weights."""
+
+    def test_basel31_hvcre_strong_95_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Strong (HVCRE) should get 95% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["strong"],
             "is_hvcre": [True],
-        })
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.70)
-
-    def test_basel31_hvcre_good_95_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 Good (HVCRE) should get 95% risk weight."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["SL001"],
-            "ead_final": [1_000_000.0],
-            "slotting_category": ["good"],
-            "is_hvcre": [True],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
         })
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.95)
 
-    def test_basel31_hvcre_satisfactory_120_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 Satisfactory (HVCRE) should get 120% risk weight."""
+    def test_basel31_hvcre_good_120_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Good (HVCRE) should get 120% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["good"],
+            "is_hvcre": [True],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(1.20)
+
+    def test_basel31_hvcre_satisfactory_140_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Satisfactory (HVCRE) should get 140% risk weight."""
         lf = pl.LazyFrame({
             "exposure_reference": ["SL001"],
             "ead_final": [1_000_000.0],
             "slotting_category": ["satisfactory"],
             "is_hvcre": [True],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(1.40)
+
+    def test_basel31_hvcre_weak_250_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 Weak (HVCRE) should get 250% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["weak"],
+            "is_hvcre": [True],
+            "is_short_maturity": [False],
+            "is_pre_operational": [False],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(2.50)
+
+
+# =============================================================================
+# Basel 3.1 Slotting Weight Tests — PF Pre-Operational
+# =============================================================================
+
+
+class TestBasel31SlottingWeightsPFPreOp:
+    """Tests for Basel 3.1 Project Finance pre-operational slotting weights."""
+
+    def test_basel31_pf_preop_strong_80_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 PF Pre-Op Strong should get 80% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["strong"],
+            "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [True],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(0.80)
+
+    def test_basel31_pf_preop_good_100_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 PF Pre-Op Good should get 100% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["good"],
+            "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [True],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(1.00)
+
+    def test_basel31_pf_preop_satisfactory_120_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 PF Pre-Op Satisfactory should get 120% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["satisfactory"],
+            "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [True],
         })
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.20)
+
+    def test_basel31_pf_preop_weak_350_percent(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 PF Pre-Op Weak should get 350% risk weight."""
+        lf = pl.LazyFrame({
+            "exposure_reference": ["SL001"],
+            "ead_final": [1_000_000.0],
+            "slotting_category": ["weak"],
+            "is_hvcre": [False],
+            "is_short_maturity": [False],
+            "is_pre_operational": [True],
+        })
+        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(3.50)
+
+
+# =============================================================================
+# Scaling Factor Tests
+# =============================================================================
+
+
+class TestScalingFactor:
+    """Tests for scaling factor configuration."""
+
+    def test_crr_scaling_factor_106(self) -> None:
+        """CRR config should have scaling_factor = 1.06."""
+        config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+        assert float(config.scaling_factor) == pytest.approx(1.06)
+
+    def test_basel31_scaling_factor_10(self) -> None:
+        """Basel 3.1 config should have scaling_factor = 1.0 (removed)."""
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+        assert float(config.scaling_factor) == pytest.approx(1.0)
 
 
 # =============================================================================
@@ -299,6 +548,7 @@ class TestCalculateRWA:
     def test_rwa_all_categories(self, basic_slotting_exposures: pl.LazyFrame, crr_config: CalculationConfig) -> None:
         """RWA should be calculated for all exposures."""
         result = (basic_slotting_exposures
+            .slotting.prepare_columns(crr_config)
             .slotting.apply_slotting_weights(crr_config)
             .slotting.calculate_rwa()
             .collect()
@@ -368,17 +618,28 @@ class TestExprNamespace:
     """Tests for expression namespace methods."""
 
     def test_lookup_rw_crr(self) -> None:
-        """lookup_rw should return correct CRR weights."""
+        """lookup_rw should return correct CRR weights (>=2.5yr default)."""
         df = pl.DataFrame({"category": ["strong", "good", "satisfactory", "weak", "default"]})
         result = df.with_columns(
             pl.col("category").slotting.lookup_rw(is_crr=True).alias("risk_weight")
         )
 
         assert result["risk_weight"][0] == pytest.approx(0.70)  # strong
-        assert result["risk_weight"][1] == pytest.approx(0.70)  # good
+        assert result["risk_weight"][1] == pytest.approx(0.90)  # good
         assert result["risk_weight"][2] == pytest.approx(1.15)  # satisfactory
         assert result["risk_weight"][3] == pytest.approx(2.50)  # weak
         assert result["risk_weight"][4] == pytest.approx(0.00)  # default
+
+    def test_lookup_rw_crr_hvcre(self) -> None:
+        """lookup_rw should return correct CRR HVCRE weights."""
+        df = pl.DataFrame({"category": ["strong", "good", "satisfactory"]})
+        result = df.with_columns(
+            pl.col("category").slotting.lookup_rw(is_crr=True, is_hvcre=True).alias("risk_weight")
+        )
+
+        assert result["risk_weight"][0] == pytest.approx(0.95)  # strong
+        assert result["risk_weight"][1] == pytest.approx(1.20)  # good
+        assert result["risk_weight"][2] == pytest.approx(1.40)  # satisfactory
 
     def test_lookup_rw_basel31_non_hvcre(self) -> None:
         """lookup_rw should return correct Basel 3.1 non-HVCRE weights."""
@@ -387,9 +648,9 @@ class TestExprNamespace:
             pl.col("category").slotting.lookup_rw(is_crr=False, is_hvcre=False).alias("risk_weight")
         )
 
-        assert result["risk_weight"][0] == pytest.approx(0.50)  # strong
-        assert result["risk_weight"][1] == pytest.approx(0.70)  # good
-        assert result["risk_weight"][2] == pytest.approx(1.00)  # satisfactory
+        assert result["risk_weight"][0] == pytest.approx(0.70)  # strong
+        assert result["risk_weight"][1] == pytest.approx(0.90)  # good
+        assert result["risk_weight"][2] == pytest.approx(1.15)  # satisfactory
 
     def test_lookup_rw_basel31_hvcre(self) -> None:
         """lookup_rw should return correct Basel 3.1 HVCRE weights."""
@@ -398,9 +659,9 @@ class TestExprNamespace:
             pl.col("category").slotting.lookup_rw(is_crr=False, is_hvcre=True).alias("risk_weight")
         )
 
-        assert result["risk_weight"][0] == pytest.approx(0.70)  # strong
-        assert result["risk_weight"][1] == pytest.approx(0.95)  # good
-        assert result["risk_weight"][2] == pytest.approx(1.20)  # satisfactory
+        assert result["risk_weight"][0] == pytest.approx(0.95)  # strong
+        assert result["risk_weight"][1] == pytest.approx(1.20)  # good
+        assert result["risk_weight"][2] == pytest.approx(1.40)  # satisfactory
 
 
 # =============================================================================

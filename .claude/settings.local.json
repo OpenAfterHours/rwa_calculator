@@ -9,7 +9,8 @@
       "WebFetch(domain:www.bis.org)",
       "Bash(python:*)",
       "WebFetch(domain:www.eba.europa.eu)",
-      "WebFetch(domain:www.legislation.gov.uk)"
+      "WebFetch(domain:www.legislation.gov.uk)",
+      "WebSearch"
     ]
   },
   "enabledMcpjsonServers": [

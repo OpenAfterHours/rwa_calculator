@@ -10,7 +10,9 @@ Pipeline position:
 Key responsibilities:
 - Map slotting categories to risk weights
 - Handle HVCRE (High Volatility Commercial Real Estate) distinction
-- Calculate RWA = EAD × RW
+- Handle maturity-based splits (CRR: <2.5yr / >=2.5yr)
+- Handle PF pre-operational vs operational distinction (Basel 3.1)
+- Calculate RWA = EAD x RW
 - Build audit trail of calculations
 
 Specialised Lending Types:
@@ -21,8 +23,9 @@ Specialised Lending Types:
 - High Volatility Commercial Real Estate (HVCRE)
 
 References:
-- CRR Art. 153(5): Supervisory slotting approach
+- CRR Art. 153(5): Supervisory slotting approach (Tables 1 & 2)
 - CRR Art. 147(8): Specialised lending definition
+- BCBS CRE33: Basel 3.1 specialised lending slotting
 """
 
 from __future__ import annotations
@@ -67,15 +70,16 @@ class SlottingCalculator:
 
     Implements SlottingCalculatorProtocol for CRR Art. 153(5).
 
-    The slotting approach maps exposures to five categories:
-    - Strong: 70% RW (CRR) / 50% RW (Basel 3.1 non-HVCRE)
-    - Good: 70% RW (CRR) / 70% RW (Basel 3.1)
-    - Satisfactory: 115% RW (CRR) / 100% RW (Basel 3.1)
-    - Weak: 250% RW (CRR) / 150% RW (Basel 3.1)
-    - Default: 0% RW (100% provisioned) / 350% RW (Basel 3.1)
+    The slotting approach maps exposures to five categories with framework-specific weights:
 
-    CRR Note: Same weights for HVCRE and non-HVCRE.
-    Basel 3.1: Higher weights for HVCRE.
+    CRR (Art. 153(5)) — weights depend on maturity (>=2.5yr shown):
+    - Non-HVCRE: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
+    - HVCRE: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
+
+    Basel 3.1 (BCBS CRE33):
+    - Operational: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
+    - PF Pre-op: Strong=80%, Good=100%, Satisfactory=120%, Weak=350%, Default=0%
+    - HVCRE: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
 
     Usage:
         calculator = SlottingCalculator()
@@ -210,6 +214,18 @@ class SlottingCalculator:
                 pl.lit("project_finance").alias("sl_type"),
             ])
 
+        # CRR maturity flag (default >= 2.5yr = more conservative)
+        if "is_short_maturity" not in schema.names():
+            exposures = exposures.with_columns([
+                pl.lit(False).alias("is_short_maturity"),
+            ])
+
+        # Basel 3.1 pre-operational flag (default operational)
+        if "is_pre_operational" not in schema.names():
+            exposures = exposures.with_columns([
+                pl.lit(False).alias("is_pre_operational"),
+            ])
+
         return exposures
 
     def _apply_slotting_weights(
@@ -218,80 +234,140 @@ class SlottingCalculator:
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Apply slotting risk weights based on category and HVCRE flag.
+        Apply slotting risk weights based on category, HVCRE flag, and maturity.
 
-        CRR has same weights for HVCRE and non-HVCRE.
-        Basel 3.1 has differentiated HVCRE weights.
+        CRR: Maturity-based split with separate HVCRE table (Art. 153(5)).
+        Basel 3.1: HVCRE and PF pre-operational differentiated (BCBS CRE33).
         """
         if config.is_crr:
-            # CRR weights (same for HVCRE and non-HVCRE)
-            return exposures.with_columns([
-                pl.when(pl.col("slotting_category").str.to_lowercase() == "strong")
-                .then(pl.lit(0.70))
-                .when(pl.col("slotting_category").str.to_lowercase() == "good")
-                .then(pl.lit(0.70))
-                .when(pl.col("slotting_category").str.to_lowercase() == "satisfactory")
-                .then(pl.lit(1.15))
-                .when(pl.col("slotting_category").str.to_lowercase() == "weak")
-                .then(pl.lit(2.50))
-                .when(pl.col("slotting_category").str.to_lowercase() == "default")
-                .then(pl.lit(0.00))
-                .otherwise(pl.lit(1.15))  # Default to satisfactory
-                .alias("risk_weight"),
-            ])
+            return self._apply_crr_weights(exposures)
         else:
-            # Basel 3.1 weights (different for HVCRE)
-            return exposures.with_columns([
-                pl.when(
-                    ~pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "strong")
-                ).then(pl.lit(0.50))
-                .when(
-                    ~pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "good")
-                ).then(pl.lit(0.70))
-                .when(
-                    ~pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "satisfactory")
-                ).then(pl.lit(1.00))
-                .when(
-                    ~pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "weak")
-                ).then(pl.lit(1.50))
-                .when(
-                    ~pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "default")
-                ).then(pl.lit(3.50))
-                # HVCRE weights
-                .when(
-                    pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "strong")
-                ).then(pl.lit(0.70))
-                .when(
-                    pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "good")
-                ).then(pl.lit(0.95))
-                .when(
-                    pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "satisfactory")
-                ).then(pl.lit(1.20))
-                .when(
-                    pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "weak")
-                ).then(pl.lit(1.75))
-                .when(
-                    pl.col("is_hvcre") &
-                    (pl.col("slotting_category").str.to_lowercase() == "default")
-                ).then(pl.lit(3.50))
-                .otherwise(pl.lit(1.00))  # Default to satisfactory non-HVCRE
-                .alias("risk_weight"),
-            ])
+            return self._apply_basel31_weights(exposures)
+
+    def _apply_crr_weights(self, exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Apply CRR slotting weights with maturity and HVCRE differentiation."""
+        from rwa_calc.engine.slotting.namespace import (
+            CRR_SLOTTING_WEIGHTS,
+            CRR_SLOTTING_WEIGHTS_SHORT,
+            CRR_SLOTTING_WEIGHTS_HVCRE,
+            CRR_SLOTTING_WEIGHTS_HVCRE_SHORT,
+        )
+
+        cat = pl.col("slotting_category").str.to_lowercase()
+        is_hvcre = pl.col("is_hvcre")
+        is_short = pl.col("is_short_maturity")
+
+        return exposures.with_columns([
+            # Non-HVCRE, >= 2.5yr
+            pl.when(~is_hvcre & ~is_short & (cat == "strong"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS["strong"]))
+            .when(~is_hvcre & ~is_short & (cat == "good"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS["good"]))
+            .when(~is_hvcre & ~is_short & (cat == "satisfactory"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
+            .when(~is_hvcre & ~is_short & (cat == "weak"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS["weak"]))
+            .when(~is_hvcre & ~is_short & (cat == "default"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS["default"]))
+
+            # Non-HVCRE, < 2.5yr
+            .when(~is_hvcre & is_short & (cat == "strong"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["strong"]))
+            .when(~is_hvcre & is_short & (cat == "good"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["good"]))
+            .when(~is_hvcre & is_short & (cat == "satisfactory"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["satisfactory"]))
+            .when(~is_hvcre & is_short & (cat == "weak"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["weak"]))
+            .when(~is_hvcre & is_short & (cat == "default"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["default"]))
+
+            # HVCRE, >= 2.5yr
+            .when(is_hvcre & ~is_short & (cat == "strong"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["strong"]))
+            .when(is_hvcre & ~is_short & (cat == "good"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["good"]))
+            .when(is_hvcre & ~is_short & (cat == "satisfactory"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
+            .when(is_hvcre & ~is_short & (cat == "weak"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["weak"]))
+            .when(is_hvcre & ~is_short & (cat == "default"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["default"]))
+
+            # HVCRE, < 2.5yr
+            .when(is_hvcre & is_short & (cat == "strong"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["strong"]))
+            .when(is_hvcre & is_short & (cat == "good"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["good"]))
+            .when(is_hvcre & is_short & (cat == "satisfactory"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["satisfactory"]))
+            .when(is_hvcre & is_short & (cat == "weak"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["weak"]))
+            .when(is_hvcre & is_short & (cat == "default"))
+            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["default"]))
+
+            .otherwise(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
+            .alias("risk_weight"),
+        ])
+
+    def _apply_basel31_weights(self, exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Apply Basel 3.1 slotting weights (BCBS CRE33)."""
+        from rwa_calc.engine.slotting.namespace import (
+            BASEL31_SLOTTING_WEIGHTS,
+            BASEL31_SLOTTING_WEIGHTS_PF_PREOP,
+            BASEL31_SLOTTING_WEIGHTS_HVCRE,
+        )
+
+        cat = pl.col("slotting_category").str.to_lowercase()
+        is_hvcre = pl.col("is_hvcre")
+        is_preop = pl.col("is_pre_operational")
+
+        return exposures.with_columns([
+            # HVCRE weights
+            pl.when(is_hvcre & (cat == "strong"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["strong"]))
+            .when(is_hvcre & (cat == "good"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["good"]))
+            .when(is_hvcre & (cat == "satisfactory"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
+            .when(is_hvcre & (cat == "weak"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["weak"]))
+            .when(is_hvcre & (cat == "default"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["default"]))
+
+            # PF pre-operational weights
+            .when(~is_hvcre & is_preop & (cat == "strong"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["strong"]))
+            .when(~is_hvcre & is_preop & (cat == "good"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["good"]))
+            .when(~is_hvcre & is_preop & (cat == "satisfactory"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["satisfactory"]))
+            .when(~is_hvcre & is_preop & (cat == "weak"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["weak"]))
+            .when(~is_hvcre & is_preop & (cat == "default"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["default"]))
+
+            # Non-HVCRE operational weights (default)
+            .when(~is_hvcre & ~is_preop & (cat == "strong"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["strong"]))
+            .when(~is_hvcre & ~is_preop & (cat == "good"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["good"]))
+            .when(~is_hvcre & ~is_preop & (cat == "satisfactory"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
+            .when(~is_hvcre & ~is_preop & (cat == "weak"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["weak"]))
+            .when(~is_hvcre & ~is_preop & (cat == "default"))
+            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["default"]))
+
+            .otherwise(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
+            .alias("risk_weight"),
+        ])
 
     def _calculate_rwa(
         self,
         exposures: pl.LazyFrame,
     ) -> pl.LazyFrame:
-        """Calculate RWA = EAD × RW."""
+        """Calculate RWA = EAD x RW."""
         return exposures.with_columns([
             (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
             (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
@@ -347,6 +423,8 @@ class SlottingCalculator:
         category: str,
         is_hvcre: bool = False,
         sl_type: str = "project_finance",
+        is_short_maturity: bool = False,
+        is_pre_operational: bool = False,
         config: CalculationConfig | None = None,
     ) -> dict:
         """
@@ -357,6 +435,8 @@ class SlottingCalculator:
             category: Slotting category (strong, good, satisfactory, weak, default)
             is_hvcre: Whether this is high-volatility commercial real estate
             sl_type: Specialised lending type
+            is_short_maturity: Whether remaining maturity < 2.5 years (CRR)
+            is_pre_operational: Whether PF is pre-operational (Basel 3.1)
             config: Calculation configuration (defaults to CRR)
 
         Returns:
@@ -370,10 +450,11 @@ class SlottingCalculator:
 
         # Look up risk weight
         if config.is_crr:
-            risk_weight = lookup_slotting_rw(category, is_hvcre)
+            risk_weight = lookup_slotting_rw(category, is_hvcre, is_short_maturity)
         else:
-            # Basel 3.1 weights
-            risk_weight = self._get_basel31_slotting_rw(category, is_hvcre)
+            risk_weight = self._get_basel31_slotting_rw(
+                category, is_hvcre, is_pre_operational
+            )
 
         # Calculate RWA
         rwa = ead * risk_weight
@@ -392,30 +473,37 @@ class SlottingCalculator:
         self,
         category: str,
         is_hvcre: bool,
+        is_pre_operational: bool = False,
     ) -> Decimal:
-        """Get Basel 3.1 slotting risk weight."""
+        """Get Basel 3.1 slotting risk weight (BCBS CRE33)."""
         cat_lower = category.lower()
 
-        if not is_hvcre:
-            # Non-HVCRE weights
+        if is_hvcre:
             weights = {
-                "strong": Decimal("0.50"),
-                "good": Decimal("0.70"),
-                "satisfactory": Decimal("1.00"),
-                "weak": Decimal("1.50"),
-                "default": Decimal("3.50"),
+                "strong": Decimal("0.95"),
+                "good": Decimal("1.20"),
+                "satisfactory": Decimal("1.40"),
+                "weak": Decimal("2.50"),
+                "default": Decimal("0.00"),
+            }
+        elif is_pre_operational:
+            weights = {
+                "strong": Decimal("0.80"),
+                "good": Decimal("1.00"),
+                "satisfactory": Decimal("1.20"),
+                "weak": Decimal("3.50"),
+                "default": Decimal("0.00"),
             }
         else:
-            # HVCRE weights
             weights = {
                 "strong": Decimal("0.70"),
-                "good": Decimal("0.95"),
-                "satisfactory": Decimal("1.20"),
-                "weak": Decimal("1.75"),
-                "default": Decimal("3.50"),
+                "good": Decimal("0.90"),
+                "satisfactory": Decimal("1.15"),
+                "weak": Decimal("2.50"),
+                "default": Decimal("0.00"),
             }
 
-        return weights.get(cat_lower, Decimal("1.00"))
+        return weights.get(cat_lower, Decimal("1.15"))
 
 
 def create_slotting_calculator() -> SlottingCalculator:

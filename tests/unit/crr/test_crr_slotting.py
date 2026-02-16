@@ -4,14 +4,15 @@ Unit tests for CRR Slotting Calculator.
 Tests the supervisory slotting approach for specialised lending
 as per CRR Art. 153(5).
 
-Slotting Categories:
-- Strong: 70% RW
-- Good: 70% RW (same as Strong under CRR)
-- Satisfactory: 115% RW
-- Weak: 250% RW
-- Default: 0% RW (100% provisioned)
+CRR has TWO slotting tables with maturity-based splits:
 
-Note: CRR has same weights for HVCRE and non-HVCRE.
+Table 1 — Non-HVCRE (PF, OF, CF, IPRE):
+    >=2.5yr: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
+    <2.5yr:  Strong=50%, Good=70%, Satisfactory=115%, Weak=250%, Default=0%
+
+Table 2 — HVCRE:
+    >=2.5yr: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
+    <2.5yr:  Strong=70%, Good=95%,  Satisfactory=140%, Weak=250%, Default=0%
 """
 
 from datetime import date
@@ -63,19 +64,19 @@ def create_slotting_bundle(
 
 
 # =============================================================================
-# CRR SLOTTING RISK WEIGHT TESTS
+# CRR SLOTTING RISK WEIGHT TESTS — Non-HVCRE, >=2.5yr (default)
 # =============================================================================
 
 
 class TestCRRSlottingRiskWeights:
-    """Test CRR slotting risk weight lookup."""
+    """Test CRR slotting risk weight lookup (non-HVCRE, >=2.5yr maturity)."""
 
     def test_strong_category_seventy_percent(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """Strong category gets 70% RW under CRR."""
+        """Strong category gets 70% RW under CRR (>=2.5yr, non-HVCRE)."""
         result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("10000000"),
             category="strong",
@@ -84,19 +85,19 @@ class TestCRRSlottingRiskWeights:
         )
         assert result["risk_weight"] == pytest.approx(0.70)
 
-    def test_good_category_seventy_percent(
+    def test_good_category_ninety_percent(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """Good category gets 70% RW under CRR (same as Strong)."""
+        """Good category gets 90% RW under CRR (>=2.5yr, non-HVCRE)."""
         result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("10000000"),
             category="good",
             is_hvcre=False,
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(0.70)
+        assert result["risk_weight"] == pytest.approx(0.90)
 
     def test_satisfactory_category_115_percent(
         self,
@@ -141,35 +142,131 @@ class TestCRRSlottingRiskWeights:
         assert result["risk_weight"] == pytest.approx(0.00)
 
 
-class TestCRRHVCREWeights:
-    """Test that CRR uses same weights for HVCRE as non-HVCRE."""
+# =============================================================================
+# CRR SHORT MATURITY TESTS — Non-HVCRE, <2.5yr
+# =============================================================================
 
-    def test_hvcre_strong_same_as_non_hvcre(
+
+class TestCRRShortMaturityWeights:
+    """Test CRR slotting risk weights for short maturity (<2.5yr)."""
+
+    def test_strong_short_maturity_fifty_percent(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """HVCRE Strong has same RW as non-HVCRE Strong under CRR."""
-        hvcre_result = slotting_calculator.calculate_single_exposure(
+        """Strong gets 50% RW for <2.5yr maturity (vs 70% for >=2.5yr)."""
+        result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("10000000"),
+            category="strong",
+            is_hvcre=False,
+            is_short_maturity=True,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.50)
+
+    def test_good_short_maturity_seventy_percent(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """Good gets 70% RW for <2.5yr maturity (vs 90% for >=2.5yr)."""
+        result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("10000000"),
+            category="good",
+            is_hvcre=False,
+            is_short_maturity=True,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.70)
+
+    def test_satisfactory_short_maturity_same(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """Satisfactory is 115% regardless of maturity."""
+        result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("5000000"),
+            category="satisfactory",
+            is_hvcre=False,
+            is_short_maturity=True,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.15)
+
+    def test_weak_short_maturity_same(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """Weak is 250% regardless of maturity."""
+        result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("5000000"),
+            category="weak",
+            is_hvcre=False,
+            is_short_maturity=True,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(2.50)
+
+
+# =============================================================================
+# CRR HVCRE WEIGHT TESTS — Art. 153(5) Table 2
+# =============================================================================
+
+
+class TestCRRHVCREWeights:
+    """Test CRR HVCRE has higher weights than non-HVCRE per Table 2."""
+
+    def test_hvcre_strong_ninety_five_percent(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """HVCRE Strong = 95% (>=2.5yr), higher than non-HVCRE 70%."""
+        result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("5000000"),
             category="strong",
             is_hvcre=True,
             config=crr_config,
         )
-        non_hvcre_result = slotting_calculator.calculate_single_exposure(
+        assert result["risk_weight"] == pytest.approx(0.95)
+
+    def test_hvcre_good_120_percent(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """HVCRE Good = 120% (>=2.5yr), higher than non-HVCRE 90%."""
+        result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("5000000"),
-            category="strong",
-            is_hvcre=False,
+            category="good",
+            is_hvcre=True,
             config=crr_config,
         )
-        assert hvcre_result["risk_weight"] == non_hvcre_result["risk_weight"]
+        assert result["risk_weight"] == pytest.approx(1.20)
+
+    def test_hvcre_satisfactory_140_percent(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """HVCRE Satisfactory = 140% (>=2.5yr), higher than non-HVCRE 115%."""
+        result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("5000000"),
+            category="satisfactory",
+            is_hvcre=True,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.40)
 
     def test_hvcre_weak_same_as_non_hvcre(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """HVCRE Weak has same RW as non-HVCRE Weak under CRR."""
+        """HVCRE Weak = 250%, same as non-HVCRE Weak."""
         hvcre_result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("5000000"),
             category="weak",
@@ -182,7 +279,38 @@ class TestCRRHVCREWeights:
             is_hvcre=False,
             config=crr_config,
         )
+        assert hvcre_result["risk_weight"] == pytest.approx(2.50)
         assert hvcre_result["risk_weight"] == non_hvcre_result["risk_weight"]
+
+    def test_hvcre_short_maturity_strong_seventy_percent(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """HVCRE Strong <2.5yr = 70%."""
+        result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("5000000"),
+            category="strong",
+            is_hvcre=True,
+            is_short_maturity=True,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.70)
+
+    def test_hvcre_short_maturity_good_ninety_five_percent(
+        self,
+        slotting_calculator: SlottingCalculator,
+        crr_config: CalculationConfig,
+    ):
+        """HVCRE Good <2.5yr = 95%."""
+        result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("5000000"),
+            category="good",
+            is_hvcre=True,
+            is_short_maturity=True,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.95)
 
 
 # =============================================================================
@@ -198,7 +326,7 @@ class TestSlottingRWACalculation:
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """RWA = EAD × RW."""
+        """RWA = EAD x RW."""
         ead = Decimal("10000000")
         result = slotting_calculator.calculate_single_exposure(
             ead=ead,
@@ -214,7 +342,7 @@ class TestSlottingRWACalculation:
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """CRR-E1: Project Finance Strong - £10m at 70% = £7m RWA."""
+        """CRR-E1: Project Finance Strong - 10m at 70% = 7m RWA."""
         result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("10000000"),
             category="strong",
@@ -230,7 +358,7 @@ class TestSlottingRWACalculation:
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """CRR-E2: Project Finance Good - £10m at 70% = £7m RWA."""
+        """CRR-E2: Project Finance Good - 10m at 90% = 9m RWA."""
         result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("10000000"),
             category="good",
@@ -238,15 +366,15 @@ class TestSlottingRWACalculation:
             sl_type="project_finance",
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(0.70)
-        assert result["rwa"] == pytest.approx(7_000_000)
+        assert result["risk_weight"] == pytest.approx(0.90)
+        assert result["rwa"] == pytest.approx(9_000_000)
 
     def test_crr_e3_ipre_weak(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """CRR-E3: IPRE Weak - £5m at 250% = £12.5m RWA."""
+        """CRR-E3: IPRE Weak - 5m at 250% = 12.5m RWA."""
         result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("5000000"),
             category="weak",
@@ -262,7 +390,7 @@ class TestSlottingRWACalculation:
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """CRR-E4: HVCRE Strong - £5m at 70% = £3.5m RWA."""
+        """CRR-E4: HVCRE Strong - 5m at 95% = 4.75m RWA."""
         result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("5000000"),
             category="strong",
@@ -270,8 +398,8 @@ class TestSlottingRWACalculation:
             sl_type="hvcre",
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(0.70)
-        assert result["rwa"] == pytest.approx(3_500_000)
+        assert result["risk_weight"] == pytest.approx(0.95)
+        assert result["rwa"] == pytest.approx(4_750_000)
 
 
 # =============================================================================
@@ -324,12 +452,12 @@ class TestSlottingBundleProcessing:
         df = result.frame.collect()
         assert len(df) == 2
 
-        # Check first exposure
+        # Check first exposure (non-HVCRE Strong = 70%)
         row1 = df.filter(pl.col("exposure_reference") == "SL001").to_dicts()[0]
         assert row1["risk_weight"] == pytest.approx(0.70)
         assert row1["rwa"] == pytest.approx(7_000_000)
 
-        # Check second exposure
+        # Check second exposure (HVCRE Weak = 250%, same as non-HVCRE)
         row2 = df.filter(pl.col("exposure_reference") == "SL002").to_dicts()[0]
         assert row2["risk_weight"] == pytest.approx(2.50)
         assert row2["rwa"] == pytest.approx(12_500_000)
@@ -398,7 +526,7 @@ class TestCRRVsBasel31:
         crr_config: CalculationConfig,
         basel31_config: CalculationConfig,
     ):
-        """CRR Strong is 70%, Basel 3.1 Strong is 50% (non-HVCRE)."""
+        """CRR Strong = 70%, Basel 3.1 Strong = 70% (non-HVCRE operational)."""
         crr_result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("10000000"),
             category="strong",
@@ -412,7 +540,7 @@ class TestCRRVsBasel31:
             config=basel31_config,
         )
         assert crr_result["risk_weight"] == pytest.approx(0.70)
-        assert basel31_result["risk_weight"] == pytest.approx(0.50)
+        assert basel31_result["risk_weight"] == pytest.approx(0.70)
 
     def test_crr_weak_vs_basel31_weak(
         self,
@@ -420,7 +548,7 @@ class TestCRRVsBasel31:
         crr_config: CalculationConfig,
         basel31_config: CalculationConfig,
     ):
-        """CRR Weak is 250%, Basel 3.1 Weak is 150% (non-HVCRE)."""
+        """CRR Weak = 250%, Basel 3.1 Weak = 250% (non-HVCRE operational)."""
         crr_result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("5000000"),
             category="weak",
@@ -434,7 +562,7 @@ class TestCRRVsBasel31:
             config=basel31_config,
         )
         assert crr_result["risk_weight"] == pytest.approx(2.50)
-        assert basel31_result["risk_weight"] == pytest.approx(1.50)
+        assert basel31_result["risk_weight"] == pytest.approx(2.50)
 
     def test_basel31_hvcre_higher_than_non_hvcre(
         self,
@@ -454,10 +582,35 @@ class TestCRRVsBasel31:
             is_hvcre=False,
             config=basel31_config,
         )
-        # Basel 3.1 Good: non-HVCRE=70%, HVCRE=95%
-        assert non_hvcre_result["risk_weight"] == pytest.approx(0.70)
-        assert hvcre_result["risk_weight"] == pytest.approx(0.95)
+        # Basel 3.1 Good: non-HVCRE operational=90%, HVCRE=120%
+        assert non_hvcre_result["risk_weight"] == pytest.approx(0.90)
+        assert hvcre_result["risk_weight"] == pytest.approx(1.20)
         assert hvcre_result["risk_weight"] > non_hvcre_result["risk_weight"]
+
+    def test_basel31_pf_pre_operational_higher(
+        self,
+        slotting_calculator: SlottingCalculator,
+        basel31_config: CalculationConfig,
+    ):
+        """Basel 3.1 PF pre-operational Strong = 80% vs operational 70%."""
+        pre_op_result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("10000000"),
+            category="strong",
+            is_hvcre=False,
+            is_pre_operational=True,
+            sl_type="project_finance",
+            config=basel31_config,
+        )
+        operational_result = slotting_calculator.calculate_single_exposure(
+            ead=Decimal("10000000"),
+            category="strong",
+            is_hvcre=False,
+            is_pre_operational=False,
+            sl_type="project_finance",
+            config=basel31_config,
+        )
+        assert pre_op_result["risk_weight"] == pytest.approx(0.80)
+        assert operational_result["risk_weight"] == pytest.approx(0.70)
 
 
 # =============================================================================
@@ -519,21 +672,22 @@ class TestSlottingAuditTrail:
 class TestSpecialisedLendingTypes:
     """Test handling of different specialised lending types."""
 
-    @pytest.mark.parametrize("sl_type", [
-        "project_finance",
-        "object_finance",
-        "commodities_finance",
-        "income_producing_re",
-        "hvcre",
+    @pytest.mark.parametrize("sl_type,is_hvcre,expected_rw", [
+        ("project_finance", False, 0.90),
+        ("object_finance", False, 0.90),
+        ("commodities_finance", False, 0.90),
+        ("income_producing_re", False, 0.90),
+        ("hvcre", True, 1.20),  # HVCRE Good = 120% per Table 2
     ])
     def test_all_sl_types_processed(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
         sl_type: str,
+        is_hvcre: bool,
+        expected_rw: float,
     ):
-        """All specialised lending types can be processed."""
-        is_hvcre = sl_type == "hvcre"
+        """All specialised lending types can be processed with correct weights."""
         result = slotting_calculator.calculate_single_exposure(
             ead=Decimal("5000000"),
             category="good",
@@ -541,8 +695,9 @@ class TestSpecialisedLendingTypes:
             sl_type=sl_type,
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(0.70)
-        assert result["rwa"] == pytest.approx(3_500_000)
+        assert result["risk_weight"] == pytest.approx(expected_rw)
+        expected_rwa = 5_000_000 * expected_rw
+        assert result["rwa"] == pytest.approx(expected_rwa)
 
 
 # =============================================================================

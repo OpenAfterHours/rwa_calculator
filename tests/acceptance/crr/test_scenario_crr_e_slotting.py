@@ -36,9 +36,10 @@ class TestCRRGroupE_SlottingApproach:
     Each test loads fixture data, runs it through the production calculator,
     and compares the output against pre-calculated expected values.
 
-    Note: CRR slotting categories differ from Basel 3.1:
-    - CRR: Strong=Good=70%, Satisfactory=115%, Weak=250%
-    - Basel 3.1: Strong=50%, Good=70%, Satisfactory=100%, Weak=250%
+    Note: CRR has TWO weight tables with maturity splits (Art. 153(5)):
+    - Non-HVCRE (>=2.5yr): Strong=70%, Good=90%, Satisfactory=115%, Weak=250%
+    - HVCRE (>=2.5yr): Strong=95%, Good=120%, Satisfactory=140%, Weak=250%
+    Basel 3.1 uses different tables (operational/PF pre-op/HVCRE).
     """
 
     def test_crr_e1_project_finance_strong(
@@ -49,10 +50,8 @@ class TestCRRGroupE_SlottingApproach:
         """
         CRR-E1: Project finance with Strong slotting category.
 
-        Input: Project finance, Strong category
-        Expected: 70% RW (CRR has Strong=Good=70%)
-
-        Note: Basel 3.1 would give Strong=50%
+        Input: Project finance, Strong category (>=2.5yr maturity)
+        Expected: 70% RW (CRR Art. 153(5) Table 1)
         """
         expected = expected_outputs_dict["CRR-E1"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E1"]
@@ -81,8 +80,8 @@ class TestCRRGroupE_SlottingApproach:
         """
         CRR-E2: Project finance with Good slotting category.
 
-        Input: Project finance, Good category
-        Expected: 70% RW (same as Strong under CRR)
+        Input: Project finance, Good category (>=2.5yr maturity)
+        Expected: 90% RW (CRR Art. 153(5) Table 1)
         """
         expected = expected_outputs_dict["CRR-E2"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E2"]
@@ -131,10 +130,8 @@ class TestCRRGroupE_SlottingApproach:
         """
         CRR-E4: HVCRE with Strong slotting category.
 
-        Input: HVCRE, Strong category
-        Expected: 70% RW (same as non-HVCRE under CRR)
-
-        Note: Basel 3.1 applies higher RWs for HVCRE
+        Input: HVCRE, Strong category (>=2.5yr maturity)
+        Expected: 95% RW (CRR Art. 153(5) Table 2, higher than non-HVCRE 70%)
         """
         expected = expected_outputs_dict["CRR-E4"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E4"]
@@ -185,31 +182,30 @@ class TestCRRGroupE_ParameterizedValidation:
         crr_slotting_rw: dict,
     ) -> None:
         """Verify slotting scenarios use valid CRR risk weights."""
-        valid_rws = [0.70, 1.15, 2.50, 0.00]  # Strong/Good, Satisfactory, Weak, Default
+        # Non-HVCRE (>=2.5yr): 70/90/115/250/0; HVCRE (>=2.5yr): 95/120/140/250/0
+        valid_rws = [0.50, 0.70, 0.90, 0.95, 1.15, 1.20, 1.40, 2.50, 0.00]
         for scenario in crr_e_scenarios:
             rw = scenario["risk_weight"]
             assert any(rw == pytest.approx(v, rel=0.01) for v in valid_rws), (
                 f"Scenario {scenario['scenario_id']} has invalid slotting RW: {rw}"
             )
 
-    def test_crr_e_strong_and_good_same_rw(
+    def test_crr_e_strong_higher_than_good(
         self,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
-        """Verify Strong and Good have same RW under CRR (differs from Basel 3.1)."""
+        """Verify Good has higher RW than Strong under CRR (90% vs 70%)."""
         strong = expected_outputs_dict["CRR-E1"]
         good = expected_outputs_dict["CRR-E2"]
-        assert strong["risk_weight"] == pytest.approx(good["risk_weight"]), (
-            "CRR should have Strong=Good=70%"
-        )
+        assert strong["risk_weight"] == pytest.approx(0.70)
+        assert good["risk_weight"] == pytest.approx(0.90)
 
-    def test_crr_e_hvcre_same_as_non_hvcre(
+    def test_crr_e_hvcre_higher_than_non_hvcre(
         self,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
-        """Verify HVCRE uses same weights as non-HVCRE under CRR."""
-        pf_strong = expected_outputs_dict["CRR-E1"]  # Project finance Strong
-        hvcre_strong = expected_outputs_dict["CRR-E4"]  # HVCRE Strong
-        assert pf_strong["risk_weight"] == pytest.approx(hvcre_strong["risk_weight"]), (
-            "CRR HVCRE should use same RW as non-HVCRE (Basel 3.1 differs)"
-        )
+        """Verify HVCRE uses higher weights than non-HVCRE under CRR Art. 153(5)."""
+        pf_strong = expected_outputs_dict["CRR-E1"]  # Non-HVCRE Strong = 70%
+        hvcre_strong = expected_outputs_dict["CRR-E4"]  # HVCRE Strong = 95%
+        assert pf_strong["risk_weight"] == pytest.approx(0.70)
+        assert hvcre_strong["risk_weight"] == pytest.approx(0.95)

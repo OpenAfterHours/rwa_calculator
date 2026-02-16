@@ -4,6 +4,10 @@ CRR Specialised Lending Slotting risk weights (CRR Art. 153(5)).
 Provides slotting risk weight lookup tables as Polars DataFrames for efficient
 joins in the RWA calculation pipeline.
 
+CRR Art. 153(5) defines two tables with maturity-based splits:
+    Table 1 - Non-HVCRE specialised lending (<2.5yr and >=2.5yr remaining maturity)
+    Table 2 - HVCRE (<2.5yr and >=2.5yr remaining maturity)
+
 Reference:
     CRR Art. 153(5): Slotting approach for specialised lending exposures
 """
@@ -19,53 +23,95 @@ from rwa_calc.domain.enums import SlottingCategory
 # SLOTTING RISK WEIGHTS (CRR Art. 153(5))
 # =============================================================================
 
-# Non-HVCRE slotting risk weights
-# Note: CRR has same weights for Strong and Good categories
+# Non-HVCRE slotting risk weights — Table 1
+# Remaining maturity >= 2.5 years
 SLOTTING_RISK_WEIGHTS: dict[SlottingCategory, Decimal] = {
     SlottingCategory.STRONG: Decimal("0.70"),
-    SlottingCategory.GOOD: Decimal("0.70"),           # Same as Strong under CRR
+    SlottingCategory.GOOD: Decimal("0.90"),
     SlottingCategory.SATISFACTORY: Decimal("1.15"),
     SlottingCategory.WEAK: Decimal("2.50"),
-    SlottingCategory.DEFAULT: Decimal("0.00"),        # 100% provisioned
+    SlottingCategory.DEFAULT: Decimal("0.00"),  # 100% provisioned
 }
 
-# HVCRE (High Volatility Commercial Real Estate) uses same weights under CRR
-# Unlike Basel 3.1 which has different HVCRE weights
-SLOTTING_RISK_WEIGHTS_HVCRE: dict[SlottingCategory, Decimal] = {
-    SlottingCategory.STRONG: Decimal("0.70"),
+# Remaining maturity < 2.5 years
+SLOTTING_RISK_WEIGHTS_SHORT: dict[SlottingCategory, Decimal] = {
+    SlottingCategory.STRONG: Decimal("0.50"),
     SlottingCategory.GOOD: Decimal("0.70"),
     SlottingCategory.SATISFACTORY: Decimal("1.15"),
     SlottingCategory.WEAK: Decimal("2.50"),
     SlottingCategory.DEFAULT: Decimal("0.00"),
 }
 
+# HVCRE slotting risk weights — Table 2
+# Remaining maturity >= 2.5 years
+SLOTTING_RISK_WEIGHTS_HVCRE: dict[SlottingCategory, Decimal] = {
+    SlottingCategory.STRONG: Decimal("0.95"),
+    SlottingCategory.GOOD: Decimal("1.20"),
+    SlottingCategory.SATISFACTORY: Decimal("1.40"),
+    SlottingCategory.WEAK: Decimal("2.50"),
+    SlottingCategory.DEFAULT: Decimal("0.00"),
+}
+
+# Remaining maturity < 2.5 years
+SLOTTING_RISK_WEIGHTS_HVCRE_SHORT: dict[SlottingCategory, Decimal] = {
+    SlottingCategory.STRONG: Decimal("0.70"),
+    SlottingCategory.GOOD: Decimal("0.95"),
+    SlottingCategory.SATISFACTORY: Decimal("1.40"),
+    SlottingCategory.WEAK: Decimal("2.50"),
+    SlottingCategory.DEFAULT: Decimal("0.00"),
+}
+
 
 def _create_slotting_df() -> pl.DataFrame:
-    """Create slotting risk weight lookup DataFrame."""
+    """Create slotting risk weight lookup DataFrame with maturity splits."""
     rows = [
-        # Non-HVCRE
-        {"slotting_category": "strong", "is_hvcre": False, "risk_weight": 0.70,
-         "description": "Strong - highly favourable characteristics"},
-        {"slotting_category": "good", "is_hvcre": False, "risk_weight": 0.70,
-         "description": "Good - favourable characteristics"},
-        {"slotting_category": "satisfactory", "is_hvcre": False, "risk_weight": 1.15,
-         "description": "Satisfactory - acceptable characteristics"},
-        {"slotting_category": "weak", "is_hvcre": False, "risk_weight": 2.50,
-         "description": "Weak - weakened characteristics"},
-        {"slotting_category": "default", "is_hvcre": False, "risk_weight": 0.00,
-         "description": "Default - 100% provisioned"},
+        # Non-HVCRE, >= 2.5yr (CRR Art. 153(5) Table 1)
+        {"slotting_category": "strong", "is_hvcre": False, "is_short_maturity": False,
+         "risk_weight": 0.70, "description": "Strong >= 2.5yr"},
+        {"slotting_category": "good", "is_hvcre": False, "is_short_maturity": False,
+         "risk_weight": 0.90, "description": "Good >= 2.5yr"},
+        {"slotting_category": "satisfactory", "is_hvcre": False, "is_short_maturity": False,
+         "risk_weight": 1.15, "description": "Satisfactory >= 2.5yr"},
+        {"slotting_category": "weak", "is_hvcre": False, "is_short_maturity": False,
+         "risk_weight": 2.50, "description": "Weak >= 2.5yr"},
+        {"slotting_category": "default", "is_hvcre": False, "is_short_maturity": False,
+         "risk_weight": 0.00, "description": "Default >= 2.5yr"},
 
-        # HVCRE (same weights under CRR)
-        {"slotting_category": "strong", "is_hvcre": True, "risk_weight": 0.70,
-         "description": "HVCRE Strong"},
-        {"slotting_category": "good", "is_hvcre": True, "risk_weight": 0.70,
-         "description": "HVCRE Good"},
-        {"slotting_category": "satisfactory", "is_hvcre": True, "risk_weight": 1.15,
-         "description": "HVCRE Satisfactory"},
-        {"slotting_category": "weak", "is_hvcre": True, "risk_weight": 2.50,
-         "description": "HVCRE Weak"},
-        {"slotting_category": "default", "is_hvcre": True, "risk_weight": 0.00,
-         "description": "HVCRE Default - 100% provisioned"},
+        # Non-HVCRE, < 2.5yr (CRR Art. 153(5) Table 1)
+        {"slotting_category": "strong", "is_hvcre": False, "is_short_maturity": True,
+         "risk_weight": 0.50, "description": "Strong < 2.5yr"},
+        {"slotting_category": "good", "is_hvcre": False, "is_short_maturity": True,
+         "risk_weight": 0.70, "description": "Good < 2.5yr"},
+        {"slotting_category": "satisfactory", "is_hvcre": False, "is_short_maturity": True,
+         "risk_weight": 1.15, "description": "Satisfactory < 2.5yr"},
+        {"slotting_category": "weak", "is_hvcre": False, "is_short_maturity": True,
+         "risk_weight": 2.50, "description": "Weak < 2.5yr"},
+        {"slotting_category": "default", "is_hvcre": False, "is_short_maturity": True,
+         "risk_weight": 0.00, "description": "Default < 2.5yr"},
+
+        # HVCRE, >= 2.5yr (CRR Art. 153(5) Table 2)
+        {"slotting_category": "strong", "is_hvcre": True, "is_short_maturity": False,
+         "risk_weight": 0.95, "description": "HVCRE Strong >= 2.5yr"},
+        {"slotting_category": "good", "is_hvcre": True, "is_short_maturity": False,
+         "risk_weight": 1.20, "description": "HVCRE Good >= 2.5yr"},
+        {"slotting_category": "satisfactory", "is_hvcre": True, "is_short_maturity": False,
+         "risk_weight": 1.40, "description": "HVCRE Satisfactory >= 2.5yr"},
+        {"slotting_category": "weak", "is_hvcre": True, "is_short_maturity": False,
+         "risk_weight": 2.50, "description": "HVCRE Weak >= 2.5yr"},
+        {"slotting_category": "default", "is_hvcre": True, "is_short_maturity": False,
+         "risk_weight": 0.00, "description": "HVCRE Default >= 2.5yr"},
+
+        # HVCRE, < 2.5yr (CRR Art. 153(5) Table 2)
+        {"slotting_category": "strong", "is_hvcre": True, "is_short_maturity": True,
+         "risk_weight": 0.70, "description": "HVCRE Strong < 2.5yr"},
+        {"slotting_category": "good", "is_hvcre": True, "is_short_maturity": True,
+         "risk_weight": 0.95, "description": "HVCRE Good < 2.5yr"},
+        {"slotting_category": "satisfactory", "is_hvcre": True, "is_short_maturity": True,
+         "risk_weight": 1.40, "description": "HVCRE Satisfactory < 2.5yr"},
+        {"slotting_category": "weak", "is_hvcre": True, "is_short_maturity": True,
+         "risk_weight": 2.50, "description": "HVCRE Weak < 2.5yr"},
+        {"slotting_category": "default", "is_hvcre": True, "is_short_maturity": True,
+         "risk_weight": 0.00, "description": "HVCRE Default < 2.5yr"},
     ]
 
     return pl.DataFrame(rows).with_columns([
@@ -78,7 +124,8 @@ def get_slotting_table() -> pl.DataFrame:
     Get slotting risk weight lookup table.
 
     Returns:
-        DataFrame with columns: slotting_category, is_hvcre, risk_weight, description
+        DataFrame with columns: slotting_category, is_hvcre, is_short_maturity,
+            risk_weight, description
     """
     return _create_slotting_df()
 
@@ -100,6 +147,7 @@ def get_slotting_table_by_type() -> dict[str, pl.DataFrame]:
 def lookup_slotting_rw(
     category: str | SlottingCategory,
     is_hvcre: bool = False,
+    is_short_maturity: bool = False,
 ) -> Decimal:
     """
     Look up slotting risk weight.
@@ -110,6 +158,7 @@ def lookup_slotting_rw(
     Args:
         category: Slotting category (strong, good, satisfactory, weak, default)
         is_hvcre: Whether this is high-volatility commercial real estate
+        is_short_maturity: Whether remaining maturity < 2.5 years
 
     Returns:
         Risk weight as Decimal
@@ -119,22 +168,24 @@ def lookup_slotting_rw(
         try:
             cat_enum = SlottingCategory(category.lower())
         except ValueError:
-            # Unknown category - return satisfactory as default
             return Decimal("1.15")
     else:
         cat_enum = category
 
-    # Look up in appropriate table
+    # Select appropriate weight table
     if is_hvcre:
-        return SLOTTING_RISK_WEIGHTS_HVCRE.get(cat_enum, Decimal("1.15"))
+        table = SLOTTING_RISK_WEIGHTS_HVCRE_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS_HVCRE
     else:
-        return SLOTTING_RISK_WEIGHTS.get(cat_enum, Decimal("1.15"))
+        table = SLOTTING_RISK_WEIGHTS_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS
+
+    return table.get(cat_enum, Decimal("1.15"))
 
 
 def calculate_slotting_rwa(
     ead: Decimal,
     category: str | SlottingCategory,
     is_hvcre: bool = False,
+    is_short_maturity: bool = False,
 ) -> tuple[Decimal, Decimal, str]:
     """
     Calculate RWA using slotting approach.
@@ -143,16 +194,18 @@ def calculate_slotting_rwa(
         ead: Exposure at default
         category: Slotting category
         is_hvcre: Whether this is HVCRE
+        is_short_maturity: Whether remaining maturity < 2.5 years
 
     Returns:
         Tuple of (rwa, risk_weight, description)
     """
-    risk_weight = lookup_slotting_rw(category, is_hvcre)
+    risk_weight = lookup_slotting_rw(category, is_hvcre, is_short_maturity)
     rwa = ead * risk_weight
 
     hvcre_str = " (HVCRE)" if is_hvcre else ""
+    mat_str = " <2.5yr" if is_short_maturity else ""
     cat_str = category.value if isinstance(category, SlottingCategory) else category
-    description = f"Slotting{hvcre_str} {cat_str}: {risk_weight:.0%} RW"
+    description = f"Slotting{hvcre_str}{mat_str} {cat_str}: {risk_weight:.0%} RW"
 
     return rwa, risk_weight, description
 

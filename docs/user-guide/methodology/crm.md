@@ -23,6 +23,16 @@ flowchart TD
 
 ## Collateral
 
+### Pledge Percentage
+
+Collateral can be specified as a **percentage of the beneficiary's EAD** instead of an absolute `market_value`. Set `pledge_percentage` (decimal fraction, e.g. 0.5 = 50%) and leave `market_value` null or zero. The system resolves it to an absolute value before haircuts:
+
+- **Direct** (loan/contingent): `market_value = pledge_percentage × exposure ead_gross`
+- **Facility**: `market_value = pledge_percentage × sum(ead_gross)` across all facility exposures
+- **Counterparty**: `market_value = pledge_percentage × sum(ead_gross)` across all counterparty exposures
+
+When `market_value` is provided (non-null, non-zero), it takes priority and `pledge_percentage` is ignored.
+
 ### Financial Collateral
 
 Financial collateral (cash, bonds, equity) directly reduces exposure.

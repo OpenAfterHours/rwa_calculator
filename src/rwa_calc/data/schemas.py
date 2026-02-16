@@ -158,6 +158,7 @@ COLLATERAL_SCHEMA = {
     "maturity_date": pl.Date,
     "market_value": pl.Float64,
     "nominal_value": pl.Float64,
+    "pledge_percentage": pl.Float64,  # Fraction of beneficiary EAD (0.5 = 50%), used when market_value not provided
     "beneficiary_type": pl.String,  # counterparty/loan/facility/contingent
     "beneficiary_reference": pl.String,  # reference to find on the above tables
     # For securities collateral - haircut determination (CRE22.52-53)

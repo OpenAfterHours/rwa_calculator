@@ -17,18 +17,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.21] - 2026-02-16
 
-### Changed
-- Version bump for PyPI release
+### Added
+
+#### Pledge Percentage for Collateral Valuation
+- Introduced `pledge_percentage` field to allow collateral to be specified as a percentage of the beneficiary's EAD
+- Collateral processing resolves `pledge_percentage` to absolute market values based on beneficiary type (loan, facility, or counterparty level)
+- Updated input schemas and CRM methodology documentation to reflect the new field
+- 403 lines of new tests covering pledge percentage resolution across different beneficiary levels
 
 ## [0.1.20] - 2026-02-14
 
-### Changed
-- Version bump for PyPI release
+### Added
+
+#### Equity Exposure FX Conversion
+- New `convert_equity_exposures()` method in FX converter for converting equity exposure values to reporting currency
+- Updated classifier and hierarchy to support equity exposures in FX conversion pipeline
+- Enhanced FX rate configuration with equity-specific handling
+- Comprehensive tests for equity exposure conversion and currency handling
 
 ## [0.1.19] - 2026-02-11
 
+### Added
+
+#### Buy-to-Let Flag
+- New `is_buy_to_let` boolean flag in hierarchy and schemas for identifying BTL exposures
+- BTL exposures excluded from SME supporting factor discount
+- Unit tests verifying BTL flag behaviour in supporting factor calculations
+
+#### On-Balance EAD Helper
+- New `on_balance_ead()` helper function in CCF module calculating EAD as `max(0, drawn) + interest`
+- Updated CRM processor and namespace to use the new helper
+- Comprehensive tests covering various on-balance EAD scenarios
+
 ### Changed
-- Version bump for PyPI release
+- Updated implementation plan and roadmap documentation with current test results and fixture completion status
 
 ## [0.1.18] - 2026-02-10
 
@@ -491,9 +513,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 | Version | Date | Status |
 |---------|------|--------|
 | 0.1.21 | 2026-02-16 | Current |
-| 0.1.20 | 2026-02-16 | Previous |
-| 0.1.19 | 2026-02-14 | - |
-| 0.1.18 | 2026-02-11 | - |
+| 0.1.20 | 2026-02-14 | Previous |
+| 0.1.19 | 2026-02-11 | - |
+| 0.1.18 | 2026-02-10 | - |
 | 0.1.17 | 2026-02-10 | - |
 | 0.1.16 | 2026-02-09 | - |
 | 0.1.15 | 2026-02-08 | - |

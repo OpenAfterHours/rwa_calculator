@@ -219,14 +219,40 @@ class CCFCalculator:
             ])
 
         # Calculate EAD from undrawn/nominal amount
+        # When provision columns are present, use nominal_after_provision
+        # to implement CRR Art. 111(2): SCRA deducted before CCF
+        has_provision_cols = (
+            "nominal_after_provision" in schema.names()
+            and "provision_on_drawn" in schema.names()
+        )
+
+        if has_provision_cols:
+            nominal_for_ccf = pl.col("nominal_after_provision")
+        else:
+            nominal_for_ccf = pl.col("nominal_amount")
+
         exposures = exposures.with_columns([
-            # EAD from CCF = nominal_amount * CCF
-            (pl.col("nominal_amount") * pl.col("ccf")).alias("ead_from_ccf"),
+            (nominal_for_ccf * pl.col("ccf")).alias("ead_from_ccf"),
         ])
 
         # Calculate total EAD (drawn + interest + CCF-adjusted undrawn)
-        # Interest is included in on-balance-sheet EAD but not in facility undrawn calculation
-        if has_interest:
+        # When provision columns exist, subtract provision_on_drawn from the
+        # on-balance-sheet component (interest is never reduced by provision)
+        if has_provision_cols and has_interest:
+            on_bal = (
+                drawn_for_ead() - pl.col("provision_on_drawn")
+            ).clip(lower_bound=0.0) + pl.col("interest").fill_null(0.0)
+            exposures = exposures.with_columns([
+                (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+            ])
+        elif has_provision_cols:
+            on_bal = (
+                drawn_for_ead() - pl.col("provision_on_drawn")
+            ).clip(lower_bound=0.0)
+            exposures = exposures.with_columns([
+                (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+            ])
+        elif has_interest:
             exposures = exposures.with_columns([
                 (on_balance_ead() + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
             ])

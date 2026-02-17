@@ -1074,3 +1074,115 @@ class TestNegativeDrawnAmount:
 
         # EAD = 500k + 20k + 300k*0.5 = 670k
         assert result["ead_pre_crm"][0] == pytest.approx(670000.0)
+
+
+# =============================================================================
+# Provision-Adjusted CCF Tests (CRR Art. 111(2))
+# =============================================================================
+
+
+class TestProvisionAdjustedCCF:
+    """Tests for CCF using provision-adjusted columns.
+
+    When provision_on_drawn and nominal_after_provision are present,
+    CCF should use nominal_after_provision for the off-balance-sheet
+    component and subtract provision_on_drawn from the on-balance-sheet
+    component.
+
+    CRR Art. 111(2): SCRA deducted from nominal *before* CCF.
+    """
+
+    def test_obs_ead_uses_nominal_after_provision(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Off-balance EAD should use nominal_after_provision when available."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["EXP001"],
+            "drawn_amount": [0.0],
+            "interest": [0.0],
+            "nominal_amount": [500_000.0],
+            "nominal_after_provision": [480_000.0],  # 20k provision
+            "provision_on_drawn": [0.0],
+            "risk_type": ["MR"],  # 50% CCF
+            "approach": ["standardised"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # ead_from_ccf = 480k * 0.5 = 240k (not 500k * 0.5 = 250k)
+        assert result["ead_from_ccf"][0] == pytest.approx(240_000.0)
+        assert result["ead_pre_crm"][0] == pytest.approx(240_000.0)
+
+    def test_on_balance_ead_uses_provision_on_drawn(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """On-balance EAD should subtract provision_on_drawn from floored drawn."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["EXP001"],
+            "drawn_amount": [800_000.0],
+            "interest": [10_000.0],
+            "nominal_amount": [200_000.0],
+            "nominal_after_provision": [200_000.0],  # No provision on nominal
+            "provision_on_drawn": [50_000.0],
+            "risk_type": ["MR"],
+            "approach": ["standardised"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # on_bal = max(0, 800k) - 50k + 10k = 760k
+        # ead_from_ccf = 200k * 0.5 = 100k
+        # ead_pre_crm = 760k + 100k = 860k
+        assert result["ead_from_ccf"][0] == pytest.approx(100_000.0)
+        assert result["ead_pre_crm"][0] == pytest.approx(860_000.0)
+
+    def test_no_provision_columns_backward_compat(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Without provision columns, CCF behaves exactly as before."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["EXP001"],
+            "drawn_amount": [500_000.0],
+            "interest": [10_000.0],
+            "nominal_amount": [200_000.0],
+            "risk_type": ["MR"],
+            "approach": ["standardised"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # ead_from_ccf = 200k * 0.5 = 100k
+        # ead_pre_crm = 500k + 10k + 100k = 610k
+        assert result["ead_from_ccf"][0] == pytest.approx(100_000.0)
+        assert result["ead_pre_crm"][0] == pytest.approx(610_000.0)
+
+    def test_mixed_provision_spill(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Provision split across drawn and nominal correctly adjusts both."""
+        exposures = pl.DataFrame({
+            "exposure_reference": ["EXP001"],
+            "drawn_amount": [30_000.0],
+            "interest": [5_000.0],
+            "nominal_amount": [200_000.0],
+            "nominal_after_provision": [180_000.0],  # 20k provision on nominal
+            "provision_on_drawn": [30_000.0],  # 30k absorbed by drawn
+            "risk_type": ["MR"],
+            "approach": ["standardised"],
+        }).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # on_bal = max(0, 30k) - 30k + 5k = 5k (interest untouched)
+        # ead_from_ccf = 180k * 0.5 = 90k
+        # ead_pre_crm = 5k + 90k = 95k
+        assert result["ead_from_ccf"][0] == pytest.approx(90_000.0)
+        assert result["ead_pre_crm"][0] == pytest.approx(95_000.0)

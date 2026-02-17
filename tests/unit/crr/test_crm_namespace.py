@@ -47,6 +47,10 @@ def basic_exposures() -> pl.LazyFrame:
     return pl.LazyFrame({
         "exposure_reference": ["EXP001", "EXP002", "EXP003"],
         "counterparty_reference": ["CP001", "CP002", "CP003"],
+        "parent_facility_reference": ["FAC001", "FAC002", "FAC003"],
+        "drawn_amount": [1_000_000.0, 500_000.0, 250_000.0],
+        "interest": [0.0, 0.0, 0.0],
+        "nominal_amount": [0.0, 0.0, 0.0],
         "ead_pre_crm": [1_000_000.0, 500_000.0, 250_000.0],
         "approach": [ApproachType.SA.value, ApproachType.SA.value, ApproachType.FIRB.value],
         "lgd": [0.45, 0.45, 0.45],
@@ -127,6 +131,7 @@ class TestCRMNamespaceRegistration:
             "apply_collateral",
             "apply_collateral_to_lgd",
             "apply_guarantees",
+            "resolve_provisions",
             "apply_provisions",
             "finalize_ead",
             "apply_all_crm",
@@ -341,8 +346,7 @@ class TestApplyProvisions:
     ) -> None:
         """Provision allocated should be calculated."""
         result = (basic_exposures
-            .crm.initialize_ead_waterfall()
-            .crm.apply_provisions(provision_data, crr_config)
+            .crm.resolve_provisions(provision_data, crr_config)
             .collect()
         )
 
@@ -358,8 +362,7 @@ class TestApplyProvisions:
     ) -> None:
         """SA approach should have provision deducted from EAD."""
         result = (basic_exposures
-            .crm.initialize_ead_waterfall()
-            .crm.apply_provisions(provision_data, crr_config)
+            .crm.resolve_provisions(provision_data, crr_config)
             .collect()
         )
 
@@ -375,8 +378,7 @@ class TestApplyProvisions:
     ) -> None:
         """IRB approach should not have provision deducted from EAD."""
         result = (basic_exposures
-            .crm.initialize_ead_waterfall()
-            .crm.apply_provisions(provision_data, crr_config)
+            .crm.resolve_provisions(provision_data, crr_config)
             .collect()
         )
 
@@ -400,16 +402,18 @@ class TestFinalizeEAD:
         provision_data: pl.LazyFrame,
         crr_config: CalculationConfig,
     ) -> None:
-        """ead_final should reflect provision deduction."""
+        """ead_final should reflect provision deduction (provision baked into ead_pre_crm)."""
+        # New pipeline order: resolve_provisions → initialize → collateral → finalize
         result = (basic_exposures
+            .crm.resolve_provisions(provision_data, crr_config)
             .crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_data, crr_config)
-            .crm.apply_provisions(provision_data, crr_config)
             .crm.finalize_ead()
             .collect()
         )
 
-        # EXP001: 1,000,000 - 200,000 (collateral) - 50,000 (provision) = 750,000
+        # EXP001: drawn=1M, provision_on_drawn=50k → ead_pre_crm = 950k
+        # collateral = 200k → ead_final = 950k - 200k = 750k
         exp001 = result.filter(pl.col("exposure_reference") == "EXP001")
         assert exp001["ead_final"][0] == pytest.approx(750_000.0)
 
@@ -519,9 +523,9 @@ class TestMethodChaining:
     ) -> None:
         """Full pipeline should work with method chaining."""
         result = (basic_exposures
+            .crm.resolve_provisions(provision_data, crr_config)
             .crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_data, crr_config)
-            .crm.apply_provisions(provision_data, crr_config)
             .crm.finalize_ead()
             .collect()
         )

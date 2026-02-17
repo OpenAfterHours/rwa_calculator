@@ -10,7 +10,11 @@
       "Bash(python:*)",
       "WebFetch(domain:www.eba.europa.eu)",
       "WebFetch(domain:www.legislation.gov.uk)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:www.bankofengland.co.uk)",
+      "WebFetch(domain:www.katalysys.com)",
+      "WebFetch(domain:www.grantthornton.co.uk)",
+      "WebFetch(domain:eur-lex.europa.eu)"
     ]
   },
   "enabledMcpjsonServers": [

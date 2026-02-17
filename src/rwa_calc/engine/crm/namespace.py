@@ -2,10 +2,11 @@
 Polars LazyFrame namespaces for Credit Risk Mitigation (CRM) calculations.
 
 Provides fluent API for CRM processing via registered namespaces:
+- `lf.crm.resolve_provisions(provisions, config)` - Resolve provisions (before CCF)
 - `lf.crm.initialize_ead_waterfall()` - Initialize EAD tracking columns
 - `lf.crm.apply_collateral(collateral, config)` - Apply collateral effects
 - `lf.crm.apply_guarantees(guarantees, config)` - Apply guarantee substitution
-- `lf.crm.apply_provisions(provisions, config)` - Apply provision deduction
+- `lf.crm.apply_provisions(provisions, config)` - Apply provision deduction (legacy)
 - `lf.crm.finalize_ead()` - Calculate final EAD
 
 Usage:
@@ -88,8 +89,38 @@ class CRMLazyFrame:
         schema = self._lf.collect_schema()
         lf = self._lf
 
+        # Provision columns: preserve if already set by resolve_provisions,
+        # otherwise initialize to zero
+        has_provision_cols = "provision_allocated" in schema.names()
+        has_provision_on_drawn = "provision_on_drawn" in schema.names()
+
         # Determine base EAD column
-        if "ead_pre_crm" in schema.names():
+        # When provision columns exist and ead_pre_crm hasn't been recalculated
+        # by CCF (i.e. namespace chaining without explicit CCF step), recompute
+        # ead_pre_crm to reflect provision deductions
+        if has_provision_on_drawn and "drawn_amount" in schema.names():
+            # Recompute ead_pre_crm with provision-adjusted amounts
+            on_bal = (
+                drawn_for_ead() - pl.col("provision_on_drawn")
+            ).clip(lower_bound=0.0)
+            if "interest" in schema.names():
+                on_bal = on_bal + pl.col("interest").fill_null(0.0)
+            if "nominal_after_provision" in schema.names():
+                nominal_col = pl.col("nominal_after_provision")
+            elif "nominal_amount" in schema.names():
+                nominal_col = pl.col("nominal_amount")
+            else:
+                nominal_col = pl.lit(0.0)
+            # If CCF/ead_from_ccf already computed, use ead_pre_crm as-is
+            if "ead_from_ccf" in schema.names():
+                base_ead_col = "ead_pre_crm"
+            else:
+                # No CCF step yet; recalculate from drawn/nominal
+                lf = lf.with_columns([
+                    (on_bal + nominal_col).alias("ead_pre_crm"),
+                ])
+                base_ead_col = "ead_pre_crm"
+        elif "ead_pre_crm" in schema.names():
             base_ead_col = "ead_pre_crm"
         elif "ead" in schema.names():
             base_ead_col = "ead"
@@ -103,6 +134,16 @@ class CRMLazyFrame:
             # No EAD column found, create placeholder
             lf = lf.with_columns([pl.lit(0.0).alias("ead_pre_crm")])
             base_ead_col = "ead_pre_crm"
+        if has_provision_cols:
+            provision_cols = [
+                pl.col("provision_allocated"),
+                pl.col("provision_deducted"),
+            ]
+        else:
+            provision_cols = [
+                pl.lit(0.0).alias("provision_allocated"),
+                pl.lit(0.0).alias("provision_deducted"),
+            ]
 
         return lf.with_columns([
             # Gross EAD = drawn + CCF-adjusted contingent
@@ -122,9 +163,8 @@ class CRMLazyFrame:
             pl.lit(None).cast(pl.String).alias("guarantor_reference"),
             pl.lit(None).cast(pl.Float64).alias("substitute_rw"),
 
-            # Initialize provision-related columns
-            pl.lit(0.0).alias("provision_allocated"),
-            pl.lit(0.0).alias("provision_deducted"),
+            # Provision-related columns
+            *provision_cols,
 
             # LGD for IRB (may be adjusted by collateral)
             pl.col("lgd").fill_null(0.45).alias("lgd_pre_crm") if "lgd" in schema.names() else pl.lit(0.45).alias("lgd_pre_crm"),
@@ -480,16 +520,39 @@ class CRMLazyFrame:
     # PROVISION APPLICATION
     # =========================================================================
 
+    def resolve_provisions(
+        self,
+        provisions: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Resolve provisions with multi-level beneficiary and drawn-first deduction.
+
+        Called *before* CCF so that nominal_after_provision feeds into the
+        CCF calculation: ``ead_from_ccf = nominal_after_provision * ccf``.
+
+        Args:
+            provisions: Provision data
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with provision columns added
+        """
+        from rwa_calc.engine.crm.processor import CRMProcessor
+
+        processor = CRMProcessor()
+        return processor.resolve_provisions(self._lf, provisions, config)
+
     def apply_provisions(
         self,
         provisions: pl.LazyFrame,
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Apply provision deduction from EAD.
+        Apply provision deduction from EAD (legacy method).
 
-        For SA, specific provisions are deducted from EAD.
-        For IRB, provisions are compared to EL for shortfall/excess.
+        Delegates to resolve_provisions for the full multi-level resolution
+        and drawn-first deduction logic.
 
         Args:
             provisions: Provision data
@@ -498,47 +561,7 @@ class CRMLazyFrame:
         Returns:
             LazyFrame with provision effects applied
         """
-        schema = self._lf.collect_schema()
-
-        # Aggregate provisions by beneficiary (exposure)
-        provisions_by_exposure = provisions.group_by(
-            "beneficiary_reference"
-        ).agg([
-            pl.col("amount").sum().alias("total_provision"),
-            pl.col("provision_type").first().alias("primary_provision_type"),
-        ])
-
-        # Join provisions to exposures
-        lf = self._lf.join(
-            provisions_by_exposure,
-            left_on="exposure_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        )
-
-        # Fill nulls and update provision columns
-        lf = lf.with_columns([
-            pl.col("total_provision").fill_null(0.0).alias("provision_allocated"),
-        ])
-
-        # Determine approach column
-        has_approach = "approach" in schema.names()
-
-        # Calculate provision deduction (for SA, deduct from EAD)
-        if has_approach:
-            lf = lf.with_columns([
-                pl.when(pl.col("approach") == ApproachType.SA.value)
-                .then(pl.col("provision_allocated"))
-                .otherwise(pl.lit(0.0))
-                .alias("provision_deducted"),
-            ])
-        else:
-            # Default to SA behavior
-            lf = lf.with_columns([
-                pl.col("provision_allocated").alias("provision_deducted"),
-            ])
-
-        return lf
+        return self.resolve_provisions(provisions, config)
 
     # =========================================================================
     # EAD FINALIZATION
@@ -548,9 +571,8 @@ class CRMLazyFrame:
         """
         Finalize EAD after all CRM adjustments.
 
-        Sets ead_final based on the CRM waterfall:
-        - ead_after_collateral (after collateral reduction)
-        - minus provision deduction
+        Provisions are already baked into ead_pre_crm (deducted before CCF),
+        so finalize_ead does NOT subtract provision_deducted again.
 
         Returns:
             LazyFrame with finalized EAD
@@ -565,17 +587,8 @@ class CRMLazyFrame:
         else:
             intermediate_ead = "ead_final"
 
-        # Get provision column
-        provision_col = "provision_deducted" if "provision_deducted" in schema.names() else pl.lit(0.0)
-
         return self._lf.with_columns([
-            # Set final EAD after provisions
-            (
-                pl.col(intermediate_ead) - (
-                    pl.col("provision_deducted") if "provision_deducted" in schema.names() else pl.lit(0.0)
-                )
-            ).clip(lower_bound=0).alias("ead_final"),
-            # Copy to ead_after_guarantee for audit
+            pl.col(intermediate_ead).clip(lower_bound=0).alias("ead_final"),
             pl.col(intermediate_ead).alias("ead_after_guarantee"),
         ])
 
@@ -596,11 +609,11 @@ class CRMLazyFrame:
         Apply full CRM pipeline.
 
         Steps:
-        1. Initialize EAD waterfall
-        2. Apply collateral (if provided)
-        3. Apply guarantees (if provided)
-        4. Apply provisions (if provided)
-        5. Finalize EAD
+        1. Resolve provisions (before CCF, adds nominal_after_provision)
+        2. Initialize EAD waterfall
+        3. Apply collateral (if provided)
+        4. Apply guarantees (if provided)
+        5. Finalize EAD (no double-deduction of provisions)
 
         Args:
             collateral: Collateral data (optional)
@@ -613,16 +626,19 @@ class CRMLazyFrame:
         Returns:
             LazyFrame with all CRM effects applied
         """
-        lf = self._lf.crm.initialize_ead_waterfall()
+        lf = self._lf
+
+        # Step 1: Resolve provisions BEFORE initialize_ead_waterfall (which triggers CCF)
+        if provisions is not None:
+            lf = lf.crm.resolve_provisions(provisions, config)
+
+        lf = lf.crm.initialize_ead_waterfall()
 
         if collateral is not None:
             lf = lf.crm.apply_collateral(collateral, config)
 
         if guarantees is not None and counterparty_lookup is not None:
             lf = lf.crm.apply_guarantees(guarantees, counterparty_lookup, config, rating_inheritance)
-
-        if provisions is not None:
-            lf = lf.crm.apply_provisions(provisions, config)
 
         return lf.crm.finalize_ead()
 

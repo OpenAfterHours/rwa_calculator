@@ -35,7 +35,7 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 ## EAD Calculation
 
 ```
-EAD = Drawn Amount + Accrued Interest + (Undrawn Amount x CCF)
+EAD = Drawn Amount + Accrued Interest + (Undrawn Amount × CCF)
 ```
 
 Where:
@@ -43,6 +43,21 @@ Where:
 - **Drawn Amount**: Current outstanding balance
 - **Accrued Interest**: Interest due but not yet paid
 - **Undrawn Amount**: Committed but undrawn facility limit minus drawn amount
+
+### Provision-Adjusted EAD (Art. 111(2))
+
+When provisions are present (SA only), they are resolved **before** CCF application using a drawn-first deduction:
+
+```
+provision_on_drawn = min(provision_allocated, max(0, Drawn Amount))
+provision_on_nominal = provision_allocated - provision_on_drawn
+nominal_after_provision = Undrawn Amount - provision_on_nominal
+
+EAD = (max(0, Drawn Amount) - provision_on_drawn) + Accrued Interest
+      + (nominal_after_provision × CCF)
+```
+
+This ensures that provisions reduce the nominal amount before the CCF multiplier is applied, compliant with CRR Art. 111(2). For IRB/Slotting exposures, provisions are tracked but not deducted — the standard EAD formula applies.
 
 ## Key Scenarios
 

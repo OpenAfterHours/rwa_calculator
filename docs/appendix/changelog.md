@@ -8,7 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+
+#### SA Provision Handling — Art. 111(2) Compliance
+Provisions are now resolved **before** CCF application using a drawn-first deduction approach, compliant with CRR Art. 111(2):
+
+**Pipeline reorder:**
+```
+resolve_provisions → CCF → initialize_ead → collateral → guarantees → finalize_ead
+```
+
+**New method:** `resolve_provisions()` with multi-level beneficiary resolution:
+- **Direct** (loan/exposure/contingent): provision matched to specific exposure
+- **Facility**: distributed pro-rata across facility's exposures
+- **Counterparty**: distributed pro-rata across all counterparty exposures
+
+**SA drawn-first deduction:**
+- `provision_on_drawn = min(provision, max(0, drawn))` — absorbs provision against drawn first
+- Remainder → `provision_on_nominal` — reduces nominal before CCF
+- `nominal_after_provision = nominal_amount - provision_on_nominal` feeds into CCF
+
+**IRB/Slotting:** Provisions tracked (`provision_allocated`) but NOT deducted from EAD (feeds EL shortfall/excess comparison)
+
+**New columns:**
+| Column | Type | Description |
+|--------|------|-------------|
+| `provision_on_drawn` | Float64 | Provision absorbed by drawn (SA only) |
+| `provision_on_nominal` | Float64 | Provision reducing nominal before CCF (SA only) |
+| `nominal_after_provision` | Float64 | `nominal_amount - provision_on_nominal` |
+| `provision_deducted` | Float64 | Total = `provision_on_drawn + provision_on_nominal` |
+| `provision_allocated` | Float64 | Total provision matched to this exposure |
+
+**Other changes:**
+- `finalize_ead()` no longer subtracts provisions (already baked into `ead_pre_crm`)
+- `_initialize_ead()` preserves existing provision columns if set by `resolve_provisions`
+- 14 unit tests in `tests/unit/crm/test_provisions.py`
 
 ### Changed
 - (Next release changes will go here)

@@ -72,6 +72,10 @@ Combined results with totals and floor adjustments.
 | `exposure_class` | `Utf8` | Regulatory exposure class |
 | `approach` | `Utf8` | SA/IRB/SLOTTING |
 | `ead` | `Float64` | Exposure at default |
+| `provision_allocated` | `Float64` | Total provision matched to this exposure |
+| `provision_on_drawn` | `Float64` | Provision absorbed by drawn amount (SA only) |
+| `provision_on_nominal` | `Float64` | Provision reducing nominal before CCF (SA only) |
+| `nominal_after_provision` | `Float64` | `nominal_amount - provision_on_nominal` |
 | `rwa_pre_floor` | `Float64` | RWA before output floor |
 | `sa_equivalent_rwa` | `Float64` | SA equivalent (for IRB) |
 | `output_floor` | `Float64` | Output floor amount |

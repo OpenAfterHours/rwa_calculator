@@ -252,22 +252,33 @@ classified = (
 
 See [`crm/processor.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/processor.py) for implementation.
 
-Transformations:
-- Apply provision deductions
-- Calculate collateral haircuts
-- Apply guarantee substitution
-- Calculate net exposure
+Transformations (Art. 111(2) compliant order):
+
+1. **Resolve provisions** — drawn-first deduction (SA), tracking only (IRB/Slotting)
+2. **Apply CCFs** — uses `nominal_after_provision` for off-balance sheet conversion
+3. **Initialize EAD** — set `ead_pre_crm` from drawn + interest + CCF contribution
+4. **Apply collateral** — haircuts, overcollateralisation, multi-level allocation
+5. **Apply guarantees** — substitution, cross-approach CCF substitution
+6. **Finalize EAD** — floor at zero, no further provision subtraction
 
 ```python
 # CRM processing adds columns
 crm_adjusted = (
     classified
     .with_columns(
-        provision_amount=...,
+        # Provision resolution (before CCF)
+        provision_allocated=...,
+        provision_on_drawn=...,
+        provision_on_nominal=...,
+        nominal_after_provision=...,
+        provision_deducted=...,
+        # Collateral
         collateral_value=...,
         collateral_haircut=...,
+        # Guarantees
         guaranteed_amount=...,
         guarantor_rw=...,
+        # Final
         net_ead=...,
     )
 )

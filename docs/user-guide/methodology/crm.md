@@ -368,20 +368,39 @@ CRR Article 153(3) and CRE31.4 — when a guarantee provides credit protection, 
 
 ## Provisions
 
-### SA Treatment
+### SA Treatment (Art. 111(2) Compliant)
 
-Specific provisions reduce EAD:
+Provisions are resolved **before** CCF application using a drawn-first deduction approach:
 
 ```python
-EAD = Gross_Exposure - Specific_Provision
+# Step 1: Drawn-first deduction
+provision_on_drawn = min(provision_allocated, max(0, drawn_amount))
+
+# Step 2: Remainder reduces nominal before CCF
+provision_on_nominal = provision_allocated - provision_on_drawn
+nominal_after_provision = nominal_amount - provision_on_nominal
+
+# Step 3: CCF applied to adjusted nominal
+ead_from_ccf = nominal_after_provision × CCF
+
+# Step 4: Final EAD
+EAD = (max(0, drawn_amount) - provision_on_drawn) + interest + ead_from_ccf
 RWA = EAD × Risk_Weight
 ```
 
+Provisions are allocated via multi-level beneficiary resolution:
+
+- **Direct** (loan/exposure/contingent): provision matched to specific exposure
+- **Facility**: provision distributed pro-rata across facility's exposures
+- **Counterparty**: provision distributed pro-rata across all counterparty exposures
+
 ### IRB Treatment
 
-Provisions compare to Expected Loss:
+Under IRB, provisions are tracked (`provision_allocated`) but **not deducted** from EAD. Instead, the calculator computes Expected Loss for comparison:
 
 ```python
+# Provisions NOT deducted from EAD (provision_deducted = 0)
+# provision_on_drawn = 0, provision_on_nominal = 0
 EL = PD × LGD × EAD
 
 if Provisions >= EL:
@@ -411,13 +430,16 @@ Provisions can be allocated at different levels:
 
 ## CRM Hierarchy
 
-When multiple CRM types are available:
+When multiple CRM types are available, provisions are resolved first (before CCF), then the remaining CRM is applied after EAD initialization:
 
 ```python
-# Order of application
-1. Apply specific provisions (reduce EAD)
-2. Apply collateral (reduce net exposure)
-3. Apply guarantees (substitution on remainder)
+# Order of application (Art. 111(2) compliant)
+1. Resolve provisions (before CCF) — drawn-first deduction, adjusts nominal
+2. Apply CCFs (uses nominal_after_provision for off-balance sheet conversion)
+3. Initialize EAD waterfall
+4. Apply collateral (reduce net exposure with haircuts)
+5. Apply guarantees (substitution on remainder)
+6. Finalize EAD (no further provision subtraction)
 ```
 
 ### Example with Multiple CRM
@@ -484,9 +506,9 @@ irb_adjusted = result.irb_exposures
       show_root_heading: true
       members:
         - apply_crm
+        - resolve_provisions
         - apply_collateral
         - apply_guarantees
-        - apply_provisions
       show_source: false
 
 ??? example "CRM Processor Implementation (processor.py)"

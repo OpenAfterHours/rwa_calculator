@@ -161,6 +161,10 @@ ead_unguaranteed = (1 - guarantee_ratio) × (drawn + undrawn × ccf_irb)
 - `ccf_original`, `ccf_guaranteed`, `ccf_unguaranteed`
 - `guarantee_ratio`, `guarantor_approach`, `guarantor_rating_type`
 
+## Provision Resolution (Before CRM)
+
+Provisions are resolved **before** the CRM waterfall (and before CCF application). See [Provisions Specification](provisions.md) for the drawn-first deduction approach and multi-level beneficiary resolution. The CRM waterfall (collateral → guarantees) operates on the provision-adjusted EAD.
+
 ## Key Scenarios
 
 | Scenario ID | Description |

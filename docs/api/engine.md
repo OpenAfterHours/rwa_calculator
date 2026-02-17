@@ -282,20 +282,47 @@ class CRMLazyFrame:
         based on guarantor type and CQS.
         """
 
+    def resolve_provisions(
+        self,
+        provisions: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Resolve provisions with multi-level beneficiary allocation.
+
+        Must be called BEFORE CCF application (Art. 111(2)).
+
+        SA: Drawn-first deduction — provision reduces max(0, drawn) first,
+            remainder reduces nominal before CCF.
+        IRB/Slotting: Provisions tracked (provision_allocated) but NOT
+            deducted from EAD (feeds EL shortfall/excess comparison).
+
+        Adds columns:
+        - provision_on_drawn: provision absorbed by drawn amount (SA only)
+        - provision_on_nominal: provision reducing nominal before CCF (SA only)
+        - nominal_after_provision: nominal_amount - provision_on_nominal
+        - provision_deducted: total = provision_on_drawn + provision_on_nominal
+        - provision_allocated: total provision matched to this exposure
+        """
+
     def apply_provisions(
         self,
         provisions: pl.LazyFrame,
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Apply provision allocation (SA only).
+        Legacy provision allocation (SA only).
 
-        SA: Deducts provisions from EAD
-        IRB: No deduction (EL comparison handled separately)
+        Prefer resolve_provisions() for Art. 111(2) compliant processing.
         """
 
     def finalize_ead(self) -> pl.LazyFrame:
-        """Finalize EAD calculation ensuring non-negative values."""
+        """
+        Finalize EAD calculation ensuring non-negative values.
+
+        Note: Does NOT subtract provisions — they are already baked into
+        ead_pre_crm via the drawn-first deduction in resolve_provisions().
+        """
 
     def apply_all_crm(
         self,
@@ -317,14 +344,14 @@ import rwa_calc.engine.crm.namespace  # Registers namespace
 
 config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-# Fluent CRM pipeline
+# Fluent CRM pipeline (Art. 111(2) compliant order)
 result = (
     exposures
-    .crm.initialize_ead_waterfall()
+    .crm.resolve_provisions(provisions, config)   # Before CCF
+    .crm.initialize_ead_waterfall()                # Uses nominal_after_provision
     .crm.apply_collateral(collateral, config)
     .crm.apply_guarantees(guarantees, counterparty_lookup, config)
-    .crm.apply_provisions(provisions, config)
-    .crm.finalize_ead()
+    .crm.finalize_ead()                            # No provision subtraction
     .collect()
 )
 ```

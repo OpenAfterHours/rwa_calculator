@@ -279,9 +279,14 @@ Apply credit risk mitigation: collateral, guarantees, provisions.
 
 ### Processing Order
 
-1. Apply specific provisions (reduce EAD)
-2. Apply collateral with haircuts
-3. Apply guarantees (substitution approach)
+Provisions are resolved **before** CCF application so that the nominal amount is adjusted before credit conversion. The full CRM pipeline order is:
+
+1. **Resolve provisions** — drawn-first deduction (SA only); IRB tracks but does not deduct
+2. **Apply CCFs** — uses `nominal_after_provision` for off-balance sheet conversion
+3. **Initialize EAD waterfall** — set `ead_pre_crm` from drawn + interest + CCF contribution
+4. **Apply collateral** with haircuts and overcollateralisation
+5. **Apply guarantees** (substitution approach, cross-approach CCF substitution)
+6. **Finalize EAD** — floor at zero; provisions already baked into `ead_pre_crm`
 
 ```python
 def process_crm(
@@ -289,24 +294,34 @@ def process_crm(
     collateral: pl.LazyFrame,
     guarantees: pl.LazyFrame,
     provisions: pl.LazyFrame,
+    counterparty_lookup: pl.LazyFrame,
     config: CalculationConfig
 ) -> pl.LazyFrame:
-    """Apply CRM in correct order."""
+    """Apply CRM in correct order (Art. 111(2) compliant)."""
 
-    # Step 1: Provisions
-    after_provisions = apply_provisions(exposures, provisions)
+    # Step 1: Resolve provisions (before CCF)
+    #   SA: drawn-first deduction, remainder reduces nominal
+    #   IRB/Slotting: tracked but not deducted from EAD
+    after_provisions = resolve_provisions(exposures, provisions, config)
 
-    # Step 2: Collateral
+    # Step 2: Apply CCFs (uses nominal_after_provision)
+    after_ccf = apply_credit_conversion_factors(after_provisions, config)
+
+    # Step 3: Initialize EAD waterfall
+    after_init = initialize_ead_waterfall(after_ccf)
+
+    # Step 4: Collateral
     after_collateral = apply_collateral_haircuts(
-        after_provisions, collateral, config
+        after_init, collateral, config
     )
 
-    # Step 3: Guarantees
+    # Step 5: Guarantees
     after_guarantees = apply_guarantee_substitution(
-        after_collateral, guarantees, config
+        after_collateral, guarantees, counterparty_lookup, config
     )
 
-    return after_guarantees
+    # Step 6: Finalize (no provision subtraction — already in ead_pre_crm)
+    return finalize_ead(after_guarantees)
 ```
 
 ## Stage 5: RWA Calculation

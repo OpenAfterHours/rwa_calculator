@@ -68,13 +68,18 @@ After classification, each exposure has regulatory attributes.
 
 ## CRM Adjusted Schema
 
-After CRM processing, exposures include mitigation adjustments.
+After CRM processing, exposures include mitigation adjustments. Provision columns are populated during the `resolve_provisions` step (before CCF), while collateral and guarantee columns are populated during the EAD waterfall.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `exposure_id` | `Utf8` | Exposure identifier |
 | ... | ... | (all classified exposure columns) |
-| `provision_amount` | `Float64` | Applied provision |
+| `provision_allocated` | `Float64` | Total provision matched to this exposure |
+| `provision_on_drawn` | `Float64` | Provision absorbed by drawn amount (SA only) |
+| `provision_on_nominal` | `Float64` | Provision reducing nominal before CCF (SA only) |
+| `nominal_after_provision` | `Float64` | `nominal_amount - provision_on_nominal` |
+| `provision_deducted` | `Float64` | Total = `provision_on_drawn + provision_on_nominal` |
+| `provision_amount` | `Float64` | Applied provision (legacy) |
 | `provision_type` | `Utf8` | SCRA or GCRA |
 | `collateral_value` | `Float64` | Total collateral value |
 | `collateral_type` | `Utf8` | Primary collateral type |

@@ -504,6 +504,16 @@ guarantees = pl.DataFrame({
 | `SCRA` | Specific Credit Risk Adjustment | Reduces exposure value; affects defaulted RW |
 | `GCRA` | General Credit Risk Adjustment | Reduces exposure value |
 
+**Valid `beneficiary_type` values:**
+
+| Value | Description | Resolution |
+|-------|-------------|------------|
+| `loan` | Allocated directly to a specific loan | Matched by `beneficiary_reference` = `loan_reference` |
+| `exposure` | Allocated directly to a specific exposure | Matched by `beneficiary_reference` = exposure reference |
+| `contingent` | Allocated directly to a contingent | Matched by `beneficiary_reference` = `contingent_reference` |
+| `facility` | Allocated at facility level | Distributed pro-rata across facility's exposures by `ead_gross` |
+| `counterparty` | Allocated at counterparty level | Distributed pro-rata across all counterparty exposures by `ead_gross` |
+
 **Valid `ifrs9_stage` values:**
 
 | Stage | Description | ECL Type |

@@ -1,6 +1,6 @@
 # Testing Guide
 
-This guide covers the testing approach, test organization, and how to write effective tests. The test suite currently contains **1,188+ tests** across unit, acceptance, and benchmark categories.
+This guide covers the testing approach, test organization, and how to write effective tests. The test suite currently contains **~1,199 tests** across unit, acceptance, and benchmark categories.
 
 ## Test Organization
 
@@ -13,6 +13,9 @@ tests/
 ├── contracts/           # Interface compliance tests
 ├── unit/                # Component unit tests
 │   ├── crr/             # CRR-specific tests
+│   ├── crm/             # CRM-specific tests
+│   │   ├── test_provisions.py        # Provision resolution (14 tests)
+│   │   └── test_cross_approach_ccf.py # Cross-approach CCF (12 tests)
 │   ├── basel31/         # Basel 3.1-specific tests
 │   └── test_fx_converter.py  # FX conversion tests
 └── fixtures/            # Test data generators

@@ -336,39 +336,52 @@ class CRMProcessorProtocol(Protocol):
 
 ```python
 class CRMProcessor:
-    """Process credit risk mitigation."""
+    """Process credit risk mitigation (Art. 111(2) compliant)."""
 
     def process(
         self,
         classified: ClassifiedExposuresBundle,
         config: CalculationConfig
     ) -> CRMAdjustedBundle:
-        # Process in order: provisions → collateral → guarantees
+        # Provisions resolved BEFORE CCF, then CRM waterfall after EAD init
 
-        # Step 1: Apply provisions
-        after_provisions = self._apply_provisions(
+        # Step 1: Resolve provisions (before CCF)
+        #   SA: drawn-first deduction, remainder reduces nominal
+        #   IRB/Slotting: tracked but not deducted
+        after_provisions = resolve_provisions(
             classified.all_exposures,
-            classified.provisions
+            classified.provisions,
+            config
         )
 
-        # Step 2: Apply collateral
+        # Step 2: Apply CCFs (uses nominal_after_provision)
+        after_ccf = self._apply_ccf(after_provisions, config)
+
+        # Step 3: Initialize EAD waterfall
+        after_init = self._initialize_ead(after_ccf)
+
+        # Step 4: Apply collateral
         after_collateral = self._apply_collateral(
-            after_provisions,
+            after_init,
             classified.collateral,
             config
         )
 
-        # Step 3: Apply guarantees
+        # Step 5: Apply guarantees
         after_guarantees = self._apply_guarantees(
             after_collateral,
             classified.guarantees,
+            classified.counterparty_lookup,
             config
         )
 
+        # Step 6: Finalize EAD (no provision subtraction)
+        final = self._finalize_ead(after_guarantees)
+
         return CRMAdjustedBundle(
-            sa_exposures=self._filter_sa(after_guarantees),
-            irb_exposures=self._filter_irb(after_guarantees),
-            slotting_exposures=self._filter_slotting(after_guarantees),
+            sa_exposures=self._filter_sa(final),
+            irb_exposures=self._filter_irb(final),
+            slotting_exposures=self._filter_slotting(final),
         )
 ```
 

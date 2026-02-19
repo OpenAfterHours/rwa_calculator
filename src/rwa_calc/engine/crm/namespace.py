@@ -220,28 +220,36 @@ class CRMLazyFrame:
                 ])
             )
 
-        # Aggregate collateral by beneficiary
-        collateral_by_exposure = eligible_collateral.group_by(
-            "beneficiary_reference"
-        ).agg([
-            pl.col(value_col).sum().alias("total_collateral_adjusted"),
-            pl.col("market_value").sum().alias("total_collateral_market") if "market_value" in collateral_schema.names() else pl.lit(0.0).alias("total_collateral_market"),
-            pl.len().alias("collateral_count"),
-        ])
+        # Allocate collateral — multi-level or direct-only
+        eligible_schema = eligible_collateral.collect_schema()
+        has_beneficiary_type = "beneficiary_type" in eligible_schema.names()
+        has_market_value = "market_value" in collateral_schema.names()
 
-        # Join collateral to exposures
-        lf = self._lf.join(
-            collateral_by_exposure,
-            left_on="exposure_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        )
+        if has_beneficiary_type:
+            lf = self._allocate_collateral_multi_level(
+                eligible_collateral, value_col, has_market_value,
+            )
+        else:
+            # Legacy: direct-only join
+            collateral_by_exposure = eligible_collateral.group_by(
+                "beneficiary_reference"
+            ).agg([
+                pl.col(value_col).sum().alias("total_collateral_adjusted"),
+                pl.col("market_value").sum().alias("total_collateral_market") if has_market_value else pl.lit(0.0).alias("total_collateral_market"),
+                pl.len().alias("collateral_count"),
+            ])
 
-        # Fill nulls for exposures without collateral
-        lf = lf.with_columns([
-            pl.col("total_collateral_adjusted").fill_null(0.0).alias("collateral_adjusted_value"),
-            pl.col("total_collateral_market").fill_null(0.0).alias("collateral_market_value"),
-        ])
+            lf = self._lf.join(
+                collateral_by_exposure,
+                left_on="exposure_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            )
+
+            lf = lf.with_columns([
+                pl.col("total_collateral_adjusted").fill_null(0.0).alias("collateral_adjusted_value"),
+                pl.col("total_collateral_market").fill_null(0.0).alias("collateral_market_value"),
+            ])
 
         # Determine approach column
         has_approach = "approach" in schema.names()
@@ -263,6 +271,129 @@ class CRMLazyFrame:
             lf = lf.with_columns([
                 (pl.col("ead_gross") - pl.col("collateral_adjusted_value")).clip(lower_bound=0).alias("ead_after_collateral"),
             ])
+
+        return lf
+
+    def _allocate_collateral_multi_level(
+        self,
+        eligible_collateral: pl.LazyFrame,
+        value_col: str,
+        has_market_value: bool,
+    ) -> pl.LazyFrame:
+        """
+        Allocate eligible collateral from direct, facility, and counterparty levels.
+
+        Pro-rata allocation by ead_gross for facility and counterparty levels.
+        """
+        lf = self._lf
+        exp_schema = lf.collect_schema()
+
+        val_expr = pl.col(value_col)
+        bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+        direct_types = ["exposure", "loan", "contingent"]
+        mv_expr = pl.col("market_value") if has_market_value else pl.lit(0.0)
+
+        # Aggregate at each level
+        coll_direct = eligible_collateral.filter(
+            bt_lower.is_in(direct_types)
+        ).group_by("beneficiary_reference").agg([
+            val_expr.sum().alias("_coll_direct"),
+            mv_expr.sum().alias("_mv_direct"),
+        ])
+
+        coll_facility = eligible_collateral.filter(
+            bt_lower == "facility"
+        ).group_by("beneficiary_reference").agg([
+            val_expr.sum().alias("_coll_facility"),
+            mv_expr.sum().alias("_mv_facility"),
+        ])
+
+        coll_counterparty = eligible_collateral.filter(
+            bt_lower == "counterparty"
+        ).group_by("beneficiary_reference").agg([
+            val_expr.sum().alias("_coll_counterparty"),
+            mv_expr.sum().alias("_mv_counterparty"),
+        ])
+
+        # EAD totals for pro-rata
+        if "parent_facility_reference" in exp_schema.names():
+            fac_ead = lf.filter(
+                pl.col("parent_facility_reference").is_not_null()
+            ).group_by("parent_facility_reference").agg(
+                pl.col("ead_gross").sum().alias("_fac_ead_total"),
+            )
+        else:
+            fac_ead = pl.LazyFrame(
+                schema={"parent_facility_reference": pl.String, "_fac_ead_total": pl.Float64}
+            )
+
+        cp_ead = lf.group_by("counterparty_reference").agg(
+            pl.col("ead_gross").sum().alias("_cp_ead_total"),
+        )
+
+        # Join direct
+        lf = lf.join(coll_direct, left_on="exposure_reference", right_on="beneficiary_reference", how="left")
+
+        # Join facility
+        if "parent_facility_reference" in exp_schema.names():
+            lf = lf.join(
+                coll_facility, left_on="parent_facility_reference", right_on="beneficiary_reference", how="left",
+            ).join(fac_ead, on="parent_facility_reference", how="left")
+        else:
+            lf = lf.with_columns([
+                pl.lit(0.0).alias("_coll_facility"),
+                pl.lit(0.0).alias("_mv_facility"),
+                pl.lit(0.0).alias("_fac_ead_total"),
+            ])
+
+        # Join counterparty
+        lf = lf.join(
+            coll_counterparty, left_on="counterparty_reference", right_on="beneficiary_reference", how="left",
+        ).join(cp_ead, on="counterparty_reference", how="left")
+
+        # Fill nulls + weights + combine
+        lf = lf.with_columns([
+            pl.col("_coll_direct").fill_null(0.0),
+            pl.col("_mv_direct").fill_null(0.0),
+            pl.col("_coll_facility").fill_null(0.0),
+            pl.col("_mv_facility").fill_null(0.0),
+            pl.col("_coll_counterparty").fill_null(0.0),
+            pl.col("_mv_counterparty").fill_null(0.0),
+            pl.col("_fac_ead_total").fill_null(0.0),
+            pl.col("_cp_ead_total").fill_null(0.0),
+        ])
+
+        lf = lf.with_columns([
+            pl.when(pl.col("_fac_ead_total") > 0)
+            .then(pl.col("ead_gross") / pl.col("_fac_ead_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("_fac_weight"),
+            pl.when(pl.col("_cp_ead_total") > 0)
+            .then(pl.col("ead_gross") / pl.col("_cp_ead_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("_cp_weight"),
+        ])
+
+        lf = lf.with_columns([
+            (
+                pl.col("_coll_direct")
+                + (pl.col("_coll_facility") * pl.col("_fac_weight"))
+                + (pl.col("_coll_counterparty") * pl.col("_cp_weight"))
+            ).alias("collateral_adjusted_value"),
+            (
+                pl.col("_mv_direct")
+                + (pl.col("_mv_facility") * pl.col("_fac_weight"))
+                + (pl.col("_mv_counterparty") * pl.col("_cp_weight"))
+            ).alias("collateral_market_value"),
+        ])
+
+        lf = lf.drop([
+            "_coll_direct", "_mv_direct",
+            "_coll_facility", "_mv_facility",
+            "_coll_counterparty", "_mv_counterparty",
+            "_fac_ead_total", "_cp_ead_total",
+            "_fac_weight", "_cp_weight",
+        ])
 
         return lf
 

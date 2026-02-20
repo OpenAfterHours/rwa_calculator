@@ -9,7 +9,13 @@ SME Supporting Factor - Tiered Approach (CRR2 Art. 501):
 - Exposures above EUR 2.5m (GBP 2.2m): factor of 0.85
 
 Formula:
-    factor = [min(E, threshold) × 0.7619 + max(E - threshold, 0) × 0.85] / E
+    factor = [min(D, threshold) × 0.7619 + max(D - threshold, 0) × 0.85] / D
+
+    Where D = drawn_amount + interest (on-balance-sheet amount owed)
+
+The tier threshold is applied to drawn (on-balance-sheet) amounts only,
+not the full post-CRM EAD which includes CCF-adjusted undrawn commitments.
+The resulting blended factor is then applied to the full RWA.
 
 Infrastructure Supporting Factor (CRR Art. 501a):
 - Qualifying infrastructure: factor of 0.75
@@ -57,10 +63,10 @@ class SupportingFactorCalculator:
         config: CalculationConfig,
     ) -> Decimal:
         """
-        Calculate SME supporting factor based on total exposure.
+        Calculate SME supporting factor based on total drawn exposure.
 
         Args:
-            total_exposure: Total exposure amount to the SME
+            total_exposure: Total drawn (on-balance-sheet) amount to the SME
             config: Calculation configuration
 
         Returns:
@@ -127,7 +133,7 @@ class SupportingFactorCalculator:
         Args:
             is_sme: Whether exposure qualifies for SME factor
             is_infrastructure: Whether exposure qualifies for infrastructure
-            total_exposure: Total exposure amount (for SME tier calculation)
+            total_exposure: Total drawn (on-balance-sheet) amount for tier calc
             config: Calculation configuration
 
         Returns:
@@ -156,14 +162,20 @@ class SupportingFactorCalculator:
         Apply supporting factors to exposures LazyFrame.
 
         The SME supporting factor threshold (EUR 2.5m) is applied at the
-        counterparty level, not per-exposure. This means all exposures to
-        the same counterparty are aggregated before determining the tiered
-        factor, and that blended factor is applied to each exposure.
+        counterparty level using drawn (on-balance-sheet) amounts only.
+        All drawn amounts to the same counterparty are aggregated before
+        determining the tiered factor. The resulting blended factor is
+        then applied to each exposure's full RWA.
+
+        The tier calculation uses drawn_amount + interest ("amount owed"),
+        NOT ead_final which includes CCF-adjusted undrawn commitments.
 
         Expects columns:
         - is_sme: bool
         - is_infrastructure: bool
-        - ead_final: float (exposure amount for tier calculation)
+        - drawn_amount: float (on-balance-sheet drawn amount)
+        - interest: float (accrued interest)
+        - ead_final: float (fallback if drawn_amount not available)
         - rwa_pre_factor: float (RWA before supporting factor)
         - counterparty_reference: str (optional, for aggregation)
 
@@ -171,7 +183,7 @@ class SupportingFactorCalculator:
         - supporting_factor: float
         - rwa_post_factor: float (RWA after supporting factor)
         - supporting_factor_applied: bool
-        - total_cp_ead: float (total counterparty EAD, for SME exposures)
+        - total_cp_drawn: float (total counterparty drawn amount, for SME)
 
         Args:
             exposures: Exposures with RWA calculated
@@ -202,32 +214,43 @@ class SupportingFactorCalculator:
         has_infra = "is_infrastructure" in schema.names()
         has_counterparty = "counterparty_reference" in schema.names()
         has_btl = "is_buy_to_let" in schema.names()
+        has_drawn = "drawn_amount" in schema.names()
+
+        # Build the drawn (on-balance-sheet) expression for tier calculation.
+        # Use drawn_amount + interest when available; fall back to ead_final.
+        if has_drawn:
+            drawn_expr = (
+                pl.col("drawn_amount").clip(lower_bound=0.0)
+                + pl.col("interest").fill_null(0.0)
+            )
+        else:
+            drawn_expr = pl.col("ead_final")
 
         # Build SME factor expression with counterparty-level aggregation
         if has_sme:
             if has_counterparty:
-                # Calculate total EAD at counterparty level using window function
+                # Aggregate drawn amounts at counterparty level using window function
                 # Only aggregate SME exposures with valid counterparty references
-                total_cp_ead_expr = pl.when(
+                total_cp_drawn_expr = pl.when(
                     pl.col("is_sme") & pl.col("counterparty_reference").is_not_null()
                 ).then(
-                    pl.col("ead_final").sum().over("counterparty_reference")
+                    drawn_expr.sum().over("counterparty_reference")
                 ).otherwise(
-                    # Fall back to individual EAD if no counterparty ref or not SME
-                    pl.col("ead_final")
+                    # Fall back to individual drawn if no counterparty ref or not SME
+                    drawn_expr
                 )
 
                 exposures = exposures.with_columns([
-                    total_cp_ead_expr.alias("total_cp_ead")
+                    total_cp_drawn_expr.alias("total_cp_drawn")
                 ])
 
-                # Use counterparty total for tier calculation
-                ead_for_tier = pl.col("total_cp_ead")
+                # Use counterparty total drawn for tier calculation
+                ead_for_tier = pl.col("total_cp_drawn")
             else:
-                # No counterparty reference column - use individual EAD
-                ead_for_tier = pl.col("ead_final")
+                # No counterparty reference column - use individual drawn amount
+                ead_for_tier = drawn_expr
 
-            # Calculate tiered factor based on aggregated exposure
+            # Calculate tiered factor based on aggregated drawn exposure
             tier1_expr = pl.when(ead_for_tier <= threshold_gbp).then(
                 ead_for_tier
             ).otherwise(pl.lit(threshold_gbp))
@@ -237,13 +260,18 @@ class SupportingFactorCalculator:
             ).otherwise(pl.lit(0.0))
 
             # BTL exposures are excluded from the SME factor but still
-            # contribute to total_cp_ead for tier calculation (CRR Art. 501)
+            # contribute to total_cp_drawn for tier calculation (CRR Art. 501)
             is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
 
             sme_factor_expr = pl.when(
                 pl.col("is_sme") & (ead_for_tier > 0) & ~is_btl
             ).then(
                 (tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier
+            ).when(
+                pl.col("is_sme") & (ead_for_tier <= 0) & ~is_btl
+            ).then(
+                # Zero drawn = all within tier 1 → pure 0.7619
+                pl.lit(factor_tier1)
             ).otherwise(pl.lit(1.0))
         else:
             sme_factor_expr = pl.lit(1.0)

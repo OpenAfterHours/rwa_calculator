@@ -808,8 +808,8 @@ def _defaulted_loans() -> list[Loan]:
             currency="GBP",
             drawn_amount=25_000.0,
             interest=0.0,
-            lgd=0.45,
-            beel=0.0,
+            lgd=0.65,  # LGD_in_default (bank's best estimate for defaulted retail)
+            beel=0.50,  # Best estimate expected loss (A-IRB: K = max(0, 0.65 - 0.50) = 0.15)
             seniority="senior",
         ),
     ]

@@ -659,6 +659,7 @@ class HierarchyResolver:
                 "undrawn_amount": pl.Float64,
                 "nominal_amount": pl.Float64,
                 "lgd": pl.Float64,
+                "beel": pl.Float64,
                 "seniority": pl.String,
                 "risk_type": pl.String,
                 "ccf_modelled": pl.Float64,
@@ -859,6 +860,7 @@ class HierarchyResolver:
             pl.col("undrawn_amount"),
             pl.col("undrawn_amount").alias("nominal_amount"),  # CCF uses nominal_amount
             pl.col("lgd").cast(pl.Float64, strict=False) if "lgd" in facility_cols else pl.lit(None).cast(pl.Float64).alias("lgd"),
+            pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0) if "beel" in facility_cols else pl.lit(0.0).alias("beel"),
             pl.col("seniority") if "seniority" in facility_cols else pl.lit(None).cast(pl.String).alias("seniority"),
             pl.col("risk_type") if "risk_type" in facility_cols else pl.lit(None).cast(pl.String).alias("risk_type"),
             pl.col("ccf_modelled").cast(pl.Float64, strict=False) if "ccf_modelled" in facility_cols else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
@@ -921,6 +923,7 @@ class HierarchyResolver:
             pl.lit(0.0).alias("undrawn_amount"),
             pl.lit(0.0).alias("nominal_amount"),
             pl.col("lgd").cast(pl.Float64, strict=False),
+            pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0) if "beel" in loan_cols else pl.lit(0.0).alias("beel"),
             pl.col("seniority"),
             pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
@@ -963,6 +966,7 @@ class HierarchyResolver:
                 pl.when(is_drawn).then(pl.lit(0.0))
                 .otherwise(pl.col("nominal_amount")).alias("nominal_amount"),
                 pl.col("lgd").cast(pl.Float64, strict=False),
+                pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0) if "beel" in cont_cols else pl.lit(0.0).alias("beel"),
                 pl.col("seniority"),
                 pl.when(is_drawn).then(pl.lit(None).cast(pl.String))
                 .otherwise(pl.col("risk_type")).alias("risk_type"),

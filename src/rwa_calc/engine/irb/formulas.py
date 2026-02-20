@@ -139,6 +139,54 @@ def apply_irb_formulas(
         (pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")).alias("expected_loss"),
     ])
 
+    # Step 10: Override for defaulted exposures (CRR Art. 153(1)(ii) / 154(1)(i))
+    schema = exposures.collect_schema()
+    if "is_defaulted" in schema.names():
+        is_defaulted = pl.col("is_defaulted").fill_null(False)
+
+        # Determine A-IRB flag
+        is_airb = (
+            pl.col("is_airb").fill_null(False)
+            if "is_airb" in schema.names()
+            else pl.lit(False)
+        )
+
+        # BEEL column
+        beel = (
+            pl.col("beel").fill_null(0.0)
+            if "beel" in schema.names()
+            else pl.lit(0.0)
+        )
+
+        # Scaling for defaulted: CRR 1.06 for non-retail, 1.0 for retail
+        defaulted_scaling = (
+            pl.when(is_retail).then(pl.lit(1.0)).otherwise(pl.lit(scaling_factor))
+        )
+
+        k_defaulted = (
+            pl.when(is_airb)
+            .then(pl.max_horizontal(pl.lit(0.0), pl.col("lgd_floored") - beel))
+            .otherwise(pl.lit(0.0))
+        )
+
+        rwa_defaulted = k_defaulted * 12.5 * defaulted_scaling * pl.col("ead_final")
+        rw_defaulted = k_defaulted * 12.5 * defaulted_scaling
+
+        el_defaulted = (
+            pl.when(is_airb)
+            .then(beel * pl.col("ead_final"))
+            .otherwise(pl.col("lgd_floored") * pl.col("ead_final"))
+        )
+
+        exposures = exposures.with_columns([
+            pl.when(is_defaulted).then(k_defaulted).otherwise(pl.col("k")).alias("k"),
+            pl.when(is_defaulted).then(pl.lit(0.0)).otherwise(pl.col("correlation")).alias("correlation"),
+            pl.when(is_defaulted).then(pl.lit(1.0)).otherwise(pl.col("maturity_adjustment")).alias("maturity_adjustment"),
+            pl.when(is_defaulted).then(rwa_defaulted).otherwise(pl.col("rwa")).alias("rwa"),
+            pl.when(is_defaulted).then(rw_defaulted).otherwise(pl.col("risk_weight")).alias("risk_weight"),
+            pl.when(is_defaulted).then(el_defaulted).otherwise(pl.col("expected_loss")).alias("expected_loss"),
+        ])
+
     return exposures
 
 

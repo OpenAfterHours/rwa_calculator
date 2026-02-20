@@ -288,6 +288,15 @@ class IRBLazyFrame:
         if "exposure_class" not in schema.names():
             lf = lf.with_columns([pl.lit("CORPORATE").alias("exposure_class")])
 
+        # Refresh schema
+        schema = lf.collect_schema()
+
+        # Defaulted exposure columns
+        if "is_defaulted" not in schema.names():
+            lf = lf.with_columns([pl.lit(False).alias("is_defaulted")])
+        if "beel" not in schema.names():
+            lf = lf.with_columns([pl.lit(0.0).alias("beel")])
+
         return lf
 
     # =========================================================================
@@ -455,6 +464,95 @@ class IRBLazyFrame:
         return self._lf.with_columns(
             (pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")).alias("expected_loss")
         )
+
+    # =========================================================================
+    # DEFAULTED EXPOSURE TREATMENT
+    # =========================================================================
+
+    def apply_defaulted_treatment(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply regulatory treatment for defaulted exposures (PD=100%).
+
+        Per CRR Art. 153(1)(ii) / 154(1)(i) and Basel CRE31.3, defaulted
+        exposures bypass the Vasicek formula entirely:
+        - F-IRB: K=0, RW=0 (capital held via provisions)
+        - A-IRB: K = max(0, LGD_in_default - BEEL)
+
+        Expected loss for defaulted exposures:
+        - F-IRB: EL = LGD × EAD (supervisory LGD)
+        - A-IRB: EL = BEEL × EAD (best estimate)
+
+        Runs after calculate_expected_loss (so all standard columns exist)
+        and before apply_guarantee_substitution.
+
+        Args:
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with defaulted rows overwritten
+        """
+        schema = self._lf.collect_schema()
+        cols = schema.names()
+
+        # No-op if is_defaulted column doesn't exist
+        if "is_defaulted" not in cols:
+            return self._lf
+
+        is_defaulted = pl.col("is_defaulted").fill_null(False)
+
+        # Determine scaling: CRR 1.06 for non-retail, 1.0 for retail; Basel 3.1 always 1.0
+        is_retail = (
+            pl.col("exposure_class")
+            .cast(pl.String)
+            .fill_null("CORPORATE")
+            .str.to_uppercase()
+            .str.contains("RETAIL")
+        )
+
+        if config.is_crr:
+            scaling = pl.when(is_retail).then(pl.lit(1.0)).otherwise(pl.lit(1.06))
+        else:
+            scaling = pl.lit(1.0)
+
+        # Ensure beel column exists (default 0.0)
+        lf = self._lf
+        if "beel" not in cols:
+            lf = lf.with_columns([pl.lit(0.0).alias("beel")])
+
+        beel = pl.col("beel").fill_null(0.0)
+
+        # K for defaulted: A-IRB = max(0, lgd_floored - beel), F-IRB = 0
+        is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in cols else pl.lit(False)
+        k_defaulted = (
+            pl.when(is_airb)
+            .then(pl.max_horizontal(pl.lit(0.0), pl.col("lgd_floored") - beel))
+            .otherwise(pl.lit(0.0))
+        )
+
+        # RWA = K × 12.5 × scaling × EAD (no maturity adjustment for defaulted)
+        rwa_defaulted = k_defaulted * 12.5 * scaling * pl.col("ead_final")
+
+        # Risk weight = K × 12.5 × scaling
+        rw_defaulted = k_defaulted * 12.5 * scaling
+
+        # Expected loss: A-IRB = BEEL × EAD, F-IRB = LGD × EAD
+        el_defaulted = (
+            pl.when(is_airb)
+            .then(beel * pl.col("ead_final"))
+            .otherwise(pl.col("lgd_floored") * pl.col("ead_final"))
+        )
+
+        # Override only defaulted rows
+        lf = lf.with_columns([
+            pl.when(is_defaulted).then(k_defaulted).otherwise(pl.col("k")).alias("k"),
+            pl.when(is_defaulted).then(pl.lit(0.0)).otherwise(pl.col("correlation")).alias("correlation"),
+            pl.when(is_defaulted).then(pl.lit(1.0)).otherwise(pl.col("maturity_adjustment")).alias("maturity_adjustment"),
+            pl.when(is_defaulted).then(rwa_defaulted).otherwise(pl.col("rwa")).alias("rwa"),
+            pl.when(is_defaulted).then(rw_defaulted).otherwise(pl.col("risk_weight")).alias("risk_weight"),
+            pl.when(is_defaulted).then(el_defaulted).otherwise(pl.col("expected_loss")).alias("expected_loss"),
+        ])
+
+        return lf
 
     # =========================================================================
     # GUARANTEE SUBSTITUTION
@@ -687,6 +785,7 @@ class IRBLazyFrame:
             .irb.calculate_maturity_adjustment(config)
             .irb.calculate_rwa(config)
             .irb.calculate_expected_loss(config)
+            .irb.apply_defaulted_treatment(config)
         )
 
     def select_expected_loss(self) -> pl.LazyFrame:
@@ -722,6 +821,9 @@ class IRBLazyFrame:
             "counterparty_reference",
             "exposure_class",
             "approach",
+            "is_airb",
+            "is_defaulted",
+            "beel",
             "pd_floored",
             "lgd_floored",
             "ead_final",
@@ -740,6 +842,56 @@ class IRBLazyFrame:
                 select_cols.append(col)
 
         audit = self._lf.select(select_cols)
+
+        # Build audit string with defaulted treatment indicator
+        has_is_defaulted = "is_defaulted" in available_cols
+        has_is_airb = "is_airb" in available_cols
+
+        if has_is_defaulted:
+            # Defaulted rows get a specific audit string
+            defaulted_str = (
+                pl.when(
+                    has_is_airb and pl.col("is_airb").fill_null(False)
+                    if has_is_airb else pl.lit(False)
+                )
+                .then(
+                    pl.concat_str([
+                        pl.lit("IRB DEFAULTED A-IRB: K=max(0, LGD-BEEL)="),
+                        (pl.col("k") * 100).round(3).cast(pl.String),
+                        pl.lit("%, LGD="),
+                        (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
+                        pl.lit("%, BEEL="),
+                        (pl.col("beel").fill_null(0.0) * 100).round(1).cast(pl.String) if "beel" in available_cols else pl.lit("0.0"),
+                        pl.lit("% → RWA="),
+                        pl.col("rwa").round(0).cast(pl.String),
+                    ])
+                )
+                .otherwise(
+                    pl.lit("IRB DEFAULTED F-IRB: K=0, RW=0 → RWA=0")
+                )
+            )
+
+            standard_str = pl.concat_str([
+                pl.lit("IRB: PD="),
+                (pl.col("pd_floored") * 100).round(2).cast(pl.String),
+                pl.lit("%, LGD="),
+                (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
+                pl.lit("%, R="),
+                (pl.col("correlation") * 100).round(2).cast(pl.String),
+                pl.lit("%, K="),
+                (pl.col("k") * 100).round(3).cast(pl.String),
+                pl.lit("%, MA="),
+                pl.col("maturity_adjustment").round(3).cast(pl.String),
+                pl.lit(" → RWA="),
+                pl.col("rwa").round(0).cast(pl.String),
+            ])
+
+            return audit.with_columns([
+                pl.when(pl.col("is_defaulted").fill_null(False))
+                .then(defaulted_str)
+                .otherwise(standard_str)
+                .alias("irb_calculation"),
+            ])
 
         return audit.with_columns([
             pl.concat_str([

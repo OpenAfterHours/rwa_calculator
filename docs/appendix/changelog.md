@@ -51,6 +51,14 @@ resolve_provisions → CCF → initialize_ead → collateral → guarantees → 
 
 
 
+
+## [0.1.27] - 2026-02-22
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.26] - 2026-02-21
 
 ### Changed
@@ -579,8 +587,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.26 | 2026-02-21 | Current |
-| 0.1.25 | 2026-02-21 | Previous |
+| 0.1.27 | 2026-02-22 | Current |
+| 0.1.26 | 2026-02-22 | Previous |
+| 0.1.25 | 2026-02-21 | - |
 | 0.1.24 | 2026-02-20 | - |
 | 0.1.23 | 2026-02-19 | - |
 | 0.1.22 | 2026-02-17 | - |

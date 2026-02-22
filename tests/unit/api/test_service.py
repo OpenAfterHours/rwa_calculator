@@ -75,9 +75,9 @@ def temp_valid_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def service() -> RWAService:
-    """Create an RWAService instance."""
-    return RWAService()
+def service(tmp_path: Path) -> RWAService:
+    """Create an RWAService instance with a temp cache directory."""
+    return RWAService(cache_dir=tmp_path / "service_cache")
 
 
 # =============================================================================
@@ -88,11 +88,12 @@ def service() -> RWAService:
 class TestRWAServiceInit:
     """Tests for RWAService initialization."""
 
-    def test_creates_with_default_components(self) -> None:
+    def test_creates_with_default_components(self, tmp_path: Path) -> None:
         """Should create service with default components."""
-        service = RWAService()
+        service = RWAService(cache_dir=tmp_path / "cache")
         assert service._validator is not None
         assert service._formatter is not None
+        assert service._cache is not None
 
 
 class TestRWAServiceValidateDataPath:
@@ -329,6 +330,7 @@ class TestQuickCalculate:
         response = quick_calculate(
             data_path=tmp_path / "nonexistent",
             framework="CRR",
+            cache_dir=tmp_path / "cache",
         )
 
         assert response.success is False

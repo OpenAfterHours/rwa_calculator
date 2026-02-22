@@ -25,10 +25,8 @@ from rwa_calc.api.models import (
     ValidationRequest,
     ValidationResponse,
 )
+from rwa_calc.api.results_cache import ResultsCache
 from rwa_calc.api.validation import DataPathValidator
-
-if TYPE_CHECKING:
-    pass
 
 
 # =============================================================================
@@ -60,13 +58,19 @@ class RWAService:
 
         if response.success:
             print(f"Total RWA: {response.summary.total_rwa:,.0f}")
-            print(response.results)
+            print(response.collect_results())
     """
 
-    def __init__(self) -> None:
-        """Initialize RWAService with default components."""
+    def __init__(self, cache_dir: Path) -> None:
+        """
+        Initialize RWAService with cache directory.
+
+        Args:
+            cache_dir: Directory for caching results as parquet files
+        """
         self._validator = DataPathValidator()
         self._formatter = ResultFormatter()
+        self._cache = ResultsCache(cache_dir)
 
     def calculate(self, request: CalculationRequest) -> CalculationResponse:
         """
@@ -92,6 +96,7 @@ class RWAService:
         if not validation.valid:
             return self._formatter.format_error_response(
                 errors=validation.errors,
+                cache=self._cache,
                 framework=request.framework,
                 reporting_date=request.reporting_date,
                 started_at=started_at,
@@ -106,6 +111,7 @@ class RWAService:
 
             return self._formatter.format_response(
                 bundle=result_bundle,
+                cache=self._cache,
                 framework=request.framework,
                 reporting_date=request.reporting_date,
                 started_at=started_at,
@@ -115,6 +121,7 @@ class RWAService:
             error = create_load_error(str(e))
             return self._formatter.format_error_response(
                 errors=[error],
+                cache=self._cache,
                 framework=request.framework,
                 reporting_date=request.reporting_date,
                 started_at=started_at,
@@ -279,14 +286,21 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
-def create_service() -> RWAService:
+def create_service(cache_dir: Path | None = None) -> RWAService:
     """
     Factory function to create RWAService instance.
+
+    Args:
+        cache_dir: Directory for caching results. Defaults to a temp directory.
 
     Returns:
         Configured RWAService
     """
-    return RWAService()
+    if cache_dir is None:
+        import tempfile
+
+        cache_dir = Path(tempfile.mkdtemp(prefix="rwa_cache_"))
+    return RWAService(cache_dir=cache_dir)
 
 
 def quick_calculate(
@@ -295,6 +309,7 @@ def quick_calculate(
     reporting_date: date | None = None,
     irb_approach: Literal["sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"] | None = None,
     data_format: Literal["parquet", "csv"] = "parquet",
+    cache_dir: Path | None = None,
 ) -> CalculationResponse:
     """
     Run a quick calculation with minimal configuration.
@@ -307,6 +322,7 @@ def quick_calculate(
         reporting_date: As-of date (defaults to today)
         irb_approach: IRB approach selection (default SA only)
         data_format: Format of input files
+        cache_dir: Directory for caching results. Defaults to a temp directory.
 
     Returns:
         CalculationResponse with results
@@ -315,7 +331,7 @@ def quick_calculate(
         response = quick_calculate("/path/to/data", framework="CRR")
         print(f"Total RWA: {response.summary.total_rwa:,.0f}")
     """
-    service = RWAService()
+    service = create_service(cache_dir=cache_dir)
     request = CalculationRequest(
         data_path=data_path,
         framework=framework,

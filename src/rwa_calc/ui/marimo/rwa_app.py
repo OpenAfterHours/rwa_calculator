@@ -217,14 +217,13 @@ def _(
 ):
     from rwa_calc.api import RWAService, CalculationRequest
     from datetime import date as date_type
-    import json
 
     calculation_response = None
     calculation_error = None
 
     if run_button.value:
         try:
-            service = RWAService()
+            service = RWAService(cache_dir=cache_dir)
 
             rd = reporting_date_input.value
             if not isinstance(rd, date_type):
@@ -239,25 +238,6 @@ def _(
             )
 
             calculation_response = service.calculate(request)
-
-            # Cache results for the results explorer
-            if calculation_response and calculation_response.success:
-                calculation_response.results.write_parquet(cache_dir / "last_results.parquet")
-
-                # Save metadata
-                metadata = {
-                    "framework": calculation_response.framework,
-                    "reporting_date": str(calculation_response.reporting_date),
-                    "total_ead": float(calculation_response.summary.total_ead),
-                    "total_rwa": float(calculation_response.summary.total_rwa),
-                    "exposure_count": calculation_response.summary.exposure_count,
-                }
-                (cache_dir / "last_results_meta.json").write_text(json.dumps(metadata, indent=2))
-
-                if calculation_response.summary_by_class is not None:
-                    calculation_response.summary_by_class.write_parquet(cache_dir / "last_summary_by_class.parquet")
-                if calculation_response.summary_by_approach is not None:
-                    calculation_response.summary_by_approach.write_parquet(cache_dir / "last_summary_by_approach.parquet")
 
         except Exception as e:
             calculation_error = str(e)
@@ -326,8 +306,9 @@ def _(calculation_response, mo):
 
 @app.cell
 def _(calculation_response, mo):
-    if calculation_response and calculation_response.success and calculation_response.results.height > 0:
-        results_df = calculation_response.results
+    if calculation_response and calculation_response.success and calculation_response.summary.exposure_count > 0:
+        results_lf = calculation_response.scan_results()
+        all_cols = results_lf.collect_schema().names()
 
         display_cols = [
             col for col in [
@@ -339,11 +320,11 @@ def _(calculation_response, mo):
                 "ead_final",
                 "risk_weight",
                 "rwa_final",
-            ] if col in results_df.columns
+            ] if col in all_cols
         ]
 
         if display_cols:
-            display_df = results_df.select(display_cols).head(100)
+            display_df = results_lf.select(display_cols).head(100).collect()
             mo.output.replace(
                 mo.vstack([
                     mo.md("## Results Preview (first 100 rows)"),
@@ -397,9 +378,9 @@ def _(calculation_response, mo):
 
 @app.cell
 def _(calculation_response, mo):
-    if calculation_response and calculation_response.success and calculation_response.results.height > 0:
+    if calculation_response and calculation_response.success and calculation_response.summary.exposure_count > 0:
         def _make_csv() -> bytes:
-            return calculation_response.results.write_csv().encode("utf-8")
+            return calculation_response.scan_results().collect().write_csv().encode("utf-8")
 
         mo.output.replace(
             mo.vstack([

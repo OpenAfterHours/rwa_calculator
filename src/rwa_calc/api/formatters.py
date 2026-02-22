@@ -2,9 +2,9 @@
 Result formatting utilities for RWA Calculator API.
 
 ResultFormatter: Formats AggregatedResultBundle for API responses
-compute_summary: Calculates SummaryStatistics from results
 
-Handles LazyFrame materialization and summary computation for UI consumption.
+Sinks results to parquet via ResultsCache and computes lightweight
+summary statistics — no full in-memory materialization of the results DataFrame.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from rwa_calc.api.models import (
     PerformanceMetrics,
     SummaryStatistics,
 )
+from rwa_calc.api.results_cache import ResultsCache
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle
@@ -36,16 +37,16 @@ class ResultFormatter:
     """
     Formats pipeline results for API responses.
 
-    Handles:
-    - LazyFrame materialization to DataFrames
-    - Summary statistics computation
-    - Error conversion to API format
-    - Performance metrics calculation
+    Sinks results to parquet via ResultsCache for zero in-memory overhead,
+    computes lightweight summary statistics via lazy aggregation, and
+    converts errors to API format.
 
     Usage:
+        cache = ResultsCache(Path(".cache"))
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
@@ -55,6 +56,7 @@ class ResultFormatter:
     def format_response(
         self,
         bundle: AggregatedResultBundle,
+        cache: ResultsCache,
         framework: str,
         reporting_date: date,
         started_at: datetime,
@@ -62,44 +64,52 @@ class ResultFormatter:
         """
         Format AggregatedResultBundle into CalculationResponse.
 
-        Materializes LazyFrames and computes summary statistics.
+        Sinks results to parquet and computes summary statistics lazily.
 
         Args:
             bundle: Result bundle from pipeline
+            cache: ResultsCache for streaming results to parquet
             framework: Framework used for calculation
             reporting_date: As-of date
             started_at: Calculation start time
 
         Returns:
-            CalculationResponse ready for API return
+            CalculationResponse with paths to cached parquet files
         """
         completed_at = datetime.now()
+        errors = convert_errors(bundle.errors) if bundle.errors else []
 
-        # Batch-collect results + summary frames in one pl.collect_all() call.
-        # This lets Polars deduplicate any shared subplans across all frames.
-        results_df, summary_by_class, summary_by_approach = (
-            self._batch_materialize_all(
-                bundle.results,
-                bundle.summary_by_class,
-                bundle.summary_by_approach,
-            )
-        )
-
-        summary = self._compute_summary(
-            results_df=results_df,
+        # Compute summary lazily — only aggregates, no full materialization
+        summary, exposure_count = self._compute_summary_lazy(
+            results=bundle.results,
             floor_impact=bundle.floor_impact,
         )
 
-        errors = convert_errors(bundle.errors) if bundle.errors else []
-
         has_critical = any(e.severity == "critical" for e in errors)
-        success = not has_critical and results_df.height > 0
+        success = not has_critical and exposure_count > 0
+
+        # Build metadata for the cache JSON
+        metadata = {
+            "framework": framework,
+            "reporting_date": str(reporting_date),
+            "total_ead": float(summary.total_ead),
+            "total_rwa": float(summary.total_rwa),
+            "exposure_count": summary.exposure_count,
+        }
+
+        # Sink results + summaries to parquet via cache
+        cached = cache.sink_results(
+            results=bundle.results,
+            summary_by_class=bundle.summary_by_class,
+            summary_by_approach=bundle.summary_by_approach,
+            metadata=metadata,
+        )
 
         performance = PerformanceMetrics(
             started_at=started_at,
             completed_at=completed_at,
             duration_seconds=(completed_at - started_at).total_seconds(),
-            exposure_count=results_df.height,
+            exposure_count=exposure_count,
         )
 
         return CalculationResponse(
@@ -107,9 +117,9 @@ class ResultFormatter:
             framework=framework,
             reporting_date=reporting_date,
             summary=summary,
-            results=results_df,
-            summary_by_class=summary_by_class,
-            summary_by_approach=summary_by_approach,
+            results_path=cached.results_path,
+            summary_by_class_path=cached.summary_by_class_path,
+            summary_by_approach_path=cached.summary_by_approach_path,
             errors=errors,
             performance=performance,
         )
@@ -117,6 +127,7 @@ class ResultFormatter:
     def format_error_response(
         self,
         errors: list[APIError],
+        cache: ResultsCache,
         framework: str,
         reporting_date: date,
         started_at: datetime,
@@ -124,8 +135,12 @@ class ResultFormatter:
         """
         Format an error response when calculation fails.
 
+        Writes an empty parquet to cache so downstream code can
+        scan_results() without file-not-found errors.
+
         Args:
             errors: List of errors that caused failure
+            cache: ResultsCache for writing empty parquet
             framework: Framework that was requested
             reporting_date: As-of date
             started_at: Calculation start time
@@ -142,7 +157,7 @@ class ResultFormatter:
             average_risk_weight=Decimal("0"),
         )
 
-        empty_results = pl.DataFrame({
+        empty_lf = pl.LazyFrame({
             "exposure_reference": pl.Series([], dtype=pl.String),
             "approach_applied": pl.Series([], dtype=pl.String),
             "exposure_class": pl.Series([], dtype=pl.String),
@@ -150,6 +165,8 @@ class ResultFormatter:
             "risk_weight": pl.Series([], dtype=pl.Float64),
             "rwa_final": pl.Series([], dtype=pl.Float64),
         })
+
+        cached = cache.sink_results(results=empty_lf)
 
         performance = PerformanceMetrics(
             started_at=started_at,
@@ -163,103 +180,99 @@ class ResultFormatter:
             framework=framework,
             reporting_date=reporting_date,
             summary=empty_summary,
-            results=empty_results,
+            results_path=cached.results_path,
             errors=errors,
             performance=performance,
         )
 
-    def _batch_materialize_all(
+    def _compute_summary_lazy(
         self,
         results: pl.LazyFrame,
-        summary_by_class: pl.LazyFrame | None,
-        summary_by_approach: pl.LazyFrame | None,
-    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
-        """
-        Batch-collect results + summary LazyFrames using pl.collect_all().
-
-        Collecting everything in one call lets Polars deduplicate any
-        shared subplans for a single pass through the data.
-
-        Args:
-            results: Main results LazyFrame (required)
-            summary_by_class: Optional summary-by-class LazyFrame
-            summary_by_approach: Optional summary-by-approach LazyFrame
-
-        Returns:
-            Tuple of (results DataFrame, class summary, approach summary)
-        """
-        frames_to_collect: list[pl.LazyFrame] = [results]
-        indices: dict[str, int] = {"results": 0}
-
-        if summary_by_class is not None:
-            indices["class"] = len(frames_to_collect)
-            frames_to_collect.append(summary_by_class)
-
-        if summary_by_approach is not None:
-            indices["approach"] = len(frames_to_collect)
-            frames_to_collect.append(summary_by_approach)
-
-        try:
-            collected = pl.collect_all(frames_to_collect)
-        except Exception:
-            empty_results = pl.DataFrame({
-                "exposure_reference": pl.Series([], dtype=pl.String),
-                "approach_applied": pl.Series([], dtype=pl.String),
-                "exposure_class": pl.Series([], dtype=pl.String),
-                "ead_final": pl.Series([], dtype=pl.Float64),
-                "risk_weight": pl.Series([], dtype=pl.Float64),
-                "rwa_final": pl.Series([], dtype=pl.Float64),
-            })
-            return empty_results, None, None
-
-        results_df = collected[indices["results"]]
-        class_df = collected[indices["class"]] if "class" in indices else None
-        approach_df = collected[indices["approach"]] if "approach" in indices else None
-
-        return results_df, class_df, approach_df
-
-    def _compute_summary(
-        self,
-        results_df: pl.DataFrame,
         floor_impact: pl.LazyFrame | None,
-    ) -> SummaryStatistics:
+    ) -> tuple[SummaryStatistics, int]:
         """
-        Compute summary statistics from the already-materialized results DataFrame.
+        Compute summary statistics via a single lazy aggregation.
 
-        Filters results_df by approach_applied instead of re-collecting separate
-        LazyFrames, eliminating 6 redundant pipeline executions.
+        Collects only a tiny 1-row aggregate — never materializes
+        the full results DataFrame.
 
         Args:
-            results_df: Materialized results DataFrame
+            results: Results LazyFrame
             floor_impact: Optional floor impact LazyFrame
 
         Returns:
-            SummaryStatistics with computed metrics
+            Tuple of (SummaryStatistics, exposure_count)
         """
-        if results_df.height == 0:
+        schema = results.collect_schema()
+        ead_col = self._find_column_in_schema(schema, ["ead_final", "ead", "exposure_at_default"])
+        rwa_col = self._find_column_in_schema(schema, ["rwa_final", "rwa", "risk_weighted_assets"])
+        has_approach = "approach_applied" in schema.names()
+
+        # Build aggregation expressions
+        agg_exprs: list[pl.Expr] = [pl.len().alias("count")]
+
+        if ead_col:
+            agg_exprs.append(pl.col(ead_col).sum().alias("total_ead"))
+        if rwa_col:
+            agg_exprs.append(pl.col(rwa_col).sum().alias("total_rwa"))
+
+        # Per-approach aggregations
+        sa_approaches = ["SA", "standardised"]
+        irb_approaches = ["foundation_irb", "advanced_irb", "FIRB"]
+        slotting_approaches = ["SLOTTING", "slotting"]
+
+        if has_approach:
+            if ead_col:
+                agg_exprs.append(
+                    pl.col(ead_col).filter(pl.col("approach_applied").is_in(sa_approaches)).sum().alias("ead_sa")
+                )
+                agg_exprs.append(
+                    pl.col(ead_col).filter(pl.col("approach_applied").is_in(irb_approaches)).sum().alias("ead_irb")
+                )
+                agg_exprs.append(
+                    pl.col(ead_col).filter(pl.col("approach_applied").is_in(slotting_approaches)).sum().alias("ead_slotting")
+                )
+            if rwa_col:
+                agg_exprs.append(
+                    pl.col(rwa_col).filter(pl.col("approach_applied").is_in(sa_approaches)).sum().alias("rwa_sa")
+                )
+                agg_exprs.append(
+                    pl.col(rwa_col).filter(pl.col("approach_applied").is_in(irb_approaches)).sum().alias("rwa_irb")
+                )
+                agg_exprs.append(
+                    pl.col(rwa_col).filter(pl.col("approach_applied").is_in(slotting_approaches)).sum().alias("rwa_slotting")
+                )
+
+        try:
+            agg_df = results.select(agg_exprs).collect()
+        except Exception:
             return SummaryStatistics(
                 total_ead=Decimal("0"),
                 total_rwa=Decimal("0"),
                 exposure_count=0,
                 average_risk_weight=Decimal("0"),
-            )
+            ), 0
 
-        ead_col = self._find_column(results_df, ["ead_final", "ead", "exposure_at_default"])
-        rwa_col = self._find_column(results_df, ["rwa_final", "rwa", "risk_weighted_assets"])
+        exposure_count = int(agg_df["count"][0])
+        if exposure_count == 0:
+            return SummaryStatistics(
+                total_ead=Decimal("0"),
+                total_rwa=Decimal("0"),
+                exposure_count=0,
+                average_risk_weight=Decimal("0"),
+            ), 0
 
-        total_ead = Decimal("0")
-        total_rwa = Decimal("0")
-
-        if ead_col:
-            total_ead = Decimal(str(results_df[ead_col].sum() or 0))
-        if rwa_col:
-            total_rwa = Decimal(str(results_df[rwa_col].sum() or 0))
-
+        total_ead = Decimal(str(agg_df["total_ead"][0] or 0)) if ead_col else Decimal("0")
+        total_rwa = Decimal(str(agg_df["total_rwa"][0] or 0)) if rwa_col else Decimal("0")
         avg_rw = total_rwa / total_ead if total_ead > 0 else Decimal("0")
 
-        # Compute per-approach stats from already-materialized results_df
-        approach_stats = self._compute_approach_stats(results_df, ead_col, rwa_col)
+        # Extract per-approach stats
+        def _get_decimal(col_name: str) -> Decimal:
+            if col_name in agg_df.columns:
+                return Decimal(str(agg_df[col_name][0] or 0))
+            return Decimal("0")
 
+        # Floor impact
         floor_applied = False
         floor_impact_value = Decimal("0")
         if floor_impact is not None:
@@ -272,152 +285,40 @@ class ResultFormatter:
             except Exception:
                 pass
 
-        return SummaryStatistics(
+        summary = SummaryStatistics(
             total_ead=total_ead,
             total_rwa=total_rwa,
-            exposure_count=results_df.height,
+            exposure_count=exposure_count,
             average_risk_weight=avg_rw,
-            total_ead_sa=approach_stats["ead_sa"],
-            total_ead_irb=approach_stats["ead_irb"],
-            total_ead_slotting=approach_stats["ead_slotting"],
-            total_rwa_sa=approach_stats["rwa_sa"],
-            total_rwa_irb=approach_stats["rwa_irb"],
-            total_rwa_slotting=approach_stats["rwa_slotting"],
+            total_ead_sa=_get_decimal("ead_sa"),
+            total_ead_irb=_get_decimal("ead_irb"),
+            total_ead_slotting=_get_decimal("ead_slotting"),
+            total_rwa_sa=_get_decimal("rwa_sa"),
+            total_rwa_irb=_get_decimal("rwa_irb"),
+            total_rwa_slotting=_get_decimal("rwa_slotting"),
             floor_applied=floor_applied,
             floor_impact=floor_impact_value,
         )
 
-    def _compute_approach_stats(
+        return summary, exposure_count
+
+    def _find_column_in_schema(
         self,
-        results_df: pl.DataFrame,
-        ead_col: str | None,
-        rwa_col: str | None,
-    ) -> dict[str, Decimal]:
-        """
-        Compute per-approach EAD and RWA totals from the materialized results DataFrame.
-
-        Filters on the approach_applied column instead of re-collecting separate LazyFrames.
-
-        Args:
-            results_df: Materialized results DataFrame
-            ead_col: Name of EAD column (or None)
-            rwa_col: Name of RWA column (or None)
-
-        Returns:
-            Dict with keys ead_sa, ead_irb, ead_slotting, rwa_sa, rwa_irb, rwa_slotting
-        """
-        stats: dict[str, Decimal] = {
-            "ead_sa": Decimal("0"),
-            "ead_irb": Decimal("0"),
-            "ead_slotting": Decimal("0"),
-            "rwa_sa": Decimal("0"),
-            "rwa_irb": Decimal("0"),
-            "rwa_slotting": Decimal("0"),
-        }
-
-        if "approach_applied" not in results_df.columns:
-            return stats
-
-        # SA approaches
-        sa_approaches = {"SA", "standardised"}
-        # IRB approaches: "foundation_irb"/"advanced_irb" from ApproachType enum,
-        # "FIRB" from aggregator fallback when 'approach' column is missing
-        irb_approaches = {"foundation_irb", "advanced_irb", "FIRB"}
-        # Slotting approaches: "SLOTTING" from aggregator literal, "slotting" from ApproachType enum
-        slotting_approaches = {"SLOTTING", "slotting"}
-
-        approach_mapping = {
-            "sa": sa_approaches,
-            "irb": irb_approaches,
-            "slotting": slotting_approaches,
-        }
-
-        for key, approaches in approach_mapping.items():
-            filtered = results_df.filter(pl.col("approach_applied").is_in(approaches))
-            if filtered.height > 0:
-                if ead_col and ead_col in filtered.columns:
-                    stats[f"ead_{key}"] = Decimal(str(filtered[ead_col].sum() or 0))
-                if rwa_col and rwa_col in filtered.columns:
-                    stats[f"rwa_{key}"] = Decimal(str(filtered[rwa_col].sum() or 0))
-
-        return stats
-
-    def _find_column(
-        self,
-        df: pl.DataFrame,
+        schema: pl.Schema,
         candidates: list[str],
     ) -> str | None:
         """
-        Find first matching column name from candidates.
+        Find first matching column name from candidates in a schema.
 
         Args:
-            df: DataFrame to search
+            schema: Polars schema to search
             candidates: List of possible column names
 
         Returns:
             First matching column name or None
         """
+        names = schema.names()
         for col in candidates:
-            if col in df.columns:
+            if col in names:
                 return col
         return None
-
-
-# =============================================================================
-# Convenience Functions
-# =============================================================================
-
-
-def compute_summary(results_df: pl.DataFrame) -> SummaryStatistics:
-    """
-    Compute summary statistics from a results DataFrame.
-
-    Convenience function for quick summary computation.
-
-    Args:
-        results_df: DataFrame with calculation results
-
-    Returns:
-        SummaryStatistics with computed metrics
-    """
-    formatter = ResultFormatter()
-    return formatter._compute_summary(
-        results_df=results_df,
-        floor_impact=None,
-    )
-
-
-def materialize_bundle(bundle: AggregatedResultBundle) -> dict[str, pl.DataFrame]:
-    """
-    Materialize all LazyFrames in a bundle to DataFrames.
-
-    Useful for debugging and inspection.
-
-    Args:
-        bundle: AggregatedResultBundle to materialize
-
-    Returns:
-        Dictionary of materialized DataFrames
-    """
-    result: dict[str, pl.DataFrame] = {}
-
-    try:
-        result["results"] = bundle.results.collect()
-    except Exception:
-        result["results"] = pl.DataFrame()
-
-    for name, lazy in [
-        ("sa_results", bundle.sa_results),
-        ("irb_results", bundle.irb_results),
-        ("slotting_results", bundle.slotting_results),
-        ("floor_impact", bundle.floor_impact),
-        ("summary_by_class", bundle.summary_by_class),
-        ("summary_by_approach", bundle.summary_by_approach),
-    ]:
-        if lazy is not None:
-            try:
-                result[name] = lazy.collect()
-            except Exception:
-                result[name] = pl.DataFrame()
-
-    return result

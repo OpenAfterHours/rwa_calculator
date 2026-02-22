@@ -1,25 +1,23 @@
 """Unit tests for the API formatters module.
 
 Tests cover:
-- ResultFormatter class
-- compute_summary convenience function
-- materialize_bundle convenience function
+- ResultFormatter.format_response with ResultsCache
+- ResultFormatter.format_error_response with ResultsCache
+- Summary computation via lazy aggregation
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import polars as pl
 import pytest
 
-from rwa_calc.api.formatters import (
-    ResultFormatter,
-    compute_summary,
-    materialize_bundle,
-)
+from rwa_calc.api.formatters import ResultFormatter
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
+from rwa_calc.api.results_cache import ResultsCache
 from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
@@ -28,6 +26,12 @@ from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 # =============================================================================
 # Fixtures
 # =============================================================================
+
+
+@pytest.fixture
+def cache(tmp_path: Path) -> ResultsCache:
+    """Create a ResultsCache in a temp directory."""
+    return ResultsCache(tmp_path / "cache")
 
 
 @pytest.fixture
@@ -116,11 +120,16 @@ def error_result_bundle() -> AggregatedResultBundle:
 class TestResultFormatterFormatResponse:
     """Tests for ResultFormatter.format_response method."""
 
-    def test_successful_response(self, sample_result_bundle: AggregatedResultBundle) -> None:
+    def test_successful_response(
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
+    ) -> None:
         """Should format successful result bundle."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=sample_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
@@ -131,26 +140,36 @@ class TestResultFormatterFormatResponse:
         assert response.framework == "CRR"
         assert response.reporting_date == date(2024, 12, 31)
 
-    def test_materializes_results(self, sample_result_bundle: AggregatedResultBundle) -> None:
-        """Should materialize LazyFrame to DataFrame."""
+    def test_results_written_to_parquet(
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
+    ) -> None:
+        """Should sink results to a parquet file that can be scanned lazily."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=sample_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
         )
 
-        assert isinstance(response.results, pl.DataFrame)
-        assert len(response.results) == 3
+        assert response.results_path.exists()
+        results_df = response.collect_results()
+        assert isinstance(results_df, pl.DataFrame)
+        assert results_df.height == 3
 
     def test_computes_summary_statistics(
-        self, sample_result_bundle: AggregatedResultBundle
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
     ) -> None:
-        """Should compute summary statistics correctly."""
+        """Should compute summary statistics correctly via lazy aggregation."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=sample_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
@@ -161,13 +180,16 @@ class TestResultFormatterFormatResponse:
         assert response.summary.total_rwa == Decimal("1750000")
 
     def test_includes_performance_metrics(
-        self, sample_result_bundle: AggregatedResultBundle
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
     ) -> None:
         """Should include performance metrics."""
         formatter = ResultFormatter()
         started = datetime.now()
         response = formatter.format_response(
             bundle=sample_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=started,
@@ -178,26 +200,37 @@ class TestResultFormatterFormatResponse:
         assert response.performance.exposure_count == 3
         assert response.performance.duration_seconds >= 0
 
-    def test_materializes_summary_by_class(
-        self, sample_result_bundle: AggregatedResultBundle
+    def test_writes_summary_by_class_parquet(
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
     ) -> None:
-        """Should materialize summary by class."""
+        """Should write summary by class to parquet."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=sample_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
         )
 
-        assert response.summary_by_class is not None
-        assert isinstance(response.summary_by_class, pl.DataFrame)
+        assert response.summary_by_class_path is not None
+        assert response.summary_by_class_path.exists()
+        class_lf = response.scan_summary_by_class()
+        assert class_lf is not None
+        assert isinstance(class_lf, pl.LazyFrame)
 
-    def test_converts_errors(self, error_result_bundle: AggregatedResultBundle) -> None:
+    def test_converts_errors(
+        self,
+        error_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
+    ) -> None:
         """Should convert CalculationErrors to APIErrors."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=error_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
@@ -211,7 +244,7 @@ class TestResultFormatterFormatResponse:
 class TestResultFormatterFormatErrorResponse:
     """Tests for ResultFormatter.format_error_response method."""
 
-    def test_error_response(self) -> None:
+    def test_error_response(self, cache: ResultsCache) -> None:
         """Should format error response correctly."""
         from rwa_calc.api.models import APIError
 
@@ -227,6 +260,7 @@ class TestResultFormatterFormatErrorResponse:
 
         response = formatter.format_error_response(
             errors=errors,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
@@ -235,17 +269,23 @@ class TestResultFormatterFormatErrorResponse:
         assert response.success is False
         assert len(response.errors) == 1
         assert response.summary.exposure_count == 0
-        assert response.results.height == 0
+        assert response.results_path.exists()
+        assert response.collect_results().height == 0
 
 
-class TestResultFormatterComputeSummary:
-    """Tests for ResultFormatter._compute_summary method."""
+class TestResultFormatterComputeSummaryLazy:
+    """Tests for ResultFormatter._compute_summary_lazy method."""
 
-    def test_empty_results(self, empty_result_bundle: AggregatedResultBundle) -> None:
+    def test_empty_results(
+        self,
+        empty_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
+    ) -> None:
         """Should handle empty results."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=empty_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
@@ -257,29 +297,34 @@ class TestResultFormatterComputeSummary:
         assert response.summary.average_risk_weight == Decimal("0")
 
     def test_computes_average_risk_weight(
-        self, sample_result_bundle: AggregatedResultBundle
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
     ) -> None:
         """Should compute average risk weight correctly."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=sample_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
         )
 
         # Total RWA = 1,750,000, Total EAD = 2,250,000
-        # Average RW = 1,750,000 / 2,250,000 ≈ 0.7778
         expected_avg_rw = Decimal("1750000") / Decimal("2250000")
         assert response.summary.average_risk_weight == expected_avg_rw
 
     def test_computes_rwa_by_approach(
-        self, sample_result_bundle: AggregatedResultBundle
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
     ) -> None:
         """Should compute RWA by approach."""
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=sample_result_bundle,
+            cache=cache,
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             started_at=datetime.now(),
@@ -290,192 +335,123 @@ class TestResultFormatterComputeSummary:
         assert response.summary.total_rwa_irb == Decimal("375000")
 
 
-class TestResultFormatterFindColumn:
-    """Tests for ResultFormatter._find_column method."""
+class TestComputeSummaryLazyApproachStats:
+    """Tests for approach stats computed via lazy aggregation."""
 
-    def test_finds_first_match(self) -> None:
-        """Should find first matching column."""
+    def _make_bundle(self, approach_applied: list[str], ead: list[float], rwa: list[float]) -> AggregatedResultBundle:
+        """Helper to create a bundle with given approach data."""
+        return AggregatedResultBundle(
+            results=pl.LazyFrame({
+                "exposure_reference": [f"EXP{i}" for i in range(len(approach_applied))],
+                "approach_applied": approach_applied,
+                "ead_final": ead,
+                "rwa_final": rwa,
+            }),
+            errors=[],
+        )
+
+    def test_foundation_irb_counted_in_irb(self, cache: ResultsCache) -> None:
+        """foundation_irb should be counted in ead_irb/rwa_irb."""
+        bundle = self._make_bundle(["foundation_irb"], [1_000_000.0], [500_000.0])
         formatter = ResultFormatter()
-        df = pl.DataFrame({
-            "ead_final": [100],
-            "rwa_final": [50],
-        })
+        response = formatter.format_response(
+            bundle=bundle, cache=cache, framework="CRR",
+            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+        )
 
-        col = formatter._find_column(df, ["ead", "ead_final", "exposure_at_default"])
-        assert col == "ead_final"
+        assert response.summary.total_ead_irb == Decimal("1000000")
+        assert response.summary.total_rwa_irb == Decimal("500000")
+        assert response.summary.total_ead_sa == Decimal("0")
 
-    def test_returns_none_for_no_match(self) -> None:
-        """Should return None when no columns match."""
+    def test_advanced_irb_counted_in_irb(self, cache: ResultsCache) -> None:
+        """advanced_irb should be counted in ead_irb/rwa_irb."""
+        bundle = self._make_bundle(["advanced_irb"], [2_000_000.0], [800_000.0])
         formatter = ResultFormatter()
-        df = pl.DataFrame({
-            "amount": [100],
-        })
+        response = formatter.format_response(
+            bundle=bundle, cache=cache, framework="CRR",
+            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+        )
 
-        col = formatter._find_column(df, ["ead", "ead_final", "exposure_at_default"])
-        assert col is None
+        assert response.summary.total_ead_irb == Decimal("2000000")
+        assert response.summary.total_rwa_irb == Decimal("800000")
 
-
-# =============================================================================
-# Convenience Function Tests
-# =============================================================================
-
-
-class TestComputeSummary:
-    """Tests for compute_summary convenience function."""
-
-    def test_basic_summary(self) -> None:
-        """Should compute summary from DataFrame."""
-        df = pl.DataFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "ead_final": [1000000.0, 500000.0],
-            "rwa_final": [500000.0, 250000.0],
-        })
-
-        summary = compute_summary(df)
-
-        assert isinstance(summary, SummaryStatistics)
-        assert summary.exposure_count == 2
-        assert summary.total_ead == Decimal("1500000")
-        assert summary.total_rwa == Decimal("750000")
-
-    def test_empty_dataframe(self) -> None:
-        """Should handle empty DataFrame."""
-        df = pl.DataFrame({
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "rwa_final": pl.Series([], dtype=pl.Float64),
-        })
-
-        summary = compute_summary(df)
-
-        assert summary.exposure_count == 0
-        assert summary.total_ead == Decimal("0")
-
-
-class TestMaterializeBundle:
-    """Tests for materialize_bundle convenience function."""
-
-    def test_materializes_all_frames(
-        self, sample_result_bundle: AggregatedResultBundle
-    ) -> None:
-        """Should materialize all LazyFrames in bundle."""
-        result = materialize_bundle(sample_result_bundle)
-
-        assert "results" in result
-        assert isinstance(result["results"], pl.DataFrame)
-        assert "sa_results" in result
-        assert "irb_results" in result
-        assert "summary_by_class" in result
-
-    def test_handles_none_frames(
-        self, empty_result_bundle: AggregatedResultBundle
-    ) -> None:
-        """Should handle None LazyFrames."""
-        result = materialize_bundle(empty_result_bundle)
-
-        assert "results" in result
-        # Optional frames that are None won't be in result
-        assert result.get("sa_results") is None or "sa_results" not in result
-
-
-# =============================================================================
-# _compute_approach_stats Tests
-# =============================================================================
-
-
-class TestComputeApproachStats:
-    """Tests for ResultFormatter._compute_approach_stats with correct approach values."""
-
-    def test_foundation_irb_counted_in_irb(self) -> None:
-        """foundation_irb (ApproachType.FIRB.value) should be counted in ead_irb/rwa_irb."""
-        df = pl.DataFrame({
-            "approach_applied": ["foundation_irb"],
-            "ead_final": [1_000_000.0],
-            "rwa_final": [500_000.0],
-        })
-        formatter = ResultFormatter()
-        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
-
-        assert stats["ead_irb"] == Decimal("1000000")
-        assert stats["rwa_irb"] == Decimal("500000")
-        assert stats["ead_sa"] == Decimal("0")
-
-    def test_advanced_irb_counted_in_irb(self) -> None:
-        """advanced_irb (ApproachType.AIRB.value) should be counted in ead_irb/rwa_irb."""
-        df = pl.DataFrame({
-            "approach_applied": ["advanced_irb"],
-            "ead_final": [2_000_000.0],
-            "rwa_final": [800_000.0],
-        })
-        formatter = ResultFormatter()
-        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
-
-        assert stats["ead_irb"] == Decimal("2000000")
-        assert stats["rwa_irb"] == Decimal("800000")
-
-    def test_sa_counted_in_sa(self) -> None:
+    def test_sa_counted_in_sa(self, cache: ResultsCache) -> None:
         """SA literal should be counted in ead_sa/rwa_sa."""
-        df = pl.DataFrame({
-            "approach_applied": ["SA"],
-            "ead_final": [500_000.0],
-            "rwa_final": [250_000.0],
-        })
+        bundle = self._make_bundle(["SA"], [500_000.0], [250_000.0])
         formatter = ResultFormatter()
-        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+        response = formatter.format_response(
+            bundle=bundle, cache=cache, framework="CRR",
+            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+        )
 
-        assert stats["ead_sa"] == Decimal("500000")
-        assert stats["rwa_sa"] == Decimal("250000")
-        assert stats["ead_irb"] == Decimal("0")
+        assert response.summary.total_ead_sa == Decimal("500000")
+        assert response.summary.total_rwa_sa == Decimal("250000")
+        assert response.summary.total_ead_irb == Decimal("0")
 
-    def test_slotting_counted_in_slotting(self) -> None:
+    def test_slotting_counted_in_slotting(self, cache: ResultsCache) -> None:
         """Both SLOTTING literal and slotting enum value should be counted."""
-        df = pl.DataFrame({
-            "approach_applied": ["SLOTTING", "slotting"],
-            "ead_final": [300_000.0, 200_000.0],
-            "rwa_final": [150_000.0, 100_000.0],
-        })
+        bundle = self._make_bundle(
+            ["SLOTTING", "slotting"],
+            [300_000.0, 200_000.0],
+            [150_000.0, 100_000.0],
+        )
         formatter = ResultFormatter()
-        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+        response = formatter.format_response(
+            bundle=bundle, cache=cache, framework="CRR",
+            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+        )
 
-        assert stats["ead_slotting"] == Decimal("500000")
-        assert stats["rwa_slotting"] == Decimal("250000")
+        assert response.summary.total_ead_slotting == Decimal("500000")
+        assert response.summary.total_rwa_slotting == Decimal("250000")
 
-    def test_mixed_approaches(self) -> None:
+    def test_mixed_approaches(self, cache: ResultsCache) -> None:
         """Mixed approach results should produce correct per-approach breakdown."""
-        df = pl.DataFrame({
-            "approach_applied": ["SA", "SA", "foundation_irb", "advanced_irb", "SLOTTING"],
-            "ead_final": [1_000_000.0, 500_000.0, 750_000.0, 250_000.0, 300_000.0],
-            "rwa_final": [1_000_000.0, 375_000.0, 375_000.0, 100_000.0, 240_000.0],
-        })
+        bundle = self._make_bundle(
+            ["SA", "SA", "foundation_irb", "advanced_irb", "SLOTTING"],
+            [1_000_000.0, 500_000.0, 750_000.0, 250_000.0, 300_000.0],
+            [1_000_000.0, 375_000.0, 375_000.0, 100_000.0, 240_000.0],
+        )
         formatter = ResultFormatter()
-        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+        response = formatter.format_response(
+            bundle=bundle, cache=cache, framework="CRR",
+            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+        )
 
-        assert stats["ead_sa"] == Decimal("1500000")
-        assert stats["rwa_sa"] == Decimal("1375000")
-        assert stats["ead_irb"] == Decimal("1000000")
-        assert stats["rwa_irb"] == Decimal("475000")
-        assert stats["ead_slotting"] == Decimal("300000")
-        assert stats["rwa_slotting"] == Decimal("240000")
+        assert response.summary.total_ead_sa == Decimal("1500000")
+        assert response.summary.total_rwa_sa == Decimal("1375000")
+        assert response.summary.total_ead_irb == Decimal("1000000")
+        assert response.summary.total_rwa_irb == Decimal("475000")
+        assert response.summary.total_ead_slotting == Decimal("300000")
+        assert response.summary.total_rwa_slotting == Decimal("240000")
 
-    def test_firb_fallback_counted_in_irb(self) -> None:
-        """FIRB fallback (when approach column missing) should also be counted in IRB."""
-        df = pl.DataFrame({
-            "approach_applied": ["FIRB"],
-            "ead_final": [400_000.0],
-            "rwa_final": [200_000.0],
-        })
+    def test_firb_fallback_counted_in_irb(self, cache: ResultsCache) -> None:
+        """FIRB fallback should also be counted in IRB."""
+        bundle = self._make_bundle(["FIRB"], [400_000.0], [200_000.0])
         formatter = ResultFormatter()
-        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+        response = formatter.format_response(
+            bundle=bundle, cache=cache, framework="CRR",
+            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+        )
 
-        assert stats["ead_irb"] == Decimal("400000")
-        assert stats["rwa_irb"] == Decimal("200000")
+        assert response.summary.total_ead_irb == Decimal("400000")
+        assert response.summary.total_rwa_irb == Decimal("200000")
 
-    def test_no_approach_column(self) -> None:
+    def test_no_approach_column(self, cache: ResultsCache) -> None:
         """Should return zeros when approach_applied column is missing."""
-        df = pl.DataFrame({
-            "ead_final": [100_000.0],
-            "rwa_final": [50_000.0],
-        })
+        bundle = AggregatedResultBundle(
+            results=pl.LazyFrame({
+                "exposure_reference": ["EXP001"],
+                "ead_final": [100_000.0],
+                "rwa_final": [50_000.0],
+            }),
+            errors=[],
+        )
         formatter = ResultFormatter()
-        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+        response = formatter.format_response(
+            bundle=bundle, cache=cache, framework="CRR",
+            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+        )
 
-        assert all(v == Decimal("0") for v in stats.values())
+        assert response.summary.total_ead_sa == Decimal("0")
+        assert response.summary.total_ead_irb == Decimal("0")
+        assert response.summary.total_ead_slotting == Decimal("0")

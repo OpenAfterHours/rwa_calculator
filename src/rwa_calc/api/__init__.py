@@ -4,13 +4,15 @@ RWA Calculator API Module.
 Public API for RWA calculations providing:
 - RWAService: Main service facade for calculations
 - Request/Response models: Clean interface contracts
+- ResultsCache: Memory-efficient parquet caching
 - Validation utilities: Data path validation
 
 Usage:
     from rwa_calc.api import RWAService, CalculationRequest
     from datetime import date
+    from pathlib import Path
 
-    service = RWAService()
+    service = RWAService(cache_dir=Path(".cache"))
     response = service.calculate(
         CalculationRequest(
             data_path="/path/to/data",
@@ -23,10 +25,7 @@ Usage:
     if response.success:
         print(f"Total RWA: {response.summary.total_rwa:,.0f}")
         print(f"Exposures: {response.summary.exposure_count}")
-        print(response.results)
-    else:
-        for error in response.errors:
-            print(f"{error.code}: {error.message}")
+        results_df = response.collect_results()
 """
 
 from rwa_calc.api.models import (
@@ -34,10 +33,13 @@ from rwa_calc.api.models import (
     CalculationRequest,
     CalculationResponse,
     PerformanceMetrics,
-    SummaryByDimension,
     SummaryStatistics,
     ValidationRequest,
     ValidationResponse,
+)
+from rwa_calc.api.results_cache import (
+    CachedResults,
+    ResultsCache,
 )
 from rwa_calc.api.service import (
     RWAService,
@@ -62,9 +64,11 @@ __all__ = [
     "CalculationResponse",
     "ValidationResponse",
     "SummaryStatistics",
-    "SummaryByDimension",
     "APIError",
     "PerformanceMetrics",
+    # Cache
+    "ResultsCache",
+    "CachedResults",
     # Validation
     "DataPathValidator",
     "validate_data_path",

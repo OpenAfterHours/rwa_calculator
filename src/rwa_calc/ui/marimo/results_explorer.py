@@ -8,7 +8,7 @@ Usage:
     uv run marimo run src/rwa_calc/ui/marimo/results_explorer.py
 
 Features:
-    - Load cached results from calculator
+    - Load cached results from calculator (lazy scan, no full materialization)
     - Filter by exposure class, approach, risk weight range
     - Aggregation by different dimensions
     - Drill-down into individual exposures
@@ -75,9 +75,11 @@ def _(cache_dir, json, mo, pl):
     meta_file = cache_dir / "last_results_meta.json"
 
     if results_file.exists():
-        results_df = pl.read_parquet(results_file)
+        results_lf = pl.scan_parquet(results_file)
         metadata = json.loads(meta_file.read_text()) if meta_file.exists() else {}
         has_results = True
+
+        exposure_count = metadata.get("exposure_count", 0)
 
         mo.output.replace(
             mo.callout(
@@ -85,14 +87,14 @@ def _(cache_dir, json, mo, pl):
 **Loaded Results**
 - Framework: {metadata.get('framework', 'Unknown')}
 - Reporting Date: {metadata.get('reporting_date', 'Unknown')}
-- Total Exposures: {results_df.height:,}
+- Total Exposures: {exposure_count:,}
 - Total RWA: {metadata.get('total_rwa', 0):,.0f}
                 """),
                 kind="success",
             )
         )
     else:
-        results_df = pl.DataFrame()
+        results_lf = pl.LazyFrame()
         metadata = {}
         has_results = False
 
@@ -103,20 +105,22 @@ def _(cache_dir, json, mo, pl):
             )
         )
 
-    return has_results, metadata, results_df
+    return has_results, metadata, results_lf
 
 
 @app.cell
-def _(has_results, mo, results_df):
-    if has_results and results_df.height > 0:
-        # Get unique values for filters
+def _(has_results, mo, pl, results_lf):
+    if has_results and len(results_lf.collect_schema().names()) > 0:
+        schema_names = results_lf.collect_schema().names()
+
+        # Get unique values for filters via lazy scan
         exposure_classes = ["All"] + sorted(
-            results_df["exposure_class"].unique().sort().to_list()
-        ) if "exposure_class" in results_df.columns else ["All"]
+            results_lf.select("exposure_class").unique().collect().to_series().to_list()
+        ) if "exposure_class" in schema_names else ["All"]
 
         approaches = ["All"] + sorted(
-            results_df["approach_applied"].unique().sort().to_list()
-        ) if "approach_applied" in results_df.columns else ["All"]
+            results_lf.select("approach_applied").unique().collect().to_series().to_list()
+        ) if "approach_applied" in schema_names else ["All"]
 
         # Create filter widgets
         class_filter = mo.ui.dropdown(
@@ -168,18 +172,20 @@ def _(has_results, mo, results_df):
 
 
 @app.cell
-def _(approach_filter, class_filter, has_results, mo, pl, results_df, rw_max, rw_min):
-    if has_results and results_df.height > 0 and class_filter is not None:
-        # Build combined filter predicate
+def _(approach_filter, class_filter, has_results, mo, pl, results_lf, rw_max, rw_min):
+    if has_results and class_filter is not None:
+        schema_names = results_lf.collect_schema().names()
+
+        # Build combined filter predicate on LazyFrame
         predicates = []
 
-        if class_filter.value != "All" and "exposure_class" in results_df.columns:
+        if class_filter.value != "All" and "exposure_class" in schema_names:
             predicates.append(pl.col("exposure_class") == class_filter.value)
 
-        if approach_filter.value != "All" and "approach_applied" in results_df.columns:
+        if approach_filter.value != "All" and "approach_applied" in schema_names:
             predicates.append(pl.col("approach_applied") == approach_filter.value)
 
-        if "risk_weight" in results_df.columns:
+        if "risk_weight" in schema_names:
             predicates.append(
                 (pl.col("risk_weight") >= rw_min.value) &
                 (pl.col("risk_weight") <= rw_max.value)
@@ -189,24 +195,26 @@ def _(approach_filter, class_filter, has_results, mo, pl, results_df, rw_max, rw
             combined = predicates[0]
             for p in predicates[1:]:
                 combined = combined & p
-            filtered_df = results_df.filter(combined)
+            filtered_lf = results_lf.filter(combined)
         else:
-            filtered_df = results_df
+            filtered_lf = results_lf
 
-        # Compute filtered statistics
-        if "ead_final" in filtered_df.columns and "rwa_final" in filtered_df.columns:
-            total_ead = filtered_df.select(pl.col("ead_final").sum()).item()
-            total_rwa = filtered_df.select(pl.col("rwa_final").sum()).item()
-            avg_rw = total_rwa / total_ead if total_ead > 0 else 0
-        else:
-            total_ead = 0
-            total_rwa = 0
-            avg_rw = 0
+        # Compute filtered statistics via a single lazy aggregation
+        stats_df = filtered_lf.select([
+            pl.col("ead_final").sum().alias("total_ead"),
+            pl.col("rwa_final").sum().alias("total_rwa"),
+            pl.len().alias("count"),
+        ]).collect()
+
+        total_ead = stats_df["total_ead"][0] or 0
+        total_rwa = stats_df["total_rwa"][0] or 0
+        row_count = int(stats_df["count"][0])
+        avg_rw = total_rwa / total_ead if total_ead > 0 else 0
 
         mo.output.replace(
             mo.hstack([
                 mo.stat(
-                    value=f"{filtered_df.height:,}",
+                    value=f"{row_count:,}",
                     label="Exposures",
                 ),
                 mo.stat(
@@ -224,16 +232,17 @@ def _(approach_filter, class_filter, has_results, mo, pl, results_df, rw_max, rw
             ], justify="space-around")
         )
     else:
-        filtered_df = pl.DataFrame()
+        filtered_lf = pl.LazyFrame()
         total_ead = 0
         total_rwa = 0
+        row_count = 0
 
-    return avg_rw, filtered_df, total_ead, total_rwa
+    return avg_rw, filtered_lf, row_count, total_ead, total_rwa
 
 
 @app.cell
-def _(filtered_df, has_results, mo):
-    if has_results and filtered_df.height > 0:
+def _(has_results, mo, row_count):
+    if has_results and row_count > 0:
         # Aggregation selector
         agg_options = ["None", "By Exposure Class", "By Approach", "By Risk Weight Band"]
         agg_selector = mo.ui.dropdown(
@@ -255,16 +264,18 @@ def _(filtered_df, has_results, mo):
 
 
 @app.cell
-def _(agg_selector, filtered_df, has_results, mo, pl):
-    if has_results and filtered_df.height > 0 and agg_selector is not None:
-        if agg_selector.value == "By Exposure Class" and "exposure_class" in filtered_df.columns:
-            agg_df = filtered_df.group_by("exposure_class").agg([
+def _(agg_selector, filtered_lf, has_results, mo, pl, row_count):
+    if has_results and row_count > 0 and agg_selector is not None:
+        schema_names = filtered_lf.collect_schema().names()
+
+        if agg_selector.value == "By Exposure Class" and "exposure_class" in schema_names:
+            agg_df = filtered_lf.group_by("exposure_class").agg([
                 pl.col("ead_final").sum().alias("total_ead"),
                 pl.col("rwa_final").sum().alias("total_rwa"),
                 pl.len().alias("count"),
             ]).with_columns(
                 (pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight")
-            ).sort("total_rwa", descending=True)
+            ).sort("total_rwa", descending=True).collect()
 
             mo.output.replace(
                 mo.vstack([
@@ -273,14 +284,14 @@ def _(agg_selector, filtered_df, has_results, mo, pl):
                 ])
             )
 
-        elif agg_selector.value == "By Approach" and "approach_applied" in filtered_df.columns:
-            agg_df = filtered_df.group_by("approach_applied").agg([
+        elif agg_selector.value == "By Approach" and "approach_applied" in schema_names:
+            agg_df = filtered_lf.group_by("approach_applied").agg([
                 pl.col("ead_final").sum().alias("total_ead"),
                 pl.col("rwa_final").sum().alias("total_rwa"),
                 pl.len().alias("count"),
             ]).with_columns(
                 (pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight")
-            ).sort("total_rwa", descending=True)
+            ).sort("total_rwa", descending=True).collect()
 
             mo.output.replace(
                 mo.vstack([
@@ -289,8 +300,8 @@ def _(agg_selector, filtered_df, has_results, mo, pl):
                 ])
             )
 
-        elif agg_selector.value == "By Risk Weight Band" and "risk_weight" in filtered_df.columns:
-            agg_df = filtered_df.with_columns(
+        elif agg_selector.value == "By Risk Weight Band" and "risk_weight" in schema_names:
+            agg_df = filtered_lf.with_columns(
                 pl.when(pl.col("risk_weight") <= 0.20).then(pl.lit("0-20%"))
                 .when(pl.col("risk_weight") <= 0.50).then(pl.lit("20-50%"))
                 .when(pl.col("risk_weight") <= 0.75).then(pl.lit("50-75%"))
@@ -304,7 +315,7 @@ def _(agg_selector, filtered_df, has_results, mo, pl):
                 pl.len().alias("count"),
             ]).with_columns(
                 (pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight")
-            ).sort("rw_band")
+            ).sort("rw_band").collect()
 
             mo.output.replace(
                 mo.vstack([
@@ -322,10 +333,10 @@ def _(agg_selector, filtered_df, has_results, mo, pl):
 
 
 @app.cell
-def _(filtered_df, has_results, mo):
-    if has_results and filtered_df.height > 0:
+def _(filtered_lf, has_results, mo, row_count):
+    if has_results and row_count > 0:
         # Column selector for detailed view
-        available_cols = filtered_df.columns
+        available_cols = filtered_lf.collect_schema().names()
 
         # Default columns to show
         default_cols = [
@@ -359,34 +370,34 @@ def _(filtered_df, has_results, mo):
 
 
 @app.cell
-def _(column_selector, filtered_df, has_results, mo):
-    if has_results and filtered_df.height > 0 and column_selector is not None and column_selector.value:
-        display_cols = [c for c in column_selector.value if c in filtered_df.columns]
+def _(column_selector, filtered_lf, has_results, mo, row_count):
+    if has_results and row_count > 0 and column_selector is not None and column_selector.value:
+        schema_names = filtered_lf.collect_schema().names()
+        display_cols = [c for c in column_selector.value if c in schema_names]
 
         if display_cols:
-            display_df = filtered_df.select(display_cols)
+            display_df = filtered_lf.select(display_cols).head(500).collect()
 
             mo.output.replace(
                 mo.vstack([
-                    mo.md(f"*Showing {min(display_df.height, 500):,} of {display_df.height:,} rows*"),
-                    mo.ui.table(display_df.head(500), selection=None),
+                    mo.md(f"*Showing {display_df.height:,} of {row_count:,} rows*"),
+                    mo.ui.table(display_df, selection=None),
                 ])
             )
     return (display_cols,)
 
 
 @app.cell
-def _(filtered_df, has_results, mo):
+def _(filtered_lf, has_results, mo, row_count):
     import io
 
-    if has_results and filtered_df.height > 0:
-        # Defer export generation until download is clicked
+    if has_results and row_count > 0:
         def _make_csv() -> bytes:
-            return filtered_df.write_csv().encode("utf-8")
+            return filtered_lf.collect().write_csv().encode("utf-8")
 
         def _make_parquet() -> bytes:
             buf = io.BytesIO()
-            filtered_df.write_parquet(buf)
+            filtered_lf.collect().write_parquet(buf)
             return buf.getvalue()
 
         mo.output.replace(
@@ -411,7 +422,7 @@ def _(filtered_df, has_results, mo):
 
 @app.cell
 def _(cache_dir, has_results, mo, pl):
-    # Load summary tables if available
+    # Load summary tables if available (small tables, collect eagerly)
     class_summary_file = cache_dir / "last_summary_by_class.parquet"
     approach_summary_file = cache_dir / "last_summary_by_approach.parquet"
 
@@ -419,12 +430,12 @@ def _(cache_dir, has_results, mo, pl):
         output_parts = []
 
         if class_summary_file.exists():
-            class_summary_df = pl.read_parquet(class_summary_file)
+            class_summary_df = pl.scan_parquet(class_summary_file).collect()
             output_parts.append(mo.md("### Original Summary by Exposure Class"))
             output_parts.append(mo.ui.table(class_summary_df, selection=None))
 
         if approach_summary_file.exists():
-            approach_summary_df = pl.read_parquet(approach_summary_file)
+            approach_summary_df = pl.scan_parquet(approach_summary_file).collect()
             output_parts.append(mo.md("### Original Summary by Approach"))
             output_parts.append(mo.ui.table(approach_summary_df, selection=None))
 

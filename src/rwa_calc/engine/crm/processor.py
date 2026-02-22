@@ -34,6 +34,7 @@ from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.ccf import CCFCalculator, drawn_for_ead, on_balance_ead, sa_ccf_expression
 from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.utils import is_valid_optional_data
 from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table
 
 # Transient columns used during guarantee processing but dropped from output
@@ -88,39 +89,6 @@ class CRMProcessor:
         self._ccf_calculator = CCFCalculator()
         self._haircut_calculator = HaircutCalculator()
 
-    def _is_valid_for_processing(
-        self,
-        data: pl.LazyFrame | None,
-        required_columns: set[str],
-    ) -> bool:
-        """
-        Check if optional CRM data is valid for processing.
-
-        This provides defense-in-depth validation to ensure data has:
-        - At least one row
-        - All required columns for the CRM operation
-
-        Args:
-            data: Optional LazyFrame to validate
-            required_columns: Set of column names that must be present
-
-        Returns:
-            True if data is valid for processing, False otherwise
-        """
-        if data is None:
-            return False
-
-        try:
-            # Check schema has required columns
-            schema = data.collect_schema()
-            if not required_columns.issubset(set(schema.names())):
-                return False
-
-            # Check if there's at least one row
-            return data.head(1).collect().height > 0
-        except Exception:
-            return False
-
     def apply_crm(
         self,
         data: ClassifiedExposuresBundle,
@@ -167,7 +135,7 @@ class CRMProcessor:
         # Step 1: Resolve provisions BEFORE CCF (CRR Art. 111(2))
         # This adds provision_on_drawn, provision_on_nominal, nominal_after_provision
         # so CCF can use the provision-adjusted nominal amount
-        if self._is_valid_for_processing(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
+        if is_valid_optional_data(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
             exposures = self.resolve_provisions(exposures, data.provisions, config)
 
         # Step 2: Apply CCF to calculate EAD for contingents
@@ -178,7 +146,7 @@ class CRMProcessor:
         exposures = self._initialize_ead(exposures)
 
         # Step 4: Apply collateral (if available and valid)
-        if self._is_valid_for_processing(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+        if is_valid_optional_data(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, data.collateral, config)
         else:
             # No collateral: still need to set F-IRB supervisory LGD based on seniority
@@ -186,7 +154,7 @@ class CRMProcessor:
 
         # Step 5: Apply guarantees (if available and valid)
         if (
-            self._is_valid_for_processing(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
+            is_valid_optional_data(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
             exposures = self.apply_guarantees(

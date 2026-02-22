@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.engine.utils import has_rows
 from rwa_calc.data.schemas import (
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
@@ -296,7 +297,7 @@ class ParquetLoader:
         try:
             lf = normalize_columns(pl.scan_parquet(full_path))
             # Check if file has any rows - return None for empty files
-            if not self._has_rows(lf):
+            if not has_rows(lf):
                 return None
 
             # Apply schema enforcement if enabled and schema provided
@@ -306,26 +307,6 @@ class ParquetLoader:
             return lf
         except Exception:
             return None
-
-    def _has_rows(self, lf: pl.LazyFrame) -> bool:
-        """
-        Check if a LazyFrame has any rows.
-
-        Args:
-            lf: LazyFrame to check
-
-        Returns:
-            True if LazyFrame has at least one row, False otherwise
-        """
-        try:
-            # Check schema first - empty schema means no data
-            schema = lf.collect_schema()
-            if len(schema) == 0:
-                return False
-            # Fetch just one row to check if data exists
-            return lf.head(1).collect().height > 0
-        except Exception:
-            return False
 
     def _load_and_combine_counterparties(self) -> pl.LazyFrame:
         """
@@ -551,7 +532,7 @@ class CSVLoader:
         try:
             lf = normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
             # Check if file has any rows - return None for empty files
-            if not self._has_rows(lf):
+            if not has_rows(lf):
                 return None
 
             # Apply schema enforcement if enabled and schema provided
@@ -561,24 +542,6 @@ class CSVLoader:
             return lf
         except Exception:
             return None
-
-    def _has_rows(self, lf: pl.LazyFrame) -> bool:
-        """
-        Check if a LazyFrame has any rows.
-
-        Args:
-            lf: LazyFrame to check
-
-        Returns:
-            True if LazyFrame has at least one row, False otherwise
-        """
-        try:
-            schema = lf.collect_schema()
-            if len(schema) == 0:
-                return False
-            return lf.head(1).collect().height > 0
-        except Exception:
-            return False
 
     def _load_and_combine_counterparties(self) -> pl.LazyFrame:
         """

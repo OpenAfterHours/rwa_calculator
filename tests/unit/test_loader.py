@@ -1063,26 +1063,26 @@ class TestEdgeCases:
         assert result.collect().height == 1
 
     def test_has_rows_returns_false_for_empty_frame(self, tmp_path: Path) -> None:
-        """_has_rows should return False for empty LazyFrame."""
-        loader = ParquetLoader(tmp_path)
+        """has_rows should return False for empty LazyFrame."""
+        from rwa_calc.engine.utils import has_rows
 
         empty_lf = pl.LazyFrame({
             "col": pl.Series([], dtype=pl.String),
         })
-        assert loader._has_rows(empty_lf) is False
+        assert has_rows(empty_lf) is False
 
     def test_has_rows_returns_true_for_non_empty_frame(self, tmp_path: Path) -> None:
-        """_has_rows should return True for non-empty LazyFrame."""
-        loader = ParquetLoader(tmp_path)
+        """has_rows should return True for non-empty LazyFrame."""
+        from rwa_calc.engine.utils import has_rows
 
         non_empty_lf = pl.LazyFrame({
             "col": ["value"],
         })
-        assert loader._has_rows(non_empty_lf) is True
+        assert has_rows(non_empty_lf) is True
 
     def test_has_rows_returns_false_for_empty_schema(self, tmp_path: Path) -> None:
-        """_has_rows should return False for LazyFrame with empty schema."""
-        loader = ParquetLoader(tmp_path)
+        """has_rows should return False for LazyFrame with empty schema."""
+        from rwa_calc.engine.utils import has_rows
 
         empty_schema_lf = pl.LazyFrame(schema={})
-        assert loader._has_rows(empty_schema_lf) is False
+        assert has_rows(empty_schema_lf) is False

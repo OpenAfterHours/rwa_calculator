@@ -591,22 +591,22 @@ class TestPipelineUtilities:
     """Tests for utility methods."""
 
     def test_has_rows_with_data(self):
-        """Test _has_rows returns True for non-empty frame."""
-        pipeline = PipelineOrchestrator()
+        """Test has_rows returns True for non-empty frame."""
+        from rwa_calc.engine.utils import has_rows
         frame = pl.LazyFrame({"a": [1, 2, 3]})
-        assert pipeline._has_rows(frame) is True
+        assert has_rows(frame) is True
 
     def test_has_rows_empty(self):
-        """Test _has_rows returns False for empty frame."""
-        pipeline = PipelineOrchestrator()
+        """Test has_rows returns False for empty frame."""
+        from rwa_calc.engine.utils import has_rows
         frame = pl.LazyFrame({"a": pl.Series([], dtype=pl.Int64)})
-        assert pipeline._has_rows(frame) is False
+        assert has_rows(frame) is False
 
     def test_has_rows_no_schema(self):
-        """Test _has_rows returns False for frame with no columns."""
-        pipeline = PipelineOrchestrator()
+        """Test has_rows returns False for frame with no columns."""
+        from rwa_calc.engine.utils import has_rows
         frame = pl.LazyFrame()
-        assert pipeline._has_rows(frame) is False
+        assert has_rows(frame) is False
 
     def test_create_empty_frames(self):
         """Test empty frame creation methods."""

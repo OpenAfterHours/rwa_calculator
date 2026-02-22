@@ -35,6 +35,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.engine.fx_converter import FXConverter
+from rwa_calc.engine.utils import is_valid_optional_data
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -62,42 +63,6 @@ class HierarchyResolver:
 
     All operations use Polars LazyFrames for deferred execution.
     """
-
-    def _is_valid_optional_data(
-        self,
-        data: pl.LazyFrame | None,
-        required_columns: set[str] | None = None,
-    ) -> bool:
-        """
-        Check if optional data is valid for processing.
-
-        This provides defense-in-depth validation to ensure data:
-        - Is not None
-        - Has at least one row
-        - Has all required columns (if specified)
-
-        Args:
-            data: Optional LazyFrame to validate
-            required_columns: Set of column names that must be present (optional)
-
-        Returns:
-            True if data is valid for processing, False otherwise
-        """
-        if data is None:
-            return False
-
-        try:
-            schema = data.collect_schema()
-
-            # Check required columns if specified
-            if required_columns is not None:
-                if not required_columns.issubset(set(schema.names())):
-                    return False
-
-            # Check if there's at least one row
-            return data.head(1).collect().height > 0
-        except Exception:
-            return False
 
     def resolve(
         self,
@@ -643,7 +608,7 @@ class HierarchyResolver:
         """
         # Validate facilities have required columns
         required_cols = {"facility_reference", "limit"}
-        if not self._is_valid_optional_data(facilities, required_cols):
+        if not is_valid_optional_data(facilities, required_cols):
             # No valid facilities, return empty LazyFrame with expected schema
             return pl.LazyFrame(schema={
                 "exposure_reference": pl.String,
@@ -669,7 +634,7 @@ class HierarchyResolver:
 
         # Check if facility_mappings is valid
         mapping_required_cols = {"parent_facility_reference", "child_reference"}
-        if not self._is_valid_optional_data(facility_mappings, mapping_required_cols):
+        if not is_valid_optional_data(facility_mappings, mapping_required_cols):
             facility_mappings = pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
                 "child_reference": pl.String,
@@ -685,6 +650,17 @@ class HierarchyResolver:
             type_col = "node_type"
         else:
             type_col = None
+
+        # Prepare root lookup for multi-level hierarchies (used by both loan and contingent sections).
+        # Left join with empty lookup naturally produces nulls; coalesce falls back to parent.
+        root_lookup = (
+            facility_root_lookup
+            if facility_root_lookup is not None
+            else pl.LazyFrame(schema={
+                "child_facility_reference": pl.String,
+                "root_facility_reference": pl.String,
+            })
+        )
 
         # Get loan schema columns to ensure we can join
         loan_schema = loans.collect_schema()
@@ -716,26 +692,21 @@ class HierarchyResolver:
                 how="inner",
             )
 
-            # For multi-level hierarchies, map each loan's drawn amount to the ROOT facility
-            if facility_root_lookup is not None and facility_root_lookup.head(1).collect().height > 0:
-                loan_with_parent = loan_with_parent.join(
-                    facility_root_lookup.select([
-                        pl.col("child_facility_reference"),
-                        pl.col("root_facility_reference").alias("_root_fac"),
-                    ]),
-                    left_on="parent_facility_reference",
-                    right_on="child_facility_reference",
-                    how="left",
-                ).with_columns([
-                    pl.coalesce(
-                        pl.col("_root_fac"),
-                        pl.col("parent_facility_reference"),
-                    ).alias("aggregation_facility"),
-                ]).drop("_root_fac")
-            else:
-                loan_with_parent = loan_with_parent.with_columns([
-                    pl.col("parent_facility_reference").alias("aggregation_facility"),
-                ])
+            # For multi-level hierarchies, map each loan's drawn amount to the ROOT facility.
+            loan_with_parent = loan_with_parent.join(
+                root_lookup.select([
+                    pl.col("child_facility_reference"),
+                    pl.col("root_facility_reference").alias("_root_fac"),
+                ]),
+                left_on="parent_facility_reference",
+                right_on="child_facility_reference",
+                how="left",
+            ).with_columns([
+                pl.coalesce(
+                    pl.col("_root_fac"),
+                    pl.col("parent_facility_reference"),
+                ).alias("aggregation_facility"),
+            ]).drop("_root_fac")
 
             loan_drawn_totals = loan_with_parent.group_by("aggregation_facility").agg([
                 pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
@@ -772,26 +743,22 @@ class HierarchyResolver:
                 how="inner",
             )
 
-            # For multi-level hierarchies, map to root facility
-            if facility_root_lookup is not None and facility_root_lookup.head(1).collect().height > 0:
-                contingent_with_parent = contingent_with_parent.join(
-                    facility_root_lookup.select([
-                        pl.col("child_facility_reference"),
-                        pl.col("root_facility_reference").alias("_root_fac"),
-                    ]),
-                    left_on="parent_facility_reference",
-                    right_on="child_facility_reference",
-                    how="left",
-                ).with_columns([
-                    pl.coalesce(
-                        pl.col("_root_fac"),
-                        pl.col("parent_facility_reference"),
-                    ).alias("aggregation_facility"),
-                ]).drop("_root_fac")
-            else:
-                contingent_with_parent = contingent_with_parent.with_columns([
-                    pl.col("parent_facility_reference").alias("aggregation_facility"),
-                ])
+            # For multi-level hierarchies, map to root facility.
+            # Reuse root_lookup from loan section (already handles None case).
+            contingent_with_parent = contingent_with_parent.join(
+                root_lookup.select([
+                    pl.col("child_facility_reference"),
+                    pl.col("root_facility_reference").alias("_root_fac"),
+                ]),
+                left_on="parent_facility_reference",
+                right_on="child_facility_reference",
+                how="left",
+            ).with_columns([
+                pl.coalesce(
+                    pl.col("_root_fac"),
+                    pl.col("parent_facility_reference"),
+                ).alias("aggregation_facility"),
+            ]).drop("_root_fac")
 
             contingent_totals = contingent_with_parent.group_by("aggregation_facility").agg([
                 pl.col("nominal_amount").clip(lower_bound=0.0).sum().alias("total_contingent"),
@@ -799,12 +766,10 @@ class HierarchyResolver:
 
         # Identify sub-facilities to exclude from output
         # Sub-facilities appear as child_reference with child_type="facility"
-        if facility_root_lookup is not None and facility_root_lookup.head(1).collect().height > 0:
-            sub_facility_refs = facility_root_lookup.select(
-                pl.col("child_facility_reference").alias("_sub_ref"),
-            )
-        else:
-            sub_facility_refs = pl.LazyFrame(schema={"_sub_ref": pl.String})
+        # Anti-join with empty frame naturally returns all rows
+        sub_facility_refs = root_lookup.select(
+            pl.col("child_facility_reference").alias("_sub_ref"),
+        )
 
         # Join with facilities to calculate undrawn
         # Combine loan drawn + contingent utilisation
@@ -1216,7 +1181,7 @@ class HierarchyResolver:
         # Check if collateral is valid for LTV processing
         # Requires beneficiary_reference and property_ltv columns
         required_cols = {"beneficiary_reference", "property_ltv"}
-        if not self._is_valid_optional_data(collateral, required_cols):
+        if not is_valid_optional_data(collateral, required_cols):
             # No valid LTV data available, add null ltv column
             return exposures.with_columns([
                 pl.lit(None).cast(pl.Float64).alias("ltv"),
@@ -1350,7 +1315,7 @@ class HierarchyResolver:
         # Check if collateral is valid for property coverage calculation
         # Requires beneficiary_reference, collateral_type, market_value, and property_type
         required_cols = {"beneficiary_reference", "collateral_type", "market_value", "property_type"}
-        if not self._is_valid_optional_data(collateral, required_cols):
+        if not is_valid_optional_data(collateral, required_cols):
             # No valid collateral data, return exposures with zero coverage
             return exposure_amounts.select([
                 pl.col("exposure_reference"),

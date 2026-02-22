@@ -75,12 +75,14 @@ class ResultFormatter:
         """
         completed_at = datetime.now()
 
-        results_df = self._materialize_results(bundle.results)
-
-        # Batch-collect summary frames that share the same query root
-        summary_by_class, summary_by_approach = self._batch_materialize_summaries(
-            bundle.summary_by_class,
-            bundle.summary_by_approach,
+        # Batch-collect results + summary frames in one pl.collect_all() call.
+        # This lets Polars deduplicate any shared subplans across all frames.
+        results_df, summary_by_class, summary_by_approach = (
+            self._batch_materialize_all(
+                bundle.results,
+                bundle.summary_by_class,
+                bundle.summary_by_approach,
+            )
         )
 
         summary = self._compute_summary(
@@ -166,48 +168,28 @@ class ResultFormatter:
             performance=performance,
         )
 
-    def _materialize_results(self, lazy_frame: pl.LazyFrame) -> pl.DataFrame:
-        """
-        Materialize main results LazyFrame to DataFrame.
-
-        Args:
-            lazy_frame: LazyFrame containing results
-
-        Returns:
-            Materialized DataFrame
-        """
-        try:
-            return lazy_frame.collect()
-        except Exception:
-            return pl.DataFrame({
-                "exposure_reference": pl.Series([], dtype=pl.String),
-                "approach_applied": pl.Series([], dtype=pl.String),
-                "exposure_class": pl.Series([], dtype=pl.String),
-                "ead_final": pl.Series([], dtype=pl.Float64),
-                "risk_weight": pl.Series([], dtype=pl.Float64),
-                "rwa_final": pl.Series([], dtype=pl.Float64),
-            })
-
-    def _batch_materialize_summaries(
+    def _batch_materialize_all(
         self,
+        results: pl.LazyFrame,
         summary_by_class: pl.LazyFrame | None,
         summary_by_approach: pl.LazyFrame | None,
-    ) -> tuple[pl.DataFrame | None, pl.DataFrame | None]:
+    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
         """
-        Batch-collect summary LazyFrames using pl.collect_all().
+        Batch-collect results + summary LazyFrames using pl.collect_all().
 
-        When both frames share a common query root, collect_all allows
-        Polars to deduplicate shared subplans for a single pass.
+        Collecting everything in one call lets Polars deduplicate any
+        shared subplans for a single pass through the data.
 
         Args:
+            results: Main results LazyFrame (required)
             summary_by_class: Optional summary-by-class LazyFrame
             summary_by_approach: Optional summary-by-approach LazyFrame
 
         Returns:
-            Tuple of (materialized class summary, materialized approach summary)
+            Tuple of (results DataFrame, class summary, approach summary)
         """
-        frames_to_collect: list[pl.LazyFrame] = []
-        indices: dict[str, int] = {}
+        frames_to_collect: list[pl.LazyFrame] = [results]
+        indices: dict[str, int] = {"results": 0}
 
         if summary_by_class is not None:
             indices["class"] = len(frames_to_collect)
@@ -217,18 +199,24 @@ class ResultFormatter:
             indices["approach"] = len(frames_to_collect)
             frames_to_collect.append(summary_by_approach)
 
-        if not frames_to_collect:
-            return None, None
-
         try:
             collected = pl.collect_all(frames_to_collect)
         except Exception:
-            return None, None
+            empty_results = pl.DataFrame({
+                "exposure_reference": pl.Series([], dtype=pl.String),
+                "approach_applied": pl.Series([], dtype=pl.String),
+                "exposure_class": pl.Series([], dtype=pl.String),
+                "ead_final": pl.Series([], dtype=pl.Float64),
+                "risk_weight": pl.Series([], dtype=pl.Float64),
+                "rwa_final": pl.Series([], dtype=pl.Float64),
+            })
+            return empty_results, None, None
 
+        results_df = collected[indices["results"]]
         class_df = collected[indices["class"]] if "class" in indices else None
         approach_df = collected[indices["approach"]] if "approach" in indices else None
 
-        return class_df, approach_df
+        return results_df, class_df, approach_df
 
     def _compute_summary(
         self,
@@ -332,10 +320,11 @@ class ResultFormatter:
 
         # SA approaches
         sa_approaches = {"SA", "standardised"}
-        # IRB approaches (FIRB, AIRB, IRB, etc.)
-        irb_approaches = {"FIRB", "AIRB", "IRB"}
-        # Slotting approaches
-        slotting_approaches = {"SLOTTING"}
+        # IRB approaches: "foundation_irb"/"advanced_irb" from ApproachType enum,
+        # "FIRB" from aggregator fallback when 'approach' column is missing
+        irb_approaches = {"foundation_irb", "advanced_irb", "FIRB"}
+        # Slotting approaches: "SLOTTING" from aggregator literal, "slotting" from ApproachType enum
+        slotting_approaches = {"SLOTTING", "slotting"}
 
         approach_mapping = {
             "sa": sa_approaches,

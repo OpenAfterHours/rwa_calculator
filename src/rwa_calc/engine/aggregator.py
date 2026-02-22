@@ -157,6 +157,11 @@ class OutputAggregator:
             config=config,
         )
 
+        # Strategic collect: materialize combined results once to prevent
+        # re-execution when summaries are collected downstream.
+        # Follows same pattern as classifier.py:210 and processor.py:209.
+        combined = combined.collect().lazy()
+
         # Apply output floor (Basel 3.1 only)
         floor_impact = None
         if config.output_floor.enabled and irb_results is not None and sa_results is not None:
@@ -464,8 +469,9 @@ class OutputAggregator:
             suffix="_sa",
         )
 
-        # Get approach column for determining which are IRB
-        irb_approaches = ["FIRB", "AIRB", "IRB"]
+        # IRB approaches: "foundation_irb"/"advanced_irb" from ApproachType enum,
+        # "FIRB" from aggregator fallback when 'approach' column is missing
+        irb_approaches = ["foundation_irb", "advanced_irb", "FIRB"]
 
         # Apply floor only to IRB exposures
         result = result.with_columns([

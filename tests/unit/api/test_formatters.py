@@ -35,7 +35,7 @@ def sample_result_bundle() -> AggregatedResultBundle:
     """Create a sample AggregatedResultBundle for testing."""
     results = pl.LazyFrame({
         "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-        "approach_applied": ["SA", "SA", "IRB"],
+        "approach_applied": ["SA", "SA", "foundation_irb"],
         "exposure_class": ["corporate", "retail", "corporate"],
         "ead_final": [1000000.0, 500000.0, 750000.0],
         "risk_weight": [1.0, 0.75, 0.5],
@@ -375,3 +375,107 @@ class TestMaterializeBundle:
         assert "results" in result
         # Optional frames that are None won't be in result
         assert result.get("sa_results") is None or "sa_results" not in result
+
+
+# =============================================================================
+# _compute_approach_stats Tests
+# =============================================================================
+
+
+class TestComputeApproachStats:
+    """Tests for ResultFormatter._compute_approach_stats with correct approach values."""
+
+    def test_foundation_irb_counted_in_irb(self) -> None:
+        """foundation_irb (ApproachType.FIRB.value) should be counted in ead_irb/rwa_irb."""
+        df = pl.DataFrame({
+            "approach_applied": ["foundation_irb"],
+            "ead_final": [1_000_000.0],
+            "rwa_final": [500_000.0],
+        })
+        formatter = ResultFormatter()
+        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+
+        assert stats["ead_irb"] == Decimal("1000000")
+        assert stats["rwa_irb"] == Decimal("500000")
+        assert stats["ead_sa"] == Decimal("0")
+
+    def test_advanced_irb_counted_in_irb(self) -> None:
+        """advanced_irb (ApproachType.AIRB.value) should be counted in ead_irb/rwa_irb."""
+        df = pl.DataFrame({
+            "approach_applied": ["advanced_irb"],
+            "ead_final": [2_000_000.0],
+            "rwa_final": [800_000.0],
+        })
+        formatter = ResultFormatter()
+        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+
+        assert stats["ead_irb"] == Decimal("2000000")
+        assert stats["rwa_irb"] == Decimal("800000")
+
+    def test_sa_counted_in_sa(self) -> None:
+        """SA literal should be counted in ead_sa/rwa_sa."""
+        df = pl.DataFrame({
+            "approach_applied": ["SA"],
+            "ead_final": [500_000.0],
+            "rwa_final": [250_000.0],
+        })
+        formatter = ResultFormatter()
+        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+
+        assert stats["ead_sa"] == Decimal("500000")
+        assert stats["rwa_sa"] == Decimal("250000")
+        assert stats["ead_irb"] == Decimal("0")
+
+    def test_slotting_counted_in_slotting(self) -> None:
+        """Both SLOTTING literal and slotting enum value should be counted."""
+        df = pl.DataFrame({
+            "approach_applied": ["SLOTTING", "slotting"],
+            "ead_final": [300_000.0, 200_000.0],
+            "rwa_final": [150_000.0, 100_000.0],
+        })
+        formatter = ResultFormatter()
+        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+
+        assert stats["ead_slotting"] == Decimal("500000")
+        assert stats["rwa_slotting"] == Decimal("250000")
+
+    def test_mixed_approaches(self) -> None:
+        """Mixed approach results should produce correct per-approach breakdown."""
+        df = pl.DataFrame({
+            "approach_applied": ["SA", "SA", "foundation_irb", "advanced_irb", "SLOTTING"],
+            "ead_final": [1_000_000.0, 500_000.0, 750_000.0, 250_000.0, 300_000.0],
+            "rwa_final": [1_000_000.0, 375_000.0, 375_000.0, 100_000.0, 240_000.0],
+        })
+        formatter = ResultFormatter()
+        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+
+        assert stats["ead_sa"] == Decimal("1500000")
+        assert stats["rwa_sa"] == Decimal("1375000")
+        assert stats["ead_irb"] == Decimal("1000000")
+        assert stats["rwa_irb"] == Decimal("475000")
+        assert stats["ead_slotting"] == Decimal("300000")
+        assert stats["rwa_slotting"] == Decimal("240000")
+
+    def test_firb_fallback_counted_in_irb(self) -> None:
+        """FIRB fallback (when approach column missing) should also be counted in IRB."""
+        df = pl.DataFrame({
+            "approach_applied": ["FIRB"],
+            "ead_final": [400_000.0],
+            "rwa_final": [200_000.0],
+        })
+        formatter = ResultFormatter()
+        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+
+        assert stats["ead_irb"] == Decimal("400000")
+        assert stats["rwa_irb"] == Decimal("200000")
+
+    def test_no_approach_column(self) -> None:
+        """Should return zeros when approach_applied column is missing."""
+        df = pl.DataFrame({
+            "ead_final": [100_000.0],
+            "rwa_final": [50_000.0],
+        })
+        formatter = ResultFormatter()
+        stats = formatter._compute_approach_stats(df, "ead_final", "rwa_final")
+
+        assert all(v == Decimal("0") for v in stats.values())

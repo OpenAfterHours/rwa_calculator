@@ -16,7 +16,7 @@
         <link rel="prev" href="../roadmap/">
       
       
-        <link rel="next" href="../retail_airb_corporate_firb_plan/">
+        <link rel="next" href="../../appendix/">
       
       
         
@@ -3388,6 +3388,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scenario-group-crr-i-defaulted-exposures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario Group CRR-I: Defaulted Exposures
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3642,7 +3653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../retail_airb_corporate_firb_plan/" class="md-nav__link">
+      <a href="../retail_airb_corporate_firb_plan.md" class="md-nav__link">
         
   
   
@@ -3967,6 +3978,17 @@
     <span class="md-ellipsis">
       
         Scenario Group CRR-H: Complex/Combined
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-group-crr-i-defaulted-exposures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario Group CRR-I: Defaulted Exposures
       
     </span>
   </a>
@@ -4772,6 +4794,46 @@
 </tr>
 </tbody>
 </table>
+<h3 id="scenario-group-crr-i-defaulted-exposures">Scenario Group CRR-I: Defaulted Exposures<a class="headerlink" href="#scenario-group-crr-i-defaulted-exposures" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Description</th>
+<th>Key Inputs</th>
+<th>Expected RWA</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRR-I1</td>
+<td>F-IRB corporate defaulted</td>
+<td>PD=100%, LGD=45% (supervisory), EAD=£5m</td>
+<td>£0 (K=0)</td>
+<td>CRR Art. 153(1)(ii)</td>
+</tr>
+<tr>
+<td>CRR-I2</td>
+<td>A-IRB retail defaulted</td>
+<td>PD=100%, LGD=15% (own estimate), BEEL</td>
+<td>K=max(0, LGD-BEEL)</td>
+<td>CRR Art. 154(1)(i)</td>
+</tr>
+<tr>
+<td>CRR-I3</td>
+<td>A-IRB corporate defaulted with CRR scaling</td>
+<td>PD=100%, LGD=35%, CRR 1.06 factor</td>
+<td>K × 12.5 × 1.06 × EAD</td>
+<td>CRR Art. 153(1)(ii), 261</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Defaulted Exposure Rules:</strong>
+- F-IRB: K = 0, RWA = 0 (regulatory capital requirement is zero for defaulted)
+- A-IRB: K = max(0, LGD - BEEL) where BEEL is best estimate of expected loss
+- Expected Loss = LGD × EAD for all defaulted exposures
+- CRR 1.06 scaling factor applies to corporate defaulted RWA</p>
 <hr />
 <h2 id="basel-31-acceptance-test-scenarios">Basel 3.1 Acceptance Test Scenarios<a class="headerlink" href="#basel-31-acceptance-test-scenarios" title="Permanent link">&para;</a></h2>
 <p>These scenarios test the Basel 3.1 implementation per PRA PS9/24, effective 1 Jan 2027.</p>
@@ -5175,14 +5237,16 @@
 <hr />
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <h3 id="completed-fixture-work">Completed Fixture Work<a class="headerlink" href="#completed-fixture-work" title="Permanent link">&para;</a></h3>
-<p>The majority of fixture data has been completed, enabling 62 of 65 acceptance tests to pass:</p>
+<p>The majority of fixture data has been completed, enabling 71 of 74 acceptance tests to pass:</p>
 <ul>
-<li>[x] IRB exposures with PD values (CRR-B: 7/7 pass)</li>
-<li>[x] CRM scenario exposures with collateral/guarantees (CRR-D: 6/6 pass)</li>
-<li>[x] Specialised lending exposures with slotting categories (CRR-E: 4/4 pass)</li>
-<li>[x] Supporting factor scenario exposures (CRR-F: 7/7 pass)</li>
-<li>[x] Provision scenario exposures with EL data (CRR-G: 3/3 pass)</li>
+<li>[x] SA scenario exposures with risk weights (CRR-A: 12/14 pass, 2 skip)</li>
+<li>[x] A-IRB exposures with own estimates (CRR-C: 6/7 pass, 1 skip)</li>
+<li>[x] CRM scenario exposures with collateral/guarantees (CRR-D: 9/9 pass)</li>
+<li>[x] Specialised lending exposures with slotting categories (CRR-E: 9/9 pass)</li>
+<li>[x] Supporting factor scenario exposures (CRR-F: 15/15 pass)</li>
+<li>[x] Provision scenario exposures with EL data (CRR-G: 7/7 pass)</li>
 <li>[x] Complex/combined scenario exposures (CRR-H: 4/4 pass)</li>
+<li>[x] Defaulted exposure scenarios with F-IRB and A-IRB treatment (CRR-I: 9/9 pass)</li>
 </ul>
 <h3 id="remaining-fixture-work">Remaining Fixture Work<a class="headerlink" href="#remaining-fixture-work" title="Permanent link">&para;</a></h3>
 <ul>

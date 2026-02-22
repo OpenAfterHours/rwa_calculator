@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- (Next release changes will go here)
+
+---
+
+
+## [0.1.27] - 2026-02-22
+
+### Added
+- Results caching with lazy loading for improved pipeline performance
+
+### Changed
+- Replaced custom validation methods with shared utility functions across hierarchy, loader, pipeline, and processor
+- Replaced `enable_irb` boolean config with `irb_approach` enum for clearer IRB permission modelling
+- Optimized data materialization to reduce redundant `.collect()` calls
+- Multiple speed optimization PRs merged (aggregator, formatters, validation)
+
+---
+
+## [0.1.26] - 2026-02-21
+
+### Performance
+- Optimized aggregator processing for large result sets
+- Optimized formatter output generation
+- Streamlined validation data processing to reduce overhead
+- UI speed improvements for interactive calculator
+
+---
+
+## [0.1.25] - 2026-02-20
+
+### Added
+
+#### IRB Defaulted Exposure Treatment (CRR Art. 153(1)(ii), 154(1)(i))
+- Defaulted exposures (PD=1.0) receive K=0 under F-IRB and K=max(0, LGD-BEEL) under A-IRB
+- Expected loss = LGD × EAD for defaulted exposures
+- CRR 1.06 scaling factor correctly applied to defaulted corporate exposures
+- New CRR-I acceptance test group with 9 tests (I1 F-IRB corporate, I2 A-IRB retail, I3 A-IRB corporate with CRR scaling)
+
+### Fixed
+- SME supporting factor now correctly uses drawn amount (not EAD) for tier threshold calculation
+
+---
+
+## [0.1.24] - 2026-02-19
+
+### Added
+
+#### Multi-Level SA Collateral Allocation
+- Multi-level collateral allocation for SA EAD reduction with overcollateralisation compliance
+- Haircut calculator enhancements for multi-level processing
+
+---
+
+## [0.1.23] - 2026-02-17
+
 ### Added
 
 #### SA Provision Handling — Art. 111(2) Compliance
@@ -42,53 +98,15 @@ resolve_provisions → CCF → initialize_ead → collateral → guarantees → 
 - `finalize_ead()` no longer subtracts provisions (already baked into `ead_pre_crm`)
 - `_initialize_ead()` preserves existing provision columns if set by `resolve_provisions`
 - 14 unit tests in `tests/unit/crm/test_provisions.py`
-
-### Changed
-- (Next release changes will go here)
+- CCF test suite expanded to 57 tests
 
 ---
-
-
-
-
-
-## [0.1.27] - 2026-02-22
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.26] - 2026-02-21
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.25] - 2026-02-20
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.24] - 2026-02-19
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.23] - 2026-02-17
-
-### Changed
-- Version bump for PyPI release
 
 ## [0.1.22] - 2026-02-16
 
 ### Changed
-- Version bump for PyPI release
+- Slotting risk weights updated for remaining maturity splits (CRR Art. 153(5))
+- Config enhancements for slotting maturity bands
 
 ## [0.1.21] - 2026-02-16
 
@@ -588,11 +606,11 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 | Version | Date | Status |
 |---------|------|--------|
 | 0.1.27 | 2026-02-22 | Current |
-| 0.1.26 | 2026-02-22 | Previous |
-| 0.1.25 | 2026-02-21 | - |
-| 0.1.24 | 2026-02-20 | - |
-| 0.1.23 | 2026-02-19 | - |
-| 0.1.22 | 2026-02-17 | - |
+| 0.1.26 | 2026-02-21 | Previous |
+| 0.1.25 | 2026-02-20 | - |
+| 0.1.24 | 2026-02-19 | - |
+| 0.1.23 | 2026-02-17 | - |
+| 0.1.22 | 2026-02-16 | - |
 | 0.1.21 | 2026-02-16 | - |
 | 0.1.20 | 2026-02-14 | - |
 | 0.1.19 | 2026-02-11 | - |

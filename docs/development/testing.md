@@ -1,23 +1,34 @@
 # Testing Guide
 
-This guide covers the testing approach, test organization, and how to write effective tests. The test suite currently contains **~1,199 tests** across unit, acceptance, and benchmark categories.
+This guide covers the testing approach, test organization, and how to write effective tests. The test suite currently contains **~1,286 tests** across unit, acceptance, and benchmark categories.
 
 ## Test Organization
 
 ```
 tests/
-├── acceptance/           # End-to-end scenario tests
+├── acceptance/           # End-to-end scenario tests (74 tests)
 │   ├── crr/             # CRR framework scenarios
+│   │   ├── test_scenario_crr_a_sa.py        # Standardised Approach (14 tests)
+│   │   ├── test_scenario_crr_c_airb.py      # Advanced IRB (7 tests)
+│   │   ├── test_scenario_crr_d_crm.py       # Credit Risk Mitigation (9 tests)
+│   │   ├── test_scenario_crr_e_slotting.py  # Slotting (9 tests)
+│   │   ├── test_scenario_crr_f_supporting_factors.py  # Supporting Factors (15 tests)
+│   │   ├── test_scenario_crr_g_provisions.py  # Provisions (7 tests)
+│   │   ├── test_scenario_crr_h_complex.py   # Complex/Combined (4 tests)
+│   │   └── test_scenario_crr_i_defaulted.py # Defaulted Exposures (9 tests)
 │   └── basel31/         # Basel 3.1 scenarios
-├── benchmarks/          # Performance and scale tests
+├── benchmarks/          # Performance and scale tests (162 tests)
 ├── contracts/           # Interface compliance tests
-├── unit/                # Component unit tests
+├── unit/                # Component unit tests (1,050 tests)
 │   ├── crr/             # CRR-specific tests
 │   ├── crm/             # CRM-specific tests
 │   │   ├── test_provisions.py        # Provision resolution (14 tests)
-│   │   └── test_cross_approach_ccf.py # Cross-approach CCF (12 tests)
+│   │   ├── test_cross_approach_ccf.py # Cross-approach CCF (12 tests)
+│   │   └── test_multi_level_sa_collateral.py # Multi-level SA collateral
 │   ├── basel31/         # Basel 3.1-specific tests
-│   └── test_fx_converter.py  # FX conversion tests
+│   ├── test_fx_converter.py  # FX conversion tests
+│   ├── crr/test_irb_defaulted.py # IRB defaulted exposure tests
+│   └── api/test_results_cache.py # Results caching tests
 └── fixtures/            # Test data generators
     ├── counterparty/    # Counterparty fixtures
     ├── exposures/       # Facility, loan, contingent fixtures

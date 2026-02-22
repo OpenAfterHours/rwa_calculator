@@ -145,7 +145,7 @@ The calculator is built using modern, high-performance technologies:
 - **Polars** - Vectorized DataFrame operations with LazyFrame optimization
 - **Pydantic** - Data validation and type safety
 - **polars-normal-stats** - Pure Polars statistical functions for IRB formulas
-- **Pytest** - Comprehensive test coverage (1,188+ tests)
+- **Pytest** - Comprehensive test coverage (1,286+ tests)
 
 ## Regulatory References
 

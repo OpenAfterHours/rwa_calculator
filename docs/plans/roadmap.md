@@ -18,8 +18,8 @@ This page tracks the development status and progress of the RWA Calculator acros
 | Component | Status | Details |
 |-----------|--------|---------|
 | Test Data Fixtures | Complete | 15 fixture types covering all counterparty, exposure, CRM, and mapping scenarios |
-| CRR Expected Outputs | Complete | 45 scenarios across 8 groups (SA, F-IRB, A-IRB, CRM, Slotting, Supporting Factors, Provisions, Complex) |
-| CRR Acceptance Tests | Complete | 65 tests (62 pass, 3 skip) |
+| CRR Expected Outputs | Complete | 38 scenarios across 8 groups (SA, A-IRB, CRM, Slotting, Supporting Factors, Provisions, Complex, Defaulted) |
+| CRR Acceptance Tests | Complete | 74 tests (71 pass, 3 skip) |
 | Basel 3.1 Expected Outputs | Not Started | Planned for Phase 1.2B |
 
 ---
@@ -53,7 +53,7 @@ Interfaces and contracts between RWA calculator components have been implemented
 |-----------|----------|------------|------------------|-------|
 | Domain enums | `domain/enums.py` | Complete | Complete | - |
 | Risk weight tables | `data/tables/crr_risk_weights.py` | Complete | Planned | - |
-| CCF tables | `engine/ccf.py` | Complete | Complete | 47 |
+| CCF tables | `engine/ccf.py` | Complete | Complete | 57 |
 | Data Loader | `engine/loader.py` | Complete | Complete | 31 |
 | Hierarchy Resolver | `engine/hierarchy.py` | Complete | Complete | 66 |
 | Exposure Classifier | `engine/classifier.py` | Complete | Complete | 24 |
@@ -92,17 +92,17 @@ Interfaces and contracts between RWA calculator components have been implemented
 
 CRR acceptance tests validate production pipeline outputs against expected values:
 
-| Group | Description | Scenarios | Status |
-|-------|-------------|-----------|--------|
-| CRR-A | Standardised Approach | 12 | **10 PASS, 2 SKIP** |
-| CRR-B | Foundation IRB | 7 | **7 PASS** |
-| CRR-C | Advanced IRB | 3 | **2 PASS, 1 SKIP** |
-| CRR-D | Credit Risk Mitigation | 6 | **6 PASS** |
-| CRR-E | Specialised Lending (Slotting) | 4 | **4 PASS** |
-| CRR-F | Supporting Factors | 7 | **7 PASS** |
-| CRR-G | Provisions & Impairments | 3 | **3 PASS** |
+| Group | Description | Tests | Status |
+|-------|-------------|-------|--------|
+| CRR-A | Standardised Approach | 14 | **12 PASS, 2 SKIP** |
+| CRR-C | Advanced IRB | 7 | **6 PASS, 1 SKIP** |
+| CRR-D | Credit Risk Mitigation | 9 | **9 PASS** |
+| CRR-E | Specialised Lending (Slotting) | 9 | **9 PASS** |
+| CRR-F | Supporting Factors | 15 | **15 PASS** |
+| CRR-G | Provisions & Impairments | 7 | **7 PASS** |
 | CRR-H | Complex/Combined | 4 | **4 PASS** |
-| | **Total** | **65** | **62 PASS, 3 SKIP** |
+| CRR-I | Defaulted Exposures | 9 | **9 PASS** |
+| | **Total** | **74** | **71 PASS, 3 SKIP** |
 
 ### Remaining Skipped Tests
 
@@ -116,8 +116,9 @@ CRR acceptance tests validate production pipeline outputs against expected value
 
 - Pipeline-based testing using session-scoped fixtures
 - Scenario-to-exposure reference mapping for all scenarios
-- 95% acceptance test pass rate (62/65)
-- All major calculation approaches validated end-to-end (SA, F-IRB, A-IRB, CRM, Slotting, Supporting Factors, Provisions)
+- 96% acceptance test pass rate (71/74)
+- All major calculation approaches validated end-to-end (SA, A-IRB, CRM, Slotting, Supporting Factors, Provisions, Defaulted Exposures)
+- F-IRB scenarios covered within A-IRB and Defaulted Exposure test groups
 
 ---
 
@@ -140,13 +141,13 @@ Reference implementations for expected output generation:
 
 ## Test Results Summary
 
-**Total: 1,152 tests** (925 unit + 65 acceptance + benchmark)
+**Total: 1,286 tests** (1,050 unit + 74 acceptance + 162 benchmark)
 
 | Category | Tests | Status |
 |----------|-------|--------|
-| Unit tests | 925 | All passing |
-| Acceptance tests | 65 | 62 pass, 3 skip |
-| Benchmark tests | ~162 | Import fix needed |
+| Unit tests | 1,050 | All passing |
+| Acceptance tests | 74 | 71 pass, 3 skip |
+| Benchmark tests | 162 | All passing |
 
 Run all tests:
 ```bash
@@ -156,6 +157,47 @@ uv run pytest -v
 ---
 
 ## Recent Completions
+
+### v0.1.27
+- [x] **Results Caching**: Pipeline results caching with lazy loading for performance
+- [x] **Validation Refactor**: Replaced custom validation methods with shared utility functions
+- [x] **IRB Config**: Replaced `enable_irb` boolean with `irb_approach` enum
+- [x] **Data Materialization**: Optimized to reduce redundant `.collect()` calls
+
+### v0.1.26
+- [x] **Performance Optimization**: Aggregator, formatter, and validation processing speed improvements
+- [x] **UI Speed**: Improved interactive calculator responsiveness
+
+### v0.1.25
+- [x] **Defaulted Exposures**: IRB defaulted treatment per CRR Art. 153(1)(ii) and 154(1)(i)
+- [x] **CRR-I Acceptance Tests**: 9 new tests for F-IRB and A-IRB defaulted exposures
+- [x] **SME Factor Fix**: Drawn amount used for tier threshold (not EAD)
+
+### v0.1.24
+- [x] **Multi-Level SA Collateral**: Collateral allocation for SA EAD reduction
+- [x] **Haircut Enhancements**: Multi-level processing in haircut calculator
+
+### v0.1.23
+- [x] **Provision Resolution**: SA provision handling compliant with CRR Art. 111(2)
+- [x] **Multi-Level Beneficiary**: Direct, facility, and counterparty provision resolution
+- [x] **Drawn-First Deduction**: Provisions absorbed by drawn amount before reducing nominal
+- [x] **14 Provision Tests**: Full test coverage in `tests/unit/crm/test_provisions.py`
+
+### v0.1.22
+- [x] **Slotting Maturity Splits**: Risk weights updated for remaining maturity bands (CRR Art. 153(5))
+- [x] **Slotting Config**: Enhanced configuration for maturity band parameters
+
+### v0.1.21
+- [x] **Pledge Percentage**: Collateral valuation as percentage of beneficiary EAD
+- [x] **Multi-Level Pledges**: Resolution across loan, facility, and counterparty levels
+
+### v0.1.20
+- [x] **Equity FX Conversion**: Currency conversion for equity exposure values
+- [x] **Equity Pipeline**: Classifier and hierarchy support for equity in FX conversion
+
+### v0.1.19
+- [x] **Buy-to-Let Flag**: BTL identification and exclusion from SME supporting factor
+- [x] **On-Balance EAD Helper**: `on_balance_ead()` function in CCF module
 
 ### v0.1.18
 - [x] **Facility Root Lookup**: Multi-level facility hierarchy traversal (up to 10 levels)

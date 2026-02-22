@@ -126,6 +126,20 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 | CRR-H3 | SME chain with factor | SME corp + supporting factor | 0.7619 applied | CRR Art. 501 |
 | CRR-H4 | Full CRM chain | Exp + coll + guar + prov | All CRM steps | Integration |
 
+### Scenario Group CRR-I: Defaulted Exposures
+
+| ID | Description | Key Inputs | Expected RWA | Notes |
+|----|-------------|------------|--------------|-------|
+| CRR-I1 | F-IRB corporate defaulted | PD=100%, LGD=45% (supervisory), EAD=£5m | £0 (K=0) | CRR Art. 153(1)(ii) |
+| CRR-I2 | A-IRB retail defaulted | PD=100%, LGD=15% (own estimate), BEEL | K=max(0, LGD-BEEL) | CRR Art. 154(1)(i) |
+| CRR-I3 | A-IRB corporate defaulted with CRR scaling | PD=100%, LGD=35%, CRR 1.06 factor | K × 12.5 × 1.06 × EAD | CRR Art. 153(1)(ii), 261 |
+
+**Defaulted Exposure Rules:**
+- F-IRB: K = 0, RWA = 0 (regulatory capital requirement is zero for defaulted)
+- A-IRB: K = max(0, LGD - BEEL) where BEEL is best estimate of expected loss
+- Expected Loss = LGD × EAD for all defaulted exposures
+- CRR 1.06 scaling factor applies to corporate defaulted RWA
+
 ---
 
 ## Basel 3.1 Acceptance Test Scenarios
@@ -298,14 +312,16 @@ tests/fixtures/
 
 ### Completed Fixture Work
 
-The majority of fixture data has been completed, enabling 62 of 65 acceptance tests to pass:
+The majority of fixture data has been completed, enabling 71 of 74 acceptance tests to pass:
 
-- [x] IRB exposures with PD values (CRR-B: 7/7 pass)
-- [x] CRM scenario exposures with collateral/guarantees (CRR-D: 6/6 pass)
-- [x] Specialised lending exposures with slotting categories (CRR-E: 4/4 pass)
-- [x] Supporting factor scenario exposures (CRR-F: 7/7 pass)
-- [x] Provision scenario exposures with EL data (CRR-G: 3/3 pass)
+- [x] SA scenario exposures with risk weights (CRR-A: 12/14 pass, 2 skip)
+- [x] A-IRB exposures with own estimates (CRR-C: 6/7 pass, 1 skip)
+- [x] CRM scenario exposures with collateral/guarantees (CRR-D: 9/9 pass)
+- [x] Specialised lending exposures with slotting categories (CRR-E: 9/9 pass)
+- [x] Supporting factor scenario exposures (CRR-F: 15/15 pass)
+- [x] Provision scenario exposures with EL data (CRR-G: 7/7 pass)
 - [x] Complex/combined scenario exposures (CRR-H: 4/4 pass)
+- [x] Defaulted exposure scenarios with F-IRB and A-IRB treatment (CRR-I: 9/9 pass)
 
 ### Remaining Fixture Work
 

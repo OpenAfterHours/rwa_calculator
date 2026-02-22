@@ -368,8 +368,9 @@ def validate_non_negative_amounts(
         LazyFrame with _valid_{col} columns added
     """
     exprs = []
+    schema_names = lf.collect_schema().names()
     for col in amount_columns:
-        if col in lf.collect_schema().names():
+        if col in schema_names:
             valid_col = f"_valid_{col}"
             exprs.append(
                 (pl.col(col) >= 0).alias(valid_col)

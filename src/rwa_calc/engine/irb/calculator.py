@@ -228,8 +228,6 @@ class IRBCalculator:
                 pl.lit(1.0).alias("supporting_factor"),
             ])
 
-        schema = exposures.collect_schema()
-
         # Prepare RWA column for factor application
         # The rwa column from formulas is pre-factor
         exposures = exposures.with_columns([

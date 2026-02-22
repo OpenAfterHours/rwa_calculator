@@ -3,7 +3,6 @@
 Tests cover:
 - CalculationRequest irb_approach field
 - RWAService._create_config() with different approach selections
-- Backward compatibility with enable_irb flag
 - CCF behavior under different approach selections (FIRB 75% vs SA 50%)
 """
 
@@ -99,16 +98,6 @@ class TestCalculationRequestIRBApproach:
         )
         assert request.irb_approach is None
 
-    def test_request_backward_compatible_with_enable_irb(self) -> None:
-        """CalculationRequest should still support legacy enable_irb."""
-        request = CalculationRequest(
-            data_path="/test/path",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-            enable_irb=True,
-        )
-        assert request.enable_irb is True
-        assert request.irb_approach is None  # Not set
 
 
 # =============================================================================
@@ -194,50 +183,17 @@ class TestServiceCreateConfig:
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 
-    def test_create_config_legacy_enable_irb_true(self, service: RWAService) -> None:
-        """_create_config with enable_irb=True should use full_irb (backward compatible)."""
+    def test_create_config_no_irb_approach_defaults_sa_only(self, service: RWAService) -> None:
+        """_create_config with no irb_approach should default to sa_only."""
         request = CalculationRequest(
             data_path="/test/path",
             framework="CRR",
             reporting_date=date(2024, 12, 31),
-            enable_irb=True,
         )
 
         config = service._create_config(request)
 
-        # Legacy enable_irb=True should behave like full_irb
-        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
-        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
-
-    def test_create_config_legacy_enable_irb_false(self, service: RWAService) -> None:
-        """_create_config with enable_irb=False should use sa_only."""
-        request = CalculationRequest(
-            data_path="/test/path",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-            enable_irb=False,
-        )
-
-        config = service._create_config(request)
-
-        # SA only permissions
         assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
-        assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
-
-    def test_create_config_irb_approach_takes_precedence(self, service: RWAService) -> None:
-        """irb_approach should take precedence over enable_irb when both are set."""
-        request = CalculationRequest(
-            data_path="/test/path",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-            enable_irb=True,  # Legacy says full IRB
-            irb_approach="firb",  # New field says FIRB only
-        )
-
-        config = service._create_config(request)
-
-        # irb_approach='firb' should take precedence
-        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 
     def test_create_config_crr_framework(self, service: RWAService) -> None:

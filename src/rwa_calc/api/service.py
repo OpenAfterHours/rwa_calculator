@@ -54,7 +54,7 @@ class RWAService:
                 data_path="/path/to/data",
                 framework="CRR",
                 reporting_date=date(2024, 12, 31),
-                enable_irb=True,
+                irb_approach="full_irb",
             )
         )
 
@@ -206,20 +206,15 @@ class RWAService:
         from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 
         # Determine IRB permissions from request
-        # New irb_approach field takes precedence over legacy enable_irb
-        if request.irb_approach is not None:
-            if request.irb_approach == "sa_only":
-                irb_permissions = IRBPermissions.sa_only()
-            elif request.irb_approach == "firb":
-                irb_permissions = IRBPermissions.firb_only()
-            elif request.irb_approach == "airb":
-                irb_permissions = IRBPermissions.airb_only()
-            elif request.irb_approach == "retail_airb_corporate_firb":
-                irb_permissions = IRBPermissions.retail_airb_corporate_firb()
-            else:  # full_irb
-                irb_permissions = IRBPermissions.full_irb()
-        elif request.enable_irb:
-            # Legacy: enable_irb=True means full_irb (backward compatible)
+        if request.irb_approach == "sa_only":
+            irb_permissions = IRBPermissions.sa_only()
+        elif request.irb_approach == "firb":
+            irb_permissions = IRBPermissions.firb_only()
+        elif request.irb_approach == "airb":
+            irb_permissions = IRBPermissions.airb_only()
+        elif request.irb_approach == "retail_airb_corporate_firb":
+            irb_permissions = IRBPermissions.retail_airb_corporate_firb()
+        elif request.irb_approach == "full_irb":
             irb_permissions = IRBPermissions.full_irb()
         else:
             irb_permissions = IRBPermissions.sa_only()
@@ -298,7 +293,7 @@ def quick_calculate(
     data_path: str | Path,
     framework: Literal["CRR", "BASEL_3_1"] = "CRR",
     reporting_date: date | None = None,
-    enable_irb: bool = False,
+    irb_approach: Literal["sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"] | None = None,
     data_format: Literal["parquet", "csv"] = "parquet",
 ) -> CalculationResponse:
     """
@@ -310,7 +305,7 @@ def quick_calculate(
         data_path: Path to data directory
         framework: Regulatory framework
         reporting_date: As-of date (defaults to today)
-        enable_irb: Whether to enable IRB approaches
+        irb_approach: IRB approach selection (default SA only)
         data_format: Format of input files
 
     Returns:
@@ -325,7 +320,7 @@ def quick_calculate(
         data_path=data_path,
         framework=framework,
         reporting_date=reporting_date or date.today(),
-        enable_irb=enable_irb,
+        irb_approach=irb_approach,
         data_format=data_format,
     )
     return service.calculate(request)

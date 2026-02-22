@@ -14,7 +14,8 @@
       "WebFetch(domain:www.bankofengland.co.uk)",
       "WebFetch(domain:www.katalysys.com)",
       "WebFetch(domain:www.grantthornton.co.uk)",
-      "WebFetch(domain:eur-lex.europa.eu)"
+      "WebFetch(domain:eur-lex.europa.eu)",
+      "Bash(find:*)"
     ]
   },
   "enabledMcpjsonServers": [

@@ -70,12 +70,12 @@ class HierarchyLazyFrame:
         Returns:
             LazyFrame with ultimate_parent_reference and hierarchy_depth columns
         """
-        schema = self._lf.collect_schema()
+        schema_names = self._lf.collect_schema().names()
 
         # Get entity reference column
-        if "counterparty_reference" in schema.names():
+        if "counterparty_reference" in schema_names:
             entity_col = "counterparty_reference"
-        elif "exposure_reference" in schema.names():
+        elif "exposure_reference" in schema_names:
             entity_col = "exposure_reference"
         else:
             raise ValueError("No reference column found")
@@ -131,15 +131,15 @@ class HierarchyLazyFrame:
         Returns:
             LazyFrame with hierarchy_depth column
         """
-        schema = self._lf.collect_schema()
+        schema_names = self._lf.collect_schema().names()
 
-        if "hierarchy_depth" in schema.names():
+        if "hierarchy_depth" in schema_names:
             return self._lf
 
         # Determine reference column
-        if "counterparty_reference" in schema.names():
+        if "counterparty_reference" in schema_names:
             ref_col = "counterparty_reference"
-        elif "exposure_reference" in schema.names():
+        elif "exposure_reference" in schema_names:
             ref_col = "exposure_reference"
         else:
             return self._lf.with_columns([pl.lit(0).alias("hierarchy_depth")])
@@ -173,18 +173,19 @@ class HierarchyLazyFrame:
         Returns:
             LazyFrame with inherited rating columns
         """
-        schema = self._lf.collect_schema()
+        schema_names = self._lf.collect_schema().names()
 
         # Get reference column
-        if "counterparty_reference" in schema.names():
+        if "counterparty_reference" in schema_names:
             ref_col = "counterparty_reference"
         else:
             return self._lf
 
         # Get most recent rating per counterparty
+        rating_schema_names = ratings.collect_schema().names()
         rating_cols = ["counterparty_reference"]
         for col in ["cqs", "pd", "rating_value", "rating_agency", "rating_type", "rating_date"]:
-            if col in ratings.collect_schema().names():
+            if col in rating_schema_names:
                 rating_cols.append(col)
 
         first_ratings = ratings.select(rating_cols).unique(
@@ -262,16 +263,16 @@ class HierarchyLazyFrame:
         Returns:
             LazyFrame with effective_* rating columns
         """
-        schema = self._lf.collect_schema()
+        schema_names = self._lf.collect_schema().names()
 
         columns_to_add = []
 
-        if "cqs" in schema.names() and "parent_cqs" in schema.names():
+        if "cqs" in schema_names and "parent_cqs" in schema_names:
             columns_to_add.append(
                 pl.coalesce(pl.col("cqs"), pl.col("parent_cqs")).alias("effective_cqs")
             )
 
-        if "pd" in schema.names() and "parent_pd" in schema.names():
+        if "pd" in schema_names and "parent_pd" in schema_names:
             columns_to_add.append(
                 pl.coalesce(pl.col("pd"), pl.col("parent_pd")).alias("effective_pd")
             )
@@ -298,7 +299,7 @@ class HierarchyLazyFrame:
         Returns:
             LazyFrame with lending group aggregations
         """
-        schema = self._lf.collect_schema()
+        schema_names = self._lf.collect_schema().names()
 
         # Build lending group membership
         lending_groups = lending_mappings.select([
@@ -323,11 +324,11 @@ class HierarchyLazyFrame:
         )
 
         # Determine exposure amount expression (floor drawn_amount at 0)
-        if "drawn_amount" in schema.names():
+        if "drawn_amount" in schema_names:
             amount_expr = pl.col("drawn_amount").clip(lower_bound=0.0)
-        elif "ead_final" in schema.names():
+        elif "ead_final" in schema_names:
             amount_expr = pl.col("ead_final")
-        elif "ead" in schema.names():
+        elif "ead" in schema_names:
             amount_expr = pl.col("ead")
         else:
             return self._lf.with_columns([pl.lit(0.0).alias("lending_group_total")])
@@ -401,8 +402,8 @@ class HierarchyLazyFrame:
             return self._lf
 
         # Check collateral has required columns
-        coll_schema = collateral.collect_schema()
-        if "beneficiary_reference" not in coll_schema.names() or "property_ltv" not in coll_schema.names():
+        coll_schema_names = collateral.collect_schema().names()
+        if "beneficiary_reference" not in coll_schema_names or "property_ltv" not in coll_schema_names:
             return self._lf.with_columns([pl.lit(None).cast(pl.Float64).alias("ltv")])
 
         # Select LTV from collateral

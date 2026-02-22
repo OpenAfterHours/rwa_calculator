@@ -40,8 +40,7 @@ class CalculationRequest:
         framework: Regulatory framework ("CRR" or "BASEL_3_1")
         reporting_date: As-of date for the calculation
         base_currency: Currency for reporting (default GBP)
-        enable_irb: Whether IRB approaches are permitted (legacy, use irb_approach)
-        irb_approach: Explicit IRB approach selection (takes precedence over enable_irb)
+        irb_approach: IRB approach selection
             - "sa_only": Standardised only, no IRB
             - "firb": Foundation IRB where permitted
             - "airb": Advanced IRB where permitted
@@ -54,7 +53,6 @@ class CalculationRequest:
     framework: Literal["CRR", "BASEL_3_1"]
     reporting_date: date
     base_currency: str = "GBP"
-    enable_irb: bool = False  # Legacy field for backward compatibility
     irb_approach: Literal[
         "sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"
     ] | None = None

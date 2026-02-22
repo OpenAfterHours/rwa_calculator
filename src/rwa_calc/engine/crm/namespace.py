@@ -6,7 +6,6 @@ Provides fluent API for CRM processing via registered namespaces:
 - `lf.crm.initialize_ead_waterfall()` - Initialize EAD tracking columns
 - `lf.crm.apply_collateral(collateral, config)` - Apply collateral effects
 - `lf.crm.apply_guarantees(guarantees, config)` - Apply guarantee substitution
-- `lf.crm.apply_provisions(provisions, config)` - Apply provision deduction (legacy)
 - `lf.crm.finalize_ead()` - Calculate final EAD
 
 Usage:
@@ -19,7 +18,7 @@ Usage:
         .crm.initialize_ead_waterfall()
         .crm.apply_collateral(collateral, config)
         .crm.apply_guarantees(guarantees, counterparty_lookup, config)
-        .crm.apply_provisions(provisions, config)
+        .crm.resolve_provisions(provisions, config)
         .crm.finalize_ead()
     )
 
@@ -61,7 +60,7 @@ class CRMLazyFrame:
             .crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral, config)
             .crm.apply_guarantees(guarantees, counterparty_lookup, config)
-            .crm.apply_provisions(provisions, config)
+            .crm.resolve_provisions(provisions, config)
             .crm.finalize_ead()
         )
     """
@@ -673,26 +672,6 @@ class CRMLazyFrame:
 
         processor = CRMProcessor()
         return processor.resolve_provisions(self._lf, provisions, config)
-
-    def apply_provisions(
-        self,
-        provisions: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply provision deduction from EAD (legacy method).
-
-        Delegates to resolve_provisions for the full multi-level resolution
-        and drawn-first deduction logic.
-
-        Args:
-            provisions: Provision data
-            config: Calculation configuration
-
-        Returns:
-            LazyFrame with provision effects applied
-        """
-        return self.resolve_provisions(provisions, config)
 
     # =========================================================================
     # EAD FINALIZATION

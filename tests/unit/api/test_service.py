@@ -256,7 +256,7 @@ class TestRWAServiceCreateConfig:
             data_path="/path/to/data",
             framework="CRR",
             reporting_date=date(2024, 12, 31),
-            enable_irb=True,
+            irb_approach="full_irb",
         )
 
         config = service._create_config(request)
@@ -346,5 +346,5 @@ class TestQuickCalculate:
             # Check default values were used
             call_args = mock_calc.call_args[0][0]
             assert call_args.framework == "CRR"
-            assert call_args.enable_irb is False
+            assert call_args.irb_approach is None
             assert call_args.data_format == "parquet"

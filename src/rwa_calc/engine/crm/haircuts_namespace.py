@@ -117,9 +117,8 @@ class HaircutsLazyFrame:
         lf = self._lf
         if "maturity_band" not in schema.names():
             lf = lf.haircuts.classify_maturity_band()
-
-        # Refresh schema after maturity band addition
-        schema = lf.collect_schema()
+            # Refresh schema after maturity band addition
+            schema = lf.collect_schema()
 
         # Add is_eligible_financial_collateral if not present
         if "is_eligible_financial_collateral" not in schema.names():

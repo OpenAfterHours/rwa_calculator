@@ -77,14 +77,14 @@ def apply_irb_formulas(
 
     # Ensure required columns exist
     schema = exposures.collect_schema()
-    if "maturity" not in schema.names():
+    schema_names = schema.names()
+    if "maturity" not in schema_names:
         exposures = exposures.with_columns(pl.lit(2.5).alias("maturity"))
-    if "turnover_m" not in schema.names():
+    if "turnover_m" not in schema_names:
         exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
     # Ensure requires_fi_scalar column exists (for FI scalar in correlation)
     # This is normally set by the classifier, default to False if not present
-    schema = exposures.collect_schema()
-    if "requires_fi_scalar" not in schema.names():
+    if "requires_fi_scalar" not in schema_names:
         exposures = exposures.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
     # Step 1: Apply PD floor (pure Polars)
@@ -188,10 +188,6 @@ def apply_irb_formulas(
         ])
 
     return exposures
-
-
-# Backward compatibility alias
-apply_irb_formulas_numpy = apply_irb_formulas
 
 
 # =============================================================================

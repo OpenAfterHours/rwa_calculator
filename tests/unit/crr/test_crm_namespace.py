@@ -132,7 +132,6 @@ class TestCRMNamespaceRegistration:
             "apply_collateral_to_lgd",
             "apply_guarantees",
             "resolve_provisions",
-            "apply_provisions",
             "finalize_ead",
             "apply_all_crm",
             "build_ead_audit",

@@ -288,9 +288,6 @@ class IRBLazyFrame:
         if "exposure_class" not in schema.names():
             lf = lf.with_columns([pl.lit("CORPORATE").alias("exposure_class")])
 
-        # Refresh schema
-        schema = lf.collect_schema()
-
         # Defaulted exposure columns
         if "is_defaulted" not in schema.names():
             lf = lf.with_columns([pl.lit(False).alias("is_defaulted")])
@@ -763,18 +760,18 @@ class IRBLazyFrame:
         """
         # Ensure required columns exist for correlation calculation
         schema = self._lf.collect_schema()
+        schema_names = schema.names()
         lf = self._lf
 
-        if "turnover_m" not in schema.names():
+        if "turnover_m" not in schema_names:
             lf = lf.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
 
-        if "maturity" not in schema.names():
+        if "maturity" not in schema_names:
             lf = lf.with_columns(pl.lit(2.5).alias("maturity"))
 
         # Ensure requires_fi_scalar column exists (for FI scalar in correlation)
         # This is normally set by the classifier, default to False if not present
-        schema = lf.collect_schema()
-        if "requires_fi_scalar" not in schema.names():
+        if "requires_fi_scalar" not in schema_names:
             lf = lf.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
         return (lf

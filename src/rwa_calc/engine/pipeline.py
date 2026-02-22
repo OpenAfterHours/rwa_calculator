@@ -54,6 +54,7 @@ from rwa_calc.contracts.protocols import (
     EquityCalculatorProtocol,
     OutputAggregatorProtocol,
 )
+from rwa_calc.engine.utils import has_rows
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -411,7 +412,7 @@ class PipelineOrchestrator:
         """Run SA calculation stage."""
         try:
             # Check if there are SA exposures
-            if not self._has_rows(data.sa_exposures):
+            if not has_rows(data.sa_exposures):
                 return SAResultBundle(
                     results=self._create_empty_sa_frame(),
                     calculation_audit=self._create_empty_sa_frame(),
@@ -448,7 +449,7 @@ class PipelineOrchestrator:
         """Run IRB calculation stage."""
         try:
             # Check if there are IRB exposures
-            if not self._has_rows(data.irb_exposures):
+            if not has_rows(data.irb_exposures):
                 return IRBResultBundle(
                     results=self._create_empty_irb_frame(),
                     expected_loss=self._create_empty_irb_frame(),
@@ -487,7 +488,7 @@ class PipelineOrchestrator:
         """Run Slotting calculation stage."""
         try:
             # Check if there are slotting exposures
-            if data.slotting_exposures is None or not self._has_rows(data.slotting_exposures):
+            if data.slotting_exposures is None or not has_rows(data.slotting_exposures):
                 return SlottingResultBundle(
                     results=self._create_empty_slotting_frame(),
                     calculation_audit=self._create_empty_slotting_frame(),
@@ -524,7 +525,7 @@ class PipelineOrchestrator:
         """Run Equity calculation stage."""
         try:
             # Check if there are equity exposures
-            if data.equity_exposures is None or not self._has_rows(data.equity_exposures):
+            if data.equity_exposures is None or not has_rows(data.equity_exposures):
                 return EquityResultBundle(
                     results=self._create_empty_equity_frame(),
                     calculation_audit=self._create_empty_equity_frame(),
@@ -595,16 +596,6 @@ class PipelineOrchestrator:
     # =========================================================================
     # Private Methods - Utilities
     # =========================================================================
-
-    def _has_rows(self, frame: pl.LazyFrame) -> bool:
-        """Check if a LazyFrame has any rows."""
-        try:
-            schema = frame.collect_schema()
-            if len(schema) == 0:
-                return False
-            return frame.head(1).collect().height > 0
-        except Exception:
-            return False
 
     def _create_error_result(self) -> AggregatedResultBundle:
         """Create error result when pipeline fails."""

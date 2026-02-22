@@ -240,10 +240,9 @@ def _(
 
             calculation_response = service.calculate(request)
 
-            # Cache results for the results explorer and CSV download
+            # Cache results for the results explorer
             if calculation_response and calculation_response.success:
                 calculation_response.results.write_parquet(cache_dir / "last_results.parquet")
-                calculation_response.results.write_csv(cache_dir / "last_results.csv")
 
                 # Save metadata
                 metadata = {
@@ -397,19 +396,16 @@ def _(calculation_response, mo):
 
 
 @app.cell
-def _(cache_dir, calculation_response, mo):
+def _(calculation_response, mo):
     if calculation_response and calculation_response.success and calculation_response.results.height > 0:
-        csv_path = cache_dir / "last_results.csv"
-        if csv_path.exists():
-            csv_data = csv_path.read_bytes()
-        else:
-            csv_data = calculation_response.results.write_csv().encode("utf-8")
+        def _make_csv() -> bytes:
+            return calculation_response.results.write_csv().encode("utf-8")
 
         mo.output.replace(
             mo.vstack([
                 mo.md("### Export Results"),
                 mo.download(
-                    data=csv_data,
+                    data=_make_csv,
                     filename="rwa_results.csv",
                     label="Download CSV",
                 ),

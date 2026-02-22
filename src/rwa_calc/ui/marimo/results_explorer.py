@@ -111,11 +111,11 @@ def _(has_results, mo, results_df):
     if has_results and results_df.height > 0:
         # Get unique values for filters
         exposure_classes = ["All"] + sorted(
-            results_df.select("exposure_class").unique().to_series().to_list()
+            results_df["exposure_class"].unique().sort().to_list()
         ) if "exposure_class" in results_df.columns else ["All"]
 
         approaches = ["All"] + sorted(
-            results_df.select("approach_applied").unique().to_series().to_list()
+            results_df["approach_applied"].unique().sort().to_list()
         ) if "approach_applied" in results_df.columns else ["All"]
 
         # Create filter widgets
@@ -170,20 +170,28 @@ def _(has_results, mo, results_df):
 @app.cell
 def _(approach_filter, class_filter, has_results, mo, pl, results_df, rw_max, rw_min):
     if has_results and results_df.height > 0 and class_filter is not None:
-        # Apply filters
-        filtered_df = results_df
+        # Build combined filter predicate
+        predicates = []
 
-        if class_filter.value != "All" and "exposure_class" in filtered_df.columns:
-            filtered_df = filtered_df.filter(pl.col("exposure_class") == class_filter.value)
+        if class_filter.value != "All" and "exposure_class" in results_df.columns:
+            predicates.append(pl.col("exposure_class") == class_filter.value)
 
-        if approach_filter.value != "All" and "approach_applied" in filtered_df.columns:
-            filtered_df = filtered_df.filter(pl.col("approach_applied") == approach_filter.value)
+        if approach_filter.value != "All" and "approach_applied" in results_df.columns:
+            predicates.append(pl.col("approach_applied") == approach_filter.value)
 
-        if "risk_weight" in filtered_df.columns:
-            filtered_df = filtered_df.filter(
+        if "risk_weight" in results_df.columns:
+            predicates.append(
                 (pl.col("risk_weight") >= rw_min.value) &
                 (pl.col("risk_weight") <= rw_max.value)
             )
+
+        if predicates:
+            combined = predicates[0]
+            for p in predicates[1:]:
+                combined = combined & p
+            filtered_df = results_df.filter(combined)
+        else:
+            filtered_df = results_df
 
         # Compute filtered statistics
         if "ead_final" in filtered_df.columns and "rwa_final" in filtered_df.columns:
@@ -372,25 +380,26 @@ def _(filtered_df, has_results, mo):
     import io
 
     if has_results and filtered_df.height > 0:
-        # Export options
-        csv_data = filtered_df.write_csv()
+        # Defer export generation until download is clicked
+        def _make_csv() -> bytes:
+            return filtered_df.write_csv().encode("utf-8")
 
-        # Write parquet to bytes buffer
-        parquet_buffer = io.BytesIO()
-        filtered_df.write_parquet(parquet_buffer)
-        parquet_bytes = parquet_buffer.getvalue()
+        def _make_parquet() -> bytes:
+            buf = io.BytesIO()
+            filtered_df.write_parquet(buf)
+            return buf.getvalue()
 
         mo.output.replace(
             mo.vstack([
                 mo.md("### Export Filtered Results"),
                 mo.hstack([
                     mo.download(
-                        data=csv_data.encode("utf-8"),
+                        data=_make_csv,
                         filename="filtered_rwa_results.csv",
                         label="Download CSV",
                     ),
                     mo.download(
-                        data=parquet_bytes,
+                        data=_make_parquet,
                         filename="filtered_rwa_results.parquet",
                         label="Download Parquet",
                     ),

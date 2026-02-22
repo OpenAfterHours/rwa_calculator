@@ -48,13 +48,6 @@ if TYPE_CHECKING:
     pass
 
 
-def _default_bs_type(lf: pl.LazyFrame) -> pl.LazyFrame:
-    """Fill missing bs_type with OFB for backward compatibility."""
-    cols = set(lf.collect_schema().names())
-    if "bs_type" not in cols:
-        return lf.with_columns(pl.lit("OFB").alias("bs_type"))
-    return lf.with_columns(pl.col("bs_type").fill_null("OFB"))
-
 
 def enforce_schema(
     lf: pl.LazyFrame,
@@ -382,8 +375,6 @@ class ParquetLoader:
         contingents = self._load_parquet_optional(
             self.config.contingents_file, CONTINGENTS_SCHEMA
         )
-        if contingents is not None:
-            contingents = _default_bs_type(contingents)
 
         return RawDataBundle(
             facilities=self._load_parquet(
@@ -635,8 +626,6 @@ class CSVLoader:
         contingents = self._load_csv_optional(
             self.config.contingents_file, CONTINGENTS_SCHEMA
         )
-        if contingents is not None:
-            contingents = _default_bs_type(contingents)
 
         return RawDataBundle(
             facilities=self._load_csv(

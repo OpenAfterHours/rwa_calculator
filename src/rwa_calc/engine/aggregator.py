@@ -265,7 +265,6 @@ class OutputAggregator:
                 pl.lit(0.0),
                 pl.col("floor_rwa") - pl.col(irb_rwa_col),
             ).alias("floor_impact_rwa"),
-        ]).with_columns([
             # Final RWA = max(IRB RWA, floor RWA)
             pl.max_horizontal(
                 pl.col(irb_rwa_col),
@@ -484,18 +483,17 @@ class OutputAggregator:
             .then(pl.col("floor_rwa") > pl.col("rwa_pre_floor"))
             .otherwise(pl.lit(False))
             .alias("is_floor_binding"),
+            # Apply floor to final RWA for IRB exposures
+            pl.when(pl.col("approach_applied").is_in(irb_approaches))
+            .then(pl.max_horizontal(pl.col("rwa_pre_floor"), pl.col("floor_rwa")))
+            .otherwise(pl.col("rwa_pre_floor"))
+            .alias("rwa_final"),
         ]).with_columns([
             # Floor impact (additional RWA from floor)
             pl.when(pl.col("is_floor_binding"))
             .then(pl.col("floor_rwa") - pl.col("rwa_pre_floor"))
             .otherwise(pl.lit(0.0))
             .alias("floor_impact_rwa"),
-        ]).with_columns([
-            # Apply floor to final RWA for IRB exposures
-            pl.when(pl.col("approach_applied").is_in(irb_approaches))
-            .then(pl.max_horizontal(pl.col("rwa_pre_floor"), pl.col("floor_rwa")))
-            .otherwise(pl.col("rwa_pre_floor"))
-            .alias("rwa_final"),
         ])
 
         # Generate floor impact analysis

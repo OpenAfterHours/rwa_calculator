@@ -1752,28 +1752,6 @@ class CRMProcessor:
 
         return exposures
 
-    def apply_provisions(
-        self,
-        exposures: pl.LazyFrame,
-        provisions: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply provision deduction from EAD (legacy method).
-
-        Delegates to resolve_provisions for the full multi-level resolution
-        and drawn-first deduction logic.
-
-        Args:
-            exposures: Exposures with EAD
-            provisions: Provision data
-            config: Calculation configuration
-
-        Returns:
-            Exposures with provision effects applied
-        """
-        return self.resolve_provisions(exposures, provisions, config)
-
     def _add_crm_audit(
         self,
         exposures: pl.LazyFrame,

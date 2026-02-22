@@ -567,10 +567,6 @@ class ExposureClassifier:
         if "has_facility_property_collateral" in schema_names:
             has_property_expr = has_property_expr | (pl.col("has_facility_property_collateral") == True)  # noqa: E712
 
-        # Fallback: check residential_collateral_value (for backwards compatibility)
-        if "residential_collateral_value" in schema_names:
-            has_property_expr = has_property_expr | (pl.col("residential_collateral_value") > 0)
-
         # Fallback: check collateral_type at exposure level if available
         if "collateral_type" in schema_names:
             has_property_expr = has_property_expr | (

@@ -130,10 +130,6 @@ class SALazyFrame:
         if "has_income_cover" not in schema.names():
             lf = lf.with_columns([pl.lit(False).alias("has_income_cover")])
 
-        # Book code (legacy - kept for backward compatibility)
-        if "book_code" not in schema.names():
-            lf = lf.with_columns([pl.lit("").alias("book_code")])
-
         # Managed as retail flag (CRR Art. 123 - for SME retail treatment)
         if "cp_is_managed_as_retail" not in schema.names():
             lf = lf.with_columns([pl.lit(False).alias("cp_is_managed_as_retail")])

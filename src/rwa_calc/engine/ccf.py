@@ -133,9 +133,6 @@ class CCFCalculator:
         if has_risk_type:
             exposures = exposures.with_columns([
                 pl.col("risk_type").fill_null("").str.to_lowercase().alias("_risk_type_normalized"),
-            ])
-
-            exposures = exposures.with_columns([
                 sa_ccf_expression().alias("_sa_ccf_from_risk_type"),
             ])
 
@@ -321,14 +318,10 @@ class CCFCalculator:
             ])
 
         # Clean up temporary columns
-        temp_columns = [
-            "_risk_type_normalized",
-            "_sa_ccf_from_risk_type",
-            "_firb_ccf_from_risk_type",
-        ]
-        existing_temp_cols = [c for c in temp_columns if c in exposures.collect_schema().names()]
-        if existing_temp_cols:
-            exposures = exposures.drop(existing_temp_cols)
+        temp_columns = ["_sa_ccf_from_risk_type", "_firb_ccf_from_risk_type"]
+        if has_risk_type:
+            temp_columns.append("_risk_type_normalized")
+        exposures = exposures.drop(temp_columns)
 
         return exposures
 

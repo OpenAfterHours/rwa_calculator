@@ -16,10 +16,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-if TYPE_CHECKING:
-    import polars as pl
+import polars as pl
 
 
 # =============================================================================
@@ -128,22 +127,6 @@ class SummaryStatistics:
     floor_impact: Decimal = field(default_factory=lambda: Decimal("0"))
 
 
-@dataclass(frozen=True)
-class SummaryByDimension:
-    """
-    Summary statistics grouped by a specific dimension.
-
-    Provides breakdown of RWA by exposure class, approach, etc.
-
-    Attributes:
-        dimension_name: Name of the grouping dimension (e.g., "exposure_class")
-        data: Materialized DataFrame with summary by dimension
-    """
-
-    dimension_name: str
-    data: pl.DataFrame
-
-
 # =============================================================================
 # Response Models - Errors
 # =============================================================================
@@ -219,17 +202,17 @@ class CalculationResponse:
     """
     Response model for RWA calculation results.
 
-    Contains the full results of a calculation including
-    summary statistics, detailed results, and any errors.
+    Contains paths to cached parquet files with lazy scan accessors.
+    No data is held in memory — callers scan or collect on demand.
 
     Attributes:
         success: Whether calculation completed without critical errors
         framework: Framework used for calculation
         reporting_date: As-of date for the calculation
         summary: Aggregated summary statistics
-        results: Materialized DataFrame with detailed results
-        summary_by_class: Optional breakdown by exposure class
-        summary_by_approach: Optional breakdown by approach
+        results_path: Path to cached results parquet file
+        summary_by_class_path: Path to class summary parquet (or None)
+        summary_by_approach_path: Path to approach summary parquet (or None)
         errors: List of errors/warnings encountered
         performance: Performance metrics for the run
     """
@@ -238,11 +221,31 @@ class CalculationResponse:
     framework: str
     reporting_date: date
     summary: SummaryStatistics
-    results: pl.DataFrame
-    summary_by_class: pl.DataFrame | None = None
-    summary_by_approach: pl.DataFrame | None = None
+    results_path: Path
+    summary_by_class_path: Path | None = None
+    summary_by_approach_path: Path | None = None
     errors: list[APIError] = field(default_factory=list)
     performance: PerformanceMetrics | None = None
+
+    def scan_results(self) -> pl.LazyFrame:
+        """Lazy-scan the results parquet file."""
+        return pl.scan_parquet(self.results_path)
+
+    def collect_results(self) -> pl.DataFrame:
+        """Collect the full results into an eager DataFrame."""
+        return self.scan_results().collect()
+
+    def scan_summary_by_class(self) -> pl.LazyFrame | None:
+        """Lazy-scan the class summary parquet, or None if not available."""
+        if self.summary_by_class_path and self.summary_by_class_path.exists():
+            return pl.scan_parquet(self.summary_by_class_path)
+        return None
+
+    def scan_summary_by_approach(self) -> pl.LazyFrame | None:
+        """Lazy-scan the approach summary parquet, or None if not available."""
+        if self.summary_by_approach_path and self.summary_by_approach_path.exists():
+            return pl.scan_parquet(self.summary_by_approach_path)
+        return None
 
     @property
     def has_warnings(self) -> bool:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import polars as pl
 import pytest
@@ -109,9 +110,9 @@ class TestServiceCreateConfig:
     """Tests for RWAService._create_config() with different approach selections."""
 
     @pytest.fixture
-    def service(self) -> RWAService:
+    def service(self, tmp_path: Path) -> RWAService:
         """Return an RWAService instance."""
-        return RWAService()
+        return RWAService(cache_dir=tmp_path / "cache")
 
     def test_create_config_sa_only(self, service: RWAService) -> None:
         """_create_config with irb_approach='sa_only' should use sa_only permissions."""

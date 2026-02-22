@@ -24,7 +24,6 @@ from rwa_calc.api.models import (
     CalculationRequest,
     CalculationResponse,
     PerformanceMetrics,
-    SummaryByDimension,
     SummaryStatistics,
     ValidationRequest,
     ValidationResponse,
@@ -181,28 +180,6 @@ class TestSummaryStatistics:
 
 
 # =============================================================================
-# SummaryByDimension Tests
-# =============================================================================
-
-
-class TestSummaryByDimension:
-    """Tests for SummaryByDimension dataclass."""
-
-    def test_create_with_dataframe(self) -> None:
-        """Should store dimension name and DataFrame."""
-        df = pl.DataFrame({
-            "exposure_class": ["CORPORATE", "RETAIL"],
-            "total_rwa": [100000.0, 50000.0],
-        })
-        summary = SummaryByDimension(
-            dimension_name="exposure_class",
-            data=df,
-        )
-        assert summary.dimension_name == "exposure_class"
-        assert len(summary.data) == 2
-
-
-# =============================================================================
 # APIError Tests
 # =============================================================================
 
@@ -320,8 +297,14 @@ class TestCalculationResponse:
     """Tests for CalculationResponse dataclass."""
 
     @pytest.fixture
-    def sample_response(self) -> CalculationResponse:
+    def sample_response(self, tmp_path: Path) -> CalculationResponse:
         """Create a sample response for testing."""
+        results_path = tmp_path / "results.parquet"
+        pl.DataFrame({
+            "exposure_reference": ["EXP001", "EXP002"],
+            "rwa_final": [250000.0, 250000.0],
+        }).write_parquet(results_path)
+
         return CalculationResponse(
             success=True,
             framework="CRR",
@@ -332,10 +315,7 @@ class TestCalculationResponse:
                 exposure_count=100,
                 average_risk_weight=Decimal("0.5"),
             ),
-            results=pl.DataFrame({
-                "exposure_reference": ["EXP001", "EXP002"],
-                "rwa_final": [250000.0, 250000.0],
-            }),
+            results_path=results_path,
         )
 
     def test_create_successful_response(self, sample_response: CalculationResponse) -> None:
@@ -343,6 +323,18 @@ class TestCalculationResponse:
         assert sample_response.success is True
         assert sample_response.framework == "CRR"
         assert sample_response.reporting_date == date(2024, 12, 31)
+
+    def test_scan_results_returns_lazyframe(self, sample_response: CalculationResponse) -> None:
+        """scan_results should return a LazyFrame."""
+        lf = sample_response.scan_results()
+        assert isinstance(lf, pl.LazyFrame)
+        assert lf.collect().height == 2
+
+    def test_collect_results_returns_dataframe(self, sample_response: CalculationResponse) -> None:
+        """collect_results should return a DataFrame."""
+        df = sample_response.collect_results()
+        assert isinstance(df, pl.DataFrame)
+        assert df.height == 2
 
     def test_has_warnings_false_when_no_errors(self, sample_response: CalculationResponse) -> None:
         """has_warnings should be False when no errors."""
@@ -352,8 +344,11 @@ class TestCalculationResponse:
         """has_errors should be False when no errors."""
         assert sample_response.has_errors is False
 
-    def test_warning_count(self) -> None:
+    def test_warning_count(self, tmp_path: Path) -> None:
         """Should count warnings correctly."""
+        results_path = tmp_path / "results.parquet"
+        pl.DataFrame().write_parquet(results_path)
+
         response = CalculationResponse(
             success=True,
             framework="CRR",
@@ -364,7 +359,7 @@ class TestCalculationResponse:
                 exposure_count=0,
                 average_risk_weight=Decimal("0"),
             ),
-            results=pl.DataFrame(),
+            results_path=results_path,
             errors=[
                 APIError(code="W1", message="Warning 1", severity="warning", category="Test"),
                 APIError(code="W2", message="Warning 2", severity="warning", category="Test"),
@@ -374,8 +369,11 @@ class TestCalculationResponse:
         assert response.warning_count == 2
         assert response.error_count == 1
 
-    def test_has_warnings_true(self) -> None:
+    def test_has_warnings_true(self, tmp_path: Path) -> None:
         """has_warnings should be True when warnings exist."""
+        results_path = tmp_path / "results.parquet"
+        pl.DataFrame().write_parquet(results_path)
+
         response = CalculationResponse(
             success=True,
             framework="CRR",
@@ -386,7 +384,7 @@ class TestCalculationResponse:
                 exposure_count=0,
                 average_risk_weight=Decimal("0"),
             ),
-            results=pl.DataFrame(),
+            results_path=results_path,
             errors=[
                 APIError(code="W1", message="Warning", severity="warning", category="Test"),
             ],
@@ -394,8 +392,11 @@ class TestCalculationResponse:
         assert response.has_warnings is True
         assert response.has_errors is False
 
-    def test_has_errors_true(self) -> None:
+    def test_has_errors_true(self, tmp_path: Path) -> None:
         """has_errors should be True when errors exist."""
+        results_path = tmp_path / "results.parquet"
+        pl.DataFrame().write_parquet(results_path)
+
         response = CalculationResponse(
             success=False,
             framework="CRR",
@@ -406,7 +407,7 @@ class TestCalculationResponse:
                 exposure_count=0,
                 average_risk_weight=Decimal("0"),
             ),
-            results=pl.DataFrame(),
+            results_path=results_path,
             errors=[
                 APIError(code="E1", message="Error", severity="error", category="Test"),
             ],

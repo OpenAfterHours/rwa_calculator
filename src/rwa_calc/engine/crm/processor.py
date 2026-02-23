@@ -172,8 +172,11 @@ class CRMProcessor:
         # Step 7: Add CRM audit trail
         exposures = self._add_crm_audit(exposures)
 
-        # Strategic collect to materialize all CRM processing
-        # This breaks up the complex query plan for better downstream performance
+        # Materialise CRM results before the approach split fan-out.
+        # The pipeline runs independent .collect() calls on each branch
+        # (SA, IRB, slotting) via has_rows() and individual calculators.
+        # Without this collect, the full pipeline plan is re-evaluated per
+        # branch and the plan depth causes Polars optimizer segfaults.
         exposures = exposures.collect().lazy()
 
         # Split by approach for output

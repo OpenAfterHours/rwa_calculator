@@ -97,20 +97,22 @@ class ResultsCache:
 
     def sink_results(
         self,
-        results: pl.LazyFrame,
-        summary_by_class: pl.LazyFrame | None = None,
-        summary_by_approach: pl.LazyFrame | None = None,
+        results: pl.LazyFrame | pl.DataFrame,
+        summary_by_class: pl.LazyFrame | pl.DataFrame | None = None,
+        summary_by_approach: pl.LazyFrame | pl.DataFrame | None = None,
         metadata: dict | None = None,
     ) -> CachedResults:
         """
-        Stream results to parquet, collect small summaries eagerly, write metadata.
+        Write results to parquet, collect small summaries eagerly, write metadata.
 
-        Falls back to collect().write_parquet() if sink_parquet() fails.
+        Accepts either LazyFrame or DataFrame for all inputs. DataFrames are
+        written directly; LazyFrames are streamed via sink_parquet (with
+        collect fallback).
 
         Args:
-            results: Main results LazyFrame (streamed to parquet)
-            summary_by_class: Optional class summary LazyFrame (collected eagerly)
-            summary_by_approach: Optional approach summary LazyFrame (collected eagerly)
+            results: Main results (LazyFrame streamed, or DataFrame written directly)
+            summary_by_class: Optional class summary
+            summary_by_approach: Optional approach summary
             metadata: Optional metadata dict written as JSON
 
         Returns:
@@ -121,14 +123,18 @@ class ResultsCache:
         class_path = self._cache_dir / "last_summary_by_class.parquet"
         approach_path = self._cache_dir / "last_summary_by_approach.parquet"
 
-        # Sink main results to parquet via streaming
-        self._sink_or_collect(results, results_path)
+        # Write main results to parquet
+        if isinstance(results, pl.DataFrame):
+            results.write_parquet(results_path)
+        else:
+            self._sink_or_collect(results, results_path)
 
-        # Collect small summary frames eagerly (they're tiny)
+        # Write small summary frames
         class_out = None
         if summary_by_class is not None:
             try:
-                summary_by_class.collect().write_parquet(class_path)
+                df = summary_by_class if isinstance(summary_by_class, pl.DataFrame) else summary_by_class.collect()
+                df.write_parquet(class_path)
                 class_out = class_path
             except Exception:
                 logger.warning("Failed to write summary_by_class parquet")
@@ -136,7 +142,8 @@ class ResultsCache:
         approach_out = None
         if summary_by_approach is not None:
             try:
-                summary_by_approach.collect().write_parquet(approach_path)
+                df = summary_by_approach if isinstance(summary_by_approach, pl.DataFrame) else summary_by_approach.collect()
+                df.write_parquet(approach_path)
                 approach_out = approach_path
             except Exception:
                 logger.warning("Failed to write summary_by_approach parquet")

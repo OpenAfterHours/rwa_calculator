@@ -523,46 +523,10 @@ class TestLendingGroupAggregation:
         lending_group_mappings: pl.LazyFrame,
     ) -> None:
         """Lending group totals should be correctly calculated."""
-        # Build enriched counterparties with required columns
-        enriched_counterparties = lending_group_counterparties.with_columns([
-            pl.lit(False).alias("counterparty_has_parent"),
-            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-            pl.lit(None).cast(pl.Int8).alias("cqs"),
-            pl.lit(None).cast(pl.Float64).alias("pd"),
-            pl.lit(None).cast(pl.String).alias("rating_value"),
-            pl.lit(None).cast(pl.String).alias("rating_agency"),
-            pl.lit(False).alias("rating_inherited"),
-            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-            pl.lit("unrated").alias("rating_inheritance_reason"),
-        ])
-
-        counterparty_lookup = CounterpartyLookup(
-            counterparties=enriched_counterparties,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
-        )
-
-        exposures, _ = resolver._unify_exposures(
-            lending_group_loans,
-            pl.LazyFrame(schema={
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=lending_group_loans,
+            contingents=pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
                 "product_type": pl.String,
                 "book_code": pl.String,
@@ -578,28 +542,23 @@ class TestLendingGroupAggregation:
                 "ccf_modelled": pl.Float64,
                 "is_short_term_trade_lc": pl.Boolean,
             }),
-            None,  # No facilities for this test
-            pl.LazyFrame(schema={
+            counterparties=lending_group_counterparties,
+            collateral=pl.LazyFrame(),
+            guarantees=pl.LazyFrame(),
+            provisions=pl.LazyFrame(),
+            ratings=None,
+            facility_mappings=pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
                 "child_reference": pl.String,
                 "child_type": pl.String,
             }),
-            counterparty_lookup,
+            org_mappings=None,
+            lending_mappings=lending_group_mappings,
         )
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
-        # Calculate residential property coverage (empty for this test)
-        residential_coverage = resolver._calculate_residential_property_coverage(
-            exposures,
-            None,  # No collateral
-        )
-
-        lending_group_totals, errors = resolver._calculate_lending_group_totals(
-            exposures,
-            lending_group_mappings,
-            residential_coverage,
-        )
-
-        df = lending_group_totals.collect()
+        result = resolver.resolve(bundle, config)
+        df = result.lending_group_totals.collect()
 
         # Should have one lending group
         assert len(df) == 1
@@ -618,46 +577,10 @@ class TestLendingGroupAggregation:
         lending_group_mappings: pl.LazyFrame,
     ) -> None:
         """Standalone counterparty should not be in any lending group."""
-        # Build enriched counterparties with required columns
-        enriched_counterparties = lending_group_counterparties.with_columns([
-            pl.lit(False).alias("counterparty_has_parent"),
-            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-            pl.lit(None).cast(pl.Int8).alias("cqs"),
-            pl.lit(None).cast(pl.Float64).alias("pd"),
-            pl.lit(None).cast(pl.String).alias("rating_value"),
-            pl.lit(None).cast(pl.String).alias("rating_agency"),
-            pl.lit(False).alias("rating_inherited"),
-            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-            pl.lit("unrated").alias("rating_inheritance_reason"),
-        ])
-
-        counterparty_lookup = CounterpartyLookup(
-            counterparties=enriched_counterparties,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
-        )
-
-        exposures, _ = resolver._unify_exposures(
-            lending_group_loans,
-            pl.LazyFrame(schema={
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=lending_group_loans,
+            contingents=pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
                 "product_type": pl.String,
                 "book_code": pl.String,
@@ -673,36 +596,23 @@ class TestLendingGroupAggregation:
                 "ccf_modelled": pl.Float64,
                 "is_short_term_trade_lc": pl.Boolean,
             }),
-            None,  # No facilities for this test
-            pl.LazyFrame(schema={
+            counterparties=lending_group_counterparties,
+            collateral=pl.LazyFrame(),
+            guarantees=pl.LazyFrame(),
+            provisions=pl.LazyFrame(),
+            ratings=None,
+            facility_mappings=pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
                 "child_reference": pl.String,
                 "child_type": pl.String,
             }),
-            counterparty_lookup,
+            org_mappings=None,
+            lending_mappings=lending_group_mappings,
         )
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
-        # Calculate residential property coverage (empty for this test)
-        residential_coverage = resolver._calculate_residential_property_coverage(
-            exposures,
-            None,  # No collateral
-        )
-
-        # Add lending group totals
-        lending_group_totals, _ = resolver._calculate_lending_group_totals(
-            exposures,
-            lending_group_mappings,
-            residential_coverage,
-        )
-
-        enriched_exposures = resolver._add_lending_group_totals_to_exposures(
-            exposures,
-            lending_group_mappings,
-            lending_group_totals,
-            residential_coverage,
-        )
-
-        df = enriched_exposures.collect()
+        result = resolver.resolve(bundle, config)
+        df = result.exposures.collect()
 
         # Standalone loan should have 0 lending group total
         standalone = df.filter(pl.col("exposure_reference") == "STANDALONE_LOAN")
@@ -2491,42 +2401,6 @@ class TestNegativeDrawnAmountInHierarchy:
             "is_managed_as_retail": [False],
         }).lazy()
 
-        enriched_counterparties = counterparties.with_columns([
-            pl.lit(False).alias("counterparty_has_parent"),
-            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-            pl.lit(None).cast(pl.Int8).alias("cqs"),
-            pl.lit(None).cast(pl.Float64).alias("pd"),
-            pl.lit(None).cast(pl.String).alias("rating_value"),
-            pl.lit(None).cast(pl.String).alias("rating_agency"),
-            pl.lit(False).alias("rating_inherited"),
-            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-            pl.lit("unrated").alias("rating_inheritance_reason"),
-        ])
-
-        counterparty_lookup = CounterpartyLookup(
-            counterparties=enriched_counterparties,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
-        )
-
         loans = pl.DataFrame({
             "loan_reference": ["LOAN_NEG"],
             "product_type": ["MORTGAGE"],
@@ -2544,9 +2418,10 @@ class TestNegativeDrawnAmountInHierarchy:
             "is_short_term_trade_lc": [None],
         }).lazy()
 
-        exposures, _ = resolver._unify_exposures(
-            loans,
-            pl.LazyFrame(schema={
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=loans,
+            contingents=pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
                 "product_type": pl.String,
                 "book_code": pl.String,
@@ -2562,21 +2437,26 @@ class TestNegativeDrawnAmountInHierarchy:
                 "ccf_modelled": pl.Float64,
                 "is_short_term_trade_lc": pl.Boolean,
             }),
-            None,
-            pl.LazyFrame(schema={
+            counterparties=counterparties,
+            collateral=pl.LazyFrame(),
+            guarantees=pl.LazyFrame(),
+            provisions=pl.LazyFrame(),
+            ratings=None,
+            facility_mappings=pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
                 "child_reference": pl.String,
                 "child_type": pl.String,
             }),
-            counterparty_lookup,
+            org_mappings=None,
+            lending_mappings=pl.LazyFrame(schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }),
         )
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
-        coverage = resolver._calculate_residential_property_coverage(
-            exposures,
-            None,
-        )
-
-        df = coverage.collect()
+        result = resolver.resolve(bundle, config)
+        df = result.exposures.collect()
         row = df.filter(pl.col("exposure_reference") == "LOAN_NEG")
 
         # total_exposure_amount should be 0, not -50000
@@ -2607,42 +2487,6 @@ class TestNegativeDrawnAmountInHierarchy:
             "is_managed_as_retail": [False, False, False],
         }).lazy()
 
-        enriched_counterparties = counterparties.with_columns([
-            pl.lit(False).alias("counterparty_has_parent"),
-            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-            pl.lit(None).cast(pl.Int8).alias("cqs"),
-            pl.lit(None).cast(pl.Float64).alias("pd"),
-            pl.lit(None).cast(pl.String).alias("rating_value"),
-            pl.lit(None).cast(pl.String).alias("rating_agency"),
-            pl.lit(False).alias("rating_inherited"),
-            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-            pl.lit("unrated").alias("rating_inheritance_reason"),
-        ])
-
-        counterparty_lookup = CounterpartyLookup(
-            counterparties=enriched_counterparties,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
-        )
-
         # Member1 has negative drawn (credit balance on current account)
         loans = pl.DataFrame({
             "loan_reference": ["LG_LOAN1", "LG_LOAN2", "LG_LOAN3"],
@@ -2661,9 +2505,10 @@ class TestNegativeDrawnAmountInHierarchy:
             "is_short_term_trade_lc": [None, None, None],
         }).lazy()
 
-        exposures, _ = resolver._unify_exposures(
-            loans,
-            pl.LazyFrame(schema={
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=loans,
+            contingents=pl.LazyFrame(schema={
                 "contingent_reference": pl.String,
                 "product_type": pl.String,
                 "book_code": pl.String,
@@ -2679,27 +2524,23 @@ class TestNegativeDrawnAmountInHierarchy:
                 "ccf_modelled": pl.Float64,
                 "is_short_term_trade_lc": pl.Boolean,
             }),
-            None,
-            pl.LazyFrame(schema={
+            counterparties=counterparties,
+            collateral=pl.LazyFrame(),
+            guarantees=pl.LazyFrame(),
+            provisions=pl.LazyFrame(),
+            ratings=None,
+            facility_mappings=pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
                 "child_reference": pl.String,
                 "child_type": pl.String,
             }),
-            counterparty_lookup,
+            org_mappings=None,
+            lending_mappings=lending_group_mappings,
         )
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
-        residential_coverage = resolver._calculate_residential_property_coverage(
-            exposures,
-            None,
-        )
-
-        lending_group_totals, _ = resolver._calculate_lending_group_totals(
-            exposures,
-            lending_group_mappings,
-            residential_coverage,
-        )
-
-        df = lending_group_totals.collect()
+        result = resolver.resolve(bundle, config)
+        df = result.lending_group_totals.collect()
 
         # total_drawn should floor the -50k at 0: 300k + 0 + 400k = 700k
         assert df["total_drawn"][0] == pytest.approx(700000.0)

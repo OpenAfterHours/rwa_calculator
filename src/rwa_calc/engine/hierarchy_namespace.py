@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.engine.hierarchy import _resolve_graph_eager
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -61,7 +63,10 @@ class HierarchyLazyFrame:
         max_depth: int = 10,
     ) -> pl.LazyFrame:
         """
-        Resolve ultimate parent for each entity using iterative joins.
+        Resolve ultimate parent for each entity using eager graph traversal.
+
+        Collects edge data, resolves the graph via dict traversal, and joins
+        the resolved lookup back onto the calling LazyFrame.
 
         Args:
             org_mappings: LazyFrame with child_counterparty_reference and parent_counterparty_reference
@@ -80,47 +85,40 @@ class HierarchyLazyFrame:
         else:
             raise ValueError("No reference column found")
 
-        # Build parent lookup
-        parent_map = org_mappings.select([
-            pl.col("child_counterparty_reference").alias("_lookup_child"),
-            pl.col("parent_counterparty_reference").alias("_lookup_parent"),
-        ])
+        # Collect edge data (small) and resolve graph eagerly
+        edges = org_mappings.select([
+            "child_counterparty_reference",
+            "parent_counterparty_reference",
+        ]).unique().collect()
 
-        # Initialize: join with parent mapping
-        result = self._lf.join(
-            parent_map,
+        resolved = _resolve_graph_eager(
+            edges,
+            child_col="child_counterparty_reference",
+            parent_col="parent_counterparty_reference",
+            max_depth=max_depth,
+        )
+
+        # Build lookup LazyFrame
+        lookup = resolved.rename({
+            "entity": "_lookup_entity",
+            "root": "_lookup_root",
+            "depth": "_lookup_depth",
+        }).lazy()
+
+        # Left join resolved lookup back onto the calling LazyFrame
+        # Entities not in edge data are roots (map to self, depth 0)
+        return self._lf.join(
+            lookup,
             left_on=entity_col,
-            right_on="_lookup_child",
+            right_on="_lookup_entity",
             how="left",
         ).with_columns([
             pl.coalesce(
-                pl.col("_lookup_parent"),
-                pl.col(entity_col)
-            ).alias("current_parent"),
-            pl.when(pl.col("_lookup_parent").is_not_null())
-            .then(pl.lit(1).cast(pl.Int32))
-            .otherwise(pl.lit(0).cast(pl.Int32))
-            .alias("hierarchy_depth"),
-        ]).drop("_lookup_parent")
-
-        # Iteratively traverse upward
-        for _ in range(max_depth):
-            result = result.join(
-                parent_map,
-                left_on="current_parent",
-                right_on="_lookup_child",
-                how="left",
-            ).with_columns([
-                pl.coalesce(pl.col("_lookup_parent"), pl.col("current_parent")).alias("current_parent"),
-                pl.when(pl.col("_lookup_parent").is_not_null())
-                .then(pl.col("hierarchy_depth") + 1)
-                .otherwise(pl.col("hierarchy_depth"))
-                .alias("hierarchy_depth"),
-            ]).drop("_lookup_parent")
-
-        return result.with_columns([
-            pl.col("current_parent").alias("ultimate_parent_reference"),
-        ]).drop("current_parent")
+                pl.col("_lookup_root"),
+                pl.col(entity_col),
+            ).alias("ultimate_parent_reference"),
+            pl.col("_lookup_depth").fill_null(0).alias("hierarchy_depth"),
+        ]).drop(["_lookup_root", "_lookup_depth"])
 
     def calculate_hierarchy_depth(self) -> pl.LazyFrame:
         """

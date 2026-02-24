@@ -230,70 +230,33 @@ class HierarchyResolver:
         max_depth: int = 10,
     ) -> pl.LazyFrame:
         """
-        Build ultimate parent mapping using iterative joins.
+        Build ultimate parent mapping using eager graph traversal.
+
+        Collects the small edge data eagerly, resolves the full graph via dict
+        traversal, and returns the result as a LazyFrame for downstream joins.
 
         Returns LazyFrame with columns:
         - counterparty_reference: The entity
         - ultimate_parent_reference: Its ultimate parent
         - hierarchy_depth: Number of levels traversed
         """
-        # Get unique child references
-        entities = org_mappings.select(
-            pl.col("child_counterparty_reference").alias("counterparty_reference")
-        ).unique()
+        edges = org_mappings.select([
+            "child_counterparty_reference",
+            "parent_counterparty_reference",
+        ]).unique().collect()
 
-        # Parent lookup for joins (alias child column to avoid name collision)
-        parent_map = org_mappings.select([
-            pl.col("child_counterparty_reference").alias("_lookup_child"),
-            pl.col("parent_counterparty_reference").alias("_lookup_parent"),
-        ])
+        resolved = _resolve_graph_eager(
+            edges,
+            child_col="child_counterparty_reference",
+            parent_col="parent_counterparty_reference",
+            max_depth=max_depth,
+        )
 
-        # Initialize: each entity's current parent is its direct parent (or self)
-        # Depth starts at 1 for entities with a parent, 0 for root entities
-        result = entities.join(
-            parent_map,
-            left_on="counterparty_reference",
-            right_on="_lookup_child",
-            how="left",
-        ).with_columns([
-            pl.coalesce(
-                pl.col("_lookup_parent"),
-                pl.col("counterparty_reference")
-            ).alias("current_parent"),
-            pl.when(pl.col("_lookup_parent").is_not_null())
-            .then(pl.lit(1).cast(pl.Int32))
-            .otherwise(pl.lit(0).cast(pl.Int32))
-            .alias("depth"),
-        ]).select([
-            pl.col("counterparty_reference"),
-            pl.col("current_parent"),
-            pl.col("depth"),
-        ])
-
-        # Iteratively traverse upward - each iteration adds one level of depth
-        for _ in range(max_depth):
-            result = result.join(
-                parent_map,
-                left_on="current_parent",
-                right_on="_lookup_child",
-                how="left",
-            ).with_columns([
-                pl.coalesce(pl.col("_lookup_parent"), pl.col("current_parent")).alias("current_parent"),
-                pl.when(pl.col("_lookup_parent").is_not_null())
-                .then(pl.col("depth") + 1)
-                .otherwise(pl.col("depth"))
-                .alias("depth"),
-            ]).select([
-                pl.col("counterparty_reference"),
-                pl.col("current_parent"),
-                pl.col("depth"),
-            ])
-
-        return result.select([
-            pl.col("counterparty_reference"),
-            pl.col("current_parent").alias("ultimate_parent_reference"),
-            pl.col("depth").alias("hierarchy_depth"),
-        ])
+        return resolved.rename({
+            "entity": "counterparty_reference",
+            "root": "ultimate_parent_reference",
+            "depth": "hierarchy_depth",
+        }).lazy()
 
     def _build_rating_inheritance_lazy(
         self,
@@ -405,10 +368,10 @@ class HierarchyResolver:
         max_depth: int = 10,
     ) -> pl.LazyFrame:
         """
-        Build root facility lookup for multi-level facility hierarchies.
+        Build root facility lookup using eager graph traversal.
 
-        Mirrors _build_ultimate_parent_lazy but for facility-to-facility relationships.
-        Iteratively traverses upward through facility hierarchy to find the root facility.
+        Collects the small facility edge data eagerly, resolves the full graph
+        via dict traversal, and returns the result as a LazyFrame.
 
         Args:
             facility_mappings: Facility mappings with parent_facility_reference,
@@ -438,72 +401,29 @@ class HierarchyResolver:
         else:
             return empty_result
 
-        # Filter to facility→facility relationships only
+        # Filter to facility→facility relationships and collect (small data)
         facility_edges = facility_mappings.filter(
             pl.col(type_col).fill_null("").str.to_lowercase() == "facility"
         ).select([
             pl.col("child_reference").alias("child_facility_reference"),
             pl.col("parent_facility_reference"),
-        ]).unique()
+        ]).unique().collect()
 
-        # Check if there are any facility edges
-        if facility_edges.head(1).collect().height == 0:
+        if facility_edges.height == 0:
             return empty_result
 
-        # Parent lookup for iterative joins
-        parent_map = facility_edges.select([
-            pl.col("child_facility_reference").alias("_lookup_child"),
-            pl.col("parent_facility_reference").alias("_lookup_parent"),
-        ])
+        resolved = _resolve_graph_eager(
+            facility_edges,
+            child_col="child_facility_reference",
+            parent_col="parent_facility_reference",
+            max_depth=max_depth,
+        )
 
-        # Initialize: each sub-facility's current parent is its direct parent
-        result = facility_edges.join(
-            parent_map,
-            left_on="parent_facility_reference",
-            right_on="_lookup_child",
-            how="left",
-        ).with_columns([
-            pl.coalesce(
-                pl.col("_lookup_parent"),
-                pl.col("parent_facility_reference"),
-            ).alias("current_root"),
-            pl.when(pl.col("_lookup_parent").is_not_null())
-            .then(pl.lit(2).cast(pl.Int32))
-            .otherwise(pl.lit(1).cast(pl.Int32))
-            .alias("depth"),
-        ]).select([
-            pl.col("child_facility_reference"),
-            pl.col("current_root"),
-            pl.col("depth"),
-        ])
-
-        # Iteratively traverse upward
-        for _ in range(max_depth - 1):
-            result = result.join(
-                parent_map,
-                left_on="current_root",
-                right_on="_lookup_child",
-                how="left",
-            ).with_columns([
-                pl.coalesce(
-                    pl.col("_lookup_parent"),
-                    pl.col("current_root"),
-                ).alias("current_root"),
-                pl.when(pl.col("_lookup_parent").is_not_null())
-                .then(pl.col("depth") + 1)
-                .otherwise(pl.col("depth"))
-                .alias("depth"),
-            ]).select([
-                pl.col("child_facility_reference"),
-                pl.col("current_root"),
-                pl.col("depth"),
-            ])
-
-        return result.select([
-            pl.col("child_facility_reference"),
-            pl.col("current_root").alias("root_facility_reference"),
-            pl.col("depth").alias("facility_hierarchy_depth"),
-        ])
+        return resolved.rename({
+            "entity": "child_facility_reference",
+            "root": "root_facility_reference",
+            "depth": "facility_hierarchy_depth",
+        }).lazy()
 
     def _enrich_counterparties_with_hierarchy(
         self,
@@ -1014,43 +934,33 @@ class HierarchyResolver:
         ])
 
         # Resolve root_facility_reference and facility_hierarchy_depth using root lookup
-        if facility_root_lookup.head(1).collect().height > 0:
-            exposures = exposures.join(
-                facility_root_lookup.select([
-                    pl.col("child_facility_reference").alias("_frl_child"),
-                    pl.col("root_facility_reference").alias("_frl_root"),
-                    pl.col("facility_hierarchy_depth").alias("_frl_depth"),
-                ]),
-                left_on="parent_facility_reference",
-                right_on="_frl_child",
-                how="left",
-            ).with_columns([
-                # Multi-level: root from lookup; single-level: parent itself; no parent: null
-                pl.when(pl.col("_frl_root").is_not_null())
-                .then(pl.col("_frl_root"))
-                .when(pl.col("parent_facility_reference").is_not_null())
-                .then(pl.col("parent_facility_reference"))
-                .otherwise(pl.lit(None).cast(pl.String))
-                .alias("root_facility_reference"),
-                # Multi-level: lookup depth + 1; single-level: 1; no parent: 0
-                pl.when(pl.col("_frl_depth").is_not_null())
-                .then((pl.col("_frl_depth") + 1).cast(pl.Int8))
-                .when(pl.col("parent_facility_reference").is_not_null())
-                .then(pl.lit(1).cast(pl.Int8))
-                .otherwise(pl.lit(0).cast(pl.Int8))
-                .alias("facility_hierarchy_depth"),
-            ]).drop(["_frl_root", "_frl_depth"])
-        else:
-            exposures = exposures.with_columns([
-                pl.when(pl.col("parent_facility_reference").is_not_null())
-                .then(pl.col("parent_facility_reference"))
-                .otherwise(pl.lit(None).cast(pl.String))
-                .alias("root_facility_reference"),
-                pl.when(pl.col("parent_facility_reference").is_not_null())
-                .then(pl.lit(1).cast(pl.Int8))
-                .otherwise(pl.lit(0).cast(pl.Int8))
-                .alias("facility_hierarchy_depth"),
-            ])
+        # Left join is safe even when lookup is empty — NULLs fall through to the
+        # when/then/otherwise chain, producing identical results to the no-lookup case.
+        exposures = exposures.join(
+            facility_root_lookup.select([
+                pl.col("child_facility_reference").alias("_frl_child"),
+                pl.col("root_facility_reference").alias("_frl_root"),
+                pl.col("facility_hierarchy_depth").alias("_frl_depth"),
+            ]),
+            left_on="parent_facility_reference",
+            right_on="_frl_child",
+            how="left",
+        ).with_columns([
+            # Multi-level: root from lookup; single-level: parent itself; no parent: null
+            pl.when(pl.col("_frl_root").is_not_null())
+            .then(pl.col("_frl_root"))
+            .when(pl.col("parent_facility_reference").is_not_null())
+            .then(pl.col("parent_facility_reference"))
+            .otherwise(pl.lit(None).cast(pl.String))
+            .alias("root_facility_reference"),
+            # Multi-level: lookup depth + 1; single-level: 1; no parent: 0
+            pl.when(pl.col("_frl_depth").is_not_null())
+            .then((pl.col("_frl_depth") + 1).cast(pl.Int8))
+            .when(pl.col("parent_facility_reference").is_not_null())
+            .then(pl.lit(1).cast(pl.Int8))
+            .otherwise(pl.lit(0).cast(pl.Int8))
+            .alias("facility_hierarchy_depth"),
+        ]).drop(["_frl_root", "_frl_depth"])
 
         # Add counterparty hierarchy fields from lookup (now includes ultimate parent)
         exposures = exposures.join(
@@ -1655,6 +1565,61 @@ class HierarchyResolver:
         exposures = exposures.with_columns(fill_null_exprs)
 
         return exposures
+
+
+def _resolve_graph_eager(
+    edges: pl.DataFrame,
+    child_col: str,
+    parent_col: str,
+    max_depth: int = 10,
+) -> pl.DataFrame:
+    """
+    Resolve a parent-child graph eagerly via dict traversal.
+
+    Builds a child→parent dict from collected edge data, then walks each chain
+    to find the ultimate root. Adapts to actual hierarchy depth rather than
+    iterating a fixed number of times.
+
+    Args:
+        edges: Collected DataFrame with child and parent columns
+        child_col: Name of the child column in edges
+        parent_col: Name of the parent column in edges
+        max_depth: Safety limit to prevent infinite loops on bad data
+
+    Returns:
+        DataFrame with columns: entity (Utf8), root (Utf8), depth (Int32)
+    """
+    child_series = edges[child_col].to_list()
+    parent_series = edges[parent_col].to_list()
+
+    parent_of: dict[str, str] = {}
+    for child, parent in zip(child_series, parent_series, strict=True):
+        if child is not None and parent is not None:
+            parent_of[child] = parent
+
+    entities: list[str] = []
+    roots: list[str] = []
+    depths: list[int] = []
+
+    for entity in parent_of:
+        current = entity
+        depth = 0
+        visited: set[str] = {current}
+        while current in parent_of and depth < max_depth:
+            next_parent = parent_of[current]
+            if next_parent in visited:
+                break  # Cycle detected
+            visited.add(next_parent)
+            current = next_parent
+            depth += 1
+        entities.append(entity)
+        roots.append(current)
+        depths.append(depth)
+
+    return pl.DataFrame(
+        {"entity": entities, "root": roots, "depth": depths},
+        schema={"entity": pl.String, "root": pl.String, "depth": pl.Int32},
+    )
 
 
 def create_hierarchy_resolver() -> HierarchyResolver:

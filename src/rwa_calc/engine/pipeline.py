@@ -55,7 +55,6 @@ from rwa_calc.contracts.protocols import (
     OutputAggregatorProtocol,
 )
 from rwa_calc.engine.utils import has_rows
-
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -411,7 +410,6 @@ class PipelineOrchestrator:
     ) -> SAResultBundle | None:
         """Run SA calculation stage."""
         try:
-            # Check if there are SA exposures
             if not has_rows(data.sa_exposures):
                 return SAResultBundle(
                     results=self._create_empty_sa_frame(),
@@ -448,7 +446,6 @@ class PipelineOrchestrator:
     ) -> IRBResultBundle | None:
         """Run IRB calculation stage."""
         try:
-            # Check if there are IRB exposures
             if not has_rows(data.irb_exposures):
                 return IRBResultBundle(
                     results=self._create_empty_irb_frame(),
@@ -487,8 +484,9 @@ class PipelineOrchestrator:
     ) -> SlottingResultBundle | None:
         """Run Slotting calculation stage."""
         try:
-            # Check if there are slotting exposures
-            if data.slotting_exposures is None or not has_rows(data.slotting_exposures):
+            if data.slotting_exposures is None or not has_rows(
+                data.slotting_exposures
+            ):
                 return SlottingResultBundle(
                     results=self._create_empty_slotting_frame(),
                     calculation_audit=self._create_empty_slotting_frame(),
@@ -524,8 +522,9 @@ class PipelineOrchestrator:
     ) -> EquityResultBundle | None:
         """Run Equity calculation stage."""
         try:
-            # Check if there are equity exposures
-            if data.equity_exposures is None or not has_rows(data.equity_exposures):
+            if data.equity_exposures is None or not has_rows(
+                data.equity_exposures
+            ):
                 return EquityResultBundle(
                     results=self._create_empty_equity_frame(),
                     calculation_audit=self._create_empty_equity_frame(),

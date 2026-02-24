@@ -10,7 +10,7 @@ Usage:
     from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
     calculator = HaircutCalculator()
-    adjusted_collateral = calculator.apply_haircuts(collateral, exposures, config)
+    adjusted_collateral = calculator.apply_haircuts(collateral, config)
 """
 
 from __future__ import annotations
@@ -69,15 +69,16 @@ class HaircutCalculator:
     def apply_haircuts(
         self,
         collateral: pl.LazyFrame,
-        exposures: pl.LazyFrame,
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Apply haircuts to collateral and match to exposures.
+        Apply haircuts to collateral.
+
+        Expects exposure_currency and exposure_maturity columns to already be
+        present on collateral (joined via _join_collateral_to_lookups before calling).
 
         Args:
-            collateral: Collateral data with market values
-            exposures: Exposures to link collateral to
+            collateral: Collateral data with market values, exposure_currency, exposure_maturity
             config: Calculation configuration
 
         Returns:
@@ -97,10 +98,6 @@ class HaircutCalculator:
 
         # Calculate collateral-specific haircut based on type
         collateral = self._apply_collateral_haircuts(collateral)
-
-        # Join with exposures to get exposure currency for FX haircut
-        # Supports multi-level linking: direct, facility, counterparty
-        collateral = self._join_exposure_currency(collateral, exposures)
 
         # Apply FX haircut
         collateral = collateral.with_columns([
@@ -133,94 +130,6 @@ class HaircutCalculator:
         ])
 
         return collateral
-
-    def _join_exposure_currency(
-        self,
-        collateral: pl.LazyFrame,
-        exposures: pl.LazyFrame,
-    ) -> pl.LazyFrame:
-        """
-        Join collateral to exposures to obtain exposure_currency and exposure_maturity.
-
-        Supports multi-level linking via beneficiary_type:
-        - Direct (exposure/loan/contingent): join on beneficiary_reference = exposure_reference
-        - Facility: join on beneficiary_reference = parent_facility_reference
-        - Counterparty: join on beneficiary_reference = counterparty_reference
-
-        Falls back to direct-only join when beneficiary_type column is absent.
-        """
-        coll_schema = collateral.collect_schema()
-        exp_schema = exposures.collect_schema()
-
-        # Exposure lookup columns for direct join
-        direct_lookup = exposures.select([
-            pl.col("exposure_reference"),
-            pl.col("currency").alias("exposure_currency"),
-            pl.col("maturity_date").alias("exposure_maturity"),
-        ])
-
-        if "beneficiary_type" not in coll_schema.names():
-            # Legacy: direct-only join
-            return collateral.join(
-                direct_lookup,
-                left_on="beneficiary_reference",
-                right_on="exposure_reference",
-                how="left",
-            )
-
-        bt_lower = pl.col("beneficiary_type").str.to_lowercase()
-        direct_types = ["exposure", "loan", "contingent"]
-
-        # Split collateral by beneficiary_type
-        coll_direct = collateral.filter(bt_lower.is_in(direct_types))
-        coll_facility = collateral.filter(bt_lower == "facility")
-        coll_counterparty = collateral.filter(bt_lower == "counterparty")
-
-        # Direct: join on exposure_reference
-        coll_direct = coll_direct.join(
-            direct_lookup,
-            left_on="beneficiary_reference",
-            right_on="exposure_reference",
-            how="left",
-        )
-
-        # Facility: lookup currency via parent_facility_reference
-        if "parent_facility_reference" in exp_schema.names():
-            facility_lookup = exposures.filter(
-                pl.col("parent_facility_reference").is_not_null()
-            ).group_by("parent_facility_reference").agg([
-                pl.col("currency").first().alias("exposure_currency"),
-                pl.col("maturity_date").first().alias("exposure_maturity"),
-            ])
-            coll_facility = coll_facility.join(
-                facility_lookup,
-                left_on="beneficiary_reference",
-                right_on="parent_facility_reference",
-                how="left",
-            )
-        else:
-            coll_facility = coll_facility.with_columns([
-                pl.lit(None).cast(pl.String).alias("exposure_currency"),
-                pl.lit(None).cast(pl.Date).alias("exposure_maturity"),
-            ])
-
-        # Counterparty: lookup currency via counterparty_reference
-        counterparty_lookup = exposures.group_by("counterparty_reference").agg([
-            pl.col("currency").first().alias("exposure_currency"),
-            pl.col("maturity_date").first().alias("exposure_maturity"),
-        ])
-        coll_counterparty = coll_counterparty.join(
-            counterparty_lookup,
-            left_on="beneficiary_reference",
-            right_on="counterparty_reference",
-            how="left",
-        )
-
-        # Concat all three splits back together
-        return pl.concat(
-            [coll_direct, coll_facility, coll_counterparty],
-            how="diagonal_relaxed",
-        )
 
     def _apply_collateral_haircuts(
         self,
@@ -383,14 +292,12 @@ class HaircutCalculator:
     def apply_maturity_mismatch(
         self,
         collateral: pl.LazyFrame,
-        exposures: pl.LazyFrame,
     ) -> pl.LazyFrame:
         """
         Apply maturity mismatch adjustment per CRR Article 238.
 
         Args:
-            collateral: Collateral with value_after_haircut
-            exposures: Exposures with maturity information
+            collateral: Collateral with value_after_haircut and exposure_maturity
 
         Returns:
             LazyFrame with maturity-adjusted collateral values

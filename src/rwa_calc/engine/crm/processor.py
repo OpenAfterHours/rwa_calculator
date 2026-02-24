@@ -34,7 +34,7 @@ from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.ccf import CCFCalculator, drawn_for_ead, on_balance_ead, sa_ccf_expression
 from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
-from rwa_calc.engine.utils import is_valid_optional_data
+from rwa_calc.engine.utils import has_required_columns
 from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table
 
 # Transient columns used during guarantee processing but dropped from output
@@ -50,6 +50,200 @@ TRANSIENT_GUARANTEE_COLUMNS = [
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+
+def _build_exposure_lookups(
+    exposures: pl.LazyFrame,
+) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
+    """
+    Pre-compute exposure lookups for collateral processing.
+
+    Builds three lookup LazyFrames (direct, facility, counterparty) with all
+    columns needed by _join_collateral_to_lookups and the multi-level allocation
+    methods. Computing these once avoids duplicate references to the upstream
+    exposures plan.
+
+    Returns:
+        (direct_lookup, facility_lookup, cp_lookup) where each has a _ben_ref_*
+        key column plus _ead_*, _currency_*, and _maturity_* value columns.
+    """
+    exp_schema = exposures.collect_schema()
+
+    # Direct: one row per exposure
+    direct_lookup = exposures.select([
+        pl.col("exposure_reference").alias("_ben_ref_direct"),
+        pl.col("ead_gross").alias("_ead_direct"),
+        pl.col("currency").alias("_currency_direct"),
+        pl.col("maturity_date").alias("_maturity_direct"),
+    ])
+
+    # Facility: aggregated per parent_facility_reference
+    if "parent_facility_reference" in exp_schema.names():
+        facility_lookup = (
+            exposures
+            .filter(pl.col("parent_facility_reference").is_not_null())
+            .group_by("parent_facility_reference")
+            .agg([
+                pl.col("ead_gross").sum().alias("_ead_facility"),
+                pl.col("currency").first().alias("_currency_facility"),
+                pl.col("maturity_date").first().alias("_maturity_facility"),
+            ])
+            .with_columns(
+                pl.col("parent_facility_reference").cast(pl.String),
+            )
+            .rename({"parent_facility_reference": "_ben_ref_facility"})
+        )
+    else:
+        facility_lookup = pl.LazyFrame(schema={
+            "_ben_ref_facility": pl.String,
+            "_ead_facility": pl.Float64,
+            "_currency_facility": pl.String,
+            "_maturity_facility": pl.Date,
+        })
+
+    # Counterparty: aggregated per counterparty_reference
+    cp_lookup = (
+        exposures
+        .group_by("counterparty_reference")
+        .agg([
+            pl.col("ead_gross").sum().alias("_ead_cp"),
+            pl.col("currency").first().alias("_currency_cp"),
+            pl.col("maturity_date").first().alias("_maturity_cp"),
+        ])
+        .rename({"counterparty_reference": "_ben_ref_cp"})
+    )
+
+    return direct_lookup, facility_lookup, cp_lookup
+
+
+def _join_collateral_to_lookups(
+    collateral: pl.LazyFrame,
+    direct_lookup: pl.LazyFrame,
+    facility_lookup: pl.LazyFrame,
+    cp_lookup: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """
+    Join all lookup columns (EAD, currency, maturity) onto collateral in one pass.
+
+    Replaces the separate _resolve_pledge_percentages and join_exposure_currency
+    join passes — each used 3 left joins, so 6 total. Now we do 3 joins total,
+    halving the plan size from lookup subtree duplication.
+
+    When beneficiary_type is absent, falls back to a single direct join.
+
+    Args:
+        collateral: Collateral LazyFrame
+        direct_lookup: exposure_reference → _ead_direct, _currency_direct, _maturity_direct
+        facility_lookup: parent_facility_reference → _ead_facility, _currency_facility, _maturity_facility
+        cp_lookup: counterparty_reference → _ead_cp, _currency_cp, _maturity_cp
+
+    Returns:
+        Collateral with _beneficiary_ead, exposure_currency, exposure_maturity columns
+    """
+    coll_schema = collateral.collect_schema()
+
+    if "beneficiary_type" not in coll_schema.names():
+        # Direct-only join — single pass with all columns
+        return collateral.join(
+            direct_lookup.select(
+                pl.col("_ben_ref_direct"),
+                pl.col("_ead_direct").alias("_beneficiary_ead"),
+                pl.col("_currency_direct").alias("exposure_currency"),
+                pl.col("_maturity_direct").alias("exposure_maturity"),
+            ),
+            left_on="beneficiary_reference",
+            right_on="_ben_ref_direct",
+            how="left",
+        )
+
+    bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+    direct_types = ["exposure", "loan", "contingent"]
+
+    # 3 left joins — each adds level-specific EAD, currency, maturity columns
+    collateral = (
+        collateral
+        .join(
+            direct_lookup,
+            left_on="beneficiary_reference",
+            right_on="_ben_ref_direct",
+            how="left",
+        )
+        .join(
+            facility_lookup,
+            left_on="beneficiary_reference",
+            right_on="_ben_ref_facility",
+            how="left",
+        )
+        .join(
+            cp_lookup,
+            left_on="beneficiary_reference",
+            right_on="_ben_ref_cp",
+            how="left",
+        )
+    )
+
+    # Select correct EAD, currency, maturity based on beneficiary_type
+    collateral = collateral.with_columns([
+        pl.when(bt_lower.is_in(direct_types)).then(pl.col("_ead_direct"))
+        .when(bt_lower == "facility").then(pl.col("_ead_facility"))
+        .when(bt_lower == "counterparty").then(pl.col("_ead_cp"))
+        .otherwise(pl.lit(0.0))
+        .alias("_beneficiary_ead"),
+        pl.when(bt_lower.is_in(direct_types)).then(pl.col("_currency_direct"))
+        .when(bt_lower == "facility").then(pl.col("_currency_facility"))
+        .when(bt_lower == "counterparty").then(pl.col("_currency_cp"))
+        .otherwise(pl.lit(None).cast(pl.String))
+        .alias("exposure_currency"),
+        pl.when(bt_lower.is_in(direct_types)).then(pl.col("_maturity_direct"))
+        .when(bt_lower == "facility").then(pl.col("_maturity_facility"))
+        .when(bt_lower == "counterparty").then(pl.col("_maturity_cp"))
+        .otherwise(pl.lit(None).cast(pl.Date))
+        .alias("exposure_maturity"),
+    ]).drop([
+        "_ead_direct", "_ead_facility", "_ead_cp",
+        "_currency_direct", "_currency_facility", "_currency_cp",
+        "_maturity_direct", "_maturity_facility", "_maturity_cp",
+    ])
+
+    return collateral
+
+
+def _resolve_pledge_from_joined(collateral: pl.LazyFrame) -> pl.LazyFrame:
+    """
+    Resolve pledge_percentage to market_value using pre-joined _beneficiary_ead.
+
+    Assumes _beneficiary_ead column already exists on collateral (from
+    _join_collateral_to_lookups). market_value takes precedence when non-null
+    and non-zero.
+
+    Args:
+        collateral: Collateral with _beneficiary_ead column
+
+    Returns:
+        Collateral with market_value resolved, _beneficiary_ead dropped
+    """
+    coll_schema = collateral.collect_schema()
+    if "pledge_percentage" not in coll_schema.names():
+        return collateral.drop("_beneficiary_ead")
+
+    needs_resolve = (
+        (pl.col("market_value").is_null() | (pl.col("market_value") == 0.0))
+        & pl.col("pledge_percentage").is_not_null()
+        & (pl.col("pledge_percentage") > 0.0)
+    )
+
+    collateral = collateral.with_columns(
+        pl.col("_beneficiary_ead").fill_null(0.0),
+    )
+
+    collateral = collateral.with_columns(
+        pl.when(needs_resolve)
+        .then(pl.col("pledge_percentage") * pl.col("_beneficiary_ead"))
+        .otherwise(pl.col("market_value"))
+        .alias("market_value"),
+    )
+
+    return collateral.drop("_beneficiary_ead")
 
 
 @dataclass
@@ -135,7 +329,7 @@ class CRMProcessor:
         # Step 1: Resolve provisions BEFORE CCF (CRR Art. 111(2))
         # This adds provision_on_drawn, provision_on_nominal, nominal_after_provision
         # so CCF can use the provision-adjusted nominal amount
-        if is_valid_optional_data(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
+        if has_required_columns(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
             exposures = self.resolve_provisions(exposures, data.provisions, config)
 
         # Step 2: Apply CCF to calculate EAD for contingents
@@ -146,7 +340,7 @@ class CRMProcessor:
         exposures = self._initialize_ead(exposures)
 
         # Step 4: Apply collateral (if available and valid)
-        if is_valid_optional_data(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+        if has_required_columns(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, data.collateral, config)
         else:
             # No collateral: still need to set F-IRB supervisory LGD based on seniority
@@ -154,7 +348,7 @@ class CRMProcessor:
 
         # Step 5: Apply guarantees (if available and valid)
         if (
-            is_valid_optional_data(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
+            has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
             exposures = self.apply_guarantees(
@@ -316,117 +510,6 @@ class CRMProcessor:
             pl.col("ead_after_collateral").alias("ead_after_guarantee"),
         ])
 
-    def _resolve_pledge_percentages(
-        self,
-        collateral: pl.LazyFrame,
-        exposures: pl.LazyFrame,
-    ) -> pl.LazyFrame:
-        """
-        Resolve percentage-based collateral pledges to absolute market values.
-
-        When collateral has pledge_percentage set instead of market_value, computes
-        market_value = pledge_percentage * beneficiary_total_ead. The base EAD depends
-        on the beneficiary level:
-        - Direct (exposure/loan/contingent): that exposure's ead_gross
-        - Facility: sum of ead_gross for all exposures under that facility
-        - Counterparty: sum of ead_gross for all exposures of that counterparty
-
-        market_value takes precedence when non-null and non-zero.
-
-        Args:
-            collateral: Collateral data, may or may not have pledge_percentage column
-            exposures: Exposures with ead_gross, parent_facility_reference, counterparty_reference
-
-        Returns:
-            Collateral with market_value resolved from pledge_percentage where applicable
-        """
-        coll_schema = collateral.collect_schema()
-        if "pledge_percentage" not in coll_schema.names():
-            return collateral
-
-        # Determine which rows need resolution:
-        # market_value is null or 0, AND pledge_percentage is set and > 0
-        needs_resolve = (
-            (pl.col("market_value").is_null() | (pl.col("market_value") == 0.0)) &
-            pl.col("pledge_percentage").is_not_null() &
-            (pl.col("pledge_percentage") > 0.0)
-        )
-
-        has_beneficiary_type = "beneficiary_type" in coll_schema.names()
-
-        # Build EAD lookups at each level
-        # Direct: exposure_reference → ead_gross
-        direct_ead = exposures.select([
-            pl.col("exposure_reference").alias("_ben_ref"),
-            pl.col("ead_gross").alias("_beneficiary_ead"),
-        ])
-
-        # Facility: parent_facility_reference → sum(ead_gross)
-        exp_schema = exposures.collect_schema()
-        if "parent_facility_reference" in exp_schema.names():
-            facility_ead = exposures.filter(
-                pl.col("parent_facility_reference").is_not_null()
-            ).group_by("parent_facility_reference").agg(
-                pl.col("ead_gross").sum().alias("_beneficiary_ead"),
-            ).select(
-                pl.col("parent_facility_reference").cast(pl.String).alias("_ben_ref"),
-                pl.col("_beneficiary_ead"),
-            )
-        else:
-            facility_ead = pl.LazyFrame(
-                schema={"_ben_ref": pl.String, "_beneficiary_ead": pl.Float64}
-            )
-
-        # Counterparty: counterparty_reference → sum(ead_gross)
-        counterparty_ead = exposures.group_by("counterparty_reference").agg(
-            pl.col("ead_gross").sum().alias("_beneficiary_ead"),
-        ).rename({"counterparty_reference": "_ben_ref"})
-
-        if has_beneficiary_type:
-            # Split by beneficiary_type, join to correct lookup, concat back
-            bt_lower = pl.col("beneficiary_type").str.to_lowercase()
-
-            direct_types = ["exposure", "loan", "contingent"]
-            coll_direct = collateral.filter(bt_lower.is_in(direct_types))
-            coll_facility = collateral.filter(bt_lower == "facility")
-            coll_counterparty = collateral.filter(bt_lower == "counterparty")
-
-            # Join each split to its EAD lookup
-            coll_direct = coll_direct.join(
-                direct_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
-            )
-            coll_facility = coll_facility.join(
-                facility_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
-            )
-            coll_counterparty = coll_counterparty.join(
-                counterparty_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
-            )
-
-            collateral = pl.concat([coll_direct, coll_facility, coll_counterparty], how="diagonal_relaxed")
-        else:
-            # Legacy: join beneficiary_reference to exposure_reference
-            collateral = collateral.join(
-                direct_ead, left_on="beneficiary_reference", right_on="_ben_ref", how="left",
-            )
-
-        # Fill null EAD (no match found)
-        collateral = collateral.with_columns(
-            pl.col("_beneficiary_ead").fill_null(0.0),
-        )
-
-        # Resolve: when needs_resolve, set market_value = pledge_percentage * beneficiary_ead
-        collateral = collateral.with_columns(
-            pl.when(needs_resolve)
-            .then(pl.col("pledge_percentage") * pl.col("_beneficiary_ead"))
-            .otherwise(pl.col("market_value"))
-            .alias("market_value"),
-        )
-
-        # Drop helper column
-        collateral = collateral.drop("_beneficiary_ead")
-
-        return collateral
-
     def apply_collateral(
         self,
         exposures: pl.LazyFrame,
@@ -436,6 +519,11 @@ class CRMProcessor:
         """
         Apply collateral to reduce EAD (SA) or LGD (IRB).
 
+        Pre-computes shared exposure lookups once, then joins ALL lookup columns
+        (EAD, currency, maturity) in a single pass of 3 joins. Pledge resolution
+        and currency/maturity derivation operate on pre-joined columns — no
+        additional joins needed.
+
         Args:
             exposures: Exposures with ead_gross
             collateral: Collateral data
@@ -444,29 +532,52 @@ class CRMProcessor:
         Returns:
             Exposures with collateral effects applied
         """
-        # Resolve percentage-based collateral to absolute market values
-        collateral = self._resolve_pledge_percentages(collateral, exposures)
+        # Pre-compute shared exposure lookups once
+        direct_lookup, facility_lookup, cp_lookup = _build_exposure_lookups(exposures)
 
-        # Apply haircuts to collateral
-        adjusted_collateral = self._haircut_calculator.apply_haircuts(
-            collateral, exposures, config
+        # Materialise the small lookup frames to sever plan-tree duplication.
+        # Each lookup is aggregated (facility/cp) or 1:1 (direct), so collecting
+        # is cheap (~50ms at 100K). Without this, every downstream reference to a
+        # lookup duplicates the full upstream exposures plan (provisions + CCF +
+        # init_ead ≈ 158 lines × 5+ branches), causing quadratic execution overhead.
+        direct_lookup = direct_lookup.collect().lazy()
+        facility_lookup = facility_lookup.collect().lazy()
+        cp_lookup = cp_lookup.collect().lazy()
+
+        # Derive EAD totals from the lookups for allocation methods
+        facility_ead_totals = facility_lookup.select(
+            pl.col("_ben_ref_facility").alias("parent_facility_reference"),
+            pl.col("_ead_facility").alias("_fac_ead_total"),
+        )
+        cp_ead_totals = cp_lookup.select(
+            pl.col("_ben_ref_cp").alias("counterparty_reference"),
+            pl.col("_ead_cp").alias("_cp_ead_total"),
         )
 
-        # Apply maturity mismatch
+        # Single pass: join all lookup columns (EAD, currency, maturity)
+        collateral = _join_collateral_to_lookups(
+            collateral, direct_lookup, facility_lookup, cp_lookup
+        )
+
+        # Resolve pledge_percentage → market_value (uses pre-joined _beneficiary_ead)
+        collateral = _resolve_pledge_from_joined(collateral)
+
+        # Apply haircuts to collateral (no longer needs exposures)
+        adjusted_collateral = self._haircut_calculator.apply_haircuts(collateral, config)
+
+        # Apply maturity mismatch (no longer needs exposures)
         adjusted_collateral = self._haircut_calculator.apply_maturity_mismatch(
-            adjusted_collateral, exposures
+            adjusted_collateral
         )
 
         # Filter to only eligible financial collateral for EAD reduction
         # Real estate collateral affects risk weight (via LTV) but does NOT reduce EAD
-        # Check if is_eligible_financial_collateral column exists
         collateral_schema = adjusted_collateral.collect_schema()
         if "is_eligible_financial_collateral" in collateral_schema:
             eligible_collateral = adjusted_collateral.filter(
                 pl.col("is_eligible_financial_collateral") == True  # noqa: E712
             )
         else:
-            # If column doesn't exist, exclude real estate by type
             eligible_collateral = adjusted_collateral.filter(
                 ~pl.col("collateral_type").str.to_lowercase().is_in([
                     "real_estate", "property", "rre", "cre",
@@ -475,16 +586,15 @@ class CRMProcessor:
             )
 
         # Allocate collateral for SA EAD reduction
-        # Check if multi-level linking (beneficiary_type) is available
         eligible_schema = eligible_collateral.collect_schema()
         has_beneficiary_type = "beneficiary_type" in eligible_schema.names()
 
         if has_beneficiary_type:
             exposures = self._allocate_collateral_multi_level_for_ead(
-                exposures, eligible_collateral
+                exposures, eligible_collateral, facility_ead_totals, cp_ead_totals
             )
         else:
-            # Legacy: direct-only join
+            # Guard: direct-only allocation
             collateral_by_exposure = eligible_collateral.group_by(
                 "beneficiary_reference"
             ).agg([
@@ -504,8 +614,10 @@ class CRMProcessor:
             )
 
             exposures = exposures.with_columns([
-                pl.col("total_collateral_adjusted").fill_null(0.0).alias("collateral_adjusted_value"),
-                pl.col("total_collateral_market").fill_null(0.0).alias("collateral_market_value"),
+                pl.col("total_collateral_adjusted").fill_null(0.0)
+                .alias("collateral_adjusted_value"),
+                pl.col("total_collateral_market").fill_null(0.0)
+                .alias("collateral_market_value"),
             ])
 
         # Apply collateral effect based on approach
@@ -513,7 +625,8 @@ class CRMProcessor:
             # For SA: Reduce EAD by collateral (simple substitution)
             pl.when(pl.col("approach") == ApproachType.SA.value)
             .then(
-                (pl.col("ead_gross") - pl.col("collateral_adjusted_value")).clip(lower_bound=0)
+                (pl.col("ead_gross") - pl.col("collateral_adjusted_value"))
+                .clip(lower_bound=0)
             )
             # For IRB: Keep EAD, collateral affects LGD (handled below)
             .otherwise(pl.col("ead_gross"))
@@ -523,7 +636,7 @@ class CRMProcessor:
         # For F-IRB: Calculate effective LGD with collateral
         # A-IRB uses modelled LGD, so no adjustment needed
         exposures = self._calculate_irb_lgd_with_collateral(
-            exposures, adjusted_collateral, config
+            exposures, adjusted_collateral, config, facility_ead_totals, cp_ead_totals
         )
 
         return exposures
@@ -533,6 +646,8 @@ class CRMProcessor:
         exposures: pl.LazyFrame,
         collateral: pl.LazyFrame,
         config: CalculationConfig,
+        facility_ead_totals: pl.LazyFrame | None = None,
+        cp_ead_totals: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate effective LGD for F-IRB exposures with collateral.
@@ -554,6 +669,8 @@ class CRMProcessor:
             exposures: Exposures with ead_gross and lgd_pre_crm
             collateral: All collateral (not just financial) with haircut-adjusted values
             config: Calculation configuration
+            facility_ead_totals: Pre-computed facility EAD totals (optional)
+            cp_ead_totals: Pre-computed counterparty EAD totals (optional)
 
         Returns:
             Exposures with lgd_post_crm updated for F-IRB
@@ -645,7 +762,7 @@ class CRMProcessor:
         if has_beneficiary_type:
             # Multi-level collateral allocation
             exposures = self._allocate_collateral_multi_level_for_lgd(
-                exposures, collateral_with_lgd
+                exposures, collateral_with_lgd, facility_ead_totals, cp_ead_totals
             )
         else:
             # Legacy: direct linking only
@@ -826,14 +943,15 @@ class CRMProcessor:
         self,
         exposures: pl.LazyFrame,
         collateral: pl.LazyFrame,
+        facility_ead_totals: pl.LazyFrame | None = None,
+        cp_ead_totals: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """
         Allocate collateral from multiple linking levels for LGD calculation.
 
-        Supports three levels of collateral linking based on beneficiary_type:
-        1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
-        2. Facility: beneficiary_reference matches parent_facility_reference
-        3. Counterparty: beneficiary_reference matches counterparty_reference
+        Uses a single group_by on (_level, beneficiary_reference) to traverse
+        the heavy upstream collateral plan once, then splits the small aggregated
+        result for per-level joins.
 
         Tracks financial and non-financial collateral separately to apply:
         - Overcollateralisation ratios (CRR Art. 230 / CRE32.9-12)
@@ -843,43 +961,74 @@ class CRMProcessor:
             exposures: Exposures with ead_gross, parent_facility_reference, counterparty_reference
             collateral: Collateral with beneficiary_type, adjusted_value, effectively_secured,
                         collateral_lgd, is_financial_collateral_type
+            facility_ead_totals: Pre-computed facility EAD totals (optional)
+            cp_ead_totals: Pre-computed counterparty EAD totals (optional)
 
         Returns:
             Exposures with total_collateral_for_lgd and lgd_secured columns
         """
-        # Helper to aggregate collateral by level, split by financial/non-financial
-        def aggregate_by_level(coll: pl.LazyFrame, level: str) -> pl.LazyFrame:
-            """Aggregate collateral values and weighted LGD for a specific beneficiary level."""
-            level_filter = ["exposure", "loan"] if level == "direct" else [level]
-            is_fin = pl.col("is_financial_collateral_type")
-            return coll.filter(
-                pl.col("beneficiary_type").str.to_lowercase().is_in(level_filter)
-            ).group_by("beneficiary_reference").agg([
-                # Financial collateral
-                pl.col("effectively_secured").filter(is_fin).sum().alias(f"eff_fin_{level}"),
-                (pl.col("effectively_secured") * pl.col("collateral_lgd")).filter(is_fin).sum().alias(f"wlgd_fin_{level}"),
-                # Non-financial collateral
-                pl.col("effectively_secured").filter(~is_fin).sum().alias(f"eff_nf_{level}"),
-                (pl.col("effectively_secured") * pl.col("collateral_lgd")).filter(~is_fin).sum().alias(f"wlgd_nf_{level}"),
-                # Raw non-financial (for min threshold check)
-                pl.col("adjusted_value").filter(~is_fin).sum().alias(f"raw_nf_{level}"),
+        bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+        is_fin = pl.col("is_financial_collateral_type")
+
+        # Single group_by: classify level, then aggregate once
+        all_coll = collateral.with_columns(
+            pl.when(bt_lower.is_in(["exposure", "loan"]))
+            .then(pl.lit("direct"))
+            .when(bt_lower == "facility").then(pl.lit("facility"))
+            .when(bt_lower == "counterparty").then(pl.lit("counterparty"))
+            .otherwise(pl.lit("direct"))
+            .alias("_level"),
+        ).group_by(["_level", "beneficiary_reference"]).agg([
+            pl.col("effectively_secured").filter(is_fin).sum().alias("_eff_fin"),
+            (pl.col("effectively_secured") * pl.col("collateral_lgd"))
+            .filter(is_fin).sum().alias("_wlgd_fin"),
+            pl.col("effectively_secured").filter(~is_fin).sum().alias("_eff_nf"),
+            (pl.col("effectively_secured") * pl.col("collateral_lgd"))
+            .filter(~is_fin).sum().alias("_wlgd_nf"),
+            pl.col("adjusted_value").filter(~is_fin).sum().alias("_raw_nf"),
+        ])
+
+        # Split the small aggregated result and rename for per-level columns
+        _lgd_agg_cols = ["_eff_fin", "_wlgd_fin", "_eff_nf", "_wlgd_nf", "_raw_nf"]
+
+        coll_direct = (
+            all_coll.filter(pl.col("_level") == "direct")
+            .drop("_level")
+            .rename({c: f"{c}_direct" for c in _lgd_agg_cols})
+        )
+        coll_facility = (
+            all_coll.filter(pl.col("_level") == "facility")
+            .drop("_level")
+            .rename({c: f"{c}_facility" for c in _lgd_agg_cols})
+        )
+        coll_counterparty = (
+            all_coll.filter(pl.col("_level") == "counterparty")
+            .drop("_level")
+            .rename({c: f"{c}_counterparty" for c in _lgd_agg_cols})
+        )
+
+        # Use pre-computed EAD totals, or compute if not provided
+        if facility_ead_totals is not None:
+            facility_ead_totals = facility_ead_totals.select(
+                pl.col("parent_facility_reference"),
+                pl.col("_fac_ead_total").alias("facility_ead_total"),
+            )
+        else:
+            facility_ead_totals = exposures.filter(
+                pl.col("parent_facility_reference").is_not_null()
+            ).group_by("parent_facility_reference").agg([
+                pl.col("ead_gross").sum().alias("facility_ead_total"),
             ])
 
-        # Aggregate at each level
-        coll_direct = aggregate_by_level(collateral, "direct")
-        coll_facility = aggregate_by_level(collateral, "facility")
-        coll_counterparty = aggregate_by_level(collateral, "counterparty")
-
-        # Calculate EAD totals for pro-rata allocation
-        facility_ead_totals = exposures.filter(
-            pl.col("parent_facility_reference").is_not_null()
-        ).group_by("parent_facility_reference").agg([
-            pl.col("ead_gross").sum().alias("facility_ead_total"),
-        ])
-
-        counterparty_ead_totals = exposures.group_by("counterparty_reference").agg([
-            pl.col("ead_gross").sum().alias("cp_ead_total"),
-        ])
+        if cp_ead_totals is not None:
+            counterparty_ead_totals = cp_ead_totals.select(
+                pl.col("counterparty_reference"),
+                pl.col("_cp_ead_total").alias("cp_ead_total"),
+            )
+        else:
+            counterparty_ead_totals = exposures.group_by("counterparty_reference").agg([
+                pl.col("ead_gross").sum().alias("cp_ead_total"),
+            ])
 
         # Join direct-level collateral
         exposures = exposures.join(
@@ -916,8 +1065,8 @@ class CRMProcessor:
         # Fill nulls for all aggregate columns
         fill_cols = []
         for level in ["direct", "facility", "counterparty"]:
-            for prefix in ["eff_fin_", "wlgd_fin_", "eff_nf_", "wlgd_nf_", "raw_nf_"]:
-                fill_cols.append(pl.col(f"{prefix}{level}").fill_null(0.0))
+            for c in _lgd_agg_cols:
+                fill_cols.append(pl.col(f"{c}_{level}").fill_null(0.0))
         fill_cols.extend([
             pl.col("facility_ead_total").fill_null(0.0),
             pl.col("cp_ead_total").fill_null(0.0),
@@ -939,34 +1088,33 @@ class CRMProcessor:
         # Allocate financial collateral (no min threshold)
         exposures = exposures.with_columns([
             (
-                pl.col("eff_fin_direct") +
-                (pl.col("eff_fin_facility") * pl.col("facility_weight")) +
-                (pl.col("eff_fin_counterparty") * pl.col("cp_weight"))
+                pl.col("_eff_fin_direct")
+                + (pl.col("_eff_fin_facility") * pl.col("facility_weight"))
+                + (pl.col("_eff_fin_counterparty") * pl.col("cp_weight"))
             ).alias("eff_fin_allocated"),
             (
-                pl.col("wlgd_fin_direct") +
-                (pl.col("wlgd_fin_facility") * pl.col("facility_weight")) +
-                (pl.col("wlgd_fin_counterparty") * pl.col("cp_weight"))
+                pl.col("_wlgd_fin_direct")
+                + (pl.col("_wlgd_fin_facility") * pl.col("facility_weight"))
+                + (pl.col("_wlgd_fin_counterparty") * pl.col("cp_weight"))
             ).alias("wlgd_fin_allocated"),
         ])
 
         # Allocate non-financial collateral
         exposures = exposures.with_columns([
             (
-                pl.col("eff_nf_direct") +
-                (pl.col("eff_nf_facility") * pl.col("facility_weight")) +
-                (pl.col("eff_nf_counterparty") * pl.col("cp_weight"))
+                pl.col("_eff_nf_direct")
+                + (pl.col("_eff_nf_facility") * pl.col("facility_weight"))
+                + (pl.col("_eff_nf_counterparty") * pl.col("cp_weight"))
             ).alias("eff_nf_allocated"),
             (
-                pl.col("wlgd_nf_direct") +
-                (pl.col("wlgd_nf_facility") * pl.col("facility_weight")) +
-                (pl.col("wlgd_nf_counterparty") * pl.col("cp_weight"))
+                pl.col("_wlgd_nf_direct")
+                + (pl.col("_wlgd_nf_facility") * pl.col("facility_weight"))
+                + (pl.col("_wlgd_nf_counterparty") * pl.col("cp_weight"))
             ).alias("wlgd_nf_allocated"),
-            # Raw non-financial for min threshold check
             (
-                pl.col("raw_nf_direct") +
-                (pl.col("raw_nf_facility") * pl.col("facility_weight")) +
-                (pl.col("raw_nf_counterparty") * pl.col("cp_weight"))
+                pl.col("_raw_nf_direct")
+                + (pl.col("_raw_nf_facility") * pl.col("facility_weight"))
+                + (pl.col("_raw_nf_counterparty") * pl.col("cp_weight"))
             ).alias("raw_nf_allocated"),
         ])
 
@@ -1001,8 +1149,8 @@ class CRMProcessor:
         # Drop intermediate columns
         drop_cols = []
         for level in ["direct", "facility", "counterparty"]:
-            for prefix in ["eff_fin_", "wlgd_fin_", "eff_nf_", "wlgd_nf_", "raw_nf_"]:
-                drop_cols.append(f"{prefix}{level}")
+            for c in _lgd_agg_cols:
+                drop_cols.append(f"{c}_{level}")
         drop_cols.extend([
             "facility_ead_total", "cp_ead_total",
             "facility_weight", "cp_weight",
@@ -1019,24 +1167,26 @@ class CRMProcessor:
         self,
         exposures: pl.LazyFrame,
         eligible_collateral: pl.LazyFrame,
+        facility_ead_totals: pl.LazyFrame | None = None,
+        cp_ead_totals: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """
         Allocate eligible financial collateral from multiple linking levels for SA EAD reduction.
 
-        Supports three levels of collateral linking based on beneficiary_type:
-        1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
-        2. Facility: beneficiary_reference matches parent_facility_reference (pro-rata by EAD)
-        3. Counterparty: beneficiary_reference matches counterparty_reference (pro-rata by EAD)
+        Uses a single group_by on (_level, beneficiary_reference) to traverse
+        the heavy upstream collateral plan once, then splits the small aggregated
+        result for per-level joins.
 
         Args:
             exposures: Exposures with ead_gross, parent_facility_reference, counterparty_reference
             eligible_collateral: Eligible financial collateral with beneficiary_type,
                                  value_after_maturity_adj/value_after_haircut, market_value
+            facility_ead_totals: Pre-computed facility EAD totals (optional)
+            cp_ead_totals: Pre-computed counterparty EAD totals (optional)
 
         Returns:
             Exposures with collateral_adjusted_value and collateral_market_value columns
         """
-        # Value expression: prefer maturity-adjusted, fallback to haircut
         val_expr = pl.coalesce(
             pl.col("value_after_maturity_adj"),
             pl.col("value_after_haircut"),
@@ -1045,44 +1195,56 @@ class CRMProcessor:
         bt_lower = pl.col("beneficiary_type").str.to_lowercase()
         direct_types = ["exposure", "loan", "contingent"]
 
-        # --- Aggregate at each level ---
-        coll_direct = eligible_collateral.filter(
-            bt_lower.is_in(direct_types)
-        ).group_by("beneficiary_reference").agg([
-            val_expr.sum().alias("_coll_direct"),
-            pl.col("market_value").sum().alias("_mv_direct"),
+        # Single group_by: classify level, then aggregate once
+        all_coll = eligible_collateral.with_columns(
+            pl.when(bt_lower.is_in(direct_types)).then(pl.lit("direct"))
+            .when(bt_lower == "facility").then(pl.lit("facility"))
+            .when(bt_lower == "counterparty").then(pl.lit("counterparty"))
+            .otherwise(pl.lit("direct"))
+            .alias("_level"),
+        ).group_by(["_level", "beneficiary_reference"]).agg([
+            val_expr.sum().alias("_coll_val"),
+            pl.col("market_value").sum().alias("_mv_val"),
         ])
 
-        coll_facility = eligible_collateral.filter(
-            bt_lower == "facility"
-        ).group_by("beneficiary_reference").agg([
-            val_expr.sum().alias("_coll_facility"),
-            pl.col("market_value").sum().alias("_mv_facility"),
-        ])
-
-        coll_counterparty = eligible_collateral.filter(
-            bt_lower == "counterparty"
-        ).group_by("beneficiary_reference").agg([
-            val_expr.sum().alias("_coll_counterparty"),
-            pl.col("market_value").sum().alias("_mv_counterparty"),
-        ])
-
-        # --- EAD totals for pro-rata allocation ---
-        exp_schema = exposures.collect_schema()
-        if "parent_facility_reference" in exp_schema.names():
-            facility_ead_totals = exposures.filter(
-                pl.col("parent_facility_reference").is_not_null()
-            ).group_by("parent_facility_reference").agg(
-                pl.col("ead_gross").sum().alias("_fac_ead_total"),
-            )
-        else:
-            facility_ead_totals = pl.LazyFrame(
-                schema={"parent_facility_reference": pl.String, "_fac_ead_total": pl.Float64}
-            )
-
-        cp_ead_totals = exposures.group_by("counterparty_reference").agg(
-            pl.col("ead_gross").sum().alias("_cp_ead_total"),
+        # Split the small aggregated result
+        coll_direct = all_coll.filter(pl.col("_level") == "direct").select(
+            "beneficiary_reference",
+            pl.col("_coll_val").alias("_coll_direct"),
+            pl.col("_mv_val").alias("_mv_direct"),
         )
+        coll_facility = all_coll.filter(pl.col("_level") == "facility").select(
+            "beneficiary_reference",
+            pl.col("_coll_val").alias("_coll_facility"),
+            pl.col("_mv_val").alias("_mv_facility"),
+        )
+        coll_counterparty = all_coll.filter(pl.col("_level") == "counterparty").select(
+            "beneficiary_reference",
+            pl.col("_coll_val").alias("_coll_counterparty"),
+            pl.col("_mv_val").alias("_mv_counterparty"),
+        )
+
+        # --- EAD totals for pro-rata allocation (use pre-computed or compute) ---
+        exp_schema = exposures.collect_schema()
+        if facility_ead_totals is None:
+            if "parent_facility_reference" in exp_schema.names():
+                facility_ead_totals = exposures.filter(
+                    pl.col("parent_facility_reference").is_not_null()
+                ).group_by("parent_facility_reference").agg(
+                    pl.col("ead_gross").sum().alias("_fac_ead_total"),
+                )
+            else:
+                facility_ead_totals = pl.LazyFrame(
+                    schema={
+                        "parent_facility_reference": pl.String,
+                        "_fac_ead_total": pl.Float64,
+                    }
+                )
+
+        if cp_ead_totals is None:
+            cp_ead_totals = exposures.group_by("counterparty_reference").agg(
+                pl.col("ead_gross").sum().alias("_cp_ead_total"),
+            )
 
         # --- Join direct-level ---
         exposures = exposures.join(

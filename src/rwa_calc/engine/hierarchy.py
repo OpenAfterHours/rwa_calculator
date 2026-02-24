@@ -35,7 +35,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.engine.fx_converter import FXConverter
-from rwa_calc.engine.utils import is_valid_optional_data
+from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -528,7 +528,7 @@ class HierarchyResolver:
         """
         # Validate facilities have required columns
         required_cols = {"facility_reference", "limit"}
-        if not is_valid_optional_data(facilities, required_cols):
+        if not has_required_columns(facilities, required_cols):
             # No valid facilities, return empty LazyFrame with expected schema
             return pl.LazyFrame(schema={
                 "exposure_reference": pl.String,
@@ -554,7 +554,7 @@ class HierarchyResolver:
 
         # Check if facility_mappings is valid
         mapping_required_cols = {"parent_facility_reference", "child_reference"}
-        if not is_valid_optional_data(facility_mappings, mapping_required_cols):
+        if not has_required_columns(facility_mappings, mapping_required_cols):
             facility_mappings = pl.LazyFrame(schema={
                 "parent_facility_reference": pl.String,
                 "child_reference": pl.String,
@@ -1091,7 +1091,7 @@ class HierarchyResolver:
         # Check if collateral is valid for LTV processing
         # Requires beneficiary_reference and property_ltv columns
         required_cols = {"beneficiary_reference", "property_ltv"}
-        if not is_valid_optional_data(collateral, required_cols):
+        if not has_required_columns(collateral, required_cols):
             # No valid LTV data available, add null ltv column
             return exposures.with_columns([
                 pl.lit(None).cast(pl.Float64).alias("ltv"),
@@ -1225,7 +1225,7 @@ class HierarchyResolver:
         # Check if collateral is valid for property coverage calculation
         # Requires beneficiary_reference, collateral_type, market_value, and property_type
         required_cols = {"beneficiary_reference", "collateral_type", "market_value", "property_type"}
-        if not is_valid_optional_data(collateral, required_cols):
+        if not has_required_columns(collateral, required_cols):
             # No valid collateral data, return exposures with zero coverage
             return exposure_amounts.select([
                 pl.col("exposure_reference"),

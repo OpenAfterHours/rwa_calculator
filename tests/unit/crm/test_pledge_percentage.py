@@ -23,7 +23,12 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.engine.crm.processor import CRMProcessor
+from rwa_calc.engine.crm.processor import (
+    CRMProcessor,
+    _build_exposure_lookups,
+    _join_collateral_to_lookups,
+    _resolve_pledge_from_joined,
+)
 
 
 # =============================================================================
@@ -130,10 +135,14 @@ def _run_resolve(
     exposure_rows: list[dict],
     collateral_rows: list[dict],
 ) -> pl.DataFrame:
-    """Run _resolve_pledge_percentages and return resolved collateral."""
+    """Run pledge resolution via combined join + resolve and return collateral."""
     exposures = pl.LazyFrame(exposure_rows)
     collateral = pl.LazyFrame(collateral_rows)
-    resolved = processor._resolve_pledge_percentages(collateral, exposures)
+    direct_lookup, facility_lookup, cp_lookup = _build_exposure_lookups(exposures)
+    joined = _join_collateral_to_lookups(
+        collateral, direct_lookup, facility_lookup, cp_lookup
+    )
+    resolved = _resolve_pledge_from_joined(joined)
     return resolved.collect()
 
 
@@ -162,7 +171,11 @@ class TestNoPledgePercentageColumn:
         collateral = pl.LazyFrame(collateral_data)
         exposures_lf = pl.LazyFrame(exposures)
 
-        result = crm_processor._resolve_pledge_percentages(collateral, exposures_lf)
+        direct_lookup, facility_lookup, cp_lookup = _build_exposure_lookups(exposures_lf)
+        joined = _join_collateral_to_lookups(
+            collateral, direct_lookup, facility_lookup, cp_lookup
+        )
+        result = _resolve_pledge_from_joined(joined)
         df = result.collect()
 
         assert df["market_value"][0] == 500.0

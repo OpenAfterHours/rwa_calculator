@@ -157,11 +157,6 @@ class OutputAggregator:
             config=config,
         )
 
-        # Strategic collect: materialize combined results once to prevent
-        # re-execution when summaries are collected downstream.
-        # Follows same pattern as classifier.py:210 and processor.py:209.
-        combined = combined.collect().lazy()
-
         # Apply output floor (Basel 3.1 only)
         floor_impact = None
         if config.output_floor.enabled and irb_results is not None and sa_results is not None:

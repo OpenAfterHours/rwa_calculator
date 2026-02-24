@@ -79,9 +79,31 @@ class ResultFormatter:
         completed_at = datetime.now()
         errors = convert_errors(bundle.errors) if bundle.errors else []
 
-        # Compute summary lazily — only aggregates, no full materialization
-        summary, exposure_count = self._compute_summary_lazy(
-            results=bundle.results,
+        # Single materialisation — collect results + summaries together via CSE.
+        # This replaces the previous two-step flow (summary collect + sink) with
+        # one pl.collect_all() call so Polars deduplicates the shared pipeline root.
+        frames_to_collect: list[pl.LazyFrame] = [bundle.results]
+        if bundle.summary_by_class is not None:
+            frames_to_collect.append(bundle.summary_by_class)
+        if bundle.summary_by_approach is not None:
+            frames_to_collect.append(bundle.summary_by_approach)
+
+        collected = pl.collect_all(frames_to_collect)
+        results_df = collected[0]
+
+        # Extract summary DataFrames from collected results
+        idx = 1
+        summary_by_class_df = None
+        if bundle.summary_by_class is not None:
+            summary_by_class_df = collected[idx]
+            idx += 1
+        summary_by_approach_df = None
+        if bundle.summary_by_approach is not None:
+            summary_by_approach_df = collected[idx]
+
+        # Compute summary from already-collected DataFrame (zero cost)
+        summary, exposure_count = self._compute_summary_from_df(
+            results_df=results_df,
             floor_impact=bundle.floor_impact,
         )
 
@@ -97,11 +119,11 @@ class ResultFormatter:
             "exposure_count": summary.exposure_count,
         }
 
-        # Sink results + summaries to parquet via cache
+        # Write results + summaries to parquet via cache (no re-execution)
         cached = cache.sink_results(
-            results=bundle.results,
-            summary_by_class=bundle.summary_by_class,
-            summary_by_approach=bundle.summary_by_approach,
+            results=results_df,
+            summary_by_class=summary_by_class_df,
+            summary_by_approach=summary_by_approach_df,
             metadata=metadata,
         )
 
@@ -185,75 +207,27 @@ class ResultFormatter:
             performance=performance,
         )
 
-    def _compute_summary_lazy(
+    def _compute_summary_from_df(
         self,
-        results: pl.LazyFrame,
+        results_df: pl.DataFrame,
         floor_impact: pl.LazyFrame | None,
     ) -> tuple[SummaryStatistics, int]:
         """
-        Compute summary statistics via a single lazy aggregation.
-
-        Collects only a tiny 1-row aggregate — never materializes
-        the full results DataFrame.
+        Compute summary statistics from an already-collected DataFrame.
 
         Args:
-            results: Results LazyFrame
+            results_df: Collected results DataFrame
             floor_impact: Optional floor impact LazyFrame
 
         Returns:
             Tuple of (SummaryStatistics, exposure_count)
         """
-        schema = results.collect_schema()
+        schema = results_df.schema
         ead_col = self._find_column_in_schema(schema, ["ead_final", "ead", "exposure_at_default"])
         rwa_col = self._find_column_in_schema(schema, ["rwa_final", "rwa", "risk_weighted_assets"])
         has_approach = "approach_applied" in schema.names()
 
-        # Build aggregation expressions
-        agg_exprs: list[pl.Expr] = [pl.len().alias("count")]
-
-        if ead_col:
-            agg_exprs.append(pl.col(ead_col).sum().alias("total_ead"))
-        if rwa_col:
-            agg_exprs.append(pl.col(rwa_col).sum().alias("total_rwa"))
-
-        # Per-approach aggregations
-        sa_approaches = ["SA", "standardised"]
-        irb_approaches = ["foundation_irb", "advanced_irb", "FIRB"]
-        slotting_approaches = ["SLOTTING", "slotting"]
-
-        if has_approach:
-            if ead_col:
-                agg_exprs.append(
-                    pl.col(ead_col).filter(pl.col("approach_applied").is_in(sa_approaches)).sum().alias("ead_sa")
-                )
-                agg_exprs.append(
-                    pl.col(ead_col).filter(pl.col("approach_applied").is_in(irb_approaches)).sum().alias("ead_irb")
-                )
-                agg_exprs.append(
-                    pl.col(ead_col).filter(pl.col("approach_applied").is_in(slotting_approaches)).sum().alias("ead_slotting")
-                )
-            if rwa_col:
-                agg_exprs.append(
-                    pl.col(rwa_col).filter(pl.col("approach_applied").is_in(sa_approaches)).sum().alias("rwa_sa")
-                )
-                agg_exprs.append(
-                    pl.col(rwa_col).filter(pl.col("approach_applied").is_in(irb_approaches)).sum().alias("rwa_irb")
-                )
-                agg_exprs.append(
-                    pl.col(rwa_col).filter(pl.col("approach_applied").is_in(slotting_approaches)).sum().alias("rwa_slotting")
-                )
-
-        try:
-            agg_df = results.select(agg_exprs).collect()
-        except Exception:
-            return SummaryStatistics(
-                total_ead=Decimal("0"),
-                total_rwa=Decimal("0"),
-                exposure_count=0,
-                average_risk_weight=Decimal("0"),
-            ), 0
-
-        exposure_count = int(agg_df["count"][0])
+        exposure_count = len(results_df)
         if exposure_count == 0:
             return SummaryStatistics(
                 total_ead=Decimal("0"),
@@ -262,15 +236,20 @@ class ResultFormatter:
                 average_risk_weight=Decimal("0"),
             ), 0
 
-        total_ead = Decimal(str(agg_df["total_ead"][0] or 0)) if ead_col else Decimal("0")
-        total_rwa = Decimal(str(agg_df["total_rwa"][0] or 0)) if rwa_col else Decimal("0")
+        total_ead = Decimal(str(results_df[ead_col].sum() or 0)) if ead_col else Decimal("0")
+        total_rwa = Decimal(str(results_df[rwa_col].sum() or 0)) if rwa_col else Decimal("0")
         avg_rw = total_rwa / total_ead if total_ead > 0 else Decimal("0")
 
-        # Extract per-approach stats
-        def _get_decimal(col_name: str) -> Decimal:
-            if col_name in agg_df.columns:
-                return Decimal(str(agg_df[col_name][0] or 0))
-            return Decimal("0")
+        # Per-approach aggregations
+        sa_approaches = ["SA", "standardised"]
+        irb_approaches = ["foundation_irb", "advanced_irb", "FIRB"]
+        slotting_approaches = ["SLOTTING", "slotting"]
+
+        def _approach_sum(col: str | None, approaches: list[str]) -> Decimal:
+            if not col or not has_approach:
+                return Decimal("0")
+            mask = results_df["approach_applied"].is_in(approaches)
+            return Decimal(str(results_df.filter(mask)[col].sum() or 0))
 
         # Floor impact
         floor_applied = False
@@ -290,12 +269,12 @@ class ResultFormatter:
             total_rwa=total_rwa,
             exposure_count=exposure_count,
             average_risk_weight=avg_rw,
-            total_ead_sa=_get_decimal("ead_sa"),
-            total_ead_irb=_get_decimal("ead_irb"),
-            total_ead_slotting=_get_decimal("ead_slotting"),
-            total_rwa_sa=_get_decimal("rwa_sa"),
-            total_rwa_irb=_get_decimal("rwa_irb"),
-            total_rwa_slotting=_get_decimal("rwa_slotting"),
+            total_ead_sa=_approach_sum(ead_col, sa_approaches),
+            total_ead_irb=_approach_sum(ead_col, irb_approaches),
+            total_ead_slotting=_approach_sum(ead_col, slotting_approaches),
+            total_rwa_sa=_approach_sum(rwa_col, sa_approaches),
+            total_rwa_irb=_approach_sum(rwa_col, irb_approaches),
+            total_rwa_slotting=_approach_sum(rwa_col, slotting_approaches),
             floor_applied=floor_applied,
             floor_impact=floor_impact_value,
         )

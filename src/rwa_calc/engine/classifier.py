@@ -205,8 +205,9 @@ class ExposureClassifier:
         # This must happen before splitting so metadata flows through CRM processor
         classified = self._enrich_slotting_exposures(classified)
 
-        # Strategic collect to materialize all classification processing
-        # This breaks up the complex query plan for better downstream performance
+        # Materialise classification before the CRM stage.
+        # Without this, the combined classifier + CRM query plan is too deep
+        # for Polars' optimizer and causes segfaults on complex scenarios.
         classified = classified.collect().lazy()
 
         # Step 8: Split by approach

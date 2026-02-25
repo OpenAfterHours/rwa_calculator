@@ -47,6 +47,7 @@ from rwa_calc.engine.irb.formulas import (
     calculate_maturity_adjustment,
     calculate_expected_loss,
 )
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 # Import namespace to ensure it's registered
@@ -160,6 +161,84 @@ class IRBCalculator:
             calculation_audit=exposures.irb.build_audit(),
             errors=errors,
         )
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply IRB formulas to IRB rows on a unified frame.
+
+        Operates on the full unified frame (SA + IRB + slotting rows together).
+        The IRB namespace chain and supporting factors overwrite shared columns
+        (rwa, risk_weight, rwa_pre_factor, rwa_post_factor, lgd, pd, etc.) for
+        ALL rows. Pre-IRB values are saved and restored for non-IRB rows.
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with IRB columns populated for IRB rows
+        """
+        is_irb = (
+            (pl.col("approach") == ApproachType.FIRB.value)
+            | (pl.col("approach") == ApproachType.AIRB.value)
+        )
+
+        # Save all shared columns that the IRB chain + supporting factors overwrite.
+        # The namespace chain writes rwa, risk_weight, lgd, pd, maturity for ALL
+        # rows. _apply_supporting_factors writes rwa_pre_factor, rwa_post_factor,
+        # supporting_factor, supporting_factor_applied for ALL rows.
+        schema = exposures.collect_schema()
+        _SHARED_COLS = [
+            "rwa", "risk_weight", "rwa_pre_factor", "rwa_post_factor",
+            "supporting_factor", "supporting_factor_applied",
+            "lgd", "pd", "maturity",
+        ]
+        save_cols = []
+        saved = []
+        for col in _SHARED_COLS:
+            if col in schema.names():
+                save_cols.append(pl.col(col).alias(f"_pre_irb_{col}"))
+                saved.append(col)
+        if save_cols:
+            exposures = exposures.with_columns(save_cols)
+
+        # Apply IRB namespace chain — runs on all rows
+        exposures = (
+            exposures
+            .irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .irb.apply_all_formulas(config)
+            .irb.apply_guarantee_substitution(config)
+        )
+
+        # Apply supporting factors (CRR only — Art. 501)
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        # Guard: restore pre-IRB values for non-IRB rows
+        guard_cols = [
+            pl.when(is_irb)
+            .then(pl.col(col))
+            .otherwise(pl.col(f"_pre_irb_{col}"))
+            .alias(col)
+            for col in saved
+        ]
+        if guard_cols:
+            exposures = exposures.with_columns(guard_cols)
+
+        # Clean up temporary columns
+        drop_cols = [
+            f"_pre_irb_{col}" for col in saved
+            if f"_pre_irb_{col}" in exposures.collect_schema().names()
+        ]
+        if drop_cols:
+            exposures = exposures.drop(drop_cols)
+
+        return exposures
 
     def calculate_expected_loss(
         self,

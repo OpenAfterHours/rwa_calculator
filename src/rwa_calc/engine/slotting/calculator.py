@@ -49,7 +49,7 @@ from rwa_calc.data.tables.crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
 )
-from rwa_calc.domain.enums import SlottingCategory
+from rwa_calc.domain.enums import ApproachType, SlottingCategory
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -176,6 +176,89 @@ class SlottingCalculator:
             calculation_audit=audit,
             errors=errors,
         )
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply slotting weights to slotting rows on a unified frame.
+
+        Operates on the full unified frame (SA + IRB + slotting rows together).
+        Only modifies rwa/risk_weight for rows where approach == 'slotting'.
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with slotting columns populated for slotting rows
+        """
+        is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
+
+        # Prepare slotting-specific columns (defaults for missing columns)
+        exposures = self._prepare_columns(exposures, config)
+
+        # Save pre-slotting values
+        schema = exposures.collect_schema()
+        has_rwa = "rwa" in schema.names()
+        has_rw = "risk_weight" in schema.names()
+
+        if has_rwa:
+            exposures = exposures.with_columns(
+                pl.col("rwa").alias("_pre_slotting_rwa")
+            )
+        if has_rw:
+            exposures = exposures.with_columns(
+                pl.col("risk_weight").alias("_pre_slotting_rw")
+            )
+
+        # Apply slotting weights (writes risk_weight for ALL rows — will be guarded)
+        exposures = self._apply_slotting_weights(exposures, config)
+
+        # Calculate RWA for slotting rows
+        exposures = exposures.with_columns([
+            (pl.col("ead_final") * pl.col("risk_weight")).alias("_slotting_rwa"),
+        ])
+
+        # Guard: only overwrite rwa/risk_weight for slotting rows
+        if has_rw:
+            exposures = exposures.with_columns(
+                pl.when(is_slotting)
+                .then(pl.col("risk_weight"))
+                .otherwise(pl.col("_pre_slotting_rw"))
+                .alias("risk_weight")
+            )
+        if has_rwa:
+            exposures = exposures.with_columns(
+                pl.when(is_slotting)
+                .then(pl.col("_slotting_rwa"))
+                .otherwise(pl.col("_pre_slotting_rwa"))
+                .alias("rwa")
+            )
+
+        # Set rwa_final for slotting rows
+        exposures = exposures.with_columns(
+            pl.when(is_slotting)
+            .then(pl.col("_slotting_rwa"))
+            .otherwise(
+                pl.col("rwa_final") if "rwa_final" in exposures.collect_schema().names()
+                else pl.col("rwa") if "rwa" in exposures.collect_schema().names()
+                else pl.lit(None).cast(pl.Float64)
+            )
+            .alias("rwa_final")
+        )
+
+        # Clean up temporary columns
+        drop_cols = [
+            c for c in ["_pre_slotting_rwa", "_pre_slotting_rw", "_slotting_rwa"]
+            if c in exposures.collect_schema().names()
+        ]
+        if drop_cols:
+            exposures = exposures.drop(drop_cols)
+
+        return exposures
 
     def _prepare_columns(
         self,

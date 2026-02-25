@@ -83,6 +83,13 @@ class StubCRMProcessor:
 class StubSACalculator:
     """Stub implementation of SACalculatorProtocol."""
 
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        return exposures
+
     def calculate(
         self,
         data: CRMAdjustedBundle,
@@ -93,6 +100,13 @@ class StubSACalculator:
 
 class StubIRBCalculator:
     """Stub implementation of IRBCalculatorProtocol."""
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        return exposures
 
     def calculate(
         self,

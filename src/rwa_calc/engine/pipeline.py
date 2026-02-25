@@ -54,7 +54,6 @@ from rwa_calc.contracts.protocols import (
     EquityCalculatorProtocol,
     OutputAggregatorProtocol,
 )
-from rwa_calc.engine.utils import has_rows
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -201,8 +200,9 @@ class PipelineOrchestrator:
         """
         Execute pipeline with pre-loaded data.
 
-        Bypasses the loader stage, useful for testing or
-        when data is already available.
+        Uses single-pass architecture: all approach-specific calculators
+        run sequentially on one unified LazyFrame, avoiding plan tree
+        duplication and mid-pipeline materialisation.
 
         Args:
             data: Pre-loaded raw data bundle
@@ -230,25 +230,13 @@ class PipelineOrchestrator:
         if classified is None:
             return self._create_error_result()
 
-        # Stage 4: Apply CRM
-        crm_adjusted = self._run_crm_processor(classified, config)
+        # Stage 4: Apply CRM (unified — no fan-out split)
+        crm_adjusted = self._run_crm_processor_unified(classified, config)
         if crm_adjusted is None:
             return self._create_error_result()
 
-        # Stage 5-8: Run calculators in parallel (conceptually)
-        sa_bundle = self._run_sa_calculator(crm_adjusted, config)
-        irb_bundle = self._run_irb_calculator(crm_adjusted, config)
-        slotting_bundle = self._run_slotting_calculator(crm_adjusted, config)
-        equity_bundle = self._run_equity_calculator(crm_adjusted, config)
-
-        # Stage 9: Aggregate results
-        result = self._run_aggregator(
-            sa_bundle,
-            irb_bundle,
-            slotting_bundle,
-            equity_bundle,
-            config,
-        )
+        # Stages 5-8: Single-pass calculation and aggregation
+        result = self._run_single_pass(crm_adjusted, config)
 
         # Add pipeline errors to result
         if self._errors:
@@ -410,13 +398,6 @@ class PipelineOrchestrator:
     ) -> SAResultBundle | None:
         """Run SA calculation stage."""
         try:
-            if not has_rows(data.sa_exposures):
-                return SAResultBundle(
-                    results=self._create_empty_sa_frame(),
-                    calculation_audit=self._create_empty_sa_frame(),
-                    errors=[],
-                )
-
             result = self._sa_calculator.get_sa_result_bundle(data, config)
             # Accumulate SA errors
             if result.errors:
@@ -433,11 +414,7 @@ class PipelineOrchestrator:
                 error_type="sa_calculation_error",
                 message=str(e),
             ))
-            return SAResultBundle(
-                results=self._create_empty_sa_frame(),
-                calculation_audit=self._create_empty_sa_frame(),
-                errors=[],
-            )
+            return None
 
     def _run_irb_calculator(
         self,
@@ -446,14 +423,6 @@ class PipelineOrchestrator:
     ) -> IRBResultBundle | None:
         """Run IRB calculation stage."""
         try:
-            if not has_rows(data.irb_exposures):
-                return IRBResultBundle(
-                    results=self._create_empty_irb_frame(),
-                    expected_loss=self._create_empty_irb_frame(),
-                    calculation_audit=self._create_empty_irb_frame(),
-                    errors=[],
-                )
-
             result = self._irb_calculator.get_irb_result_bundle(data, config)
             # Accumulate IRB errors
             if result.errors:
@@ -470,12 +439,7 @@ class PipelineOrchestrator:
                 error_type="irb_calculation_error",
                 message=str(e),
             ))
-            return IRBResultBundle(
-                results=self._create_empty_irb_frame(),
-                expected_loss=self._create_empty_irb_frame(),
-                calculation_audit=self._create_empty_irb_frame(),
-                errors=[],
-            )
+            return None
 
     def _run_slotting_calculator(
         self,
@@ -484,15 +448,6 @@ class PipelineOrchestrator:
     ) -> SlottingResultBundle | None:
         """Run Slotting calculation stage."""
         try:
-            if data.slotting_exposures is None or not has_rows(
-                data.slotting_exposures
-            ):
-                return SlottingResultBundle(
-                    results=self._create_empty_slotting_frame(),
-                    calculation_audit=self._create_empty_slotting_frame(),
-                    errors=[],
-                )
-
             result = self._slotting_calculator.get_slotting_result_bundle(data, config)
             # Accumulate Slotting errors
             if result.errors:
@@ -509,11 +464,7 @@ class PipelineOrchestrator:
                 error_type="slotting_calculation_error",
                 message=str(e),
             ))
-            return SlottingResultBundle(
-                results=self._create_empty_slotting_frame(),
-                calculation_audit=self._create_empty_slotting_frame(),
-                errors=[],
-            )
+            return None
 
     def _run_equity_calculator(
         self,
@@ -522,16 +473,6 @@ class PipelineOrchestrator:
     ) -> EquityResultBundle | None:
         """Run Equity calculation stage."""
         try:
-            if data.equity_exposures is None or not has_rows(
-                data.equity_exposures
-            ):
-                return EquityResultBundle(
-                    results=self._create_empty_equity_frame(),
-                    calculation_audit=self._create_empty_equity_frame(),
-                    approach="sa",
-                    errors=[],
-                )
-
             result = self._equity_calculator.get_equity_result_bundle(data, config)
             # Accumulate Equity errors
             if result.errors:
@@ -548,12 +489,7 @@ class PipelineOrchestrator:
                 error_type="equity_calculation_error",
                 message=str(e),
             ))
-            return EquityResultBundle(
-                results=self._create_empty_equity_frame(),
-                calculation_audit=self._create_empty_equity_frame(),
-                approach="sa",
-                errors=[],
-            )
+            return None
 
     def _run_aggregator(
         self,
@@ -593,6 +529,198 @@ class PipelineOrchestrator:
             return self._create_error_result()
 
     # =========================================================================
+    # Private Methods - Single-Pass Pipeline
+    # =========================================================================
+
+    def _run_crm_processor_unified(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle | None:
+        """Run CRM processing without fan-out split (single-pass mode)."""
+        try:
+            result = self._crm_processor.get_crm_unified_bundle(data, config)
+            if result.crm_errors:
+                for error in result.crm_errors:
+                    self._errors.append(PipelineError(
+                        stage="crm_processor",
+                        error_type=getattr(error, "error_type", "unknown"),
+                        message=getattr(error, "message", str(error)),
+                        context=getattr(error, "context", {}),
+                    ))
+            return result
+        except Exception as e:
+            self._errors.append(PipelineError(
+                stage="crm_processor",
+                error_type="crm_error",
+                message=str(e),
+            ))
+            return None
+
+    def _run_single_pass(
+        self,
+        crm_adjusted: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> AggregatedResultBundle:
+        """
+        Single-pass calculation on unified frame.
+
+        Runs all approach-specific calculators sequentially on the same
+        unified LazyFrame, avoiding plan tree duplication and mid-pipeline
+        materialisation.
+        """
+        try:
+            exposures = crm_adjusted.exposures
+
+            # Apply SA calculations (risk weights, guarantee sub, RWA, factors)
+            exposures = self._sa_calculator.calculate_unified(exposures, config)
+
+            # Apply IRB calculations (PD/LGD floors, correlation, K, MA, RWA, EL)
+            exposures = self._irb_calculator.calculate_unified(exposures, config)
+
+            # Apply slotting calculations (category -> RW -> RWA)
+            exposures = self._slotting_calculator.calculate_unified(exposures, config)
+
+            # Standardize output columns
+            schema = exposures.collect_schema()
+            standardize_cols = []
+
+            # approach_applied: map from approach
+            if "approach" in schema.names():
+                standardize_cols.append(
+                    pl.col("approach").alias("approach_applied")
+                )
+
+            # rwa_final: pick the right rwa
+            if "rwa_post_factor" in schema.names():
+                standardize_cols.append(
+                    pl.coalesce(
+                        pl.col("rwa_post_factor"),
+                        pl.col("rwa") if "rwa" in schema.names() else pl.lit(0.0),
+                    ).alias("rwa_final")
+                )
+            elif "rwa" in schema.names():
+                standardize_cols.append(
+                    pl.col("rwa").alias("rwa_final")
+                )
+
+            if standardize_cols:
+                exposures = exposures.with_columns(standardize_cols)
+
+            # Equity — separate path (not in unified frame)
+            equity_bundle = self._run_equity_calculator(crm_adjusted, config)
+
+            # Aggregate via single-pass aggregator
+            return self._aggregate_single_pass(
+                exposures, equity_bundle, config
+            )
+        except Exception as e:
+            self._errors.append(PipelineError(
+                stage="single_pass",
+                error_type="single_pass_error",
+                message=str(e),
+            ))
+            return self._create_error_result()
+
+    def _aggregate_single_pass(
+        self,
+        exposures: pl.LazyFrame,
+        equity_bundle: EquityResultBundle | None,
+        config: CalculationConfig,
+    ) -> AggregatedResultBundle:
+        """Aggregate results from single-pass unified frame."""
+        from rwa_calc.domain.enums import ApproachType
+
+        try:
+            # Concat equity if present (only separate frame)
+            if equity_bundle and equity_bundle.results is not None:
+                equity_prepared = equity_bundle.results.with_columns([
+                    pl.lit("EQUITY").alias("approach_applied"),
+                    pl.col(
+                        "rwa" if "rwa" in equity_bundle.results.collect_schema().names()
+                        else "rwa_final"
+                    ).alias("rwa_final"),
+                ])
+                schema = equity_prepared.collect_schema()
+                if "exposure_class" not in schema.names():
+                    equity_prepared = equity_prepared.with_columns(
+                        pl.lit("equity").alias("exposure_class")
+                    )
+                combined = pl.concat(
+                    [exposures, equity_prepared], how="diagonal_relaxed"
+                )
+            else:
+                combined = exposures
+
+            # Filter per-approach results from unified frame
+            sa_results = combined.filter(
+                pl.col("approach") == ApproachType.SA.value
+            )
+            irb_results = combined.filter(
+                (pl.col("approach") == ApproachType.FIRB.value)
+                | (pl.col("approach") == ApproachType.AIRB.value)
+            )
+            slotting_results = combined.filter(
+                pl.col("approach") == ApproachType.SLOTTING.value
+            )
+            equity_results = (
+                equity_bundle.results if equity_bundle and equity_bundle.results is not None
+                else None
+            )
+
+            # Generate summaries using the aggregator's methods
+            pre_crm_summary = self._aggregator._generate_pre_crm_summary(combined)
+            post_crm_detailed = self._aggregator._generate_post_crm_detailed(combined)
+            post_crm_summary = self._aggregator._generate_post_crm_summary(
+                post_crm_detailed
+            )
+            summary_by_class = self._aggregator._generate_summary_by_class(
+                post_crm_detailed
+            )
+            summary_by_approach = self._aggregator._generate_summary_by_approach(
+                post_crm_detailed
+            )
+
+            # Apply output floor if enabled
+            floor_impact = None
+            if config.output_floor.enabled:
+                combined, floor_impact = self._aggregator._apply_floor_with_impact(
+                    combined,
+                    combined,  # SA-equivalent RW already joined by SA calculator
+                    config,
+                )
+
+            # Supporting factor impact
+            supporting_factor_impact = None
+            if config.supporting_factors.enabled:
+                supporting_factor_impact = (
+                    self._aggregator._generate_supporting_factor_impact(combined)
+                )
+
+            return AggregatedResultBundle(
+                results=combined,
+                sa_results=sa_results,
+                irb_results=irb_results,
+                slotting_results=slotting_results,
+                equity_results=equity_results,
+                floor_impact=floor_impact,
+                supporting_factor_impact=supporting_factor_impact,
+                summary_by_class=summary_by_class,
+                summary_by_approach=summary_by_approach,
+                pre_crm_summary=pre_crm_summary,
+                post_crm_detailed=post_crm_detailed,
+                post_crm_summary=post_crm_summary,
+                errors=[],
+            )
+        except Exception as e:
+            self._errors.append(PipelineError(
+                stage="aggregator",
+                error_type="aggregation_error",
+                message=str(e),
+            ))
+            return self._create_error_result()
+
+    # =========================================================================
     # Private Methods - Utilities
     # =========================================================================
 
@@ -609,52 +737,6 @@ class PipelineOrchestrator:
             }),
             errors=[self._convert_pipeline_error(e) for e in self._errors],
         )
-
-    def _create_empty_sa_frame(self) -> pl.LazyFrame:
-        """Create empty SA results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "exposure_class": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa_pre_factor": pl.Series([], dtype=pl.Float64),
-            "supporting_factor": pl.Series([], dtype=pl.Float64),
-            "rwa_post_factor": pl.Series([], dtype=pl.Float64),
-        })
-
-    def _create_empty_irb_frame(self) -> pl.LazyFrame:
-        """Create empty IRB results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "exposure_class": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "pd_floored": pl.Series([], dtype=pl.Float64),
-            "lgd_floored": pl.Series([], dtype=pl.Float64),
-            "correlation": pl.Series([], dtype=pl.Float64),
-            "k": pl.Series([], dtype=pl.Float64),
-            "rwa": pl.Series([], dtype=pl.Float64),
-        })
-
-    def _create_empty_slotting_frame(self) -> pl.LazyFrame:
-        """Create empty Slotting results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "slotting_category": pl.Series([], dtype=pl.String),
-            "is_hvcre": pl.Series([], dtype=pl.Boolean),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa": pl.Series([], dtype=pl.Float64),
-        })
-
-    def _create_empty_equity_frame(self) -> pl.LazyFrame:
-        """Create empty Equity results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "equity_type": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa": pl.Series([], dtype=pl.Float64),
-        })
 
     def _convert_pipeline_error(self, error: PipelineError) -> object:
         """Convert PipelineError to standard error format."""

@@ -394,6 +394,70 @@ class CRMProcessor:
             crm_errors=errors,
         )
 
+    def get_crm_unified_bundle(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        """
+        Apply CRM without fan-out split. No mid-pipeline collect.
+
+        Same CRM processing as get_crm_adjusted_bundle() but skips the
+        collect().lazy() materialisation barrier and approach split. Returns
+        the unified LazyFrame for single-pass calculator processing.
+
+        Args:
+            data: Classified exposures from classifier
+            config: Calculation configuration
+
+        Returns:
+            CRMAdjustedBundle with unified exposures (split fields empty)
+        """
+        errors: list[CRMError] = []
+
+        exposures = data.all_exposures
+
+        # Steps 1-7: Same CRM processing as get_crm_adjusted_bundle
+        if has_required_columns(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
+            exposures = self.resolve_provisions(exposures, data.provisions, config)
+
+        exposures = self._apply_ccf(exposures, config)
+        exposures = self._initialize_ead(exposures)
+
+        if has_required_columns(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = self.apply_collateral(exposures, data.collateral, config)
+        else:
+            exposures = self._apply_firb_supervisory_lgd_no_collateral(exposures)
+
+        if (
+            has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
+            and data.counterparty_lookup is not None
+        ):
+            exposures = self.apply_guarantees(
+                exposures,
+                data.guarantees,
+                data.counterparty_lookup.counterparties,
+                config,
+                data.counterparty_lookup.rating_inheritance,
+            )
+
+        exposures = self._finalize_ead(exposures)
+        exposures = self._add_crm_audit(exposures)
+
+        # NO collect().lazy() — unified frame stays lazy
+        # NO approach split — single-pass calculators handle routing
+
+        return CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=pl.LazyFrame(),
+            irb_exposures=pl.LazyFrame(),
+            slotting_exposures=None,
+            equity_exposures=data.equity_exposures,
+            crm_audit=None,  # Audit computed at collect time if needed
+            collateral_allocation=None,
+            crm_errors=errors,
+        )
+
     def _apply_ccf(
         self,
         exposures: pl.LazyFrame,

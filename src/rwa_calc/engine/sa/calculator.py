@@ -150,6 +150,55 @@ class SACalculator:
             errors=errors,
         )
 
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply SA risk weights to SA rows on a unified frame.
+
+        Operates on the full unified frame (SA + IRB + slotting rows together).
+        Only modifies columns for rows where approach == 'standardised'.
+
+        Steps:
+        1. Join risk weight table (unconditional — SA-equivalent RW for output floor)
+        2. Apply SA-specific RW overrides (mortgage LTV, retail fixed, etc.)
+        3. Apply SA guarantee substitution
+        4. Calculate RWA = EAD x RW (SA rows only)
+        5. Apply supporting factors (SA rows only)
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with SA columns populated for SA rows
+        """
+        is_sa = pl.col("approach") == ApproachType.SA.value
+
+        # Step 1-2: Apply risk weights (runs unconditionally — also provides
+        # SA-equivalent RW for IRB output floor)
+        exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
+        exposures = self._apply_guarantee_substitution(exposures, config)
+
+        # Step 4: Calculate pre-factor RWA (SA rows only)
+        schema = exposures.collect_schema()
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        exposures = exposures.with_columns([
+            pl.when(is_sa)
+            .then(pl.col(ead_col) * pl.col("risk_weight"))
+            .otherwise(pl.col("rwa_pre_factor") if "rwa_pre_factor" in schema.names() else pl.lit(None).cast(pl.Float64))
+            .alias("rwa_pre_factor"),
+        ])
+
+        # Step 5: Apply supporting factors (SA rows only)
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        return exposures
+
     def _apply_risk_weights(
         self,
         exposures: pl.LazyFrame,

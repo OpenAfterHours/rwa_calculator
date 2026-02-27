@@ -90,6 +90,13 @@ class StubSACalculator:
     ) -> pl.LazyFrame:
         return exposures
 
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        return exposures
+
     def calculate(
         self,
         data: CRMAdjustedBundle,
@@ -102,6 +109,13 @@ class StubIRBCalculator:
     """Stub implementation of IRBCalculatorProtocol."""
 
     def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        return exposures
+
+    def calculate_branch(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,

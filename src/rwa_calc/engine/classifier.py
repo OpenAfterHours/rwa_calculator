@@ -249,8 +249,10 @@ class ExposureClassifier:
         """
         Compute all flags that depend only on raw input columns.
 
-        Single .with_columns() replacing 7 old methods. Every expression here
-        reads only from the original joined columns, not from each other.
+        Uses two .with_columns() batches: the first pre-computes shared
+        intermediates (uppercase strings, entity-type mapping) that the
+        second batch references, avoiding redundant str.to_uppercase()
+        and replace_strict() calls.
 
         Sets: exposure_class_sa, exposure_class_irb, exposure_class, is_mortgage,
               is_defaulted, exposure_class_for_sa, is_infrastructure,
@@ -259,47 +261,51 @@ class ExposureClassifier:
         """
         max_retail_exposure = float(config.retail_thresholds.max_exposure_threshold)
 
-        return exposures.with_columns([
-            # --- Exposure class mappings (from _classify_exposure_class) ---
+        # Batch 1: Pre-compute shared intermediates to avoid redundant work.
+        # - _sa_class: entity type → SA class mapping (used 3× below)
+        # - _irb_class: entity type → IRB class mapping
+        # - _pt_upper: product_type uppercased (used 6× in is_mortgage, infrastructure, sl_type)
+        # - _cp_ref_upper: counterparty_reference uppercased (used 11× in slotting)
+        exposures = exposures.with_columns([
             pl.col("cp_entity_type")
             .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value)
-            .alias("exposure_class_sa"),
-
+            .alias("_sa_class"),
             pl.col("cp_entity_type")
             .replace_strict(ENTITY_TYPE_TO_IRB_CLASS, default=ExposureClass.OTHER.value)
-            .alias("exposure_class_irb"),
+            .alias("_irb_class"),
+            pl.col("product_type").str.to_uppercase().alias("_pt_upper"),
+            pl.col("counterparty_reference").str.to_uppercase().alias("_cp_ref_upper"),
+        ])
 
-            pl.col("cp_entity_type")
-            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value)
-            .alias("exposure_class"),
+        # Batch 2: Derive all flags from pre-computed intermediates.
+        return exposures.with_columns([
+            # --- Exposure class mappings (reuse _sa_class / _irb_class) ---
+            pl.col("_sa_class").alias("exposure_class_sa"),
+            pl.col("_irb_class").alias("exposure_class_irb"),
+            pl.col("_sa_class").alias("exposure_class"),
 
-            # --- Mortgage flag (from _apply_retail_classification) ---
+            # --- Mortgage flag ---
             self._build_is_mortgage_expr(schema_names),
 
-            # --- Default flags (from _identify_defaults) ---
+            # --- Default flags ---
             (pl.col("cp_default_status") == True)  # noqa: E712
             .alias("is_defaulted"),
 
             pl.when(pl.col("cp_default_status") == True)  # noqa: E712
             .then(pl.lit(ExposureClass.DEFAULTED.value))
-            .otherwise(
-                pl.col("cp_entity_type")
-                .replace_strict(
-                    ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value,
-                )
-            )
+            .otherwise(pl.col("_sa_class"))
             .alias("exposure_class_for_sa"),
 
-            # --- Infrastructure flag (from _apply_infrastructure_classification) ---
-            pl.col("product_type").str.to_uppercase().str.contains("INFRASTRUCTURE")
+            # --- Infrastructure flag (uses _pt_upper) ---
+            pl.col("_pt_upper").str.contains("INFRASTRUCTURE")
             .alias("is_infrastructure"),
 
-            # --- Financial sector entity flag (from _apply_fi_scalar_classification) ---
+            # --- Financial sector entity flag ---
             pl.col("cp_entity_type")
             .is_in(FINANCIAL_SECTOR_ENTITY_TYPES)
             .alias("is_financial_sector_entity"),
 
-            # --- Retail threshold check (from _apply_retail_classification) ---
+            # --- Retail threshold check ---
             pl.when(
                 pl.col("lending_group_adjusted_exposure") > max_retail_exposure
             ).then(pl.lit(False))
@@ -315,10 +321,10 @@ class ExposureClassifier:
             .otherwise(pl.lit(False))
             .alias("retail_threshold_exclusion_applied"),
 
-            # --- Slotting metadata (from _enrich_slotting_exposures) ---
+            # --- Slotting metadata (uses _cp_ref_upper, _pt_upper) ---
             self._build_slotting_category_expr(),
             self._build_sl_type_expr(schema_names),
-        ])
+        ]).drop(["_sa_class", "_irb_class", "_pt_upper", "_cp_ref_upper"])
 
     # =========================================================================
     # Phase 3: SME + retail classification (1 .with_columns — 5 expressions)
@@ -499,7 +505,7 @@ class ExposureClassifier:
         and the classification audit string. Permission checks are inlined
         as pl.lit(bool) to avoid intermediate columns.
 
-        Sets: approach, lgd (cleared for FIRB), classification_reason
+        Sets: approach, lgd (cleared for FIRB)
         """
         # Pre-compute all permission booleans (Python-side, not Polars)
         airb_corporate = config.irb_permissions.is_permitted(
@@ -651,34 +657,9 @@ class ExposureClassifier:
             .alias("lgd")
         )
 
-        # --- Classification audit string ---
-        audit_expr = pl.concat_str([
-            pl.lit("entity_type="),
-            pl.col("cp_entity_type").fill_null("unknown"),
-            pl.lit("; exp_class_sa="),
-            pl.col("exposure_class_sa").fill_null("unknown"),
-            pl.lit("; exp_class_irb="),
-            pl.col("exposure_class_irb").fill_null("unknown"),
-            pl.lit("; is_sme="),
-            pl.col("is_sme").cast(pl.String),
-            pl.lit("; is_mortgage="),
-            pl.col("is_mortgage").cast(pl.String),
-            pl.lit("; is_defaulted="),
-            pl.col("is_defaulted").cast(pl.String),
-            pl.lit("; is_infrastructure="),
-            pl.col("is_infrastructure").cast(pl.String),
-            pl.lit("; requires_fi_scalar="),
-            pl.col("requires_fi_scalar").cast(pl.String),
-            pl.lit("; qualifies_as_retail="),
-            pl.col("qualifies_as_retail").cast(pl.String),
-            pl.lit("; reclassified_to_retail="),
-            pl.col("reclassified_to_retail").cast(pl.String),
-        ]).alias("classification_reason")
-
         return exposures.with_columns([
             approach_expr,
             lgd_expr,
-            audit_expr,
         ])
 
     # =========================================================================
@@ -687,10 +668,13 @@ class ExposureClassifier:
 
     @staticmethod
     def _build_is_mortgage_expr(schema_names: set[str]) -> pl.Expr:
-        """Build is_mortgage expression, conditional on available columns."""
+        """Build is_mortgage expression, conditional on available columns.
+
+        Uses _pt_upper (pre-computed uppercase product_type) when available.
+        """
         base = (
-            pl.col("product_type").str.to_uppercase().str.contains("MORTGAGE")
-            | pl.col("product_type").str.to_uppercase().str.contains("HOME_LOAN")
+            pl.col("_pt_upper").str.contains("MORTGAGE")
+            | pl.col("_pt_upper").str.contains("HOME_LOAN")
         )
         if (
             "property_collateral_value" in schema_names
@@ -709,48 +693,32 @@ class ExposureClassifier:
 
     @staticmethod
     def _build_slotting_category_expr() -> pl.Expr:
-        """Build slotting_category expression from counterparty_reference patterns."""
+        """Build slotting_category expression using _cp_ref_upper (pre-computed)."""
         return (
-            pl.when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_STRONG")
-            ).then(pl.lit("strong"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_GOOD")
-            ).then(pl.lit("good"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_WEAK")
-            ).then(pl.lit("weak"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_DEFAULT")
-            ).then(pl.lit("default"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_SATISFACTORY")
-            ).then(pl.lit("satisfactory"))
+            pl.when(pl.col("_cp_ref_upper").str.contains("_STRONG"))
+            .then(pl.lit("strong"))
+            .when(pl.col("_cp_ref_upper").str.contains("_GOOD"))
+            .then(pl.lit("good"))
+            .when(pl.col("_cp_ref_upper").str.contains("_WEAK"))
+            .then(pl.lit("weak"))
+            .when(pl.col("_cp_ref_upper").str.contains("_DEFAULT"))
+            .then(pl.lit("default"))
+            .when(pl.col("_cp_ref_upper").str.contains("_SATISFACTORY"))
+            .then(pl.lit("satisfactory"))
             .otherwise(pl.lit("satisfactory"))
             .alias("slotting_category")
         )
 
     @staticmethod
     def _build_sl_type_expr(schema_names: set[str]) -> pl.Expr:
-        """Build sl_type expression from product_type and counterparty_reference."""
+        """Build sl_type expression using _pt_upper/_cp_ref_upper (pre-computed)."""
         cp_ref_chain = (
-            pl.when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_PF_")
-            ).then(pl.lit("project_finance"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_IPRE_")
-            ).then(pl.lit("ipre"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_HVCRE_")
-            ).then(pl.lit("hvcre"))
+            pl.when(pl.col("_cp_ref_upper").str.contains("_PF_"))
+            .then(pl.lit("project_finance"))
+            .when(pl.col("_cp_ref_upper").str.contains("_IPRE_"))
+            .then(pl.lit("ipre"))
+            .when(pl.col("_cp_ref_upper").str.contains("_HVCRE_"))
+            .then(pl.lit("hvcre"))
             .otherwise(pl.lit("project_finance"))
         )
 
@@ -758,31 +726,22 @@ class ExposureClassifier:
             return cp_ref_chain.alias("sl_type")
 
         return (
-            pl.when(
-                pl.col("product_type").str.to_uppercase().str.contains("PROJECT")
-            ).then(pl.lit("project_finance"))
-            .when(
-                pl.col("product_type").str.to_uppercase().str.contains("OBJECT")
-            ).then(pl.lit("object_finance"))
-            .when(
-                pl.col("product_type").str.to_uppercase().str.contains("COMMOD")
-            ).then(pl.lit("commodities_finance"))
-            .when(pl.col("product_type").str.to_uppercase() == "IPRE")
+            pl.when(pl.col("_pt_upper").str.contains("PROJECT"))
+            .then(pl.lit("project_finance"))
+            .when(pl.col("_pt_upper").str.contains("OBJECT"))
+            .then(pl.lit("object_finance"))
+            .when(pl.col("_pt_upper").str.contains("COMMOD"))
+            .then(pl.lit("commodities_finance"))
+            .when(pl.col("_pt_upper") == "IPRE")
             .then(pl.lit("ipre"))
-            .when(pl.col("product_type").str.to_uppercase() == "HVCRE")
+            .when(pl.col("_pt_upper") == "HVCRE")
             .then(pl.lit("hvcre"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_PF_")
-            ).then(pl.lit("project_finance"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_IPRE_")
-            ).then(pl.lit("ipre"))
-            .when(
-                pl.col("counterparty_reference").str.to_uppercase()
-                .str.contains("_HVCRE_")
-            ).then(pl.lit("hvcre"))
+            .when(pl.col("_cp_ref_upper").str.contains("_PF_"))
+            .then(pl.lit("project_finance"))
+            .when(pl.col("_cp_ref_upper").str.contains("_IPRE_"))
+            .then(pl.lit("ipre"))
+            .when(pl.col("_cp_ref_upper").str.contains("_HVCRE_"))
+            .then(pl.lit("hvcre"))
             .otherwise(pl.lit("project_finance"))
             .alias("sl_type")
         )
@@ -851,7 +810,11 @@ class ExposureClassifier:
         self,
         exposures: pl.LazyFrame,
     ) -> pl.LazyFrame:
-        """Build classification audit trail."""
+        """Build classification audit trail.
+
+        Computes classification_reason here (deferred from main pipeline)
+        since it's only needed for audit, not by downstream CRM/calculators.
+        """
         return exposures.select([
             pl.col("exposure_reference"),
             pl.col("counterparty_reference"),
@@ -871,7 +834,28 @@ class ExposureClassifier:
             pl.col("residential_collateral_value"),
             pl.col("lending_group_adjusted_exposure"),
             pl.col("reclassified_to_retail"),
-            pl.col("classification_reason"),
+            pl.concat_str([
+                pl.lit("entity_type="),
+                pl.col("cp_entity_type").fill_null("unknown"),
+                pl.lit("; exp_class_sa="),
+                pl.col("exposure_class_sa").fill_null("unknown"),
+                pl.lit("; exp_class_irb="),
+                pl.col("exposure_class_irb").fill_null("unknown"),
+                pl.lit("; is_sme="),
+                pl.col("is_sme").cast(pl.String),
+                pl.lit("; is_mortgage="),
+                pl.col("is_mortgage").cast(pl.String),
+                pl.lit("; is_defaulted="),
+                pl.col("is_defaulted").cast(pl.String),
+                pl.lit("; is_infrastructure="),
+                pl.col("is_infrastructure").cast(pl.String),
+                pl.lit("; requires_fi_scalar="),
+                pl.col("requires_fi_scalar").cast(pl.String),
+                pl.lit("; qualifies_as_retail="),
+                pl.col("qualifies_as_retail").cast(pl.String),
+                pl.lit("; reclassified_to_retail="),
+                pl.col("reclassified_to_retail").cast(pl.String),
+            ]).alias("classification_reason"),
         ])
 
 

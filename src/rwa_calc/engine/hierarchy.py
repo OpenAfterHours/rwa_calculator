@@ -1112,8 +1112,9 @@ class HierarchyResolver:
         """
         Join property collateral at direct/facility/counterparty levels.
 
-        Uses .over() window functions for allocation weights to avoid self-joins
-        that would duplicate the exposures plan tree.
+        Uses a single conditional group_by across all property collateral and
+        3 joins (one per level) instead of 6 separate aggregations + 6 joins.
+        Allocation weights use .over() window functions.
 
         Args:
             exposures: Exposures with total_exposure_amount column
@@ -1124,35 +1125,40 @@ class HierarchyResolver:
             Exposures with residential_collateral_value, property_collateral_value,
             and has_facility_property_collateral columns added
         """
-        def aggregate_by_level(
-            coll: pl.LazyFrame,
-            level: str,
-            value_alias: str,
-        ) -> pl.LazyFrame:
-            level_filter = ["exposure", "loan"] if level == "direct" else [level]
-            return coll.filter(
-                pl.col("beneficiary_type").str.to_lowercase().is_in(level_filter)
-            ).group_by("beneficiary_reference").agg(
-                pl.col("market_value").sum().alias(value_alias),
-            )
+        bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+        is_residential = (
+            pl.col("property_type").str.to_lowercase() == "residential"
+        )
 
-        # Aggregate collateral at each level (these are small from collateral, not
-        # self-joins on exposures, so they don't duplicate the plan)
-        res_direct = aggregate_by_level(residential_collateral, "direct", "res_direct")
-        res_facility = aggregate_by_level(
-            residential_collateral, "facility", "res_facility",
+        # Single conditional group_by: 6 aggregates in one pass
+        coll_agg = all_property_collateral.with_columns(
+            pl.when(bt_lower.is_in(["exposure", "loan"]))
+            .then(pl.lit("direct"))
+            .when(bt_lower == "facility").then(pl.lit("facility"))
+            .when(bt_lower == "counterparty").then(pl.lit("counterparty"))
+            .otherwise(pl.lit("direct"))
+            .alias("_level"),
+        ).group_by(["_level", "beneficiary_reference"]).agg([
+            pl.col("market_value").filter(is_residential).sum()
+            .alias("_res"),
+            pl.col("market_value").sum().alias("_prop"),
+        ])
+
+        # Split and rename for per-level joins
+        coll_direct = (
+            coll_agg.filter(pl.col("_level") == "direct")
+            .drop("_level")
+            .rename({"_res": "_res_d", "_prop": "_prop_d"})
         )
-        res_cp = aggregate_by_level(
-            residential_collateral, "counterparty", "res_cp",
+        coll_facility = (
+            coll_agg.filter(pl.col("_level") == "facility")
+            .drop("_level")
+            .rename({"_res": "_res_f", "_prop": "_prop_f"})
         )
-        prop_direct = aggregate_by_level(
-            all_property_collateral, "direct", "prop_direct",
-        )
-        prop_facility = aggregate_by_level(
-            all_property_collateral, "facility", "prop_facility",
-        )
-        prop_cp = aggregate_by_level(
-            all_property_collateral, "counterparty", "prop_cp",
+        coll_cp = (
+            coll_agg.filter(pl.col("_level") == "counterparty")
+            .drop("_level")
+            .rename({"_res": "_res_c", "_prop": "_prop_c"})
         )
 
         # .over() window functions for allocation weights (no self-join!)
@@ -1173,40 +1179,25 @@ class HierarchyResolver:
             .alias("cp_total"),
         ])
 
-        # Join collateral lookups (6 small joins from collateral data)
+        # 3 joins (one per level) instead of 6
         exposures = exposures.join(
-            res_direct,
+            coll_direct,
             left_on="exposure_reference",
             right_on="beneficiary_reference",
             how="left",
         ).join(
-            prop_direct,
-            left_on="exposure_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            res_facility,
+            coll_facility,
             left_on="parent_facility_reference",
             right_on="beneficiary_reference",
             how="left",
         ).join(
-            prop_facility,
-            left_on="parent_facility_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            res_cp,
-            left_on="counterparty_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            prop_cp,
+            coll_cp,
             left_on="counterparty_reference",
             right_on="beneficiary_reference",
             how="left",
         )
 
-        # Calculate pro-rata allocation weights
+        # Pro-rata weights + combine all levels in one batch
         exposures = exposures.with_columns([
             pl.when(pl.col("facility_total") > 0)
             .then(pl.col("total_exposure_amount") / pl.col("facility_total"))
@@ -1218,32 +1209,28 @@ class HierarchyResolver:
             .alias("cp_weight"),
         ])
 
-        # Combine values from all levels with pro-rata allocation
         exposures = exposures.with_columns([
             (
-                pl.col("res_direct").fill_null(0.0)
-                + (pl.col("res_facility").fill_null(0.0) * pl.col("facility_weight"))
-                + (pl.col("res_cp").fill_null(0.0) * pl.col("cp_weight"))
+                pl.col("_res_d").fill_null(0.0)
+                + (pl.col("_res_f").fill_null(0.0) * pl.col("facility_weight"))
+                + (pl.col("_res_c").fill_null(0.0) * pl.col("cp_weight"))
             ).alias("residential_collateral_value"),
             (
-                pl.col("prop_direct").fill_null(0.0)
-                + (
-                    pl.col("prop_facility").fill_null(0.0)
-                    * pl.col("facility_weight")
-                )
-                + (pl.col("prop_cp").fill_null(0.0) * pl.col("cp_weight"))
+                pl.col("_prop_d").fill_null(0.0)
+                + (pl.col("_prop_f").fill_null(0.0) * pl.col("facility_weight"))
+                + (pl.col("_prop_c").fill_null(0.0) * pl.col("cp_weight"))
             ).alias("property_collateral_value"),
             (
-                (pl.col("prop_direct").fill_null(0.0) > 0)
-                | (pl.col("prop_facility").fill_null(0.0) > 0)
-                | (pl.col("prop_cp").fill_null(0.0) > 0)
+                (pl.col("_prop_d").fill_null(0.0) > 0)
+                | (pl.col("_prop_f").fill_null(0.0) > 0)
+                | (pl.col("_prop_c").fill_null(0.0) > 0)
             ).alias("has_facility_property_collateral"),
         ])
 
         # Drop intermediate columns
         return exposures.drop([
-            "res_direct", "res_facility", "res_cp",
-            "prop_direct", "prop_facility", "prop_cp",
+            "_res_d", "_res_f", "_res_c",
+            "_prop_d", "_prop_f", "_prop_c",
             "facility_total", "cp_total", "facility_weight", "cp_weight",
         ])
 

@@ -217,12 +217,7 @@ class IRBLazyFrame:
         """
         Ensure all required columns exist with defaults.
 
-        Adds/normalizes:
-        - pd: Probability of default (default 1%)
-        - ead_final: Exposure at default
-        - maturity: Effective maturity (floor 1y, cap 5y)
-        - turnover_m: Annual turnover in millions
-        - exposure_class: Exposure classification
+        Single schema check followed by one with_columns() for all defaults.
 
         Args:
             config: Calculation configuration
@@ -231,70 +226,58 @@ class IRBLazyFrame:
             LazyFrame with all required columns
         """
         schema = self._lf.collect_schema()
-        lf = self._lf
+        names = set(schema.names())
+        exprs: list[pl.Expr] = []
 
         # PD
-        if "pd" not in schema.names():
-            lf = lf.with_columns([pl.lit(0.01).alias("pd")])
+        if "pd" not in names:
+            exprs.append(pl.lit(0.01).alias("pd"))
 
         # EAD
-        if "ead_final" not in schema.names():
-            if "ead" in schema.names():
-                lf = lf.with_columns([pl.col("ead").alias("ead_final")])
+        if "ead_final" not in names:
+            if "ead" in names:
+                exprs.append(pl.col("ead").alias("ead_final"))
             else:
-                lf = lf.with_columns([pl.lit(0.0).alias("ead_final")])
+                exprs.append(pl.lit(0.0).alias("ead_final"))
 
-        # Refresh schema after potential changes
-        schema = lf.collect_schema()
-
-        # Maturity - calculated using exact fractional years accounting for leap years
-        maturity_floor = 1.0
-        maturity_cap = 5.0
-        default_maturity = 5.0
-
-        if "maturity" not in schema.names():
-            if "maturity_date" in schema.names():
-                reporting_date = config.reporting_date
-                lf = lf.with_columns([
+        # Maturity
+        if "maturity" not in names:
+            if "maturity_date" in names:
+                exprs.append(
                     pl.when(pl.col("maturity_date").is_not_null())
                     .then(
-                        _exact_fractional_years_expr(reporting_date, "maturity_date")
-                        .clip(maturity_floor, maturity_cap)
+                        _exact_fractional_years_expr(
+                            config.reporting_date, "maturity_date"
+                        ).clip(1.0, 5.0)
                     )
-                    .otherwise(pl.lit(default_maturity))
+                    .otherwise(pl.lit(5.0))
                     .alias("maturity"),
-                ])
+                )
             else:
-                lf = lf.with_columns([pl.lit(default_maturity).alias("maturity")])
-
-        # Refresh schema
-        schema = lf.collect_schema()
+                exprs.append(pl.lit(5.0).alias("maturity"))
 
         # Turnover for SME correlation adjustment
-        if "turnover_m" not in schema.names():
-            if "cp_annual_revenue" in schema.names():
-                lf = lf.with_columns([
-                    (pl.col("cp_annual_revenue") / 1_000_000.0).alias("turnover_m"),
-                ])
+        if "turnover_m" not in names:
+            if "cp_annual_revenue" in names:
+                exprs.append(
+                    (pl.col("cp_annual_revenue") / 1_000_000.0).alias("turnover_m")
+                )
             else:
-                lf = lf.with_columns([
-                    pl.lit(None).cast(pl.Float64).alias("turnover_m"),
-                ])
-
-        # Refresh schema
-        schema = lf.collect_schema()
+                exprs.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
 
         # Exposure class
-        if "exposure_class" not in schema.names():
-            lf = lf.with_columns([pl.lit("CORPORATE").alias("exposure_class")])
+        if "exposure_class" not in names:
+            exprs.append(pl.lit("CORPORATE").alias("exposure_class"))
 
         # Defaulted exposure columns
-        if "is_defaulted" not in schema.names():
-            lf = lf.with_columns([pl.lit(False).alias("is_defaulted")])
-        if "beel" not in schema.names():
-            lf = lf.with_columns([pl.lit(0.0).alias("beel")])
+        if "is_defaulted" not in names:
+            exprs.append(pl.lit(False).alias("is_defaulted"))
+        if "beel" not in names:
+            exprs.append(pl.lit(0.0).alias("beel"))
 
-        return lf
+        if exprs:
+            return self._lf.with_columns(exprs)
+        return self._lf
 
     # =========================================================================
     # INDIVIDUAL FORMULA STEPS
@@ -740,17 +723,13 @@ class IRBLazyFrame:
 
     def apply_all_formulas(self, config: CalculationConfig) -> pl.LazyFrame:
         """
-        Apply full IRB formula pipeline.
+        Apply full IRB formula pipeline in 4 batched with_columns.
 
-        Steps:
-        1. Ensure required columns exist (turnover_m, maturity, requires_fi_scalar)
-        2. Apply PD floor
-        3. Apply LGD floor (Basel 3.1 only)
-        4. Calculate correlation (with FI scalar if applicable)
-        5. Calculate K
-        6. Calculate maturity adjustment
-        7. Calculate RWA and risk weight
-        8. Calculate expected loss
+        Batch 1: Ensure defaults + PD floor + LGD floor (read only input cols)
+        Batch 2: Correlation + maturity adjustment (read pd_floored from batch 1)
+        Batch 3: K (reads correlation from batch 2)
+        Batch 4: RWA + risk weight + expected loss (read k, maturity_adjustment)
+        Then: defaulted treatment override
 
         Args:
             config: Calculation configuration
@@ -758,32 +737,77 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with all IRB calculations
         """
-        # Ensure required columns exist for correlation calculation
         schema = self._lf.collect_schema()
-        schema_names = schema.names()
+        schema_names = set(schema.names())
         lf = self._lf
 
+        # --- Batch 1: defaults + PD floor + LGD floor ---
+        batch1: list[pl.Expr] = []
+
         if "turnover_m" not in schema_names:
-            lf = lf.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-
+            batch1.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
         if "maturity" not in schema_names:
-            lf = lf.with_columns(pl.lit(2.5).alias("maturity"))
-
-        # Ensure requires_fi_scalar column exists (for FI scalar in correlation)
-        # This is normally set by the classifier, default to False if not present
+            batch1.append(pl.lit(2.5).alias("maturity"))
         if "requires_fi_scalar" not in schema_names:
-            lf = lf.with_columns(pl.lit(False).alias("requires_fi_scalar"))
+            batch1.append(pl.lit(False).alias("requires_fi_scalar"))
 
-        return (lf
-            .irb.apply_pd_floor(config)
-            .irb.apply_lgd_floor(config)
-            .irb.calculate_correlation(config)
-            .irb.calculate_k(config)
-            .irb.calculate_maturity_adjustment(config)
-            .irb.calculate_rwa(config)
-            .irb.calculate_expected_loss(config)
-            .irb.apply_defaulted_treatment(config)
+        pd_floor = float(config.pd_floors.corporate)
+        batch1.append(
+            pl.col("pd").clip(lower_bound=pd_floor).alias("pd_floored")
         )
+
+        lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
+        if config.is_basel_3_1:
+            lgd_floor = float(config.lgd_floors.unsecured)
+            batch1.append(
+                pl.col(lgd_col).clip(lower_bound=lgd_floor).alias("lgd_floored")
+            )
+        else:
+            batch1.append(pl.col(lgd_col).alias("lgd_floored"))
+
+        lf = lf.with_columns(batch1)
+
+        # --- Batch 2: Correlation + maturity adjustment (read pd_floored) ---
+        eur_gbp_rate = float(config.eur_gbp_rate)
+        is_retail = (
+            pl.col("exposure_class")
+            .cast(pl.String)
+            .fill_null("CORPORATE")
+            .str.to_uppercase()
+            .str.contains("RETAIL")
+        )
+        lf = lf.with_columns([
+            _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation"),
+            pl.when(is_retail)
+            .then(pl.lit(1.0))
+            .otherwise(_polars_maturity_adjustment_expr())
+            .alias("maturity_adjustment"),
+        ])
+
+        # --- Batch 3: K (reads correlation from batch 2) ---
+        lf = lf.with_columns(
+            _polars_capital_k_expr().alias("k")
+        )
+
+        # --- Batch 4: RWA + risk weight + expected loss ---
+        scaling_factor = 1.06 if config.is_crr else 1.0
+        lf = lf.with_columns([
+            pl.lit(scaling_factor).alias("scaling_factor"),
+            (
+                pl.col("k") * 12.5 * scaling_factor
+                * pl.col("ead_final") * pl.col("maturity_adjustment")
+            ).alias("rwa"),
+            (
+                pl.col("k") * 12.5 * scaling_factor
+                * pl.col("maturity_adjustment")
+            ).alias("risk_weight"),
+            (
+                pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")
+            ).alias("expected_loss"),
+        ])
+
+        # Defaulted treatment (overrides for PD=100% exposures)
+        return lf.irb.apply_defaulted_treatment(config)
 
     def select_expected_loss(self) -> pl.LazyFrame:
         """

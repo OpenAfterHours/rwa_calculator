@@ -636,9 +636,19 @@ class CRMProcessor:
             adjusted_collateral
         )
 
-        # Filter to only eligible financial collateral for EAD reduction
-        # Real estate collateral affects risk weight (via LTV) but does NOT reduce EAD
+        # Check for multi-level linking and collateral type info
         collateral_schema = adjusted_collateral.collect_schema()
+        has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
+        has_collateral_type = "collateral_type" in collateral_schema.names()
+
+        if has_beneficiary_type and has_collateral_type:
+            # Unified EAD + LGD allocation: single group_by, single join chain
+            return self._apply_collateral_unified(
+                exposures, adjusted_collateral, collateral_schema, config,
+                facility_ead_totals, cp_ead_totals,
+            )
+
+        # Legacy path: separate EAD and LGD allocation
         if "is_eligible_financial_collateral" in collateral_schema:
             eligible_collateral = adjusted_collateral.filter(
                 pl.col("is_eligible_financial_collateral") == True  # noqa: E712
@@ -651,11 +661,9 @@ class CRMProcessor:
                 ])
             )
 
-        # Allocate collateral for SA EAD reduction
         eligible_schema = eligible_collateral.collect_schema()
-        has_beneficiary_type = "beneficiary_type" in eligible_schema.names()
 
-        if has_beneficiary_type:
+        if "beneficiary_type" in eligible_schema.names():
             exposures = self._allocate_collateral_multi_level_for_ead(
                 exposures, eligible_collateral, facility_ead_totals, cp_ead_totals
             )
@@ -688,22 +696,326 @@ class CRMProcessor:
 
         # Apply collateral effect based on approach
         exposures = exposures.with_columns([
-            # For SA: Reduce EAD by collateral (simple substitution)
             pl.when(pl.col("approach") == ApproachType.SA.value)
             .then(
                 (pl.col("ead_gross") - pl.col("collateral_adjusted_value"))
                 .clip(lower_bound=0)
             )
-            # For IRB: Keep EAD, collateral affects LGD (handled below)
             .otherwise(pl.col("ead_gross"))
             .alias("ead_after_collateral"),
         ])
 
         # For F-IRB: Calculate effective LGD with collateral
-        # A-IRB uses modelled LGD, so no adjustment needed
         exposures = self._calculate_irb_lgd_with_collateral(
             exposures, adjusted_collateral, config, facility_ead_totals, cp_ead_totals
         )
+
+        return exposures
+
+    def _apply_collateral_unified(
+        self,
+        exposures: pl.LazyFrame,
+        adjusted_collateral: pl.LazyFrame,
+        collateral_schema: pl.Schema,
+        config: CalculationConfig,
+        facility_ead_totals: pl.LazyFrame,
+        cp_ead_totals: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Unified EAD + LGD collateral allocation in a single pass.
+
+        Fuses _allocate_collateral_multi_level_for_ead and
+        _allocate_collateral_multi_level_for_lgd into one group_by and one
+        set of 3-level joins (5 joins instead of 10).
+
+        Args:
+            exposures: Exposures with ead_gross, parent_facility_reference, etc.
+            adjusted_collateral: All collateral after haircuts and maturity mismatch
+            collateral_schema: Pre-collected schema of adjusted_collateral
+            config: Calculation configuration
+            facility_ead_totals: Pre-computed facility EAD totals
+            cp_ead_totals: Pre-computed counterparty EAD totals
+
+        Returns:
+            Exposures with EAD reduction and LGD post-CRM fully applied
+        """
+        # --- Determine eligible expression for EAD reduction ---
+        if "is_eligible_financial_collateral" in collateral_schema:
+            is_eligible = pl.col("is_eligible_financial_collateral")
+        else:
+            is_eligible = ~pl.col("collateral_type").str.to_lowercase().is_in([
+                "real_estate", "property", "rre", "cre",
+                "residential_property", "commercial_property",
+            ])
+
+        # --- Annotate collateral with LGD categories ---
+        _financial_types = [
+            "cash", "deposit", "gold", "financial_collateral",
+            "government_bond", "corporate_bond", "equity",
+        ]
+        _receivable_types = ["receivables", "trade_receivables"]
+        _real_estate_types = [
+            "real_estate", "property", "rre", "cre",
+            "residential_re", "commercial_re",
+            "residential", "commercial",
+            "residential_property", "commercial_property",
+        ]
+        _other_physical_types = ["other_physical", "equipment", "inventory", "other"]
+
+        coll_type_lower = pl.col("collateral_type").str.to_lowercase()
+
+        annotated = adjusted_collateral.with_columns([
+            pl.when(coll_type_lower.is_in(_financial_types)).then(pl.lit(0.0))
+            .when(coll_type_lower.is_in(_receivable_types)).then(pl.lit(0.35))
+            .when(coll_type_lower.is_in(_real_estate_types)).then(pl.lit(0.35))
+            .when(coll_type_lower.is_in(_other_physical_types)).then(pl.lit(0.40))
+            .otherwise(pl.lit(0.45))
+            .alias("collateral_lgd"),
+
+            pl.when(coll_type_lower.is_in(_financial_types)).then(pl.lit(1.0))
+            .when(coll_type_lower.is_in(_receivable_types)).then(pl.lit(1.25))
+            .when(coll_type_lower.is_in(_real_estate_types)).then(pl.lit(1.40))
+            .when(coll_type_lower.is_in(_other_physical_types)).then(pl.lit(1.40))
+            .otherwise(pl.lit(1.0))
+            .alias("overcollateralisation_ratio"),
+
+            coll_type_lower.is_in(_financial_types).alias("is_financial_collateral_type"),
+
+            pl.coalesce(
+                pl.col("value_after_maturity_adj")
+                if "value_after_maturity_adj" in collateral_schema.names() else pl.lit(None),
+                pl.col("value_after_haircut")
+                if "value_after_haircut" in collateral_schema.names() else pl.lit(None),
+                pl.col("market_value"),
+            ).alias("adjusted_value"),
+        ])
+        annotated = annotated.with_columns(
+            (pl.col("adjusted_value") / pl.col("overcollateralisation_ratio"))
+            .alias("effectively_secured"),
+        )
+
+        # --- Single group_by: EAD + LGD aggregates in one pass ---
+        val_expr = pl.coalesce(
+            pl.col("value_after_maturity_adj"),
+            pl.col("value_after_haircut"),
+        )
+        bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+        direct_types = ["exposure", "loan", "contingent"]
+        is_fin = pl.col("is_financial_collateral_type")
+
+        all_coll = annotated.with_columns(
+            pl.when(bt_lower.is_in(direct_types)).then(pl.lit("direct"))
+            .when(bt_lower == "facility").then(pl.lit("facility"))
+            .when(bt_lower == "counterparty").then(pl.lit("counterparty"))
+            .otherwise(pl.lit("direct"))
+            .alias("_level"),
+        ).group_by(["_level", "beneficiary_reference"]).agg([
+            # EAD aggregates (eligible financial only)
+            val_expr.filter(is_eligible).sum().alias("_cv"),
+            pl.col("market_value").filter(is_eligible).sum().alias("_mv"),
+            # LGD aggregates: financial
+            pl.col("effectively_secured").filter(is_fin).sum().alias("_ef"),
+            (pl.col("effectively_secured") * pl.col("collateral_lgd"))
+            .filter(is_fin).sum().alias("_wf"),
+            # LGD aggregates: non-financial
+            pl.col("effectively_secured").filter(~is_fin).sum().alias("_en"),
+            (pl.col("effectively_secured") * pl.col("collateral_lgd"))
+            .filter(~is_fin).sum().alias("_wn"),
+            pl.col("adjusted_value").filter(~is_fin).sum().alias("_rn"),
+        ])
+
+        _agg = ["_cv", "_mv", "_ef", "_wf", "_en", "_wn", "_rn"]
+
+        # Split the small aggregated result for per-level joins
+        coll_direct = (
+            all_coll.filter(pl.col("_level") == "direct")
+            .drop("_level")
+            .rename({c: f"{c}_d" for c in _agg})
+        )
+        coll_facility = (
+            all_coll.filter(pl.col("_level") == "facility")
+            .drop("_level")
+            .rename({c: f"{c}_f" for c in _agg})
+        )
+        coll_counterparty = (
+            all_coll.filter(pl.col("_level") == "counterparty")
+            .drop("_level")
+            .rename({c: f"{c}_c" for c in _agg})
+        )
+
+        # --- Join all 3 levels to exposures (5 joins total) ---
+        exp_schema = exposures.collect_schema()
+
+        exposures = exposures.join(
+            coll_direct,
+            left_on="exposure_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        )
+
+        if "parent_facility_reference" in exp_schema.names():
+            exposures = exposures.join(
+                coll_facility,
+                left_on="parent_facility_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            ).join(
+                facility_ead_totals,
+                on="parent_facility_reference",
+                how="left",
+            )
+        else:
+            exposures = exposures.with_columns(
+                [pl.lit(0.0).alias(f"{c}_f") for c in _agg]
+                + [pl.lit(0.0).alias("_fac_ead_total")]
+            )
+
+        exposures = exposures.join(
+            coll_counterparty,
+            left_on="counterparty_reference",
+            right_on="beneficiary_reference",
+            how="left",
+        ).join(
+            cp_ead_totals,
+            on="counterparty_reference",
+            how="left",
+        )
+
+        # --- Fill nulls + pro-rata weights ---
+        fill_exprs = []
+        for sfx in ["d", "f", "c"]:
+            for c in _agg:
+                fill_exprs.append(pl.col(f"{c}_{sfx}").fill_null(0.0))
+        fill_exprs.extend([
+            pl.col("_fac_ead_total").fill_null(0.0),
+            pl.col("_cp_ead_total").fill_null(0.0),
+        ])
+        exposures = exposures.with_columns(fill_exprs)
+
+        exposures = exposures.with_columns([
+            pl.when(pl.col("_fac_ead_total") > 0)
+            .then(pl.col("ead_gross") / pl.col("_fac_ead_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("_fw"),
+            pl.when(pl.col("_cp_ead_total") > 0)
+            .then(pl.col("ead_gross") / pl.col("_cp_ead_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("_cw"),
+        ])
+
+        # --- Combine all levels for EAD + LGD ---
+        def _sum3(col: str) -> pl.Expr:
+            return (
+                pl.col(f"{col}_d")
+                + pl.col(f"{col}_f") * pl.col("_fw")
+                + pl.col(f"{col}_c") * pl.col("_cw")
+            )
+
+        exposures = exposures.with_columns([
+            _sum3("_cv").alias("collateral_adjusted_value"),
+            _sum3("_mv").alias("collateral_market_value"),
+            _sum3("_ef").alias("_eff_fin_a"),
+            _sum3("_wf").alias("_wlgd_fin_a"),
+            _sum3("_en").alias("_eff_nf_a"),
+            _sum3("_wn").alias("_wlgd_nf_a"),
+            _sum3("_rn").alias("_raw_nf_a"),
+        ])
+
+        # Min threshold: zero non-financial if raw < 30% of EAD
+        exposures = exposures.with_columns([
+            pl.when(pl.col("_raw_nf_a") >= 0.30 * pl.col("ead_gross"))
+            .then(pl.col("_eff_nf_a"))
+            .otherwise(pl.lit(0.0))
+            .alias("_eff_nf_final"),
+            pl.when(pl.col("_raw_nf_a") >= 0.30 * pl.col("ead_gross"))
+            .then(pl.col("_wlgd_nf_a"))
+            .otherwise(pl.lit(0.0))
+            .alias("_wlgd_nf_final"),
+        ])
+
+        # total_collateral_for_lgd + lgd_secured (combined)
+        exposures = exposures.with_columns([
+            (pl.col("_eff_fin_a") + pl.col("_eff_nf_final"))
+            .alias("total_collateral_for_lgd"),
+            pl.when(pl.col("_eff_fin_a") + pl.col("_eff_nf_final") > 0)
+            .then(
+                (pl.col("_wlgd_fin_a") + pl.col("_wlgd_nf_final"))
+                / (pl.col("_eff_fin_a") + pl.col("_eff_nf_final"))
+            )
+            .otherwise(pl.lit(0.45))
+            .alias("lgd_secured"),
+        ])
+
+        # --- Drop intermediate allocation columns ---
+        drop_cols = [
+            f"{c}_{sfx}" for sfx in ["d", "f", "c"] for c in _agg
+        ] + [
+            "_fac_ead_total", "_cp_ead_total", "_fw", "_cw",
+            "_eff_fin_a", "_wlgd_fin_a",
+            "_eff_nf_a", "_wlgd_nf_a", "_raw_nf_a",
+            "_eff_nf_final", "_wlgd_nf_final",
+        ]
+        exposures = exposures.drop(drop_cols)
+
+        # --- Apply EAD reduction + determine seniority-based LGD ---
+        exposures = exposures.with_columns([
+            pl.when(pl.col("approach") == ApproachType.SA.value)
+            .then(
+                (pl.col("ead_gross") - pl.col("collateral_adjusted_value"))
+                .clip(lower_bound=0)
+            )
+            .otherwise(pl.col("ead_gross"))
+            .alias("ead_after_collateral"),
+
+            pl.when(
+                pl.col("seniority").str.to_lowercase()
+                .is_in(["subordinated", "junior"])
+            )
+            .then(pl.lit(0.75))
+            .otherwise(pl.lit(0.45))
+            .alias("lgd_unsecured"),
+        ])
+
+        # --- Calculate LGD post-CRM + audit ---
+        exposures = exposures.with_columns([
+            pl.when(
+                (pl.col("approach") == ApproachType.FIRB.value)
+                & (pl.col("ead_gross") > 0)
+                & (pl.col("total_collateral_for_lgd") > 0)
+            ).then(
+                (
+                    (
+                        pl.col("lgd_secured")
+                        * pl.col("total_collateral_for_lgd")
+                        .clip(upper_bound=pl.col("ead_gross"))
+                    )
+                    + (
+                        pl.col("lgd_unsecured")
+                        * (
+                            pl.col("ead_gross")
+                            - pl.col("total_collateral_for_lgd")
+                        ).clip(lower_bound=0)
+                    )
+                )
+                / pl.col("ead_gross")
+            )
+            .when(
+                (pl.col("approach") == ApproachType.FIRB.value)
+                & (pl.col("ead_gross") > 0)
+            )
+            .then(pl.col("lgd_unsecured"))
+            .otherwise(pl.col("lgd_pre_crm"))
+            .alias("lgd_post_crm"),
+
+            pl.when(pl.col("ead_gross") > 0)
+            .then(
+                pl.col("total_collateral_for_lgd")
+                .clip(upper_bound=pl.col("ead_gross"))
+                / pl.col("ead_gross") * 100
+            )
+            .otherwise(pl.lit(0.0))
+            .alias("collateral_coverage_pct"),
+        ])
 
         return exposures
 

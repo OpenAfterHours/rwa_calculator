@@ -575,6 +575,11 @@ class PipelineOrchestrator:
         try:
             exposures = crm_adjusted.exposures  # Lazy (materialised at init_ead)
 
+            # Materialise CRM plan before calculator split.
+            # CRM output is a deep lazy plan; without this, collect_all
+            # re-optimizes it 3× (once per SA/IRB/Slotting branch).
+            exposures = exposures.collect().lazy()
+
             # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
             if config.output_floor.enabled:
                 exposures = self._sa_calculator.calculate_unified(exposures, config)

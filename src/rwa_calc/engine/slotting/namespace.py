@@ -243,8 +243,8 @@ class SlottingExpr:
 
     @staticmethod
     def _map_category(cat_expr: pl.Expr, weights: dict[str, float]) -> pl.Expr:
-        """Map category name to risk weight using replace."""
-        return cat_expr.replace(
+        """Map category name to risk weight using replace_strict."""
+        return cat_expr.replace_strict(
             old=list(weights.keys()),
             new=list(weights.values()),
             default=lit(weights["satisfactory"]),

@@ -157,7 +157,7 @@ class SlottingCalculator:
 
         # Apply calculation pipeline using registered namespace
         exposures = (
-            exposures.slotting.prepare_columns(config)
+            exposures.slotting.prepare_columns()
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
         )

@@ -424,6 +424,13 @@ class CRMProcessor:
         exposures = self._apply_ccf(exposures, config)
         exposures = self._initialize_ead(exposures)
 
+        # Materialise the deep lazy plan (provisions → CCF → init_ead) once.
+        # Without this, apply_collateral's 3 lookup collects each re-execute
+        # the full upstream plan, and the final collect re-executes it again
+        # (4× total).  Collecting here means all downstream operations
+        # (collateral, guarantees, finalize, audit) work on materialised data.
+        exposures = exposures.collect().lazy()
+
         if has_required_columns(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, data.collateral, config)
         else:
@@ -443,9 +450,6 @@ class CRMProcessor:
 
         exposures = self._finalize_ead(exposures)
         exposures = self._add_crm_audit(exposures)
-
-        # NO collect().lazy() — unified frame stays lazy
-        # NO approach split — single-pass calculators handle routing
 
         return CRMAdjustedBundle(
             exposures=exposures,
@@ -599,11 +603,9 @@ class CRMProcessor:
         # Pre-compute shared exposure lookups once
         direct_lookup, facility_lookup, cp_lookup = _build_exposure_lookups(exposures)
 
-        # Materialise the small lookup frames to sever plan-tree duplication.
-        # Each lookup is aggregated (facility/cp) or 1:1 (direct), so collecting
-        # is cheap (~50ms at 100K). Without this, every downstream reference to a
-        # lookup duplicates the full upstream exposures plan (provisions + CCF +
-        # init_ead ≈ 158 lines × 5+ branches), causing quadratic execution overhead.
+        # Materialise the small lookup frames to prevent plan-tree duplication.
+        # Each lookup is referenced in multiple downstream joins; without this,
+        # Polars re-evaluates the group_by/select expressions at each reference.
         direct_lookup = direct_lookup.collect().lazy()
         facility_lookup = facility_lookup.collect().lazy()
         cp_lookup = cp_lookup.collect().lazy()

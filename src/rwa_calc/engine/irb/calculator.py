@@ -170,10 +170,9 @@ class IRBCalculator:
         """
         Apply IRB formulas to IRB rows on a unified frame.
 
-        Operates on the full unified frame (SA + IRB + slotting rows together).
-        The IRB namespace chain and supporting factors overwrite shared columns
-        (rwa, risk_weight, rwa_pre_factor, rwa_post_factor, lgd, pd, etc.) for
-        ALL rows. Pre-IRB values are saved and restored for non-IRB rows.
+        Uses filter-process-merge to avoid running expensive IRB formulas
+        (normal_ppf, normal_cdf) on non-IRB rows. Filters IRB rows out,
+        runs the namespace chain on the subset, then concats back.
 
         Args:
             exposures: Unified frame with all approaches
@@ -187,26 +186,44 @@ class IRBCalculator:
             | (pl.col("approach") == ApproachType.AIRB.value)
         )
 
-        # Save all shared columns that the IRB chain + supporting factors overwrite.
-        # The namespace chain writes rwa, risk_weight, lgd, pd, maturity for ALL
-        # rows. _apply_supporting_factors writes rwa_pre_factor, rwa_post_factor,
-        # supporting_factor, supporting_factor_applied for ALL rows.
-        schema = exposures.collect_schema()
-        _SHARED_COLS = [
-            "rwa", "risk_weight", "rwa_pre_factor", "rwa_post_factor",
-            "supporting_factor", "supporting_factor_applied",
-            "lgd", "pd", "maturity",
-        ]
-        save_cols = []
-        saved = []
-        for col in _SHARED_COLS:
-            if col in schema.names():
-                save_cols.append(pl.col(col).alias(f"_pre_irb_{col}"))
-                saved.append(col)
-        if save_cols:
-            exposures = exposures.with_columns(save_cols)
+        # Split: separate IRB rows from non-IRB
+        non_irb = exposures.filter(~is_irb)
+        irb = exposures.filter(is_irb)
 
-        # Apply IRB namespace chain — runs on all rows
+        # Process: run IRB namespace chain on IRB rows only
+        irb = (
+            irb
+            .irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .irb.apply_all_formulas(config)
+            .irb.apply_guarantee_substitution(config)
+        )
+
+        # Apply supporting factors (CRR only — Art. 501)
+        irb = self._apply_supporting_factors(irb, config)
+
+        # Merge: concat IRB results back with non-IRB rows
+        return pl.concat([non_irb, irb], how="diagonal_relaxed")
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate IRB RWA on pre-filtered IRB-only rows.
+
+        Unlike calculate_unified(), expects only IRB rows — no filter/concat
+        wrapper needed. Runs the namespace chain directly.
+
+        Args:
+            exposures: Pre-filtered IRB rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with IRB RWA columns populated
+        """
         exposures = (
             exposures
             .irb.classify_approach(config)
@@ -218,25 +235,6 @@ class IRBCalculator:
 
         # Apply supporting factors (CRR only — Art. 501)
         exposures = self._apply_supporting_factors(exposures, config)
-
-        # Guard: restore pre-IRB values for non-IRB rows
-        guard_cols = [
-            pl.when(is_irb)
-            .then(pl.col(col))
-            .otherwise(pl.col(f"_pre_irb_{col}"))
-            .alias(col)
-            for col in saved
-        ]
-        if guard_cols:
-            exposures = exposures.with_columns(guard_cols)
-
-        # Clean up temporary columns
-        drop_cols = [
-            f"_pre_irb_{col}" for col in saved
-            if f"_pre_irb_{col}" in exposures.collect_schema().names()
-        ]
-        if drop_cols:
-            exposures = exposures.drop(drop_cols)
 
         return exposures
 

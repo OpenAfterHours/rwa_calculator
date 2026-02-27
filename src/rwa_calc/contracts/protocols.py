@@ -211,6 +211,23 @@ class SACalculatorProtocol(Protocol):
         """
         ...
 
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate SA RWA on pre-filtered SA-only rows.
+
+        Args:
+            exposures: Pre-filtered SA rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with SA RWA columns populated
+        """
+        ...
+
     def calculate(
         self,
         data: CRMAdjustedBundle,
@@ -260,6 +277,23 @@ class IRBCalculatorProtocol(Protocol):
 
         Returns:
             Unified frame with IRB columns populated for IRB rows
+        """
+        ...
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate IRB RWA on pre-filtered IRB-only rows.
+
+        Args:
+            exposures: Pre-filtered IRB rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with IRB RWA columns populated
         """
         ...
 
@@ -328,6 +362,23 @@ class SlottingCalculatorProtocol(Protocol):
 
         Returns:
             Unified frame with slotting columns populated for slotting rows
+        """
+        ...
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate Slotting RWA on pre-filtered slotting-only rows.
+
+        Args:
+            exposures: Pre-filtered slotting rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with slotting RWA columns populated
         """
         ...
 

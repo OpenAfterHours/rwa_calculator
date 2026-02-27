@@ -185,8 +185,8 @@ class SlottingCalculator:
         """
         Apply slotting weights to slotting rows on a unified frame.
 
-        Operates on the full unified frame (SA + IRB + slotting rows together).
-        Only modifies rwa/risk_weight for rows where approach == 'slotting'.
+        Uses filter-process-merge to isolate slotting processing from
+        other approaches' columns.
 
         Args:
             exposures: Unified frame with all approaches
@@ -197,67 +197,39 @@ class SlottingCalculator:
         """
         is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
 
-        # Prepare slotting-specific columns (defaults for missing columns)
+        # Split: separate slotting rows from non-slotting
+        non_slotting = exposures.filter(~is_slotting)
+        slotting = exposures.filter(is_slotting)
+
+        # Process: run slotting chain on slotting rows only
+        slotting = self._prepare_columns(slotting, config)
+        slotting = self._apply_slotting_weights(slotting, config)
+        slotting = self._calculate_rwa(slotting)
+
+        # Merge: concat slotting results back with non-slotting rows
+        return pl.concat([non_slotting, slotting], how="diagonal_relaxed")
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate Slotting RWA on pre-filtered slotting-only rows.
+
+        Unlike calculate_unified(), expects only slotting rows — no
+        filter/concat wrapper needed.
+
+        Args:
+            exposures: Pre-filtered slotting rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with slotting RWA columns populated
+        """
         exposures = self._prepare_columns(exposures, config)
-
-        # Save pre-slotting values
-        schema = exposures.collect_schema()
-        has_rwa = "rwa" in schema.names()
-        has_rw = "risk_weight" in schema.names()
-
-        if has_rwa:
-            exposures = exposures.with_columns(
-                pl.col("rwa").alias("_pre_slotting_rwa")
-            )
-        if has_rw:
-            exposures = exposures.with_columns(
-                pl.col("risk_weight").alias("_pre_slotting_rw")
-            )
-
-        # Apply slotting weights (writes risk_weight for ALL rows — will be guarded)
         exposures = self._apply_slotting_weights(exposures, config)
-
-        # Calculate RWA for slotting rows
-        exposures = exposures.with_columns([
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("_slotting_rwa"),
-        ])
-
-        # Guard: only overwrite rwa/risk_weight for slotting rows
-        if has_rw:
-            exposures = exposures.with_columns(
-                pl.when(is_slotting)
-                .then(pl.col("risk_weight"))
-                .otherwise(pl.col("_pre_slotting_rw"))
-                .alias("risk_weight")
-            )
-        if has_rwa:
-            exposures = exposures.with_columns(
-                pl.when(is_slotting)
-                .then(pl.col("_slotting_rwa"))
-                .otherwise(pl.col("_pre_slotting_rwa"))
-                .alias("rwa")
-            )
-
-        # Set rwa_final for slotting rows
-        exposures = exposures.with_columns(
-            pl.when(is_slotting)
-            .then(pl.col("_slotting_rwa"))
-            .otherwise(
-                pl.col("rwa_final") if "rwa_final" in exposures.collect_schema().names()
-                else pl.col("rwa") if "rwa" in exposures.collect_schema().names()
-                else pl.lit(None).cast(pl.Float64)
-            )
-            .alias("rwa_final")
-        )
-
-        # Clean up temporary columns
-        drop_cols = [
-            c for c in ["_pre_slotting_rwa", "_pre_slotting_rw", "_slotting_rwa"]
-            if c in exposures.collect_schema().names()
-        ]
-        if drop_cols:
-            exposures = exposures.drop(drop_cols)
-
+        exposures = self._calculate_rwa(exposures)
         return exposures
 
     def _prepare_columns(

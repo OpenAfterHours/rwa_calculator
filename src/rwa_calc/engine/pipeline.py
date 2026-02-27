@@ -563,56 +563,63 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> AggregatedResultBundle:
         """
-        Single-pass calculation on unified frame.
+        Split-once calculation with parallel collect.
 
-        Runs all approach-specific calculators sequentially on the same
-        unified LazyFrame, avoiding plan tree duplication and mid-pipeline
-        materialisation.
+        Splits the CRM-adjusted frame by approach, runs each calculator
+        on its subset, then collects all three branches in parallel via
+        pl.collect_all(). CSE (Common Subplan Elimination) ensures the
+        shared CRM upstream computes only once.
         """
+        from rwa_calc.domain.enums import ApproachType
+
         try:
-            exposures = crm_adjusted.exposures
+            exposures = crm_adjusted.exposures  # Lazy (materialised at init_ead)
 
-            # Apply SA calculations (risk weights, guarantee sub, RWA, factors)
-            exposures = self._sa_calculator.calculate_unified(exposures, config)
+            # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
+            if config.output_floor.enabled:
+                exposures = self._sa_calculator.calculate_unified(exposures, config)
 
-            # Apply IRB calculations (PD/LGD floors, correlation, K, MA, RWA, EL)
-            exposures = self._irb_calculator.calculate_unified(exposures, config)
+            # Split once by approach
+            is_irb = (
+                (pl.col("approach") == ApproachType.FIRB.value)
+                | (pl.col("approach") == ApproachType.AIRB.value)
+            )
+            is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
 
-            # Apply slotting calculations (category -> RW -> RWA)
-            exposures = self._slotting_calculator.calculate_unified(exposures, config)
+            sa_branch = exposures.filter(~is_irb & ~is_slotting)
+            irb_branch = exposures.filter(is_irb)
+            slotting_branch = exposures.filter(is_slotting)
 
-            # Standardize output columns
-            schema = exposures.collect_schema()
-            standardize_cols = []
+            # Process each branch (all still lazy)
+            if config.output_floor.enabled:
+                # SA already calculated by calculate_unified above
+                sa_result = sa_branch
+            else:
+                sa_result = self._sa_calculator.calculate_branch(sa_branch, config)
 
-            # approach_applied: map from approach
-            if "approach" in schema.names():
-                standardize_cols.append(
-                    pl.col("approach").alias("approach_applied")
-                )
+            irb_result = self._irb_calculator.calculate_branch(irb_branch, config)
+            slotting_result = self._slotting_calculator.calculate_branch(
+                slotting_branch, config
+            )
 
-            # rwa_final: pick the right rwa
-            if "rwa_post_factor" in schema.names():
-                standardize_cols.append(
-                    pl.coalesce(
-                        pl.col("rwa_post_factor"),
-                        pl.col("rwa") if "rwa" in schema.names() else pl.lit(0.0),
-                    ).alias("rwa_final")
-                )
-            elif "rwa" in schema.names():
-                standardize_cols.append(
-                    pl.col("rwa").alias("rwa_final")
-                )
+            # Standardize output columns on each branch
+            sa_result = self._standardize_branch_output(sa_result)
+            irb_result = self._standardize_branch_output(irb_result)
+            slotting_result = self._standardize_branch_output(slotting_result)
 
-            if standardize_cols:
-                exposures = exposures.with_columns(standardize_cols)
+            # Collect all in parallel — CSE computes shared upstream once.
+            # Force cpu engine: streaming doesn't support CSE, so each branch
+            # would re-execute the full CRM plan independently (~9x slower).
+            sa_df, irb_df, slotting_df = pl.collect_all(
+                [sa_result, irb_result, slotting_result],
+            )
 
             # Equity — separate path (not in unified frame)
             equity_bundle = self._run_equity_calculator(crm_adjusted, config)
 
-            # Aggregate via single-pass aggregator
+            # Aggregate from already-collected DataFrames
             return self._aggregate_single_pass(
-                exposures, equity_bundle, config
+                sa_df, irb_df, slotting_df, equity_bundle, config
             )
         except Exception as e:
             self._errors.append(PipelineError(
@@ -622,17 +629,52 @@ class PipelineOrchestrator:
             ))
             return self._create_error_result()
 
+    @staticmethod
+    def _standardize_branch_output(exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Add approach_applied and rwa_final columns for aggregation."""
+        schema = exposures.collect_schema()
+        cols = []
+
+        if "approach" in schema.names():
+            cols.append(pl.col("approach").alias("approach_applied"))
+
+        if "rwa_post_factor" in schema.names():
+            cols.append(
+                pl.coalesce(
+                    pl.col("rwa_post_factor"),
+                    pl.col("rwa") if "rwa" in schema.names() else pl.lit(0.0),
+                ).alias("rwa_final")
+            )
+        elif "rwa" in schema.names():
+            cols.append(pl.col("rwa").alias("rwa_final"))
+
+        if cols:
+            exposures = exposures.with_columns(cols)
+
+        return exposures
+
     def _aggregate_single_pass(
         self,
-        exposures: pl.LazyFrame,
+        sa_df: pl.DataFrame,
+        irb_df: pl.DataFrame,
+        slotting_df: pl.DataFrame,
         equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
     ) -> AggregatedResultBundle:
-        """Aggregate results from single-pass unified frame."""
-        from rwa_calc.domain.enums import ApproachType
-
+        """Aggregate results from collect_all DataFrames."""
         try:
-            # Concat equity if present (only separate frame)
+            # Per-approach results — already separated, no filtering needed
+            sa_results = sa_df.lazy()
+            irb_results = irb_df.lazy()
+            slotting_results = slotting_df.lazy()
+
+            # Combine for summaries (data already materialised — cheap concat)
+            combined = pl.concat(
+                [sa_df, irb_df, slotting_df], how="diagonal_relaxed"
+            ).lazy()
+
+            # Concat equity if present
+            equity_results = None
             if equity_bundle and equity_bundle.results is not None:
                 equity_prepared = equity_bundle.results.with_columns([
                     pl.lit("EQUITY").alias("approach_applied"),
@@ -647,26 +689,9 @@ class PipelineOrchestrator:
                         pl.lit("equity").alias("exposure_class")
                     )
                 combined = pl.concat(
-                    [exposures, equity_prepared], how="diagonal_relaxed"
+                    [combined, equity_prepared], how="diagonal_relaxed"
                 )
-            else:
-                combined = exposures
-
-            # Filter per-approach results from unified frame
-            sa_results = combined.filter(
-                pl.col("approach") == ApproachType.SA.value
-            )
-            irb_results = combined.filter(
-                (pl.col("approach") == ApproachType.FIRB.value)
-                | (pl.col("approach") == ApproachType.AIRB.value)
-            )
-            slotting_results = combined.filter(
-                pl.col("approach") == ApproachType.SLOTTING.value
-            )
-            equity_results = (
-                equity_bundle.results if equity_bundle and equity_bundle.results is not None
-                else None
-            )
+                equity_results = equity_bundle.results
 
             # Generate summaries using the aggregator's methods
             pre_crm_summary = self._aggregator._generate_pre_crm_summary(combined)

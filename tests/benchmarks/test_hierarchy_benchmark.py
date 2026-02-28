@@ -134,12 +134,13 @@ class TestHierarchyBenchmark10K:
 
         loans = dataset_10k["loans"]
         contingents = dataset_10k["contingents"]
+        facilities = dataset_10k["facilities"]
         facility_mappings = dataset_10k["facility_mappings"]
 
         # Benchmark unification
         def unify():
             return resolver._unify_exposures(
-                loans, contingents, facility_mappings, counterparty_lookup
+                loans, contingents, facilities, facility_mappings, counterparty_lookup
             )
 
         result, errors = benchmark(unify)
@@ -282,11 +283,12 @@ class TestHierarchyBenchmark100K:
 
         loans = dataset_100k["loans"]
         contingents = dataset_100k["contingents"]
+        facilities = dataset_100k["facilities"]
         facility_mappings = dataset_100k["facility_mappings"]
 
         def unify():
             return resolver._unify_exposures(
-                loans, contingents, facility_mappings, counterparty_lookup
+                loans, contingents, facilities, facility_mappings, counterparty_lookup
             )
 
         result, _ = benchmark(unify)

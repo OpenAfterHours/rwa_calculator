@@ -21,40 +21,51 @@ tests/benchmarks/
 
 ## Running Benchmarks
 
-### All Benchmarks
+Benchmark tests are marked with `@pytest.mark.benchmark` and are skipped by default (`--benchmark-skip` in pyproject.toml). Use `--benchmark-only` or override `addopts` to run them.
+
+### All Benchmarks (10K + 100K)
 
 ```bash
-# Run all benchmark tests
-uv run pytest tests/benchmarks/ -v
+# Run all benchmarks except 1M/10M (recommended)
+uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m and not 1M" -o "addopts=" --benchmark-only -v
 
-# With detailed timing
-uv run pytest tests/benchmarks/ -v --tb=short
+# With detailed timing on failure
+uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m" -o "addopts=" --benchmark-only -v --tb=short
 ```
 
 ### By Scale
 
 ```bash
 # Quick tests (10K counterparties)
-uv run pytest tests/benchmarks/ -m scale_10k -v
+uv run pytest tests/benchmarks/ -m scale_10k -o "addopts=" --benchmark-only -v
 
 # Standard benchmarks (100K counterparties)
-uv run pytest tests/benchmarks/ -m scale_100k -v
+uv run pytest tests/benchmarks/ -m scale_100k -o "addopts=" --benchmark-only -v
 
-# Large scale (1M counterparties) - slower
-uv run pytest tests/benchmarks/ -m scale_1m -v
+# Large scale (1M counterparties) - requires significant memory
+uv run pytest tests/benchmarks/ -m scale_1m -o "addopts=" --benchmark-only -v
 
 # Enterprise scale (10M counterparties) - very slow
-uv run pytest tests/benchmarks/ -m scale_10m -v
+uv run pytest tests/benchmarks/ -m scale_10m -o "addopts=" --benchmark-only -v
 ```
 
 ### Skip Slow Tests
 
 ```bash
-# Skip 1M+ scale tests
-uv run pytest tests/benchmarks/ -m "not slow" -v
+# Skip 1M+ scale tests (default recommendation)
+uv run pytest tests/benchmarks/ -m "benchmark and not slow" -o "addopts=" --benchmark-only -v
+```
 
-# Only memory benchmarks
-uv run pytest tests/benchmarks/ -m benchmark -v
+### Profiling Scripts
+
+In addition to pytest benchmarks, standalone profiling scripts provide stage-by-stage breakdowns:
+
+```bash
+# Full pipeline stage breakdown (hierarchy → classifier → CRM → calculators)
+uv run python -m tests.benchmarks.profile_stage_breakdown
+
+# Hierarchy and classifier sub-stage profiling
+uv run python -m tests.benchmarks.profile_hierarchy_classifier
 ```
 
 ## Test Markers
@@ -200,28 +211,13 @@ Individual component performance at 100K scale:
 
 ### IRB Formula Benchmarks
 
-The IRB formula implementation uses pure Polars expressions with `polars-normal-stats` for statistical functions, enabling full lazy evaluation and streaming.
-
-#### Performance Results
-
-| Scale | Mean Time | Throughput |
-|------:|----------:|-----------:|
-| 10,000 | 7.2 ms | 1.4M rows/s |
-| 100,000 | 32.3 ms | 3.1M rows/s |
-| 1,000,000 | 298 ms | 3.4M rows/s |
+The IRB formula implementation uses pure Polars expressions with `polars-normal-stats` for statistical functions, enabling full lazy evaluation.
 
 Key benefits of the pure Polars implementation:
 
 - **Full lazy evaluation**: Query optimization preserved throughout
-- **Streaming-capable**: Datasets larger than memory can be processed
 - **No data conversion**: No NumPy/SciPy overhead
 - **Sub-second for 1M rows**: 1 million IRB exposures processed in ~300ms
-
-Run the IRB formula benchmark:
-
-```bash
-uv run python tests/benchmarks/benchmark_irb_formulas.py
-```
 
 ### Memory Benchmarks
 
@@ -253,49 +249,87 @@ uv run python tests/benchmarks/benchmark_irb_formulas.py
 | 1M | < 120 sec | - |
 | 10M | < 20 min | - |
 
+### Measured Results (100K, v0.1.28)
+
+Results from `pytest-benchmark` on a typical development machine (100K counterparties, ~365K exposures):
+
+| Test | Min (ms) | Mean (ms) |
+|------|----------|-----------|
+| Hierarchy resolve | 67 | 72 |
+| Counterparty lookup | 45 | 51 |
+| Exposure unification | 19 | 22 |
+| Classifier | 730 | 757 |
+| SA calculator | 271 | 310 |
+| **Full pipeline (SA only)** | **1,611** | **1,710** |
+| **Full pipeline (CRR)** | **1,848** | **1,931** |
+| Full pipeline (IRB + slotting) | 2,092 | 2,210 |
+| Basel 3.1 with output floor | 2,058 | 2,110 |
+
+#### Pipeline Stage Breakdown (from profiler)
+
+| Stage | Best (ms) | Mean (ms) |
+|-------|-----------|-----------|
+| Hierarchy | 383 | 400 |
+| Classifier | 212 | 230 |
+| CRM | 669 | 710 |
+| Calculators (SA+IRB+Slotting) | 309 | 340 |
+| **Total (stages)** | **1,634** | **1,774** |
+
 ---
 
 ## Writing Benchmark Tests
 
 ### Basic Structure
 
+Tests use the `pytest-benchmark` fixture for accurate timing with multiple rounds:
+
 ```python
 import pytest
-import time
 
+@pytest.mark.benchmark
+@pytest.mark.scale_100k
 class TestMyBenchmark:
     """Benchmark tests for MyComponent."""
 
-    @pytest.mark.scale_100k
-    def test_my_component_100k(self, dataset_100k):
-        """Test MyComponent at 100K scale."""
-        start = time.perf_counter()
+    def test_my_component_100k(self, benchmark, dataset_100k):
+        """Benchmark MyComponent at 100K scale."""
+        raw_data = create_raw_data_bundle(dataset_100k)
+        config = CalculationConfig.crr(date(2026, 1, 1))
 
-        # Run the operation
-        result = my_component.process(dataset_100k)
+        def run():
+            result = my_component.process(raw_data, config)
+            _ = result.collect()  # Force lazy evaluation
+            return result
 
-        duration = time.perf_counter() - start
-
-        # Assert performance target
-        assert duration < 10.0, f"Expected < 10s, got {duration:.2f}s"
-
-        # Assert correctness
-        assert result.is_valid
+        result = benchmark(run)
+        assert result is not None
 ```
 
 ### Using Dataset Generators
 
-The benchmark tests use dataset generators that create realistic data distributions:
+The benchmark tests use dataset generators with cached parquet files for fast loading. Datasets are cached in `tests/benchmarks/data/` and regenerated only when `--benchmark-regenerate` is passed:
 
 ```python
-@pytest.fixture
+# Session-scoped fixture — generates once, cached to parquet
+@pytest.fixture(scope="session")
 def dataset_100k():
-    """Generate 100K counterparty dataset."""
-    return generate_dataset(
-        num_counterparties=100_000,
-        facilities_per_counterparty=3,
-        loans_per_facility=2,
+    """Load or generate 100K counterparty dataset."""
+    return get_or_create_dataset(
+        scale="100k",
+        n_counterparties=100_000,
+        hierarchy_depth=3,
+        seed=42,
     )
+```
+
+To regenerate cached datasets:
+
+```bash
+# Regenerate all cached datasets
+uv run pytest tests/benchmarks/ -o "addopts=" --benchmark-only --benchmark-regenerate -v
+
+# Regenerate specific scale only
+uv run pytest tests/benchmarks/ -o "addopts=" --benchmark-only --benchmark-regenerate-scale=100k -v
 ```
 
 ### Memory Testing
@@ -325,16 +359,16 @@ def test_memory_usage(self, dataset):
 ### Recommended CI Configuration
 
 ```yaml
-# Run quick benchmarks on every PR
+# Run quick benchmarks on every PR (10K + 100K, excludes 1M/10M)
 benchmark-quick:
   script:
-    - uv run pytest tests/benchmarks/ -m "scale_10k or scale_100k" -v
+    - uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m" -o "addopts=" --benchmark-only -v
 
-# Run full benchmarks nightly
+# Run full benchmarks nightly (includes 1M)
 benchmark-full:
   schedule: "0 2 * * *"  # 2 AM daily
   script:
-    - uv run pytest tests/benchmarks/ -v --tb=short
+    - uv run pytest tests/benchmarks/ -m "benchmark and not slow" -o "addopts=" --benchmark-only -v --tb=short
 ```
 
 ### Performance Regression Detection
@@ -343,7 +377,7 @@ Monitor benchmark results over time to detect regressions:
 
 ```bash
 # Generate benchmark report
-uv run pytest tests/benchmarks/ -v --benchmark-json=benchmark.json
+uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m" -o "addopts=" --benchmark-only --benchmark-json=benchmark.json
 
 # Compare with baseline
 uv run pytest-benchmark compare benchmark.json baseline.json

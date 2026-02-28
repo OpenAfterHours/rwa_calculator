@@ -402,13 +402,13 @@ class TestComponentBenchmarks100K:
         classified = classifier.classify(resolved, config)
 
         crm = CRMProcessor()
-        crm_adjusted = crm.process(classified, resolved, config)
+        crm_adjusted = crm.get_crm_adjusted_bundle(classified, config)
 
         sa_calc = SACalculator()
 
         def calculate_sa():
-            result = sa_calc.calculate(crm_adjusted.sa_adjusted, config)
-            _ = result.collect(engine=BENCHMARK_ENGINE)
+            result = sa_calc.calculate(crm_adjusted, config)
+            _ = result.frame.collect()
             return result
 
         result = benchmark(calculate_sa)

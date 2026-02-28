@@ -369,6 +369,7 @@ def generate_facilities(
         "risk_type": risk_types,
         "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
         "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
+        "is_buy_to_let": np.full(n_facilities, None),  # BTL flag for SME supporting factor
     }).cast(FACILITY_SCHEMA).lazy()
 
 
@@ -538,12 +539,11 @@ def generate_loans(
         ) if False else [base_date + timedelta(days=int(d)) for d in maturity_days],
         "currency": currencies,
         "drawn_amount": drawn_amounts,
+        "interest": np.zeros(n_loans),  # Accrued interest
         "lgd": lgd,
         "beel": np.zeros(n_loans),
         "seniority": seniority,
-        "risk_type": np.full(n_loans, "FR"),  # Loans are already drawn, full risk
-        "ccf_modelled": np.full(n_loans, None),  # No modelled CCF for loans
-        "is_short_term_trade_lc": np.full(n_loans, None),  # N/A for loans
+        "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
     }).cast(LOAN_SCHEMA)
 
     return df.lazy()
@@ -852,6 +852,7 @@ def generate_contingents(
         "risk_type": risk_types,
         "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
         "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
+        "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default
     }).cast(CONTINGENTS_SCHEMA).lazy()
 
 
@@ -980,6 +981,7 @@ def generate_collateral(
         "maturity_date": maturity_dates,
         "market_value": market_values,
         "nominal_value": nominal_values,
+        "pledge_percentage": np.full(n_collateral, None),  # Not used in benchmarks
         "beneficiary_type": np.full(n_collateral, "loan"),
         "beneficiary_reference": beneficiary_refs,
         "issuer_cqs": issuer_cqs,

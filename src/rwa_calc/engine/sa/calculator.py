@@ -150,6 +150,92 @@ class SACalculator:
             errors=errors,
         )
 
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply SA risk weights to SA rows on a unified frame.
+
+        Operates on the full unified frame (SA + IRB + slotting rows together).
+        Only modifies columns for rows where approach == 'standardised'.
+
+        Steps:
+        1. Join risk weight table (unconditional — SA-equivalent RW for output floor)
+        2. Apply SA-specific RW overrides (mortgage LTV, retail fixed, etc.)
+        3. Apply SA guarantee substitution
+        4. Calculate RWA = EAD x RW (SA rows only)
+        5. Apply supporting factors (SA rows only)
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with SA columns populated for SA rows
+        """
+        is_sa = pl.col("approach") == ApproachType.SA.value
+
+        # Step 1-2: Apply risk weights (runs unconditionally — also provides
+        # SA-equivalent RW for IRB output floor)
+        exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
+        exposures = self._apply_guarantee_substitution(exposures, config)
+
+        # Step 4: Calculate pre-factor RWA (SA rows only)
+        schema = exposures.collect_schema()
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        exposures = exposures.with_columns([
+            pl.when(is_sa)
+            .then(pl.col(ead_col) * pl.col("risk_weight"))
+            .otherwise(pl.col("rwa_pre_factor") if "rwa_pre_factor" in schema.names() else pl.lit(None).cast(pl.Float64))
+            .alias("rwa_pre_factor"),
+        ])
+
+        # Step 5: Apply supporting factors (SA rows only)
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        return exposures
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate SA RWA on pre-filtered SA-only rows.
+
+        Unlike calculate_unified(), expects only SA rows — no approach guards
+        needed for RWA calculation. Risk weight join runs on ~55K SA rows
+        instead of the full 100K unified frame.
+
+        Args:
+            exposures: Pre-filtered SA rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with SA RWA columns populated
+        """
+        # Step 1-2: Apply risk weights
+        exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 3: Guarantee substitution
+        exposures = self._apply_guarantee_substitution(exposures, config)
+
+        # Step 4: Calculate pre-factor RWA (all rows are SA — no guard needed)
+        schema = exposures.collect_schema()
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        exposures = exposures.with_columns(
+            (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
+        )
+
+        # Step 5: Apply supporting factors
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        return exposures
+
     def _apply_risk_weights(
         self,
         exposures: pl.LazyFrame,
@@ -174,41 +260,40 @@ class SACalculator:
         use_uk_deviation = config.base_currency == "GBP"
         rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
-        # Ensure required columns exist
+        # Ensure required columns exist (single with_columns call)
         schema = exposures.collect_schema()
+        missing_cols = []
         if "ltv" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(None).cast(pl.Float64).alias("ltv"),
-            ])
+            missing_cols.append(pl.lit(None).cast(pl.Float64).alias("ltv"))
         if "has_income_cover" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("has_income_cover"),
-            ])
+            missing_cols.append(pl.lit(False).alias("has_income_cover"))
         if "book_code" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit("").alias("book_code"),
-            ])
+            missing_cols.append(pl.lit("").alias("book_code"))
         if "cp_is_managed_as_retail" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("cp_is_managed_as_retail"),
-            ])
+            missing_cols.append(pl.lit(False).alias("cp_is_managed_as_retail"))
+        if missing_cols:
+            exposures = exposures.with_columns(missing_cols)
 
         # Prepare exposures for join
-        # Normalize exposure class names for matching
+        # Compute uppercase once for all comparisons (avoids repeated regex)
         # Use sentinel value -1 for null CQS to allow join (null != null in joins)
+        _upper = pl.col("exposure_class").str.to_uppercase()
         exposures = exposures.with_columns([
             # Map detailed classes to lookup classes
-            pl.when(pl.col("exposure_class").str.contains("(?i)central_govt"))
+            pl.when(_upper.str.contains("CENTRAL_GOVT", literal=True))
             .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
-            .when(pl.col("exposure_class").str.contains("(?i)institution"))
+            .when(_upper.str.contains("INSTITUTION", literal=True))
             .then(pl.lit("INSTITUTION"))
-            .when(pl.col("exposure_class").str.contains("(?i)corporate"))
+            .when(_upper.str.contains("CORPORATE", literal=True))
             .then(pl.lit("CORPORATE"))
-            .otherwise(pl.col("exposure_class").str.to_uppercase())
+            .otherwise(_upper)
             .alias("_lookup_class"),
 
             # Use -1 as sentinel for null CQS (for join matching)
             pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("_lookup_cqs"),
+
+            # Cache uppercase for risk weight override chain
+            _upper.alias("_upper_class"),
         ])
 
         # Prepare risk weight table with same sentinel for null CQS
@@ -234,10 +319,14 @@ class SACalculator:
         cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
         cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
 
+        _uc = pl.col("_upper_class")
         exposures = exposures.with_columns([
             # Order matters: check specific classes before generic ones
             # 1. Residential mortgage: LTV-based (must come before retail)
-            pl.when(pl.col("exposure_class").str.contains("(?i)mortgage|residential"))
+            pl.when(
+                _uc.str.contains("MORTGAGE", literal=True)
+                | _uc.str.contains("RESIDENTIAL", literal=True)
+            )
             .then(
                 pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
                 .then(pl.lit(resi_rw_low))
@@ -253,7 +342,10 @@ class SACalculator:
             )
 
             # 2. Commercial RE: LTV + income cover based
-            .when(pl.col("exposure_class").str.contains("(?i)commercial.*re|cre"))
+            .when(
+                _uc.str.contains("COMMERCIAL", literal=True)
+                | _uc.str.contains("CRE", literal=True)
+            )
             .then(
                 pl.when(
                     (pl.col("ltv").fill_null(1.0) <= cre_threshold) &
@@ -265,27 +357,30 @@ class SACalculator:
 
             # 3. SME managed as retail: 75% RW (CRR Art. 123)
             .when(
-                (pl.col("exposure_class").str.contains("(?i)sme")) &
-                (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                _uc.str.contains("SME", literal=True)
+                & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
             )
             .then(pl.lit(retail_rw))
 
             # 4. Corporate SME: 100% RW (then reduced by SME supporting factor)
-            .when(pl.col("exposure_class").str.contains("(?i)corporate.*sme|sme.*corporate"))
+            .when(
+                _uc.str.contains("CORPORATE", literal=True)
+                & _uc.str.contains("SME", literal=True)
+            )
             .then(pl.lit(1.0))
 
             # 5. Retail (non-mortgage): 75% flat
-            .when(pl.col("exposure_class").str.contains("(?i)retail"))
+            .when(_uc.str.contains("RETAIL", literal=True))
             .then(pl.lit(retail_rw))
 
-            # 5. Default: use joined CQS-based risk weight, or 100%
+            # 6. Default: use joined CQS-based risk weight, or 100%
             .otherwise(pl.col("risk_weight").fill_null(1.0))
             .alias("risk_weight"),
         ])
 
         # Clean up temporary columns
         exposures = exposures.drop([
-            col for col in ["_lookup_class", "_lookup_cqs", "risk_weight_rw"]
+            col for col in ["_lookup_class", "_lookup_cqs", "_upper_class", "risk_weight_rw"]
             if col in exposures.collect_schema().names()
         ])
 
@@ -334,11 +429,12 @@ class SACalculator:
         # Sovereign: 0%, 20%, 50%, 100%, 100%, 150%
         # Institution (UK): 20%, 30%, 50%, 100%, 100%, 150%
         # Corporate: 20%, 50%, 100%, 100%, 150%, 150%
+        _ugt = pl.col("guarantor_entity_type").str.to_uppercase()
         exposures = exposures.with_columns([
             pl.when(pl.col("guaranteed_portion") <= 0)
             .then(pl.lit(None).cast(pl.Float64))
             # Sovereign guarantors
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)sovereign"))
+            .when(_ugt.str.contains("SOVEREIGN", literal=True))
             .then(
                 pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.0))
                 .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.20))
@@ -348,7 +444,7 @@ class SACalculator:
                 .otherwise(pl.lit(1.0))  # Unrated
             )
             # Institution guarantors (UK deviation: CQS 2 = 30%)
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)institution"))
+            .when(_ugt.str.contains("INSTITUTION", literal=True))
             .then(
                 pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
                 .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
@@ -358,7 +454,7 @@ class SACalculator:
                 .otherwise(pl.lit(0.40))  # Unrated
             )
             # Corporate guarantors
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)corporate"))
+            .when(_ugt.str.contains("CORPORATE", literal=True))
             .then(
                 pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
                 .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.50))

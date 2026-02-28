@@ -185,7 +185,7 @@ class TestPipelineBenchmark100K:
         """
         Benchmark full SA pipeline at 100K scale.
 
-        Target: < 10 seconds
+        Target: < 3 seconds
         """
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(BENCHMARK_REPORTING_DATE)
@@ -215,7 +215,7 @@ class TestPipelineBenchmark100K:
         """
         Benchmark full CRR pipeline (SA + IRB) at 100K scale.
 
-        Target: < 15 seconds
+        Target: < 3 seconds
         """
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(
@@ -260,12 +260,14 @@ class TestPipelineBenchmark100K:
 
         exposure_count = benchmark(run_pipeline)
 
-        # Get timing from benchmark
-        # benchmark.stats gives us timing info
-        mean_time = benchmark.stats.stats.mean if hasattr(benchmark, 'stats') else 1.0
-
-        print(f"\nExposures processed: {exposure_count}")
-        print(f"Approximate throughput: {exposure_count / mean_time:.0f} exposures/second")
+        # Get timing from benchmark (stats is None when benchmarking is disabled)
+        if benchmark.stats is not None:
+            mean_time = benchmark.stats.stats.mean
+            print(f"\nExposures processed: {exposure_count}")
+            print(f"Approximate throughput: {exposure_count / mean_time:.0f} exposures/second")
+        else:
+            print(f"\nExposures processed: {exposure_count}")
+            print("Throughput: benchmarking disabled, run with --benchmark-enable for timing")
 
 
 # =============================================================================
@@ -402,13 +404,13 @@ class TestComponentBenchmarks100K:
         classified = classifier.classify(resolved, config)
 
         crm = CRMProcessor()
-        crm_adjusted = crm.process(classified, resolved, config)
+        crm_adjusted = crm.get_crm_adjusted_bundle(classified, config)
 
         sa_calc = SACalculator()
 
         def calculate_sa():
-            result = sa_calc.calculate(crm_adjusted.sa_adjusted, config)
-            _ = result.collect(engine=BENCHMARK_ENGINE)
+            result = sa_calc.calculate(crm_adjusted, config)
+            _ = result.frame.collect()
             return result
 
         result = benchmark(calculate_sa)
@@ -618,6 +620,7 @@ class TestApproachBenchmarks100K:
 
 @pytest.mark.benchmark
 @pytest.mark.scale_1m
+@pytest.mark.slow
 class TestApproachBenchmarks1M:
     """Benchmark different calculation approaches at 1M scale."""
 

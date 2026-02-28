@@ -99,7 +99,7 @@ known-first-party = ["rwa_calc"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --benchmark-skip"
+addopts = "-v --tb=short --benchmark-disable -m 'not slow'"
 markers = [
     "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
     "slow: mark test as slow (10M+ scale, may take several minutes)",

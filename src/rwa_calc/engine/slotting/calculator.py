@@ -49,7 +49,7 @@ from rwa_calc.data.tables.crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
 )
-from rwa_calc.domain.enums import SlottingCategory
+from rwa_calc.domain.enums import ApproachType, SlottingCategory
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -176,6 +176,61 @@ class SlottingCalculator:
             calculation_audit=audit,
             errors=errors,
         )
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply slotting weights to slotting rows on a unified frame.
+
+        Uses filter-process-merge to isolate slotting processing from
+        other approaches' columns.
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with slotting columns populated for slotting rows
+        """
+        is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
+
+        # Split: separate slotting rows from non-slotting
+        non_slotting = exposures.filter(~is_slotting)
+        slotting = exposures.filter(is_slotting)
+
+        # Process: run slotting chain on slotting rows only
+        slotting = self._prepare_columns(slotting, config)
+        slotting = self._apply_slotting_weights(slotting, config)
+        slotting = self._calculate_rwa(slotting)
+
+        # Merge: concat slotting results back with non-slotting rows
+        return pl.concat([non_slotting, slotting], how="diagonal_relaxed")
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate Slotting RWA on pre-filtered slotting-only rows.
+
+        Unlike calculate_unified(), expects only slotting rows — no
+        filter/concat wrapper needed.
+
+        Args:
+            exposures: Pre-filtered slotting rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with slotting RWA columns populated
+        """
+        exposures = self._prepare_columns(exposures, config)
+        exposures = self._apply_slotting_weights(exposures, config)
+        exposures = self._calculate_rwa(exposures)
+        return exposures
 
     def _prepare_columns(
         self,

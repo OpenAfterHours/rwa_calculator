@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- (Next release changes will go here)
+### Fixed
+- Benchmark data generators now include all schema columns (`is_buy_to_let` for loans/facilities, `interest` for loans, `bs_type` for contingents, `pledge_percentage` for collateral)
+- Benchmark tests updated for current API: `_unify_exposures` signature (added `facilities` arg), `CRMProcessor.get_crm_adjusted_bundle` (replaces removed `process` method)
+- Protocol test stubs updated to include `calculate_branch` method for SA and IRB calculators
+
+### Performance
+- Pipeline optimizations: pre-computed classifier intermediates, deferred audit string, slimmed counterparty join, eliminated unnecessary `collect_schema()` calls
+- Full CRR pipeline at 100K: ~1.7s mean (SA-only ~1.7s, CRR ~1.9s)
 
 ---
 

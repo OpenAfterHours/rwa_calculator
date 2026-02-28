@@ -15,10 +15,17 @@
       "WebFetch(domain:www.katalysys.com)",
       "WebFetch(domain:www.grantthornton.co.uk)",
       "WebFetch(domain:eur-lex.europa.eu)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "mcp__polars-mcp__polars_get_docstring",
+      "mcp__polars-mcp__polars_search_api"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "polars-mcp"
-  ]
+  ],
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  }
 }

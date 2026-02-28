@@ -112,11 +112,11 @@ uv run pytest -v
 # Run with coverage
 uv run pytest --cov=src/rwa_calc
 
-# Run benchmarks
-uv run pytest tests/benchmarks/ -v
+# Run benchmarks (10K + 100K, excludes 1M/10M)
+uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m" -o "addopts=" --benchmark-only -v
 ```
 
-**Test Results:** 1,286 tests
+**Test Results:** 1,285 tests (1,253 unit/acceptance + 32 benchmark)
 
 ## License
 

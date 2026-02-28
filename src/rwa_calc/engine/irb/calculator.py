@@ -47,6 +47,7 @@ from rwa_calc.engine.irb.formulas import (
     calculate_maturity_adjustment,
     calculate_expected_loss,
 )
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 # Import namespace to ensure it's registered
@@ -160,6 +161,82 @@ class IRBCalculator:
             calculation_audit=exposures.irb.build_audit(),
             errors=errors,
         )
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply IRB formulas to IRB rows on a unified frame.
+
+        Uses filter-process-merge to avoid running expensive IRB formulas
+        (normal_ppf, normal_cdf) on non-IRB rows. Filters IRB rows out,
+        runs the namespace chain on the subset, then concats back.
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with IRB columns populated for IRB rows
+        """
+        is_irb = (
+            (pl.col("approach") == ApproachType.FIRB.value)
+            | (pl.col("approach") == ApproachType.AIRB.value)
+        )
+
+        # Split: separate IRB rows from non-IRB
+        non_irb = exposures.filter(~is_irb)
+        irb = exposures.filter(is_irb)
+
+        # Process: run IRB namespace chain on IRB rows only
+        irb = (
+            irb
+            .irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .irb.apply_all_formulas(config)
+            .irb.apply_guarantee_substitution(config)
+        )
+
+        # Apply supporting factors (CRR only — Art. 501)
+        irb = self._apply_supporting_factors(irb, config)
+
+        # Merge: concat IRB results back with non-IRB rows
+        return pl.concat([non_irb, irb], how="diagonal_relaxed")
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate IRB RWA on pre-filtered IRB-only rows.
+
+        Unlike calculate_unified(), expects only IRB rows — no filter/concat
+        wrapper needed. Runs the namespace chain directly.
+
+        Args:
+            exposures: Pre-filtered IRB rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with IRB RWA columns populated
+        """
+        exposures = (
+            exposures
+            .irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .irb.apply_all_formulas(config)
+            .irb.apply_guarantee_substitution(config)
+        )
+
+        # Apply supporting factors (CRR only — Art. 501)
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        return exposures
 
     def calculate_expected_loss(
         self,

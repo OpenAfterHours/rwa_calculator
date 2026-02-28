@@ -194,6 +194,40 @@ class SACalculatorProtocol(Protocol):
     Output: LazyFrameResult with SA calculations
     """
 
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply SA risk weights on unified frame (single-pass pipeline).
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with SA columns populated for SA rows
+        """
+        ...
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate SA RWA on pre-filtered SA-only rows.
+
+        Args:
+            exposures: Pre-filtered SA rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with SA RWA columns populated
+        """
+        ...
+
     def calculate(
         self,
         data: CRMAdjustedBundle,
@@ -228,6 +262,40 @@ class IRBCalculatorProtocol(Protocol):
     Input: CRMAdjustedBundle (IRB exposures)
     Output: LazyFrameResult with IRB calculations
     """
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply IRB formulas on unified frame (single-pass pipeline).
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with IRB columns populated for IRB rows
+        """
+        ...
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate IRB RWA on pre-filtered IRB-only rows.
+
+        Args:
+            exposures: Pre-filtered IRB rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with IRB RWA columns populated
+        """
+        ...
 
     def calculate(
         self,
@@ -279,6 +347,40 @@ class SlottingCalculatorProtocol(Protocol):
     Input: CRMAdjustedBundle (slotting exposures)
     Output: LazyFrameResult with slotting calculations
     """
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply slotting weights on unified frame (single-pass pipeline).
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with slotting columns populated for slotting rows
+        """
+        ...
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate Slotting RWA on pre-filtered slotting-only rows.
+
+        Args:
+            exposures: Pre-filtered slotting rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with slotting RWA columns populated
+        """
+        ...
 
     def calculate(
         self,

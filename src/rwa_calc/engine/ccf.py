@@ -49,23 +49,31 @@ def on_balance_ead() -> pl.Expr:
     return pl.col("drawn_amount").clip(lower_bound=0.0) + pl.col("interest").fill_null(0.0)
 
 
-def sa_ccf_expression(risk_type_col: str = "risk_type") -> pl.Expr:
+def sa_ccf_expression(
+    risk_type_col: str = "risk_type",
+    is_basel_3_1: bool = False,
+) -> pl.Expr:
     """
     Return a Polars expression that maps risk_type to SA CCFs.
 
-    SA CCF values per CRR Art. 111:
+    CRR (Art. 111):
     - FR / full_risk: 100%
     - MR / medium_risk: 50%
     - MLR / medium_low_risk: 20%
     - LR / low_risk: 0%
 
+    Basel 3.1 (CRE20.88): LR (unconditionally cancellable) changes to 10%.
+
     Args:
         risk_type_col: Name of the risk_type column (default "risk_type")
+        is_basel_3_1: Whether to apply Basel 3.1 CCF values
 
     Returns:
         Polars expression resolving to Float64 SA CCF values
     """
     normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
+    # Basel 3.1: UCC/LR gets 10% instead of 0% (CRE20.88)
+    lr_ccf = 0.10 if is_basel_3_1 else 0.0
     return (
         pl.when(normalized.is_in(["fr", "full_risk"]))
         .then(pl.lit(1.0))
@@ -74,7 +82,7 @@ def sa_ccf_expression(risk_type_col: str = "risk_type") -> pl.Expr:
         .when(normalized.is_in(["mlr", "medium_low_risk"]))
         .then(pl.lit(0.2))
         .when(normalized.is_in(["lr", "low_risk"]))
-        .then(pl.lit(0.0))
+        .then(pl.lit(lr_ccf))
         .otherwise(pl.lit(0.5))  # Default to MR (50%) for SA
     )
 
@@ -128,23 +136,26 @@ class CCFCalculator:
         has_short_term_trade_lc = "is_short_term_trade_lc" in schema.names()
         has_interest = "interest" in schema.names()
 
+        is_b31 = config.is_basel_3_1
+
         # Calculate CCF from risk_type for SA approach
-        # FR=100%, MR=50%, MLR=20%, LR=0%
+        # FR=100%, MR=50%, MLR=20%, LR=0% (CRR) or 10% (Basel 3.1)
         if has_risk_type:
             exposures = exposures.with_columns([
                 pl.col("risk_type").fill_null("").str.to_lowercase().alias("_risk_type_normalized"),
-                sa_ccf_expression().alias("_sa_ccf_from_risk_type"),
+                sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),
             ])
 
             # Calculate CCF from risk_type for F-IRB approach
-            # FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0%
+            # FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0% (CRR) or 10% (Basel 3.1)
             # Exception: Short-term trade LCs retain 20% (CRR Art. 166(9))
+            firb_lr_ccf = 0.10 if is_b31 else 0.0
             if has_short_term_trade_lc:
                 exposures = exposures.with_columns([
                     pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
                     .then(pl.lit(1.0))
                     .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
-                    .then(pl.lit(0.0))
+                    .then(pl.lit(firb_lr_ccf))
                     # Art. 166(9) exception: short-term trade LCs for goods movement retain 20%
                     .when(
                         pl.col("_risk_type_normalized").is_in(["mlr", "medium_low_risk"])
@@ -163,7 +174,7 @@ class CCFCalculator:
                     .when(pl.col("_risk_type_normalized").is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
                     .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
                     .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
-                    .then(pl.lit(0.0))
+                    .then(pl.lit(firb_lr_ccf))
                     .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
                     .alias("_firb_ccf_from_risk_type"),
                 ])
@@ -180,15 +191,24 @@ class CCFCalculator:
                 # Cast ccf_modelled to Float64 in case it's stored as String
                 ccf_modelled_expr = pl.col("ccf_modelled").cast(pl.Float64, strict=False)
 
+                # A-IRB CCF with Basel 3.1 floor enforcement (CRE32.27):
+                # modelled CCF must be at least 50% of the SA CCF
+                if is_b31:
+                    airb_ccf_expr = pl.max_horizontal(
+                        ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
+                        pl.col("_sa_ccf_from_risk_type") * 0.5,
+                    )
+                else:
+                    airb_ccf_expr = ccf_modelled_expr.fill_null(
+                        pl.col("_sa_ccf_from_risk_type")
+                    )
+
                 # Full logic with A-IRB ccf_modelled support
                 exposures = exposures.with_columns([
                     pl.when(pl.col("nominal_amount") == 0)
                     .then(pl.lit(0.0))  # Loans with no contingent - no CCF
                     .when(pl.col("approach") == ApproachType.AIRB.value)
-                    .then(
-                        # A-IRB: use ccf_modelled if provided, else fall back to SA
-                        ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type"))
-                    )
+                    .then(airb_ccf_expr)
                     .when(pl.col("approach") == ApproachType.FIRB.value)
                     .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule
                     .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA

@@ -48,12 +48,8 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.data.tables.crr_equity_rw import (
-    SA_EQUITY_RISK_WEIGHTS,
-    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
-    lookup_equity_rw,
-)
-from rwa_calc.domain.enums import ApproachType, EquityType, ExposureClass
+from rwa_calc.data.tables.crr_equity_rw import lookup_equity_rw
+from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -179,8 +175,12 @@ class EquityCalculator:
         """
         Determine SA vs IRB_SIMPLE based on config.
 
-        If the firm has IRB permissions (FIRB or AIRB) for any exposure class,
-        they must use Article 155 IRB Simple approach for equity.
+        Under Basel 3.1 (CRE20.58-62): IRB for equity is removed — all equity
+        exposures must use SA treatment. The IRB Simple Risk Weight Method
+        (Art. 155: 190%/290%/370%) is no longer available.
+
+        Under CRR: If the firm has IRB permissions (FIRB or AIRB) for any
+        exposure class, they must use Article 155 IRB Simple approach for equity.
         If SA-only, use Article 133 SA approach.
 
         Args:
@@ -189,13 +189,17 @@ class EquityCalculator:
         Returns:
             "sa" for Article 133, "irb_simple" for Article 155
         """
-        # Check if firm has any IRB permissions beyond SA
+        # Basel 3.1: IRB equity removed — all equity uses SA (CRE20.58-62)
+        if config.is_basel_3_1:
+            return "sa"
+
+        # CRR: Check if firm has any IRB permissions beyond SA
         # If permissions dict is empty, it's SA-only
         if not config.irb_permissions.permissions:
             return "sa"
 
         # Check if any exposure class has FIRB or AIRB permission
-        for exposure_class, approaches in config.irb_permissions.permissions.items():
+        for _exposure_class, approaches in config.irb_permissions.permissions.items():
             if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
                 return "irb_simple"
 
@@ -417,6 +421,7 @@ class EquityCalculator:
             Dictionary with calculation results
         """
         from datetime import date
+
         from rwa_calc.contracts.config import CalculationConfig
 
         if config is None:

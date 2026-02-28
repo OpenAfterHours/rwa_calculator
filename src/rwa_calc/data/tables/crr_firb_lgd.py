@@ -14,14 +14,12 @@ from decimal import Decimal
 
 import polars as pl
 
-from rwa_calc.domain.enums import CollateralType, Seniority
-
-
 # =============================================================================
 # F-IRB SUPERVISORY LGD VALUES (CRR Art. 161)
 # =============================================================================
 
 # Supervisory LGD values by seniority and collateral type
+# CRR values (Art. 161)
 FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
     # Unsecured exposures
     "unsecured_senior": Decimal("0.45"),      # 45% for senior unsecured
@@ -40,6 +38,40 @@ FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
     # Secured by other physical collateral
     "other_physical": Decimal("0.40"),        # 40% for other physical
 }
+
+# Basel 3.1 revised supervisory LGD values (CRE32.9-12, PRA PS9/24)
+# Key changes from CRR: senior 45%→40%, receivables 35%→20%, RE 35%→20%,
+# other physical 40%→25%
+BASEL31_FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
+    # Unsecured exposures
+    "unsecured_senior": Decimal("0.40"),      # 40% (CRR: 45%)
+    "subordinated": Decimal("0.75"),          # 75% (unchanged)
+
+    # Fully secured by eligible financial collateral
+    "financial_collateral": Decimal("0.00"),  # 0% (unchanged)
+
+    # Secured by receivables
+    "receivables": Decimal("0.20"),           # 20% (CRR: 35%)
+
+    # Secured by real estate
+    "residential_re": Decimal("0.20"),        # 20% (CRR: 35%)
+    "commercial_re": Decimal("0.20"),         # 20% (CRR: 35%)
+
+    # Secured by other physical collateral
+    "other_physical": Decimal("0.25"),        # 25% (CRR: 40%)
+}
+
+
+def get_firb_lgd_table_for_framework(is_basel_3_1: bool = False) -> dict[str, Decimal]:
+    """Get the F-IRB supervisory LGD table for the given framework.
+
+    Args:
+        is_basel_3_1: True for Basel 3.1 values, False for CRR values
+
+    Returns:
+        Dictionary of collateral_type -> supervisory LGD
+    """
+    return BASEL31_FIRB_SUPERVISORY_LGD if is_basel_3_1 else FIRB_SUPERVISORY_LGD
 
 # =============================================================================
 # F-IRB OVERCOLLATERALISATION REQUIREMENTS (CRR Art. 230 / CRE32.9-12)
@@ -135,6 +167,7 @@ def get_firb_lgd_table() -> pl.DataFrame:
 def lookup_firb_lgd(
     collateral_type: str | None = None,
     is_subordinated: bool = False,
+    is_basel_3_1: bool = False,
 ) -> Decimal:
     """
     Look up F-IRB supervisory LGD.
@@ -145,44 +178,47 @@ def lookup_firb_lgd(
     Args:
         collateral_type: Type of collateral securing the exposure (None = unsecured)
         is_subordinated: Whether the exposure is subordinated
+        is_basel_3_1: Whether to use Basel 3.1 revised values (CRE32.9-12)
 
     Returns:
         Supervisory LGD as Decimal
     """
+    table = BASEL31_FIRB_SUPERVISORY_LGD if is_basel_3_1 else FIRB_SUPERVISORY_LGD
+
     # Subordinated always gets 75% regardless of collateral
     if is_subordinated:
-        return FIRB_SUPERVISORY_LGD["subordinated"]
+        return table["subordinated"]
 
     # No collateral - senior unsecured
     if collateral_type is None:
-        return FIRB_SUPERVISORY_LGD["unsecured_senior"]
+        return table["unsecured_senior"]
 
     coll_lower = collateral_type.lower()
 
     # Financial collateral
     if coll_lower in ("financial_collateral", "cash", "deposit", "gold"):
-        return FIRB_SUPERVISORY_LGD["financial_collateral"]
+        return table["financial_collateral"]
 
     # Receivables
     if coll_lower in ("receivables", "trade_receivables"):
-        return FIRB_SUPERVISORY_LGD["receivables"]
+        return table["receivables"]
 
     # Real estate
     if coll_lower in ("residential_re", "rre", "residential"):
-        return FIRB_SUPERVISORY_LGD["residential_re"]
+        return table["residential_re"]
 
     if coll_lower in ("commercial_re", "cre", "commercial"):
-        return FIRB_SUPERVISORY_LGD["commercial_re"]
+        return table["commercial_re"]
 
     if coll_lower in ("real_estate", "property"):
-        return FIRB_SUPERVISORY_LGD["residential_re"]  # Default to residential
+        return table["residential_re"]  # Default to residential
 
     # Other physical collateral
     if coll_lower in ("other_physical", "equipment", "inventory"):
-        return FIRB_SUPERVISORY_LGD["other_physical"]
+        return table["other_physical"]
 
     # Unknown - treat as unsecured
-    return FIRB_SUPERVISORY_LGD["unsecured_senior"]
+    return table["unsecured_senior"]
 
 
 def _get_overcollateralisation_params(collateral_type: str) -> tuple[float, float]:

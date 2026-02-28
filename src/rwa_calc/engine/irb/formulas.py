@@ -44,6 +44,112 @@ G_999 = 3.0902323061678132
 
 
 # =============================================================================
+# PD AND LGD FLOOR EXPRESSION HELPERS
+# =============================================================================
+
+
+def _pd_floor_expression(config: CalculationConfig) -> pl.Expr:
+    """
+    Build Polars expression for per-exposure-class PD floor.
+
+    Under CRR (Art. 163): Uniform 0.03% floor for all exposure classes.
+    Under Basel 3.1 (CRE30.55): Differentiated floors:
+        - Corporate/SME: 0.05%
+        - Retail mortgage: 0.05%
+        - QRRE transactors: 0.03%, revolvers: 0.10%
+        - Retail other: 0.05%
+
+    Returns a Polars expression evaluating to the per-row PD floor value.
+    """
+    floors = config.pd_floors
+
+    # Optimisation: if all floors are the same (CRR case), return a scalar
+    all_values = {
+        floors.corporate, floors.corporate_sme, floors.retail_mortgage,
+        floors.retail_other, floors.retail_qrre_transactor, floors.retail_qrre_revolver,
+    }
+    if len(all_values) == 1:
+        return pl.lit(float(all_values.pop()))
+
+    # Basel 3.1: differentiated floors by exposure class
+    exp_class = (
+        pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
+    )
+
+    # For QRRE, distinguish transactor vs revolver if column exists
+    # Default to revolver (conservative) if is_qrre_transactor column not present
+    qrre_floor = pl.lit(float(floors.retail_qrre_revolver))
+
+    return (
+        pl.when(exp_class.str.contains("QRRE"))
+        .then(qrre_floor)
+        .when(exp_class.str.contains("MORTGAGE") | exp_class.str.contains("RESIDENTIAL"))
+        .then(pl.lit(float(floors.retail_mortgage)))
+        .when(exp_class.str.contains("RETAIL"))
+        .then(pl.lit(float(floors.retail_other)))
+        .when(exp_class == "CORPORATE_SME")
+        .then(pl.lit(float(floors.corporate_sme)))
+        .otherwise(pl.lit(float(floors.corporate)))
+    )
+
+
+def _lgd_floor_expression(config: CalculationConfig) -> pl.Expr:
+    """
+    Build Polars expression for per-collateral-type LGD floor.
+
+    Under CRR: No LGD floors (returns 0.0).
+    Under Basel 3.1 (CRE30.41): Differentiated floors for A-IRB:
+        - Unsecured (senior): 25%
+        - Financial collateral: 0%
+        - Receivables: 10%
+        - CRE: 10%, RRE: 5%
+        - Other physical: 15%
+
+    Uses collateral_type column if available, defaults to unsecured (25%)
+    which is the most conservative floor.
+
+    Returns a Polars expression evaluating to the per-row LGD floor value.
+    """
+    if config.is_crr:
+        return pl.lit(0.0)
+
+    floors = config.lgd_floors
+    # Default to unsecured floor (25%) — most conservative
+    return pl.lit(float(floors.unsecured))
+
+
+def _lgd_floor_expression_with_collateral(config: CalculationConfig) -> pl.Expr:
+    """
+    Build Polars expression for per-collateral-type LGD floor when collateral_type
+    column is available.
+
+    This is used when the dataframe has a collateral_type column, allowing
+    precise per-row LGD floors based on the primary collateral type.
+    """
+    if config.is_crr:
+        return pl.lit(0.0)
+
+    floors = config.lgd_floors
+    coll = pl.col("collateral_type").fill_null("unsecured").str.to_lowercase()
+
+    return (
+        pl.when(coll.is_in(["financial_collateral", "cash", "deposit", "gold", "financial"]))
+        .then(pl.lit(float(floors.financial_collateral)))
+        .when(coll.is_in(["receivables", "trade_receivables"]))
+        .then(pl.lit(float(floors.receivables)))
+        .when(coll.is_in(["residential_re", "rre", "residential", "residential_property"]))
+        .then(pl.lit(float(floors.residential_real_estate)))
+        .when(coll.is_in(["commercial_re", "cre", "commercial", "commercial_property"]))
+        .then(pl.lit(float(floors.commercial_real_estate)))
+        .when(coll.is_in(["real_estate", "property", "immovable"]))
+        .then(pl.lit(float(floors.commercial_real_estate)))
+        .when(coll.is_in(["other_physical", "equipment", "inventory"]))
+        .then(pl.lit(float(floors.other_physical)))
+        .otherwise(pl.lit(float(floors.unsecured)))
+    )
+
+
+# =============================================================================
 # MAIN VECTORIZED FUNCTION (pure Polars with polars-normal-stats)
 # =============================================================================
 
@@ -71,7 +177,6 @@ def apply_irb_formulas(
     Returns:
         LazyFrame with IRB calculations added
     """
-    pd_floor = float(config.pd_floors.corporate)
     apply_scaling = config.is_crr
     scaling_factor = 1.06 if apply_scaling else 1.0
 
@@ -87,16 +192,21 @@ def apply_irb_formulas(
     if "requires_fi_scalar" not in schema_names:
         exposures = exposures.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
-    # Step 1: Apply PD floor (pure Polars)
+    # Step 1: Apply per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
+    pd_floor_expr = _pd_floor_expression(config)
     exposures = exposures.with_columns(
-        pl.col("pd").clip(lower_bound=pd_floor).alias("pd_floored")
+        pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
     )
 
-    # Step 2: Apply LGD floor (Basel 3.1 A-IRB only)
+    # Step 2: Apply LGD floor (Basel 3.1 A-IRB only, CRR has no LGD floors)
     if config.is_basel_3_1:
-        lgd_floor = float(config.lgd_floors.unsecured)
+        has_collateral_type = "collateral_type" in schema_names
+        if has_collateral_type:
+            lgd_floor_expr = _lgd_floor_expression_with_collateral(config)
+        else:
+            lgd_floor_expr = _lgd_floor_expression(config)
         exposures = exposures.with_columns(
-            pl.col("lgd").clip(lower_bound=lgd_floor).alias("lgd_floored")
+            pl.max_horizontal(pl.col("lgd"), lgd_floor_expr).alias("lgd_floored")
         )
     else:
         exposures = exposures.with_columns(

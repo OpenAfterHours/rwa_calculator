@@ -35,11 +35,14 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_firb_lgd import FIRB_SUPERVISORY_LGD
+from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
-    _polars_correlation_expr,
+    _lgd_floor_expression,
+    _lgd_floor_expression_with_collateral,
+    _pd_floor_expression,
     _polars_capital_k_expr,
+    _polars_correlation_expr,
     _polars_maturity_adjustment_expr,
 )
 
@@ -148,9 +151,8 @@ class IRBLazyFrame:
         """
         Apply F-IRB supervisory LGD for Foundation IRB exposures.
 
-        F-IRB uses supervisory LGD values per CRR Art. 161:
-        - Senior unsecured: 45%
-        - Subordinated: 75%
+        CRR (Art. 161): Senior unsecured 45%, subordinated 75%
+        Basel 3.1 (CRE32.9-12): Senior unsecured 40%, subordinated 75%
 
         For F-IRB exposures with collateral, the CRM processor calculates
         the effective LGD (lgd_post_crm) based on collateral type and coverage.
@@ -179,8 +181,10 @@ class IRBLazyFrame:
                 pl.col("lgd").cast(pl.Float64, strict=False).alias("lgd"),
             ])
 
-        default_lgd = float(FIRB_SUPERVISORY_LGD["unsecured_senior"])
-        sub_lgd = float(FIRB_SUPERVISORY_LGD["subordinated"])
+        # Use framework-appropriate supervisory LGD values
+        lgd_table = get_firb_lgd_table_for_framework(config.is_basel_3_1)
+        default_lgd = float(lgd_table["unsecured_senior"])
+        sub_lgd = float(lgd_table["subordinated"])
 
         lf = lf.with_columns([
             pl.when(
@@ -287,8 +291,12 @@ class IRBLazyFrame:
         """
         Apply PD floor based on configuration.
 
-        CRR: 0.03% for all classes
-        Basel 3.1: Differentiated by class (0.05% corporate, etc.)
+        CRR (Art. 163): 0.03% for all classes
+        Basel 3.1 (CRE30.55): Differentiated by class
+            - Corporate/SME: 0.05%
+            - Retail mortgage: 0.05%
+            - QRRE revolvers: 0.10%, transactors: 0.03%
+            - Retail other: 0.05%
 
         Args:
             config: Calculation configuration
@@ -296,20 +304,25 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with pd_floored column
         """
-        pd_floor = float(config.pd_floors.corporate)
+        pd_floor_expr = _pd_floor_expression(config)
         return self._lf.with_columns(
-            pl.col("pd").clip(lower_bound=pd_floor).alias("pd_floored")
+            pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         )
 
     def apply_lgd_floor(self, config: CalculationConfig) -> pl.LazyFrame:
         """
-        Apply LGD floor for Basel 3.1 A-IRB.
+        Apply LGD floor for Basel 3.1 A-IRB exposures.
 
         Uses lgd_input (which contains collateral-adjusted LGD for F-IRB)
         as the base for flooring.
 
-        CRR: No LGD floor
-        Basel 3.1: 25% unsecured, varies by collateral
+        CRR: No LGD floor (A-IRB models LGD freely)
+        Basel 3.1 (CRE30.41): Differentiated floors by collateral type:
+            - Unsecured: 25%, Financial: 0%, Receivables: 10%
+            - RRE: 5%, CRE: 10%, Other physical: 15%
+
+        LGD floors only apply to A-IRB own-estimate LGDs. F-IRB supervisory
+        LGDs are regulatory values and don't need flooring.
 
         Args:
             config: Calculation configuration
@@ -317,14 +330,17 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with lgd_floored column
         """
-        # Use lgd_input which has collateral-adjusted LGD for F-IRB
         schema = self._lf.collect_schema()
         lgd_col = "lgd_input" if "lgd_input" in schema.names() else "lgd"
 
         if config.is_basel_3_1:
-            lgd_floor = float(config.lgd_floors.unsecured)
+            has_collateral_type = "collateral_type" in schema.names()
+            if has_collateral_type:
+                lgd_floor_expr = _lgd_floor_expression_with_collateral(config)
+            else:
+                lgd_floor_expr = _lgd_floor_expression(config)
             return self._lf.with_columns(
-                pl.col(lgd_col).clip(lower_bound=lgd_floor).alias("lgd_floored")
+                pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr).alias("lgd_floored")
             )
         return self._lf.with_columns(
             pl.col(lgd_col).alias("lgd_floored")
@@ -751,16 +767,22 @@ class IRBLazyFrame:
         if "requires_fi_scalar" not in schema_names:
             batch1.append(pl.lit(False).alias("requires_fi_scalar"))
 
-        pd_floor = float(config.pd_floors.corporate)
+        # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
+        pd_floor_expr = _pd_floor_expression(config)
         batch1.append(
-            pl.col("pd").clip(lower_bound=pd_floor).alias("pd_floored")
+            pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         )
 
+        # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB)
         lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
         if config.is_basel_3_1:
-            lgd_floor = float(config.lgd_floors.unsecured)
+            has_collateral_type = "collateral_type" in schema_names
+            if has_collateral_type:
+                lgd_floor_expr = _lgd_floor_expression_with_collateral(config)
+            else:
+                lgd_floor_expr = _lgd_floor_expression(config)
             batch1.append(
-                pl.col(lgd_col).clip(lower_bound=lgd_floor).alias("lgd_floored")
+                pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr).alias("lgd_floored")
             )
         else:
             batch1.append(pl.col(lgd_col).alias("lgd_floored"))

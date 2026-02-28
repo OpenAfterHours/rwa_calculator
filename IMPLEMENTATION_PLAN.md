@@ -2,22 +2,18 @@
 
 Status legend: `[ ]` = not started, `[~]` = partial, `[x]` = done
 
-## Priority 1 — CRR Completion (v1.0, target 100% acceptance pass rate)
+## Priority 1 — CRR Completion (v1.0) — COMPLETE
 
-Current state: **91/91 CRR acceptance tests pass (100%)**, 0 skipped, 0 failures. All Priority 1 acceptance test gaps resolved.
+All Priority 1 items are done. **91/91 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed.
 
-- [ ] **CI/CD pipeline** (M1.6) — Only 2 workflows exist: `docs.yml` (MkDocs deploy) and `publish.yml` (PyPI publish). **No workflow runs pytest, ruff, or mypy.** No PR checks. **Action:** Create `.github/workflows/ci.yml` with: (1) ruff check + ruff format --check, (2) mypy --strict, (3) pytest tests/ --benchmark-skip, triggered on push and PR. See `specs/milestones.md`.
+- [x] **CI/CD pipeline** (M1.6) — `.github/workflows/ci.yml` created with 3 parallel jobs: (1) Lint & Format (ruff check + ruff format --check), (2) Type Check (mypy), (3) Tests (pytest with benchmarks disabled, slow tests excluded). Triggers on push to master and PRs targeting master. All 3 quality gates pass locally: ruff clean, mypy clean, 1395 tests pass.
 
 ## Priority 2 — Basel 3.1 Core (v1.1)
 
 ### 2a. Engine gaps (must be fixed for Basel 3.1 correctness)
 
-- [x] **PD floor per exposure class in engine** (FR-1.9 / FR-5.4, CRE30.55) — Implemented. Added `_pd_floor_expression(config)` helper in `formulas.py` that builds a Polars `when/then` chain mapping `exposure_class` to the correct PD floor. CRR uses uniform 0.03%; Basel 3.1 differentiates (corporate 0.05%, QRRE revolver 0.10%, retail mortgage 0.05%). Updated `apply_irb_formulas()`, `namespace.apply_pd_floor()`, and `namespace.apply_all_formulas()`. 17 unit tests cover all exposure classes and both frameworks.
-- [x] **LGD floor per collateral type in engine** (FR-1.5 / FR-5.4, CRE30.41) — Implemented. Added `_lgd_floor_expression(config)` (default unsecured 25%) and `_lgd_floor_expression_with_collateral(config)` (maps `collateral_type` column to per-type floors: financial 0%, RRE 5%, CRE 10%, receivables 10%, other physical 15%). CRR returns 0% (no floors). Used in `apply_irb_formulas()`, `namespace.apply_lgd_floor()`, and `namespace.apply_all_formulas()`. 18 unit tests.
-- [x] **F-IRB supervisory LGD for Basel 3.1** (CRE32.9-12) — Implemented. Added `BASEL31_FIRB_SUPERVISORY_LGD` dictionary with revised values (senior 40%, receivables 20%, RE 20%, other physical 25%). Added `get_firb_lgd_table_for_framework()`. Updated `lookup_firb_lgd()` with `is_basel_3_1` parameter. IRB namespace `apply_firb_lgd()` uses framework-appropriate values. 25 unit tests.
-- [x] **A-IRB CCF floor** (CRE32.27) — Implemented. Under Basel 3.1, A-IRB modelled CCFs are floored at 50% of the SA CCF for the same item type: `ccf = max(ccf_modelled, 0.5 * sa_ccf)`. Added in `CCFCalculator.apply_ccf()` with `is_b31` conditional. 5 unit tests cover floor scenarios.
-- [x] **CCF for unconditionally cancellable commitments** (CRE20.88) — Implemented. `sa_ccf_expression()` now accepts `is_basel_3_1` parameter. LR/low_risk CCF: 0% under CRR, 10% under Basel 3.1. F-IRB LR CCF also updated. 4 unit tests.
-- [x] **Equity calculator Basel 3.1 routing** (CRE20.58-62) — Implemented. Added early return `if config.is_basel_3_1: return "sa"` in `_determine_approach()`. Under Basel 3.1, IRB Simple (Art. 155) is removed; all equity uses SA (Art. 133). 11 unit tests.
+Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB supervisory LGD, A-IRB CCF floor, CCF for unconditionally cancellable commitments, Equity calculator Basel 3.1 routing.
+
 - [ ] **Large corporate correlation multiplier** (CRE31.5) — Basel 3.1 requires 1.25x correlation multiplier for corporates belonging to groups with total consolidated assets > EUR 500m (separate from existing FI scalar). Not implemented. **Action:** Need `consolidated_assets` or equivalent field on counterparty data; add threshold check and 1.25x multiplier in `_polars_correlation_expr()`. Requires schema extension for the assets column.
 
 ### 2b. SA risk weight revisions
@@ -53,7 +49,7 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 
 - [ ] **BDD test scaffold** — `tests/bdd/conftest.py` references `docs/specifications/` which is being deleted (git status shows `D docs/specifications/*.md`). No actual BDD step definitions or feature files exist. **Action:** Either implement BDD tests or remove the empty scaffold. Low priority.
 - [ ] **Runtime skip pattern inconsistency** — CRR-A tests used `@pytest.mark.skip` for known gaps; CRR-C/D/E/F/G/H use `if result is None: pytest.skip()` inside test body, silently skipping if pipeline doesn't produce results. CRR-A7/A8 skips now resolved. **Action:** Audit remaining runtime skips to ensure they are visible and justified.
-- [ ] **Pre-existing lint errors in SA calculator** — `src/rwa_calc/engine/sa/calculator.py` has 4 ruff violations: unused `ExposureClass` import, unsorted import blocks, extraneous parentheses. All pre-existing, not from recent changes.
+- [x] **Pre-existing lint errors in SA calculator** — Resolved. `ruff check src/ tests/` passes clean with zero violations.
 
 ## Learnings
 

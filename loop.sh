@@ -63,11 +63,11 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     cat "$PROMPT_FILE" | claude -p \
         --dangerously-skip-permissions \
         --output-format=stream-json \
-        --max_turns 5 \
+        --max-turns 5 \
         --model opus \
         --verbose \
         | tee "$LOGFILE" \
-        | python -c "
+        | python3 -c "
 import sys, json
 for line in sys.stdin:
     line = line.strip()

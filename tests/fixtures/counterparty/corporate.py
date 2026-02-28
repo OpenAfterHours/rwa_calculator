@@ -577,6 +577,37 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "is_managed_as_retail": False,
         },
         # =============================================================================
+        # CRR-A7: Commercial RE borrower (40% LTV, income cover)
+        # =============================================================================
+        {
+            "counterparty_reference": "CORP_CRE_001",
+            "counterparty_name": "Commercial Property Investor Ltd",
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 50_000_000.0,
+            "total_assets": 80_000_000.0,
+            "default_status": False,
+            "sector_code": "68.20",  # Renting and operating of own real estate
+            "is_regulated": True,
+            "is_managed_as_retail": False,
+        },
+        # =============================================================================
+        # CRR-A8: Off-Balance Sheet CCF test (unrated corporate = 100% RW)
+        # Counterparty for CONT_CCF_001 contingent fixture
+        # =============================================================================
+        {
+            "counterparty_reference": "CORP_OBS_001",
+            "counterparty_name": "OBS Test Corporate Ltd",
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 100_000_000.0,  # Large corporate (no SME factor)
+            "total_assets": 80_000_000.0,
+            "default_status": False,
+            "sector_code": "46.90",
+            "is_regulated": True,
+            "is_managed_as_retail": False,
+        },
+        # =============================================================================
         # HIERARCHY TEST 4: Same Reference Pattern
         # Tests scenario where facility_reference = loan_reference
         # This is a valid business pattern when source systems use unified identifiers

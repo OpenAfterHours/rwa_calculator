@@ -209,16 +209,20 @@ class TestFullIRBPermissions:
             # FIRB not permitted for retail
             assert ApproachType.FIRB not in permitted
 
-    def test_full_irb_specialised_lending_has_firb_and_slotting(self) -> None:
-        """Full IRB should have specialised lending with FIRB and slotting (no AIRB)."""
+    def test_full_irb_specialised_lending_has_all_approaches(self) -> None:
+        """Full IRB should have specialised lending with FIRB, slotting, and AIRB.
+
+        Under CRR Art. 153(5), firms can use A-IRB for specialised lending if they
+        can reliably estimate PD. Only when PD cannot be estimated must firms fall back
+        to the slotting approach. full_irb() represents maximum regulatory approval.
+        """
         permissions = IRBPermissions.full_irb()
 
         permitted = permissions.get_permitted_approaches(ExposureClass.SPECIALISED_LENDING)
         assert ApproachType.SA in permitted
         assert ApproachType.FIRB in permitted
         assert ApproachType.SLOTTING in permitted
-        # AIRB not permitted for specialised lending
-        assert ApproachType.AIRB not in permitted
+        assert ApproachType.AIRB in permitted
 
     def test_full_irb_equity_sa_only(self) -> None:
         """Full IRB should have equity using SA only."""

@@ -409,6 +409,24 @@ def _ccf_test_contingents() -> list[Contingent]:
             seniority="senior",
             risk_type="FR",  # Full risk = 100% CCF
         ),
+        # =============================================================================
+        # CCF 50%: Undrawn committed facility > 1yr (CRR-A8 scenario)
+        # Nominal 1,000,000 x 50% CCF = 500,000 EAD, 100% RW (unrated corporate)
+        # =============================================================================
+        Contingent(
+            contingent_reference="CONT_CCF_001",
+            product_type="UNDRAWN_COMMIT",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_OBS_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2028, 1, 1),  # 2yr maturity (> 1yr = MR)
+            currency="GBP",
+            nominal_amount=1_000_000.0,  # CRR-A8: 50% CCF -> EAD = 500,000
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+            risk_type="MR",  # Medium risk = 50% CCF (SA)
+        ),
         # Subordinated contingent for LGD testing
         Contingent(
             contingent_reference="CONT_SUB_001",

@@ -342,7 +342,7 @@ class IRBPermissions:
                 ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING, ApproachType.FIRB},
+                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.EQUITY: {ApproachType.SA},  # IRB for equity removed under Basel 3.1
             }
         )

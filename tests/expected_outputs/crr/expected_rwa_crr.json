@@ -685,7 +685,7 @@
     {
       "scenario_id": "CRR-E1",
       "scenario_group": "CRR-E",
-      "description": "Project finance - Strong (70% RW)",
+      "description": "Project finance - Strong (70% RW, >=2.5yr maturity)",
       "regulatory_framework": "CRR",
       "approach": "Slotting",
       "exposure_class": "SPECIALISED_LENDING",
@@ -704,12 +704,12 @@
       "rwa_after_sf": 7000000.0,
       "expected_loss": null,
       "regulatory_reference": "CRR Art. 153(5)",
-      "calculation_notes": "CRR Strong=Good=70% (Basel 3.1 Strong=50%)"
+      "calculation_notes": "CRR Strong=70% (>=2.5yr), 50% if <2.5yr"
     },
     {
       "scenario_id": "CRR-E2",
       "scenario_group": "CRR-E",
-      "description": "Project finance - Good (70% RW)",
+      "description": "Project finance - Good (90% RW, >=2.5yr maturity)",
       "regulatory_framework": "CRR",
       "approach": "Slotting",
       "exposure_class": "SPECIALISED_LENDING",
@@ -722,13 +722,13 @@
       "cqs": null,
       "ltv": null,
       "turnover": null,
-      "risk_weight": 0.7,
-      "rwa_before_sf": 7000000.0,
+      "risk_weight": 0.9,
+      "rwa_before_sf": 9000000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 7000000.0,
+      "rwa_after_sf": 9000000.0,
       "expected_loss": null,
       "regulatory_reference": "CRR Art. 153(5)",
-      "calculation_notes": "Good category = 70% RW"
+      "calculation_notes": "CRR Good=90% (>=2.5yr), 70% if <2.5yr"
     },
     {
       "scenario_id": "CRR-E3",
@@ -757,7 +757,7 @@
     {
       "scenario_id": "CRR-E4",
       "scenario_group": "CRR-E",
-      "description": "HVCRE - Strong (70% RW)",
+      "description": "HVCRE - Strong (95% RW, >=2.5yr maturity)",
       "regulatory_framework": "CRR",
       "approach": "Slotting",
       "exposure_class": "SPECIALISED_LENDING_HVCRE",
@@ -770,13 +770,13 @@
       "cqs": null,
       "ltv": null,
       "turnover": null,
-      "risk_weight": 0.7,
-      "rwa_before_sf": 3500000.0,
+      "risk_weight": 0.95,
+      "rwa_before_sf": 4750000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 3500000.0,
+      "rwa_after_sf": 4750000.0,
       "expected_loss": null,
       "regulatory_reference": "CRR Art. 153(5)",
-      "calculation_notes": "CRR HVCRE = non-HVCRE weights (Basel 3.1 higher for HVCRE)"
+      "calculation_notes": "CRR HVCRE Strong=95% (>=2.5yr), 70% if <2.5yr"
     },
     {
       "scenario_id": "CRR-F1",

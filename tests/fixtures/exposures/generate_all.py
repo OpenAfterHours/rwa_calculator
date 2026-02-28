@@ -5,9 +5,9 @@ Usage:
     uv run python tests/fixtures/exposures/generate_all.py
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import polars as pl
 
@@ -53,10 +53,10 @@ class ExposureGenerator:
 
 def get_generators() -> list[ExposureGenerator]:
     """Return all configured exposure generators."""
-    from facilities import create_facilities, save_facilities
-    from loans import create_loans, save_loans
     from contingents import create_contingents, save_contingents
+    from facilities import create_facilities, save_facilities
     from facility_mapping import create_facility_mappings, save_facility_mappings
+    from loans import create_loans, save_loans
 
     return [
         ExposureGenerator("Facilities", create_facilities, save_facilities),
@@ -124,7 +124,10 @@ def print_hierarchy_analysis(output_dir: Path) -> None:
     # Loans analysis
     loan_refs = set(loans.select("loan_reference").to_series().to_list())
     mapped_loans = set(
-        mappings.filter(pl.col("child_type") == "loan").select("child_reference").to_series().to_list()
+        mappings.filter(pl.col("child_type") == "loan")
+        .select("child_reference")
+        .to_series()
+        .to_list()
     )
     standalone_loans = loan_refs - mapped_loans
 
@@ -136,16 +139,19 @@ def print_hierarchy_analysis(output_dir: Path) -> None:
     total_limit = facilities.select(pl.col("limit").sum()).item()
     total_drawn = loans.select(pl.col("drawn_amount").sum()).item()
 
-    print(f"\nExposure Totals:")
+    print("\nExposure Totals:")
     print(f"  Total facility limits: £{total_limit:,.0f}")
     print(f"  Total loans drawn: £{total_drawn:,.0f}")
 
     # Multi-level hierarchy
     child_facilities = set(
-        mappings.filter(pl.col("child_type") == "facility").select("child_reference").to_series().to_list()
+        mappings.filter(pl.col("child_type") == "facility")
+        .select("child_reference")
+        .to_series()
+        .to_list()
     )
     if child_facilities:
-        print(f"\nMulti-level hierarchy:")
+        print("\nMulti-level hierarchy:")
         print(f"  Sub-facilities: {child_facilities}")
 
     # Hierarchy test scenarios
@@ -161,15 +167,24 @@ def print_hierarchy_analysis(output_dir: Path) -> None:
             .select(pl.col("drawn_amount").sum())
             .item()
         )
-        facility_limit = facilities.filter(pl.col("facility_reference") == "FAC_HIER_001").select("limit").item()
-        print(f"  H1 - Multiple loans under facility:")
-        print(f"       FAC_HIER_001: {loan_count} loans, £{total_drawn_h1:,.0f} drawn of £{facility_limit:,.0f} limit")
+        facility_limit = (
+            facilities.filter(pl.col("facility_reference") == "FAC_HIER_001").select("limit").item()
+        )
+        print("  H1 - Multiple loans under facility:")
+        print(
+            f"       FAC_HIER_001: {loan_count} loans, £{total_drawn_h1:,.0f} drawn of £{facility_limit:,.0f} limit"
+        )
 
     # H2: Multi-level hierarchy
     parent_001 = mappings.filter(pl.col("parent_facility_reference") == "FAC_HIER_PARENT_001")
     if len(parent_001) > 0:
-        sub_facs = parent_001.filter(pl.col("child_type") == "facility").select("child_reference").to_series().to_list()
-        print(f"  H2 - Multi-level facility hierarchy:")
+        sub_facs = (
+            parent_001.filter(pl.col("child_type") == "facility")
+            .select("child_reference")
+            .to_series()
+            .to_list()
+        )
+        print("  H2 - Multi-level facility hierarchy:")
         print(f"       FAC_HIER_PARENT_001 -> {sub_facs}")
 
     print("=" * 70)

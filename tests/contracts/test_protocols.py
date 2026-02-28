@@ -7,7 +7,6 @@ definitions for type checking.
 from datetime import date
 
 import polars as pl
-import pytest
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -15,7 +14,6 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
     create_empty_classified_bundle,
-    create_empty_counterparty_lookup,
     create_empty_crm_adjusted_bundle,
     create_empty_raw_data_bundle,
     create_empty_resolved_hierarchy_bundle,
@@ -155,6 +153,7 @@ class StubOutputAggregator:
         config: CalculationConfig,
     ):
         from rwa_calc.contracts.bundles import AggregatedResultBundle
+
         return AggregatedResultBundle(results=pl.LazyFrame())
 
     def apply_output_floor(

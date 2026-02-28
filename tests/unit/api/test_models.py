@@ -29,7 +29,6 @@ from rwa_calc.api.models import (
     ValidationResponse,
 )
 
-
 # =============================================================================
 # CalculationRequest Tests
 # =============================================================================
@@ -79,7 +78,7 @@ class TestCalculationRequest:
             framework="CRR",
             reporting_date=date(2024, 12, 31),
         )
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(AttributeError):  # FrozenInstanceError
             request.data_path = "/new/path"  # type: ignore
 
     def test_basel_31_framework(self) -> None:
@@ -300,10 +299,12 @@ class TestCalculationResponse:
     def sample_response(self, tmp_path: Path) -> CalculationResponse:
         """Create a sample response for testing."""
         results_path = tmp_path / "results.parquet"
-        pl.DataFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "rwa_final": [250000.0, 250000.0],
-        }).write_parquet(results_path)
+        pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "rwa_final": [250000.0, 250000.0],
+            }
+        ).write_parquet(results_path)
 
         return CalculationResponse(
             success=True,
@@ -442,7 +443,9 @@ class TestValidationResponse:
             files_found=["file1.parquet"],
             files_missing=["file2.parquet", "file3.parquet"],
             errors=[
-                APIError(code="VAL002", message="Missing file", severity="error", category="Validation"),
+                APIError(
+                    code="VAL002", message="Missing file", severity="error", category="Validation"
+                ),
             ],
         )
         assert response.valid is False

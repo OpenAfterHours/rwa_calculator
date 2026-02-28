@@ -137,13 +137,15 @@ class EquityCalculator:
         exposures = data.equity_exposures
 
         if exposures is None:
-            empty_frame = pl.LazyFrame({
-                "exposure_reference": pl.Series([], dtype=pl.String),
-                "equity_type": pl.Series([], dtype=pl.String),
-                "ead_final": pl.Series([], dtype=pl.Float64),
-                "risk_weight": pl.Series([], dtype=pl.Float64),
-                "rwa": pl.Series([], dtype=pl.Float64),
-            })
+            empty_frame = pl.LazyFrame(
+                {
+                    "exposure_reference": pl.Series([], dtype=pl.String),
+                    "equity_type": pl.Series([], dtype=pl.String),
+                    "ead_final": pl.Series([], dtype=pl.Float64),
+                    "risk_weight": pl.Series([], dtype=pl.Float64),
+                    "rwa": pl.Series([], dtype=pl.Float64),
+                }
+            )
             return EquityResultBundle(
                 results=empty_frame,
                 calculation_audit=empty_frame,
@@ -215,48 +217,66 @@ class EquityCalculator:
 
         if "ead_final" not in schema.names():
             if "fair_value" in schema.names():
-                exposures = exposures.with_columns([
-                    pl.col("fair_value").alias("ead_final"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.col("fair_value").alias("ead_final"),
+                    ]
+                )
             elif "carrying_value" in schema.names():
-                exposures = exposures.with_columns([
-                    pl.col("carrying_value").alias("ead_final"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.col("carrying_value").alias("ead_final"),
+                    ]
+                )
             elif "ead" in schema.names():
-                exposures = exposures.with_columns([
-                    pl.col("ead").alias("ead_final"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.col("ead").alias("ead_final"),
+                    ]
+                )
             else:
-                exposures = exposures.with_columns([
-                    pl.lit(0.0).alias("ead_final"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.lit(0.0).alias("ead_final"),
+                    ]
+                )
 
         schema = exposures.collect_schema()
 
         if "equity_type" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit("other").alias("equity_type"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit("other").alias("equity_type"),
+                ]
+            )
 
         if "is_diversified_portfolio" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("is_diversified_portfolio"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(False).alias("is_diversified_portfolio"),
+                ]
+            )
 
         if "is_speculative" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("is_speculative"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(False).alias("is_speculative"),
+                ]
+            )
 
         if "is_exchange_traded" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("is_exchange_traded"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(False).alias("is_exchange_traded"),
+                ]
+            )
 
         if "is_government_supported" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("is_government_supported"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(False).alias("is_government_supported"),
+                ]
+            )
 
         return exposures
 
@@ -274,34 +294,36 @@ class EquityCalculator:
         - Unlisted: 250%
         - Speculative: 400%
         """
-        return exposures.with_columns([
-            pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-            .then(pl.lit(0.00))
-            .when(pl.col("is_speculative") == True)  # noqa: E712
-            .then(pl.lit(4.00))
-            .when(pl.col("equity_type").str.to_lowercase() == "speculative")
-            .then(pl.lit(4.00))
-            .when(pl.col("is_exchange_traded") == True)  # noqa: E712
-            .then(pl.lit(1.00))
-            .when(pl.col("equity_type").str.to_lowercase() == "listed")
-            .then(pl.lit(1.00))
-            .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
-            .then(pl.lit(1.00))
-            .when(pl.col("is_government_supported") == True)  # noqa: E712
-            .then(pl.lit(1.00))
-            .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
-            .then(pl.lit(1.00))
-            .when(pl.col("equity_type").str.to_lowercase() == "unlisted")
-            .then(pl.lit(2.50))
-            .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
-            .then(pl.lit(2.50))
-            .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
-            .then(pl.lit(2.50))
-            .when(pl.col("equity_type").str.to_lowercase() == "ciu")
-            .then(pl.lit(2.50))
-            .otherwise(pl.lit(2.50))
-            .alias("risk_weight"),
-        ])
+        return exposures.with_columns(
+            [
+                pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
+                .then(pl.lit(0.00))
+                .when(pl.col("is_speculative") == True)  # noqa: E712
+                .then(pl.lit(4.00))
+                .when(pl.col("equity_type").str.to_lowercase() == "speculative")
+                .then(pl.lit(4.00))
+                .when(pl.col("is_exchange_traded") == True)  # noqa: E712
+                .then(pl.lit(1.00))
+                .when(pl.col("equity_type").str.to_lowercase() == "listed")
+                .then(pl.lit(1.00))
+                .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
+                .then(pl.lit(1.00))
+                .when(pl.col("is_government_supported") == True)  # noqa: E712
+                .then(pl.lit(1.00))
+                .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
+                .then(pl.lit(1.00))
+                .when(pl.col("equity_type").str.to_lowercase() == "unlisted")
+                .then(pl.lit(2.50))
+                .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
+                .then(pl.lit(2.50))
+                .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
+                .then(pl.lit(2.50))
+                .when(pl.col("equity_type").str.to_lowercase() == "ciu")
+                .then(pl.lit(2.50))
+                .otherwise(pl.lit(2.50))
+                .alias("risk_weight"),
+            ]
+        )
 
     def _apply_equity_weights_irb_simple(
         self,
@@ -317,40 +339,44 @@ class EquityCalculator:
         - Exchange-traded: 290%
         - Other equity: 370%
         """
-        return exposures.with_columns([
-            pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-            .then(pl.lit(0.00))
-            .when(
-                (pl.col("equity_type").str.to_lowercase() == "private_equity_diversified") |
-                (
-                    (pl.col("equity_type").str.to_lowercase() == "private_equity") &
-                    (pl.col("is_diversified_portfolio") == True)  # noqa: E712
+        return exposures.with_columns(
+            [
+                pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
+                .then(pl.lit(0.00))
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
+                    | (
+                        (pl.col("equity_type").str.to_lowercase() == "private_equity")
+                        & (pl.col("is_diversified_portfolio") == True)  # noqa: E712
+                    )
                 )
-            )
-            .then(pl.lit(1.90))
-            .when(pl.col("is_government_supported") == True)  # noqa: E712
-            .then(pl.lit(1.90))
-            .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
-            .then(pl.lit(1.90))
-            .when(pl.col("is_exchange_traded") == True)  # noqa: E712
-            .then(pl.lit(2.90))
-            .when(pl.col("equity_type").str.to_lowercase() == "listed")
-            .then(pl.lit(2.90))
-            .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
-            .then(pl.lit(2.90))
-            .otherwise(pl.lit(3.70))
-            .alias("risk_weight"),
-        ])
+                .then(pl.lit(1.90))
+                .when(pl.col("is_government_supported") == True)  # noqa: E712
+                .then(pl.lit(1.90))
+                .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
+                .then(pl.lit(1.90))
+                .when(pl.col("is_exchange_traded") == True)  # noqa: E712
+                .then(pl.lit(2.90))
+                .when(pl.col("equity_type").str.to_lowercase() == "listed")
+                .then(pl.lit(2.90))
+                .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
+                .then(pl.lit(2.90))
+                .otherwise(pl.lit(3.70))
+                .alias("risk_weight"),
+            ]
+        )
 
     def _calculate_rwa(
         self,
         exposures: pl.LazyFrame,
     ) -> pl.LazyFrame:
         """Calculate RWA = EAD x RW."""
-        return exposures.with_columns([
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
-        ])
+        return exposures.with_columns(
+            [
+                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
+                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
+            ]
+        )
 
     def _build_audit(
         self,
@@ -382,16 +408,20 @@ class EquityCalculator:
 
         article = "Art. 133 SA" if approach == "sa" else "Art. 155 IRB Simple"
 
-        audit = audit.with_columns([
-            pl.concat_str([
-                pl.lit(f"Equity ({article}): Type="),
-                pl.col("equity_type"),
-                pl.lit(", RW="),
-                (pl.col("risk_weight") * 100).round(0).cast(pl.String),
-                pl.lit("%, RWA="),
-                pl.col("rwa").round(0).cast(pl.String),
-            ]).alias("equity_calculation"),
-        ])
+        audit = audit.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit(f"Equity ({article}): Type="),
+                        pl.col("equity_type"),
+                        pl.lit(", RW="),
+                        (pl.col("risk_weight") * 100).round(0).cast(pl.String),
+                        pl.lit("%, RWA="),
+                        pl.col("rwa").round(0).cast(pl.String),
+                    ]
+                ).alias("equity_calculation"),
+            ]
+        )
 
         return audit
 

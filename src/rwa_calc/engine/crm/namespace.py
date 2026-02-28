@@ -99,9 +99,7 @@ class CRMLazyFrame:
         # ead_pre_crm to reflect provision deductions
         if has_provision_on_drawn and "drawn_amount" in schema.names():
             # Recompute ead_pre_crm with provision-adjusted amounts
-            on_bal = (
-                drawn_for_ead() - pl.col("provision_on_drawn")
-            ).clip(lower_bound=0.0)
+            on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(lower_bound=0.0)
             if "interest" in schema.names():
                 on_bal = on_bal + pl.col("interest").fill_null(0.0)
             if "nominal_after_provision" in schema.names():
@@ -115,9 +113,11 @@ class CRMLazyFrame:
                 base_ead_col = "ead_pre_crm"
             else:
                 # No CCF step yet; recalculate from drawn/nominal
-                lf = lf.with_columns([
-                    (on_bal + nominal_col).alias("ead_pre_crm"),
-                ])
+                lf = lf.with_columns(
+                    [
+                        (on_bal + nominal_col).alias("ead_pre_crm"),
+                    ]
+                )
                 base_ead_col = "ead_pre_crm"
         elif "ead_pre_crm" in schema.names():
             base_ead_col = "ead_pre_crm"
@@ -144,31 +144,32 @@ class CRMLazyFrame:
                 pl.lit(0.0).alias("provision_deducted"),
             ]
 
-        return lf.with_columns([
-            # Gross EAD = drawn + CCF-adjusted contingent
-            pl.col(base_ead_col).alias("ead_gross"),
-
-            # Initialize subsequent EAD columns
-            pl.col(base_ead_col).alias("ead_after_collateral"),
-            pl.col(base_ead_col).alias("ead_after_guarantee"),
-            pl.col(base_ead_col).alias("ead_final"),
-
-            # Initialize collateral-related columns
-            pl.lit(0.0).alias("collateral_allocated"),
-            pl.lit(0.0).alias("collateral_adjusted_value"),
-
-            # Initialize guarantee-related columns
-            pl.lit(0.0).alias("guarantee_amount"),
-            pl.lit(None).cast(pl.String).alias("guarantor_reference"),
-            pl.lit(None).cast(pl.Float64).alias("substitute_rw"),
-
-            # Provision-related columns
-            *provision_cols,
-
-            # LGD for IRB (may be adjusted by collateral)
-            pl.col("lgd").fill_null(0.45).alias("lgd_pre_crm") if "lgd" in schema.names() else pl.lit(0.45).alias("lgd_pre_crm"),
-            pl.col("lgd").fill_null(0.45).alias("lgd_post_crm") if "lgd" in schema.names() else pl.lit(0.45).alias("lgd_post_crm"),
-        ])
+        return lf.with_columns(
+            [
+                # Gross EAD = drawn + CCF-adjusted contingent
+                pl.col(base_ead_col).alias("ead_gross"),
+                # Initialize subsequent EAD columns
+                pl.col(base_ead_col).alias("ead_after_collateral"),
+                pl.col(base_ead_col).alias("ead_after_guarantee"),
+                pl.col(base_ead_col).alias("ead_final"),
+                # Initialize collateral-related columns
+                pl.lit(0.0).alias("collateral_allocated"),
+                pl.lit(0.0).alias("collateral_adjusted_value"),
+                # Initialize guarantee-related columns
+                pl.lit(0.0).alias("guarantee_amount"),
+                pl.lit(None).cast(pl.String).alias("guarantor_reference"),
+                pl.lit(None).cast(pl.Float64).alias("substitute_rw"),
+                # Provision-related columns
+                *provision_cols,
+                # LGD for IRB (may be adjusted by collateral)
+                pl.col("lgd").fill_null(0.45).alias("lgd_pre_crm")
+                if "lgd" in schema.names()
+                else pl.lit(0.45).alias("lgd_pre_crm"),
+                pl.col("lgd").fill_null(0.45).alias("lgd_post_crm")
+                if "lgd" in schema.names()
+                else pl.lit(0.45).alias("lgd_post_crm"),
+            ]
+        )
 
     # =========================================================================
     # COLLATERAL APPLICATION
@@ -213,10 +214,18 @@ class CRMLazyFrame:
             )
         else:
             eligible_collateral = collateral.filter(
-                ~pl.col("collateral_type").str.to_lowercase().is_in([
-                    "real_estate", "property", "rre", "cre",
-                    "residential_property", "commercial_property"
-                ])
+                ~pl.col("collateral_type")
+                .str.to_lowercase()
+                .is_in(
+                    [
+                        "real_estate",
+                        "property",
+                        "rre",
+                        "cre",
+                        "residential_property",
+                        "commercial_property",
+                    ]
+                )
             )
 
         # Allocate collateral — multi-level or direct-only
@@ -226,17 +235,21 @@ class CRMLazyFrame:
 
         if has_beneficiary_type:
             lf = self._allocate_collateral_multi_level(
-                eligible_collateral, value_col, has_market_value,
+                eligible_collateral,
+                value_col,
+                has_market_value,
             )
         else:
             # Legacy: direct-only join
-            collateral_by_exposure = eligible_collateral.group_by(
-                "beneficiary_reference"
-            ).agg([
-                pl.col(value_col).sum().alias("total_collateral_adjusted"),
-                pl.col("market_value").sum().alias("total_collateral_market") if has_market_value else pl.lit(0.0).alias("total_collateral_market"),
-                pl.len().alias("collateral_count"),
-            ])
+            collateral_by_exposure = eligible_collateral.group_by("beneficiary_reference").agg(
+                [
+                    pl.col(value_col).sum().alias("total_collateral_adjusted"),
+                    pl.col("market_value").sum().alias("total_collateral_market")
+                    if has_market_value
+                    else pl.lit(0.0).alias("total_collateral_market"),
+                    pl.len().alias("collateral_count"),
+                ]
+            )
 
             lf = self._lf.join(
                 collateral_by_exposure,
@@ -245,31 +258,45 @@ class CRMLazyFrame:
                 how="left",
             )
 
-            lf = lf.with_columns([
-                pl.col("total_collateral_adjusted").fill_null(0.0).alias("collateral_adjusted_value"),
-                pl.col("total_collateral_market").fill_null(0.0).alias("collateral_market_value"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.col("total_collateral_adjusted")
+                    .fill_null(0.0)
+                    .alias("collateral_adjusted_value"),
+                    pl.col("total_collateral_market")
+                    .fill_null(0.0)
+                    .alias("collateral_market_value"),
+                ]
+            )
 
         # Determine approach column
         has_approach = "approach" in schema.names()
 
         # Apply collateral effect based on approach
         if has_approach:
-            lf = lf.with_columns([
-                # For SA: Reduce EAD by collateral (simple substitution)
-                pl.when(pl.col("approach") == ApproachType.SA.value)
-                .then(
-                    (pl.col("ead_gross") - pl.col("collateral_adjusted_value")).clip(lower_bound=0)
-                )
-                # For IRB: Keep EAD, collateral affects LGD (handled elsewhere)
-                .otherwise(pl.col("ead_gross"))
-                .alias("ead_after_collateral"),
-            ])
+            lf = lf.with_columns(
+                [
+                    # For SA: Reduce EAD by collateral (simple substitution)
+                    pl.when(pl.col("approach") == ApproachType.SA.value)
+                    .then(
+                        (pl.col("ead_gross") - pl.col("collateral_adjusted_value")).clip(
+                            lower_bound=0
+                        )
+                    )
+                    # For IRB: Keep EAD, collateral affects LGD (handled elsewhere)
+                    .otherwise(pl.col("ead_gross"))
+                    .alias("ead_after_collateral"),
+                ]
+            )
         else:
             # Default to SA behavior
-            lf = lf.with_columns([
-                (pl.col("ead_gross") - pl.col("collateral_adjusted_value")).clip(lower_bound=0).alias("ead_after_collateral"),
-            ])
+            lf = lf.with_columns(
+                [
+                    (pl.col("ead_gross") - pl.col("collateral_adjusted_value"))
+                    .clip(lower_bound=0)
+                    .alias("ead_after_collateral"),
+                ]
+            )
 
         return lf
 
@@ -293,33 +320,47 @@ class CRMLazyFrame:
         mv_expr = pl.col("market_value") if has_market_value else pl.lit(0.0)
 
         # Aggregate at each level
-        coll_direct = eligible_collateral.filter(
-            bt_lower.is_in(direct_types)
-        ).group_by("beneficiary_reference").agg([
-            val_expr.sum().alias("_coll_direct"),
-            mv_expr.sum().alias("_mv_direct"),
-        ])
+        coll_direct = (
+            eligible_collateral.filter(bt_lower.is_in(direct_types))
+            .group_by("beneficiary_reference")
+            .agg(
+                [
+                    val_expr.sum().alias("_coll_direct"),
+                    mv_expr.sum().alias("_mv_direct"),
+                ]
+            )
+        )
 
-        coll_facility = eligible_collateral.filter(
-            bt_lower == "facility"
-        ).group_by("beneficiary_reference").agg([
-            val_expr.sum().alias("_coll_facility"),
-            mv_expr.sum().alias("_mv_facility"),
-        ])
+        coll_facility = (
+            eligible_collateral.filter(bt_lower == "facility")
+            .group_by("beneficiary_reference")
+            .agg(
+                [
+                    val_expr.sum().alias("_coll_facility"),
+                    mv_expr.sum().alias("_mv_facility"),
+                ]
+            )
+        )
 
-        coll_counterparty = eligible_collateral.filter(
-            bt_lower == "counterparty"
-        ).group_by("beneficiary_reference").agg([
-            val_expr.sum().alias("_coll_counterparty"),
-            mv_expr.sum().alias("_mv_counterparty"),
-        ])
+        coll_counterparty = (
+            eligible_collateral.filter(bt_lower == "counterparty")
+            .group_by("beneficiary_reference")
+            .agg(
+                [
+                    val_expr.sum().alias("_coll_counterparty"),
+                    mv_expr.sum().alias("_mv_counterparty"),
+                ]
+            )
+        )
 
         # EAD totals for pro-rata
         if "parent_facility_reference" in exp_schema.names():
-            fac_ead = lf.filter(
-                pl.col("parent_facility_reference").is_not_null()
-            ).group_by("parent_facility_reference").agg(
-                pl.col("ead_gross").sum().alias("_fac_ead_total"),
+            fac_ead = (
+                lf.filter(pl.col("parent_facility_reference").is_not_null())
+                .group_by("parent_facility_reference")
+                .agg(
+                    pl.col("ead_gross").sum().alias("_fac_ead_total"),
+                )
             )
         else:
             fac_ead = pl.LazyFrame(
@@ -331,68 +372,91 @@ class CRMLazyFrame:
         )
 
         # Join direct
-        lf = lf.join(coll_direct, left_on="exposure_reference", right_on="beneficiary_reference", how="left")
+        lf = lf.join(
+            coll_direct, left_on="exposure_reference", right_on="beneficiary_reference", how="left"
+        )
 
         # Join facility
         if "parent_facility_reference" in exp_schema.names():
             lf = lf.join(
-                coll_facility, left_on="parent_facility_reference", right_on="beneficiary_reference", how="left",
+                coll_facility,
+                left_on="parent_facility_reference",
+                right_on="beneficiary_reference",
+                how="left",
             ).join(fac_ead, on="parent_facility_reference", how="left")
         else:
-            lf = lf.with_columns([
-                pl.lit(0.0).alias("_coll_facility"),
-                pl.lit(0.0).alias("_mv_facility"),
-                pl.lit(0.0).alias("_fac_ead_total"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.lit(0.0).alias("_coll_facility"),
+                    pl.lit(0.0).alias("_mv_facility"),
+                    pl.lit(0.0).alias("_fac_ead_total"),
+                ]
+            )
 
         # Join counterparty
         lf = lf.join(
-            coll_counterparty, left_on="counterparty_reference", right_on="beneficiary_reference", how="left",
+            coll_counterparty,
+            left_on="counterparty_reference",
+            right_on="beneficiary_reference",
+            how="left",
         ).join(cp_ead, on="counterparty_reference", how="left")
 
         # Fill nulls + weights + combine
-        lf = lf.with_columns([
-            pl.col("_coll_direct").fill_null(0.0),
-            pl.col("_mv_direct").fill_null(0.0),
-            pl.col("_coll_facility").fill_null(0.0),
-            pl.col("_mv_facility").fill_null(0.0),
-            pl.col("_coll_counterparty").fill_null(0.0),
-            pl.col("_mv_counterparty").fill_null(0.0),
-            pl.col("_fac_ead_total").fill_null(0.0),
-            pl.col("_cp_ead_total").fill_null(0.0),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.col("_coll_direct").fill_null(0.0),
+                pl.col("_mv_direct").fill_null(0.0),
+                pl.col("_coll_facility").fill_null(0.0),
+                pl.col("_mv_facility").fill_null(0.0),
+                pl.col("_coll_counterparty").fill_null(0.0),
+                pl.col("_mv_counterparty").fill_null(0.0),
+                pl.col("_fac_ead_total").fill_null(0.0),
+                pl.col("_cp_ead_total").fill_null(0.0),
+            ]
+        )
 
-        lf = lf.with_columns([
-            pl.when(pl.col("_fac_ead_total") > 0)
-            .then(pl.col("ead_gross") / pl.col("_fac_ead_total"))
-            .otherwise(pl.lit(0.0))
-            .alias("_fac_weight"),
-            pl.when(pl.col("_cp_ead_total") > 0)
-            .then(pl.col("ead_gross") / pl.col("_cp_ead_total"))
-            .otherwise(pl.lit(0.0))
-            .alias("_cp_weight"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.when(pl.col("_fac_ead_total") > 0)
+                .then(pl.col("ead_gross") / pl.col("_fac_ead_total"))
+                .otherwise(pl.lit(0.0))
+                .alias("_fac_weight"),
+                pl.when(pl.col("_cp_ead_total") > 0)
+                .then(pl.col("ead_gross") / pl.col("_cp_ead_total"))
+                .otherwise(pl.lit(0.0))
+                .alias("_cp_weight"),
+            ]
+        )
 
-        lf = lf.with_columns([
-            (
-                pl.col("_coll_direct")
-                + (pl.col("_coll_facility") * pl.col("_fac_weight"))
-                + (pl.col("_coll_counterparty") * pl.col("_cp_weight"))
-            ).alias("collateral_adjusted_value"),
-            (
-                pl.col("_mv_direct")
-                + (pl.col("_mv_facility") * pl.col("_fac_weight"))
-                + (pl.col("_mv_counterparty") * pl.col("_cp_weight"))
-            ).alias("collateral_market_value"),
-        ])
+        lf = lf.with_columns(
+            [
+                (
+                    pl.col("_coll_direct")
+                    + (pl.col("_coll_facility") * pl.col("_fac_weight"))
+                    + (pl.col("_coll_counterparty") * pl.col("_cp_weight"))
+                ).alias("collateral_adjusted_value"),
+                (
+                    pl.col("_mv_direct")
+                    + (pl.col("_mv_facility") * pl.col("_fac_weight"))
+                    + (pl.col("_mv_counterparty") * pl.col("_cp_weight"))
+                ).alias("collateral_market_value"),
+            ]
+        )
 
-        lf = lf.drop([
-            "_coll_direct", "_mv_direct",
-            "_coll_facility", "_mv_facility",
-            "_coll_counterparty", "_mv_counterparty",
-            "_fac_ead_total", "_cp_ead_total",
-            "_fac_weight", "_cp_weight",
-        ])
+        lf = lf.drop(
+            [
+                "_coll_direct",
+                "_mv_direct",
+                "_coll_facility",
+                "_mv_facility",
+                "_coll_counterparty",
+                "_mv_counterparty",
+                "_fac_ead_total",
+                "_cp_ead_total",
+                "_fac_weight",
+                "_cp_weight",
+            ]
+        )
 
         return lf
 
@@ -425,11 +489,11 @@ class CRMLazyFrame:
             return self._lf
 
         # Aggregate collateral by beneficiary
-        collateral_by_exposure = collateral.group_by(
-            "beneficiary_reference"
-        ).agg([
-            pl.col(value_col).sum().alias("total_collateral_for_lgd"),
-        ])
+        collateral_by_exposure = collateral.group_by("beneficiary_reference").agg(
+            [
+                pl.col(value_col).sum().alias("total_collateral_for_lgd"),
+            ]
+        )
 
         # Join collateral to exposures
         lf = self._lf.join(
@@ -444,16 +508,17 @@ class CRMLazyFrame:
         # Full CRR formula is more complex
         ead_col = "ead_gross" if "ead_gross" in schema.names() else "ead_final"
 
-        lf = lf.with_columns([
-            pl.when(pl.col("total_collateral_for_lgd").is_not_null() & (pl.col(ead_col) > 0))
-            .then(
-                pl.col("lgd_pre_crm") * (
-                    1 - pl.col("total_collateral_for_lgd") / pl.col(ead_col)
-                ).clip(lower_bound=0)
-            )
-            .otherwise(pl.col("lgd_pre_crm"))
-            .alias("lgd_post_crm"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.when(pl.col("total_collateral_for_lgd").is_not_null() & (pl.col(ead_col) > 0))
+                .then(
+                    pl.col("lgd_pre_crm")
+                    * (1 - pl.col("total_collateral_for_lgd") / pl.col(ead_col)).clip(lower_bound=0)
+                )
+                .otherwise(pl.col("lgd_pre_crm"))
+                .alias("lgd_post_crm"),
+            ]
+        )
 
         return lf
 
@@ -485,13 +550,13 @@ class CRMLazyFrame:
         schema = self._lf.collect_schema()
 
         # Aggregate guarantees by beneficiary
-        guarantees_by_exposure = guarantees.group_by(
-            "beneficiary_reference"
-        ).agg([
-            pl.col("amount_covered").sum().alias("total_guarantee_amount"),
-            pl.col("guarantor").first().alias("primary_guarantor"),
-            pl.len().alias("guarantee_count"),
-        ])
+        guarantees_by_exposure = guarantees.group_by("beneficiary_reference").agg(
+            [
+                pl.col("amount_covered").sum().alias("total_guarantee_amount"),
+                pl.col("guarantor").first().alias("primary_guarantor"),
+                pl.len().alias("guarantee_count"),
+            ]
+        )
 
         # Join guarantees to exposures
         lf = self._lf.join(
@@ -502,33 +567,42 @@ class CRMLazyFrame:
         )
 
         # Fill nulls
-        lf = lf.with_columns([
-            pl.col("total_guarantee_amount").fill_null(0.0).alias("guarantee_amount"),
-            pl.col("primary_guarantor").alias("guarantor_reference"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.col("total_guarantee_amount").fill_null(0.0).alias("guarantee_amount"),
+                pl.col("primary_guarantor").alias("guarantor_reference"),
+            ]
+        )
 
         # Calculate guaranteed vs unguaranteed portions
-        ead_col = "ead_after_collateral" if "ead_after_collateral" in schema.names() else "ead_final"
+        ead_col = (
+            "ead_after_collateral" if "ead_after_collateral" in schema.names() else "ead_final"
+        )
 
-        lf = lf.with_columns([
-            # Guaranteed amount (capped at EAD)
-            pl.min_horizontal(
-                pl.col("guarantee_amount"),
-                pl.col(ead_col)
-            ).alias("guaranteed_portion"),
-        ])
+        lf = lf.with_columns(
+            [
+                # Guaranteed amount (capped at EAD)
+                pl.min_horizontal(pl.col("guarantee_amount"), pl.col(ead_col)).alias(
+                    "guaranteed_portion"
+                ),
+            ]
+        )
 
-        lf = lf.with_columns([
-            # Unguaranteed portion
-            (pl.col(ead_col) - pl.col("guaranteed_portion")).alias("unguaranteed_portion"),
-        ])
+        lf = lf.with_columns(
+            [
+                # Unguaranteed portion
+                (pl.col(ead_col) - pl.col("guaranteed_portion")).alias("unguaranteed_portion"),
+            ]
+        )
 
         # Look up guarantor's entity type and CQS
         lf = lf.join(
-            counterparty_lookup.select([
-                pl.col("counterparty_reference"),
-                pl.col("entity_type").alias("guarantor_entity_type"),
-            ]),
+            counterparty_lookup.select(
+                [
+                    pl.col("counterparty_reference"),
+                    pl.col("entity_type").alias("guarantor_entity_type"),
+                ]
+            ),
             left_on="guarantor_reference",
             right_on="counterparty_reference",
             how="left",
@@ -552,26 +626,34 @@ class CRMLazyFrame:
             )
 
             if "rating_type" not in ri_schema.names():
-                lf = lf.with_columns([
-                    pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
-                ])
+                lf = lf.with_columns(
+                    [
+                        pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                    ]
+                )
         else:
-            lf = lf.with_columns([
-                pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
-                pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
+                    pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                ]
+            )
 
         # Fill nulls
-        lf = lf.with_columns([
-            pl.col("guarantor_entity_type").fill_null("").alias("guarantor_entity_type"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.col("guarantor_entity_type").fill_null("").alias("guarantor_entity_type"),
+            ]
+        )
 
         # Derive guarantor exposure class and approach
-        lf = lf.with_columns([
-            pl.col("guarantor_entity_type")
-            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
-            .alias("guarantor_exposure_class"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.col("guarantor_entity_type")
+                .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+                .alias("guarantor_exposure_class"),
+            ]
+        )
 
         # Determine guarantor approach from IRB permissions AND rating type.
         # IRB only if: firm has IRB permission AND guarantor has internal rating.
@@ -580,18 +662,20 @@ class CRMLazyFrame:
             if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
                 irb_exposure_class_values.add(ec.value)
 
-        lf = lf.with_columns([
-            pl.when(
-                (pl.col("guarantor_exposure_class") != "") &
-                pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values)) &
-                (pl.col("guarantor_rating_type").fill_null("") == "internal")
-            )
-            .then(pl.lit("irb"))
-            .when(pl.col("guarantor_exposure_class") != "")
-            .then(pl.lit("sa"))
-            .otherwise(pl.lit(""))
-            .alias("guarantor_approach"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.when(
+                    (pl.col("guarantor_exposure_class") != "")
+                    & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
+                    & (pl.col("guarantor_rating_type").fill_null("") == "internal")
+                )
+                .then(pl.lit("irb"))
+                .when(pl.col("guarantor_exposure_class") != "")
+                .then(pl.lit("sa"))
+                .otherwise(pl.lit(""))
+                .alias("guarantor_approach"),
+            ]
+        )
 
         # Cross-approach CCF substitution
         has_risk_type = "risk_type" in schema.names()
@@ -601,48 +685,68 @@ class CRMLazyFrame:
 
         if has_risk_type and has_nominal and has_approach:
             # Compute guarantee ratio
-            lf = lf.with_columns([
-                pl.when(pl.col(ead_col) > 0)
-                .then(
-                    (pl.col("guaranteed_portion") / pl.col(ead_col))
-                    .clip(upper_bound=1.0)
-                )
-                .otherwise(pl.lit(0.0))
-                .alias("guarantee_ratio"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.when(pl.col(ead_col) > 0)
+                    .then((pl.col("guaranteed_portion") / pl.col(ead_col)).clip(upper_bound=1.0))
+                    .otherwise(pl.lit(0.0))
+                    .alias("guarantee_ratio"),
+                ]
+            )
 
             needs_ccf_sub = (
-                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value]) &
-                (pl.col("guarantor_approach") == "sa") &
-                (pl.col("guaranteed_portion") > 0) &
-                (pl.col("nominal_amount") > 0)
+                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+                & (pl.col("guarantor_approach") == "sa")
+                & (pl.col("guaranteed_portion") > 0)
+                & (pl.col("nominal_amount") > 0)
             )
 
             sa_ccf = sa_ccf_expression()
-            lf = lf.with_columns([
-                pl.col("ccf").alias("ccf_original"),
-                pl.when(needs_ccf_sub).then(sa_ccf).otherwise(pl.col("ccf")).alias("ccf_guaranteed"),
-                pl.col("ccf").alias("ccf_unguaranteed"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.col("ccf").alias("ccf_original"),
+                    pl.when(needs_ccf_sub)
+                    .then(sa_ccf)
+                    .otherwise(pl.col("ccf"))
+                    .alias("ccf_guaranteed"),
+                    pl.col("ccf").alias("ccf_unguaranteed"),
+                ]
+            )
 
             on_bal = on_balance_ead() if has_interest else drawn_for_ead()
             ratio = pl.col("guarantee_ratio")
-            new_guaranteed = (on_bal * ratio) + (pl.col("nominal_amount") * ratio * pl.col("ccf_guaranteed"))
+            new_guaranteed = (on_bal * ratio) + (
+                pl.col("nominal_amount") * ratio * pl.col("ccf_guaranteed")
+            )
             new_unguaranteed = (on_bal * (pl.lit(1.0) - ratio)) + (
                 pl.col("nominal_amount") * (pl.lit(1.0) - ratio) * pl.col("ccf_unguaranteed")
             )
 
-            lf = lf.with_columns([
-                pl.when(needs_ccf_sub).then(new_guaranteed).otherwise(pl.col("guaranteed_portion")).alias("guaranteed_portion"),
-                pl.when(needs_ccf_sub).then(new_unguaranteed).otherwise(pl.col("unguaranteed_portion")).alias("unguaranteed_portion"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.when(needs_ccf_sub)
+                    .then(new_guaranteed)
+                    .otherwise(pl.col("guaranteed_portion"))
+                    .alias("guaranteed_portion"),
+                    pl.when(needs_ccf_sub)
+                    .then(new_unguaranteed)
+                    .otherwise(pl.col("unguaranteed_portion"))
+                    .alias("unguaranteed_portion"),
+                ]
+            )
 
-            lf = lf.with_columns([
-                pl.when(needs_ccf_sub)
-                .then(pl.col("guaranteed_portion") + pl.col("unguaranteed_portion"))
-                .otherwise(pl.col(ead_col))
-                .alias("ead_after_collateral" if "ead_after_collateral" in schema.names() else "ead_final"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.when(needs_ccf_sub)
+                    .then(pl.col("guaranteed_portion") + pl.col("unguaranteed_portion"))
+                    .otherwise(pl.col(ead_col))
+                    .alias(
+                        "ead_after_collateral"
+                        if "ead_after_collateral" in schema.names()
+                        else "ead_final"
+                    ),
+                ]
+            )
 
         return lf
 
@@ -697,10 +801,12 @@ class CRMLazyFrame:
         else:
             intermediate_ead = "ead_final"
 
-        return self._lf.with_columns([
-            pl.col(intermediate_ead).clip(lower_bound=0).alias("ead_final"),
-            pl.col(intermediate_ead).alias("ead_after_guarantee"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.col(intermediate_ead).clip(lower_bound=0).alias("ead_final"),
+                pl.col(intermediate_ead).alias("ead_after_guarantee"),
+            ]
+        )
 
     # =========================================================================
     # CONVENIENCE / PIPELINE METHODS
@@ -748,7 +854,9 @@ class CRMLazyFrame:
             lf = lf.crm.apply_collateral(collateral, config)
 
         if guarantees is not None and counterparty_lookup is not None:
-            lf = lf.crm.apply_guarantees(guarantees, counterparty_lookup, config, rating_inheritance)
+            lf = lf.crm.apply_guarantees(
+                guarantees, counterparty_lookup, config, rating_inheritance
+            )
 
         return lf.crm.finalize_ead()
 
@@ -784,19 +892,29 @@ class CRMLazyFrame:
         audit = self._lf.select(select_cols)
 
         # Add calculation string
-        audit = audit.with_columns([
-            pl.concat_str([
-                pl.lit("EAD: gross="),
-                pl.col("ead_gross").round(0).cast(pl.String),
-                pl.lit("; coll="),
-                pl.col("collateral_adjusted_value").round(0).cast(pl.String) if "collateral_adjusted_value" in available_cols else pl.lit("0"),
-                pl.lit("; guar="),
-                pl.col("guarantee_amount").round(0).cast(pl.String) if "guarantee_amount" in available_cols else pl.lit("0"),
-                pl.lit("; prov="),
-                pl.col("provision_allocated").round(0).cast(pl.String) if "provision_allocated" in available_cols else pl.lit("0"),
-                pl.lit("; final="),
-                pl.col("ead_final").round(0).cast(pl.String),
-            ]).alias("crm_calculation"),
-        ])
+        audit = audit.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("EAD: gross="),
+                        pl.col("ead_gross").round(0).cast(pl.String),
+                        pl.lit("; coll="),
+                        pl.col("collateral_adjusted_value").round(0).cast(pl.String)
+                        if "collateral_adjusted_value" in available_cols
+                        else pl.lit("0"),
+                        pl.lit("; guar="),
+                        pl.col("guarantee_amount").round(0).cast(pl.String)
+                        if "guarantee_amount" in available_cols
+                        else pl.lit("0"),
+                        pl.lit("; prov="),
+                        pl.col("provision_allocated").round(0).cast(pl.String)
+                        if "provision_allocated" in available_cols
+                        else pl.lit("0"),
+                        pl.lit("; final="),
+                        pl.col("ead_final").round(0).cast(pl.String),
+                    ]
+                ).alias("crm_calculation"),
+            ]
+        )
 
         return audit

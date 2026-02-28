@@ -141,49 +141,68 @@ class CCFCalculator:
         # Calculate CCF from risk_type for SA approach
         # FR=100%, MR=50%, MLR=20%, LR=0% (CRR) or 10% (Basel 3.1)
         if has_risk_type:
-            exposures = exposures.with_columns([
-                pl.col("risk_type").fill_null("").str.to_lowercase().alias("_risk_type_normalized"),
-                sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.col("risk_type")
+                    .fill_null("")
+                    .str.to_lowercase()
+                    .alias("_risk_type_normalized"),
+                    sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),
+                ]
+            )
 
             # Calculate CCF from risk_type for F-IRB approach
             # FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0% (CRR) or 10% (Basel 3.1)
             # Exception: Short-term trade LCs retain 20% (CRR Art. 166(9))
             firb_lr_ccf = 0.10 if is_b31 else 0.0
             if has_short_term_trade_lc:
-                exposures = exposures.with_columns([
-                    pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
-                    .then(pl.lit(firb_lr_ccf))
-                    # Art. 166(9) exception: short-term trade LCs for goods movement retain 20%
-                    .when(
-                        pl.col("_risk_type_normalized").is_in(["mlr", "medium_low_risk"])
-                        & pl.col("is_short_term_trade_lc").fill_null(False)
-                    )
-                    .then(pl.lit(0.2))  # Art. 166(9) exception
-                    .when(pl.col("_risk_type_normalized").is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
-                    .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
-                    .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
-                    .alias("_firb_ccf_from_risk_type"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
+                        .then(pl.lit(1.0))
+                        .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
+                        .then(pl.lit(firb_lr_ccf))
+                        # Art. 166(9) exception: short-term trade LCs for goods movement retain 20%
+                        .when(
+                            pl.col("_risk_type_normalized").is_in(["mlr", "medium_low_risk"])
+                            & pl.col("is_short_term_trade_lc").fill_null(False)
+                        )
+                        .then(pl.lit(0.2))  # Art. 166(9) exception
+                        .when(
+                            pl.col("_risk_type_normalized").is_in(
+                                ["mr", "medium_risk", "mlr", "medium_low_risk"]
+                            )
+                        )
+                        .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
+                        .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
+                        .alias("_firb_ccf_from_risk_type"),
+                    ]
+                )
             else:
-                exposures = exposures.with_columns([
-                    pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("_risk_type_normalized").is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
-                    .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
-                    .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
-                    .then(pl.lit(firb_lr_ccf))
-                    .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
-                    .alias("_firb_ccf_from_risk_type"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.when(pl.col("_risk_type_normalized").is_in(["fr", "full_risk"]))
+                        .then(pl.lit(1.0))
+                        .when(
+                            pl.col("_risk_type_normalized").is_in(
+                                ["mr", "medium_risk", "mlr", "medium_low_risk"]
+                            )
+                        )
+                        .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
+                        .when(pl.col("_risk_type_normalized").is_in(["lr", "low_risk"]))
+                        .then(pl.lit(firb_lr_ccf))
+                        .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
+                        .alias("_firb_ccf_from_risk_type"),
+                    ]
+                )
         else:
             # No risk_type column - use default CCFs
-            exposures = exposures.with_columns([
-                pl.lit(0.5).alias("_sa_ccf_from_risk_type"),   # Default to MR (50%) for SA
-                pl.lit(0.75).alias("_firb_ccf_from_risk_type"),  # Default to 75% for F-IRB
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(0.5).alias("_sa_ccf_from_risk_type"),  # Default to MR (50%) for SA
+                    pl.lit(0.75).alias("_firb_ccf_from_risk_type"),  # Default to 75% for F-IRB
+                ]
+            )
 
         # Select final CCF based on approach
         if has_approach:
@@ -199,48 +218,51 @@ class CCFCalculator:
                         pl.col("_sa_ccf_from_risk_type") * 0.5,
                     )
                 else:
-                    airb_ccf_expr = ccf_modelled_expr.fill_null(
-                        pl.col("_sa_ccf_from_risk_type")
-                    )
+                    airb_ccf_expr = ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type"))
 
                 # Full logic with A-IRB ccf_modelled support
-                exposures = exposures.with_columns([
-                    pl.when(pl.col("nominal_amount") == 0)
-                    .then(pl.lit(0.0))  # Loans with no contingent - no CCF
-                    .when(pl.col("approach") == ApproachType.AIRB.value)
-                    .then(airb_ccf_expr)
-                    .when(pl.col("approach") == ApproachType.FIRB.value)
-                    .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule
-                    .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
-                    .alias("ccf"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.when(pl.col("nominal_amount") == 0)
+                        .then(pl.lit(0.0))  # Loans with no contingent - no CCF
+                        .when(pl.col("approach") == ApproachType.AIRB.value)
+                        .then(airb_ccf_expr)
+                        .when(pl.col("approach") == ApproachType.FIRB.value)
+                        .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule
+                        .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
+                        .alias("ccf"),
+                    ]
+                )
             else:
                 # No ccf_modelled column
-                exposures = exposures.with_columns([
-                    pl.when(pl.col("nominal_amount") == 0)
-                    .then(pl.lit(0.0))  # Loans with no contingent - no CCF
-                    .when(pl.col("approach") == ApproachType.FIRB.value)
-                    .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule
-                    .when(pl.col("approach") == ApproachType.AIRB.value)
-                    .then(pl.col("_sa_ccf_from_risk_type"))  # A-IRB: use SA as fallback
-                    .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
-                    .alias("ccf"),
-                ])
+                exposures = exposures.with_columns(
+                    [
+                        pl.when(pl.col("nominal_amount") == 0)
+                        .then(pl.lit(0.0))  # Loans with no contingent - no CCF
+                        .when(pl.col("approach") == ApproachType.FIRB.value)
+                        .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule
+                        .when(pl.col("approach") == ApproachType.AIRB.value)
+                        .then(pl.col("_sa_ccf_from_risk_type"))  # A-IRB: use SA as fallback
+                        .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
+                        .alias("ccf"),
+                    ]
+                )
         else:
             # Default to SA CCF when approach not specified
-            exposures = exposures.with_columns([
-                pl.when(pl.col("nominal_amount") == 0)
-                .then(pl.lit(0.0))  # Loans with no contingent - no CCF
-                .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
-                .alias("ccf"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.when(pl.col("nominal_amount") == 0)
+                    .then(pl.lit(0.0))  # Loans with no contingent - no CCF
+                    .otherwise(pl.col("_sa_ccf_from_risk_type"))  # SA
+                    .alias("ccf"),
+                ]
+            )
 
         # Calculate EAD from undrawn/nominal amount
         # When provision columns are present, use nominal_after_provision
         # to implement CRR Art. 111(2): SCRA deducted before CCF
         has_provision_cols = (
-            "nominal_after_provision" in schema.names()
-            and "provision_on_drawn" in schema.names()
+            "nominal_after_provision" in schema.names() and "provision_on_drawn" in schema.names()
         )
 
         if has_provision_cols:
@@ -248,94 +270,118 @@ class CCFCalculator:
         else:
             nominal_for_ccf = pl.col("nominal_amount")
 
-        exposures = exposures.with_columns([
-            (nominal_for_ccf * pl.col("ccf")).alias("ead_from_ccf"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                (nominal_for_ccf * pl.col("ccf")).alias("ead_from_ccf"),
+            ]
+        )
 
         # Calculate total EAD (drawn + interest + CCF-adjusted undrawn)
         # When provision columns exist, subtract provision_on_drawn from the
         # on-balance-sheet component (interest is never reduced by provision)
         if has_provision_cols and has_interest:
-            on_bal = (
-                drawn_for_ead() - pl.col("provision_on_drawn")
-            ).clip(lower_bound=0.0) + pl.col("interest").fill_null(0.0)
-            exposures = exposures.with_columns([
-                (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
-            ])
+            on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(
+                lower_bound=0.0
+            ) + pl.col("interest").fill_null(0.0)
+            exposures = exposures.with_columns(
+                [
+                    (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+                ]
+            )
         elif has_provision_cols:
-            on_bal = (
-                drawn_for_ead() - pl.col("provision_on_drawn")
-            ).clip(lower_bound=0.0)
-            exposures = exposures.with_columns([
-                (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
-            ])
+            on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(lower_bound=0.0)
+            exposures = exposures.with_columns(
+                [
+                    (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+                ]
+            )
         elif has_interest:
-            exposures = exposures.with_columns([
-                (on_balance_ead() + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    (on_balance_ead() + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+                ]
+            )
         else:
             # Legacy: no interest column, EAD = drawn + CCF-adjusted undrawn
-            exposures = exposures.with_columns([
-                (drawn_for_ead() + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    (drawn_for_ead() + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
+                ]
+            )
 
         # Add CCF audit trail
         if has_risk_type and has_interest:
-            exposures = exposures.with_columns([
-                pl.concat_str([
-                    pl.lit("CCF="),
-                    (pl.col("ccf") * 100).round(0).cast(pl.String),
-                    pl.lit("%; risk_type="),
-                    pl.col("risk_type").fill_null("unknown"),
-                    pl.lit("; drawn="),
-                    pl.col("drawn_amount").round(0).cast(pl.String),
-                    pl.lit("; interest="),
-                    pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
-                    pl.lit("; nominal="),
-                    pl.col("nominal_amount").round(0).cast(pl.String),
-                    pl.lit("; ead_ccf="),
-                    pl.col("ead_from_ccf").round(0).cast(pl.String),
-                ]).alias("ccf_calculation"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("CCF="),
+                            (pl.col("ccf") * 100).round(0).cast(pl.String),
+                            pl.lit("%; risk_type="),
+                            pl.col("risk_type").fill_null("unknown"),
+                            pl.lit("; drawn="),
+                            pl.col("drawn_amount").round(0).cast(pl.String),
+                            pl.lit("; interest="),
+                            pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
+                            pl.lit("; nominal="),
+                            pl.col("nominal_amount").round(0).cast(pl.String),
+                            pl.lit("; ead_ccf="),
+                            pl.col("ead_from_ccf").round(0).cast(pl.String),
+                        ]
+                    ).alias("ccf_calculation"),
+                ]
+            )
         elif has_risk_type:
-            exposures = exposures.with_columns([
-                pl.concat_str([
-                    pl.lit("CCF="),
-                    (pl.col("ccf") * 100).round(0).cast(pl.String),
-                    pl.lit("%; risk_type="),
-                    pl.col("risk_type").fill_null("unknown"),
-                    pl.lit("; nominal="),
-                    pl.col("nominal_amount").round(0).cast(pl.String),
-                    pl.lit("; ead_ccf="),
-                    pl.col("ead_from_ccf").round(0).cast(pl.String),
-                ]).alias("ccf_calculation"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("CCF="),
+                            (pl.col("ccf") * 100).round(0).cast(pl.String),
+                            pl.lit("%; risk_type="),
+                            pl.col("risk_type").fill_null("unknown"),
+                            pl.lit("; nominal="),
+                            pl.col("nominal_amount").round(0).cast(pl.String),
+                            pl.lit("; ead_ccf="),
+                            pl.col("ead_from_ccf").round(0).cast(pl.String),
+                        ]
+                    ).alias("ccf_calculation"),
+                ]
+            )
         elif has_interest:
-            exposures = exposures.with_columns([
-                pl.concat_str([
-                    pl.lit("CCF="),
-                    (pl.col("ccf") * 100).round(0).cast(pl.String),
-                    pl.lit("%; drawn="),
-                    pl.col("drawn_amount").round(0).cast(pl.String),
-                    pl.lit("; interest="),
-                    pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
-                    pl.lit("; nominal="),
-                    pl.col("nominal_amount").round(0).cast(pl.String),
-                    pl.lit("; ead_ccf="),
-                    pl.col("ead_from_ccf").round(0).cast(pl.String),
-                ]).alias("ccf_calculation"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("CCF="),
+                            (pl.col("ccf") * 100).round(0).cast(pl.String),
+                            pl.lit("%; drawn="),
+                            pl.col("drawn_amount").round(0).cast(pl.String),
+                            pl.lit("; interest="),
+                            pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
+                            pl.lit("; nominal="),
+                            pl.col("nominal_amount").round(0).cast(pl.String),
+                            pl.lit("; ead_ccf="),
+                            pl.col("ead_from_ccf").round(0).cast(pl.String),
+                        ]
+                    ).alias("ccf_calculation"),
+                ]
+            )
         else:
-            exposures = exposures.with_columns([
-                pl.concat_str([
-                    pl.lit("CCF="),
-                    (pl.col("ccf") * 100).round(0).cast(pl.String),
-                    pl.lit("%; nominal="),
-                    pl.col("nominal_amount").round(0).cast(pl.String),
-                    pl.lit("; ead_ccf="),
-                    pl.col("ead_from_ccf").round(0).cast(pl.String),
-                ]).alias("ccf_calculation"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("CCF="),
+                            (pl.col("ccf") * 100).round(0).cast(pl.String),
+                            pl.lit("%; nominal="),
+                            pl.col("nominal_amount").round(0).cast(pl.String),
+                            pl.lit("; ead_ccf="),
+                            pl.col("ead_from_ccf").round(0).cast(pl.String),
+                        ]
+                    ).alias("ccf_calculation"),
+                ]
+            )
 
         # Clean up temporary columns
         temp_columns = ["_sa_ccf_from_risk_type", "_firb_ccf_from_risk_type"]

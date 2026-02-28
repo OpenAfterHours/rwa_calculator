@@ -6,17 +6,15 @@ summary views for regulatory reporting (COREP).
 """
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.bundles import (
-    SAResultBundle,
     IRBResultBundle,
-    AggregatedResultBundle,
+    SAResultBundle,
 )
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
 
 
@@ -42,25 +40,27 @@ class TestPostCRMDetailedView:
     ) -> None:
         """Guaranteed exposure should generate two reporting rows."""
         # SA results with guarantee data
-        sa_results = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [0.58],  # Blended RW
-            "rwa_post_factor": [580_000.0],
-            # Pre/Post CRM columns
-            "pre_crm_counterparty_reference": ["CP001"],
-            "pre_crm_exposure_class": ["CORPORATE"],
-            "post_crm_counterparty_guaranteed": ["GUAR001"],
-            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
-            "is_guaranteed": [True],
-            "guaranteed_portion": [600_000.0],
-            "unguaranteed_portion": [400_000.0],
-            "guarantor_reference": ["GUAR001"],
-            "pre_crm_risk_weight": [1.0],  # 100% for corporate
-            "guarantor_rw": [0.0],  # 0% for sovereign CQS 1
-        })
+        sa_results = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [0.58],  # Blended RW
+                "rwa_post_factor": [580_000.0],
+                # Pre/Post CRM columns
+                "pre_crm_counterparty_reference": ["CP001"],
+                "pre_crm_exposure_class": ["CORPORATE"],
+                "post_crm_counterparty_guaranteed": ["GUAR001"],
+                "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
+                "is_guaranteed": [True],
+                "guaranteed_portion": [600_000.0],
+                "unguaranteed_portion": [400_000.0],
+                "guarantor_reference": ["GUAR001"],
+                "pre_crm_risk_weight": [1.0],  # 100% for corporate
+                "guarantor_rw": [0.0],  # 0% for sovereign CQS 1
+            }
+        )
 
         sa_bundle = SAResultBundle(results=sa_results)
 
@@ -98,22 +98,24 @@ class TestPostCRMDetailedView:
         crr_config: CalculationConfig,
     ) -> None:
         """Non-guaranteed exposure should have single reporting row."""
-        sa_results = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "rwa_post_factor": [1_000_000.0],
-            # Pre/Post CRM columns
-            "pre_crm_counterparty_reference": ["CP001"],
-            "pre_crm_exposure_class": ["CORPORATE"],
-            "post_crm_counterparty_guaranteed": ["CP001"],  # Same as original
-            "post_crm_exposure_class_guaranteed": ["CORPORATE"],  # Same as original
-            "is_guaranteed": [False],
-            "guaranteed_portion": [0.0],
-            "unguaranteed_portion": [1_000_000.0],
-        })
+        sa_results = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "rwa_post_factor": [1_000_000.0],
+                # Pre/Post CRM columns
+                "pre_crm_counterparty_reference": ["CP001"],
+                "pre_crm_exposure_class": ["CORPORATE"],
+                "post_crm_counterparty_guaranteed": ["CP001"],  # Same as original
+                "post_crm_exposure_class_guaranteed": ["CORPORATE"],  # Same as original
+                "is_guaranteed": [False],
+                "guaranteed_portion": [0.0],
+                "unguaranteed_portion": [1_000_000.0],
+            }
+        )
 
         sa_bundle = SAResultBundle(results=sa_results)
 
@@ -141,23 +143,25 @@ class TestPreCRMSummary:
         crr_config: CalculationConfig,
     ) -> None:
         """Pre-CRM summary groups all EAD under original borrower's class."""
-        sa_results = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": ["CP001", "CP002"],
-            "exposure_class": ["CORPORATE", "CORPORATE"],
-            "ead_final": [1_000_000.0, 500_000.0],
-            "risk_weight": [0.58, 1.0],  # EXP001 has guarantee benefit
-            "rwa_post_factor": [580_000.0, 500_000.0],
-            # Pre/Post CRM columns
-            "pre_crm_counterparty_reference": ["CP001", "CP002"],
-            "pre_crm_exposure_class": ["CORPORATE", "CORPORATE"],
-            "post_crm_counterparty_guaranteed": ["GUAR001", "CP002"],
-            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK", "CORPORATE"],
-            "is_guaranteed": [True, False],
-            "guaranteed_portion": [600_000.0, 0.0],
-            "unguaranteed_portion": [400_000.0, 500_000.0],
-            "pre_crm_risk_weight": [1.0, 1.0],
-        })
+        sa_results = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": ["CP001", "CP002"],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "ead_final": [1_000_000.0, 500_000.0],
+                "risk_weight": [0.58, 1.0],  # EXP001 has guarantee benefit
+                "rwa_post_factor": [580_000.0, 500_000.0],
+                # Pre/Post CRM columns
+                "pre_crm_counterparty_reference": ["CP001", "CP002"],
+                "pre_crm_exposure_class": ["CORPORATE", "CORPORATE"],
+                "post_crm_counterparty_guaranteed": ["GUAR001", "CP002"],
+                "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK", "CORPORATE"],
+                "is_guaranteed": [True, False],
+                "guaranteed_portion": [600_000.0, 0.0],
+                "unguaranteed_portion": [400_000.0, 500_000.0],
+                "pre_crm_risk_weight": [1.0, 1.0],
+            }
+        )
 
         sa_bundle = SAResultBundle(results=sa_results)
 
@@ -191,25 +195,27 @@ class TestPostCRMSummary:
         crr_config: CalculationConfig,
     ) -> None:
         """Guaranteed portion should aggregate under guarantor's exposure class."""
-        sa_results = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [0.58],
-            "rwa_post_factor": [580_000.0],
-            # Pre/Post CRM columns
-            "pre_crm_counterparty_reference": ["CP001"],
-            "pre_crm_exposure_class": ["CORPORATE"],
-            "post_crm_counterparty_guaranteed": ["GUAR001"],
-            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
-            "is_guaranteed": [True],
-            "guaranteed_portion": [600_000.0],
-            "unguaranteed_portion": [400_000.0],
-            "guarantor_reference": ["GUAR001"],
-            "pre_crm_risk_weight": [1.0],
-            "guarantor_rw": [0.0],
-        })
+        sa_results = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [0.58],
+                "rwa_post_factor": [580_000.0],
+                # Pre/Post CRM columns
+                "pre_crm_counterparty_reference": ["CP001"],
+                "pre_crm_exposure_class": ["CORPORATE"],
+                "post_crm_counterparty_guaranteed": ["GUAR001"],
+                "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
+                "is_guaranteed": [True],
+                "guaranteed_portion": [600_000.0],
+                "unguaranteed_portion": [400_000.0],
+                "guarantor_reference": ["GUAR001"],
+                "pre_crm_risk_weight": [1.0],
+                "guarantor_rw": [0.0],
+            }
+        )
 
         sa_bundle = SAResultBundle(results=sa_results)
 
@@ -234,7 +240,9 @@ class TestPostCRMSummary:
         assert corp_row["total_rwa"][0] == pytest.approx(400_000.0)  # 400k * 100%
 
         # SOVEREIGN row (guaranteed portion)
-        sov_row = summary_df.filter(pl.col("reporting_exposure_class") == "CENTRAL_GOVT_CENTRAL_BANK")
+        sov_row = summary_df.filter(
+            pl.col("reporting_exposure_class") == "CENTRAL_GOVT_CENTRAL_BANK"
+        )
         assert len(sov_row) == 1
         assert sov_row["total_ead"][0] == pytest.approx(600_000.0)
         assert sov_row["total_rwa"][0] == pytest.approx(0.0)  # 600k * 0%
@@ -251,39 +259,43 @@ class TestMixedSAIRBPortfolio:
     ) -> None:
         """Aggregator handles mixed SA and IRB exposures with guarantees."""
         # SA exposure with guarantee
-        sa_results = pl.LazyFrame({
-            "exposure_reference": ["SA001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "ead_final": [500_000.0],
-            "risk_weight": [0.6],
-            "rwa_post_factor": [300_000.0],
-            "pre_crm_exposure_class": ["CORPORATE"],
-            "post_crm_exposure_class_guaranteed": ["INSTITUTION"],
-            "is_guaranteed": [True],
-            "guaranteed_portion": [250_000.0],
-            "unguaranteed_portion": [250_000.0],
-            "pre_crm_risk_weight": [1.0],
-            "guarantor_rw": [0.2],
-        })
+        sa_results = pl.LazyFrame(
+            {
+                "exposure_reference": ["SA001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "ead_final": [500_000.0],
+                "risk_weight": [0.6],
+                "rwa_post_factor": [300_000.0],
+                "pre_crm_exposure_class": ["CORPORATE"],
+                "post_crm_exposure_class_guaranteed": ["INSTITUTION"],
+                "is_guaranteed": [True],
+                "guaranteed_portion": [250_000.0],
+                "unguaranteed_portion": [250_000.0],
+                "pre_crm_risk_weight": [1.0],
+                "guarantor_rw": [0.2],
+            }
+        )
 
         # IRB exposure with guarantee
-        irb_results = pl.LazyFrame({
-            "exposure_reference": ["IRB001"],
-            "counterparty_reference": ["CP002"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["FIRB"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [0.3],
-            "rwa": [300_000.0],
-            "pre_crm_exposure_class": ["CORPORATE"],
-            "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
-            "is_guaranteed": [True],
-            "guaranteed_portion": [500_000.0],
-            "unguaranteed_portion": [500_000.0],
-            "pre_crm_risk_weight": [0.5],
-            "guarantor_rw": [0.0],
-        })
+        irb_results = pl.LazyFrame(
+            {
+                "exposure_reference": ["IRB001"],
+                "counterparty_reference": ["CP002"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["FIRB"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [0.3],
+                "rwa": [300_000.0],
+                "pre_crm_exposure_class": ["CORPORATE"],
+                "post_crm_exposure_class_guaranteed": ["CENTRAL_GOVT_CENTRAL_BANK"],
+                "is_guaranteed": [True],
+                "guaranteed_portion": [500_000.0],
+                "unguaranteed_portion": [500_000.0],
+                "pre_crm_risk_weight": [0.5],
+                "guarantor_rw": [0.0],
+            }
+        )
 
         sa_bundle = SAResultBundle(results=sa_results)
         irb_bundle = IRBResultBundle(results=irb_results)

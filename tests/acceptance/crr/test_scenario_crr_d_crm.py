@@ -11,16 +11,15 @@ Regulatory References:
 - CRR Art. 238: Maturity mismatch
 """
 
-import pytest
-import polars as pl
 from typing import Any
 
+import polars as pl
+import pytest
 from tests.acceptance.crr.conftest import (
-    assert_rwa_within_tolerance,
     assert_ead_match,
+    assert_rwa_within_tolerance,
     get_result_for_exposure,
 )
-
 
 # Mapping of scenario IDs to exposure references
 SCENARIO_EXPOSURE_MAP = {
@@ -242,9 +241,7 @@ class TestCRRGroupD_ParameterizedValidation:
         """Verify CRM scenarios show effect of mitigation on EAD or RWA."""
         for scenario in crr_d_scenarios:
             # All CRM scenarios should result in some form of risk reduction
-            assert scenario["ead"] is not None, (
-                f"Scenario {scenario['scenario_id']} missing EAD"
-            )
+            assert scenario["ead"] is not None, f"Scenario {scenario['scenario_id']} missing EAD"
             assert scenario["rwa_after_sf"] is not None, (
                 f"Scenario {scenario['scenario_id']} missing RWA"
             )

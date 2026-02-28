@@ -15,8 +15,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.engine import AuditLazyFrame, AuditExpr  # noqa: F401
-
+from rwa_calc.engine import AuditExpr, AuditLazyFrame  # noqa: F401
 
 # =============================================================================
 # Fixtures
@@ -26,66 +25,76 @@ from rwa_calc.engine import AuditLazyFrame, AuditExpr  # noqa: F401
 @pytest.fixture
 def sa_data() -> pl.LazyFrame:
     """Return SA calculation data."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001"],
-        "ead_final": [1_000_000.0],
-        "risk_weight": [0.50],
-        "supporting_factor": [0.7619],
-        "rwa_pre_factor": [500_000.0],
-        "rwa_post_factor": [380_950.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001"],
+            "ead_final": [1_000_000.0],
+            "risk_weight": [0.50],
+            "supporting_factor": [0.7619],
+            "rwa_pre_factor": [500_000.0],
+            "rwa_post_factor": [380_950.0],
+        }
+    )
 
 
 @pytest.fixture
 def irb_data() -> pl.LazyFrame:
     """Return IRB calculation data."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001"],
-        "ead_final": [1_000_000.0],
-        "pd_floored": [0.01],
-        "lgd_floored": [0.45],
-        "correlation": [0.19],
-        "k": [0.05],
-        "maturity_adjustment": [1.2],
-        "rwa": [700_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001"],
+            "ead_final": [1_000_000.0],
+            "pd_floored": [0.01],
+            "lgd_floored": [0.45],
+            "correlation": [0.19],
+            "k": [0.05],
+            "maturity_adjustment": [1.2],
+            "rwa": [700_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def slotting_data() -> pl.LazyFrame:
     """Return slotting calculation data."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001"],
-        "slotting_category": ["satisfactory"],
-        "is_hvcre": [False],
-        "risk_weight": [1.15],
-        "rwa": [1_150_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001"],
+            "slotting_category": ["satisfactory"],
+            "is_hvcre": [False],
+            "risk_weight": [1.15],
+            "rwa": [1_150_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def crm_data() -> pl.LazyFrame:
     """Return CRM/EAD calculation data."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001"],
-        "ead_gross": [1_000_000.0],
-        "collateral_adjusted_value": [200_000.0],
-        "guarantee_amount": [300_000.0],
-        "provision_allocated": [50_000.0],
-        "ead_final": [450_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001"],
+            "ead_gross": [1_000_000.0],
+            "collateral_adjusted_value": [200_000.0],
+            "guarantee_amount": [300_000.0],
+            "provision_allocated": [50_000.0],
+            "ead_final": [450_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def haircut_data() -> pl.LazyFrame:
     """Return haircut calculation data."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL001"],
-        "market_value": [100_000.0],
-        "collateral_haircut": [0.10],
-        "fx_haircut": [0.08],
-        "value_after_haircut": [82_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL001"],
+            "market_value": [100_000.0],
+            "collateral_haircut": [0.10],
+            "fx_haircut": [0.08],
+            "value_after_haircut": [82_000.0],
+        }
+    )
 
 
 # =============================================================================
@@ -143,9 +152,7 @@ class TestExprFormatCurrency:
     def test_format_currency_integer(self) -> None:
         """Should format as integer string."""
         df = pl.DataFrame({"value": [1_000_000.0]})
-        result = df.with_columns(
-            pl.col("value").audit.format_currency().alias("formatted")
-        )
+        result = df.with_columns(pl.col("value").audit.format_currency().alias("formatted"))
         assert result["formatted"][0] == "1000000.0"
 
     def test_format_currency_no_decimals(self) -> None:
@@ -163,9 +170,7 @@ class TestExprFormatPercent:
     def test_format_percent_default(self) -> None:
         """Should format as percentage with 1 decimal."""
         df = pl.DataFrame({"value": [0.50]})
-        result = df.with_columns(
-            pl.col("value").audit.format_percent().alias("formatted")
-        )
+        result = df.with_columns(pl.col("value").audit.format_percent().alias("formatted"))
         assert result["formatted"][0] == "50.0%"
 
     def test_format_percent_more_decimals(self) -> None:
@@ -183,9 +188,7 @@ class TestExprFormatRatio:
     def test_format_ratio_default(self) -> None:
         """Should format as ratio with 3 decimals."""
         df = pl.DataFrame({"value": [0.123456]})
-        result = df.with_columns(
-            pl.col("value").audit.format_ratio().alias("formatted")
-        )
+        result = df.with_columns(pl.col("value").audit.format_ratio().alias("formatted"))
         assert result["formatted"][0] == "0.123"
 
 
@@ -195,9 +198,7 @@ class TestExprFormatBps:
     def test_format_bps(self) -> None:
         """Should format as basis points."""
         df = pl.DataFrame({"value": [0.015]})  # 1.5% = 150 bps
-        result = df.with_columns(
-            pl.col("value").audit.format_bps().alias("formatted")
-        )
+        result = df.with_columns(pl.col("value").audit.format_bps().alias("formatted"))
         assert result["formatted"][0] == "150.0 bps"
 
 
@@ -224,11 +225,13 @@ class TestBuildSACalculation:
 
     def test_sa_calculation_without_supporting_factor(self) -> None:
         """Should build SA calculation string without supporting factor."""
-        data = pl.LazyFrame({
-            "ead_final": [1_000_000.0],
-            "risk_weight": [0.50],
-            "rwa_pre_factor": [500_000.0],
-        })
+        data = pl.LazyFrame(
+            {
+                "ead_final": [1_000_000.0],
+                "risk_weight": [0.50],
+                "rwa_pre_factor": [500_000.0],
+            }
+        )
 
         result = data.audit.build_sa_calculation().collect()
         calc_str = result["sa_calculation"][0]
@@ -284,12 +287,14 @@ class TestBuildSlottingCalculation:
 
     def test_slotting_calculation_hvcre(self) -> None:
         """Should include HVCRE marker when applicable."""
-        data = pl.LazyFrame({
-            "slotting_category": ["strong"],
-            "is_hvcre": [True],
-            "risk_weight": [0.70],
-            "rwa": [700_000.0],
-        })
+        data = pl.LazyFrame(
+            {
+                "slotting_category": ["strong"],
+                "is_hvcre": [True],
+                "risk_weight": [0.70],
+                "rwa": [700_000.0],
+            }
+        )
 
         result = data.audit.build_slotting_calculation().collect()
         calc_str = result["slotting_calculation"][0]

@@ -92,10 +92,7 @@ class SupportingFactorCalculator:
         tier1_amount = min(total_exposure, threshold)
         tier2_amount = max(total_exposure - threshold, Decimal("0"))
 
-        weighted_factor = (
-            tier1_amount * factor_tier1 +
-            tier2_amount * factor_tier2
-        )
+        weighted_factor = tier1_amount * factor_tier1 + tier2_amount * factor_tier2
 
         return weighted_factor / total_exposure
 
@@ -194,11 +191,13 @@ class SupportingFactorCalculator:
         """
         if not config.supporting_factors.enabled:
             # Basel 3.1: No supporting factors
-            return exposures.with_columns([
-                pl.lit(1.0).alias("supporting_factor"),
-                pl.col("rwa_pre_factor").alias("rwa_post_factor"),
-                pl.lit(False).alias("supporting_factor_applied"),
-            ])
+            return exposures.with_columns(
+                [
+                    pl.lit(1.0).alias("supporting_factor"),
+                    pl.col("rwa_pre_factor").alias("rwa_post_factor"),
+                    pl.lit(False).alias("supporting_factor_applied"),
+                ]
+            )
 
         # Get threshold in GBP
         threshold_gbp = float(
@@ -219,10 +218,9 @@ class SupportingFactorCalculator:
         # Build the drawn (on-balance-sheet) expression for tier calculation.
         # Use drawn_amount + interest when available; fall back to ead_final.
         if has_drawn:
-            drawn_expr = (
-                pl.col("drawn_amount").clip(lower_bound=0.0)
-                + pl.col("interest").fill_null(0.0)
-            )
+            drawn_expr = pl.col("drawn_amount").clip(lower_bound=0.0) + pl.col(
+                "interest"
+            ).fill_null(0.0)
         else:
             drawn_expr = pl.col("ead_final")
 
@@ -231,18 +229,16 @@ class SupportingFactorCalculator:
             if has_counterparty:
                 # Aggregate drawn amounts at counterparty level using window function
                 # Only aggregate SME exposures with valid counterparty references
-                total_cp_drawn_expr = pl.when(
-                    pl.col("is_sme") & pl.col("counterparty_reference").is_not_null()
-                ).then(
-                    drawn_expr.sum().over("counterparty_reference")
-                ).otherwise(
-                    # Fall back to individual drawn if no counterparty ref or not SME
-                    drawn_expr
+                total_cp_drawn_expr = (
+                    pl.when(pl.col("is_sme") & pl.col("counterparty_reference").is_not_null())
+                    .then(drawn_expr.sum().over("counterparty_reference"))
+                    .otherwise(
+                        # Fall back to individual drawn if no counterparty ref or not SME
+                        drawn_expr
+                    )
                 )
 
-                exposures = exposures.with_columns([
-                    total_cp_drawn_expr.alias("total_cp_drawn")
-                ])
+                exposures = exposures.with_columns([total_cp_drawn_expr.alias("total_cp_drawn")])
 
                 # Use counterparty total drawn for tier calculation
                 ead_for_tier = pl.col("total_cp_drawn")
@@ -251,36 +247,42 @@ class SupportingFactorCalculator:
                 ead_for_tier = drawn_expr
 
             # Calculate tiered factor based on aggregated drawn exposure
-            tier1_expr = pl.when(ead_for_tier <= threshold_gbp).then(
-                ead_for_tier
-            ).otherwise(pl.lit(threshold_gbp))
+            tier1_expr = (
+                pl.when(ead_for_tier <= threshold_gbp)
+                .then(ead_for_tier)
+                .otherwise(pl.lit(threshold_gbp))
+            )
 
-            tier2_expr = pl.when(ead_for_tier > threshold_gbp).then(
-                ead_for_tier - threshold_gbp
-            ).otherwise(pl.lit(0.0))
+            tier2_expr = (
+                pl.when(ead_for_tier > threshold_gbp)
+                .then(ead_for_tier - threshold_gbp)
+                .otherwise(pl.lit(0.0))
+            )
 
             # BTL exposures are excluded from the SME factor but still
             # contribute to total_cp_drawn for tier calculation (CRR Art. 501)
             is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
 
-            sme_factor_expr = pl.when(
-                pl.col("is_sme") & (ead_for_tier > 0) & ~is_btl
-            ).then(
-                (tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier
-            ).when(
-                pl.col("is_sme") & (ead_for_tier <= 0) & ~is_btl
-            ).then(
-                # Zero drawn = all within tier 1 → pure 0.7619
-                pl.lit(factor_tier1)
-            ).otherwise(pl.lit(1.0))
+            sme_factor_expr = (
+                pl.when(pl.col("is_sme") & (ead_for_tier > 0) & ~is_btl)
+                .then((tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier)
+                .when(pl.col("is_sme") & (ead_for_tier <= 0) & ~is_btl)
+                .then(
+                    # Zero drawn = all within tier 1 → pure 0.7619
+                    pl.lit(factor_tier1)
+                )
+                .otherwise(pl.lit(1.0))
+            )
         else:
             sme_factor_expr = pl.lit(1.0)
 
         # Build infrastructure factor expression inline
         if has_infra:
-            infra_factor_expr = pl.when(pl.col("is_infrastructure")).then(
-                pl.lit(infra_factor)
-            ).otherwise(pl.lit(1.0))
+            infra_factor_expr = (
+                pl.when(pl.col("is_infrastructure"))
+                .then(pl.lit(infra_factor))
+                .otherwise(pl.lit(1.0))
+            )
         else:
             infra_factor_expr = pl.lit(1.0)
 
@@ -288,11 +290,13 @@ class SupportingFactorCalculator:
         min_factor_expr = pl.min_horizontal(sme_factor_expr, infra_factor_expr)
 
         # Single with_columns call for maximum performance
-        return exposures.with_columns([
-            min_factor_expr.alias("supporting_factor"),
-            (pl.col("rwa_pre_factor") * min_factor_expr).alias("rwa_post_factor"),
-            (min_factor_expr < 1.0).alias("supporting_factor_applied"),
-        ])
+        return exposures.with_columns(
+            [
+                min_factor_expr.alias("supporting_factor"),
+                (pl.col("rwa_pre_factor") * min_factor_expr).alias("rwa_post_factor"),
+                (min_factor_expr < 1.0).alias("supporting_factor_applied"),
+            ]
+        )
 
 
 def create_supporting_factor_calculator() -> SupportingFactorCalculator:

@@ -139,13 +139,17 @@ class IRBLazyFrame:
 
         lf = self._lf
         if "approach" not in schema.names():
-            lf = lf.with_columns([
-                pl.lit(ApproachType.FIRB.value).alias("approach"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.lit(ApproachType.FIRB.value).alias("approach"),
+                ]
+            )
 
-        return lf.with_columns([
-            (pl.col("approach") == ApproachType.AIRB.value).alias("is_airb"),
-        ])
+        return lf.with_columns(
+            [
+                (pl.col("approach") == ApproachType.AIRB.value).alias("is_airb"),
+            ]
+        )
 
     def apply_firb_lgd(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -172,50 +176,60 @@ class IRBLazyFrame:
 
         lf = self._lf
         if "lgd" not in schema.names():
-            lf = lf.with_columns([
-                pl.lit(None).cast(pl.Float64).alias("lgd"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("lgd"),
+                ]
+            )
         elif schema["lgd"] != pl.Float64:
             # Cast lgd to Float64 if it's not already (handles String type from Excel imports)
-            lf = lf.with_columns([
-                pl.col("lgd").cast(pl.Float64, strict=False).alias("lgd"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.col("lgd").cast(pl.Float64, strict=False).alias("lgd"),
+                ]
+            )
 
         # Use framework-appropriate supervisory LGD values
         lgd_table = get_firb_lgd_table_for_framework(config.is_basel_3_1)
         default_lgd = float(lgd_table["unsecured_senior"])
         sub_lgd = float(lgd_table["subordinated"])
 
-        lf = lf.with_columns([
-            pl.when(
-                (pl.col("approach") == ApproachType.FIRB.value) &
-                pl.col("lgd").is_null()
-            )
-            .then(
-                pl.when(
-                    has_seniority and
-                    pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
+        lf = lf.with_columns(
+            [
+                pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
+                .then(
+                    pl.when(
+                        has_seniority
+                        and pl.col("seniority")
+                        .fill_null("senior")
+                        .str.to_lowercase()
+                        .str.contains("sub")
+                    )
+                    .then(pl.lit(sub_lgd))
+                    .otherwise(pl.lit(default_lgd))
                 )
-                .then(pl.lit(sub_lgd))
-                .otherwise(pl.lit(default_lgd))
-            )
-            .otherwise(pl.col("lgd").fill_null(default_lgd))
-            .alias("lgd"),
-        ])
+                .otherwise(pl.col("lgd").fill_null(default_lgd))
+                .alias("lgd"),
+            ]
+        )
 
         # For lgd_input, use lgd_post_crm (from CRM processor) if available
         # This ensures collateral-adjusted LGD is used for F-IRB risk weight calculation
         if has_lgd_post_crm:
-            return lf.with_columns([
-                pl.when(pl.col("approach") == ApproachType.FIRB.value)
-                .then(pl.col("lgd_post_crm"))
-                .otherwise(pl.col("lgd"))
-                .alias("lgd_input"),
-            ])
+            return lf.with_columns(
+                [
+                    pl.when(pl.col("approach") == ApproachType.FIRB.value)
+                    .then(pl.col("lgd_post_crm"))
+                    .otherwise(pl.col("lgd"))
+                    .alias("lgd_input"),
+                ]
+            )
         else:
-            return lf.with_columns([
-                pl.col("lgd").alias("lgd_input"),
-            ])
+            return lf.with_columns(
+                [
+                    pl.col("lgd").alias("lgd_input"),
+                ]
+            )
 
     def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -250,9 +264,9 @@ class IRBLazyFrame:
                 exprs.append(
                     pl.when(pl.col("maturity_date").is_not_null())
                     .then(
-                        _exact_fractional_years_expr(
-                            config.reporting_date, "maturity_date"
-                        ).clip(1.0, 5.0)
+                        _exact_fractional_years_expr(config.reporting_date, "maturity_date").clip(
+                            1.0, 5.0
+                        )
                     )
                     .otherwise(pl.lit(5.0))
                     .alias("maturity"),
@@ -263,9 +277,7 @@ class IRBLazyFrame:
         # Turnover for SME correlation adjustment
         if "turnover_m" not in names:
             if "cp_annual_revenue" in names:
-                exprs.append(
-                    (pl.col("cp_annual_revenue") / 1_000_000.0).alias("turnover_m")
-                )
+                exprs.append((pl.col("cp_annual_revenue") / 1_000_000.0).alias("turnover_m"))
             else:
                 exprs.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
 
@@ -342,9 +354,7 @@ class IRBLazyFrame:
             return self._lf.with_columns(
                 pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr).alias("lgd_floored")
             )
-        return self._lf.with_columns(
-            pl.col(lgd_col).alias("lgd_floored")
-        )
+        return self._lf.with_columns(pl.col(lgd_col).alias("lgd_floored"))
 
     def calculate_correlation(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -388,9 +398,7 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with k column
         """
-        return self._lf.with_columns(
-            _polars_capital_k_expr().alias("k")
-        )
+        return self._lf.with_columns(_polars_capital_k_expr().alias("k"))
 
     def calculate_maturity_adjustment(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -439,11 +447,21 @@ class IRBLazyFrame:
         """
         scaling_factor = 1.06 if config.is_crr else 1.0
 
-        return self._lf.with_columns([
-            pl.lit(scaling_factor).alias("scaling_factor"),
-            (pl.col("k") * 12.5 * scaling_factor * pl.col("ead_final") * pl.col("maturity_adjustment")).alias("rwa"),
-            (pl.col("k") * 12.5 * scaling_factor * pl.col("maturity_adjustment")).alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.lit(scaling_factor).alias("scaling_factor"),
+                (
+                    pl.col("k")
+                    * 12.5
+                    * scaling_factor
+                    * pl.col("ead_final")
+                    * pl.col("maturity_adjustment")
+                ).alias("rwa"),
+                (pl.col("k") * 12.5 * scaling_factor * pl.col("maturity_adjustment")).alias(
+                    "risk_weight"
+                ),
+            ]
+        )
 
     def calculate_expected_loss(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -458,7 +476,9 @@ class IRBLazyFrame:
             LazyFrame with expected_loss column
         """
         return self._lf.with_columns(
-            (pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")).alias("expected_loss")
+            (pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")).alias(
+                "expected_loss"
+            )
         )
 
     # =========================================================================
@@ -539,14 +559,28 @@ class IRBLazyFrame:
         )
 
         # Override only defaulted rows
-        lf = lf.with_columns([
-            pl.when(is_defaulted).then(k_defaulted).otherwise(pl.col("k")).alias("k"),
-            pl.when(is_defaulted).then(pl.lit(0.0)).otherwise(pl.col("correlation")).alias("correlation"),
-            pl.when(is_defaulted).then(pl.lit(1.0)).otherwise(pl.col("maturity_adjustment")).alias("maturity_adjustment"),
-            pl.when(is_defaulted).then(rwa_defaulted).otherwise(pl.col("rwa")).alias("rwa"),
-            pl.when(is_defaulted).then(rw_defaulted).otherwise(pl.col("risk_weight")).alias("risk_weight"),
-            pl.when(is_defaulted).then(el_defaulted).otherwise(pl.col("expected_loss")).alias("expected_loss"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.when(is_defaulted).then(k_defaulted).otherwise(pl.col("k")).alias("k"),
+                pl.when(is_defaulted)
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("correlation"))
+                .alias("correlation"),
+                pl.when(is_defaulted)
+                .then(pl.lit(1.0))
+                .otherwise(pl.col("maturity_adjustment"))
+                .alias("maturity_adjustment"),
+                pl.when(is_defaulted).then(rwa_defaulted).otherwise(pl.col("rwa")).alias("rwa"),
+                pl.when(is_defaulted)
+                .then(rw_defaulted)
+                .otherwise(pl.col("risk_weight"))
+                .alias("risk_weight"),
+                pl.when(is_defaulted)
+                .then(el_defaulted)
+                .otherwise(pl.col("expected_loss"))
+                .alias("expected_loss"),
+            ]
+        )
 
         return lf
 
@@ -606,130 +640,156 @@ class IRBLazyFrame:
         # Using SA risk weights for substitution (per CRR Art. 215-217)
         use_uk_deviation = config.base_currency == "GBP"
 
-        lf = lf.with_columns([
-            pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
-            .then(pl.lit(None).cast(pl.Float64))
-            # Sovereign guarantors - CQS 1 gets 0%
-            .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)sovereign"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.0))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
-                .otherwise(pl.lit(1.0))  # Unrated
-            )
-            # Institution guarantors (UK deviation: CQS 2 = 30%)
-            .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)institution"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
-                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
-                .otherwise(pl.lit(0.40))  # Unrated
-            )
-            # Corporate guarantors
-            .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)corporate"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([3, 4])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs").is_in([5, 6])).then(pl.lit(1.50))
-                .otherwise(pl.lit(1.0))  # Unrated
-            )
-            # Unknown entity type - no substitution
-            .otherwise(pl.lit(None).cast(pl.Float64))
-            .alias("guarantor_rw"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
+                .then(pl.lit(None).cast(pl.Float64))
+                # Sovereign guarantors - CQS 1 gets 0%
+                .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)sovereign"))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.0))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(1.0))  # Unrated
+                )
+                # Institution guarantors (UK deviation: CQS 2 = 30%)
+                .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)institution"))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(0.40))  # Unrated
+                )
+                # Corporate guarantors
+                .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)corporate"))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([3, 4]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs").is_in([5, 6]))
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(1.0))  # Unrated
+                )
+                # Unknown entity type - no substitution
+                .otherwise(pl.lit(None).cast(pl.Float64))
+                .alias("guarantor_rw"),
+            ]
+        )
 
         # Determine EAD column
         ead_col = "ead_final" if "ead_final" in cols else "ead"
 
         # Check if guarantee is beneficial (guarantor RW < borrower IRB RW)
         # Non-beneficial guarantees should NOT be applied per CRR Art. 213
-        lf = lf.with_columns([
-            pl.when(
-                (pl.col("guaranteed_portion").fill_null(0) > 0) &
-                (pl.col("guarantor_rw").is_not_null()) &
-                (pl.col("guarantor_rw") < pl.col("risk_weight_irb_original"))
-            )
-            .then(pl.lit(True))
-            .otherwise(pl.lit(False))
-            .alias("is_guarantee_beneficial"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.when(
+                    (pl.col("guaranteed_portion").fill_null(0) > 0)
+                    & (pl.col("guarantor_rw").is_not_null())
+                    & (pl.col("guarantor_rw") < pl.col("risk_weight_irb_original"))
+                )
+                .then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("is_guarantee_beneficial"),
+            ]
+        )
 
         # Calculate blended RWA using substitution approach
         # Only apply if guarantee is beneficial
         # For guaranteed portion: use guarantor_rw × guaranteed_portion
         # For unguaranteed portion: use IRB-calculated RWA proportionally
-        lf = lf.with_columns([
-            # Calculate RWA for guaranteed portion using guarantor RW
-            # Only if guarantee is beneficial
-            pl.when(
-                (pl.col("guaranteed_portion").fill_null(0) > 0) &
-                (pl.col("guarantor_rw").is_not_null()) &
-                (pl.col("is_guarantee_beneficial"))
-            ).then(
-                # Blended RWA = unguaranteed_IRB_RWA + guaranteed_portion × guarantor_RW
-                # The IRB RWA is for the full exposure, so we need to pro-rate it
-                pl.col("rwa_irb_original") * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0) +
-                pl.col("guaranteed_portion") * pl.col("guarantor_rw")
-            )
-            # No guarantee, no guarantor RW, or non-beneficial - use original IRB RWA
-            .otherwise(pl.col("rwa_irb_original"))
-            .alias("rwa"),
-        ])
+        lf = lf.with_columns(
+            [
+                # Calculate RWA for guaranteed portion using guarantor RW
+                # Only if guarantee is beneficial
+                pl.when(
+                    (pl.col("guaranteed_portion").fill_null(0) > 0)
+                    & (pl.col("guarantor_rw").is_not_null())
+                    & (pl.col("is_guarantee_beneficial"))
+                )
+                .then(
+                    # Blended RWA = unguaranteed_IRB_RWA + guaranteed_portion × guarantor_RW
+                    # The IRB RWA is for the full exposure, so we need to pro-rate it
+                    pl.col("rwa_irb_original")
+                    * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
+                    + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
+                )
+                # No guarantee, no guarantor RW, or non-beneficial - use original IRB RWA
+                .otherwise(pl.col("rwa_irb_original"))
+                .alias("rwa"),
+            ]
+        )
 
         # Calculate blended risk weight for reporting
-        lf = lf.with_columns([
-            (pl.col("rwa") / pl.col(ead_col)).fill_null(0.0).alias("risk_weight"),
-        ])
+        lf = lf.with_columns(
+            [
+                (pl.col("rwa") / pl.col(ead_col)).fill_null(0.0).alias("risk_weight"),
+            ]
+        )
 
         # Adjust expected loss for SA-guaranteed portion
         # SA has no EL concept (CRR Art. 158-159), so only unguaranteed portion retains IRB EL
         # For IRB guarantors, EL unchanged (PD substitution not yet implemented)
         if has_expected_loss:
-            lf = lf.with_columns([
-                pl.when(
-                    (pl.col("guaranteed_portion").fill_null(0) > 0) &
-                    (pl.col("guarantor_rw").is_not_null()) &
-                    (pl.col("is_guarantee_beneficial")) &
-                    (pl.col("guarantor_approach").fill_null("") == "sa")
-                ).then(
-                    # SA portion has no EL — only unguaranteed portion retains IRB EL
-                    pl.col("expected_loss_irb_original") * (
-                        pl.col("unguaranteed_portion") / pl.col(ead_col)
-                    ).fill_null(1.0)
-                )
-                .otherwise(pl.col("expected_loss_irb_original"))
-                .alias("expected_loss"),
-            ])
+            lf = lf.with_columns(
+                [
+                    pl.when(
+                        (pl.col("guaranteed_portion").fill_null(0) > 0)
+                        & (pl.col("guarantor_rw").is_not_null())
+                        & (pl.col("is_guarantee_beneficial"))
+                        & (pl.col("guarantor_approach").fill_null("") == "sa")
+                    )
+                    .then(
+                        # SA portion has no EL — only unguaranteed portion retains IRB EL
+                        pl.col("expected_loss_irb_original")
+                        * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
+                    )
+                    .otherwise(pl.col("expected_loss_irb_original"))
+                    .alias("expected_loss"),
+                ]
+            )
 
         # Track guarantee status for reporting
-        lf = lf.with_columns([
-            pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
-            .then(pl.lit("NO_GUARANTEE"))
-            .when(~pl.col("is_guarantee_beneficial"))
-            .then(pl.lit("GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"))
-            .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
-            .alias("guarantee_status"),
-
-            # Track which method was used (SA RW for now, PD substitution not yet implemented)
-            pl.when(
-                (pl.col("guaranteed_portion").fill_null(0) > 0) &
-                (pl.col("is_guarantee_beneficial"))
-            )
-            .then(pl.lit("SA_RW_SUBSTITUTION"))
-            .otherwise(pl.lit("NO_SUBSTITUTION"))
-            .alias("guarantee_method_used"),
-
-            # Calculate RW benefit from guarantee (positive = RW reduced)
-            pl.when(pl.col("is_guarantee_beneficial"))
-            .then(pl.col("risk_weight_irb_original") - pl.col("risk_weight"))
-            .otherwise(pl.lit(0.0))
-            .alias("guarantee_benefit_rw"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
+                .then(pl.lit("NO_GUARANTEE"))
+                .when(~pl.col("is_guarantee_beneficial"))
+                .then(pl.lit("GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"))
+                .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
+                .alias("guarantee_status"),
+                # Track which method was used (SA RW for now, PD substitution not yet implemented)
+                pl.when(
+                    (pl.col("guaranteed_portion").fill_null(0) > 0)
+                    & (pl.col("is_guarantee_beneficial"))
+                )
+                .then(pl.lit("SA_RW_SUBSTITUTION"))
+                .otherwise(pl.lit("NO_SUBSTITUTION"))
+                .alias("guarantee_method_used"),
+                # Calculate RW benefit from guarantee (positive = RW reduced)
+                pl.when(pl.col("is_guarantee_beneficial"))
+                .then(pl.col("risk_weight_irb_original") - pl.col("risk_weight"))
+                .otherwise(pl.lit(0.0))
+                .alias("guarantee_benefit_rw"),
+            ]
+        )
 
         return lf
 
@@ -769,9 +829,7 @@ class IRBLazyFrame:
 
         # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
         pd_floor_expr = _pd_floor_expression(config)
-        batch1.append(
-            pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
-        )
+        batch1.append(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
         # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB)
         lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
@@ -781,9 +839,7 @@ class IRBLazyFrame:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(config)
             else:
                 lgd_floor_expr = _lgd_floor_expression(config)
-            batch1.append(
-                pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr).alias("lgd_floored")
-            )
+            batch1.append(pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr).alias("lgd_floored"))
         else:
             batch1.append(pl.col(lgd_col).alias("lgd_floored"))
 
@@ -798,35 +854,39 @@ class IRBLazyFrame:
             .str.to_uppercase()
             .str.contains("RETAIL")
         )
-        lf = lf.with_columns([
-            _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation"),
-            pl.when(is_retail)
-            .then(pl.lit(1.0))
-            .otherwise(_polars_maturity_adjustment_expr())
-            .alias("maturity_adjustment"),
-        ])
+        lf = lf.with_columns(
+            [
+                _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation"),
+                pl.when(is_retail)
+                .then(pl.lit(1.0))
+                .otherwise(_polars_maturity_adjustment_expr())
+                .alias("maturity_adjustment"),
+            ]
+        )
 
         # --- Batch 3: K (reads correlation from batch 2) ---
-        lf = lf.with_columns(
-            _polars_capital_k_expr().alias("k")
-        )
+        lf = lf.with_columns(_polars_capital_k_expr().alias("k"))
 
         # --- Batch 4: RWA + risk weight + expected loss ---
         scaling_factor = 1.06 if config.is_crr else 1.0
-        lf = lf.with_columns([
-            pl.lit(scaling_factor).alias("scaling_factor"),
-            (
-                pl.col("k") * 12.5 * scaling_factor
-                * pl.col("ead_final") * pl.col("maturity_adjustment")
-            ).alias("rwa"),
-            (
-                pl.col("k") * 12.5 * scaling_factor
-                * pl.col("maturity_adjustment")
-            ).alias("risk_weight"),
-            (
-                pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")
-            ).alias("expected_loss"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.lit(scaling_factor).alias("scaling_factor"),
+                (
+                    pl.col("k")
+                    * 12.5
+                    * scaling_factor
+                    * pl.col("ead_final")
+                    * pl.col("maturity_adjustment")
+                ).alias("rwa"),
+                (pl.col("k") * 12.5 * scaling_factor * pl.col("maturity_adjustment")).alias(
+                    "risk_weight"
+                ),
+                (pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")).alias(
+                    "expected_loss"
+                ),
+            ]
+        )
 
         # Defaulted treatment (overrides for PD=100% exposures)
         return lf.irb.apply_defaulted_treatment(config)
@@ -838,13 +898,15 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with EL columns: exposure_reference, pd, lgd, ead, expected_loss
         """
-        return self._lf.select([
-            pl.col("exposure_reference"),
-            pl.col("pd_floored").alias("pd"),
-            pl.col("lgd_floored").alias("lgd"),
-            pl.col("ead_final").alias("ead"),
-            pl.col("expected_loss"),
-        ])
+        return self._lf.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col("pd_floored").alias("pd"),
+                pl.col("lgd_floored").alias("lgd"),
+                pl.col("ead_final").alias("ead"),
+                pl.col("expected_loss"),
+            ]
+        )
 
     def build_audit(self) -> pl.LazyFrame:
         """
@@ -895,63 +957,74 @@ class IRBLazyFrame:
             defaulted_str = (
                 pl.when(
                     has_is_airb and pl.col("is_airb").fill_null(False)
-                    if has_is_airb else pl.lit(False)
+                    if has_is_airb
+                    else pl.lit(False)
                 )
                 .then(
-                    pl.concat_str([
-                        pl.lit("IRB DEFAULTED A-IRB: K=max(0, LGD-BEEL)="),
-                        (pl.col("k") * 100).round(3).cast(pl.String),
-                        pl.lit("%, LGD="),
-                        (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
-                        pl.lit("%, BEEL="),
-                        (pl.col("beel").fill_null(0.0) * 100).round(1).cast(pl.String) if "beel" in available_cols else pl.lit("0.0"),
-                        pl.lit("% → RWA="),
-                        pl.col("rwa").round(0).cast(pl.String),
-                    ])
+                    pl.concat_str(
+                        [
+                            pl.lit("IRB DEFAULTED A-IRB: K=max(0, LGD-BEEL)="),
+                            (pl.col("k") * 100).round(3).cast(pl.String),
+                            pl.lit("%, LGD="),
+                            (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
+                            pl.lit("%, BEEL="),
+                            (pl.col("beel").fill_null(0.0) * 100).round(1).cast(pl.String)
+                            if "beel" in available_cols
+                            else pl.lit("0.0"),
+                            pl.lit("% → RWA="),
+                            pl.col("rwa").round(0).cast(pl.String),
+                        ]
+                    )
                 )
-                .otherwise(
-                    pl.lit("IRB DEFAULTED F-IRB: K=0, RW=0 → RWA=0")
-                )
+                .otherwise(pl.lit("IRB DEFAULTED F-IRB: K=0, RW=0 → RWA=0"))
             )
 
-            standard_str = pl.concat_str([
-                pl.lit("IRB: PD="),
-                (pl.col("pd_floored") * 100).round(2).cast(pl.String),
-                pl.lit("%, LGD="),
-                (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
-                pl.lit("%, R="),
-                (pl.col("correlation") * 100).round(2).cast(pl.String),
-                pl.lit("%, K="),
-                (pl.col("k") * 100).round(3).cast(pl.String),
-                pl.lit("%, MA="),
-                pl.col("maturity_adjustment").round(3).cast(pl.String),
-                pl.lit(" → RWA="),
-                pl.col("rwa").round(0).cast(pl.String),
-            ])
+            standard_str = pl.concat_str(
+                [
+                    pl.lit("IRB: PD="),
+                    (pl.col("pd_floored") * 100).round(2).cast(pl.String),
+                    pl.lit("%, LGD="),
+                    (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
+                    pl.lit("%, R="),
+                    (pl.col("correlation") * 100).round(2).cast(pl.String),
+                    pl.lit("%, K="),
+                    (pl.col("k") * 100).round(3).cast(pl.String),
+                    pl.lit("%, MA="),
+                    pl.col("maturity_adjustment").round(3).cast(pl.String),
+                    pl.lit(" → RWA="),
+                    pl.col("rwa").round(0).cast(pl.String),
+                ]
+            )
 
-            return audit.with_columns([
-                pl.when(pl.col("is_defaulted").fill_null(False))
-                .then(defaulted_str)
-                .otherwise(standard_str)
-                .alias("irb_calculation"),
-            ])
+            return audit.with_columns(
+                [
+                    pl.when(pl.col("is_defaulted").fill_null(False))
+                    .then(defaulted_str)
+                    .otherwise(standard_str)
+                    .alias("irb_calculation"),
+                ]
+            )
 
-        return audit.with_columns([
-            pl.concat_str([
-                pl.lit("IRB: PD="),
-                (pl.col("pd_floored") * 100).round(2).cast(pl.String),
-                pl.lit("%, LGD="),
-                (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
-                pl.lit("%, R="),
-                (pl.col("correlation") * 100).round(2).cast(pl.String),
-                pl.lit("%, K="),
-                (pl.col("k") * 100).round(3).cast(pl.String),
-                pl.lit("%, MA="),
-                pl.col("maturity_adjustment").round(3).cast(pl.String),
-                pl.lit(" → RWA="),
-                pl.col("rwa").round(0).cast(pl.String),
-            ]).alias("irb_calculation"),
-        ])
+        return audit.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("IRB: PD="),
+                        (pl.col("pd_floored") * 100).round(2).cast(pl.String),
+                        pl.lit("%, LGD="),
+                        (pl.col("lgd_floored") * 100).round(1).cast(pl.String),
+                        pl.lit("%, R="),
+                        (pl.col("correlation") * 100).round(2).cast(pl.String),
+                        pl.lit("%, K="),
+                        (pl.col("k") * 100).round(3).cast(pl.String),
+                        pl.lit("%, MA="),
+                        pl.col("maturity_adjustment").round(3).cast(pl.String),
+                        pl.lit(" → RWA="),
+                        pl.col("rwa").round(0).cast(pl.String),
+                    ]
+                ).alias("irb_calculation"),
+            ]
+        )
 
 
 # =============================================================================

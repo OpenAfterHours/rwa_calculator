@@ -11,7 +11,6 @@ Usage:
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import polars as pl
 
@@ -64,13 +63,15 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         try:
             files = generator_func(output_dir)
             total_records = sum(count for _, count in files)
-            results.append(FixtureGroupResult(
-                group_name=group_name,
-                output_dir=output_dir,
-                file_count=len(files),
-                total_records=total_records,
-                files=files,
-            ))
+            results.append(
+                FixtureGroupResult(
+                    group_name=group_name,
+                    output_dir=output_dir,
+                    file_count=len(files),
+                    total_records=total_records,
+                    files=files,
+                )
+            )
         except Exception as e:
             print(f"ERROR generating {group_name}: {e}")
             raise
@@ -82,19 +83,30 @@ def _generate_counterparties(output_dir: Path) -> list[tuple[str, int]]:
     """Generate counterparty fixtures."""
     sys.path.insert(0, str(output_dir))
     try:
-        from sovereign import create_sovereign_counterparties, save_sovereign_counterparties
-        from institution import create_institution_counterparties, save_institution_counterparties
         from corporate import create_corporate_counterparties, save_corporate_counterparties
+        from institution import create_institution_counterparties, save_institution_counterparties
         from retail import create_retail_counterparties, save_retail_counterparties
-        from specialised_lending import create_specialised_lending_counterparties, save_specialised_lending_counterparties
+        from sovereign import create_sovereign_counterparties, save_sovereign_counterparties
+        from specialised_lending import (
+            create_specialised_lending_counterparties,
+            save_specialised_lending_counterparties,
+        )
 
         files = []
         for name, create_fn, save_fn in [
             ("sovereign.parquet", create_sovereign_counterparties, save_sovereign_counterparties),
-            ("institution.parquet", create_institution_counterparties, save_institution_counterparties),
+            (
+                "institution.parquet",
+                create_institution_counterparties,
+                save_institution_counterparties,
+            ),
             ("corporate.parquet", create_corporate_counterparties, save_corporate_counterparties),
             ("retail.parquet", create_retail_counterparties, save_retail_counterparties),
-            ("specialised_lending.parquet", create_specialised_lending_counterparties, save_specialised_lending_counterparties),
+            (
+                "specialised_lending.parquet",
+                create_specialised_lending_counterparties,
+                save_specialised_lending_counterparties,
+            ),
         ]:
             df = create_fn()
             save_fn(output_dir)
@@ -108,8 +120,8 @@ def _generate_mappings(output_dir: Path) -> list[tuple[str, int]]:
     """Generate mapping fixtures."""
     sys.path.insert(0, str(output_dir))
     try:
-        from org_mapping import create_org_mappings, save_org_mappings
         from lending_mapping import create_lending_mappings, save_lending_mappings
+        from org_mapping import create_org_mappings, save_org_mappings
 
         files = []
         for name, create_fn, save_fn in [
@@ -141,10 +153,10 @@ def _generate_exposures(output_dir: Path) -> list[tuple[str, int]]:
     """Generate exposure fixtures."""
     sys.path.insert(0, str(output_dir))
     try:
-        from facilities import create_facilities, save_facilities
-        from loans import create_loans, save_loans
         from contingents import create_contingents, save_contingents
+        from facilities import create_facilities, save_facilities
         from facility_mapping import create_facility_mappings, save_facility_mappings
+        from loans import create_loans, save_loans
 
         files = []
         for name, create_fn, save_fn in [
@@ -235,7 +247,9 @@ def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -
     print("-" * 80)
 
     for result in results:
-        print(f"  {result.group_name:<20} {result.file_count:>3} files  {result.total_records:>6} records")
+        print(
+            f"  {result.group_name:<20} {result.file_count:>3} files  {result.total_records:>6} records"
+        )
 
     print("-" * 80)
     print(f"  {'TOTAL':<20} {total_files:>3} files  {total_records:>6} records")
@@ -253,13 +267,15 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
 
     # Load all parquet files
     try:
-        counterparties = pl.concat([
-            pl.read_parquet(fixtures_dir / "counterparty" / "sovereign.parquet"),
-            pl.read_parquet(fixtures_dir / "counterparty" / "institution.parquet"),
-            pl.read_parquet(fixtures_dir / "counterparty" / "corporate.parquet"),
-            pl.read_parquet(fixtures_dir / "counterparty" / "retail.parquet"),
-            pl.read_parquet(fixtures_dir / "counterparty" / "specialised_lending.parquet"),
-        ])
+        counterparties = pl.concat(
+            [
+                pl.read_parquet(fixtures_dir / "counterparty" / "sovereign.parquet"),
+                pl.read_parquet(fixtures_dir / "counterparty" / "institution.parquet"),
+                pl.read_parquet(fixtures_dir / "counterparty" / "corporate.parquet"),
+                pl.read_parquet(fixtures_dir / "counterparty" / "retail.parquet"),
+                pl.read_parquet(fixtures_dir / "counterparty" / "specialised_lending.parquet"),
+            ]
+        )
         loans = pl.read_parquet(fixtures_dir / "exposures" / "loans.parquet")
         facilities = pl.read_parquet(fixtures_dir / "exposures" / "facilities.parquet")
         contingents = pl.read_parquet(fixtures_dir / "exposures" / "contingents.parquet")
@@ -345,10 +361,14 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
 
         # Check 8: Collateral beneficiary references
         coll_loan_refs = set(
-            collateral.filter(pl.col("beneficiary_type") == "loan")["beneficiary_reference"].to_list()
+            collateral.filter(pl.col("beneficiary_type") == "loan")[
+                "beneficiary_reference"
+            ].to_list()
         )
         coll_fac_refs = set(
-            collateral.filter(pl.col("beneficiary_type") == "facility")["beneficiary_reference"].to_list()
+            collateral.filter(pl.col("beneficiary_type") == "facility")[
+                "beneficiary_reference"
+            ].to_list()
         )
         missing_coll_loans = coll_loan_refs - loan_refs
         missing_coll_facs = coll_fac_refs - fac_refs
@@ -361,10 +381,14 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
 
         # Check 9: Guarantee beneficiary references
         guar_loan_refs = set(
-            guarantees.filter(pl.col("beneficiary_type") == "loan")["beneficiary_reference"].to_list()
+            guarantees.filter(pl.col("beneficiary_type") == "loan")[
+                "beneficiary_reference"
+            ].to_list()
         )
         guar_fac_refs = set(
-            guarantees.filter(pl.col("beneficiary_type") == "facility")["beneficiary_reference"].to_list()
+            guarantees.filter(pl.col("beneficiary_type") == "facility")[
+                "beneficiary_reference"
+            ].to_list()
         )
         missing_guar_loans = guar_loan_refs - loan_refs
         missing_guar_facs = guar_fac_refs - fac_refs
@@ -385,7 +409,9 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
 
         # Check 11: Provision beneficiary references
         prov_loan_refs = set(
-            provisions.filter(pl.col("beneficiary_type") == "loan")["beneficiary_reference"].to_list()
+            provisions.filter(pl.col("beneficiary_type") == "loan")[
+                "beneficiary_reference"
+            ].to_list()
         )
         missing_prov_loans = prov_loan_refs - loan_refs
         if missing_prov_loans:

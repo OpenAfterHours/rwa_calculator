@@ -6,7 +6,7 @@ Status legend: `[ ]` = not started, `[~]` = partial, `[x]` = done
 
 All Priority 1 items are done. **91/91 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed.
 
-- [x] **CI/CD pipeline** (M1.6) — `.github/workflows/ci.yml` created with 3 parallel jobs: (1) Lint & Format (ruff check + ruff format --check), (2) Type Check (mypy), (3) Tests (pytest with benchmarks disabled, slow tests excluded). Triggers on push to master and PRs targeting master. All 3 quality gates pass locally: ruff clean, mypy clean, 1395 tests pass.
+- [x] **CI/CD pipeline** (M1.6) — `.github/workflows/ci.yml` created with 3 parallel jobs: (1) Lint & Format (ruff check + ruff format --check), (2) Type Check (mypy), (3) Tests (pytest with benchmarks disabled, slow tests excluded). Triggers on push to master and PRs targeting master. All 3 quality gates pass locally: ruff clean, mypy clean, 1406 tests pass. Added `[tool.mypy]` config to `pyproject.toml`.
 
 ## Priority 2 — Basel 3.1 Core (v1.1)
 
@@ -27,7 +27,7 @@ Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB sup
 
 ### 2d. Testing and validation
 
-- [ ] **Output floor phase-in validation tests** (M2.6) — Engine implements output floor correctly. Unit tests cover only 1 of 6 transitional years (2029 at 60%). **Action:** Add parametrized test sweeping 2027–2032 schedule (50%/55%/60%/65%/70%/72.5%) plus pre-2027 edge case. See `specs/output-reporting.md`.
+- [x] **Output floor phase-in validation tests** (M2.6) — 11 new tests added in `TestOutputFloorTransitionalPhaseIn`: parametrized sweep of all 6 years (2027-2032), pre-2027 edge case (no floor), exactly-on-transition-date, far-future (2040), floor-equals-IRB boundary, and floor impact RWA calculation. Also fixed bug in `OutputFloorConfig.get_floor_percentage()` where pre-2027 dates incorrectly returned 72.5% instead of 0%.
 - [ ] **Basel 3.1 expected outputs** (M2.1) — Workbook structure exists at `workbooks/basel31_expected_outputs/` but values are hardcoded stubs, not verified hand calculations. `tests/expected_outputs/basel31/` directory doesn't exist. **Action:** Verify workbook calculations against regulatory formulas; generate expected output CSV/JSON files. See `specs/milestones.md`.
 - [ ] **Basel 3.1 acceptance tests** (M2.5) — `tests/acceptance/basel31/` directory doesn't exist. No B31 tests anywhere. **Action:** Create acceptance test suite for B31-A (SA revised, 10 scenarios) and B31-F (output floor, 3 scenarios). See `specs/regulatory-compliance.md`.
 
@@ -49,13 +49,14 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 
 - [ ] **BDD test scaffold** — `tests/bdd/conftest.py` references `docs/specifications/` which is being deleted (git status shows `D docs/specifications/*.md`). No actual BDD step definitions or feature files exist. **Action:** Either implement BDD tests or remove the empty scaffold. Low priority.
 - [ ] **Runtime skip pattern inconsistency** — CRR-A tests used `@pytest.mark.skip` for known gaps; CRR-C/D/E/F/G/H use `if result is None: pytest.skip()` inside test body, silently skipping if pipeline doesn't produce results. CRR-A7/A8 skips now resolved. **Action:** Audit remaining runtime skips to ensure they are visible and justified.
-- [x] **Pre-existing lint errors in SA calculator** — Resolved. `ruff check src/ tests/` passes clean with zero violations.
+- [x] **Pre-existing lint/format/type errors across codebase** — Fixed all ~247 ruff lint errors (auto-fixed 215, manually fixed 32), formatted 121 files via `ruff format`, and configured mypy in `pyproject.toml` with appropriate suppressions for Polars custom namespace limitations. All three CI gates now pass: ruff check clean, ruff format clean, mypy 0 errors, 1406 tests pass.
 
 ## Learnings
 
 - `PDFloors.get_floor()` and `LGDFloors.get_floor()` exist in config but are never called by the engine — the config layer is ahead of the engine layer for Basel 3.1. The engine now uses vectorized `_pd_floor_expression()` / `_lgd_floor_expression()` helpers instead, which are more efficient for bulk processing.
 - Slotting calculator is the best-implemented Basel 3.1 area (3 differentiated risk weight tables, proper framework branching).
-- Output floor engine code is correct; the gap is purely in test coverage (only 1 of 6 transitional years tested).
+- Output floor engine code is correct. Phase-in tests now cover all 6 transitional years plus edge cases (11 tests).
+- **Workbook schedule inconsistency:** `workbooks/basel31_expected_outputs/data/regulatory_params.py` uses the original BCBS schedule (starts 2025: 50%/55%/60%/65%/70%/72.5%) while the engine config (`OutputFloorConfig.basel_3_1()`) uses the PRA PS9/24 UK schedule (starts 2027). The engine is correct for UK firms. The workbook schedule needs aligning to PRA dates.
 - CRR Art. 126 CRE treatment: Commercial RE is not a separate exposure class — it's a corporate exposure with commercial property collateral. The SA calculator detects CRE via `property_type == "commercial"` propagated from collateral through hierarchy enrichment.
 - `IRBPermissions.full_irb()` should include AIRB for specialised lending under CRR (Art. 153(5) allows A-IRB when PD can be reliably estimated). The `airb_only()` method correctly excludes SL AIRB for Basel 3.1 per CRE33.5.
 - Hierarchy `_add_collateral_ltv()` now propagates three columns from collateral: `ltv` (property_ltv), `property_type`, and `has_income_cover` (is_income_producing). This enrichment supports both residential mortgage and commercial RE risk weight calculations.

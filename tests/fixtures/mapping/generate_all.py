@@ -5,9 +5,9 @@ Usage:
     uv run python tests/fixtures/mapping/generate_all.py
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import polars as pl
 
@@ -52,8 +52,8 @@ class MappingGenerator:
 
 def get_generators() -> list[MappingGenerator]:
     """Return all configured mapping generators."""
-    from org_mapping import create_org_mappings, save_org_mappings
     from lending_mapping import create_lending_mappings, save_lending_mappings
+    from org_mapping import create_org_mappings, save_org_mappings
 
     return [
         MappingGenerator("Organisation Hierarchy", create_org_mappings, save_org_mappings),
@@ -115,7 +115,9 @@ def print_relationship_details(results: list[GeneratorResult]) -> None:
     for result in results:
         print(f"\n  {result.name}:")
         parent_counts = (
-            result.dataframe.group_by("parent_counterparty_reference").len().sort("parent_counterparty_reference")
+            result.dataframe.group_by("parent_counterparty_reference")
+            .len()
+            .sort("parent_counterparty_reference")
         )
         for row in parent_counts.iter_rows(named=True):
             print(f"    {row['parent_counterparty_reference']}: {row['len']} connected")

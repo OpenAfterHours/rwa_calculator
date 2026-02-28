@@ -9,7 +9,6 @@ Tests cover:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
 
 import polars as pl
@@ -19,7 +18,6 @@ from rwa_calc.api.models import CalculationRequest
 from rwa_calc.api.service import RWAService
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass, IRBApproachOption
-
 
 # =============================================================================
 # IRBApproachOption Enum Tests
@@ -100,7 +98,6 @@ class TestCalculationRequestIRBApproach:
         assert request.irb_approach is None
 
 
-
 # =============================================================================
 # RWAService._create_config Tests
 # =============================================================================
@@ -165,9 +162,7 @@ class TestServiceCreateConfig:
         # FIRB should NOT be permitted
         assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         # Retail should have AIRB
-        assert config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_MORTGAGE, ApproachType.AIRB
-        )
+        assert config.irb_permissions.is_permitted(ExposureClass.RETAIL_MORTGAGE, ApproachType.AIRB)
 
     def test_create_config_full_irb(self, service: RWAService) -> None:
         """_create_config with irb_approach='full_irb' should use full_irb permissions."""
@@ -328,13 +323,15 @@ class TestCCFCalculatorIntegration:
         crr_config_firb: CalculationConfig,
     ) -> None:
         """FIRB exposure with MR risk_type should get 75% CCF."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["FIRB_MR_001"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [1000000.0],
-            "risk_type": ["MR"],  # Medium risk
-            "approach": ["foundation_irb"],  # FIRB approach
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_MR_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MR"],  # Medium risk
+                "approach": ["foundation_irb"],  # FIRB approach
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config_firb).collect()
 
@@ -348,13 +345,15 @@ class TestCCFCalculatorIntegration:
         crr_config_firb: CalculationConfig,
     ) -> None:
         """SA exposure with MR risk_type should get 50% CCF."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["SA_MR_001"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [1000000.0],
-            "risk_type": ["MR"],  # Medium risk
-            "approach": ["standardised"],  # SA approach
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SA_MR_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MR"],  # Medium risk
+                "approach": ["standardised"],  # SA approach
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config_firb).collect()
 
@@ -368,14 +367,16 @@ class TestCCFCalculatorIntegration:
         crr_config_firb: CalculationConfig,
     ) -> None:
         """AIRB exposure with ccf_modelled should use the modelled CCF."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["AIRB_MODELLED_001"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [1000000.0],
-            "risk_type": ["MR"],
-            "ccf_modelled": [0.65],  # Bank's own estimate
-            "approach": ["advanced_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_MODELLED_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MR"],
+                "ccf_modelled": [0.65],  # Bank's own estimate
+                "approach": ["advanced_irb"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config_firb).collect()
 
@@ -389,14 +390,16 @@ class TestCCFCalculatorIntegration:
         crr_config_firb: CalculationConfig,
     ) -> None:
         """AIRB exposure without ccf_modelled should fall back to SA CCF."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["AIRB_NO_MODEL_001"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [1000000.0],
-            "risk_type": ["MR"],
-            "ccf_modelled": [None],  # No modelled CCF
-            "approach": ["advanced_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_NO_MODEL_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MR"],
+                "ccf_modelled": [None],  # No modelled CCF
+                "approach": ["advanced_irb"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config_firb).collect()
 
@@ -410,13 +413,15 @@ class TestCCFCalculatorIntegration:
         crr_config_firb: CalculationConfig,
     ) -> None:
         """FIRB exposure with MLR risk_type should get 75% CCF."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["FIRB_MLR_001"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [1000000.0],
-            "risk_type": ["MLR"],  # Medium-low risk
-            "approach": ["foundation_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_MLR_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MLR"],  # Medium-low risk
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config_firb).collect()
 
@@ -430,13 +435,15 @@ class TestCCFCalculatorIntegration:
         crr_config_firb: CalculationConfig,
     ) -> None:
         """SA exposure with MLR risk_type should get 20% CCF."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["SA_MLR_001"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [1000000.0],
-            "risk_type": ["MLR"],  # Medium-low risk
-            "approach": ["standardised"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SA_MLR_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MLR"],  # Medium-low risk
+                "approach": ["standardised"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config_firb).collect()
 

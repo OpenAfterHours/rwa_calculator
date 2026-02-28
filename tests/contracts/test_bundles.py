@@ -74,29 +74,37 @@ class TestCounterpartyLookup:
         """Should create lookup with hierarchy mappings as LazyFrames."""
         lookup = CounterpartyLookup(
             counterparties=pl.LazyFrame({"counterparty_reference": ["A", "B", "C"]}),
-            parent_mappings=pl.LazyFrame({
-                "child_counterparty_reference": ["B", "C"],
-                "parent_counterparty_reference": ["A", "A"],
-            }),
-            ultimate_parent_mappings=pl.LazyFrame({
-                "counterparty_reference": ["A", "B", "C"],
-                "ultimate_parent_reference": ["A", "A", "A"],
-                "hierarchy_depth": [0, 1, 1],
-            }),
-            rating_inheritance=pl.LazyFrame({
-                "counterparty_reference": ["A"],
-                "cqs": [1],
-                "pd": [0.001],
-                "rating_value": ["A2"],
-                "inherited": [False],
-                "source_counterparty": ["A"],
-                "inheritance_reason": ["own_rating"],
-            }),
+            parent_mappings=pl.LazyFrame(
+                {
+                    "child_counterparty_reference": ["B", "C"],
+                    "parent_counterparty_reference": ["A", "A"],
+                }
+            ),
+            ultimate_parent_mappings=pl.LazyFrame(
+                {
+                    "counterparty_reference": ["A", "B", "C"],
+                    "ultimate_parent_reference": ["A", "A", "A"],
+                    "hierarchy_depth": [0, 1, 1],
+                }
+            ),
+            rating_inheritance=pl.LazyFrame(
+                {
+                    "counterparty_reference": ["A"],
+                    "cqs": [1],
+                    "pd": [0.001],
+                    "rating_value": ["A2"],
+                    "inherited": [False],
+                    "source_counterparty": ["A"],
+                    "inheritance_reason": ["own_rating"],
+                }
+            ),
         )
 
         # Verify parent mappings
         parents = lookup.parent_mappings.collect()
-        b_parent = parents.filter(pl.col("child_counterparty_reference") == "B")["parent_counterparty_reference"][0]
+        b_parent = parents.filter(pl.col("child_counterparty_reference") == "B")[
+            "parent_counterparty_reference"
+        ][0]
         assert b_parent == "A"
 
         # Verify ultimate parent mappings
@@ -196,10 +204,12 @@ class TestSAResultBundle:
     def test_create_sa_results(self):
         """Should create bundle with SA results."""
         bundle = SAResultBundle(
-            results=pl.LazyFrame({
-                "ref": ["E1"],
-                "sa_rwa": [100.0],
-            })
+            results=pl.LazyFrame(
+                {
+                    "ref": ["E1"],
+                    "sa_rwa": [100.0],
+                }
+            )
         )
 
         assert bundle.results.collect().shape[0] == 1
@@ -217,14 +227,18 @@ class TestIRBResultBundle:
     def test_create_irb_results(self):
         """Should create bundle with IRB results."""
         bundle = IRBResultBundle(
-            results=pl.LazyFrame({
-                "ref": ["E1"],
-                "irb_rwa": [150.0],
-            }),
-            expected_loss=pl.LazyFrame({
-                "ref": ["E1"],
-                "el": [5.0],
-            }),
+            results=pl.LazyFrame(
+                {
+                    "ref": ["E1"],
+                    "irb_rwa": [150.0],
+                }
+            ),
+            expected_loss=pl.LazyFrame(
+                {
+                    "ref": ["E1"],
+                    "el": [5.0],
+                }
+            ),
         )
 
         assert bundle.results.collect().shape[0] == 1

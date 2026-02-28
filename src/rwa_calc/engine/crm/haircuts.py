@@ -26,7 +26,6 @@ from rwa_calc.data.tables.crr_haircuts import (
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
     get_haircut_table,
-    get_maturity_band,
     lookup_collateral_haircut,
     lookup_fx_haircut,
 )
@@ -85,49 +84,59 @@ class HaircutCalculator:
             LazyFrame with haircut-adjusted collateral values
         """
         # Add maturity band for bond haircut lookup
-        collateral = collateral.with_columns([
-            pl.when(pl.col("residual_maturity_years").is_null())
-            .then(pl.lit("5y_plus"))
-            .when(pl.col("residual_maturity_years") <= 1.0)
-            .then(pl.lit("0_1y"))
-            .when(pl.col("residual_maturity_years") <= 5.0)
-            .then(pl.lit("1_5y"))
-            .otherwise(pl.lit("5y_plus"))
-            .alias("maturity_band"),
-        ])
+        collateral = collateral.with_columns(
+            [
+                pl.when(pl.col("residual_maturity_years").is_null())
+                .then(pl.lit("5y_plus"))
+                .when(pl.col("residual_maturity_years") <= 1.0)
+                .then(pl.lit("0_1y"))
+                .when(pl.col("residual_maturity_years") <= 5.0)
+                .then(pl.lit("1_5y"))
+                .otherwise(pl.lit("5y_plus"))
+                .alias("maturity_band"),
+            ]
+        )
 
         # Calculate collateral-specific haircut based on type
         collateral = self._apply_collateral_haircuts(collateral)
 
         # Apply FX haircut
-        collateral = collateral.with_columns([
-            pl.when(pl.col("currency") != pl.col("exposure_currency"))
-            .then(pl.lit(float(FX_HAIRCUT)))
-            .otherwise(pl.lit(0.0))
-            .alias("fx_haircut"),
-        ])
+        collateral = collateral.with_columns(
+            [
+                pl.when(pl.col("currency") != pl.col("exposure_currency"))
+                .then(pl.lit(float(FX_HAIRCUT)))
+                .otherwise(pl.lit(0.0))
+                .alias("fx_haircut"),
+            ]
+        )
 
         # Calculate adjusted value after haircuts
-        collateral = collateral.with_columns([
-            (
-                pl.col("market_value") *
-                (1.0 - pl.col("collateral_haircut") - pl.col("fx_haircut"))
-            ).alias("value_after_haircut"),
-        ])
+        collateral = collateral.with_columns(
+            [
+                (
+                    pl.col("market_value")
+                    * (1.0 - pl.col("collateral_haircut") - pl.col("fx_haircut"))
+                ).alias("value_after_haircut"),
+            ]
+        )
 
         # Add haircut audit trail
-        collateral = collateral.with_columns([
-            pl.concat_str([
-                pl.lit("MV="),
-                pl.col("market_value").round(0).cast(pl.String),
-                pl.lit("; Hc="),
-                (pl.col("collateral_haircut") * 100).round(1).cast(pl.String),
-                pl.lit("%; Hfx="),
-                (pl.col("fx_haircut") * 100).round(1).cast(pl.String),
-                pl.lit("%; Adj="),
-                pl.col("value_after_haircut").round(0).cast(pl.String),
-            ]).alias("haircut_calculation"),
-        ])
+        collateral = collateral.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("MV="),
+                        pl.col("market_value").round(0).cast(pl.String),
+                        pl.lit("; Hc="),
+                        (pl.col("collateral_haircut") * 100).round(1).cast(pl.String),
+                        pl.lit("%; Hfx="),
+                        (pl.col("fx_haircut") * 100).round(1).cast(pl.String),
+                        pl.lit("%; Adj="),
+                        pl.col("value_after_haircut").round(0).cast(pl.String),
+                    ]
+                ).alias("haircut_calculation"),
+            ]
+        )
 
         return collateral
 
@@ -144,150 +153,202 @@ class HaircutCalculator:
         Returns:
             LazyFrame with collateral_haircut column added
         """
-        return collateral.with_columns([
-            # Cash - 0%
-            pl.when(pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit"]))
-            .then(pl.lit(0.00))
-            # Gold - 15%
-            .when(pl.col("collateral_type").str.to_lowercase() == "gold")
-            .then(pl.lit(0.15))
-            # Government bonds - by CQS and maturity
-            # Match explicit govt bond types or generic "bond" with sovereign issuer
-            .when(
-                (
-                    pl.col("collateral_type").str.to_lowercase().is_in([
-                        "govt_bond", "sovereign_bond", "government_bond", "gilt"
-                    ]) |
-                    ((pl.col("collateral_type").str.to_lowercase() == "bond") &
-                     (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
-                ) &
-                (pl.col("issuer_cqs") == 1) &
-                (pl.col("maturity_band") == "0_1y")
-            ).then(pl.lit(0.005))
-            .when(
-                (
-                    pl.col("collateral_type").str.to_lowercase().is_in([
-                        "govt_bond", "sovereign_bond", "government_bond", "gilt"
-                    ]) |
-                    ((pl.col("collateral_type").str.to_lowercase() == "bond") &
-                     (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
-                ) &
-                (pl.col("issuer_cqs") == 1) &
-                (pl.col("maturity_band") == "1_5y")
-            ).then(pl.lit(0.02))
-            .when(
-                (
-                    pl.col("collateral_type").str.to_lowercase().is_in([
-                        "govt_bond", "sovereign_bond", "government_bond", "gilt"
-                    ]) |
-                    ((pl.col("collateral_type").str.to_lowercase() == "bond") &
-                     (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
-                ) &
-                (pl.col("issuer_cqs") == 1)
-            ).then(pl.lit(0.04))
-            .when(
-                (
-                    pl.col("collateral_type").str.to_lowercase().is_in([
-                        "govt_bond", "sovereign_bond", "government_bond", "gilt"
-                    ]) |
-                    ((pl.col("collateral_type").str.to_lowercase() == "bond") &
-                     (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
-                ) &
-                (pl.col("issuer_cqs").is_in([2, 3])) &
-                (pl.col("maturity_band") == "0_1y")
-            ).then(pl.lit(0.01))
-            .when(
-                (
-                    pl.col("collateral_type").str.to_lowercase().is_in([
-                        "govt_bond", "sovereign_bond", "government_bond", "gilt"
-                    ]) |
-                    ((pl.col("collateral_type").str.to_lowercase() == "bond") &
-                     (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
-                ) &
-                (pl.col("issuer_cqs").is_in([2, 3])) &
-                (pl.col("maturity_band") == "1_5y")
-            ).then(pl.lit(0.03))
-            .when(
-                (
-                    pl.col("collateral_type").str.to_lowercase().is_in([
-                        "govt_bond", "sovereign_bond", "government_bond", "gilt"
-                    ]) |
-                    ((pl.col("collateral_type").str.to_lowercase() == "bond") &
-                     (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
-                ) &
-                (pl.col("issuer_cqs").is_in([2, 3]))
-            ).then(pl.lit(0.06))
-            # Corporate bonds CQS 1-2
-            .when(
-                (pl.col("collateral_type").str.to_lowercase().is_in([
-                    "corp_bond", "corporate_bond"
-                ])) &
-                (pl.col("issuer_cqs").is_in([1, 2])) &
-                (pl.col("maturity_band") == "0_1y")
-            ).then(pl.lit(0.01))
-            .when(
-                (pl.col("collateral_type").str.to_lowercase().is_in([
-                    "corp_bond", "corporate_bond"
-                ])) &
-                (pl.col("issuer_cqs").is_in([1, 2])) &
-                (pl.col("maturity_band") == "1_5y")
-            ).then(pl.lit(0.04))
-            .when(
-                (pl.col("collateral_type").str.to_lowercase().is_in([
-                    "corp_bond", "corporate_bond"
-                ])) &
-                (pl.col("issuer_cqs").is_in([1, 2]))
-            ).then(pl.lit(0.06))
-            # Corporate bonds CQS 3
-            .when(
-                (pl.col("collateral_type").str.to_lowercase().is_in([
-                    "corp_bond", "corporate_bond"
-                ])) &
-                (pl.col("issuer_cqs") == 3) &
-                (pl.col("maturity_band") == "0_1y")
-            ).then(pl.lit(0.02))
-            .when(
-                (pl.col("collateral_type").str.to_lowercase().is_in([
-                    "corp_bond", "corporate_bond"
-                ])) &
-                (pl.col("issuer_cqs") == 3) &
-                (pl.col("maturity_band") == "1_5y")
-            ).then(pl.lit(0.06))
-            .when(
-                (pl.col("collateral_type").str.to_lowercase().is_in([
-                    "corp_bond", "corporate_bond"
-                ])) &
-                (pl.col("issuer_cqs") == 3)
-            ).then(pl.lit(0.08))
-            # Equity - main index 15%, other 25%
-            .when(
-                (pl.col("collateral_type").str.to_lowercase().is_in([
-                    "equity", "shares", "stock"
-                ])) &
-                (pl.col("is_eligible_financial_collateral") == True)  # noqa: E712
-            ).then(pl.lit(0.15))  # Main index
-            .when(
-                pl.col("collateral_type").str.to_lowercase().is_in([
-                    "equity", "shares", "stock"
-                ])
-            ).then(pl.lit(0.25))  # Other equity
-            # Receivables - 20%
-            .when(
-                pl.col("collateral_type").str.to_lowercase().is_in([
-                    "receivables", "trade_receivables"
-                ])
-            ).then(pl.lit(0.20))
-            # Real estate - no haircut (LTV-based treatment)
-            .when(
-                pl.col("collateral_type").str.to_lowercase().is_in([
-                    "real_estate", "property", "rre", "cre",
-                    "residential_property", "commercial_property"
-                ])
-            ).then(pl.lit(0.00))
-            # Other physical - 40%
-            .otherwise(pl.lit(0.40))
-            .alias("collateral_haircut"),
-        ])
+        return collateral.with_columns(
+            [
+                # Cash - 0%
+                pl.when(pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit"]))
+                .then(pl.lit(0.00))
+                # Gold - 15%
+                .when(pl.col("collateral_type").str.to_lowercase() == "gold")
+                .then(pl.lit(0.15))
+                # Government bonds - by CQS and maturity
+                # Match explicit govt bond types or generic "bond" with sovereign issuer
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
+                        | (
+                            (pl.col("collateral_type").str.to_lowercase() == "bond")
+                            & (pl.col("issuer_type").str.to_lowercase() == "sovereign")
+                        )
+                    )
+                    & (pl.col("issuer_cqs") == 1)
+                    & (pl.col("maturity_band") == "0_1y")
+                )
+                .then(pl.lit(0.005))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
+                        | (
+                            (pl.col("collateral_type").str.to_lowercase() == "bond")
+                            & (pl.col("issuer_type").str.to_lowercase() == "sovereign")
+                        )
+                    )
+                    & (pl.col("issuer_cqs") == 1)
+                    & (pl.col("maturity_band") == "1_5y")
+                )
+                .then(pl.lit(0.02))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
+                        | (
+                            (pl.col("collateral_type").str.to_lowercase() == "bond")
+                            & (pl.col("issuer_type").str.to_lowercase() == "sovereign")
+                        )
+                    )
+                    & (pl.col("issuer_cqs") == 1)
+                )
+                .then(pl.lit(0.04))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
+                        | (
+                            (pl.col("collateral_type").str.to_lowercase() == "bond")
+                            & (pl.col("issuer_type").str.to_lowercase() == "sovereign")
+                        )
+                    )
+                    & (pl.col("issuer_cqs").is_in([2, 3]))
+                    & (pl.col("maturity_band") == "0_1y")
+                )
+                .then(pl.lit(0.01))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
+                        | (
+                            (pl.col("collateral_type").str.to_lowercase() == "bond")
+                            & (pl.col("issuer_type").str.to_lowercase() == "sovereign")
+                        )
+                    )
+                    & (pl.col("issuer_cqs").is_in([2, 3]))
+                    & (pl.col("maturity_band") == "1_5y")
+                )
+                .then(pl.lit(0.03))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
+                        | (
+                            (pl.col("collateral_type").str.to_lowercase() == "bond")
+                            & (pl.col("issuer_type").str.to_lowercase() == "sovereign")
+                        )
+                    )
+                    & (pl.col("issuer_cqs").is_in([2, 3]))
+                )
+                .then(pl.lit(0.06))
+                # Corporate bonds CQS 1-2
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["corp_bond", "corporate_bond"])
+                    )
+                    & (pl.col("issuer_cqs").is_in([1, 2]))
+                    & (pl.col("maturity_band") == "0_1y")
+                )
+                .then(pl.lit(0.01))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["corp_bond", "corporate_bond"])
+                    )
+                    & (pl.col("issuer_cqs").is_in([1, 2]))
+                    & (pl.col("maturity_band") == "1_5y")
+                )
+                .then(pl.lit(0.04))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["corp_bond", "corporate_bond"])
+                    )
+                    & (pl.col("issuer_cqs").is_in([1, 2]))
+                )
+                .then(pl.lit(0.06))
+                # Corporate bonds CQS 3
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["corp_bond", "corporate_bond"])
+                    )
+                    & (pl.col("issuer_cqs") == 3)
+                    & (pl.col("maturity_band") == "0_1y")
+                )
+                .then(pl.lit(0.02))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["corp_bond", "corporate_bond"])
+                    )
+                    & (pl.col("issuer_cqs") == 3)
+                    & (pl.col("maturity_band") == "1_5y")
+                )
+                .then(pl.lit(0.06))
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["corp_bond", "corporate_bond"])
+                    )
+                    & (pl.col("issuer_cqs") == 3)
+                )
+                .then(pl.lit(0.08))
+                # Equity - main index 15%, other 25%
+                .when(
+                    (
+                        pl.col("collateral_type")
+                        .str.to_lowercase()
+                        .is_in(["equity", "shares", "stock"])
+                    )
+                    & (pl.col("is_eligible_financial_collateral") == True)  # noqa: E712
+                )
+                .then(pl.lit(0.15))  # Main index
+                .when(
+                    pl.col("collateral_type")
+                    .str.to_lowercase()
+                    .is_in(["equity", "shares", "stock"])
+                )
+                .then(pl.lit(0.25))  # Other equity
+                # Receivables - 20%
+                .when(
+                    pl.col("collateral_type")
+                    .str.to_lowercase()
+                    .is_in(["receivables", "trade_receivables"])
+                )
+                .then(pl.lit(0.20))
+                # Real estate - no haircut (LTV-based treatment)
+                .when(
+                    pl.col("collateral_type")
+                    .str.to_lowercase()
+                    .is_in(
+                        [
+                            "real_estate",
+                            "property",
+                            "rre",
+                            "cre",
+                            "residential_property",
+                            "commercial_property",
+                        ]
+                    )
+                )
+                .then(pl.lit(0.00))
+                # Other physical - 40%
+                .otherwise(pl.lit(0.40))
+                .alias("collateral_haircut"),
+            ]
+        )
 
     def apply_maturity_mismatch(
         self,
@@ -303,35 +364,41 @@ class HaircutCalculator:
             LazyFrame with maturity-adjusted collateral values
         """
         # Calculate residual maturities
-        collateral = collateral.with_columns([
-            # Collateral residual maturity
-            pl.col("residual_maturity_years").fill_null(10.0).alias("coll_maturity"),
-        ])
+        collateral = collateral.with_columns(
+            [
+                # Collateral residual maturity
+                pl.col("residual_maturity_years").fill_null(10.0).alias("coll_maturity"),
+            ]
+        )
 
         # Join to get exposure maturity (already joined in apply_haircuts)
         # Calculate maturity mismatch adjustment
-        collateral = collateral.with_columns([
-            # If collateral maturity >= exposure maturity, no adjustment
-            pl.when(
-                pl.col("coll_maturity") >= 5.0  # Assume 5y cap
-            ).then(pl.lit(1.0))
-            # If collateral < 3 months, no protection
-            .when(pl.col("coll_maturity") < 0.25)
-            .then(pl.lit(0.0))
-            # Apply adjustment: (t - 0.25) / (T - 0.25)
-            .otherwise(
-                (pl.col("coll_maturity") - 0.25) / (5.0 - 0.25)  # Simplified with T=5
-            )
-            .alias("maturity_adjustment_factor"),
-        ])
+        collateral = collateral.with_columns(
+            [
+                # If collateral maturity >= exposure maturity, no adjustment
+                pl.when(
+                    pl.col("coll_maturity") >= 5.0  # Assume 5y cap
+                )
+                .then(pl.lit(1.0))
+                # If collateral < 3 months, no protection
+                .when(pl.col("coll_maturity") < 0.25)
+                .then(pl.lit(0.0))
+                # Apply adjustment: (t - 0.25) / (T - 0.25)
+                .otherwise(
+                    (pl.col("coll_maturity") - 0.25) / (5.0 - 0.25)  # Simplified with T=5
+                )
+                .alias("maturity_adjustment_factor"),
+            ]
+        )
 
         # Apply maturity adjustment
-        collateral = collateral.with_columns([
-            (
-                pl.col("value_after_haircut") *
-                pl.col("maturity_adjustment_factor")
-            ).alias("value_after_maturity_adj"),
-        ])
+        collateral = collateral.with_columns(
+            [
+                (pl.col("value_after_haircut") * pl.col("maturity_adjustment_factor")).alias(
+                    "value_after_maturity_adj"
+                ),
+            ]
+        )
 
         return collateral
 

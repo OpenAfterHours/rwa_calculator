@@ -188,7 +188,7 @@ GUARANTEE_SCHEMA = {
     "amount_covered": pl.Float64,
     "percentage_covered": pl.Float64,
     "beneficiary_type": pl.String,
-    "beneficiary_reference":pl.String,
+    "beneficiary_reference": pl.String,
 }
 
 PROVISION_SCHEMA = {
@@ -198,8 +198,8 @@ PROVISION_SCHEMA = {
     "currency": pl.String,
     "amount": pl.Float64,
     "as_of_date": pl.Date,
-    "beneficiary_type": pl.String, # counterparty/loan/facility/contingent
-    "beneficiary_reference":pl.String, # reference to find on the above tables
+    "beneficiary_type": pl.String,  # counterparty/loan/facility/contingent
+    "beneficiary_reference": pl.String,  # reference to find on the above tables
 }
 
 RATINGS_SCHEMA = {
@@ -250,9 +250,9 @@ EQUITY_EXPOSURE_SCHEMA = {
 # =============================================================================
 
 FX_RATES_SCHEMA = {
-    "currency_from": pl.String,   # Source currency (e.g., "USD")
-    "currency_to": pl.String,     # Target currency (e.g., "GBP")
-    "rate": pl.Float64,           # Multiply source amount by rate to get target amount
+    "currency_from": pl.String,  # Source currency (e.g., "USD")
+    "currency_to": pl.String,  # Target currency (e.g., "GBP")
+    "rate": pl.Float64,  # Multiply source amount by rate to get target amount
 }
 
 
@@ -363,18 +363,36 @@ CORRELATION_PARAMETER_SCHEMA = {
 # Used by validate_bundle_values() to catch invalid values at input time.
 
 VALID_ENTITY_TYPES = {
-    "sovereign", "central_bank", "rgla_sovereign", "rgla_institution",
-    "pse_sovereign", "pse_institution", "mdb", "international_org",
-    "institution", "bank", "ccp", "financial_institution",
-    "corporate", "company", "individual", "retail",
-    "specialised_lending", "equity",
+    "sovereign",
+    "central_bank",
+    "rgla_sovereign",
+    "rgla_institution",
+    "pse_sovereign",
+    "pse_institution",
+    "mdb",
+    "international_org",
+    "institution",
+    "bank",
+    "ccp",
+    "financial_institution",
+    "corporate",
+    "company",
+    "individual",
+    "retail",
+    "specialised_lending",
+    "equity",
 }
 
 VALID_SENIORITY = {"senior", "subordinated"}
 
 VALID_COLLATERAL_TYPES = {
-    "cash", "gold", "equity", "bond", "real_estate",
-    "receivables", "other_physical",
+    "cash",
+    "gold",
+    "equity",
+    "bond",
+    "real_estate",
+    "receivables",
+    "other_physical",
 }
 
 VALID_PROPERTY_TYPES = {"residential", "commercial"}
@@ -388,16 +406,26 @@ VALID_PROVISION_TYPES = {"scra", "gcra"}
 VALID_RATING_TYPES = {"internal", "external"}
 
 VALID_SL_TYPES = {
-    "project_finance", "object_finance", "commodities_finance",
-    "ipre", "hvcre",
+    "project_finance",
+    "object_finance",
+    "commodities_finance",
+    "ipre",
+    "hvcre",
 }
 
 VALID_SLOTTING_CATEGORIES = {"strong", "good", "satisfactory", "weak", "default"}
 
 VALID_EQUITY_TYPES = {
-    "central_bank", "listed", "exchange_traded", "government_supported",
-    "unlisted", "speculative", "private_equity", "private_equity_diversified",
-    "ciu", "other",
+    "central_bank",
+    "listed",
+    "exchange_traded",
+    "government_supported",
+    "unlisted",
+    "speculative",
+    "private_equity",
+    "private_equity_diversified",
+    "ciu",
+    "other",
 }
 
 VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent"}
@@ -478,9 +506,9 @@ RAW_EXPOSURE_SCHEMA = {
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # FX conversion audit trail (populated after FX conversion)
-    "original_currency": pl.String,       # Currency before FX conversion
-    "original_amount": pl.Float64,        # Amount before FX conversion (drawn + interest + nominal)
-    "fx_rate_applied": pl.Float64,        # Rate used (null if no conversion needed)
+    "original_currency": pl.String,  # Currency before FX conversion
+    "original_amount": pl.Float64,  # Amount before FX conversion (drawn + interest + nominal)
+    "fx_rate_applied": pl.Float64,  # Rate used (null if no conversion needed)
 }
 
 # Schema for exposures after hierarchy resolution
@@ -604,22 +632,18 @@ CRM_PRE_POST_COLUMNS = {
     # Pre-CRM attributes (original exposure before CRM substitution)
     "pre_crm_counterparty_reference": pl.String,  # Original borrower reference
     "pre_crm_exposure_class": pl.String,  # Original exposure class before substitution
-
     # Post-CRM attributes (for guaranteed portion)
     "post_crm_counterparty_guaranteed": pl.String,  # = guarantor_reference for guaranteed exposures
     "post_crm_exposure_class_guaranteed": pl.String,  # Derived from guarantor's entity_type
-
     # CRM impact indicators
     "is_guaranteed": pl.Boolean,  # Whether exposure has effective guarantee
     "guaranteed_portion": pl.Float64,  # EAD covered by guarantee
     "unguaranteed_portion": pl.Float64,  # EAD not covered by guarantee
     "guarantor_reference": pl.String,  # Foreign key to get guarantor attributes via joins
-
     # Risk weight tracking (populated by calculators)
     "pre_crm_risk_weight": pl.Float64,  # Borrower's RW before guarantee substitution
     "guarantor_rw": pl.Float64,  # Guarantor's RW (SA lookup or IRB-calculated)
     "guarantee_benefit_rw": pl.Float64,  # RW reduction from guarantee
-
     # IRB-specific pre/post CRM tracking
     "rwa_irb_original": pl.Float64,  # IRB RWA before guarantee substitution
     "risk_weight_irb_original": pl.Float64,  # IRB RW before guarantee substitution
@@ -721,7 +745,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "book_code": pl.String,  # Portfolio/book classification
     "currency": pl.String,  # Exposure currency
     "basel_version": pl.String,  # "3.0" or "3.1"
-
     # -------------------------------------------------------------------------
     # COUNTERPARTY HIERARCHY (Rating Inheritance)
     # -------------------------------------------------------------------------
@@ -732,7 +755,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "rating_inherited": pl.Boolean,  # Whether rating came from parent
     "rating_source_counterparty": pl.String,  # Counterparty whose rating was used
     "rating_inheritance_reason": pl.String,  # "own_rating", "parent_rating", "group_rating", "unrated"
-
     # -------------------------------------------------------------------------
     # LENDING GROUP HIERARCHY (Retail Threshold Aggregation)
     # -------------------------------------------------------------------------
@@ -740,7 +762,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "lending_group_total_exposure": pl.Float64,  # Aggregated exposure across group
     "retail_threshold_applied": pl.Float64,  # £1m (3.0) or £880k (3.1)
     "retail_eligible_via_group": pl.Boolean,  # Whether retail classification based on group aggregation
-
     # -------------------------------------------------------------------------
     # EXPOSURE HIERARCHY (Facility Structure)
     # -------------------------------------------------------------------------
@@ -749,7 +770,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "root_facility_reference": pl.String,  # Top-level facility in hierarchy
     "facility_hierarchy_depth": pl.Int8,  # Levels from root facility (0=top)
     "facility_hierarchy_path": pl.List(pl.String),  # Full path from root to this exposure
-
     # -------------------------------------------------------------------------
     # CRM INHERITANCE (From Hierarchy)
     # -------------------------------------------------------------------------
@@ -761,7 +781,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "provision_source_level": pl.String,  # "exposure", "facility", "counterparty"
     "provision_inherited_from": pl.String,  # Reference of entity provision inherited from
     "crm_allocation_notes": pl.String,  # Explanation of how CRM was allocated down hierarchy
-
     # -------------------------------------------------------------------------
     # EXPOSURE CLASSIFICATION
     # -------------------------------------------------------------------------
@@ -770,7 +789,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "approach_permitted": pl.String,  # "SA", "FIRB", "AIRB" based on permissions
     "approach_applied": pl.String,  # Actual approach used
     "approach_selection_reason": pl.String,  # Why this approach was selected
-
     # -------------------------------------------------------------------------
     # ORIGINAL EXPOSURE VALUES
     # -------------------------------------------------------------------------
@@ -778,14 +796,12 @@ CALCULATION_OUTPUT_SCHEMA = {
     "undrawn_amount": pl.Float64,  # Undrawn commitment amount
     "original_maturity_date": pl.Date,  # Contractual maturity
     "residual_maturity_years": pl.Float64,  # Years to maturity
-
     # -------------------------------------------------------------------------
     # CCF APPLICATION (Off-balance sheet conversion)
     # -------------------------------------------------------------------------
     "ccf_applied": pl.Float64,  # CCF percentage (0%, 20%, 40%, 50%, 100%)
     "ccf_source": pl.String,  # Reference to regulatory article
     "converted_undrawn": pl.Float64,  # undrawn_amount × ccf_applied
-
     # -------------------------------------------------------------------------
     # CRM - COLLATERAL IMPACT
     # -------------------------------------------------------------------------
@@ -796,7 +812,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "fx_haircut_applied": pl.Float64,  # FX mismatch haircut (8% or 0%)
     "maturity_mismatch_adjustment": pl.Float64,  # Adjustment for maturity mismatch
     "collateral_adjusted_value": pl.Float64,  # Net collateral value after haircuts
-
     # -------------------------------------------------------------------------
     # CRM - GUARANTEE IMPACT (Substitution approach)
     # -------------------------------------------------------------------------
@@ -806,34 +821,28 @@ CALCULATION_OUTPUT_SCHEMA = {
     "guaranteed_amount": pl.Float64,  # Amount covered by guarantee
     "guarantor_risk_weight": pl.Float64,  # RW of guarantor (for substitution)
     "guarantee_benefit": pl.Float64,  # RWA reduction from guarantee
-
     # -------------------------------------------------------------------------
     # PRE/POST CRM COUNTERPARTY TRACKING (Regulatory reporting)
     # -------------------------------------------------------------------------
     # Pre-CRM attributes (original exposure before CRM substitution)
     "pre_crm_counterparty_reference": pl.String,  # Original borrower reference
     "pre_crm_exposure_class": pl.String,  # Original exposure class before substitution
-
     # Post-CRM attributes (for guaranteed portion)
     "post_crm_counterparty_guaranteed": pl.String,  # = guarantor_reference for guaranteed
     "post_crm_exposure_class_guaranteed": pl.String,  # Derived from guarantor's entity_type
     "guarantor_reference": pl.String,  # Foreign key to guarantor data
-
     # CRM split tracking
     "is_guaranteed": pl.Boolean,  # Whether exposure has effective guarantee
     "guaranteed_portion": pl.Float64,  # EAD covered by guarantee
     "unguaranteed_portion": pl.Float64,  # EAD not covered by guarantee
-
     # Risk weight tracking for pre/post CRM reporting
     "pre_crm_risk_weight": pl.Float64,  # Borrower's RW before guarantee substitution
     "guarantee_benefit_rw": pl.Float64,  # RW reduction from guarantee (pre_crm_rw - post_crm_rw)
-
     # IRB-specific tracking
     "rwa_irb_original": pl.Float64,  # IRB RWA before guarantee substitution
     "risk_weight_irb_original": pl.Float64,  # IRB RW before guarantee substitution
     "guarantee_method_used": pl.String,  # "SA_RW_SUBSTITUTION", "PD_SUBSTITUTION", or "NO_GUARANTEE"
     "guarantee_status": pl.String,  # Detailed status including non-beneficial flag
-
     # -------------------------------------------------------------------------
     # CRM - PROVISION IMPACT
     # -------------------------------------------------------------------------
@@ -841,7 +850,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "scra_provision_amount": pl.Float64,  # Specific provisions
     "gcra_provision_amount": pl.Float64,  # General provisions
     "provision_capped_amount": pl.Float64,  # Amount eligible for CRM
-
     # -------------------------------------------------------------------------
     # EAD CALCULATION
     # -------------------------------------------------------------------------
@@ -850,7 +858,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "ead_after_guarantee": pl.Float64,  # Portion not guaranteed
     "final_ead": pl.Float64,  # Final EAD for RWA calculation
     "ead_calculation_method": pl.String,  # "simple", "comprehensive", "supervisory_haircut"
-
     # -------------------------------------------------------------------------
     # RISK WEIGHT DETERMINATION - SA
     # -------------------------------------------------------------------------
@@ -861,7 +868,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "sa_rw_adjustment_reason": pl.String,  # Reason for adjustment
     "sa_final_risk_weight": pl.Float64,  # Final SA risk weight
     "sa_rw_regulatory_ref": pl.String,  # CRR article / CRE reference
-
     # -------------------------------------------------------------------------
     # RISK WEIGHT DETERMINATION - IRB
     # -------------------------------------------------------------------------
@@ -877,7 +883,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "irb_maturity_adj_b": pl.Float64,  # Maturity adjustment factor
     "irb_capital_k": pl.Float64,  # Capital requirement (K)
     "irb_risk_weight": pl.Float64,  # 12.5 × K × 100%
-
     # -------------------------------------------------------------------------
     # SPECIALISED LENDING / EQUITY (Alternative approaches)
     # -------------------------------------------------------------------------
@@ -886,7 +891,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "sl_risk_weight": pl.Float64,  # Slotting RW
     "equity_type": pl.String,  # Equity category if applicable
     "equity_risk_weight": pl.Float64,  # Equity RW
-
     # -------------------------------------------------------------------------
     # REAL ESTATE SPECIFIC
     # -------------------------------------------------------------------------
@@ -896,7 +900,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "is_income_producing": pl.Boolean,  # CRE income flag
     "is_adc": pl.Boolean,  # ADC exposure flag
     "mortgage_risk_weight": pl.Float64,  # LTV-based RW
-
     # -------------------------------------------------------------------------
     # FINAL RWA CALCULATION
     # -------------------------------------------------------------------------
@@ -908,7 +911,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "floor_impact": pl.Float64,  # Additional RWA from floor
     "final_rwa": pl.Float64,  # max(rwa_before_floor, output_floor_rwa)
     "risk_weight_effective": pl.Float64,  # final_rwa / final_ead (implied RW)
-
     # -------------------------------------------------------------------------
     # EXPECTED LOSS (IRB comparison to provisions)
     # -------------------------------------------------------------------------
@@ -916,14 +918,12 @@ CALCULATION_OUTPUT_SCHEMA = {
     "provision_held": pl.Float64,  # Total provision amount
     "el_shortfall": pl.Float64,  # max(0, EL - provision)
     "el_excess": pl.Float64,  # max(0, provision - EL)
-
     # -------------------------------------------------------------------------
     # BASEL 3.1 ADJUSTMENTS
     # -------------------------------------------------------------------------
     "sme_supporting_factor": pl.Float64,  # SME factor (3.0 only, 0.7619/0.85)
     "infra_supporting_factor": pl.Float64,  # Infrastructure factor if applicable
     "supporting_factor_benefit": pl.Float64,  # RWA reduction from factors
-
     # -------------------------------------------------------------------------
     # WARNINGS & VALIDATION
     # -------------------------------------------------------------------------

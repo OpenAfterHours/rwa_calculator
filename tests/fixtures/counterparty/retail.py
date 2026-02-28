@@ -21,8 +21,9 @@ Scenario A9 from plan: £50k loan to individual = £37.5k RWA (75% RW)
 Scenario A10 from plan: £500k loan, SME turnover < £880k = £375k RWA (75% RW)
 """
 
-import polars as pl
 from pathlib import Path
+
+import polars as pl
 
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 

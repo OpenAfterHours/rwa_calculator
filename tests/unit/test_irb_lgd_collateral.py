@@ -14,11 +14,10 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle, CounterpartyLookup
+from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.crm.processor import CRMProcessor
-
 
 # =============================================================================
 # Fixtures
@@ -80,9 +79,11 @@ def create_classified_bundle(
 
     # Ensure parent_facility_reference is String type (not null type when all values are None)
     if "parent_facility_reference" in exposures.collect_schema().names():
-        exposures = exposures.with_columns([
-            pl.col("parent_facility_reference").cast(pl.String),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.col("parent_facility_reference").cast(pl.String),
+            ]
+        )
 
     collateral = None
     if collateral_data:
@@ -102,32 +103,40 @@ def create_classified_bundle(
 
     # Create empty CounterpartyLookup
     counterparty_lookup = CounterpartyLookup(
-        counterparties=pl.LazyFrame(schema={
-            "counterparty_reference": pl.String,
-            "entity_type": pl.String,
-        }),
-        parent_mappings=pl.LazyFrame(schema={
-            "child_counterparty_reference": pl.String,
-            "parent_counterparty_reference": pl.String,
-        }),
-        ultimate_parent_mappings=pl.LazyFrame(schema={
-            "counterparty_reference": pl.String,
-            "ultimate_parent_reference": pl.String,
-            "hierarchy_depth": pl.Int32,
-        }),
-        rating_inheritance=pl.LazyFrame(schema={
-            "counterparty_reference": pl.String,
-            "cqs": pl.Int8,
-            "pd": pl.Float64,
-        }),
+        counterparties=pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "entity_type": pl.String,
+            }
+        ),
+        parent_mappings=pl.LazyFrame(
+            schema={
+                "child_counterparty_reference": pl.String,
+                "parent_counterparty_reference": pl.String,
+            }
+        ),
+        ultimate_parent_mappings=pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }
+        ),
+        rating_inheritance=pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "cqs": pl.Int8,
+                "pd": pl.Float64,
+            }
+        ),
     )
 
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
         sa_exposures=exposures.filter(pl.col("approach") == ApproachType.SA.value),
         irb_exposures=exposures.filter(
-            (pl.col("approach") == ApproachType.FIRB.value) |
-            (pl.col("approach") == ApproachType.AIRB.value)
+            (pl.col("approach") == ApproachType.FIRB.value)
+            | (pl.col("approach") == ApproachType.AIRB.value)
         ),
         slotting_exposures=exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value),
         equity_exposures=None,

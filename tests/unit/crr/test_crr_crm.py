@@ -21,7 +21,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm import (
     CRMProcessor,
     HaircutCalculator,
@@ -68,52 +68,56 @@ def crr_config_with_irb() -> CalculationConfig:
 @pytest.fixture
 def basic_exposures() -> pl.LazyFrame:
     """Basic exposures for CRM testing."""
-    return pl.DataFrame({
-        "exposure_reference": ["EXP001", "EXP002", "EXP003", "EXP004"],
-        "exposure_type": ["loan", "loan", "contingent", "contingent"],
-        "product_type": ["TERM_LOAN", "MORTGAGE", "LC", "GUARANTEE"],
-        "book_code": ["CORP", "RETAIL", "CORP", "CORP"],
-        "counterparty_reference": ["CP001", "CP002", "CP003", "CP004"],
-        "value_date": [date(2023, 1, 1)] * 4,
-        "maturity_date": [date(2028, 1, 1)] * 4,
-        "currency": ["GBP", "GBP", "GBP", "GBP"],
-        "drawn_amount": [1000000.0, 500000.0, 0.0, 0.0],
-        "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
-        "nominal_amount": [0.0, 0.0, 500000.0, 250000.0],
-        "lgd": [0.45, 0.15, 0.45, 0.45],
-        "seniority": ["senior", "senior", "senior", "senior"],
-        "risk_type": [None, None, "MR", "FR"],  # MR = 50% CCF, FR = 100% CCF
-        "approach": ["standardised", "standardised", "standardised", "standardised"],
-        "exposure_class": ["corporate", "retail_mortgage", "corporate", "corporate"],
-        "is_sme": [False, False, False, False],
-        "is_mortgage": [False, True, False, False],
-        "is_defaulted": [False, False, False, False],
-        "qualifies_as_retail": [False, True, False, False],
-        "exposure_class_for_sa": ["corporate", "retail_mortgage", "corporate", "corporate"],
-        "firb_permitted": [False, False, False, False],
-        "airb_permitted": [False, False, False, False],
-        "classification_reason": ["test"] * 4,
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002", "EXP003", "EXP004"],
+            "exposure_type": ["loan", "loan", "contingent", "contingent"],
+            "product_type": ["TERM_LOAN", "MORTGAGE", "LC", "GUARANTEE"],
+            "book_code": ["CORP", "RETAIL", "CORP", "CORP"],
+            "counterparty_reference": ["CP001", "CP002", "CP003", "CP004"],
+            "value_date": [date(2023, 1, 1)] * 4,
+            "maturity_date": [date(2028, 1, 1)] * 4,
+            "currency": ["GBP", "GBP", "GBP", "GBP"],
+            "drawn_amount": [1000000.0, 500000.0, 0.0, 0.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 0.0, 500000.0, 250000.0],
+            "lgd": [0.45, 0.15, 0.45, 0.45],
+            "seniority": ["senior", "senior", "senior", "senior"],
+            "risk_type": [None, None, "MR", "FR"],  # MR = 50% CCF, FR = 100% CCF
+            "approach": ["standardised", "standardised", "standardised", "standardised"],
+            "exposure_class": ["corporate", "retail_mortgage", "corporate", "corporate"],
+            "is_sme": [False, False, False, False],
+            "is_mortgage": [False, True, False, False],
+            "is_defaulted": [False, False, False, False],
+            "qualifies_as_retail": [False, True, False, False],
+            "exposure_class_for_sa": ["corporate", "retail_mortgage", "corporate", "corporate"],
+            "firb_permitted": [False, False, False, False],
+            "airb_permitted": [False, False, False, False],
+            "classification_reason": ["test"] * 4,
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def basic_collateral() -> pl.LazyFrame:
     """Basic collateral for haircut testing."""
-    return pl.DataFrame({
-        "collateral_reference": ["COLL001", "COLL002", "COLL003", "COLL004"],
-        "collateral_type": ["cash", "govt_bond", "equity", "corp_bond"],
-        "currency": ["GBP", "GBP", "GBP", "EUR"],  # EUR = FX mismatch
-        "maturity_date": [None, date(2026, 6, 30), None, date(2027, 12, 31)],
-        "market_value": [500000.0, 600000.0, 400000.0, 300000.0],
-        "nominal_value": [500000.0, 600000.0, 400000.0, 300000.0],
-        "beneficiary_type": ["loan", "loan", "loan", "loan"],
-        "beneficiary_reference": ["EXP001", "EXP001", "EXP002", "EXP003"],
-        "issuer_cqs": [None, 1, None, 2],
-        "issuer_type": [None, "sovereign", None, "corporate"],
-        "residual_maturity_years": [None, 2.5, None, 3.0],
-        "is_eligible_financial_collateral": [True, True, True, True],
-        "is_eligible_irb_collateral": [True, True, True, True],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "collateral_reference": ["COLL001", "COLL002", "COLL003", "COLL004"],
+            "collateral_type": ["cash", "govt_bond", "equity", "corp_bond"],
+            "currency": ["GBP", "GBP", "GBP", "EUR"],  # EUR = FX mismatch
+            "maturity_date": [None, date(2026, 6, 30), None, date(2027, 12, 31)],
+            "market_value": [500000.0, 600000.0, 400000.0, 300000.0],
+            "nominal_value": [500000.0, 600000.0, 400000.0, 300000.0],
+            "beneficiary_type": ["loan", "loan", "loan", "loan"],
+            "beneficiary_reference": ["EXP001", "EXP001", "EXP002", "EXP003"],
+            "issuer_cqs": [None, 1, None, 2],
+            "issuer_type": [None, "sovereign", None, "corporate"],
+            "residual_maturity_years": [None, 2.5, None, 3.0],
+            "is_eligible_financial_collateral": [True, True, True, True],
+            "is_eligible_irb_collateral": [True, True, True, True],
+        }
+    ).lazy()
 
 
 def create_classified_bundle(
@@ -124,8 +128,8 @@ def create_classified_bundle(
         all_exposures=exposures,
         sa_exposures=exposures.filter(pl.col("approach") == ApproachType.SA.value),
         irb_exposures=exposures.filter(
-            (pl.col("approach") == ApproachType.FIRB.value) |
-            (pl.col("approach") == ApproachType.AIRB.value)
+            (pl.col("approach") == ApproachType.FIRB.value)
+            | (pl.col("approach") == ApproachType.AIRB.value)
         ),
         slotting_exposures=None,
         equity_exposures=None,
@@ -311,27 +315,29 @@ class TestCRMProcessor:
         crr_config: CalculationConfig,
     ) -> None:
         """Loan EAD should equal drawn amount (no CCF for drawn items)."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["LOAN001"],
-            "exposure_type": ["loan"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "drawn_amount": [1000000.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "risk_type": [None],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-            "is_sme": [False],
-            "is_mortgage": [False],
-            "is_defaulted": [False],
-            "qualifies_as_retail": [False],
-            "exposure_class_for_sa": ["corporate"],
-            "firb_permitted": [False],
-            "airb_permitted": [False],
-            "classification_reason": ["test"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["LOAN001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [1000000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "risk_type": [None],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+                "is_sme": [False],
+                "is_mortgage": [False],
+                "is_defaulted": [False],
+                "qualifies_as_retail": [False],
+                "exposure_class_for_sa": ["corporate"],
+                "firb_permitted": [False],
+                "airb_permitted": [False],
+                "classification_reason": ["test"],
+            }
+        ).lazy()
 
         bundle = create_classified_bundle(exposures)
         result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
@@ -346,27 +352,29 @@ class TestCRMProcessor:
         crr_config: CalculationConfig,
     ) -> None:
         """Contingent EAD should apply CCF to nominal amount."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["CONT001"],
-            "exposure_type": ["contingent"],
-            "product_type": ["LC"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [500000.0],
-            "lgd": [0.45],
-            "risk_type": ["MR"],  # MR = 50% CCF
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-            "is_sme": [False],
-            "is_mortgage": [False],
-            "is_defaulted": [False],
-            "qualifies_as_retail": [False],
-            "exposure_class_for_sa": ["corporate"],
-            "firb_permitted": [False],
-            "airb_permitted": [False],
-            "classification_reason": ["test"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CONT001"],
+                "exposure_type": ["contingent"],
+                "product_type": ["LC"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [500000.0],
+                "lgd": [0.45],
+                "risk_type": ["MR"],  # MR = 50% CCF
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+                "is_sme": [False],
+                "is_mortgage": [False],
+                "is_defaulted": [False],
+                "qualifies_as_retail": [False],
+                "exposure_class_for_sa": ["corporate"],
+                "firb_permitted": [False],
+                "airb_permitted": [False],
+                "classification_reason": ["test"],
+            }
+        ).lazy()
 
         bundle = create_classified_bundle(exposures)
         result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
@@ -398,27 +406,29 @@ class TestCRMProcessor:
         crr_config: CalculationConfig,
     ) -> None:
         """Exposures should be correctly split into SA and IRB."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["SA001", "SA002"],
-            "exposure_type": ["loan", "loan"],
-            "product_type": ["TERM_LOAN", "TERM_LOAN"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP002"],
-            "drawn_amount": [1000000.0, 500000.0],
-            "nominal_amount": [0.0, 0.0],
-            "lgd": [0.45, 0.45],
-            "risk_type": [None, None],
-            "approach": ["standardised", "standardised"],
-            "exposure_class": ["corporate", "corporate"],
-            "is_sme": [False, False],
-            "is_mortgage": [False, False],
-            "is_defaulted": [False, False],
-            "qualifies_as_retail": [False, False],
-            "exposure_class_for_sa": ["corporate", "corporate"],
-            "firb_permitted": [False, False],
-            "airb_permitted": [False, False],
-            "classification_reason": ["test", "test"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SA001", "SA002"],
+                "exposure_type": ["loan", "loan"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP002"],
+                "drawn_amount": [1000000.0, 500000.0],
+                "nominal_amount": [0.0, 0.0],
+                "lgd": [0.45, 0.45],
+                "risk_type": [None, None],
+                "approach": ["standardised", "standardised"],
+                "exposure_class": ["corporate", "corporate"],
+                "is_sme": [False, False],
+                "is_mortgage": [False, False],
+                "is_defaulted": [False, False],
+                "qualifies_as_retail": [False, False],
+                "exposure_class_for_sa": ["corporate", "corporate"],
+                "firb_permitted": [False, False],
+                "airb_permitted": [False, False],
+                "classification_reason": ["test", "test"],
+            }
+        ).lazy()
 
         bundle = create_classified_bundle(exposures)
         result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)

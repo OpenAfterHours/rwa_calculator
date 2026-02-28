@@ -24,10 +24,11 @@ app = marimo.App(width="full")
 
 @app.cell
 def _():
-    import marimo as mo
-    import polars as pl
     import json
     from pathlib import Path
+
+    import marimo as mo
+    import polars as pl
 
     cache_dir = Path(__file__).parent / ".cache"
 
@@ -85,10 +86,10 @@ def _(cache_dir, json, mo, pl):
             mo.callout(
                 mo.md(f"""
 **Loaded Results**
-- Framework: {metadata.get('framework', 'Unknown')}
-- Reporting Date: {metadata.get('reporting_date', 'Unknown')}
+- Framework: {metadata.get("framework", "Unknown")}
+- Reporting Date: {metadata.get("reporting_date", "Unknown")}
 - Total Exposures: {exposure_count:,}
-- Total RWA: {metadata.get('total_rwa', 0):,.0f}
+- Total RWA: {metadata.get("total_rwa", 0):,.0f}
                 """),
                 kind="success",
             )
@@ -100,7 +101,9 @@ def _(cache_dir, json, mo, pl):
 
         mo.output.replace(
             mo.callout(
-                mo.md("No results found. Please run a calculation in the [Calculator](/calculator) first."),
+                mo.md(
+                    "No results found. Please run a calculation in the [Calculator](/calculator) first."
+                ),
                 kind="warn",
             )
         )
@@ -114,13 +117,19 @@ def _(has_results, mo, pl, results_lf):
         schema_names = results_lf.collect_schema().names()
 
         # Get unique values for filters via lazy scan
-        exposure_classes = ["All"] + sorted(
-            results_lf.select("exposure_class").unique().collect().to_series().to_list()
-        ) if "exposure_class" in schema_names else ["All"]
+        exposure_classes = (
+            ["All"]
+            + sorted(results_lf.select("exposure_class").unique().collect().to_series().to_list())
+            if "exposure_class" in schema_names
+            else ["All"]
+        )
 
-        approaches = ["All"] + sorted(
-            results_lf.select("approach_applied").unique().collect().to_series().to_list()
-        ) if "approach_applied" in schema_names else ["All"]
+        approaches = (
+            ["All"]
+            + sorted(results_lf.select("approach_applied").unique().collect().to_series().to_list())
+            if "approach_applied" in schema_names
+            else ["All"]
+        )
 
         # Create filter widgets
         class_filter = mo.ui.dropdown(
@@ -152,15 +161,21 @@ def _(has_results, mo, pl, results_lf):
         )
 
         mo.output.replace(
-            mo.vstack([
-                mo.md("### Filters"),
-                mo.hstack([
-                    class_filter,
-                    approach_filter,
-                    rw_min,
-                    rw_max,
-                ], justify="start", gap=2),
-            ])
+            mo.vstack(
+                [
+                    mo.md("### Filters"),
+                    mo.hstack(
+                        [
+                            class_filter,
+                            approach_filter,
+                            rw_min,
+                            rw_max,
+                        ],
+                        justify="start",
+                        gap=2,
+                    ),
+                ]
+            )
         )
     else:
         class_filter = None
@@ -187,8 +202,7 @@ def _(approach_filter, class_filter, has_results, mo, pl, results_lf, rw_max, rw
 
         if "risk_weight" in schema_names:
             predicates.append(
-                (pl.col("risk_weight") >= rw_min.value) &
-                (pl.col("risk_weight") <= rw_max.value)
+                (pl.col("risk_weight") >= rw_min.value) & (pl.col("risk_weight") <= rw_max.value)
             )
 
         if predicates:
@@ -200,11 +214,13 @@ def _(approach_filter, class_filter, has_results, mo, pl, results_lf, rw_max, rw
             filtered_lf = results_lf
 
         # Compute filtered statistics via a single lazy aggregation
-        stats_df = filtered_lf.select([
-            pl.col("ead_final").sum().alias("total_ead"),
-            pl.col("rwa_final").sum().alias("total_rwa"),
-            pl.len().alias("count"),
-        ]).collect()
+        stats_df = filtered_lf.select(
+            [
+                pl.col("ead_final").sum().alias("total_ead"),
+                pl.col("rwa_final").sum().alias("total_rwa"),
+                pl.len().alias("count"),
+            ]
+        ).collect()
 
         total_ead = stats_df["total_ead"][0] or 0
         total_rwa = stats_df["total_rwa"][0] or 0
@@ -212,24 +228,27 @@ def _(approach_filter, class_filter, has_results, mo, pl, results_lf, rw_max, rw
         avg_rw = total_rwa / total_ead if total_ead > 0 else 0
 
         mo.output.replace(
-            mo.hstack([
-                mo.stat(
-                    value=f"{row_count:,}",
-                    label="Exposures",
-                ),
-                mo.stat(
-                    value=f"{total_ead:,.0f}",
-                    label="Total EAD",
-                ),
-                mo.stat(
-                    value=f"{total_rwa:,.0f}",
-                    label="Total RWA",
-                ),
-                mo.stat(
-                    value=f"{avg_rw:.2%}",
-                    label="Avg Risk Weight",
-                ),
-            ], justify="space-around")
+            mo.hstack(
+                [
+                    mo.stat(
+                        value=f"{row_count:,}",
+                        label="Exposures",
+                    ),
+                    mo.stat(
+                        value=f"{total_ead:,.0f}",
+                        label="Total EAD",
+                    ),
+                    mo.stat(
+                        value=f"{total_rwa:,.0f}",
+                        label="Total RWA",
+                    ),
+                    mo.stat(
+                        value=f"{avg_rw:.2%}",
+                        label="Avg Risk Weight",
+                    ),
+                ],
+                justify="space-around",
+            )
         )
     else:
         filtered_lf = pl.LazyFrame()
@@ -252,10 +271,12 @@ def _(has_results, mo, row_count):
         )
 
         mo.output.replace(
-            mo.vstack([
-                mo.md("### Analysis View"),
-                agg_selector,
-            ])
+            mo.vstack(
+                [
+                    mo.md("### Analysis View"),
+                    agg_selector,
+                ]
+            )
         )
     else:
         agg_selector = None
@@ -269,59 +290,89 @@ def _(agg_selector, filtered_lf, has_results, mo, pl, row_count):
         schema_names = filtered_lf.collect_schema().names()
 
         if agg_selector.value == "By Exposure Class" and "exposure_class" in schema_names:
-            agg_df = filtered_lf.group_by("exposure_class").agg([
-                pl.col("ead_final").sum().alias("total_ead"),
-                pl.col("rwa_final").sum().alias("total_rwa"),
-                pl.len().alias("count"),
-            ]).with_columns(
-                (pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight")
-            ).sort("total_rwa", descending=True).collect()
+            agg_df = (
+                filtered_lf.group_by("exposure_class")
+                .agg(
+                    [
+                        pl.col("ead_final").sum().alias("total_ead"),
+                        pl.col("rwa_final").sum().alias("total_rwa"),
+                        pl.len().alias("count"),
+                    ]
+                )
+                .with_columns((pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight"))
+                .sort("total_rwa", descending=True)
+                .collect()
+            )
 
             mo.output.replace(
-                mo.vstack([
-                    mo.md("#### Summary by Exposure Class"),
-                    mo.ui.table(agg_df, selection=None),
-                ])
+                mo.vstack(
+                    [
+                        mo.md("#### Summary by Exposure Class"),
+                        mo.ui.table(agg_df, selection=None),
+                    ]
+                )
             )
 
         elif agg_selector.value == "By Approach" and "approach_applied" in schema_names:
-            agg_df = filtered_lf.group_by("approach_applied").agg([
-                pl.col("ead_final").sum().alias("total_ead"),
-                pl.col("rwa_final").sum().alias("total_rwa"),
-                pl.len().alias("count"),
-            ]).with_columns(
-                (pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight")
-            ).sort("total_rwa", descending=True).collect()
+            agg_df = (
+                filtered_lf.group_by("approach_applied")
+                .agg(
+                    [
+                        pl.col("ead_final").sum().alias("total_ead"),
+                        pl.col("rwa_final").sum().alias("total_rwa"),
+                        pl.len().alias("count"),
+                    ]
+                )
+                .with_columns((pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight"))
+                .sort("total_rwa", descending=True)
+                .collect()
+            )
 
             mo.output.replace(
-                mo.vstack([
-                    mo.md("#### Summary by Approach"),
-                    mo.ui.table(agg_df, selection=None),
-                ])
+                mo.vstack(
+                    [
+                        mo.md("#### Summary by Approach"),
+                        mo.ui.table(agg_df, selection=None),
+                    ]
+                )
             )
 
         elif agg_selector.value == "By Risk Weight Band" and "risk_weight" in schema_names:
-            agg_df = filtered_lf.with_columns(
-                pl.when(pl.col("risk_weight") <= 0.20).then(pl.lit("0-20%"))
-                .when(pl.col("risk_weight") <= 0.50).then(pl.lit("20-50%"))
-                .when(pl.col("risk_weight") <= 0.75).then(pl.lit("50-75%"))
-                .when(pl.col("risk_weight") <= 1.00).then(pl.lit("75-100%"))
-                .when(pl.col("risk_weight") <= 1.50).then(pl.lit("100-150%"))
-                .otherwise(pl.lit("150%+"))
-                .alias("rw_band")
-            ).group_by("rw_band").agg([
-                pl.col("ead_final").sum().alias("total_ead"),
-                pl.col("rwa_final").sum().alias("total_rwa"),
-                pl.len().alias("count"),
-            ]).with_columns(
-                (pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight")
-            ).sort("rw_band").collect()
+            agg_df = (
+                filtered_lf.with_columns(
+                    pl.when(pl.col("risk_weight") <= 0.20)
+                    .then(pl.lit("0-20%"))
+                    .when(pl.col("risk_weight") <= 0.50)
+                    .then(pl.lit("20-50%"))
+                    .when(pl.col("risk_weight") <= 0.75)
+                    .then(pl.lit("50-75%"))
+                    .when(pl.col("risk_weight") <= 1.00)
+                    .then(pl.lit("75-100%"))
+                    .when(pl.col("risk_weight") <= 1.50)
+                    .then(pl.lit("100-150%"))
+                    .otherwise(pl.lit("150%+"))
+                    .alias("rw_band")
+                )
+                .group_by("rw_band")
+                .agg(
+                    [
+                        pl.col("ead_final").sum().alias("total_ead"),
+                        pl.col("rwa_final").sum().alias("total_rwa"),
+                        pl.len().alias("count"),
+                    ]
+                )
+                .with_columns((pl.col("total_rwa") / pl.col("total_ead")).alias("avg_risk_weight"))
+                .sort("rw_band")
+                .collect()
+            )
 
             mo.output.replace(
-                mo.vstack([
-                    mo.md("#### Summary by Risk Weight Band"),
-                    mo.ui.table(agg_df, selection=None),
-                ])
+                mo.vstack(
+                    [
+                        mo.md("#### Summary by Risk Weight Band"),
+                        mo.ui.table(agg_df, selection=None),
+                    ]
+                )
             )
 
         else:
@@ -340,7 +391,8 @@ def _(filtered_lf, has_results, mo, row_count):
 
         # Default columns to show
         default_cols = [
-            col for col in [
+            col
+            for col in [
                 "exposure_reference",
                 "counterparty_name",
                 "exposure_class",
@@ -348,7 +400,8 @@ def _(filtered_lf, has_results, mo, row_count):
                 "ead_final",
                 "risk_weight",
                 "rwa_final",
-            ] if col in available_cols
+            ]
+            if col in available_cols
         ]
 
         column_selector = mo.ui.multiselect(
@@ -358,10 +411,12 @@ def _(filtered_lf, has_results, mo, row_count):
         )
 
         mo.output.replace(
-            mo.vstack([
-                mo.md("### Detailed Results"),
-                column_selector,
-            ])
+            mo.vstack(
+                [
+                    mo.md("### Detailed Results"),
+                    column_selector,
+                ]
+            )
         )
     else:
         column_selector = None
@@ -379,10 +434,12 @@ def _(column_selector, filtered_lf, has_results, mo, row_count):
             display_df = filtered_lf.select(display_cols).head(500).collect()
 
             mo.output.replace(
-                mo.vstack([
-                    mo.md(f"*Showing {display_df.height:,} of {row_count:,} rows*"),
-                    mo.ui.table(display_df, selection=None),
-                ])
+                mo.vstack(
+                    [
+                        mo.md(f"*Showing {display_df.height:,} of {row_count:,} rows*"),
+                        mo.ui.table(display_df, selection=None),
+                    ]
+                )
             )
     return (display_cols,)
 
@@ -392,6 +449,7 @@ def _(filtered_lf, has_results, mo, row_count):
     import io
 
     if has_results and row_count > 0:
+
         def _make_csv() -> bytes:
             return filtered_lf.collect().write_csv().encode("utf-8")
 
@@ -401,21 +459,26 @@ def _(filtered_lf, has_results, mo, row_count):
             return buf.getvalue()
 
         mo.output.replace(
-            mo.vstack([
-                mo.md("### Export Filtered Results"),
-                mo.hstack([
-                    mo.download(
-                        data=_make_csv,
-                        filename="filtered_rwa_results.csv",
-                        label="Download CSV",
+            mo.vstack(
+                [
+                    mo.md("### Export Filtered Results"),
+                    mo.hstack(
+                        [
+                            mo.download(
+                                data=_make_csv,
+                                filename="filtered_rwa_results.csv",
+                                label="Download CSV",
+                            ),
+                            mo.download(
+                                data=_make_parquet,
+                                filename="filtered_rwa_results.parquet",
+                                label="Download Parquet",
+                            ),
+                        ],
+                        gap=2,
                     ),
-                    mo.download(
-                        data=_make_parquet,
-                        filename="filtered_rwa_results.parquet",
-                        label="Download Parquet",
-                    ),
-                ], gap=2),
-            ])
+                ]
+            )
         )
     return
 

@@ -226,8 +226,16 @@ class OutputFloorConfig:
     transitional_floor_schedule: dict[date, Decimal] = field(default_factory=dict)
 
     def get_floor_percentage(self, calculation_date: date) -> Decimal:
-        """Get the applicable floor percentage for a given date."""
+        """Get the applicable floor percentage for a given date.
+
+        Returns 0% if floor is disabled or the calculation date precedes the
+        transitional start date (PS9/24: 1 Jan 2027 for UK firms).
+        """
         if not self.enabled:
+            return Decimal("0.0")
+
+        # Before the transitional period starts, no floor applies
+        if self.transitional_start_date and calculation_date < self.transitional_start_date:
             return Decimal("0.0")
 
         # Check transitional schedule
@@ -335,14 +343,27 @@ class IRBPermissions:
         """Full IRB permissions for all applicable classes."""
         return cls(
             permissions={
-                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
                 ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
-                ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+                ExposureClass.CORPORATE_SME: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
                 ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING, ApproachType.FIRB, ApproachType.AIRB},
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
                 ExposureClass.EQUITY: {ApproachType.SA},  # IRB for equity removed under Basel 3.1
             }
         )
@@ -366,7 +387,11 @@ class IRBPermissions:
                 ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA},  # FIRB not permitted for retail
                 ExposureClass.RETAIL_QRRE: {ApproachType.SA},  # FIRB not permitted for retail
                 ExposureClass.RETAIL_OTHER: {ApproachType.SA},  # FIRB not permitted for retail
-                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING, ApproachType.FIRB},
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                    ApproachType.FIRB,
+                },
                 ExposureClass.EQUITY: {ApproachType.SA},
             }
         )
@@ -390,7 +415,10 @@ class IRBPermissions:
                 ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING},  # No AIRB for SL
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                },  # No AIRB for SL
                 ExposureClass.EQUITY: {ApproachType.SA},
             }
         )
@@ -424,7 +452,11 @@ class IRBPermissions:
                 ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING, ApproachType.FIRB},
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                    ApproachType.FIRB,
+                },
                 ExposureClass.EQUITY: {ApproachType.SA},
             }
         )

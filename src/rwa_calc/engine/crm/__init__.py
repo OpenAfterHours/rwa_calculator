@@ -22,13 +22,12 @@ Usage with namespace:
 """
 
 # Import namespace modules to register namespaces on module load
-import rwa_calc.engine.crm.namespace  # noqa: F401
 import rwa_calc.engine.crm.haircuts_namespace  # noqa: F401
-
+import rwa_calc.engine.crm.namespace  # noqa: F401
 from rwa_calc.engine.crm.haircuts import HaircutCalculator, create_haircut_calculator
-from rwa_calc.engine.crm.processor import CRMProcessor, create_crm_processor
+from rwa_calc.engine.crm.haircuts_namespace import HaircutsExpr, HaircutsLazyFrame
 from rwa_calc.engine.crm.namespace import CRMLazyFrame
-from rwa_calc.engine.crm.haircuts_namespace import HaircutsLazyFrame, HaircutsExpr
+from rwa_calc.engine.crm.processor import CRMProcessor, create_crm_processor
 
 __all__ = [
     "CRMProcessor",

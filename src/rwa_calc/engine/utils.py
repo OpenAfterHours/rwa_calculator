@@ -91,9 +91,8 @@ def is_valid_optional_data(
     try:
         schema = data.collect_schema()
 
-        if required_columns is not None:
-            if not required_columns.issubset(set(schema.names())):
-                return False
+        if required_columns is not None and not required_columns.issubset(set(schema.names())):
+            return False
 
         return data.head(1).collect().height > 0
     except Exception:

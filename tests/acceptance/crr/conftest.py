@@ -5,25 +5,24 @@ Provides common test configuration and helper utilities for validating
 RWA calculations against expected outputs.
 """
 
-import pytest
+import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-import sys
 from typing import Any
 
 import polars as pl
+import pytest
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.rwa_calc.config.fx_rates import (
+from src.rwa_calc.config.fx_rates import (  # noqa: E402
     CRR_REGULATORY_THRESHOLDS_EUR,
     get_crr_threshold_gbp,
 )
-
 
 # =============================================================================
 # Expected Outputs Fixtures
@@ -50,10 +49,7 @@ def expected_outputs_df(expected_outputs_path: Path) -> pl.DataFrame:
 @pytest.fixture(scope="session")
 def expected_outputs_dict(expected_outputs_df: pl.DataFrame) -> dict[str, dict[str, Any]]:
     """Convert expected outputs to dictionary keyed by scenario_id."""
-    return {
-        row["scenario_id"]: row
-        for row in expected_outputs_df.to_dicts()
-    }
+    return {row["scenario_id"]: row for row in expected_outputs_df.to_dicts()}
 
 
 def get_scenarios_by_group(
@@ -61,9 +57,7 @@ def get_scenarios_by_group(
     group: str,
 ) -> list[dict[str, Any]]:
     """Filter scenarios by group prefix."""
-    return expected_outputs_df.filter(
-        pl.col("scenario_group") == group
-    ).to_dicts()
+    return expected_outputs_df.filter(pl.col("scenario_group") == group).to_dicts()
 
 
 @pytest.fixture(scope="session")
@@ -142,7 +136,7 @@ def crr_config() -> dict[str, Any]:
         "sme_exposure_threshold_gbp": get_crr_threshold_gbp("sme_exposure"),
         "sme_exposure_threshold_eur": CRR_REGULATORY_THRESHOLDS_EUR["sme_exposure"],
         "sme_supporting_factor_tier1": Decimal("0.7619"),  # Up to threshold
-        "sme_supporting_factor_tier2": Decimal("0.85"),    # Above threshold
+        "sme_supporting_factor_tier2": Decimal("0.85"),  # Above threshold
         # Infrastructure factor (not tiered)
         "infrastructure_factor": Decimal("0.75"),
         # IRB parameters
@@ -258,6 +252,7 @@ def crr_slotting_rw() -> dict[str, Decimal]:
 def load_test_fixtures():
     """Load test fixtures from tests/fixtures directory."""
     from workbooks.shared.fixture_loader import load_fixtures
+
     return load_fixtures()
 
 
@@ -286,8 +281,8 @@ def assert_rwa_within_tolerance(
     else:
         relative_diff = abs(actual - expected) / abs(expected)
         assert relative_diff <= tolerance, (
-            f"{scenario_id}: RWA difference {relative_diff*100:.2f}% exceeds "
-            f"tolerance {tolerance*100:.0f}%: actual={actual:,.2f}, expected={expected:,.2f}"
+            f"{scenario_id}: RWA difference {relative_diff * 100:.2f}% exceeds "
+            f"tolerance {tolerance * 100:.0f}%: actual={actual:,.2f}, expected={expected:,.2f}"
         )
 
 
@@ -332,8 +327,8 @@ def assert_ead_match(
     else:
         relative_diff = abs(actual - expected) / abs(expected)
         assert relative_diff <= tolerance, (
-            f"{scenario_id}: EAD difference {relative_diff*100:.2f}% exceeds "
-            f"tolerance {tolerance*100:.0f}%: actual={actual:,.2f}, expected={expected:,.2f}"
+            f"{scenario_id}: EAD difference {relative_diff * 100:.2f}% exceeds "
+            f"tolerance {tolerance * 100:.0f}%: actual={actual:,.2f}, expected={expected:,.2f}"
         )
 
 
@@ -401,17 +396,25 @@ def crr_slotting_calculation_config():
     to ensure exposures use the slotting approach instead of A-IRB.
     """
     from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-    from rwa_calc.domain.enums import ExposureClass, ApproachType
+    from rwa_calc.domain.enums import ApproachType, ExposureClass
 
     return CalculationConfig.crr(
         reporting_date=date(2025, 12, 31),
         irb_permissions=IRBPermissions(
             permissions={
                 # Full IRB for normal exposure classes
-                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
                 ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
                 ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
-                ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+                ExposureClass.CORPORATE_SME: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
                 ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
                 ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
@@ -576,9 +579,7 @@ def get_result_for_exposure(
     Returns:
         dict of result values, or None if not found
     """
-    filtered = results_df.filter(
-        pl.col("exposure_reference") == exposure_reference
-    )
+    filtered = results_df.filter(pl.col("exposure_reference") == exposure_reference)
 
     if filtered.height == 0:
         return None

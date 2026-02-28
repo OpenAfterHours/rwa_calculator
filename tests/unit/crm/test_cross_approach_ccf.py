@@ -18,7 +18,6 @@ Covers:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -28,9 +27,7 @@ from rwa_calc.contracts.bundles import (
     CounterpartyLookup,
 )
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.crm.processor import CRMProcessor
-
 
 # =============================================================================
 # Fixtures
@@ -78,10 +75,17 @@ def _make_bundle(
 ) -> ClassifiedExposuresBundle:
     """Build a ClassifiedExposuresBundle for testing."""
     empty_mappings = pl.LazyFrame(
-        schema={"child_counterparty_reference": pl.String, "parent_counterparty_reference": pl.String}
+        schema={
+            "child_counterparty_reference": pl.String,
+            "parent_counterparty_reference": pl.String,
+        }
     )
     empty_ultimate = pl.LazyFrame(
-        schema={"counterparty_reference": pl.String, "ultimate_parent_reference": pl.String, "hierarchy_depth": pl.Int32}
+        schema={
+            "counterparty_reference": pl.String,
+            "ultimate_parent_reference": pl.String,
+            "hierarchy_depth": pl.Int32,
+        }
     )
     if rating_inheritance is None:
         rating_inheritance = pl.LazyFrame(
@@ -330,12 +334,14 @@ class TestFIRBWithIRBGuarantor:
                 _base_counterparty("GUARANTOR01", "corporate"),  # IRB entity type
                 _base_counterparty("BORROWER01", "corporate"),
             ],
-            rating_rows=[{
-                "counterparty_reference": "GUARANTOR01",
-                "cqs": None,
-                "pd": 0.005,
-                "rating_type": "internal",
-            }],
+            rating_rows=[
+                {
+                    "counterparty_reference": "GUARANTOR01",
+                    "cqs": None,
+                    "pd": 0.005,
+                    "rating_type": "internal",
+                }
+            ],
         )
 
         row = result.filter(pl.col("exposure_reference") == "EXP001")
@@ -362,12 +368,14 @@ class TestFIRBWithIRBGuarantor:
                 _base_counterparty("GUARANTOR01", "corporate"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
-            rating_rows=[{
-                "counterparty_reference": "GUARANTOR01",
-                "cqs": 2,
-                "pd": None,
-                "rating_type": "external",
-            }],
+            rating_rows=[
+                {
+                    "counterparty_reference": "GUARANTOR01",
+                    "cqs": 2,
+                    "pd": None,
+                    "rating_type": "external",
+                }
+            ],
         )
 
         row = result.filter(pl.col("exposure_reference") == "EXP001")
@@ -467,7 +475,9 @@ class TestAIRBWithSAGuarantor:
             [exp],
             [_base_guarantee(pct=0.6, guarantor="GUARANTOR01")],
             [
-                _base_counterparty("GUARANTOR01", "individual"),  # SA (retail_other under firb_config)
+                _base_counterparty(
+                    "GUARANTOR01", "individual"
+                ),  # SA (retail_other under firb_config)
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )

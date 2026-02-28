@@ -17,14 +17,13 @@ Usage:
 from datetime import date
 from typing import Literal
 
-import pytest
 import polars as pl
+import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-
 
 # Default reporting date for benchmarks
 BENCHMARK_REPORTING_DATE = date(2026, 1, 1)
@@ -426,7 +425,11 @@ class TestComponentBenchmarks100K:
 def create_irb_with_slotting_permissions() -> IRBPermissions:
     """Create IRB permissions that include slotting for specialised lending."""
     permissions = {
-        ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
+        ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {
+            ApproachType.SA,
+            ApproachType.FIRB,
+            ApproachType.AIRB,
+        },
         ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
         ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
         ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
@@ -514,8 +517,16 @@ class TestApproachBenchmarks100K:
         result = benchmark(run_pipeline)
 
         assert result is not None
-        sa_count = result.sa_results.collect(engine=BENCHMARK_ENGINE).height if result.sa_results is not None else 0
-        irb_count = result.irb_results.collect(engine=BENCHMARK_ENGINE).height if result.irb_results is not None else 0
+        sa_count = (
+            result.sa_results.collect(engine=BENCHMARK_ENGINE).height
+            if result.sa_results is not None
+            else 0
+        )
+        irb_count = (
+            result.irb_results.collect(engine=BENCHMARK_ENGINE).height
+            if result.irb_results is not None
+            else 0
+        )
         print(f"\nSA exposures: {sa_count:,}, IRB exposures: {irb_count:,}")
 
     def test_irb_with_slotting_100k(
@@ -549,9 +560,21 @@ class TestApproachBenchmarks100K:
         result = benchmark(run_pipeline)
 
         assert result is not None
-        sa_count = result.sa_results.collect(engine=BENCHMARK_ENGINE).height if result.sa_results is not None else 0
-        irb_count = result.irb_results.collect(engine=BENCHMARK_ENGINE).height if result.irb_results is not None else 0
-        slotting_count = result.slotting_results.collect(engine=BENCHMARK_ENGINE).height if result.slotting_results is not None else 0
+        sa_count = (
+            result.sa_results.collect(engine=BENCHMARK_ENGINE).height
+            if result.sa_results is not None
+            else 0
+        )
+        irb_count = (
+            result.irb_results.collect(engine=BENCHMARK_ENGINE).height
+            if result.irb_results is not None
+            else 0
+        )
+        slotting_count = (
+            result.slotting_results.collect(engine=BENCHMARK_ENGINE).height
+            if result.slotting_results is not None
+            else 0
+        )
         print(f"\nSA: {sa_count:,}, IRB: {irb_count:,}, Slotting: {slotting_count:,}")
 
     def test_partial_irb_corporate_only_100k(
@@ -583,8 +606,16 @@ class TestApproachBenchmarks100K:
         result = benchmark(run_pipeline)
 
         assert result is not None
-        sa_count = result.sa_results.collect(engine=BENCHMARK_ENGINE).height if result.sa_results is not None else 0
-        irb_count = result.irb_results.collect(engine=BENCHMARK_ENGINE).height if result.irb_results is not None else 0
+        sa_count = (
+            result.sa_results.collect(engine=BENCHMARK_ENGINE).height
+            if result.sa_results is not None
+            else 0
+        )
+        irb_count = (
+            result.irb_results.collect(engine=BENCHMARK_ENGINE).height
+            if result.irb_results is not None
+            else 0
+        )
         print(f"\nSA exposures: {sa_count:,}, IRB (corporate): {irb_count:,}")
 
     def test_basel_3_1_with_output_floor_100k(
@@ -730,7 +761,9 @@ class TestPipelineMemoryBenchmark:
                 _ = result.sa_results.collect(engine=BENCHMARK_ENGINE)
 
         print(f"\nPeak memory usage: {tracker.peak_mb:.2f} MB")
-        assert tracker.peak_mb < 4000, f"Memory usage {tracker.peak_mb:.2f} MB exceeds 4000 MB limit"
+        assert tracker.peak_mb < 4000, (
+            f"Memory usage {tracker.peak_mb:.2f} MB exceeds 4000 MB limit"
+        )
 
 
 # =============================================================================

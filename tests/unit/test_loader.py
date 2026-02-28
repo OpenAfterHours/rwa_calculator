@@ -55,104 +55,132 @@ def temp_parquet_dir(tmp_path: Path) -> Path:
     (tmp_path / "mapping").mkdir()
 
     # Create minimal counterparty files
-    sovereign_df = pl.DataFrame({
-        "counterparty_id": ["SOV001"],
-        "counterparty_type": ["SOVEREIGN"],
-        "name": ["Test Sovereign"],
-    })
+    sovereign_df = pl.DataFrame(
+        {
+            "counterparty_id": ["SOV001"],
+            "counterparty_type": ["SOVEREIGN"],
+            "name": ["Test Sovereign"],
+        }
+    )
     sovereign_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
 
-    institution_df = pl.DataFrame({
-        "counterparty_id": ["INST001"],
-        "counterparty_type": ["INSTITUTION"],
-        "name": ["Test Institution"],
-    })
+    institution_df = pl.DataFrame(
+        {
+            "counterparty_id": ["INST001"],
+            "counterparty_type": ["INSTITUTION"],
+            "name": ["Test Institution"],
+        }
+    )
     institution_df.write_parquet(tmp_path / "counterparty" / "institution.parquet")
 
-    corporate_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "counterparty_type": ["CORPORATE"],
-        "name": ["Test Corporate"],
-    })
+    corporate_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "counterparty_type": ["CORPORATE"],
+            "name": ["Test Corporate"],
+        }
+    )
     corporate_df.write_parquet(tmp_path / "counterparty" / "corporate.parquet")
 
-    retail_df = pl.DataFrame({
-        "counterparty_id": ["RET001"],
-        "counterparty_type": ["RETAIL"],
-        "name": ["Test Retail"],
-    })
+    retail_df = pl.DataFrame(
+        {
+            "counterparty_id": ["RET001"],
+            "counterparty_type": ["RETAIL"],
+            "name": ["Test Retail"],
+        }
+    )
     retail_df.write_parquet(tmp_path / "counterparty" / "retail.parquet")
 
     # Create exposure files
-    facilities_df = pl.DataFrame({
-        "facility_id": ["FAC001"],
-        "counterparty_id": ["CORP001"],
-        "facility_type": ["TERM_LOAN"],
-    })
+    facilities_df = pl.DataFrame(
+        {
+            "facility_id": ["FAC001"],
+            "counterparty_id": ["CORP001"],
+            "facility_type": ["TERM_LOAN"],
+        }
+    )
     facilities_df.write_parquet(tmp_path / "exposures" / "facilities.parquet")
 
-    loans_df = pl.DataFrame({
-        "loan_id": ["LOAN001"],
-        "facility_id": ["FAC001"],
-        "outstanding_balance": [1000000.0],
-    })
+    loans_df = pl.DataFrame(
+        {
+            "loan_id": ["LOAN001"],
+            "facility_id": ["FAC001"],
+            "outstanding_balance": [1000000.0],
+        }
+    )
     loans_df.write_parquet(tmp_path / "exposures" / "loans.parquet")
 
-    contingents_df = pl.DataFrame({
-        "contingent_id": ["CONT001"],
-        "facility_id": ["FAC001"],
-        "commitment_amount": [500000.0],
-    })
+    contingents_df = pl.DataFrame(
+        {
+            "contingent_id": ["CONT001"],
+            "facility_id": ["FAC001"],
+            "commitment_amount": [500000.0],
+        }
+    )
     contingents_df.write_parquet(tmp_path / "exposures" / "contingents.parquet")
 
-    facility_mapping_df = pl.DataFrame({
-        "loan_id": ["LOAN001"],
-        "facility_id": ["FAC001"],
-    })
+    facility_mapping_df = pl.DataFrame(
+        {
+            "loan_id": ["LOAN001"],
+            "facility_id": ["FAC001"],
+        }
+    )
     facility_mapping_df.write_parquet(tmp_path / "exposures" / "facility_mapping.parquet")
 
     # Create collateral file
-    collateral_df = pl.DataFrame({
-        "collateral_id": ["COL001"],
-        "collateral_type": ["PROPERTY"],
-        "value": [750000.0],
-    })
+    collateral_df = pl.DataFrame(
+        {
+            "collateral_id": ["COL001"],
+            "collateral_type": ["PROPERTY"],
+            "value": [750000.0],
+        }
+    )
     collateral_df.write_parquet(tmp_path / "collateral" / "collateral.parquet")
 
     # Create guarantee file
-    guarantee_df = pl.DataFrame({
-        "guarantee_id": ["GUAR001"],
-        "guarantor_id": ["INST001"],
-        "amount": [200000.0],
-    })
+    guarantee_df = pl.DataFrame(
+        {
+            "guarantee_id": ["GUAR001"],
+            "guarantor_id": ["INST001"],
+            "amount": [200000.0],
+        }
+    )
     guarantee_df.write_parquet(tmp_path / "guarantee" / "guarantee.parquet")
 
     # Create provision file
-    provision_df = pl.DataFrame({
-        "facility_id": ["FAC001"],
-        "provision_amount": [10000.0],
-    })
+    provision_df = pl.DataFrame(
+        {
+            "facility_id": ["FAC001"],
+            "provision_amount": [10000.0],
+        }
+    )
     provision_df.write_parquet(tmp_path / "provision" / "provision.parquet")
 
     # Create ratings file
-    ratings_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "rating_agency": ["MOODYS"],
-        "rating": ["A2"],
-    })
+    ratings_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "rating_agency": ["MOODYS"],
+            "rating": ["A2"],
+        }
+    )
     ratings_df.write_parquet(tmp_path / "ratings" / "ratings.parquet")
 
     # Create mapping files
-    org_mapping_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "parent_id": [None],
-    })
+    org_mapping_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "parent_id": [None],
+        }
+    )
     org_mapping_df.write_parquet(tmp_path / "mapping" / "org_mapping.parquet")
 
-    lending_mapping_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "lending_group_id": ["LG001"],
-    })
+    lending_mapping_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "lending_group_id": ["LG001"],
+        }
+    )
     lending_mapping_df.write_parquet(tmp_path / "mapping" / "lending_mapping.parquet")
 
     return tmp_path
@@ -171,104 +199,132 @@ def temp_csv_dir(tmp_path: Path) -> Path:
     (tmp_path / "mapping").mkdir()
 
     # Create minimal counterparty files
-    sovereign_df = pl.DataFrame({
-        "counterparty_id": ["SOV001"],
-        "counterparty_type": ["SOVEREIGN"],
-        "name": ["Test Sovereign"],
-    })
+    sovereign_df = pl.DataFrame(
+        {
+            "counterparty_id": ["SOV001"],
+            "counterparty_type": ["SOVEREIGN"],
+            "name": ["Test Sovereign"],
+        }
+    )
     sovereign_df.write_csv(tmp_path / "counterparty" / "sovereign.csv")
 
-    institution_df = pl.DataFrame({
-        "counterparty_id": ["INST001"],
-        "counterparty_type": ["INSTITUTION"],
-        "name": ["Test Institution"],
-    })
+    institution_df = pl.DataFrame(
+        {
+            "counterparty_id": ["INST001"],
+            "counterparty_type": ["INSTITUTION"],
+            "name": ["Test Institution"],
+        }
+    )
     institution_df.write_csv(tmp_path / "counterparty" / "institution.csv")
 
-    corporate_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "counterparty_type": ["CORPORATE"],
-        "name": ["Test Corporate"],
-    })
+    corporate_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "counterparty_type": ["CORPORATE"],
+            "name": ["Test Corporate"],
+        }
+    )
     corporate_df.write_csv(tmp_path / "counterparty" / "corporate.csv")
 
-    retail_df = pl.DataFrame({
-        "counterparty_id": ["RET001"],
-        "counterparty_type": ["RETAIL"],
-        "name": ["Test Retail"],
-    })
+    retail_df = pl.DataFrame(
+        {
+            "counterparty_id": ["RET001"],
+            "counterparty_type": ["RETAIL"],
+            "name": ["Test Retail"],
+        }
+    )
     retail_df.write_csv(tmp_path / "counterparty" / "retail.csv")
 
     # Create exposure files
-    facilities_df = pl.DataFrame({
-        "facility_id": ["FAC001"],
-        "counterparty_id": ["CORP001"],
-        "facility_type": ["TERM_LOAN"],
-    })
+    facilities_df = pl.DataFrame(
+        {
+            "facility_id": ["FAC001"],
+            "counterparty_id": ["CORP001"],
+            "facility_type": ["TERM_LOAN"],
+        }
+    )
     facilities_df.write_csv(tmp_path / "exposures" / "facilities.csv")
 
-    loans_df = pl.DataFrame({
-        "loan_id": ["LOAN001"],
-        "facility_id": ["FAC001"],
-        "outstanding_balance": [1000000.0],
-    })
+    loans_df = pl.DataFrame(
+        {
+            "loan_id": ["LOAN001"],
+            "facility_id": ["FAC001"],
+            "outstanding_balance": [1000000.0],
+        }
+    )
     loans_df.write_csv(tmp_path / "exposures" / "loans.csv")
 
-    contingents_df = pl.DataFrame({
-        "contingent_id": ["CONT001"],
-        "facility_id": ["FAC001"],
-        "commitment_amount": [500000.0],
-    })
+    contingents_df = pl.DataFrame(
+        {
+            "contingent_id": ["CONT001"],
+            "facility_id": ["FAC001"],
+            "commitment_amount": [500000.0],
+        }
+    )
     contingents_df.write_csv(tmp_path / "exposures" / "contingents.csv")
 
-    facility_mapping_df = pl.DataFrame({
-        "loan_id": ["LOAN001"],
-        "facility_id": ["FAC001"],
-    })
+    facility_mapping_df = pl.DataFrame(
+        {
+            "loan_id": ["LOAN001"],
+            "facility_id": ["FAC001"],
+        }
+    )
     facility_mapping_df.write_csv(tmp_path / "exposures" / "facility_mapping.csv")
 
     # Create collateral file
-    collateral_df = pl.DataFrame({
-        "collateral_id": ["COL001"],
-        "collateral_type": ["PROPERTY"],
-        "value": [750000.0],
-    })
+    collateral_df = pl.DataFrame(
+        {
+            "collateral_id": ["COL001"],
+            "collateral_type": ["PROPERTY"],
+            "value": [750000.0],
+        }
+    )
     collateral_df.write_csv(tmp_path / "collateral" / "collateral.csv")
 
     # Create guarantee file
-    guarantee_df = pl.DataFrame({
-        "guarantee_id": ["GUAR001"],
-        "guarantor_id": ["INST001"],
-        "amount": [200000.0],
-    })
+    guarantee_df = pl.DataFrame(
+        {
+            "guarantee_id": ["GUAR001"],
+            "guarantor_id": ["INST001"],
+            "amount": [200000.0],
+        }
+    )
     guarantee_df.write_csv(tmp_path / "guarantee" / "guarantee.csv")
 
     # Create provision file
-    provision_df = pl.DataFrame({
-        "facility_id": ["FAC001"],
-        "provision_amount": [10000.0],
-    })
+    provision_df = pl.DataFrame(
+        {
+            "facility_id": ["FAC001"],
+            "provision_amount": [10000.0],
+        }
+    )
     provision_df.write_csv(tmp_path / "provision" / "provision.csv")
 
     # Create ratings file
-    ratings_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "rating_agency": ["MOODYS"],
-        "rating": ["A2"],
-    })
+    ratings_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "rating_agency": ["MOODYS"],
+            "rating": ["A2"],
+        }
+    )
     ratings_df.write_csv(tmp_path / "ratings" / "ratings.csv")
 
     # Create mapping files
-    org_mapping_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "parent_id": [None],
-    })
+    org_mapping_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "parent_id": [None],
+        }
+    )
     org_mapping_df.write_csv(tmp_path / "mapping" / "org_mapping.csv")
 
-    lending_mapping_df = pl.DataFrame({
-        "counterparty_id": ["CORP001"],
-        "lending_group_id": ["LG001"],
-    })
+    lending_mapping_df = pl.DataFrame(
+        {
+            "counterparty_id": ["CORP001"],
+            "lending_group_id": ["LG001"],
+        }
+    )
     lending_mapping_df.write_csv(tmp_path / "mapping" / "lending_mapping.csv")
 
     return tmp_path
@@ -378,9 +434,7 @@ class TestParquetLoaderInit:
 
     def test_init_with_custom_config(self, temp_parquet_dir: Path) -> None:
         """Loader should accept custom configuration."""
-        custom_config = DataSourceConfig(
-            counterparty_files=["counterparty/sovereign.parquet"]
-        )
+        custom_config = DataSourceConfig(counterparty_files=["counterparty/sovereign.parquet"])
         loader = ParquetLoader(temp_parquet_dir, config=custom_config)
         assert loader.config == custom_config
 
@@ -454,10 +508,12 @@ class TestParquetLoaderLoad:
     def test_load_optional_specialised_lending(self, temp_parquet_dir: Path) -> None:
         """Specialised lending should load when file exists."""
         # Create specialised lending file
-        sl_df = pl.DataFrame({
-            "counterparty_id": ["SL001"],
-            "specialised_lending_type": ["PROJECT_FINANCE"],
-        })
+        sl_df = pl.DataFrame(
+            {
+                "counterparty_id": ["SL001"],
+                "specialised_lending_type": ["PROJECT_FINANCE"],
+            }
+        )
         sl_df.write_parquet(temp_parquet_dir / "counterparty" / "specialised_lending.parquet")
 
         loader = ParquetLoader(temp_parquet_dir)
@@ -615,16 +671,18 @@ class TestHeaderNormalization:
         (tmp_path / "mapping").mkdir()
 
         # Create file with uppercase headers
-        df = pl.DataFrame({
-            "Counterparty_ID": ["SOV001"],
-            "COUNTERPARTY_TYPE": ["SOVEREIGN"],
-            "Name": ["Test Sovereign"],
-        })
+        df = pl.DataFrame(
+            {
+                "Counterparty_ID": ["SOV001"],
+                "COUNTERPARTY_TYPE": ["SOVEREIGN"],
+                "Name": ["Test Sovereign"],
+            }
+        )
         df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
 
-        loader = ParquetLoader(tmp_path, config=DataSourceConfig(
-            counterparty_files=["counterparty/sovereign.parquet"]
-        ))
+        loader = ParquetLoader(
+            tmp_path, config=DataSourceConfig(counterparty_files=["counterparty/sovereign.parquet"])
+        )
         counterparties = loader._load_and_combine_counterparties()
         result = counterparties.collect()
 
@@ -641,11 +699,13 @@ class TestHeaderNormalization:
         (tmp_path / "exposures").mkdir()
 
         # Create file with spaces in headers
-        df = pl.DataFrame({
-            "Facility ID": ["FAC001"],
-            "Counterparty ID": ["CORP001"],
-            "Facility Type": ["TERM_LOAN"],
-        })
+        df = pl.DataFrame(
+            {
+                "Facility ID": ["FAC001"],
+                "Counterparty ID": ["CORP001"],
+                "Facility Type": ["TERM_LOAN"],
+            }
+        )
         df.write_parquet(tmp_path / "exposures" / "facilities.parquet")
 
         loader = ParquetLoader(tmp_path)
@@ -662,16 +722,18 @@ class TestHeaderNormalization:
         (tmp_path / "counterparty").mkdir()
 
         # Create file with uppercase headers
-        df = pl.DataFrame({
-            "Counterparty_ID": ["SOV001"],
-            "COUNTERPARTY_TYPE": ["SOVEREIGN"],
-            "Name": ["Test Sovereign"],
-        })
+        df = pl.DataFrame(
+            {
+                "Counterparty_ID": ["SOV001"],
+                "COUNTERPARTY_TYPE": ["SOVEREIGN"],
+                "Name": ["Test Sovereign"],
+            }
+        )
         df.write_csv(tmp_path / "counterparty" / "sovereign.csv")
 
-        loader = CSVLoader(tmp_path, config=DataSourceConfig(
-            counterparty_files=["counterparty/sovereign.csv"]
-        ))
+        loader = CSVLoader(
+            tmp_path, config=DataSourceConfig(counterparty_files=["counterparty/sovereign.csv"])
+        )
         counterparties = loader._load_and_combine_counterparties()
         result = counterparties.collect()
 
@@ -684,11 +746,13 @@ class TestHeaderNormalization:
         (tmp_path / "exposures").mkdir()
 
         # Create file with spaces in headers
-        df = pl.DataFrame({
-            "Facility ID": ["FAC001"],
-            "Counterparty ID": ["CORP001"],
-            "Facility Type": ["TERM_LOAN"],
-        })
+        df = pl.DataFrame(
+            {
+                "Facility ID": ["FAC001"],
+                "Counterparty ID": ["CORP001"],
+                "Facility Type": ["TERM_LOAN"],
+            }
+        )
         df.write_csv(tmp_path / "exposures" / "facilities.csv")
 
         loader = CSVLoader(tmp_path)
@@ -700,13 +764,14 @@ class TestHeaderNormalization:
 
     def test_normalize_columns_function(self) -> None:
         """Test the normalize_columns helper function directly."""
-        from rwa_calc.engine.loader import normalize_columns
 
-        lf = pl.LazyFrame({
-            "Column One": [1],
-            "COLUMN_TWO": [2],
-            "Column Three With Spaces": [3],
-        })
+        lf = pl.LazyFrame(
+            {
+                "Column One": [1],
+                "COLUMN_TWO": [2],
+                "Column Three With Spaces": [3],
+            }
+        )
         result = normalize_columns(lf).collect()
 
         assert "column_one" in result.columns
@@ -724,10 +789,12 @@ class TestEnforceSchema:
 
     def test_enforce_schema_casts_string_to_float64(self) -> None:
         """String columns should be cast to Float64 when specified."""
-        lf = pl.LazyFrame({
-            "amount": ["100.50", "200.75", "300.00"],
-            "name": ["a", "b", "c"],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount": ["100.50", "200.75", "300.00"],
+                "name": ["a", "b", "c"],
+            }
+        )
         schema = {"amount": pl.Float64}
 
         result = enforce_schema(lf, schema).collect()
@@ -739,10 +806,12 @@ class TestEnforceSchema:
 
     def test_enforce_schema_casts_int_to_string(self) -> None:
         """Int columns should be cast to String when specified."""
-        lf = pl.LazyFrame({
-            "book_code": [123, 456, 789],
-            "amount": [100.0, 200.0, 300.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "book_code": [123, 456, 789],
+                "amount": [100.0, 200.0, 300.0],
+            }
+        )
         schema = {"book_code": pl.String}
 
         result = enforce_schema(lf, schema).collect()
@@ -752,10 +821,12 @@ class TestEnforceSchema:
 
     def test_enforce_schema_casts_int_to_boolean(self) -> None:
         """Int columns (0/1) should be cast to Boolean when specified."""
-        lf = pl.LazyFrame({
-            "is_active": [1, 0, 1],
-            "count": [10, 20, 30],
-        })
+        lf = pl.LazyFrame(
+            {
+                "is_active": [1, 0, 1],
+                "count": [10, 20, 30],
+            }
+        )
         schema = {"is_active": pl.Boolean}
 
         result = enforce_schema(lf, schema).collect()
@@ -765,9 +836,11 @@ class TestEnforceSchema:
 
     def test_enforce_schema_casts_int_to_float64(self) -> None:
         """Int columns should be cast to Float64 when specified."""
-        lf = pl.LazyFrame({
-            "limit": [1000, 2000, 3000],  # Int64
-        })
+        lf = pl.LazyFrame(
+            {
+                "limit": [1000, 2000, 3000],  # Int64
+            }
+        )
         schema = {"limit": pl.Float64}
 
         result = enforce_schema(lf, schema).collect()
@@ -777,9 +850,11 @@ class TestEnforceSchema:
 
     def test_enforce_schema_skips_missing_columns(self) -> None:
         """Schema columns not in data should be silently skipped."""
-        lf = pl.LazyFrame({
-            "amount": [100.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount": [100.0],
+            }
+        )
         schema = {
             "amount": pl.Float64,
             "missing_column": pl.String,  # Not in data
@@ -793,9 +868,11 @@ class TestEnforceSchema:
 
     def test_enforce_schema_skips_already_correct_types(self) -> None:
         """Columns already matching the schema type should not be modified."""
-        lf = pl.LazyFrame({
-            "amount": [100.0, 200.0],  # Already Float64
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount": [100.0, 200.0],  # Already Float64
+            }
+        )
         schema = {"amount": pl.Float64}
 
         result = enforce_schema(lf, schema).collect()
@@ -805,9 +882,11 @@ class TestEnforceSchema:
 
     def test_enforce_schema_invalid_value_becomes_null_non_strict(self) -> None:
         """Invalid cast values become null in non-strict mode."""
-        lf = pl.LazyFrame({
-            "amount": ["100.0", "not_a_number", "300.0"],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount": ["100.0", "not_a_number", "300.0"],
+            }
+        )
         schema = {"amount": pl.Float64}
 
         result = enforce_schema(lf, schema, strict=False).collect()
@@ -826,24 +905,27 @@ class TestSchemaEnforcementInLoaders:
         (tmp_path / "exposures").mkdir()
 
         # Create parquet with wrong types (interest as String)
-        df = pl.DataFrame({
-            "loan_reference": ["L001"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": [123],  # Int64, should be String
-            "counterparty_reference": ["CORP001"],
-            "value_date": [None],
-            "maturity_date": [None],
-            "currency": ["GBP"],
-            "drawn_amount": [1000.0],
-            "interest": ["50.5"],  # String, should be Float64
-            "lgd": [0.45],
-            "beel": [0.0],
-            "seniority": ["senior"],
-        })
+        df = pl.DataFrame(
+            {
+                "loan_reference": ["L001"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": [123],  # Int64, should be String
+                "counterparty_reference": ["CORP001"],
+                "value_date": [None],
+                "maturity_date": [None],
+                "currency": ["GBP"],
+                "drawn_amount": [1000.0],
+                "interest": ["50.5"],  # String, should be Float64
+                "lgd": [0.45],
+                "beel": [0.0],
+                "seniority": ["senior"],
+            }
+        )
         df.write_parquet(tmp_path / "exposures" / "loans.parquet")
 
         loader = ParquetLoader(tmp_path)
         from rwa_calc.data.schemas import LOAN_SCHEMA
+
         result = loader._load_parquet("exposures/loans.parquet", LOAN_SCHEMA).collect()
 
         # Types should be corrected
@@ -856,14 +938,17 @@ class TestSchemaEnforcementInLoaders:
         (tmp_path / "exposures").mkdir()
 
         # Create parquet with wrong types
-        df = pl.DataFrame({
-            "loan_reference": ["L001"],
-            "interest": ["50.5"],  # String
-        })
+        df = pl.DataFrame(
+            {
+                "loan_reference": ["L001"],
+                "interest": ["50.5"],  # String
+            }
+        )
         df.write_parquet(tmp_path / "exposures" / "loans.parquet")
 
         loader = ParquetLoader(tmp_path, enforce_schemas=False)
         from rwa_calc.data.schemas import LOAN_SCHEMA
+
         result = loader._load_parquet("exposures/loans.parquet", LOAN_SCHEMA).collect()
 
         # Types should remain original
@@ -877,10 +962,9 @@ class TestSchemaEnforcementInLoaders:
         csv_content = "loan_reference,book_code,interest\nL001,123,50.5\n"
         (tmp_path / "exposures" / "loans.csv").write_text(csv_content)
 
-        loader = CSVLoader(tmp_path, config=DataSourceConfig(
-            loans_file="exposures/loans.csv"
-        ))
+        loader = CSVLoader(tmp_path, config=DataSourceConfig(loans_file="exposures/loans.csv"))
         from rwa_calc.data.schemas import LOAN_SCHEMA
+
         result = loader._load_csv("exposures/loans.csv", LOAN_SCHEMA).collect()
 
         # book_code should be cast to String
@@ -910,10 +994,12 @@ class TestEdgeCases:
         (tmp_path / "counterparty").mkdir()
 
         # Only create sovereign file
-        sovereign_df = pl.DataFrame({
-            "counterparty_id": ["SOV001"],
-            "counterparty_type": ["SOVEREIGN"],
-        })
+        sovereign_df = pl.DataFrame(
+            {
+                "counterparty_id": ["SOV001"],
+                "counterparty_type": ["SOVEREIGN"],
+            }
+        )
         sovereign_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
 
         loader = ParquetLoader(tmp_path)
@@ -959,7 +1045,7 @@ class TestEdgeCases:
         lf = loader._load_and_combine_counterparties()
 
         # Error occurs at collect time
-        with pytest.raises(Exception):  # ComputeError from Polars
+        with pytest.raises(pl.exceptions.ComputeError):
             lf.collect()
 
     def test_config_with_different_schema_counterparties(self, tmp_path: Path) -> None:
@@ -967,18 +1053,22 @@ class TestEdgeCases:
         (tmp_path / "counterparty").mkdir()
 
         # Create files with different schemas
-        sovereign_df = pl.DataFrame({
-            "counterparty_id": ["SOV001"],
-            "counterparty_type": ["SOVEREIGN"],
-            "country_code": ["GB"],  # Extra column
-        })
+        sovereign_df = pl.DataFrame(
+            {
+                "counterparty_id": ["SOV001"],
+                "counterparty_type": ["SOVEREIGN"],
+                "country_code": ["GB"],  # Extra column
+            }
+        )
         sovereign_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
 
-        corporate_df = pl.DataFrame({
-            "counterparty_id": ["CORP001"],
-            "counterparty_type": ["CORPORATE"],
-            "industry_code": ["MANU"],  # Different extra column
-        })
+        corporate_df = pl.DataFrame(
+            {
+                "counterparty_id": ["CORP001"],
+                "counterparty_type": ["CORPORATE"],
+                "industry_code": ["MANU"],  # Different extra column
+            }
+        )
         corporate_df.write_parquet(tmp_path / "counterparty" / "corporate.parquet")
 
         loader = ParquetLoader(tmp_path)
@@ -999,11 +1089,13 @@ class TestEdgeCases:
         (tmp_path / "collateral").mkdir()
 
         # Create empty parquet file with schema but no rows
-        empty_df = pl.DataFrame({
-            "collateral_reference": pl.Series([], dtype=pl.String),
-            "beneficiary_reference": pl.Series([], dtype=pl.String),
-            "market_value": pl.Series([], dtype=pl.Float64),
-        })
+        empty_df = pl.DataFrame(
+            {
+                "collateral_reference": pl.Series([], dtype=pl.String),
+                "beneficiary_reference": pl.Series([], dtype=pl.String),
+                "market_value": pl.Series([], dtype=pl.Float64),
+            }
+        )
         empty_df.write_parquet(tmp_path / "collateral" / "collateral.parquet")
 
         loader = ParquetLoader(tmp_path)
@@ -1031,11 +1123,13 @@ class TestEdgeCases:
         (tmp_path / "collateral").mkdir()
 
         # Create parquet file with data
-        df = pl.DataFrame({
-            "collateral_reference": ["COLL001"],
-            "beneficiary_reference": ["LOAN001"],
-            "market_value": [100000.0],
-        })
+        df = pl.DataFrame(
+            {
+                "collateral_reference": ["COLL001"],
+                "beneficiary_reference": ["LOAN001"],
+                "market_value": [100000.0],
+            }
+        )
         df.write_parquet(tmp_path / "collateral" / "collateral.parquet")
 
         loader = ParquetLoader(tmp_path)
@@ -1051,7 +1145,9 @@ class TestEdgeCases:
         (tmp_path / "collateral").mkdir()
 
         # Create CSV file with data
-        csv_content = "collateral_reference,beneficiary_reference,market_value\nCOLL001,LOAN001,100000.0\n"
+        csv_content = (
+            "collateral_reference,beneficiary_reference,market_value\nCOLL001,LOAN001,100000.0\n"
+        )
         (tmp_path / "collateral" / "collateral.csv").write_text(csv_content)
 
         loader = CSVLoader(tmp_path)
@@ -1066,18 +1162,22 @@ class TestEdgeCases:
         """has_rows should return False for empty LazyFrame."""
         from rwa_calc.engine.utils import has_rows
 
-        empty_lf = pl.LazyFrame({
-            "col": pl.Series([], dtype=pl.String),
-        })
+        empty_lf = pl.LazyFrame(
+            {
+                "col": pl.Series([], dtype=pl.String),
+            }
+        )
         assert has_rows(empty_lf) is False
 
     def test_has_rows_returns_true_for_non_empty_frame(self, tmp_path: Path) -> None:
         """has_rows should return True for non-empty LazyFrame."""
         from rwa_calc.engine.utils import has_rows
 
-        non_empty_lf = pl.LazyFrame({
-            "col": ["value"],
-        })
+        non_empty_lf = pl.LazyFrame(
+            {
+                "col": ["value"],
+            }
+        )
         assert has_rows(non_empty_lf) is True
 
     def test_has_rows_returns_false_for_empty_schema(self, tmp_path: Path) -> None:

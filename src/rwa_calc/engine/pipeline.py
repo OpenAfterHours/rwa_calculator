@@ -34,26 +34,27 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
-    RawDataBundle,
-    ResolvedHierarchyBundle,
     ClassifiedExposuresBundle,
     CRMAdjustedBundle,
-    SAResultBundle,
-    IRBResultBundle,
-    SlottingResultBundle,
     EquityResultBundle,
+    IRBResultBundle,
+    RawDataBundle,
+    ResolvedHierarchyBundle,
+    SAResultBundle,
+    SlottingResultBundle,
 )
 from rwa_calc.contracts.protocols import (
-    LoaderProtocol,
-    HierarchyResolverProtocol,
     ClassifierProtocol,
     CRMProcessorProtocol,
-    SACalculatorProtocol,
-    IRBCalculatorProtocol,
-    SlottingCalculatorProtocol,
     EquityCalculatorProtocol,
+    HierarchyResolverProtocol,
+    IRBCalculatorProtocol,
+    LoaderProtocol,
     OutputAggregatorProtocol,
+    SACalculatorProtocol,
+    SlottingCalculatorProtocol,
 )
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -172,9 +173,7 @@ class PipelineOrchestrator:
             ValueError: If no loader is configured
         """
         if self._loader is None:
-            raise ValueError(
-                "No loader configured. Use run_with_data() or provide a loader."
-            )
+            raise ValueError("No loader configured. Use run_with_data() or provide a loader.")
 
         # Reset errors for new run
         self._errors = []
@@ -183,11 +182,13 @@ class PipelineOrchestrator:
         try:
             raw_data = self._loader.load()
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="loader",
-                error_type="load_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="loader",
+                    error_type="load_error",
+                    message=str(e),
+                )
+            )
             return self._create_error_result()
 
         return self.run_with_data(raw_data, config)
@@ -264,14 +265,14 @@ class PipelineOrchestrator:
 
     def _ensure_components_initialized(self) -> None:
         """Ensure all required components are initialized."""
-        from rwa_calc.engine.hierarchy import HierarchyResolver
+        from rwa_calc.engine.aggregator import OutputAggregator
         from rwa_calc.engine.classifier import ExposureClassifier
         from rwa_calc.engine.crm.processor import CRMProcessor
-        from rwa_calc.engine.sa.calculator import SACalculator
-        from rwa_calc.engine.irb.calculator import IRBCalculator
-        from rwa_calc.engine.slotting.calculator import SlottingCalculator
         from rwa_calc.engine.equity.calculator import EquityCalculator
-        from rwa_calc.engine.aggregator import OutputAggregator
+        from rwa_calc.engine.hierarchy import HierarchyResolver
+        from rwa_calc.engine.irb.calculator import IRBCalculator
+        from rwa_calc.engine.sa.calculator import SACalculator
+        from rwa_calc.engine.slotting.calculator import SlottingCalculator
 
         if self._hierarchy_resolver is None:
             self._hierarchy_resolver = HierarchyResolver()
@@ -301,17 +302,21 @@ class PipelineOrchestrator:
 
             validation_errors = validate_bundle_values(data)
             for error in validation_errors:
-                self._errors.append(PipelineError(
-                    stage="input_validation",
-                    error_type="invalid_value",
-                    message=error.message,
-                ))
+                self._errors.append(
+                    PipelineError(
+                        stage="input_validation",
+                        error_type="invalid_value",
+                        message=error.message,
+                    )
+                )
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="input_validation",
-                error_type="validation_error",
-                message=f"Value validation failed: {e}",
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="input_validation",
+                    error_type="validation_error",
+                    message=f"Value validation failed: {e}",
+                )
+            )
 
     def _run_hierarchy_resolver(
         self,
@@ -324,19 +329,23 @@ class PipelineOrchestrator:
             # Accumulate hierarchy errors
             if result.hierarchy_errors:
                 for error in result.hierarchy_errors:
-                    self._errors.append(PipelineError(
-                        stage="hierarchy_resolver",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                        context=getattr(error, "context", {}),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="hierarchy_resolver",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="hierarchy_resolver",
-                error_type="resolution_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="hierarchy_resolver",
+                    error_type="resolution_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_classifier(
@@ -350,19 +359,23 @@ class PipelineOrchestrator:
             # Accumulate classification errors
             if result.classification_errors:
                 for error in result.classification_errors:
-                    self._errors.append(PipelineError(
-                        stage="classifier",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                        context=getattr(error, "context", {}),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="classifier",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="classifier",
-                error_type="classification_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="classifier",
+                    error_type="classification_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_crm_processor(
@@ -376,19 +389,23 @@ class PipelineOrchestrator:
             # Accumulate CRM errors
             if result.crm_errors:
                 for error in result.crm_errors:
-                    self._errors.append(PipelineError(
-                        stage="crm_processor",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                        context=getattr(error, "context", {}),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="crm_processor",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="crm_processor",
-                error_type="crm_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="crm_processor",
+                    error_type="crm_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_sa_calculator(
@@ -402,18 +419,22 @@ class PipelineOrchestrator:
             # Accumulate SA errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="sa_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="sa_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="sa_calculator",
-                error_type="sa_calculation_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="sa_calculator",
+                    error_type="sa_calculation_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_irb_calculator(
@@ -427,18 +448,22 @@ class PipelineOrchestrator:
             # Accumulate IRB errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="irb_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="irb_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="irb_calculator",
-                error_type="irb_calculation_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="irb_calculator",
+                    error_type="irb_calculation_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_slotting_calculator(
@@ -452,18 +477,22 @@ class PipelineOrchestrator:
             # Accumulate Slotting errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="slotting_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="slotting_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="slotting_calculator",
-                error_type="slotting_calculation_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="slotting_calculator",
+                    error_type="slotting_calculation_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_equity_calculator(
@@ -477,18 +506,22 @@ class PipelineOrchestrator:
             # Accumulate Equity errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="equity_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="equity_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="equity_calculator",
-                error_type="equity_calculation_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="equity_calculator",
+                    error_type="equity_calculation_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_aggregator(
@@ -514,18 +547,22 @@ class PipelineOrchestrator:
                     if isinstance(error, PipelineError):
                         self._errors.append(error)
                     else:
-                        self._errors.append(PipelineError(
-                            stage="aggregator",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                        ))
+                        self._errors.append(
+                            PipelineError(
+                                stage="aggregator",
+                                error_type=getattr(error, "error_type", "unknown"),
+                                message=getattr(error, "message", str(error)),
+                            )
+                        )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="aggregator",
-                error_type="aggregation_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="aggregator",
+                    error_type="aggregation_error",
+                    message=str(e),
+                )
+            )
             return self._create_error_result()
 
     # =========================================================================
@@ -542,19 +579,23 @@ class PipelineOrchestrator:
             result = self._crm_processor.get_crm_unified_bundle(data, config)
             if result.crm_errors:
                 for error in result.crm_errors:
-                    self._errors.append(PipelineError(
-                        stage="crm_processor",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                        context=getattr(error, "context", {}),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="crm_processor",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="crm_processor",
-                error_type="crm_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="crm_processor",
+                    error_type="crm_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_single_pass(
@@ -585,9 +626,8 @@ class PipelineOrchestrator:
                 exposures = self._sa_calculator.calculate_unified(exposures, config)
 
             # Split once by approach
-            is_irb = (
-                (pl.col("approach") == ApproachType.FIRB.value)
-                | (pl.col("approach") == ApproachType.AIRB.value)
+            is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
+                pl.col("approach") == ApproachType.AIRB.value
             )
             is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
 
@@ -603,9 +643,7 @@ class PipelineOrchestrator:
                 sa_result = self._sa_calculator.calculate_branch(sa_branch, config)
 
             irb_result = self._irb_calculator.calculate_branch(irb_branch, config)
-            slotting_result = self._slotting_calculator.calculate_branch(
-                slotting_branch, config
-            )
+            slotting_result = self._slotting_calculator.calculate_branch(slotting_branch, config)
 
             # Standardize output columns on each branch
             sa_result = self._standardize_branch_output(sa_result)
@@ -623,15 +661,15 @@ class PipelineOrchestrator:
             equity_bundle = self._run_equity_calculator(crm_adjusted, config)
 
             # Aggregate from already-collected DataFrames
-            return self._aggregate_single_pass(
-                sa_df, irb_df, slotting_df, equity_bundle, config
-            )
+            return self._aggregate_single_pass(sa_df, irb_df, slotting_df, equity_bundle, config)
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="single_pass",
-                error_type="single_pass_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="single_pass",
+                    error_type="single_pass_error",
+                    message=str(e),
+                )
+            )
             return self._create_error_result()
 
     @staticmethod
@@ -674,42 +712,35 @@ class PipelineOrchestrator:
             slotting_results = slotting_df.lazy()
 
             # Combine for summaries (data already materialised — cheap concat)
-            combined = pl.concat(
-                [sa_df, irb_df, slotting_df], how="diagonal_relaxed"
-            ).lazy()
+            combined = pl.concat([sa_df, irb_df, slotting_df], how="diagonal_relaxed").lazy()
 
             # Concat equity if present
             equity_results = None
             if equity_bundle and equity_bundle.results is not None:
-                equity_prepared = equity_bundle.results.with_columns([
-                    pl.lit("EQUITY").alias("approach_applied"),
-                    pl.col(
-                        "rwa" if "rwa" in equity_bundle.results.collect_schema().names()
-                        else "rwa_final"
-                    ).alias("rwa_final"),
-                ])
+                equity_prepared = equity_bundle.results.with_columns(
+                    [
+                        pl.lit("EQUITY").alias("approach_applied"),
+                        pl.col(
+                            "rwa"
+                            if "rwa" in equity_bundle.results.collect_schema().names()
+                            else "rwa_final"
+                        ).alias("rwa_final"),
+                    ]
+                )
                 schema = equity_prepared.collect_schema()
                 if "exposure_class" not in schema.names():
                     equity_prepared = equity_prepared.with_columns(
                         pl.lit("equity").alias("exposure_class")
                     )
-                combined = pl.concat(
-                    [combined, equity_prepared], how="diagonal_relaxed"
-                )
+                combined = pl.concat([combined, equity_prepared], how="diagonal_relaxed")
                 equity_results = equity_bundle.results
 
             # Generate summaries using the aggregator's methods
             pre_crm_summary = self._aggregator._generate_pre_crm_summary(combined)
             post_crm_detailed = self._aggregator._generate_post_crm_detailed(combined)
-            post_crm_summary = self._aggregator._generate_post_crm_summary(
-                post_crm_detailed
-            )
-            summary_by_class = self._aggregator._generate_summary_by_class(
-                post_crm_detailed
-            )
-            summary_by_approach = self._aggregator._generate_summary_by_approach(
-                post_crm_detailed
-            )
+            post_crm_summary = self._aggregator._generate_post_crm_summary(post_crm_detailed)
+            summary_by_class = self._aggregator._generate_summary_by_class(post_crm_detailed)
+            summary_by_approach = self._aggregator._generate_summary_by_approach(post_crm_detailed)
 
             # Apply output floor if enabled
             floor_impact = None
@@ -723,8 +754,8 @@ class PipelineOrchestrator:
             # Supporting factor impact
             supporting_factor_impact = None
             if config.supporting_factors.enabled:
-                supporting_factor_impact = (
-                    self._aggregator._generate_supporting_factor_impact(combined)
+                supporting_factor_impact = self._aggregator._generate_supporting_factor_impact(
+                    combined
                 )
 
             return AggregatedResultBundle(
@@ -743,11 +774,13 @@ class PipelineOrchestrator:
                 errors=[],
             )
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="aggregator",
-                error_type="aggregation_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="aggregator",
+                    error_type="aggregation_error",
+                    message=str(e),
+                )
+            )
             return self._create_error_result()
 
     # =========================================================================
@@ -757,20 +790,22 @@ class PipelineOrchestrator:
     def _create_error_result(self) -> AggregatedResultBundle:
         """Create error result when pipeline fails."""
         return AggregatedResultBundle(
-            results=pl.LazyFrame({
-                "exposure_reference": pl.Series([], dtype=pl.String),
-                "approach_applied": pl.Series([], dtype=pl.String),
-                "exposure_class": pl.Series([], dtype=pl.String),
-                "ead_final": pl.Series([], dtype=pl.Float64),
-                "risk_weight": pl.Series([], dtype=pl.Float64),
-                "rwa_final": pl.Series([], dtype=pl.Float64),
-            }),
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": pl.Series([], dtype=pl.String),
+                    "approach_applied": pl.Series([], dtype=pl.String),
+                    "exposure_class": pl.Series([], dtype=pl.String),
+                    "ead_final": pl.Series([], dtype=pl.Float64),
+                    "risk_weight": pl.Series([], dtype=pl.Float64),
+                    "rwa_final": pl.Series([], dtype=pl.Float64),
+                }
+            ),
             errors=[self._convert_pipeline_error(e) for e in self._errors],
         )
 
     def _convert_pipeline_error(self, error: PipelineError) -> object:
         """Convert PipelineError to standard error format."""
-        from rwa_calc.contracts.errors import CalculationError, ErrorSeverity, ErrorCategory
+        from rwa_calc.contracts.errors import CalculationError, ErrorCategory, ErrorSeverity
 
         return CalculationError(
             code=f"PIPELINE_{error.stage.upper()}",

@@ -14,10 +14,9 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.hierarchy import HierarchyResolver
-
 
 # =============================================================================
 # Fixtures
@@ -65,10 +64,12 @@ def create_raw_bundle(
         guarantees=None,
         provisions=None,
         org_mappings=None,
-        lending_mappings=pl.DataFrame({
-            "parent_counterparty_reference": pl.Series([], dtype=pl.String),
-            "child_counterparty_reference": pl.Series([], dtype=pl.String),
-        }).lazy(),
+        lending_mappings=pl.DataFrame(
+            {
+                "parent_counterparty_reference": pl.Series([], dtype=pl.String),
+                "child_counterparty_reference": pl.Series([], dtype=pl.String),
+            }
+        ).lazy(),
         ratings=None,
         fx_rates=None,
     )

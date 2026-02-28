@@ -1434,7 +1434,11 @@ def print_summary(output_path: Path) -> None:
         print(f"  {row['book_code']}: {row['len']}")
 
     print("\nTotal drawn by book:")
-    book_totals = df.group_by("book_code").agg(pl.col("drawn_amount").sum().alias("total_drawn")).sort("book_code")
+    book_totals = (
+        df.group_by("book_code")
+        .agg(pl.col("drawn_amount").sum().alias("total_drawn"))
+        .sort("book_code")
+    )
     for row in book_totals.iter_rows(named=True):
         print(f"  {row['book_code']}: £{row['total_drawn']:,.0f}")
 

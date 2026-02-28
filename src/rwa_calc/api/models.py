@@ -20,7 +20,6 @@ from typing import Literal
 
 import polars as pl
 
-
 # =============================================================================
 # Request Models
 # =============================================================================
@@ -52,9 +51,9 @@ class CalculationRequest:
     framework: Literal["CRR", "BASEL_3_1"]
     reporting_date: date
     base_currency: str = "GBP"
-    irb_approach: Literal[
-        "sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"
-    ] | None = None
+    irb_approach: (
+        Literal["sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"] | None
+    ) = None
     data_format: Literal["parquet", "csv"] = "parquet"
     eur_gbp_rate: Decimal = field(default_factory=lambda: Decimal("0.8732"))
 

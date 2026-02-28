@@ -29,7 +29,6 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm import CRMLazyFrame  # noqa: F401 - imports register namespace
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -44,71 +43,83 @@ def crr_config() -> CalculationConfig:
 @pytest.fixture
 def basic_exposures() -> pl.LazyFrame:
     """Return basic exposures with EAD."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-        "counterparty_reference": ["CP001", "CP002", "CP003"],
-        "parent_facility_reference": ["FAC001", "FAC002", "FAC003"],
-        "drawn_amount": [1_000_000.0, 500_000.0, 250_000.0],
-        "interest": [0.0, 0.0, 0.0],
-        "nominal_amount": [0.0, 0.0, 0.0],
-        "ead_pre_crm": [1_000_000.0, 500_000.0, 250_000.0],
-        "approach": [ApproachType.SA.value, ApproachType.SA.value, ApproachType.FIRB.value],
-        "lgd": [0.45, 0.45, 0.45],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+            "counterparty_reference": ["CP001", "CP002", "CP003"],
+            "parent_facility_reference": ["FAC001", "FAC002", "FAC003"],
+            "drawn_amount": [1_000_000.0, 500_000.0, 250_000.0],
+            "interest": [0.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 0.0, 0.0],
+            "ead_pre_crm": [1_000_000.0, 500_000.0, 250_000.0],
+            "approach": [ApproachType.SA.value, ApproachType.SA.value, ApproachType.FIRB.value],
+            "lgd": [0.45, 0.45, 0.45],
+        }
+    )
 
 
 @pytest.fixture
 def collateral_data() -> pl.LazyFrame:
     """Return collateral data."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL001", "COLL002"],
-        "beneficiary_reference": ["EXP001", "EXP002"],
-        "collateral_type": ["cash", "govt_bond"],
-        "market_value": [200_000.0, 150_000.0],
-        "value_after_haircut": [200_000.0, 145_000.0],
-        "value_after_maturity_adj": [200_000.0, 140_000.0],
-        "is_eligible_financial_collateral": [True, True],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL001", "COLL002"],
+            "beneficiary_reference": ["EXP001", "EXP002"],
+            "collateral_type": ["cash", "govt_bond"],
+            "market_value": [200_000.0, 150_000.0],
+            "value_after_haircut": [200_000.0, 145_000.0],
+            "value_after_maturity_adj": [200_000.0, 140_000.0],
+            "is_eligible_financial_collateral": [True, True],
+        }
+    )
 
 
 @pytest.fixture
 def guarantee_data() -> pl.LazyFrame:
     """Return guarantee data."""
-    return pl.LazyFrame({
-        "guarantee_reference": ["GUAR001", "GUAR002"],
-        "beneficiary_reference": ["EXP001", "EXP002"],
-        "guarantor": ["CP100", "CP101"],
-        "amount_covered": [300_000.0, 200_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "guarantee_reference": ["GUAR001", "GUAR002"],
+            "beneficiary_reference": ["EXP001", "EXP002"],
+            "guarantor": ["CP100", "CP101"],
+            "amount_covered": [300_000.0, 200_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def counterparty_lookup() -> pl.LazyFrame:
     """Return counterparty lookup data."""
-    return pl.LazyFrame({
-        "counterparty_reference": ["CP100", "CP101"],
-        "entity_type": ["SOVEREIGN", "INSTITUTION"],
-    })
+    return pl.LazyFrame(
+        {
+            "counterparty_reference": ["CP100", "CP101"],
+            "entity_type": ["SOVEREIGN", "INSTITUTION"],
+        }
+    )
 
 
 @pytest.fixture
 def rating_inheritance() -> pl.LazyFrame:
     """Return rating inheritance data."""
-    return pl.LazyFrame({
-        "counterparty_reference": ["CP100", "CP101"],
-        "cqs": [1, 2],
-    })
+    return pl.LazyFrame(
+        {
+            "counterparty_reference": ["CP100", "CP101"],
+            "cqs": [1, 2],
+        }
+    )
 
 
 @pytest.fixture
 def provision_data() -> pl.LazyFrame:
     """Return provision data."""
-    return pl.LazyFrame({
-        "provision_reference": ["PROV001", "PROV002"],
-        "beneficiary_reference": ["EXP001", "EXP003"],
-        "amount": [50_000.0, 25_000.0],
-        "provision_type": ["specific", "specific"],
-    })
+    return pl.LazyFrame(
+        {
+            "provision_reference": ["PROV001", "PROV002"],
+            "beneficiary_reference": ["EXP001", "EXP003"],
+            "amount": [50_000.0, 25_000.0],
+            "provision_type": ["specific", "specific"],
+        }
+    )
 
 
 # =============================================================================
@@ -180,7 +191,12 @@ class TestInitializeEADWaterfall:
         """Collateral and guarantee amounts should be initialized to zero."""
         result = basic_exposures.crm.initialize_ead_waterfall().collect()
 
-        for col in ["collateral_allocated", "collateral_adjusted_value", "guarantee_amount", "provision_allocated"]:
+        for col in [
+            "collateral_allocated",
+            "collateral_adjusted_value",
+            "guarantee_amount",
+            "provision_allocated",
+        ]:
             for value in result[col]:
                 assert value == pytest.approx(0.0)
 
@@ -200,8 +216,8 @@ class TestApplyCollateral:
         crr_config: CalculationConfig,
     ) -> None:
         """SA approach should have EAD reduced by collateral."""
-        result = (basic_exposures
-            .crm.initialize_ead_waterfall()
+        result = (
+            basic_exposures.crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_data, crr_config)
             .collect()
         )
@@ -219,15 +235,17 @@ class TestApplyCollateral:
     ) -> None:
         """IRB approach should not have EAD reduced by collateral."""
         # Add collateral for IRB exposure
-        collateral_with_irb = collateral_data.with_columns([
-            pl.when(pl.col("beneficiary_reference") == "EXP001")
-            .then(pl.lit("EXP003"))  # Change to IRB exposure
-            .otherwise(pl.col("beneficiary_reference"))
-            .alias("beneficiary_reference")
-        ])
+        collateral_with_irb = collateral_data.with_columns(
+            [
+                pl.when(pl.col("beneficiary_reference") == "EXP001")
+                .then(pl.lit("EXP003"))  # Change to IRB exposure
+                .otherwise(pl.col("beneficiary_reference"))
+                .alias("beneficiary_reference")
+            ]
+        )
 
-        result = (basic_exposures
-            .crm.initialize_ead_waterfall()
+        result = (
+            basic_exposures.crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_with_irb, crr_config)
             .collect()
         )
@@ -243,8 +261,8 @@ class TestApplyCollateral:
         crr_config: CalculationConfig,
     ) -> None:
         """Exposures without collateral should have unchanged EAD."""
-        result = (basic_exposures
-            .crm.initialize_ead_waterfall()
+        result = (
+            basic_exposures.crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_data, crr_config)
             .collect()
         )
@@ -271,9 +289,11 @@ class TestApplyGuarantees:
         crr_config: CalculationConfig,
     ) -> None:
         """apply_guarantees should add guarantee-related columns."""
-        result = (basic_exposures
-            .crm.initialize_ead_waterfall()
-            .crm.apply_guarantees(guarantee_data, counterparty_lookup, crr_config, rating_inheritance)
+        result = (
+            basic_exposures.crm.initialize_ead_waterfall()
+            .crm.apply_guarantees(
+                guarantee_data, counterparty_lookup, crr_config, rating_inheritance
+            )
             .collect()
         )
 
@@ -292,9 +312,11 @@ class TestApplyGuarantees:
         crr_config: CalculationConfig,
     ) -> None:
         """Guaranteed portion should be calculated correctly."""
-        result = (basic_exposures
-            .crm.initialize_ead_waterfall()
-            .crm.apply_guarantees(guarantee_data, counterparty_lookup, crr_config, rating_inheritance)
+        result = (
+            basic_exposures.crm.initialize_ead_waterfall()
+            .crm.apply_guarantees(
+                guarantee_data, counterparty_lookup, crr_config, rating_inheritance
+            )
             .collect()
         )
 
@@ -312,16 +334,20 @@ class TestApplyGuarantees:
     ) -> None:
         """Guaranteed portion should be capped at EAD."""
         # Create guarantee larger than EAD
-        large_guarantee = pl.LazyFrame({
-            "guarantee_reference": ["GUAR001"],
-            "beneficiary_reference": ["EXP003"],  # EAD = 250,000
-            "guarantor": ["CP100"],
-            "amount_covered": [500_000.0],  # Larger than EAD
-        })
+        large_guarantee = pl.LazyFrame(
+            {
+                "guarantee_reference": ["GUAR001"],
+                "beneficiary_reference": ["EXP003"],  # EAD = 250,000
+                "guarantor": ["CP100"],
+                "amount_covered": [500_000.0],  # Larger than EAD
+            }
+        )
 
-        result = (basic_exposures
-            .crm.initialize_ead_waterfall()
-            .crm.apply_guarantees(large_guarantee, counterparty_lookup, crr_config, rating_inheritance)
+        result = (
+            basic_exposures.crm.initialize_ead_waterfall()
+            .crm.apply_guarantees(
+                large_guarantee, counterparty_lookup, crr_config, rating_inheritance
+            )
             .collect()
         )
 
@@ -344,10 +370,7 @@ class TestApplyProvisions:
         crr_config: CalculationConfig,
     ) -> None:
         """Provision allocated should be calculated."""
-        result = (basic_exposures
-            .crm.resolve_provisions(provision_data, crr_config)
-            .collect()
-        )
+        result = basic_exposures.crm.resolve_provisions(provision_data, crr_config).collect()
 
         # EXP001 has 50,000 provision
         exp001 = result.filter(pl.col("exposure_reference") == "EXP001")
@@ -360,10 +383,7 @@ class TestApplyProvisions:
         crr_config: CalculationConfig,
     ) -> None:
         """SA approach should have provision deducted from EAD."""
-        result = (basic_exposures
-            .crm.resolve_provisions(provision_data, crr_config)
-            .collect()
-        )
+        result = basic_exposures.crm.resolve_provisions(provision_data, crr_config).collect()
 
         # EXP001 has SA approach and 50,000 provision
         exp001 = result.filter(pl.col("exposure_reference") == "EXP001")
@@ -376,10 +396,7 @@ class TestApplyProvisions:
         crr_config: CalculationConfig,
     ) -> None:
         """IRB approach should not have provision deducted from EAD."""
-        result = (basic_exposures
-            .crm.resolve_provisions(provision_data, crr_config)
-            .collect()
-        )
+        result = basic_exposures.crm.resolve_provisions(provision_data, crr_config).collect()
 
         # EXP003 has FIRB approach and 25,000 provision
         exp003 = result.filter(pl.col("exposure_reference") == "EXP003")
@@ -403,8 +420,8 @@ class TestFinalizeEAD:
     ) -> None:
         """ead_final should reflect provision deduction (provision baked into ead_pre_crm)."""
         # New pipeline order: resolve_provisions → initialize → collateral → finalize
-        result = (basic_exposures
-            .crm.resolve_provisions(provision_data, crr_config)
+        result = (
+            basic_exposures.crm.resolve_provisions(provision_data, crr_config)
             .crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_data, crr_config)
             .crm.finalize_ead()
@@ -421,23 +438,27 @@ class TestFinalizeEAD:
         crr_config: CalculationConfig,
     ) -> None:
         """ead_final should not be negative even with large deductions."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_pre_crm": [100_000.0],
-            "approach": [ApproachType.SA.value],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_pre_crm": [100_000.0],
+                "approach": [ApproachType.SA.value],
+            }
+        )
 
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["COLL001"],
-            "beneficiary_reference": ["EXP001"],
-            "collateral_type": ["cash"],
-            "market_value": [150_000.0],  # More than EAD
-            "value_after_haircut": [150_000.0],
-            "is_eligible_financial_collateral": [True],
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["COLL001"],
+                "beneficiary_reference": ["EXP001"],
+                "collateral_type": ["cash"],
+                "market_value": [150_000.0],  # More than EAD
+                "value_after_haircut": [150_000.0],
+                "is_eligible_financial_collateral": [True],
+            }
+        )
 
-        result = (exposures
-            .crm.initialize_ead_waterfall()
+        result = (
+            exposures.crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral, crr_config)
             .crm.finalize_ead()
             .collect()
@@ -521,8 +542,8 @@ class TestMethodChaining:
         crr_config: CalculationConfig,
     ) -> None:
         """Full pipeline should work with method chaining."""
-        result = (basic_exposures
-            .crm.resolve_provisions(provision_data, crr_config)
+        result = (
+            basic_exposures.crm.resolve_provisions(provision_data, crr_config)
             .crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_data, crr_config)
             .crm.finalize_ead()
@@ -549,8 +570,8 @@ class TestBuildEADAudit:
         crr_config: CalculationConfig,
     ) -> None:
         """build_ead_audit should include crm_calculation string."""
-        result = (basic_exposures
-            .crm.initialize_ead_waterfall()
+        result = (
+            basic_exposures.crm.initialize_ead_waterfall()
             .crm.apply_collateral(collateral_data, crr_config)
             .crm.finalize_ead()
             .crm.build_ead_audit()

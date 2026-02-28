@@ -18,7 +18,6 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine import AggregatorLazyFrame  # noqa: F401
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -39,52 +38,60 @@ def basel31_config() -> CalculationConfig:
 @pytest.fixture
 def sa_results() -> pl.LazyFrame:
     """Return SA calculation results."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001", "EXP002"],
-        "exposure_class": ["CORPORATE", "RETAIL"],
-        "ead_final": [1_000_000.0, 500_000.0],
-        "risk_weight": [0.50, 0.75],
-        "rwa_post_factor": [500_000.0, 375_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002"],
+            "exposure_class": ["CORPORATE", "RETAIL"],
+            "ead_final": [1_000_000.0, 500_000.0],
+            "risk_weight": [0.50, 0.75],
+            "rwa_post_factor": [500_000.0, 375_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def irb_results() -> pl.LazyFrame:
     """Return IRB calculation results."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP003", "EXP004"],
-        "exposure_class": ["CORPORATE", "CORPORATE"],
-        "ead_final": [2_000_000.0, 1_500_000.0],
-        "risk_weight": [0.40, 0.35],
-        "rwa": [800_000.0, 525_000.0],
-        "approach": ["FIRB", "FIRB"],
-        "expected_loss": [20_000.0, 15_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP003", "EXP004"],
+            "exposure_class": ["CORPORATE", "CORPORATE"],
+            "ead_final": [2_000_000.0, 1_500_000.0],
+            "risk_weight": [0.40, 0.35],
+            "rwa": [800_000.0, 525_000.0],
+            "approach": ["FIRB", "FIRB"],
+            "expected_loss": [20_000.0, 15_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def slotting_results() -> pl.LazyFrame:
     """Return Slotting calculation results."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP005"],
-        "exposure_class": ["SPECIALISED_LENDING"],
-        "ead_final": [1_000_000.0],
-        "risk_weight": [0.70],
-        "rwa": [700_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP005"],
+            "exposure_class": ["SPECIALISED_LENDING"],
+            "ead_final": [1_000_000.0],
+            "risk_weight": [0.70],
+            "rwa": [700_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def combined_results() -> pl.LazyFrame:
     """Return combined results with approach."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-        "exposure_class": ["CORPORATE", "RETAIL", "CORPORATE"],
-        "ead_final": [1_000_000.0, 500_000.0, 2_000_000.0],
-        "risk_weight": [0.50, 0.75, 0.40],
-        "rwa_final": [500_000.0, 375_000.0, 800_000.0],
-        "approach_applied": ["SA", "SA", "FIRB"],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+            "exposure_class": ["CORPORATE", "RETAIL", "CORPORATE"],
+            "ead_final": [1_000_000.0, 500_000.0, 2_000_000.0],
+            "risk_weight": [0.50, 0.75, 0.40],
+            "rwa_final": [500_000.0, 375_000.0, 800_000.0],
+            "approach_applied": ["SA", "SA", "FIRB"],
+        }
+    )
 
 
 # =============================================================================
@@ -189,14 +196,16 @@ class TestApplyOutputFloor:
     ) -> None:
         """Basel 3.1 should apply output floor to IRB exposures."""
         # Create IRB results with lower RWA than floor would require
-        irb_results = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "exposure_class": ["CORPORATE"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [0.20],  # Low IRB RW
-            "rwa_final": [200_000.0],  # Low IRB RWA
-            "approach_applied": ["FIRB"],
-        })
+        irb_results = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_class": ["CORPORATE"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [0.20],  # Low IRB RW
+                "rwa_final": [200_000.0],  # Low IRB RWA
+                "approach_applied": ["FIRB"],
+            }
+        )
 
         result = irb_results.aggregator.apply_output_floor(
             sa_results,

@@ -18,8 +18,9 @@ Institution Risk Weights (SA) per CRE20.16 with UK ECRA deviation:
 Short-term exposures (<=3 months) may receive preferential treatment.
 """
 
-import polars as pl
 from pathlib import Path
+
+import polars as pl
 
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 

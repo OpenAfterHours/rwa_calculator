@@ -28,7 +28,7 @@ import polars as pl
 from rwa_calc.engine.hierarchy import _resolve_graph_eager
 
 if TYPE_CHECKING:
-    from rwa_calc.contracts.config import CalculationConfig
+    pass
 
 
 # =============================================================================
@@ -86,10 +86,16 @@ class HierarchyLazyFrame:
             raise ValueError("No reference column found")
 
         # Collect edge data (small) and resolve graph eagerly
-        edges = org_mappings.select([
-            "child_counterparty_reference",
-            "parent_counterparty_reference",
-        ]).unique().collect()
+        edges = (
+            org_mappings.select(
+                [
+                    "child_counterparty_reference",
+                    "parent_counterparty_reference",
+                ]
+            )
+            .unique()
+            .collect()
+        )
 
         resolved = _resolve_graph_eager(
             edges,
@@ -99,26 +105,34 @@ class HierarchyLazyFrame:
         )
 
         # Build lookup LazyFrame
-        lookup = resolved.rename({
-            "entity": "_lookup_entity",
-            "root": "_lookup_root",
-            "depth": "_lookup_depth",
-        }).lazy()
+        lookup = resolved.rename(
+            {
+                "entity": "_lookup_entity",
+                "root": "_lookup_root",
+                "depth": "_lookup_depth",
+            }
+        ).lazy()
 
         # Left join resolved lookup back onto the calling LazyFrame
         # Entities not in edge data are roots (map to self, depth 0)
-        return self._lf.join(
-            lookup,
-            left_on=entity_col,
-            right_on="_lookup_entity",
-            how="left",
-        ).with_columns([
-            pl.coalesce(
-                pl.col("_lookup_root"),
-                pl.col(entity_col),
-            ).alias("ultimate_parent_reference"),
-            pl.col("_lookup_depth").fill_null(0).alias("hierarchy_depth"),
-        ]).drop(["_lookup_root", "_lookup_depth"])
+        return (
+            self._lf.join(
+                lookup,
+                left_on=entity_col,
+                right_on="_lookup_entity",
+                how="left",
+            )
+            .with_columns(
+                [
+                    pl.coalesce(
+                        pl.col("_lookup_root"),
+                        pl.col(entity_col),
+                    ).alias("ultimate_parent_reference"),
+                    pl.col("_lookup_depth").fill_null(0).alias("hierarchy_depth"),
+                ]
+            )
+            .drop(["_lookup_root", "_lookup_depth"])
+        )
 
     def calculate_hierarchy_depth(self) -> pl.LazyFrame:
         """
@@ -143,12 +157,14 @@ class HierarchyLazyFrame:
             return self._lf.with_columns([pl.lit(0).alias("hierarchy_depth")])
 
         # Calculate depth based on whether entity is its own ultimate parent
-        return self._lf.with_columns([
-            pl.when(pl.col("ultimate_parent_reference") == pl.col(ref_col))
-            .then(pl.lit(0))
-            .otherwise(pl.lit(1))  # Simplified - actual depth needs traversal
-            .alias("hierarchy_depth"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.when(pl.col("ultimate_parent_reference") == pl.col(ref_col))
+                .then(pl.lit(0))
+                .otherwise(pl.lit(1))  # Simplified - actual depth needs traversal
+                .alias("hierarchy_depth"),
+            ]
+        )
 
     # =========================================================================
     # RATING INHERITANCE METHODS
@@ -193,10 +209,12 @@ class HierarchyLazyFrame:
 
         # Join own ratings
         result = self._lf.join(
-            first_ratings.select([
-                pl.col("counterparty_reference").alias("rated_cp"),
-                *[pl.col(c) for c in rating_cols if c != "counterparty_reference"],
-            ]),
+            first_ratings.select(
+                [
+                    pl.col("counterparty_reference").alias("rated_cp"),
+                    *[pl.col(c) for c in rating_cols if c != "counterparty_reference"],
+                ]
+            ),
             left_on=ref_col,
             right_on="rated_cp",
             how="left",
@@ -206,20 +224,28 @@ class HierarchyLazyFrame:
         if ultimate_parents is not None:
             # Join to get ultimate parent
             result = result.join(
-                ultimate_parents.select([
-                    pl.col("counterparty_reference").alias("_up_cp"),
-                    pl.col("ultimate_parent_reference"),
-                ]),
+                ultimate_parents.select(
+                    [
+                        pl.col("counterparty_reference").alias("_up_cp"),
+                        pl.col("ultimate_parent_reference"),
+                    ]
+                ),
                 left_on=ref_col,
                 right_on="_up_cp",
                 how="left",
             )
 
             # Join to get parent's ratings
-            parent_ratings = first_ratings.select([
-                pl.col("counterparty_reference").alias("parent_cp"),
-                *[pl.col(c).alias(f"parent_{c}") for c in rating_cols if c != "counterparty_reference"],
-            ])
+            parent_ratings = first_ratings.select(
+                [
+                    pl.col("counterparty_reference").alias("parent_cp"),
+                    *[
+                        pl.col(c).alias(f"parent_{c}")
+                        for c in rating_cols
+                        if c != "counterparty_reference"
+                    ],
+                ]
+            )
 
             result = result.join(
                 parent_ratings,
@@ -231,24 +257,27 @@ class HierarchyLazyFrame:
             # Coalesce own rating with parent rating
             for col in ["cqs", "pd", "rating_value"]:
                 if col in rating_cols:
-                    result = result.with_columns([
-                        pl.coalesce(pl.col(col), pl.col(f"parent_{col}")).alias(col),
-                    ])
+                    result = result.with_columns(
+                        [
+                            pl.coalesce(pl.col(col), pl.col(f"parent_{col}")).alias(col),
+                        ]
+                    )
 
             # Add inheritance flags
             has_own_rating = pl.col("cqs").is_not_null() if "cqs" in rating_cols else pl.lit(False)
 
-            result = result.with_columns([
-                pl.when(has_own_rating)
-                .then(pl.lit(False))
-                .otherwise(pl.lit(True))
-                .alias("rating_inherited"),
-
-                pl.when(has_own_rating)
-                .then(pl.lit("own_rating"))
-                .otherwise(pl.lit("parent_rating"))
-                .alias("inheritance_reason"),
-            ])
+            result = result.with_columns(
+                [
+                    pl.when(has_own_rating)
+                    .then(pl.lit(False))
+                    .otherwise(pl.lit(True))
+                    .alias("rating_inherited"),
+                    pl.when(has_own_rating)
+                    .then(pl.lit("own_rating"))
+                    .otherwise(pl.lit("parent_rating"))
+                    .alias("inheritance_reason"),
+                ]
+            )
 
         return result
 
@@ -300,16 +329,20 @@ class HierarchyLazyFrame:
         schema_names = self._lf.collect_schema().names()
 
         # Build lending group membership
-        lending_groups = lending_mappings.select([
-            pl.col("parent_counterparty_reference").alias("lending_group_reference"),
-            pl.col("child_counterparty_reference").alias("member_counterparty_reference"),
-        ])
+        lending_groups = lending_mappings.select(
+            [
+                pl.col("parent_counterparty_reference").alias("lending_group_reference"),
+                pl.col("child_counterparty_reference").alias("member_counterparty_reference"),
+            ]
+        )
 
         # Include parent as member
-        parent_as_member = lending_mappings.select([
-            pl.col("parent_counterparty_reference").alias("lending_group_reference"),
-            pl.col("parent_counterparty_reference").alias("member_counterparty_reference"),
-        ]).unique()
+        parent_as_member = lending_mappings.select(
+            [
+                pl.col("parent_counterparty_reference").alias("lending_group_reference"),
+                pl.col("parent_counterparty_reference").alias("member_counterparty_reference"),
+            ]
+        ).unique()
 
         all_members = pl.concat([lending_groups, parent_as_member], how="vertical")
 
@@ -332,12 +365,16 @@ class HierarchyLazyFrame:
             return self._lf.with_columns([pl.lit(0.0).alias("lending_group_total")])
 
         # Calculate totals per lending group
-        lending_group_totals = exposures_with_group.filter(
-            pl.col("lending_group_reference").is_not_null()
-        ).group_by("lending_group_reference").agg([
-            amount_expr.sum().alias("total_exposure"),
-            pl.len().alias("exposure_count"),
-        ])
+        lending_group_totals = (
+            exposures_with_group.filter(pl.col("lending_group_reference").is_not_null())
+            .group_by("lending_group_reference")
+            .agg(
+                [
+                    amount_expr.sum().alias("total_exposure"),
+                    pl.len().alias("exposure_count"),
+                ]
+            )
+        )
 
         return lending_group_totals
 
@@ -355,15 +392,19 @@ class HierarchyLazyFrame:
             LazyFrame with lending_group_reference column
         """
         # Build lending group membership
-        lending_groups = lending_mappings.select([
-            pl.col("parent_counterparty_reference").alias("lending_group_reference"),
-            pl.col("child_counterparty_reference").alias("member_counterparty_reference"),
-        ])
+        lending_groups = lending_mappings.select(
+            [
+                pl.col("parent_counterparty_reference").alias("lending_group_reference"),
+                pl.col("child_counterparty_reference").alias("member_counterparty_reference"),
+            ]
+        )
 
-        parent_as_member = lending_mappings.select([
-            pl.col("parent_counterparty_reference").alias("lending_group_reference"),
-            pl.col("parent_counterparty_reference").alias("member_counterparty_reference"),
-        ]).unique()
+        parent_as_member = lending_mappings.select(
+            [
+                pl.col("parent_counterparty_reference").alias("lending_group_reference"),
+                pl.col("parent_counterparty_reference").alias("member_counterparty_reference"),
+            ]
+        ).unique()
 
         all_members = pl.concat([lending_groups, parent_as_member], how="vertical")
 
@@ -401,18 +442,25 @@ class HierarchyLazyFrame:
 
         # Check collateral has required columns
         coll_schema_names = collateral.collect_schema().names()
-        if "beneficiary_reference" not in coll_schema_names or "property_ltv" not in coll_schema_names:
+        if (
+            "beneficiary_reference" not in coll_schema_names
+            or "property_ltv" not in coll_schema_names
+        ):
             return self._lf.with_columns([pl.lit(None).cast(pl.Float64).alias("ltv")])
 
         # Select LTV from collateral
-        ltv_lookup = collateral.select([
-            pl.col("beneficiary_reference"),
-            pl.col("property_ltv").alias("ltv"),
-        ]).filter(
-            pl.col("ltv").is_not_null()
-        ).unique(
-            subset=["beneficiary_reference"],
-            keep="first",
+        ltv_lookup = (
+            collateral.select(
+                [
+                    pl.col("beneficiary_reference"),
+                    pl.col("property_ltv").alias("ltv"),
+                ]
+            )
+            .filter(pl.col("ltv").is_not_null())
+            .unique(
+                subset=["beneficiary_reference"],
+                keep="first",
+            )
         )
 
         return self._lf.join(

@@ -20,13 +20,12 @@ Usage:
 from datetime import date
 from typing import Literal
 
-import pytest
 import polars as pl
+import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.hierarchy import HierarchyResolver
-
 
 # Default reporting date for benchmarks
 BENCHMARK_REPORTING_DATE = date(2026, 1, 1)
@@ -104,9 +103,7 @@ class TestHierarchyBenchmark10K:
 
         # Benchmark the counterparty lookup
         def build_lookup():
-            return resolver._build_counterparty_lookup(
-                counterparties, org_mappings, ratings
-            )
+            return resolver._build_counterparty_lookup(counterparties, org_mappings, ratings)
 
         result, errors = benchmark(build_lookup)
 
@@ -212,9 +209,7 @@ class TestHierarchyBenchmark100K:
         resolver = HierarchyResolver()
 
         def build_lookup():
-            return resolver._build_counterparty_lookup(
-                counterparties, org_mappings, ratings
-            )
+            return resolver._build_counterparty_lookup(counterparties, org_mappings, ratings)
 
         result, errors = benchmark(build_lookup)
 
@@ -241,9 +236,7 @@ class TestHierarchyBenchmark100K:
         resolver = HierarchyResolver()
 
         def build_lookup():
-            return resolver._build_counterparty_lookup(
-                counterparties, org_mappings, ratings
-            )
+            return resolver._build_counterparty_lookup(counterparties, org_mappings, ratings)
 
         result, _ = benchmark(build_lookup)
 
@@ -491,7 +484,9 @@ class TestHierarchyMemoryBenchmark:
             _ = result.exposures.collect(engine=BENCHMARK_ENGINE)
 
         print(f"\nPeak memory usage: {tracker.peak_mb:.2f} MB")
-        assert tracker.peak_mb < 2000, f"Memory usage {tracker.peak_mb:.2f} MB exceeds 2000 MB limit"
+        assert tracker.peak_mb < 2000, (
+            f"Memory usage {tracker.peak_mb:.2f} MB exceeds 2000 MB limit"
+        )
 
 
 # =============================================================================
@@ -577,4 +572,6 @@ class TestEntityTypeCoverage:
 
         # Verify facility hierarchy has sub-facilities (depth >= 2)
         by_type = fac_stats.get("by_child_type", {})
-        assert by_type.get("facility", 0) > 0, "Should have facility-to-facility mappings for depth >= 2"
+        assert by_type.get("facility", 0) > 0, (
+            "Should have facility-to-facility mappings for depth >= 2"
+        )

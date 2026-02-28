@@ -29,6 +29,7 @@ from rwa_calc.engine.irb.formulas import apply_irb_formulas
 @dataclass
 class BenchmarkResult:
     """Result from a benchmark run."""
+
     n_rows: int
     times: list[float]
     mean_time: float
@@ -54,7 +55,9 @@ def generate_irb_exposure_data(n_rows: int, seed: int = 42) -> pl.LazyFrame:
     pd_base = rng.uniform(0.0003, 0.05, size=n_rows)
 
     # Generate LGDs
-    lgd_values = rng.choice([0.25, 0.35, 0.45, 0.55, 0.75], size=n_rows, p=[0.1, 0.15, 0.50, 0.15, 0.1])
+    lgd_values = rng.choice(
+        [0.25, 0.35, 0.45, 0.55, 0.75], size=n_rows, p=[0.1, 0.15, 0.50, 0.15, 0.1]
+    )
 
     # Generate EADs
     ead_values = rng.uniform(10_000, 10_000_000, size=n_rows)
@@ -63,7 +66,7 @@ def generate_irb_exposure_data(n_rows: int, seed: int = 42) -> pl.LazyFrame:
     exposure_classes = rng.choice(
         ["CORPORATE", "CORPORATE_SME", "RETAIL_MORTGAGE", "RETAIL_OTHER", "INSTITUTION"],
         size=n_rows,
-        p=[0.40, 0.25, 0.15, 0.10, 0.10]
+        p=[0.40, 0.25, 0.15, 0.10, 0.10],
     )
 
     # Generate maturities
@@ -72,20 +75,20 @@ def generate_irb_exposure_data(n_rows: int, seed: int = 42) -> pl.LazyFrame:
     # Generate turnover for SME adjustment
     turnover_m = rng.uniform(1, 100, size=n_rows)
     turnover_m = np.where(
-        np.char.find(exposure_classes.astype(str), "CORPORATE") >= 0,
-        turnover_m,
-        np.nan
+        np.char.find(exposure_classes.astype(str), "CORPORATE") >= 0, turnover_m, np.nan
     )
 
-    return pl.DataFrame({
-        "exposure_reference": [f"EXP_{i:08d}" for i in range(n_rows)],
-        "pd": pd_base,
-        "lgd": lgd_values,
-        "ead_final": ead_values,
-        "exposure_class": exposure_classes,
-        "maturity": maturities,
-        "turnover_m": turnover_m,
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "exposure_reference": [f"EXP_{i:08d}" for i in range(n_rows)],
+            "pd": pd_base,
+            "lgd": lgd_values,
+            "ead_final": ead_values,
+            "exposure_class": exposure_classes,
+            "maturity": maturities,
+            "turnover_m": turnover_m,
+        }
+    ).lazy()
 
 
 def run_benchmark(

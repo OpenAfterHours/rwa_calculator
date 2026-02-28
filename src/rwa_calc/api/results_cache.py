@@ -133,7 +133,11 @@ class ResultsCache:
         class_out = None
         if summary_by_class is not None:
             try:
-                df = summary_by_class if isinstance(summary_by_class, pl.DataFrame) else summary_by_class.collect()
+                df = (
+                    summary_by_class
+                    if isinstance(summary_by_class, pl.DataFrame)
+                    else summary_by_class.collect()
+                )
                 df.write_parquet(class_path)
                 class_out = class_path
             except Exception:
@@ -142,7 +146,11 @@ class ResultsCache:
         approach_out = None
         if summary_by_approach is not None:
             try:
-                df = summary_by_approach if isinstance(summary_by_approach, pl.DataFrame) else summary_by_approach.collect()
+                df = (
+                    summary_by_approach
+                    if isinstance(summary_by_approach, pl.DataFrame)
+                    else summary_by_approach.collect()
+                )
                 df.write_parquet(approach_path)
                 approach_out = approach_path
             except Exception:
@@ -211,7 +219,5 @@ class ResultsCache:
         try:
             lf.sink_parquet(path)
         except Exception:
-            logger.warning(
-                "sink_parquet() failed, falling back to collect().write_parquet()"
-            )
+            logger.warning("sink_parquet() failed, falling back to collect().write_parquet()")
             lf.collect().write_parquet(path)

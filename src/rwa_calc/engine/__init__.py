@@ -35,17 +35,17 @@ Polars Namespaces:
 """
 
 # Import namespace modules to register namespaces on module load
-import rwa_calc.engine.hierarchy_namespace  # noqa: F401
 import rwa_calc.engine.aggregator_namespace  # noqa: F401
 import rwa_calc.engine.audit_namespace  # noqa: F401
+import rwa_calc.engine.hierarchy_namespace  # noqa: F401
 
-from .loader import ParquetLoader, CSVLoader
-from .hierarchy import HierarchyResolver, create_hierarchy_resolver
 from .aggregator import OutputAggregator, create_output_aggregator
-from .pipeline import PipelineOrchestrator, create_pipeline, create_test_pipeline
-from .hierarchy_namespace import HierarchyLazyFrame
 from .aggregator_namespace import AggregatorLazyFrame
-from .audit_namespace import AuditLazyFrame, AuditExpr
+from .audit_namespace import AuditExpr, AuditLazyFrame
+from .hierarchy import HierarchyResolver, create_hierarchy_resolver
+from .hierarchy_namespace import HierarchyLazyFrame
+from .loader import CSVLoader, ParquetLoader
+from .pipeline import PipelineOrchestrator, create_pipeline, create_test_pipeline
 
 __all__ = [
     "ParquetLoader",

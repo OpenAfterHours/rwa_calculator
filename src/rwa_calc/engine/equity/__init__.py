@@ -42,12 +42,11 @@ References:
 
 # Import namespace module to register namespaces on module load
 import rwa_calc.engine.equity.namespace  # noqa: F401
-
 from rwa_calc.engine.equity.calculator import (
     EquityCalculator,
     create_equity_calculator,
 )
-from rwa_calc.engine.equity.namespace import EquityLazyFrame, EquityExpr
+from rwa_calc.engine.equity.namespace import EquityExpr, EquityLazyFrame
 
 __all__ = [
     "EquityCalculator",

@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import polars as pl
 
-
 # =============================================================================
 # EXPRESSION NAMESPACE
 # =============================================================================
@@ -73,10 +72,12 @@ class AuditExpr:
         Returns:
             Expression formatted as percentage string (e.g., "20.0%")
         """
-        return pl.concat_str([
-            (self._expr * 100).round(decimals).cast(pl.String),
-            pl.lit("%"),
-        ])
+        return pl.concat_str(
+            [
+                (self._expr * 100).round(decimals).cast(pl.String),
+                pl.lit("%"),
+            ]
+        )
 
     def format_ratio(self, decimals: int = 3) -> pl.Expr:
         """
@@ -100,10 +101,12 @@ class AuditExpr:
         Returns:
             Expression formatted as basis points string (e.g., "150 bps")
         """
-        return pl.concat_str([
-            (self._expr * 10000).round(decimals).cast(pl.String),
-            pl.lit(" bps"),
-        ])
+        return pl.concat_str(
+            [
+                (self._expr * 10000).round(decimals).cast(pl.String),
+                pl.lit(" bps"),
+            ]
+        )
 
 
 # =============================================================================
@@ -139,33 +142,45 @@ class AuditLazyFrame:
 
         # Build calculation string based on available columns
         has_sf = "supporting_factor" in cols and "rwa_post_factor" in cols
-        rwa_col = "rwa_post_factor" if has_sf else ("rwa_pre_factor" if "rwa_pre_factor" in cols else "rwa")
+        rwa_col = (
+            "rwa_post_factor"
+            if has_sf
+            else ("rwa_pre_factor" if "rwa_pre_factor" in cols else "rwa")
+        )
         ead_col = "ead_final" if "ead_final" in cols else "ead"
 
         if has_sf:
-            return self._lf.with_columns([
-                pl.concat_str([
-                    pl.lit("SA: EAD="),
-                    pl.col(ead_col).round(0).cast(pl.String),
-                    pl.lit(" x RW="),
-                    (pl.col("risk_weight") * 100).round(1).cast(pl.String),
-                    pl.lit("% x SF="),
-                    (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
-                    pl.lit("% -> RWA="),
-                    pl.col(rwa_col).round(0).cast(pl.String),
-                ]).alias("sa_calculation"),
-            ])
+            return self._lf.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("SA: EAD="),
+                            pl.col(ead_col).round(0).cast(pl.String),
+                            pl.lit(" x RW="),
+                            (pl.col("risk_weight") * 100).round(1).cast(pl.String),
+                            pl.lit("% x SF="),
+                            (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
+                            pl.lit("% -> RWA="),
+                            pl.col(rwa_col).round(0).cast(pl.String),
+                        ]
+                    ).alias("sa_calculation"),
+                ]
+            )
         else:
-            return self._lf.with_columns([
-                pl.concat_str([
-                    pl.lit("SA: EAD="),
-                    pl.col(ead_col).round(0).cast(pl.String),
-                    pl.lit(" x RW="),
-                    (pl.col("risk_weight") * 100).round(1).cast(pl.String),
-                    pl.lit("% -> RWA="),
-                    pl.col(rwa_col).round(0).cast(pl.String),
-                ]).alias("sa_calculation"),
-            ])
+            return self._lf.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("SA: EAD="),
+                            pl.col(ead_col).round(0).cast(pl.String),
+                            pl.lit(" x RW="),
+                            (pl.col("risk_weight") * 100).round(1).cast(pl.String),
+                            pl.lit("% -> RWA="),
+                            pl.col(rwa_col).round(0).cast(pl.String),
+                        ]
+                    ).alias("sa_calculation"),
+                ]
+            )
 
     def build_irb_calculation(self) -> pl.LazyFrame:
         """
@@ -182,24 +197,33 @@ class AuditLazyFrame:
         pd_col = "pd_floored" if "pd_floored" in cols else "pd"
         lgd_col = "lgd_floored" if "lgd_floored" in cols else "lgd"
         rwa_col = "rwa"
-        ead_col = "ead_final" if "ead_final" in cols else "ead"
 
-        return self._lf.with_columns([
-            pl.concat_str([
-                pl.lit("IRB: PD="),
-                (pl.col(pd_col) * 100).round(2).cast(pl.String),
-                pl.lit("%, LGD="),
-                (pl.col(lgd_col) * 100).round(1).cast(pl.String),
-                pl.lit("%, R="),
-                (pl.col("correlation") * 100).round(2).cast(pl.String) if "correlation" in cols else pl.lit("N/A"),
-                pl.lit("%, K="),
-                (pl.col("k") * 100).round(3).cast(pl.String) if "k" in cols else pl.lit("N/A"),
-                pl.lit("%, MA="),
-                pl.col("maturity_adjustment").round(3).cast(pl.String) if "maturity_adjustment" in cols else pl.lit("1.000"),
-                pl.lit(" -> RWA="),
-                pl.col(rwa_col).round(0).cast(pl.String),
-            ]).alias("irb_calculation"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("IRB: PD="),
+                        (pl.col(pd_col) * 100).round(2).cast(pl.String),
+                        pl.lit("%, LGD="),
+                        (pl.col(lgd_col) * 100).round(1).cast(pl.String),
+                        pl.lit("%, R="),
+                        (pl.col("correlation") * 100).round(2).cast(pl.String)
+                        if "correlation" in cols
+                        else pl.lit("N/A"),
+                        pl.lit("%, K="),
+                        (pl.col("k") * 100).round(3).cast(pl.String)
+                        if "k" in cols
+                        else pl.lit("N/A"),
+                        pl.lit("%, MA="),
+                        pl.col("maturity_adjustment").round(3).cast(pl.String)
+                        if "maturity_adjustment" in cols
+                        else pl.lit("1.000"),
+                        pl.lit(" -> RWA="),
+                        pl.col(rwa_col).round(0).cast(pl.String),
+                    ]
+                ).alias("irb_calculation"),
+            ]
+        )
 
     def build_slotting_calculation(self) -> pl.LazyFrame:
         """
@@ -210,22 +234,21 @@ class AuditLazyFrame:
         Returns:
             LazyFrame with slotting_calculation column
         """
-        schema = self._lf.collect_schema()
-        cols = schema.names()
-
-        return self._lf.with_columns([
-            pl.concat_str([
-                pl.lit("Slotting: Category="),
-                pl.col("slotting_category"),
-                pl.when(pl.col("is_hvcre"))
-                .then(pl.lit(" (HVCRE)"))
-                .otherwise(pl.lit("")),
-                pl.lit(", RW="),
-                (pl.col("risk_weight") * 100).round(0).cast(pl.String),
-                pl.lit("% -> RWA="),
-                pl.col("rwa").round(0).cast(pl.String),
-            ]).alias("slotting_calculation"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("Slotting: Category="),
+                        pl.col("slotting_category"),
+                        pl.when(pl.col("is_hvcre")).then(pl.lit(" (HVCRE)")).otherwise(pl.lit("")),
+                        pl.lit(", RW="),
+                        (pl.col("risk_weight") * 100).round(0).cast(pl.String),
+                        pl.lit("% -> RWA="),
+                        pl.col("rwa").round(0).cast(pl.String),
+                    ]
+                ).alias("slotting_calculation"),
+            ]
+        )
 
     def build_crm_calculation(self) -> pl.LazyFrame:
         """
@@ -239,20 +262,34 @@ class AuditLazyFrame:
         schema = self._lf.collect_schema()
         cols = schema.names()
 
-        return self._lf.with_columns([
-            pl.concat_str([
-                pl.lit("EAD: gross="),
-                pl.col("ead_gross").round(0).cast(pl.String) if "ead_gross" in cols else pl.lit("N/A"),
-                pl.lit("; coll="),
-                pl.col("collateral_adjusted_value").round(0).cast(pl.String) if "collateral_adjusted_value" in cols else pl.lit("0"),
-                pl.lit("; guar="),
-                pl.col("guarantee_amount").round(0).cast(pl.String) if "guarantee_amount" in cols else pl.lit("0"),
-                pl.lit("; prov="),
-                pl.col("provision_allocated").round(0).cast(pl.String) if "provision_allocated" in cols else pl.lit("0"),
-                pl.lit("; final="),
-                pl.col("ead_final").round(0).cast(pl.String) if "ead_final" in cols else pl.lit("N/A"),
-            ]).alias("crm_calculation"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("EAD: gross="),
+                        pl.col("ead_gross").round(0).cast(pl.String)
+                        if "ead_gross" in cols
+                        else pl.lit("N/A"),
+                        pl.lit("; coll="),
+                        pl.col("collateral_adjusted_value").round(0).cast(pl.String)
+                        if "collateral_adjusted_value" in cols
+                        else pl.lit("0"),
+                        pl.lit("; guar="),
+                        pl.col("guarantee_amount").round(0).cast(pl.String)
+                        if "guarantee_amount" in cols
+                        else pl.lit("0"),
+                        pl.lit("; prov="),
+                        pl.col("provision_allocated").round(0).cast(pl.String)
+                        if "provision_allocated" in cols
+                        else pl.lit("0"),
+                        pl.lit("; final="),
+                        pl.col("ead_final").round(0).cast(pl.String)
+                        if "ead_final" in cols
+                        else pl.lit("N/A"),
+                    ]
+                ).alias("crm_calculation"),
+            ]
+        )
 
     def build_haircut_calculation(self) -> pl.LazyFrame:
         """
@@ -266,18 +303,30 @@ class AuditLazyFrame:
         schema = self._lf.collect_schema()
         cols = schema.names()
 
-        return self._lf.with_columns([
-            pl.concat_str([
-                pl.lit("MV="),
-                pl.col("market_value").round(0).cast(pl.String) if "market_value" in cols else pl.lit("N/A"),
-                pl.lit("; Hc="),
-                (pl.col("collateral_haircut") * 100).round(1).cast(pl.String) if "collateral_haircut" in cols else pl.lit("0"),
-                pl.lit("%; Hfx="),
-                (pl.col("fx_haircut") * 100).round(1).cast(pl.String) if "fx_haircut" in cols else pl.lit("0"),
-                pl.lit("%; Adj="),
-                pl.col("value_after_haircut").round(0).cast(pl.String) if "value_after_haircut" in cols else pl.lit("N/A"),
-            ]).alias("haircut_calculation"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("MV="),
+                        pl.col("market_value").round(0).cast(pl.String)
+                        if "market_value" in cols
+                        else pl.lit("N/A"),
+                        pl.lit("; Hc="),
+                        (pl.col("collateral_haircut") * 100).round(1).cast(pl.String)
+                        if "collateral_haircut" in cols
+                        else pl.lit("0"),
+                        pl.lit("%; Hfx="),
+                        (pl.col("fx_haircut") * 100).round(1).cast(pl.String)
+                        if "fx_haircut" in cols
+                        else pl.lit("0"),
+                        pl.lit("%; Adj="),
+                        pl.col("value_after_haircut").round(0).cast(pl.String)
+                        if "value_after_haircut" in cols
+                        else pl.lit("N/A"),
+                    ]
+                ).alias("haircut_calculation"),
+            ]
+        )
 
     def build_floor_calculation(self) -> pl.LazyFrame:
         """
@@ -294,17 +343,21 @@ class AuditLazyFrame:
         if "floor_rwa" not in cols:
             return self._lf
 
-        return self._lf.with_columns([
-            pl.concat_str([
-                pl.lit("Floor: IRB RWA="),
-                pl.col("rwa_pre_floor").round(0).cast(pl.String),
-                pl.lit("; Floor RWA="),
-                pl.col("floor_rwa").round(0).cast(pl.String),
-                pl.lit(" ("),
-                (pl.col("output_floor_pct") * 100).round(1).cast(pl.String),
-                pl.lit("%); Final="),
-                pl.col("rwa_final").round(0).cast(pl.String),
-                pl.lit("; Binding="),
-                pl.col("is_floor_binding").cast(pl.String),
-            ]).alias("floor_calculation"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("Floor: IRB RWA="),
+                        pl.col("rwa_pre_floor").round(0).cast(pl.String),
+                        pl.lit("; Floor RWA="),
+                        pl.col("floor_rwa").round(0).cast(pl.String),
+                        pl.lit(" ("),
+                        (pl.col("output_floor_pct") * 100).round(1).cast(pl.String),
+                        pl.lit("%); Final="),
+                        pl.col("rwa_final").round(0).cast(pl.String),
+                        pl.lit("; Binding="),
+                        pl.col("is_floor_binding").cast(pl.String),
+                    ]
+                ).alias("floor_calculation"),
+            ]
+        )

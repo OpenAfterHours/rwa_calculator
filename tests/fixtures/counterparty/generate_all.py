@@ -5,9 +5,9 @@ Usage:
     uv run python tests/fixtures/counterparty/generate_all.py
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import polars as pl
 
@@ -62,21 +62,31 @@ class CounterpartyGenerator:
 
 def get_generators() -> list[CounterpartyGenerator]:
     """Return all configured counterparty generators."""
-    from sovereign import create_sovereign_counterparties, save_sovereign_counterparties
-    from institution import create_institution_counterparties, save_institution_counterparties
     from corporate import create_corporate_counterparties, save_corporate_counterparties
+    from institution import create_institution_counterparties, save_institution_counterparties
     from retail import create_retail_counterparties, save_retail_counterparties
+    from sovereign import create_sovereign_counterparties, save_sovereign_counterparties
     from specialised_lending import (
         create_specialised_lending_counterparties,
         save_specialised_lending_counterparties,
     )
 
     return [
-        CounterpartyGenerator("Sovereign", create_sovereign_counterparties, save_sovereign_counterparties),
-        CounterpartyGenerator("Institution", create_institution_counterparties, save_institution_counterparties),
-        CounterpartyGenerator("Corporate", create_corporate_counterparties, save_corporate_counterparties),
+        CounterpartyGenerator(
+            "Sovereign", create_sovereign_counterparties, save_sovereign_counterparties
+        ),
+        CounterpartyGenerator(
+            "Institution", create_institution_counterparties, save_institution_counterparties
+        ),
+        CounterpartyGenerator(
+            "Corporate", create_corporate_counterparties, save_corporate_counterparties
+        ),
         CounterpartyGenerator("Retail", create_retail_counterparties, save_retail_counterparties),
-        CounterpartyGenerator("Specialised Lending", create_specialised_lending_counterparties, save_specialised_lending_counterparties),
+        CounterpartyGenerator(
+            "Specialised Lending",
+            create_specialised_lending_counterparties,
+            save_specialised_lending_counterparties,
+        ),
     ]
 
 

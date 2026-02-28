@@ -21,8 +21,9 @@ SME Classification Thresholds:
     - SME Retail: Annual revenue < £50m AND total exposure < £1m (retail treatment)
 """
 
-import polars as pl
 from pathlib import Path
+
+import polars as pl
 
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 

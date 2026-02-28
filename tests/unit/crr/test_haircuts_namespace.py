@@ -23,8 +23,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.crm import HaircutsLazyFrame, HaircutsExpr  # noqa: F401
-
+from rwa_calc.engine.crm import HaircutsExpr, HaircutsLazyFrame  # noqa: F401
 
 # =============================================================================
 # Fixtures
@@ -40,55 +39,63 @@ def crr_config() -> CalculationConfig:
 @pytest.fixture
 def cash_collateral() -> pl.LazyFrame:
     """Return cash collateral."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL001"],
-        "collateral_type": ["cash"],
-        "market_value": [100_000.0],
-        "currency": ["GBP"],
-        "residual_maturity_years": [None],
-        "issuer_cqs": [None],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL001"],
+            "collateral_type": ["cash"],
+            "market_value": [100_000.0],
+            "currency": ["GBP"],
+            "residual_maturity_years": [None],
+            "issuer_cqs": [None],
+        }
+    )
 
 
 @pytest.fixture
 def bond_collateral() -> pl.LazyFrame:
     """Return government bond collateral with various maturities."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL001", "COLL002", "COLL003"],
-        "collateral_type": ["govt_bond", "govt_bond", "govt_bond"],
-        "market_value": [100_000.0, 100_000.0, 100_000.0],
-        "currency": ["GBP", "GBP", "GBP"],
-        "residual_maturity_years": [0.5, 3.0, 7.0],  # 0-1y, 1-5y, 5y+
-        "issuer_cqs": [1, 1, 1],
-        "is_eligible_financial_collateral": [True, True, True],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL001", "COLL002", "COLL003"],
+            "collateral_type": ["govt_bond", "govt_bond", "govt_bond"],
+            "market_value": [100_000.0, 100_000.0, 100_000.0],
+            "currency": ["GBP", "GBP", "GBP"],
+            "residual_maturity_years": [0.5, 3.0, 7.0],  # 0-1y, 1-5y, 5y+
+            "issuer_cqs": [1, 1, 1],
+            "is_eligible_financial_collateral": [True, True, True],
+        }
+    )
 
 
 @pytest.fixture
 def equity_collateral() -> pl.LazyFrame:
     """Return equity collateral."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL001", "COLL002"],
-        "collateral_type": ["equity", "equity"],
-        "market_value": [100_000.0, 100_000.0],
-        "currency": ["GBP", "GBP"],
-        "residual_maturity_years": [None, None],
-        "issuer_cqs": [None, None],
-        "is_eligible_financial_collateral": [True, False],  # Main index vs other
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL001", "COLL002"],
+            "collateral_type": ["equity", "equity"],
+            "market_value": [100_000.0, 100_000.0],
+            "currency": ["GBP", "GBP"],
+            "residual_maturity_years": [None, None],
+            "issuer_cqs": [None, None],
+            "is_eligible_financial_collateral": [True, False],  # Main index vs other
+        }
+    )
 
 
 @pytest.fixture
 def fx_collateral() -> pl.LazyFrame:
     """Return collateral with FX mismatch."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL001", "COLL002"],
-        "collateral_type": ["cash", "cash"],
-        "market_value": [100_000.0, 100_000.0],
-        "currency": ["GBP", "USD"],
-        "exposure_currency": ["GBP", "GBP"],
-        "residual_maturity_years": [None, None],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL001", "COLL002"],
+            "collateral_type": ["cash", "cash"],
+            "market_value": [100_000.0, 100_000.0],
+            "currency": ["GBP", "USD"],
+            "exposure_currency": ["GBP", "GBP"],
+            "residual_maturity_years": [None, None],
+        }
+    )
 
 
 # =============================================================================
@@ -164,36 +171,48 @@ class TestClassifyMaturityBand:
 class TestApplyCollateralHaircuts:
     """Tests for collateral haircut application."""
 
-    def test_cash_zero_haircut(self, cash_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_cash_zero_haircut(
+        self, cash_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Cash should have 0% haircut."""
         result = cash_collateral.haircuts.apply_collateral_haircuts(crr_config).collect()
         assert result["collateral_haircut"][0] == pytest.approx(0.0)
 
-    def test_govt_bond_cqs1_0_1y_haircut(self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_govt_bond_cqs1_0_1y_haircut(
+        self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Government bond CQS 1, 0-1y maturity should have 0.5% haircut."""
         result = bond_collateral.haircuts.apply_collateral_haircuts(crr_config).collect()
         # First bond: CQS 1, 0.5y maturity
         assert result["collateral_haircut"][0] == pytest.approx(0.005)
 
-    def test_govt_bond_cqs1_1_5y_haircut(self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_govt_bond_cqs1_1_5y_haircut(
+        self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Government bond CQS 1, 1-5y maturity should have 2% haircut."""
         result = bond_collateral.haircuts.apply_collateral_haircuts(crr_config).collect()
         # Second bond: CQS 1, 3.0y maturity
         assert result["collateral_haircut"][1] == pytest.approx(0.02)
 
-    def test_govt_bond_cqs1_5y_plus_haircut(self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_govt_bond_cqs1_5y_plus_haircut(
+        self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Government bond CQS 1, 5y+ maturity should have 4% haircut."""
         result = bond_collateral.haircuts.apply_collateral_haircuts(crr_config).collect()
         # Third bond: CQS 1, 7.0y maturity
         assert result["collateral_haircut"][2] == pytest.approx(0.04)
 
-    def test_equity_main_index_haircut(self, equity_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_equity_main_index_haircut(
+        self, equity_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Main index equity should have 15% haircut."""
         result = equity_collateral.haircuts.apply_collateral_haircuts(crr_config).collect()
         # First equity: is_eligible_financial_collateral = True (main index)
         assert result["collateral_haircut"][0] == pytest.approx(0.15)
 
-    def test_equity_other_haircut(self, equity_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_equity_other_haircut(
+        self, equity_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Other equity should have 25% haircut."""
         result = equity_collateral.haircuts.apply_collateral_haircuts(crr_config).collect()
         # Second equity: is_eligible_financial_collateral = False (other)
@@ -231,28 +250,34 @@ class TestApplyMaturityMismatch:
 
     def test_long_maturity_no_adjustment(self) -> None:
         """Collateral maturity >= exposure maturity should have factor = 1.0."""
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["COLL001"],
-            "residual_maturity_years": [10.0],
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["COLL001"],
+                "residual_maturity_years": [10.0],
+            }
+        )
         result = collateral.haircuts.apply_maturity_mismatch(exposure_maturity_years=5.0).collect()
         assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)
 
     def test_very_short_maturity_no_protection(self) -> None:
         """Collateral maturity < 3 months should have factor = 0.0."""
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["COLL001"],
-            "residual_maturity_years": [0.1],  # ~1.2 months
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["COLL001"],
+                "residual_maturity_years": [0.1],  # ~1.2 months
+            }
+        )
         result = collateral.haircuts.apply_maturity_mismatch(exposure_maturity_years=5.0).collect()
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
 
     def test_intermediate_maturity_partial_factor(self) -> None:
         """Intermediate collateral maturity should have partial factor."""
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["COLL001"],
-            "residual_maturity_years": [2.5],  # Between 0.25 and 5
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["COLL001"],
+                "residual_maturity_years": [2.5],  # Between 0.25 and 5
+            }
+        )
         result = collateral.haircuts.apply_maturity_mismatch(exposure_maturity_years=5.0).collect()
         # Factor = (2.5 - 0.25) / (5.0 - 0.25) = 2.25 / 4.75 ~ 0.474
         expected = (2.5 - 0.25) / (5.0 - 0.25)
@@ -269,25 +294,29 @@ class TestCalculateAdjustedValue:
 
     def test_value_after_haircut(self, crr_config: CalculationConfig) -> None:
         """value_after_haircut should equal MV * (1 - Hc - Hfx)."""
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["COLL001"],
-            "market_value": [100_000.0],
-            "collateral_haircut": [0.10],  # 10%
-            "fx_haircut": [0.08],  # 8%
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["COLL001"],
+                "market_value": [100_000.0],
+                "collateral_haircut": [0.10],  # 10%
+                "fx_haircut": [0.08],  # 8%
+            }
+        )
         result = collateral.haircuts.calculate_adjusted_value().collect()
         # value_after_haircut = 100,000 * (1 - 0.10 - 0.08) = 82,000
         assert result["value_after_haircut"][0] == pytest.approx(82_000.0)
 
     def test_value_after_maturity_adj(self, crr_config: CalculationConfig) -> None:
         """value_after_maturity_adj should apply maturity factor."""
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["COLL001"],
-            "market_value": [100_000.0],
-            "collateral_haircut": [0.10],
-            "fx_haircut": [0.0],
-            "maturity_adjustment_factor": [0.5],
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["COLL001"],
+                "market_value": [100_000.0],
+                "collateral_haircut": [0.10],
+                "fx_haircut": [0.0],
+                "maturity_adjustment_factor": [0.5],
+            }
+        )
         result = collateral.haircuts.calculate_adjusted_value().collect()
         # value_after_haircut = 100,000 * 0.90 = 90,000
         # value_after_maturity_adj = 90,000 * 0.5 = 45,000
@@ -302,7 +331,9 @@ class TestCalculateAdjustedValue:
 class TestApplyAllHaircuts:
     """Tests for full haircut pipeline."""
 
-    def test_apply_all_haircuts(self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_apply_all_haircuts(
+        self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """apply_all_haircuts should apply full pipeline."""
         result = bond_collateral.haircuts.apply_all_haircuts(config=crr_config).collect()
 
@@ -326,10 +357,12 @@ class TestApplyAllHaircuts:
 class TestMethodChaining:
     """Tests for method chaining."""
 
-    def test_full_pipeline_chain(self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_full_pipeline_chain(
+        self, bond_collateral: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Full pipeline should work with method chaining."""
-        result = (bond_collateral
-            .haircuts.classify_maturity_band()
+        result = (
+            bond_collateral.haircuts.classify_maturity_band()
             .haircuts.apply_collateral_haircuts(crr_config)
             .haircuts.apply_fx_haircut("currency")
             .haircuts.apply_maturity_mismatch(5.0)
@@ -372,8 +405,8 @@ class TestBuildHaircutAudit:
         crr_config: CalculationConfig,
     ) -> None:
         """build_haircut_audit should include haircut_calculation string."""
-        result = (bond_collateral
-            .haircuts.apply_all_haircuts(config=crr_config)
+        result = (
+            bond_collateral.haircuts.apply_all_haircuts(config=crr_config)
             .haircuts.build_haircut_audit()
             .collect()
         )

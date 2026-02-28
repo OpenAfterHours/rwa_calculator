@@ -26,7 +26,6 @@ import polars as pl
 
 from rwa_calc.domain.enums import EquityType
 
-
 # =============================================================================
 # ARTICLE 133 - STANDARDISED APPROACH RISK WEIGHTS
 # =============================================================================
@@ -125,24 +124,32 @@ def lookup_equity_rw(
 
 def _create_sa_equity_df() -> pl.DataFrame:
     """Create SA equity risk weight lookup DataFrame."""
-    return pl.DataFrame({
-        "equity_type": [e.value for e in EquityType],
-        "risk_weight": [float(SA_EQUITY_RISK_WEIGHTS[e]) for e in EquityType],
-        "approach": ["sa"] * len(EquityType),
-    }).with_columns([
-        pl.col("risk_weight").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "equity_type": [e.value for e in EquityType],
+            "risk_weight": [float(SA_EQUITY_RISK_WEIGHTS[e]) for e in EquityType],
+            "approach": ["sa"] * len(EquityType),
+        }
+    ).with_columns(
+        [
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
 
 
 def _create_irb_simple_equity_df() -> pl.DataFrame:
     """Create IRB Simple equity risk weight lookup DataFrame."""
-    return pl.DataFrame({
-        "equity_type": [e.value for e in EquityType],
-        "risk_weight": [float(IRB_SIMPLE_EQUITY_RISK_WEIGHTS[e]) for e in EquityType],
-        "approach": ["irb_simple"] * len(EquityType),
-    }).with_columns([
-        pl.col("risk_weight").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "equity_type": [e.value for e in EquityType],
+            "risk_weight": [float(IRB_SIMPLE_EQUITY_RISK_WEIGHTS[e]) for e in EquityType],
+            "approach": ["irb_simple"] * len(EquityType),
+        }
+    ).with_columns(
+        [
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
 
 
 def get_equity_rw_table(approach: str = "sa") -> pl.DataFrame:
@@ -168,7 +175,9 @@ def get_combined_equity_rw_table() -> pl.DataFrame:
         DataFrame with columns: equity_type, risk_weight, approach
         Contains rows for both SA and IRB_SIMPLE approaches.
     """
-    return pl.concat([
-        _create_sa_equity_df(),
-        _create_irb_simple_equity_df(),
-    ])
+    return pl.concat(
+        [
+            _create_sa_equity_df(),
+            _create_irb_simple_equity_df(),
+        ]
+    )

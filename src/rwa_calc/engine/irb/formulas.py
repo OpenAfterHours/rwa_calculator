@@ -65,16 +65,18 @@ def _pd_floor_expression(config: CalculationConfig) -> pl.Expr:
 
     # Optimisation: if all floors are the same (CRR case), return a scalar
     all_values = {
-        floors.corporate, floors.corporate_sme, floors.retail_mortgage,
-        floors.retail_other, floors.retail_qrre_transactor, floors.retail_qrre_revolver,
+        floors.corporate,
+        floors.corporate_sme,
+        floors.retail_mortgage,
+        floors.retail_other,
+        floors.retail_qrre_transactor,
+        floors.retail_qrre_revolver,
     }
     if len(all_values) == 1:
         return pl.lit(float(all_values.pop()))
 
     # Basel 3.1: differentiated floors by exposure class
-    exp_class = (
-        pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
-    )
+    exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
 
     # For QRRE, distinguish transactor vs revolver if column exists
     # Default to revolver (conservative) if is_qrre_transactor column not present
@@ -209,9 +211,7 @@ def apply_irb_formulas(
             pl.max_horizontal(pl.col("lgd"), lgd_floor_expr).alias("lgd_floored")
         )
     else:
-        exposures = exposures.with_columns(
-            pl.col("lgd").alias("lgd_floored")
-        )
+        exposures = exposures.with_columns(pl.col("lgd").alias("lgd_floored"))
 
     # Step 3: Calculate correlation using pure Polars expressions
     # Pass EUR/GBP rate from config to convert GBP turnover to EUR for SME adjustment
@@ -221,9 +221,7 @@ def apply_irb_formulas(
     )
 
     # Step 4: Calculate K using pure Polars with polars-normal-stats
-    exposures = exposures.with_columns(
-        _polars_capital_k_expr().alias("k")
-    )
+    exposures = exposures.with_columns(_polars_capital_k_expr().alias("k"))
 
     # Step 5: Calculate maturity adjustment (only for non-retail)
     is_retail = (
@@ -242,12 +240,24 @@ def apply_irb_formulas(
     )
 
     # Step 6-9: Final calculations (pure Polars expressions)
-    exposures = exposures.with_columns([
-        pl.lit(scaling_factor).alias("scaling_factor"),
-        (pl.col("k") * 12.5 * scaling_factor * pl.col("ead_final") * pl.col("maturity_adjustment")).alias("rwa"),
-        (pl.col("k") * 12.5 * scaling_factor * pl.col("maturity_adjustment")).alias("risk_weight"),
-        (pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")).alias("expected_loss"),
-    ])
+    exposures = exposures.with_columns(
+        [
+            pl.lit(scaling_factor).alias("scaling_factor"),
+            (
+                pl.col("k")
+                * 12.5
+                * scaling_factor
+                * pl.col("ead_final")
+                * pl.col("maturity_adjustment")
+            ).alias("rwa"),
+            (pl.col("k") * 12.5 * scaling_factor * pl.col("maturity_adjustment")).alias(
+                "risk_weight"
+            ),
+            (pl.col("pd_floored") * pl.col("lgd_floored") * pl.col("ead_final")).alias(
+                "expected_loss"
+            ),
+        ]
+    )
 
     # Step 10: Override for defaulted exposures (CRR Art. 153(1)(ii) / 154(1)(i))
     schema = exposures.collect_schema()
@@ -256,22 +266,14 @@ def apply_irb_formulas(
 
         # Determine A-IRB flag
         is_airb = (
-            pl.col("is_airb").fill_null(False)
-            if "is_airb" in schema.names()
-            else pl.lit(False)
+            pl.col("is_airb").fill_null(False) if "is_airb" in schema.names() else pl.lit(False)
         )
 
         # BEEL column
-        beel = (
-            pl.col("beel").fill_null(0.0)
-            if "beel" in schema.names()
-            else pl.lit(0.0)
-        )
+        beel = pl.col("beel").fill_null(0.0) if "beel" in schema.names() else pl.lit(0.0)
 
         # Scaling for defaulted: CRR 1.06 for non-retail, 1.0 for retail
-        defaulted_scaling = (
-            pl.when(is_retail).then(pl.lit(1.0)).otherwise(pl.lit(scaling_factor))
-        )
+        defaulted_scaling = pl.when(is_retail).then(pl.lit(1.0)).otherwise(pl.lit(scaling_factor))
 
         k_defaulted = (
             pl.when(is_airb)
@@ -288,14 +290,28 @@ def apply_irb_formulas(
             .otherwise(pl.col("lgd_floored") * pl.col("ead_final"))
         )
 
-        exposures = exposures.with_columns([
-            pl.when(is_defaulted).then(k_defaulted).otherwise(pl.col("k")).alias("k"),
-            pl.when(is_defaulted).then(pl.lit(0.0)).otherwise(pl.col("correlation")).alias("correlation"),
-            pl.when(is_defaulted).then(pl.lit(1.0)).otherwise(pl.col("maturity_adjustment")).alias("maturity_adjustment"),
-            pl.when(is_defaulted).then(rwa_defaulted).otherwise(pl.col("rwa")).alias("rwa"),
-            pl.when(is_defaulted).then(rw_defaulted).otherwise(pl.col("risk_weight")).alias("risk_weight"),
-            pl.when(is_defaulted).then(el_defaulted).otherwise(pl.col("expected_loss")).alias("expected_loss"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.when(is_defaulted).then(k_defaulted).otherwise(pl.col("k")).alias("k"),
+                pl.when(is_defaulted)
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("correlation"))
+                .alias("correlation"),
+                pl.when(is_defaulted)
+                .then(pl.lit(1.0))
+                .otherwise(pl.col("maturity_adjustment"))
+                .alias("maturity_adjustment"),
+                pl.when(is_defaulted).then(rwa_defaulted).otherwise(pl.col("rwa")).alias("rwa"),
+                pl.when(is_defaulted)
+                .then(rw_defaulted)
+                .otherwise(pl.col("risk_weight"))
+                .alias("risk_weight"),
+                pl.when(is_defaulted)
+                .then(el_defaulted)
+                .otherwise(pl.col("expected_loss"))
+                .alias("expected_loss"),
+            ]
+        )
 
     return exposures
 
@@ -365,9 +381,7 @@ def _polars_correlation_expr(
     is_sme = has_valid_turnover & (turnover_eur < sme_threshold)
 
     r_corporate_with_sme = (
-        pl.when(is_corporate & is_sme)
-        .then(r_corporate - sme_adjustment)
-        .otherwise(r_corporate)
+        pl.when(is_corporate & is_sme).then(r_corporate - sme_adjustment).otherwise(r_corporate)
     )
 
     # Build base correlation based on exposure class
@@ -458,11 +472,12 @@ def _polars_maturity_adjustment_expr(
 @dataclass(frozen=True)
 class CorrelationParams:
     """Parameters for asset correlation calculation."""
+
     correlation_type: str  # "fixed" or "pd_dependent"
-    r_min: float           # Minimum correlation (at high PD)
-    r_max: float           # Maximum correlation (at low PD)
-    fixed: float           # Fixed correlation value
-    decay_factor: float    # K factor in formula (50 for corp, 35 for retail)
+    r_min: float  # Minimum correlation (at high PD)
+    r_max: float  # Maximum correlation (at low PD)
+    fixed: float  # Fixed correlation value
+    decay_factor: float  # K factor in formula (50 for corp, 35 for retail)
 
 
 CORRELATION_PARAMS: dict[str, CorrelationParams] = {
@@ -707,10 +722,7 @@ def calculate_irb_rwa(
 
     k = calculate_k(pd_floored, lgd_floored, correlation)
 
-    if apply_maturity_adjustment:
-        ma = calculate_maturity_adjustment(pd_floored, maturity)
-    else:
-        ma = 1.0
+    ma = calculate_maturity_adjustment(pd_floored, maturity) if apply_maturity_adjustment else 1.0
 
     scaling = 1.06 if apply_scaling_factor else 1.0
     rwa = k * 12.5 * scaling * ead * ma

@@ -1301,10 +1301,12 @@ class HierarchyResolver:
         collateral: pl.LazyFrame | None,
     ) -> pl.LazyFrame:
         """
-        Add LTV from collateral to exposures for real estate risk weight calculations.
+        Add LTV and property metadata from collateral for real estate risk weights.
 
-        Joins collateral property_ltv to exposures where collateral is linked via
-        beneficiary_reference. For mortgages and commercial RE, LTV determines risk weight.
+        Joins collateral property_ltv, property_type, and is_income_producing to
+        exposures where collateral is linked via beneficiary_reference. For mortgages
+        and commercial RE, LTV determines risk weight. For CRE (CRR Art. 126),
+        income cover status determines 50% vs 100% risk weight.
 
         Supports three levels of collateral linking based on beneficiary_type:
         1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
@@ -1316,29 +1318,47 @@ class HierarchyResolver:
             collateral: Collateral data with beneficiary_reference and property_ltv (optional)
 
         Returns:
-            Exposures with ltv column added
+            Exposures with ltv, property_type, and has_income_cover columns added
         """
         # Check if collateral is valid for LTV processing
         # Requires beneficiary_reference and property_ltv columns
         required_cols = {"beneficiary_reference", "property_ltv"}
         if not has_required_columns(collateral, required_cols):
-            # No valid LTV data available, add null ltv column
+            # No valid LTV data available, add null columns
             return exposures.with_columns([
                 pl.lit(None).cast(pl.Float64).alias("ltv"),
+                pl.lit(None).cast(pl.Utf8).alias("property_type"),
+                pl.lit(False).alias("has_income_cover"),
             ])
 
-        # Check if beneficiary_type column exists for multi-level linking
+        # Check which optional columns exist on collateral
         collateral_schema = collateral.collect_schema()
         has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
+        has_property_type = "property_type" in collateral_schema.names()
+        has_income_producing = "is_income_producing" in collateral_schema.names()
 
         # Filter for collateral with LTV data
         ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
+
+        # Build the list of columns to select from collateral
+        # Always include beneficiary_reference and property_ltv
+        _prop_type = (
+            pl.col("property_type") if has_property_type
+            else pl.lit(None).cast(pl.Utf8).alias("property_type")
+        )
+        _income_cover = (
+            pl.col("is_income_producing").fill_null(False).alias("has_income_cover")
+            if has_income_producing
+            else pl.lit(False).alias("has_income_cover")
+        )
 
         if not has_beneficiary_type:
             # Legacy behavior: assume direct exposure linking
             ltv_lookup = ltv_collateral.select([
                 pl.col("beneficiary_reference"),
                 pl.col("property_ltv").alias("ltv"),
+                _prop_type.alias("property_type"),
+                _income_cover,
             ]).unique(subset=["beneficiary_reference"], keep="first")
 
             return exposures.join(
@@ -1346,7 +1366,9 @@ class HierarchyResolver:
                 left_on="exposure_reference",
                 right_on="beneficiary_reference",
                 how="left",
-            )
+            ).with_columns([
+                pl.col("has_income_cover").fill_null(False),
+            ])
 
         # Multi-level linking: separate collateral by beneficiary_type
         # 1. Direct/exposure-level collateral
@@ -1355,6 +1377,8 @@ class HierarchyResolver:
         ).select([
             pl.col("beneficiary_reference").alias("direct_ref"),
             pl.col("property_ltv").alias("direct_ltv"),
+            _prop_type.alias("direct_property_type"),
+            _income_cover.alias("direct_income_cover"),
         ]).unique(subset=["direct_ref"], keep="first")
 
         # 2. Facility-level collateral
@@ -1363,6 +1387,8 @@ class HierarchyResolver:
         ).select([
             pl.col("beneficiary_reference").alias("facility_ref"),
             pl.col("property_ltv").alias("facility_ltv"),
+            _prop_type.alias("facility_property_type"),
+            _income_cover.alias("facility_income_cover"),
         ]).unique(subset=["facility_ref"], keep="first")
 
         # 3. Counterparty-level collateral
@@ -1371,6 +1397,8 @@ class HierarchyResolver:
         ).select([
             pl.col("beneficiary_reference").alias("cp_ref"),
             pl.col("property_ltv").alias("cp_ltv"),
+            _prop_type.alias("cp_property_type"),
+            _income_cover.alias("cp_income_cover"),
         ]).unique(subset=["cp_ref"], keep="first")
 
         # Join all three levels
@@ -1391,14 +1419,28 @@ class HierarchyResolver:
             how="left",
         )
 
-        # Coalesce LTV: prefer direct, then facility, then counterparty
+        # Coalesce: prefer direct, then facility, then counterparty
         exposures = exposures.with_columns([
             pl.coalesce(
                 pl.col("direct_ltv"),
                 pl.col("facility_ltv"),
                 pl.col("cp_ltv"),
             ).alias("ltv"),
-        ]).drop(["direct_ltv", "facility_ltv", "cp_ltv"])
+            pl.coalesce(
+                pl.col("direct_property_type"),
+                pl.col("facility_property_type"),
+                pl.col("cp_property_type"),
+            ).alias("property_type"),
+            pl.coalesce(
+                pl.col("direct_income_cover"),
+                pl.col("facility_income_cover"),
+                pl.col("cp_income_cover"),
+            ).fill_null(False).alias("has_income_cover"),
+        ]).drop([
+            "direct_ltv", "facility_ltv", "cp_ltv",
+            "direct_property_type", "facility_property_type", "cp_property_type",
+            "direct_income_cover", "facility_income_cover", "cp_income_cover",
+        ])
 
         return exposures
 

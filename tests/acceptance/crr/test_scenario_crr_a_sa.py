@@ -145,7 +145,6 @@ class TestCRRGroupA_StandardisedApproach:
         assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A6")
         assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A6")
 
-    @pytest.mark.skip(reason="Fixture LOAN_CRE_001 not yet created")
     def test_crr_a7_commercial_re_low_ltv(
         self,
         sa_results_df: pl.DataFrame,
@@ -164,7 +163,6 @@ class TestCRRGroupA_StandardisedApproach:
         assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A7")
         assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A7")
 
-    @pytest.mark.skip(reason="Fixture CONT_CCF_001 not yet created - use CONT_CCF_50PCT")
     def test_crr_a8_obs_commitment_ccf(
         self,
         sa_results_df: pl.DataFrame,

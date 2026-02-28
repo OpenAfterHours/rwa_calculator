@@ -271,6 +271,8 @@ class SACalculator:
             missing_cols.append(pl.lit("").alias("book_code"))
         if "cp_is_managed_as_retail" not in schema.names():
             missing_cols.append(pl.lit(False).alias("cp_is_managed_as_retail"))
+        if "property_type" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("property_type"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -341,10 +343,12 @@ class SACalculator:
                 )
             )
 
-            # 2. Commercial RE: LTV + income cover based
+            # 2. Commercial RE: LTV + income cover based (CRR Art. 126)
+            # Detected via exposure_class OR property_type from collateral
             .when(
                 _uc.str.contains("COMMERCIAL", literal=True)
                 | _uc.str.contains("CRE", literal=True)
+                | (pl.col("property_type").fill_null("") == "commercial")
             )
             .then(
                 pl.when(

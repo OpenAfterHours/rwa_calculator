@@ -453,9 +453,388 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
 def generate_crr_b_scenarios(fixtures) -> list[CRRScenarioOutput]:
     """Generate CRR Group B (F-IRB) scenario outputs.
 
-    Note: F-IRB scenarios removed due to fixture/expected output mismatches.
+    Tests Foundation IRB calculations under CRR:
+    - Supervisory LGD (45% senior, 75% subordinated, blended for collateral)
+    - Single PD floor 0.03% for all exposure classes
+    - 1.06 scaling factor
+    - Maturity adjustment with [1y, 5y] cap
+    - SME firm-size adjustment on correlation (Art. 153(4))
+    - SME supporting factor (Art. 501)
+
+    Inputs are hardcoded to match fixture data in tests/fixtures/.
+    Maturities approximate the pipeline's date-based calculation from
+    reporting_date=2025-12-31 to each loan's maturity_date.
     """
-    return []
+    scenarios = []
+
+    # =========================================================================
+    # CRR-B1: Corporate F-IRB - Low PD (0.10%)
+    # LOAN_CORP_UK_001 to CORP_UK_001 (BP, turnover £200B - no SME adjustment)
+    # Tests: Standard F-IRB with low PD, supervisory LGD, maturity adjustment
+    # =========================================================================
+    ead_b1 = 25_000_000.0
+    pd_raw_b1 = 0.001  # 0.10% from RTG_INT_FIRB_B1
+    lgd_b1 = 0.45  # Senior unsecured (CRR Art. 161)
+    maturity_b1 = 4.25  # ~4.25y from 2025-12-31 to 2030-03-31
+    pd_floored_b1 = apply_pd_floor(pd_raw_b1)
+    correlation_b1 = calculate_correlation(pd_floored_b1, "CORPORATE")
+
+    result_b1 = base_calculate_irb_rwa(
+        ead=ead_b1,
+        pd=pd_raw_b1,
+        lgd=lgd_b1,
+        correlation=correlation_b1,
+        maturity=maturity_b1,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-B1",
+        scenario_group="CRR-B",
+        description="Corporate F-IRB - low PD (0.10%)",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CORP_UK_001",
+        counterparty_reference="CORP_UK_001",
+        ead=ead_b1,
+        pd=pd_floored_b1,
+        lgd=lgd_b1,
+        maturity=maturity_b1,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_b1["rwa"] / ead_b1 if ead_b1 > 0 else 0,
+        rwa_before_sf=result_b1["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_b1["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_b1, lgd_b1, ead_b1),
+        regulatory_reference="CRR Art. 153, 161",
+        calculation_notes="Senior unsecured, supervisory LGD 45%. Low PD with maturity > 2.5y.",
+    ))
+
+    # =========================================================================
+    # CRR-B2: Corporate F-IRB - High PD (5.00%)
+    # LOAN_CORP_UK_005 to CORP_UK_005 (Regional Services, turnover £100M)
+    # Tests: F-IRB at high PD where K is large and correlation is low
+    # =========================================================================
+    ead_b2 = 5_000_000.0
+    pd_raw_b2 = 0.05  # 5.00% from RTG_INT_FIRB_B2
+    lgd_b2 = 0.45  # Senior unsecured
+    maturity_b2 = 3.0  # ~3.0y from 2025-12-31 to 2029-01-01
+    pd_floored_b2 = apply_pd_floor(pd_raw_b2)
+    correlation_b2 = calculate_correlation(pd_floored_b2, "CORPORATE")
+
+    result_b2 = base_calculate_irb_rwa(
+        ead=ead_b2,
+        pd=pd_raw_b2,
+        lgd=lgd_b2,
+        correlation=correlation_b2,
+        maturity=maturity_b2,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-B2",
+        scenario_group="CRR-B",
+        description="Corporate F-IRB - high PD (5.00%)",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CORP_UK_005",
+        counterparty_reference="CORP_UK_005",
+        ead=ead_b2,
+        pd=pd_floored_b2,
+        lgd=lgd_b2,
+        maturity=maturity_b2,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_b2["rwa"] / ead_b2 if ead_b2 > 0 else 0,
+        rwa_before_sf=result_b2["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_b2["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_b2, lgd_b2, ead_b2),
+        regulatory_reference="CRR Art. 153, 161",
+        calculation_notes="High PD corporate. Correlation decreases at high PD (R→0.12).",
+    ))
+
+    # =========================================================================
+    # CRR-B3: Subordinated Exposure - 75% LGD
+    # LOAN_SUB_001 to CORP_UK_004 (Mid-Sized Manufacturing, turnover £500M)
+    # Tests: CRR Art. 161 subordinated claim with 75% supervisory LGD
+    # =========================================================================
+    ead_b3 = 2_000_000.0
+    pd_raw_b3 = 0.01  # 1.00% from RTG_INT_FIRB_B3
+    lgd_b3 = 0.75  # Subordinated (CRR Art. 161)
+    maturity_b3 = 4.0  # ~4.0y from 2025-12-31 to 2030-01-01
+    pd_floored_b3 = apply_pd_floor(pd_raw_b3)
+    correlation_b3 = calculate_correlation(pd_floored_b3, "CORPORATE")
+
+    result_b3 = base_calculate_irb_rwa(
+        ead=ead_b3,
+        pd=pd_raw_b3,
+        lgd=lgd_b3,
+        correlation=correlation_b3,
+        maturity=maturity_b3,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-B3",
+        scenario_group="CRR-B",
+        description="Subordinated exposure - 75% supervisory LGD",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_SUB_001",
+        counterparty_reference="CORP_UK_004",
+        ead=ead_b3,
+        pd=pd_floored_b3,
+        lgd=lgd_b3,
+        maturity=maturity_b3,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_b3["rwa"] / ead_b3 if ead_b3 > 0 else 0,
+        rwa_before_sf=result_b3["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_b3["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_b3, lgd_b3, ead_b3),
+        regulatory_reference="CRR Art. 153, 161",
+        calculation_notes="Subordinated claim: 75% LGD vs 45% senior. Significantly higher RWA.",
+    ))
+
+    # =========================================================================
+    # CRR-B4: Financial Collateral - Blended LGD
+    # LOAN_COLL_001 to CORP_SME_002 (SME Tech, turnover £35M → EUR ~40M)
+    # Tests: Blended LGD from 50% cash collateral coverage
+    # LGD = 50% × 0% (financial) + 50% × 45% (unsecured) = 22.5%
+    # SME firm-size adjustment on correlation applies (turnover < EUR 50M)
+    # =========================================================================
+    ead_b4 = 5_000_000.0
+    pd_raw_b4 = 0.005  # 0.50% from RTG_INT_FIRB_B4
+    lgd_b4 = 0.225  # Blended: 50% × 0% + 50% × 45%
+    maturity_b4 = 2.5  # ~2.5y from 2025-12-31 to 2028-06-30
+    turnover_m_b4 = 35.0  # £35M from CORP_SME_002
+    pd_floored_b4 = apply_pd_floor(pd_raw_b4)
+    # SME firm-size adjustment: turnover EUR ~40M < EUR 50M threshold
+    correlation_b4 = calculate_correlation(
+        pd_floored_b4, "CORPORATE", turnover=turnover_m_b4, turnover_currency="GBP"
+    )
+
+    result_b4 = base_calculate_irb_rwa(
+        ead=ead_b4,
+        pd=pd_raw_b4,
+        lgd=lgd_b4,
+        correlation=correlation_b4,
+        maturity=maturity_b4,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-B4",
+        scenario_group="CRR-B",
+        description="Financial collateral - blended LGD 22.5%",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_COLL_001",
+        counterparty_reference="CORP_SME_002",
+        ead=ead_b4,
+        pd=pd_floored_b4,
+        lgd=lgd_b4,
+        maturity=maturity_b4,
+        cqs=None,
+        ltv=None,
+        turnover=turnover_m_b4,
+        risk_weight=result_b4["rwa"] / ead_b4 if ead_b4 > 0 else 0,
+        rwa_before_sf=result_b4["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_b4["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_b4, lgd_b4, ead_b4),
+        regulatory_reference="CRR Art. 153, 161, 230",
+        calculation_notes="50% cash collateral → blended LGD. SME correlation adjustment applied.",
+    ))
+
+    # =========================================================================
+    # CRR-B5: SME Corporate with Supporting Factor
+    # LOAN_CORP_SME_001 to CORP_SME_001 (SME Engineering, turnover £30M → EUR ~34M)
+    # Tests: SME firm-size adjustment on correlation + Art. 501 supporting factor
+    # =========================================================================
+    ead_b5 = 2_000_000.0
+    pd_raw_b5 = 0.02  # 2.00% from RTG_INT_FIRB_B5
+    lgd_b5 = 0.45  # Senior unsecured
+    maturity_b5 = 3.0  # ~3.0y from 2025-12-31 to 2028-12-31
+    turnover_m_b5 = 30.0  # £30M from CORP_SME_001
+    pd_floored_b5 = apply_pd_floor(pd_raw_b5)
+    # SME firm-size adjustment: turnover EUR ~34M < EUR 50M threshold
+    correlation_b5 = calculate_correlation(
+        pd_floored_b5, "CORPORATE", turnover=turnover_m_b5, turnover_currency="GBP"
+    )
+
+    result_b5 = base_calculate_irb_rwa(
+        ead=ead_b5,
+        pd=pd_raw_b5,
+        lgd=lgd_b5,
+        correlation=correlation_b5,
+        maturity=maturity_b5,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        apply_scaling_factor=True,
+    )
+
+    # SME supporting factor (CRR2 Art. 501)
+    # Exposure £2M ≈ EUR 2.29M < EUR 2.5M threshold → Tier 1 factor 0.7619
+    sme_sf_b5 = float(CRR_SME_SUPPORTING_FACTOR)
+    rwa_after_sf_b5 = result_b5["rwa"] * sme_sf_b5
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-B5",
+        scenario_group="CRR-B",
+        description="SME corporate - firm-size adjustment + supporting factor",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE_SME",
+        exposure_reference="LOAN_CORP_SME_001",
+        counterparty_reference="CORP_SME_001",
+        ead=ead_b5,
+        pd=pd_floored_b5,
+        lgd=lgd_b5,
+        maturity=maturity_b5,
+        cqs=None,
+        ltv=None,
+        turnover=turnover_m_b5,
+        risk_weight=result_b5["rwa"] / ead_b5 if ead_b5 > 0 else 0,
+        rwa_before_sf=result_b5["rwa"],
+        supporting_factor=sme_sf_b5,
+        rwa_after_sf=rwa_after_sf_b5,
+        expected_loss=calculate_expected_loss(pd_floored_b5, lgd_b5, ead_b5),
+        regulatory_reference="CRR Art. 153(4), 501",
+        calculation_notes=(
+            f"SME firm-size adjustment reduces correlation. "
+            f"SME supporting factor {sme_sf_b5:.4f} applied (Tier 1)."
+        ),
+    ))
+
+    # =========================================================================
+    # CRR-B6: PD Floor Binding
+    # LOAN_CORP_UK_002 to CORP_UK_002 (Unilever, turnover £60B - no SME)
+    # Tests: Internal PD 0.01% floored to regulatory minimum 0.03%
+    # =========================================================================
+    ead_b6 = 1_000_000.0
+    pd_raw_b6 = 0.0001  # 0.01% from RTG_INT_FLOOR_TEST — below floor
+    lgd_b6 = 0.45  # Senior unsecured
+    maturity_b6 = 2.0  # ~2.0y from 2025-12-31 to 2028-01-01
+    pd_floored_b6 = apply_pd_floor(pd_raw_b6)  # Floored to 0.03%
+    correlation_b6 = calculate_correlation(pd_floored_b6, "CORPORATE")
+
+    result_b6 = base_calculate_irb_rwa(
+        ead=ead_b6,
+        pd=pd_raw_b6,
+        lgd=lgd_b6,
+        correlation=correlation_b6,
+        maturity=maturity_b6,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-B6",
+        scenario_group="CRR-B",
+        description="PD floor binding - 0.01% floored to 0.03%",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_CORP_UK_002",
+        counterparty_reference="CORP_UK_002",
+        ead=ead_b6,
+        pd=pd_floored_b6,
+        lgd=lgd_b6,
+        maturity=maturity_b6,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_b6["rwa"] / ead_b6 if ead_b6 > 0 else 0,
+        rwa_before_sf=result_b6["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_b6["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_b6, lgd_b6, ead_b6),
+        regulatory_reference="CRR Art. 153, 163",
+        calculation_notes=(
+            f"Internal PD {pd_raw_b6*100:.2f}% floored to {pd_floored_b6*100:.2f}% "
+            f"(CRR Art. 163). Floor increases RWA relative to raw PD."
+        ),
+    ))
+
+    # =========================================================================
+    # CRR-B7: Long Maturity - 7Y Capped to 5Y
+    # LOAN_LONG_MAT_001 to CORP_LRG_001 (Large Corp, turnover £500M - no SME)
+    # Tests: CRR Art. 162 maturity cap at 5 years
+    # =========================================================================
+    ead_b7 = 8_000_000.0
+    pd_raw_b7 = 0.008  # 0.80% from RTG_INT_FIRB_B7
+    lgd_b7 = 0.45  # Senior unsecured
+    maturity_b7 = 5.0  # 7.0y contractual, capped to 5.0y (CRR Art. 162)
+    pd_floored_b7 = apply_pd_floor(pd_raw_b7)
+    correlation_b7 = calculate_correlation(pd_floored_b7, "CORPORATE")
+
+    result_b7 = base_calculate_irb_rwa(
+        ead=ead_b7,
+        pd=pd_raw_b7,
+        lgd=lgd_b7,
+        correlation=correlation_b7,
+        maturity=maturity_b7,
+        pd_floor=float(CRR_PD_FLOOR),
+        lgd_floor=None,
+        apply_maturity_adjustment=True,
+        apply_scaling_factor=True,
+    )
+
+    scenarios.append(CRRScenarioOutput(
+        scenario_id="CRR-B7",
+        scenario_group="CRR-B",
+        description="Long maturity - 7Y capped to 5Y",
+        regulatory_framework="CRR",
+        approach="F-IRB",
+        exposure_class="CORPORATE",
+        exposure_reference="LOAN_LONG_MAT_001",
+        counterparty_reference="CORP_LRG_001",
+        ead=ead_b7,
+        pd=pd_floored_b7,
+        lgd=lgd_b7,
+        maturity=maturity_b7,
+        cqs=None,
+        ltv=None,
+        turnover=None,
+        risk_weight=result_b7["rwa"] / ead_b7 if ead_b7 > 0 else 0,
+        rwa_before_sf=result_b7["rwa"],
+        supporting_factor=1.0,
+        rwa_after_sf=result_b7["rwa"],
+        expected_loss=calculate_expected_loss(pd_floored_b7, lgd_b7, ead_b7),
+        regulatory_reference="CRR Art. 153, 162",
+        calculation_notes=(
+            "Contractual maturity 7Y capped to 5Y per CRR Art. 162. "
+            "Maximum maturity adjustment factor."
+        ),
+    ))
+
+    return scenarios
 
 
 def generate_crr_c_scenarios(fixtures) -> list[CRRScenarioOutput]:

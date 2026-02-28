@@ -36,9 +36,15 @@ class TestCRRGroupE_SlottingApproach:
     Each test loads fixture data, runs it through the production calculator,
     and compares the output against pre-calculated expected values.
 
-    Note: CRR has TWO weight tables with maturity splits (Art. 153(5)):
-    - Non-HVCRE (>=2.5yr): Strong=70%, Good=90%, Satisfactory=115%, Weak=250%
-    - HVCRE (>=2.5yr): Strong=95%, Good=120%, Satisfactory=140%, Weak=250%
+    CRR Art. 153(5) has TWO weight tables with maturity splits:
+    - Non-HVCRE Table 1:
+      >=2.5yr: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
+      <2.5yr:  Strong=50%, Good=70%, Satisfactory=115%, Weak=250%, Default=0%
+    - HVCRE Table 2:
+      >=2.5yr: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
+      <2.5yr:  Strong=70%, Good=95%,  Satisfactory=140%, Weak=250%, Default=0%
+
+    Test fixtures use 5yr maturity (>=2.5yr), so the higher weight set applies.
     Basel 3.1 uses different tables (operational/PF pre-op/HVCRE).
     """
 
@@ -80,8 +86,9 @@ class TestCRRGroupE_SlottingApproach:
         """
         CRR-E2: Project finance with Good slotting category.
 
-        Input: Project finance, Good category (>=2.5yr maturity)
-        Expected: 90% RW (CRR Art. 153(5) Table 1)
+        Input: Project finance, Good category, 5yr maturity (>=2.5yr)
+        Expected: 90% RW (CRR Art. 153(5) Table 1, non-HVCRE >=2.5yr)
+        Note: Would be 70% if remaining maturity < 2.5 years.
         """
         expected = expected_outputs_dict["CRR-E2"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E2"]
@@ -130,8 +137,10 @@ class TestCRRGroupE_SlottingApproach:
         """
         CRR-E4: HVCRE with Strong slotting category.
 
-        Input: HVCRE, Strong category (>=2.5yr maturity)
-        Expected: 95% RW (CRR Art. 153(5) Table 2, higher than non-HVCRE 70%)
+        Input: HVCRE, Strong category, 5yr maturity (>=2.5yr)
+        Expected: 95% RW (CRR Art. 153(5) Table 2, HVCRE >=2.5yr)
+        Note: Would be 70% if remaining maturity < 2.5 years.
+        Higher than non-HVCRE Strong (70%).
         """
         expected = expected_outputs_dict["CRR-E4"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E4"]

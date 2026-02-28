@@ -1,4 +1,4 @@
-0a. Study `specs/*` with up to 2 parallel Opus subagents to learn the application specifications. Refer to `ref_docs/` for regulatory source documents.
+0a. Study `specs/*` with up to 2 parallel Opus subagents to learn the application specifications.
 0b. Study @IMPLEMENTATION_PLAN.md.
 0c. For reference, the application source code is in `src/rwa_calc/`.
 

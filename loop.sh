@@ -63,7 +63,6 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     cat "$PROMPT_FILE" | claude -p \
         --dangerously-skip-permissions \
         --output-format=stream-json \
-        --max-turns 5 \
         --model opus \
         --verbose \
         | tee "$LOGFILE" \

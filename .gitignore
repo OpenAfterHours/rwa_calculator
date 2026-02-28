@@ -12,3 +12,4 @@ site/
 .pypirc
 dist/
 *.xlsx
+logs/

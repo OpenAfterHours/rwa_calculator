@@ -40,7 +40,16 @@ if [ ! -f "$PROMPT_FILE" ]; then
     exit 1
 fi
 
+mkdir -p logs
+
 while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+    LOGFILE="logs/${MODE}_$(date +%Y%m%d_%H%M%S)_iter${ITERATION}.jsonl"
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Iteration $((ITERATION + 1)) / $MAX_ITERATIONS"
+    echo "  Log: $LOGFILE"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     # Run Ralph iteration with selected prompt
     # -p: Headless mode (non-interactive, reads from stdin)
@@ -49,11 +58,39 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     # --model opus: Primary agent uses Opus for complex reasoning (task selection, prioritization)
     #               Can use 'sonnet' in build mode for speed if plan is clear and tasks well-defined
     # --verbose: Detailed execution logging
+    #
+    # Output: full JSON streamed to log file, filtered assistant text to terminal
     cat "$PROMPT_FILE" | claude -p \
         --dangerously-skip-permissions \
         --output-format=stream-json \
+        --max_turns 5 \
         --model opus \
-        --verbose
+        --verbose \
+        | tee "$LOGFILE" \
+        | python -c "
+import sys, json
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        e = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    t = e.get('type')
+    if t == 'assistant':
+        for c in e.get('message', {}).get('content', []):
+            if c.get('type') == 'text' and c.get('text'):
+                print(c['text'], flush=True)
+    elif t == 'tool_use':
+        print(f'  -> {e.get(\"name\", \"unknown\")}', flush=True)
+    elif t == 'result':
+        cost = e.get('cost_usd', '?')
+        dur = e.get('duration_ms', '?')
+        print(f'\n--- Result (cost: {cost}, duration: {dur}ms) ---', flush=True)
+        if e.get('result'):
+            print(e['result'], flush=True)
+"
 
     # Push changes after each iteration
     git push origin "$CURRENT_BRANCH" || {
@@ -62,5 +99,5 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     }
 
     ITERATION=$((ITERATION + 1))
-    echo -e "\n\n======================== LOOP $ITERATION ========================\n"
+    echo -e "\n\n======================== LOOP $ITERATION COMPLETE ========================\n"
 done

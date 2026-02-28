@@ -3090,10 +3090,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#all-benchmarks" class="md-nav__link">
+  <a href="#all-benchmarks-10k-100k" class="md-nav__link">
     <span class="md-ellipsis">
       
-        All Benchmarks
+        All Benchmarks (10K + 100K)
       
     </span>
   </a>
@@ -3116,6 +3116,17 @@
     <span class="md-ellipsis">
       
         Skip Slow Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profiling-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profiling Scripts
       
     </span>
   </a>
@@ -3376,23 +3387,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="IRB Formula Benchmarks">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#performance-results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Results
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
         
           <li class="md-nav__item">
@@ -3459,6 +3453,34 @@
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#measured-results-100k-v0128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured Results (100K, v0.1.28)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Measured Results (100K, v0.1.28)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-stage-breakdown-from-profiler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline Stage Breakdown (from profiler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -4030,10 +4052,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#all-benchmarks" class="md-nav__link">
+  <a href="#all-benchmarks-10k-100k" class="md-nav__link">
     <span class="md-ellipsis">
       
-        All Benchmarks
+        All Benchmarks (10K + 100K)
       
     </span>
   </a>
@@ -4056,6 +4078,17 @@
     <span class="md-ellipsis">
       
         Skip Slow Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profiling-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profiling Scripts
       
     </span>
   </a>
@@ -4316,23 +4349,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="IRB Formula Benchmarks">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#performance-results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Results
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
         
           <li class="md-nav__item">
@@ -4399,6 +4415,34 @@
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#measured-results-100k-v0128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured Results (100K, v0.1.28)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Measured Results (100K, v0.1.28)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-stage-breakdown-from-profiler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline Stage Breakdown (from profiler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -4591,32 +4635,38 @@
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>└── test_pipeline_benchmark.py    # End-to-end pipeline performance
 </span></code></pre></div>
 <h2 id="running-benchmarks">Running Benchmarks<a class="headerlink" href="#running-benchmarks" title="Permanent link">&para;</a></h2>
-<h3 id="all-benchmarks">All Benchmarks<a class="headerlink" href="#all-benchmarks" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Run all benchmark tests</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-v
+<p>Benchmark tests are marked with <code>@pytest.mark.benchmark</code> and are skipped by default (<code>--benchmark-skip</code> in pyproject.toml). Use <code>--benchmark-only</code> or override <code>addopts</code> to run them.</p>
+<h3 id="all-benchmarks-10k-100k">All Benchmarks (10K + 100K)<a class="headerlink" href="#all-benchmarks-10k-100k" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Run all benchmarks except 1M/10M (recommended)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;benchmark and not slow&quot;</span><span class="w"> </span>-k<span class="w"> </span><span class="s2">&quot;not 1m and not 1M&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>-v
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># With detailed timing</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-v<span class="w"> </span>--tb<span class="o">=</span>short
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># With detailed timing on failure</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;benchmark and not slow&quot;</span><span class="w"> </span>-k<span class="w"> </span><span class="s2">&quot;not 1m&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>-v<span class="w"> </span>--tb<span class="o">=</span>short
 </span></code></pre></div>
 <h3 id="by-scale">By Scale<a class="headerlink" href="#by-scale" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Quick tests (10K counterparties)</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_10k<span class="w"> </span>-v
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_10k<span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>-v
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Standard benchmarks (100K counterparties)</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_100k<span class="w"> </span>-v
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_100k<span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>-v
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Large scale (1M counterparties) - slower</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_1m<span class="w"> </span>-v
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Large scale (1M counterparties) - requires significant memory</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_1m<span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>-v
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Enterprise scale (10M counterparties) - very slow</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_10m<span class="w"> </span>-v
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>scale_10m<span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>-v
 </span></code></pre></div>
 <h3 id="skip-slow-tests">Skip Slow Tests<a class="headerlink" href="#skip-slow-tests" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Skip 1M+ scale tests</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;not slow&quot;</span><span class="w"> </span>-v
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Only memory benchmarks</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span>benchmark<span class="w"> </span>-v
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Skip 1M+ scale tests (default recommendation)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;benchmark and not slow&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>-v
+</span></code></pre></div>
+<h3 id="profiling-scripts">Profiling Scripts<a class="headerlink" href="#profiling-scripts" title="Permanent link">&para;</a></h3>
+<p>In addition to pytest benchmarks, standalone profiling scripts provide stage-by-stage breakdowns:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Full pipeline stage breakdown (hierarchy → classifier → CRM → calculators)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>tests.benchmarks.profile_stage_breakdown
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Hierarchy and classifier sub-stage profiling</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>tests.benchmarks.profile_hierarchy_classifier
 </span></code></pre></div>
 <h2 id="test-markers">Test Markers<a class="headerlink" href="#test-markers" title="Permanent link">&para;</a></h2>
 <table>
@@ -4953,44 +5003,13 @@
 </tbody>
 </table>
 <h3 id="irb-formula-benchmarks">IRB Formula Benchmarks<a class="headerlink" href="#irb-formula-benchmarks" title="Permanent link">&para;</a></h3>
-<p>The IRB formula implementation uses pure Polars expressions with <code>polars-normal-stats</code> for statistical functions, enabling full lazy evaluation and streaming.</p>
-<h4 id="performance-results">Performance Results<a class="headerlink" href="#performance-results" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th style="text-align: right;">Scale</th>
-<th style="text-align: right;">Mean Time</th>
-<th style="text-align: right;">Throughput</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: right;">10,000</td>
-<td style="text-align: right;">7.2 ms</td>
-<td style="text-align: right;">1.4M rows/s</td>
-</tr>
-<tr>
-<td style="text-align: right;">100,000</td>
-<td style="text-align: right;">32.3 ms</td>
-<td style="text-align: right;">3.1M rows/s</td>
-</tr>
-<tr>
-<td style="text-align: right;">1,000,000</td>
-<td style="text-align: right;">298 ms</td>
-<td style="text-align: right;">3.4M rows/s</td>
-</tr>
-</tbody>
-</table>
+<p>The IRB formula implementation uses pure Polars expressions with <code>polars-normal-stats</code> for statistical functions, enabling full lazy evaluation.</p>
 <p>Key benefits of the pure Polars implementation:</p>
 <ul>
 <li><strong>Full lazy evaluation</strong>: Query optimization preserved throughout</li>
-<li><strong>Streaming-capable</strong>: Datasets larger than memory can be processed</li>
 <li><strong>No data conversion</strong>: No NumPy/SciPy overhead</li>
 <li><strong>Sub-second for 1M rows</strong>: 1 million IRB exposures processed in ~300ms</li>
 </ul>
-<p>Run the IRB formula benchmark:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>tests/benchmarks/benchmark_irb_formulas.py
-</span></code></pre></div>
 <h3 id="memory-benchmarks">Memory Benchmarks<a class="headerlink" href="#memory-benchmarks" title="Permanent link">&para;</a></h3>
 <h4 id="testpipelinememorybenchmark"><code>TestPipelineMemoryBenchmark</code><a class="headerlink" href="#testpipelinememorybenchmark" title="Permanent link">&para;</a></h4>
 <table>
@@ -5075,80 +5094,183 @@
 </tr>
 </tbody>
 </table>
+<h3 id="measured-results-100k-v0128">Measured Results (100K, v0.1.28)<a class="headerlink" href="#measured-results-100k-v0128" title="Permanent link">&para;</a></h3>
+<p>Results from <code>pytest-benchmark</code> on a typical development machine (100K counterparties, ~365K exposures):</p>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Min (ms)</th>
+<th>Mean (ms)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hierarchy resolve</td>
+<td>67</td>
+<td>72</td>
+</tr>
+<tr>
+<td>Counterparty lookup</td>
+<td>45</td>
+<td>51</td>
+</tr>
+<tr>
+<td>Exposure unification</td>
+<td>19</td>
+<td>22</td>
+</tr>
+<tr>
+<td>Classifier</td>
+<td>730</td>
+<td>757</td>
+</tr>
+<tr>
+<td>SA calculator</td>
+<td>271</td>
+<td>310</td>
+</tr>
+<tr>
+<td><strong>Full pipeline (SA only)</strong></td>
+<td><strong>1,611</strong></td>
+<td><strong>1,710</strong></td>
+</tr>
+<tr>
+<td><strong>Full pipeline (CRR)</strong></td>
+<td><strong>1,848</strong></td>
+<td><strong>1,931</strong></td>
+</tr>
+<tr>
+<td>Full pipeline (IRB + slotting)</td>
+<td>2,092</td>
+<td>2,210</td>
+</tr>
+<tr>
+<td>Basel 3.1 with output floor</td>
+<td>2,058</td>
+<td>2,110</td>
+</tr>
+</tbody>
+</table>
+<h4 id="pipeline-stage-breakdown-from-profiler">Pipeline Stage Breakdown (from profiler)<a class="headerlink" href="#pipeline-stage-breakdown-from-profiler" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Best (ms)</th>
+<th>Mean (ms)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hierarchy</td>
+<td>383</td>
+<td>400</td>
+</tr>
+<tr>
+<td>Classifier</td>
+<td>212</td>
+<td>230</td>
+</tr>
+<tr>
+<td>CRM</td>
+<td>669</td>
+<td>710</td>
+</tr>
+<tr>
+<td>Calculators (SA+IRB+Slotting)</td>
+<td>309</td>
+<td>340</td>
+</tr>
+<tr>
+<td><strong>Total (stages)</strong></td>
+<td><strong>1,634</strong></td>
+<td><strong>1,774</strong></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="writing-benchmark-tests">Writing Benchmark Tests<a class="headerlink" href="#writing-benchmark-tests" title="Permanent link">&para;</a></h2>
 <h3 id="basic-structure">Basic Structure<a class="headerlink" href="#basic-structure" title="Permanent link">&para;</a></h3>
+<p>Tests use the <code>pytest-benchmark</code> fixture for accurate timing with multiple rounds:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestMyBenchmark</span><span class="p">:</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Benchmark tests for MyComponent.&quot;&quot;&quot;</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">scale_100k</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_my_component_100k</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset_100k</span><span class="p">):</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Test MyComponent at 100K scale.&quot;&quot;&quot;</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>        <span class="c1"># Run the operation</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">my_component</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">dataset_100k</span><span class="p">)</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>        <span class="n">duration</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>        <span class="c1"># Assert performance target</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>        <span class="k">assert</span> <span class="n">duration</span> <span class="o">&lt;</span> <span class="mf">10.0</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected &lt; 10s, got </span><span class="si">{</span><span class="n">duration</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">s&quot;</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>        <span class="c1"># Assert correctness</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>        <span class="k">assert</span> <span class="n">result</span><span class="o">.</span><span class="n">is_valid</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">benchmark</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">scale_100k</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestMyBenchmark</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Benchmark tests for MyComponent.&quot;&quot;&quot;</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_my_component_100k</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">benchmark</span><span class="p">,</span> <span class="n">dataset_100k</span><span class="p">):</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Benchmark MyComponent at 100K scale.&quot;&quot;&quot;</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="n">raw_data</span> <span class="o">=</span> <span class="n">create_raw_data_bundle</span><span class="p">(</span><span class="n">dataset_100k</span><span class="p">)</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>        <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>            <span class="n">result</span> <span class="o">=</span> <span class="n">my_component</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">raw_data</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>            <span class="n">_</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>  <span class="c1"># Force lazy evaluation</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>            <span class="k">return</span> <span class="n">result</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">benchmark</span><span class="p">(</span><span class="n">run</span><span class="p">)</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>        <span class="k">assert</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
 </span></code></pre></div>
 <h3 id="using-dataset-generators">Using Dataset Generators<a class="headerlink" href="#using-dataset-generators" title="Permanent link">&para;</a></h3>
-<p>The benchmark tests use dataset generators that create realistic data distributions:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">dataset_100k</span><span class="p">():</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate 100K counterparty dataset.&quot;&quot;&quot;</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="k">return</span> <span class="n">generate_dataset</span><span class="p">(</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="n">num_counterparties</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="n">facilities_per_counterparty</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="n">loans_per_facility</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="p">)</span>
+<p>The benchmark tests use dataset generators with cached parquet files for fast loading. Datasets are cached in <code>tests/benchmarks/data/</code> and regenerated only when <code>--benchmark-regenerate</code> is passed:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Session-scoped fixture — generates once, cached to parquet</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span><span class="p">(</span><span class="n">scope</span><span class="o">=</span><span class="s2">&quot;session&quot;</span><span class="p">)</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">dataset_100k</span><span class="p">():</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load or generate 100K counterparty dataset.&quot;&quot;&quot;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="k">return</span> <span class="n">get_or_create_dataset</span><span class="p">(</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="n">scale</span><span class="o">=</span><span class="s2">&quot;100k&quot;</span><span class="p">,</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="n">n_counterparties</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>        <span class="n">hierarchy_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>        <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="p">)</span>
+</span></code></pre></div>
+<p>To regenerate cached datasets:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Regenerate all cached datasets</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>--benchmark-regenerate<span class="w"> </span>-v
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Regenerate specific scale only</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>--benchmark-regenerate-scale<span class="o">=</span>100k<span class="w"> </span>-v
 </span></code></pre></div>
 <h3 id="memory-testing">Memory Testing<a class="headerlink" href="#memory-testing" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">tracemalloc</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">benchmark</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_memory_usage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">):</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Test memory consumption.&quot;&quot;&quot;</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">tracemalloc</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="c1"># Run operation</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    <span class="n">current</span><span class="p">,</span> <span class="n">peak</span> <span class="o">=</span> <span class="n">tracemalloc</span><span class="o">.</span><span class="n">get_traced_memory</span><span class="p">()</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="n">tracemalloc</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">peak_mb</span> <span class="o">=</span> <span class="n">peak</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="k">assert</span> <span class="n">peak_mb</span> <span class="o">&lt;</span> <span class="mi">500</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected &lt; 500 MB, got </span><span class="si">{</span><span class="n">peak_mb</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB&quot;</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">tracemalloc</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">benchmark</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_memory_usage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">):</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Test memory consumption.&quot;&quot;&quot;</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">tracemalloc</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="c1"># Run operation</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="n">current</span><span class="p">,</span> <span class="n">peak</span> <span class="o">=</span> <span class="n">tracemalloc</span><span class="o">.</span><span class="n">get_traced_memory</span><span class="p">()</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">tracemalloc</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">peak_mb</span> <span class="o">=</span> <span class="n">peak</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="k">assert</span> <span class="n">peak_mb</span> <span class="o">&lt;</span> <span class="mi">500</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected &lt; 500 MB, got </span><span class="si">{</span><span class="n">peak_mb</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB&quot;</span>
 </span></code></pre></div>
 <hr />
 <h2 id="cicd-integration">CI/CD Integration<a class="headerlink" href="#cicd-integration" title="Permanent link">&para;</a></h2>
 <h3 id="recommended-ci-configuration">Recommended CI Configuration<a class="headerlink" href="#recommended-ci-configuration" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Run quick benchmarks on every PR</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">benchmark-quick</span><span class="p">:</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">script</span><span class="p">:</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uv run pytest tests/benchmarks/ -m &quot;scale_10k or scale_100k&quot; -v</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Run full benchmarks nightly</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="nt">benchmark-full</span><span class="p">:</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w">  </span><span class="c1"># 2 AM daily</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="nt">script</span><span class="p">:</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uv run pytest tests/benchmarks/ -v --tb=short</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Run quick benchmarks on every PR (10K + 100K, excludes 1M/10M)</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">benchmark-quick</span><span class="p">:</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">script</span><span class="p">:</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uv run pytest tests/benchmarks/ -m &quot;benchmark and not slow&quot; -k &quot;not 1m&quot; -o &quot;addopts=&quot; --benchmark-only -v</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Run full benchmarks nightly (includes 1M)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="nt">benchmark-full</span><span class="p">:</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w">  </span><span class="c1"># 2 AM daily</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span><span class="nt">script</span><span class="p">:</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uv run pytest tests/benchmarks/ -m &quot;benchmark and not slow&quot; -o &quot;addopts=&quot; --benchmark-only -v --tb=short</span>
 </span></code></pre></div>
 <h3 id="performance-regression-detection">Performance Regression Detection<a class="headerlink" href="#performance-regression-detection" title="Permanent link">&para;</a></h3>
 <p>Monitor benchmark results over time to detect regressions:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Generate benchmark report</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-v<span class="w"> </span>--benchmark-json<span class="o">=</span>benchmark.json
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Compare with baseline</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest-benchmark<span class="w"> </span>compare<span class="w"> </span>benchmark.json<span class="w"> </span>baseline.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Generate benchmark report</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/benchmarks/<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;benchmark and not slow&quot;</span><span class="w"> </span>-k<span class="w"> </span><span class="s2">&quot;not 1m&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;addopts=&quot;</span><span class="w"> </span>--benchmark-only<span class="w"> </span>--benchmark-json<span class="o">=</span>benchmark.json
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Compare with baseline</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest-benchmark<span class="w"> </span>compare<span class="w"> </span>benchmark.json<span class="w"> </span>baseline.json
 </span></code></pre></div>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>

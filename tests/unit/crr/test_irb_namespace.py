@@ -1062,3 +1062,231 @@ class TestApplyGuaranteeSubstitution:
         assert "risk_weight_irb_original" in result.columns
         assert result["rwa_irb_original"][0] == pytest.approx(100_000.0)
         assert result["risk_weight_irb_original"][0] == pytest.approx(0.10)
+
+
+# =============================================================================
+# EL Shortfall / Excess Tests
+# =============================================================================
+
+
+class TestELShortfallExcess:
+    """Tests for compute_el_shortfall_excess().
+
+    EL shortfall = max(0, expected_loss - provision_allocated)
+    EL excess    = max(0, provision_allocated - expected_loss)
+
+    References:
+    - CRR Art. 158-159: EL shortfall treatment
+    - CRR Art. 62(d): Excess provisions as T2 capital (capped)
+    """
+
+    def test_shortfall_when_el_exceeds_provisions(self) -> None:
+        """EL > provisions produces positive shortfall and zero excess."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [45_000.0],
+                "provision_allocated": [30_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(15_000.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_excess_when_provisions_exceed_el(self) -> None:
+        """Provisions > EL produces positive excess and zero shortfall."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [11_250.0],
+                "provision_allocated": [50_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(0.0)
+        assert result["el_excess"][0] == pytest.approx(38_750.0)
+
+    def test_exact_match_el_equals_provisions(self) -> None:
+        """EL == provisions produces zero for both shortfall and excess."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [25_000.0],
+                "provision_allocated": [25_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(0.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_zero_provisions(self) -> None:
+        """Zero provisions means full EL is shortfall."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [10_000.0],
+                "provision_allocated": [0.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(10_000.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_zero_expected_loss(self) -> None:
+        """Zero EL with provisions means full excess."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [0.0],
+                "provision_allocated": [5_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(0.0)
+        assert result["el_excess"][0] == pytest.approx(5_000.0)
+
+    def test_multiple_exposures_mixed(self) -> None:
+        """Mixed portfolio with both shortfall and excess exposures."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "expected_loss": [45_000.0, 11_250.0, 20_000.0],
+                "provision_allocated": [30_000.0, 50_000.0, 20_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        # EXP001: shortfall = 15k, excess = 0
+        assert result["el_shortfall"][0] == pytest.approx(15_000.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+        # EXP002: shortfall = 0, excess = 38.75k
+        assert result["el_shortfall"][1] == pytest.approx(0.0)
+        assert result["el_excess"][1] == pytest.approx(38_750.0)
+        # EXP003: exact match
+        assert result["el_shortfall"][2] == pytest.approx(0.0)
+        assert result["el_excess"][2] == pytest.approx(0.0)
+
+    def test_no_provision_allocated_column(self) -> None:
+        """When provision_allocated is absent, full EL becomes shortfall."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [10_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(10_000.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_no_expected_loss_column(self) -> None:
+        """When expected_loss is absent, both are zero."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "provision_allocated": [10_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(0.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_null_expected_loss_treated_as_zero(self) -> None:
+        """Null expected_loss is treated as zero."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [None],
+                "provision_allocated": [5_000.0],
+            },
+            schema={
+                "exposure_reference": pl.String,
+                "expected_loss": pl.Float64,
+                "provision_allocated": pl.Float64,
+            },
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(0.0)
+        assert result["el_excess"][0] == pytest.approx(5_000.0)
+
+    def test_null_provision_treated_as_zero(self) -> None:
+        """Null provision_allocated is treated as zero."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "expected_loss": [10_000.0],
+                "provision_allocated": [None],
+            },
+            schema={
+                "exposure_reference": pl.String,
+                "expected_loss": pl.Float64,
+                "provision_allocated": pl.Float64,
+            },
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(10_000.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_crr_g2_scenario_values(self) -> None:
+        """CRR-G2 scenario: EL=45k, prov=30k -> shortfall=15k (CRR Art. 159)."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["LOAN_PROV_G2"],
+                "expected_loss": [45_000.0],
+                "provision_allocated": [30_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(15_000.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_crr_g3_scenario_values(self) -> None:
+        """CRR-G3 scenario: EL=11.25k, prov=50k -> excess=38.75k (CRR Art. 62(d))."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["LOAN_PROV_G3"],
+                "expected_loss": [11_250.0],
+                "provision_allocated": [50_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(0.0)
+        assert result["el_excess"][0] == pytest.approx(38_750.0)
+
+    def test_b31_g2_scenario_values(self) -> None:
+        """B31-G2 scenario: EL=40k, prov=30k -> shortfall=10k (LGD 40% vs 45%)."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["LOAN_PROV_G2"],
+                "expected_loss": [40_000.0],
+                "provision_allocated": [30_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(10_000.0)
+        assert result["el_excess"][0] == pytest.approx(0.0)
+
+    def test_b31_g3_scenario_values(self) -> None:
+        """B31-G3 scenario: EL=10k, prov=50k -> excess=40k (LGD 40% vs 45%)."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["LOAN_PROV_G3"],
+                "expected_loss": [10_000.0],
+                "provision_allocated": [50_000.0],
+            }
+        )
+        result = lf.irb.compute_el_shortfall_excess().collect()
+
+        assert result["el_shortfall"][0] == pytest.approx(0.0)
+        assert result["el_excess"][0] == pytest.approx(40_000.0)

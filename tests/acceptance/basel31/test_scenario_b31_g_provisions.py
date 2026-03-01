@@ -271,6 +271,113 @@ class TestB31GroupG_FrameworkDifferences:
         )
 
 
+class TestB31GroupG_ELShortfallExcess:
+    """
+    Basel 3.1 EL shortfall/excess column validation.
+
+    Verifies that the production pipeline computes per-exposure
+    el_shortfall and el_excess columns correctly under Basel 3.1.
+    The lower LGD (40% vs 45%) reduces EL, changing the
+    shortfall/excess balance compared to CRR.
+
+    References:
+    - CRE35.1-3: Expected loss calculation
+    - CRE32.9: Revised F-IRB supervisory LGD (40%)
+    - CRR Art. 159: EL shortfall treatment
+    - CRR Art. 62(d): Excess provisions as T2 capital
+    """
+
+    def test_b31_g2_el_shortfall_column(
+        self,
+        firb_results_df: pl.DataFrame,
+    ) -> None:
+        """
+        B31-G2: el_shortfall = max(0, EL - provisions) = 40k - 30k = 10k.
+
+        EL = PD(2%) x LGD(40%) x EAD(5M) = 40,000 (CRR: 45,000)
+        Provisions = 30,000
+        Shortfall = 10,000 (CRR: 15,000) — 33% lower due to LGD reduction
+        """
+        result = get_result_for_exposure(firb_results_df, "LOAN_PROV_G2")
+        if result is None:
+            pytest.skip("LOAN_PROV_G2 not in F-IRB results")
+
+        assert "el_shortfall" in result, "el_shortfall column missing from IRB results"
+        assert result["el_shortfall"] == pytest.approx(10_000.0, rel=0.01), (
+            f"B31-G2: el_shortfall should be 10,000 (EL 40k - prov 30k), "
+            f"got {result['el_shortfall']}"
+        )
+
+    def test_b31_g2_el_excess_is_zero(
+        self,
+        firb_results_df: pl.DataFrame,
+    ) -> None:
+        """B31-G2: el_excess should be zero when EL > provisions."""
+        result = get_result_for_exposure(firb_results_df, "LOAN_PROV_G2")
+        if result is None:
+            pytest.skip("LOAN_PROV_G2 not in F-IRB results")
+
+        assert "el_excess" in result, "el_excess column missing from IRB results"
+        assert result["el_excess"] == pytest.approx(0.0, abs=0.01), (
+            f"B31-G2: el_excess should be 0 (EL > provisions), got {result['el_excess']}"
+        )
+
+    def test_b31_g3_el_excess_column(
+        self,
+        firb_results_df: pl.DataFrame,
+    ) -> None:
+        """
+        B31-G3: el_excess = max(0, provisions - EL) = 50k - 10k = 40k.
+
+        EL = PD(0.5%) x LGD(40%) x EAD(5M) = 10,000 (CRR: 11,250)
+        Provisions = 50,000
+        Excess = 40,000 (CRR: 38,750) — higher excess due to lower EL
+        """
+        result = get_result_for_exposure(firb_results_df, "LOAN_PROV_G3")
+        if result is None:
+            pytest.skip("LOAN_PROV_G3 not in F-IRB results")
+
+        assert "el_excess" in result, "el_excess column missing from IRB results"
+        assert result["el_excess"] == pytest.approx(40_000.0, rel=0.01), (
+            f"B31-G3: el_excess should be 40,000 (prov 50k - EL 10k), "
+            f"got {result['el_excess']}"
+        )
+
+    def test_b31_g3_el_shortfall_is_zero(
+        self,
+        firb_results_df: pl.DataFrame,
+    ) -> None:
+        """B31-G3: el_shortfall should be zero when provisions > EL."""
+        result = get_result_for_exposure(firb_results_df, "LOAN_PROV_G3")
+        if result is None:
+            pytest.skip("LOAN_PROV_G3 not in F-IRB results")
+
+        assert "el_shortfall" in result, "el_shortfall column missing from IRB results"
+        assert result["el_shortfall"] == pytest.approx(0.0, abs=0.01), (
+            f"B31-G3: el_shortfall should be 0 (provisions > EL), "
+            f"got {result['el_shortfall']}"
+        )
+
+    def test_b31_g2_shortfall_lower_than_crr(
+        self,
+        firb_results_df: pl.DataFrame,
+    ) -> None:
+        """B31-G2: Shortfall should be lower than CRR due to LGD 40% vs 45%.
+
+        CRR shortfall: 45k - 30k = 15k
+        B31 shortfall: 40k - 30k = 10k (33% lower)
+        """
+        result = get_result_for_exposure(firb_results_df, "LOAN_PROV_G2")
+        if result is None:
+            pytest.skip("LOAN_PROV_G2 not in F-IRB results")
+
+        crr_shortfall = 15_000.0  # Known CRR value
+        assert result["el_shortfall"] < crr_shortfall, (
+            f"B31-G2: Shortfall ({result['el_shortfall']}) should be less than "
+            f"CRR shortfall ({crr_shortfall}) due to lower LGD"
+        )
+
+
 class TestB31GroupG_ParameterizedValidation:
     """
     Parametrized tests to validate expected outputs structure.

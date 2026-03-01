@@ -35,14 +35,14 @@ Remaining (needs specification work before implementation):
 
 - [x] **Output floor phase-in validation tests** (M2.6) — Done. 11 tests covering all 6 transitional years plus edge cases.
 - [x] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 38 scenarios across 8 groups (10 SA, 7 F-IRB, 3 A-IRB, 6 CRM, 4 slotting, 3 output floor, 3 provisions, 2 complex/combined).
-- [x] **Basel 3.1 acceptance tests** (M2.5) — **102 tests across 8 test files**, all passing:
+- [x] **Basel 3.1 acceptance tests** (M2.5) — **111 tests across 8 test files**, all passing:
   - `test_scenario_b31_a_sa.py` (14): SA risk weight revisions
   - `test_scenario_b31_b_firb.py` (16): F-IRB revised LGD/PD floors
   - `test_scenario_b31_c_airb.py` (13): A-IRB LGD floor enforcement
   - `test_scenario_b31_d_crm.py` (15): CRM revised haircuts
   - `test_scenario_b31_e_slotting.py` (13): Slotting operational/HVCRE tables
   - `test_scenario_b31_f_output_floor.py` (6): Output floor phase-in
-  - `test_scenario_b31_g_provisions.py` (15): Provision EAD deduction, EL shortfall/excess with B31 LGD
+  - `test_scenario_b31_g_provisions.py` (20): Provision EAD deduction, EL shortfall/excess with B31 LGD, el_shortfall/el_excess column validation
   - `test_scenario_b31_h_complex.py` (10): Facility aggregation, SME SF removal impact
 
 ### 2e. Output floor engine — COMPLETE
@@ -68,17 +68,21 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - [ ] **BDD test scaffold** — Empty scaffold, no actual BDD tests. Low priority.
 - [ ] **Runtime skip pattern inconsistency** — Audit remaining runtime skips.
 
+### 2f. EL shortfall/excess computation — COMPLETE
+
+- [x] **EL shortfall/excess per exposure** (CRR Art. 158-159, Art. 62(d)) — Done. `compute_el_shortfall_excess()` added to IRB namespace. Computes `el_shortfall = max(0, EL - provision_allocated)` and `el_excess = max(0, provision_allocated - EL)` for every IRB exposure. Called in all 3 IRB calculator paths (`get_irb_result_bundle`, `calculate_unified`, `calculate_branch`). 14 unit tests, 9 acceptance tests (4 CRR-G, 5 B31-G). Aggregator `_generate_summary_by_approach()` extended to sum `total_el_shortfall` / `total_el_excess`.
+
 ## Test Counts
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,302 | 1 |
+| Unit | 1,316 | 1 |
 | Contracts | 123 | 0 |
-| Acceptance (CRR) | 87 | 0 |
-| Acceptance (Basel 3.1) | 102 | 0 |
+| Acceptance (CRR) | 91 | 0 |
+| Acceptance (Basel 3.1) | 111 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,623** | **22** |
+| **Total** | **1,646** | **22** |
 
 ## Learnings
 
@@ -103,5 +107,5 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - **B31-G provision tests use same fixtures as CRR-G:** The provision fixture data (`LOAN_PROV_G1/G2/G3`) is shared across frameworks. The pipeline config (`CalculationConfig.basel_3_1()`) drives different IRB results (LGD 40% vs 45%, no 1.06 scaling). SA provision deduction (G1) is identical across frameworks.
 - **B31-G2/G3 maturity differs from CRR:** With F-IRB reporting_date=2027-06-30 and loan maturity_date=2028-06-30, effective maturity = 1.0027y (vs CRR 2.5y). At M≈1.0, the maturity adjustment MA = 1.0 (numerator equals denominator). This dramatically reduces IRB RWA: G2 RWA drops from £6.1M (CRR) to £4.3M (B31) — 30% reduction.
 - **B31-H3 SME impact quantified:** Basel 3.1 SME corporates get 85% RW (vs CRR 100%) but lose the 0.7619 supporting factor. Net effect: effective RW rises from 76.19% to 85%, a 12% RWA increase. This is material for banks with large SME portfolios.
-- **EL shortfall/excess columns not yet computed:** `el_shortfall` and `el_excess` are defined in `schemas.py` but not computed anywhere in the engine. The IRB calculator produces `expected_loss` and `provision_allocated`, but the comparison (max(0, EL - provision) / max(0, provision - EL)) is not yet implemented. Tests verify RWA and EL values but not shortfall/excess columns directly.
+- **EL shortfall/excess columns (implemented):** `el_shortfall` and `el_excess` are computed by `IRBLazyFrame.compute_el_shortfall_excess()` in the IRB namespace. Called after `apply_all_formulas()` in all IRB calculator paths. Guards against missing `provision_allocated` (defaults to 0) and missing `expected_loss` (both columns default to 0). T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) is not yet computed at portfolio level — only per-exposure shortfall/excess is tracked.
 - **Pre-existing formatting issues:** `formulas.py` and `namespace.py` in `engine/irb/` had ruff format violations. Fixed as part of this increment.

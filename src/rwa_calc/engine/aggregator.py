@@ -760,6 +760,16 @@ class OutputAggregator:
                 pl.col("expected_loss").sum().alias("total_expected_loss"),
             )
 
+        # Add EL shortfall/excess for IRB if available
+        if "el_shortfall" in cols:
+            agg_exprs.append(
+                pl.col("el_shortfall").sum().alias("total_el_shortfall"),
+            )
+        if "el_excess" in cols:
+            agg_exprs.append(
+                pl.col("el_excess").sum().alias("total_el_excess"),
+            )
+
         # Group by approach
         if group_col:
             summary = results.group_by(group_col).agg(agg_exprs)

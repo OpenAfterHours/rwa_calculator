@@ -596,6 +596,59 @@ class IRBLazyFrame:
         return lf
 
     # =========================================================================
+    # EL SHORTFALL / EXCESS
+    # =========================================================================
+
+    def compute_el_shortfall_excess(self) -> pl.LazyFrame:
+        """
+        Compute EL shortfall and excess for IRB exposures.
+
+        Compares expected loss to allocated provisions to determine
+        whether the bank has a shortfall (EL > provisions) or excess
+        (provisions > EL). Shortfall reduces CET1/T2; excess may be
+        added to T2 capital (subject to 0.6% IRB RWA cap).
+
+        Requires ``expected_loss`` to be computed first. If
+        ``provision_allocated`` is absent (no provisions in the input),
+        shortfall equals the full EL and excess is zero.
+
+        Produces:
+            el_shortfall: max(0, expected_loss - provision_allocated)
+            el_excess:    max(0, provision_allocated - expected_loss)
+
+        References:
+            CRR Art. 158-159: EL shortfall treatment
+            CRR Art. 62(d): Excess provisions as T2 capital (capped)
+            CRE35.1-3: Basel 3.1 expected loss calculation
+        """
+        schema = self._lf.collect_schema()
+        cols = schema.names()
+
+        if "expected_loss" not in cols:
+            # EL not yet computed — nothing to compare
+            return self._lf.with_columns(
+                [
+                    pl.lit(0.0).alias("el_shortfall"),
+                    pl.lit(0.0).alias("el_excess"),
+                ]
+            )
+
+        el = pl.col("expected_loss").fill_null(0.0)
+
+        if "provision_allocated" in cols:
+            prov = pl.col("provision_allocated").fill_null(0.0)
+        else:
+            # No provisions resolved — full EL is shortfall
+            prov = pl.lit(0.0)
+
+        return self._lf.with_columns(
+            [
+                pl.max_horizontal(pl.lit(0.0), el - prov).alias("el_shortfall"),
+                pl.max_horizontal(pl.lit(0.0), prov - el).alias("el_excess"),
+            ]
+        )
+
+    # =========================================================================
     # GUARANTEE SUBSTITUTION
     # =========================================================================
 

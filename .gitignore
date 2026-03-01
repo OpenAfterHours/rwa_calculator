@@ -1,15 +1,15 @@
 .idea
 nul
 __pycache__/
+.venv*/
+
 # exclude datafiles
 *.parquet
-
 *.csv
-site
-tests/benchmarks/data/
-*.csvsite/ 
+*.xlsx
+
 site/
+tests/benchmarks/data/
 .pypirc
 dist/
-*.xlsx
 logs/

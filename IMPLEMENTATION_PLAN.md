@@ -14,8 +14,6 @@ All items complete including CI/CD pipeline (M1.6). All 3 quality gates pass: ru
 
 Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB supervisory LGD, A-IRB CCF floor, CCF for unconditionally cancellable commitments, Equity calculator Basel 3.1 routing.
 
-- [ ] **Large corporate correlation multiplier** (CRE31.5) — Basel 3.1 requires 1.25x correlation multiplier for corporates belonging to groups with total consolidated assets > EUR 500m (separate from existing FI scalar). Not implemented. **Action:** Need `consolidated_assets` or equivalent field on counterparty data; add threshold check and 1.25x multiplier in `_polars_correlation_expr()`. Requires schema extension for the assets column.
-
 ### 2b. SA risk weight revisions
 
 - [x] **LTV-based residential RE risk weights** (FR-1.2 / CRE20.71–88) — Done. Implemented Basel 3.1 LTV-band risk weights (CRE20.73/82/85/86/87-88) in `data/tables/b31_risk_weights.py` and `engine/sa/calculator.py`. Covers general residential (7 bands: 20%-70%), income-producing residential (7 bands: 30%-105%), general commercial RE (min(60%, cp_rw) if LTV <= 60%), income-producing commercial RE (3 bands: 70%/90%/110%), and ADC (150%/100% pre-sold). 59 unit tests in `tests/unit/test_b31_sa_risk_weights.py`. All 1444 tests pass.

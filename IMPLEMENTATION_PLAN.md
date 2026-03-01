@@ -55,7 +55,7 @@ Remaining:
 
 ## Priority 4 — Output & Export
 
-- [~] **Excel / Parquet export** (FR-4.7) — Partial. No programmatic export API yet.
+- [x] **Excel / Parquet export** (FR-4.7) — Done. `ResultExporter` in `api/export.py` with `export_to_parquet()`, `export_to_csv()`, `export_to_excel()`. `CalculationResponse` has convenience methods `to_parquet()`, `to_csv()`, `to_excel()`. Protocol: `ResultExporterProtocol`. Excel requires `xlsxwriter` (added to deps). 19 unit tests.
 - [ ] **COREP template generation** (FR-4.6) — Not Started. Deferred to v2.0.
 
 ## Infrastructure & Cleanup
@@ -67,14 +67,14 @@ Remaining:
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,383 | 0 |
+| Unit | 1,402 | 0 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 91 | 0 |
 | Acceptance (Basel 3.1) | 111 | 0 |
 | Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 22 |
-| **Total** | **1,775** | **22** |
+| **Total** | **1,794** | **22** |
 
 ## Learnings
 
@@ -84,6 +84,8 @@ Remaining:
 - `_ensure_components_initialized()` caches the `CRMProcessor` with the first config's `is_basel_3_1` flag and never recreates it. This is why `DualFrameworkRunner` and `TransitionalScheduleRunner` each create separate `PipelineOrchestrator` instances.
 - `PDFloors.get_floor()` and `LGDFloors.get_floor()` exist in config but are never called by the engine — the engine uses vectorized `_pd_floor_expression()` / `_lgd_floor_expression()` helpers instead.
 - `approach_applied` column uses enum string values: `"standardised"`, `"foundation_irb"`, `"advanced_irb"`, `"slotting"` — not the enum names `"SA"`, `"FIRB"`, etc. Tests must filter on the `.value` form.
+- `ResultExporter` reads from `CalculationResponse`'s cached parquet files via lazy scan, so export doesn't require re-running the pipeline. `CalculationResponse.to_parquet()` / `to_csv()` / `to_excel()` are convenience wrappers.
+- Excel export requires `xlsxwriter` (Polars uses it for `DataFrame.write_excel()`). `fastexcel` is for reading only.
 
 ### Regulatory rules
 

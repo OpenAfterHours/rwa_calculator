@@ -16,9 +16,12 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from rwa_calc.api.export import ExportResult
 
 # =============================================================================
 # Request Models
@@ -245,6 +248,53 @@ class CalculationResponse:
         if self.summary_by_approach_path and self.summary_by_approach_path.exists():
             return pl.scan_parquet(self.summary_by_approach_path)
         return None
+
+    def to_parquet(self, output_dir: Path) -> ExportResult:
+        """
+        Export results to Parquet files.
+
+        Args:
+            output_dir: Directory to write parquet files into
+
+        Returns:
+            ExportResult with list of written files and row count
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_parquet(self, output_dir)
+
+    def to_csv(self, output_dir: Path) -> ExportResult:
+        """
+        Export results to CSV files.
+
+        Args:
+            output_dir: Directory to write CSV files into
+
+        Returns:
+            ExportResult with list of written files and row count
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_csv(self, output_dir)
+
+    def to_excel(self, output_path: Path) -> ExportResult:
+        """
+        Export results to a multi-sheet Excel workbook.
+
+        Requires xlsxwriter to be installed.
+
+        Args:
+            output_path: Path for the .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_excel(self, output_path)
 
     @property
     def has_warnings(self) -> bool:

@@ -10,7 +10,7 @@
 | FR-4.4 | Pre/post-CRM RWA breakdown with guarantee benefit attribution | P1 | Done |
 | FR-4.5 | Exposure-level detail output with all intermediate calculations | P1 | Done |
 | FR-4.6 | COREP template generation (CRR reporting) | P3 | Not Started |
-| FR-4.7 | Excel / Parquet export of results | P2 | Partial |
+| FR-4.7 | Excel / Parquet export of results | P2 | Done |
 
 ## Output Floor (Basel 3.1)
 
@@ -38,5 +38,6 @@ Regulatory reporting templates for CRR firms (C07.00, C08.01, C08.02). Stub exis
 ## Export
 
 ### Status
-- Parquet export: partial
-- Excel (XLSX) export via fastexcel: partial
+- Parquet export: Done
+- CSV export: Done
+- Excel (XLSX) export via xlsxwriter: Done

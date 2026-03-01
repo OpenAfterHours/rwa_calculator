@@ -20,8 +20,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     import polars as pl
 
+    from rwa_calc.api.export import ExportResult
+    from rwa_calc.api.models import CalculationResponse
     from rwa_calc.contracts.bundles import (
         AggregatedResultBundle,
         CapitalImpactBundle,
@@ -691,5 +695,76 @@ class DataQualityCheckerProtocol(Protocol):
 
         Returns:
             List of CalculationError for any issues found
+        """
+        ...
+
+
+# =============================================================================
+# EXPORT PROTOCOLS
+# =============================================================================
+
+
+@runtime_checkable
+class ResultExporterProtocol(Protocol):
+    """
+    Protocol for result export components.
+
+    Exports CalculationResponse data to external file formats.
+    Each method writes one or more files and returns an ExportResult
+    describing what was written.
+
+    Why: Firms need calculation results in formats consumable by
+    downstream systems — Parquet for analytics pipelines, CSV for
+    ad-hoc analysis, Excel for stakeholder reporting.
+    """
+
+    def export_to_parquet(
+        self,
+        response: CalculationResponse,
+        output_dir: Path,
+    ) -> ExportResult:
+        """
+        Export results to Parquet files.
+
+        Args:
+            response: CalculationResponse with cached results
+            output_dir: Directory to write parquet files into
+
+        Returns:
+            ExportResult with list of written files and row count
+        """
+        ...
+
+    def export_to_csv(
+        self,
+        response: CalculationResponse,
+        output_dir: Path,
+    ) -> ExportResult:
+        """
+        Export results to CSV files.
+
+        Args:
+            response: CalculationResponse with cached results
+            output_dir: Directory to write CSV files into
+
+        Returns:
+            ExportResult with list of written files and row count
+        """
+        ...
+
+    def export_to_excel(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """
+        Export results to a multi-sheet Excel workbook.
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
         """
         ...

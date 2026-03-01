@@ -34,8 +34,8 @@ Remaining (needs specification work before implementation):
 ### 2d. Testing and validation
 
 - [x] **Output floor phase-in validation tests** (M2.6) — Done. 11 tests covering all 6 transitional years plus edge cases.
-- [~] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON exists at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 13 scenarios (10 SA, 3 output floor). Workbook structure at `workbooks/basel31_expected_outputs/` defines 39 scenarios across 8 groups (A-H). **Remaining:** Verify workbook calculations for groups B-H against regulatory formulas; extend JSON with verified values.
-- [x] **Basel 3.1 acceptance tests** (M2.5) — Done. 20 tests across 2 test files: `test_scenario_b31_a_sa.py` (14 tests) and `test_scenario_b31_f_output_floor.py` (6 tests). All 20 pass. Remaining groups B-H need test files.
+- [~] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON exists at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 20 scenarios (10 SA, 7 F-IRB, 3 output floor). Workbook structure at `workbooks/basel31_expected_outputs/` defines 39 scenarios across 8 groups (A-H). **Remaining:** Verify workbook calculations for groups C-H against regulatory formulas; extend JSON with verified values.
+- [~] **Basel 3.1 acceptance tests** (M2.5) — 36 tests across 3 test files: `test_scenario_b31_a_sa.py` (14 tests), `test_scenario_b31_b_firb.py` (16 tests), and `test_scenario_b31_f_output_floor.py` (6 tests). All 36 pass. Remaining groups C-H need test files.
 
 ### 2e. Output floor engine — COMPLETE
 
@@ -67,10 +67,10 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 | Unit | 1,302 | 1 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 87 | 0 |
-| Acceptance (Basel 3.1) | 20 | 0 |
+| Acceptance (Basel 3.1) | 36 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,541** | **22** |
+| **Total** | **1,557** | **22** |
 
 ## Learnings
 
@@ -87,3 +87,6 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - **A-IRB LGD floor bug (fixed):** LGD floors were applied to ALL Basel 3.1 IRB rows (F-IRB and A-IRB). Fixed to only apply to A-IRB rows using `is_airb` column gating. F-IRB supervisory LGDs are regulatory values and don't need flooring (CRE30.41). Without `is_airb` column, defaults to no floor (conservative).
 - Investment-grade corporate 65% only applies to unrated corporates. SCRA grading only applies to unrated institutions.
 - Subordinated debt 150% is checked first in Basel 3.1 override chain because it overrides ALL other treatments.
+- **CRM processor F-IRB LGD bug (fixed):** `_apply_collateral_unified` and `_calculate_irb_lgd_with_collateral` hardcoded `pl.lit(0.45)` for senior unsecured LGD fallback, ignoring Basel 3.1's 40% value. The framework-conditional variable `lgd_unsecured` was correctly computed earlier in each method but not used in the `.otherwise()` fallback. Fixed 3 locations in `processor.py`. The `_apply_firb_supervisory_lgd_no_collateral` path was already correct but only triggered when zero collateral rows existed portfolio-wide.
+- F-IRB acceptance tests require `IRBPermissions.firb_only()` (not `full_irb()`) and reporting date 2027-06-30 to get meaningful maturities from fixture loans (maturity dates 2028-2033). Using `full_irb()` routes to A-IRB; using dates after 2032 causes all maturities to floor at 1.0.
+- Workbook `regulatory_params.py` PD floor discrepancy: uses `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) while production config correctly uses `0.0005` (Basel 3.1 0.05% per CRE30.20). Workbook needs updating.

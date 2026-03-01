@@ -84,6 +84,12 @@ def b31_a_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
+def b31_b_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-B (Foundation IRB Revised) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-B")
+
+
+@pytest.fixture(scope="session")
 def b31_f_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
     """Get B31-F (Output Floor) scenarios."""
     return get_scenarios_by_group(expected_outputs_df, "B31-F")
@@ -123,6 +129,28 @@ def b31_irb_calculation_config():
     return CalculationConfig.basel_3_1(
         reporting_date=date(2032, 6, 30),
         irb_permissions=IRBPermissions.full_irb(),
+    )
+
+
+@pytest.fixture(scope="session")
+def b31_firb_calculation_config():
+    """
+    Create Basel 3.1 CalculationConfig with F-IRB only permissions.
+
+    Used for B31-B F-IRB acceptance tests. Reporting date 2027-06-30 gives
+    meaningful maturities (1-5y) while being post Basel 3.1 effective date.
+
+    Key differences from CRR F-IRB config:
+    - Senior unsecured LGD: 40% (was 45%)
+    - PD floor: 0.05% corporate (was 0.03%)
+    - Scaling factor: 1.0 (was 1.06)
+    - Supporting factor: disabled
+    """
+    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+
+    return CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 6, 30),
+        irb_permissions=IRBPermissions.firb_only(),
     )
 
 
@@ -334,6 +362,27 @@ def irb_only_results_df(irb_pipeline_results) -> pl.DataFrame:
     if irb_pipeline_results.irb_results is None:
         return pl.DataFrame()
     return irb_pipeline_results.irb_results.collect()
+
+
+@pytest.fixture(scope="session")
+def firb_pipeline_results(raw_data_bundle, b31_firb_calculation_config):
+    """
+    Run all fixtures through the Basel 3.1 pipeline with F-IRB only permissions.
+
+    Used for B31-B F-IRB acceptance tests. Session-scoped.
+    """
+    from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+    pipeline = PipelineOrchestrator()
+    return pipeline.run_with_data(raw_data_bundle, b31_firb_calculation_config)
+
+
+@pytest.fixture(scope="session")
+def firb_results_df(firb_pipeline_results) -> pl.DataFrame:
+    """Get F-IRB results from the Basel 3.1 pipeline."""
+    if firb_pipeline_results.irb_results is None:
+        return pl.DataFrame()
+    return firb_pipeline_results.irb_results.collect()
 
 
 @pytest.fixture(scope="session")

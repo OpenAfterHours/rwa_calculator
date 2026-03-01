@@ -51,12 +51,15 @@ Remaining (needs specification work before implementation):
 
 ## Priority 3 — Dual-Framework Comparison (v1.2)
 
-No code exists for any M3.x milestone. The infrastructure supports dual execution (separate factory methods `CalculationConfig.crr()` / `.basel_3_1()`), but no comparison logic exists.
+### 3a. Side-by-side comparison — COMPLETE
 
-- [ ] **Side-by-side CRR vs Basel 3.1 comparison output** (M3.1) — Not Started.
-- [ ] **Capital impact analysis** (M3.2) — Not Started.
-- [ ] **Transitional floor schedule modelling** (M3.3) — Not Started.
-- [ ] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Not Started.
+- [x] **Side-by-side CRR vs Basel 3.1 comparison output** (M3.1) — Done. `DualFrameworkRunner` in `engine/comparison.py` orchestrates two separate `PipelineOrchestrator` instances (one per framework) on the same `RawDataBundle`. Produces `ComparisonBundle` with per-exposure deltas (delta_rwa, delta_risk_weight, delta_ead, delta_rwa_pct) and summary views by exposure class and approach. 22 unit tests + 19 acceptance tests (SA and F-IRB comparison scenarios).
+
+### 3b. Remaining (not started)
+
+- [ ] **Capital impact analysis** (M3.2) — Not Started. Depends on M3.1 (done). Would add delta attribution by driver (PD floor changes, LGD floor changes, scaling factor removal, supporting factor removal, output floor binding).
+- [ ] **Transitional floor schedule modelling** (M3.3) — Not Started. Would run the same B31 portfolio across 2027-2032 reporting dates to show how the output floor progressively tightens.
+- [ ] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Not Started. Would add comparison visualization, floor schedule slider, drill-down from portfolio delta to exposure-level drivers.
 
 ## Priority 4 — Output & Export
 
@@ -76,13 +79,14 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,316 | 1 |
+| Unit | 1,338 | 1 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 91 | 0 |
 | Acceptance (Basel 3.1) | 111 | 0 |
+| Acceptance (Comparison) | 19 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,646** | **22** |
+| **Total** | **1,687** | **22** |
 
 ## Learnings
 
@@ -109,3 +113,6 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - **B31-H3 SME impact quantified:** Basel 3.1 SME corporates get 85% RW (vs CRR 100%) but lose the 0.7619 supporting factor. Net effect: effective RW rises from 76.19% to 85%, a 12% RWA increase. This is material for banks with large SME portfolios.
 - **EL shortfall/excess columns (implemented):** `el_shortfall` and `el_excess` are computed by `IRBLazyFrame.compute_el_shortfall_excess()` in the IRB namespace. Called after `apply_all_formulas()` in all IRB calculator paths. Guards against missing `provision_allocated` (defaults to 0) and missing `expected_loss` (both columns default to 0). T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) is not yet computed at portfolio level — only per-exposure shortfall/excess is tracked.
 - **Pre-existing formatting issues:** `formulas.py` and `namespace.py` in `engine/irb/` had ruff format violations. Fixed as part of this increment.
+- **DualFrameworkRunner design:** Uses two separate `PipelineOrchestrator` instances (one per framework) because `_ensure_components_initialized()` caches the `CRMProcessor` with the first config's `is_basel_3_1` flag and never recreates it. The `run_with_data()` method shares the same `RawDataBundle` between both runs, halving I/O cost. Comparison join is on `exposure_reference` using a full outer join to handle mismatched exposure sets.
+- **Approach column values:** `approach_applied` column uses enum string values: `"standardised"`, `"foundation_irb"`, `"advanced_irb"`, `"slotting"` — not the enum names `"SA"`, `"FIRB"`, etc. Tests must filter on the `.value` form.
+- **Spec inconsistencies found:** `specs/regulatory-compliance.md` is stale (says B31 tests not started, but 111 pass). `specs/nfr.md` test count outdated (says 1,050 but 1,687 pass). `specs/milestones.md` CRR count stale (says 71/74 but 91 pass). Slotting risk weight tables differ between `specs/crr/slotting-approach.md` and `specs/basel31/framework-differences.md`.

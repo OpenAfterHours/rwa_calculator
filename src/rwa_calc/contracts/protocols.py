@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import (
         AggregatedResultBundle,
         ClassifiedExposuresBundle,
+        ComparisonBundle,
         CRMAdjustedBundle,
         EquityResultBundle,
         IRBResultBundle,
@@ -564,6 +565,40 @@ class PipelineProtocol(Protocol):
 
         Returns:
             AggregatedResultBundle with all results and audit trail
+        """
+        ...
+
+
+@runtime_checkable
+class ComparisonRunnerProtocol(Protocol):
+    """
+    Protocol for dual-framework comparison execution.
+
+    Runs the same portfolio through both CRR and Basel 3.1 pipelines
+    and produces a ComparisonBundle with per-exposure deltas and
+    summary impact analysis.
+
+    Why: During Basel 3.1 transition, firms need to quantify the capital
+    impact of moving from CRR to Basel 3.1. This protocol defines the
+    interface for orchestrating that comparison.
+    """
+
+    def compare(
+        self,
+        data: RawDataBundle,
+        crr_config: CalculationConfig,
+        b31_config: CalculationConfig,
+    ) -> ComparisonBundle:
+        """
+        Run both frameworks on the same data and produce comparison.
+
+        Args:
+            data: Pre-loaded raw data bundle (shared between frameworks)
+            crr_config: CRR configuration
+            b31_config: Basel 3.1 configuration
+
+        Returns:
+            ComparisonBundle with per-exposure deltas and summaries
         """
         ...
 

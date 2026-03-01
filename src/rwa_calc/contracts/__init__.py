@@ -21,6 +21,7 @@ Submodules:
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
     ClassifiedExposuresBundle,
+    ComparisonBundle,
     CounterpartyLookup,
     CRMAdjustedBundle,
     IRBResultBundle,
@@ -84,6 +85,7 @@ from rwa_calc.contracts.errors import (
 # Protocol definitions
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
+    ComparisonRunnerProtocol,
     CRMProcessorProtocol,
     DataQualityCheckerProtocol,
     HierarchyResolverProtocol,
@@ -162,6 +164,7 @@ __all__ = [
     "ERROR_UNKNOWN_EXPOSURE_CLASS",
     # Bundles
     "AggregatedResultBundle",
+    "ComparisonBundle",
     "ClassifiedExposuresBundle",
     "CounterpartyLookup",
     "CRMAdjustedBundle",
@@ -177,6 +180,7 @@ __all__ = [
     "create_empty_resolved_hierarchy_bundle",
     # Protocols
     "ClassifierProtocol",
+    "ComparisonRunnerProtocol",
     "CRMProcessorProtocol",
     "DataQualityCheckerProtocol",
     "HierarchyResolverProtocol",

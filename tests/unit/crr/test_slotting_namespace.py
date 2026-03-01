@@ -118,7 +118,7 @@ class TestPrepareColumns:
                 "ead": [100_000.0],
             }
         )
-        result = lf.slotting.prepare_columns(crr_config).collect()
+        result = lf.slotting.prepare_columns().collect()
 
         assert "ead_final" in result.columns
         assert "slotting_category" in result.columns
@@ -131,7 +131,7 @@ class TestPrepareColumns:
         self, basic_slotting_exposures: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """prepare_columns should preserve existing columns."""
-        result = basic_slotting_exposures.slotting.prepare_columns(crr_config).collect()
+        result = basic_slotting_exposures.slotting.prepare_columns().collect()
 
         assert result["slotting_category"][0] == "strong"
         assert result["is_hvcre"][0] == False  # noqa: E712
@@ -614,7 +614,7 @@ class TestCalculateRWA:
     ) -> None:
         """RWA should be calculated for all exposures."""
         result = (
-            basic_slotting_exposures.slotting.prepare_columns(crr_config)
+            basic_slotting_exposures.slotting.prepare_columns()
             .slotting.apply_slotting_weights(crr_config)
             .slotting.calculate_rwa()
             .collect()
@@ -671,7 +671,7 @@ class TestMethodChaining:
     ) -> None:
         """Full pipeline should work with method chaining."""
         result = (
-            basic_slotting_exposures.slotting.prepare_columns(crr_config)
+            basic_slotting_exposures.slotting.prepare_columns()
             .slotting.apply_slotting_weights(crr_config)
             .slotting.calculate_rwa()
             .collect()

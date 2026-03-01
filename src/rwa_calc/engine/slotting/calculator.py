@@ -88,6 +88,57 @@ class SlottingCalculator:
         """Initialize slotting calculator."""
         self._slotting_table: pl.DataFrame | None = None
 
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply slotting weights on unified frame (single-pass pipeline).
+
+        Filters slotting rows, applies the namespace chain, then concats
+        back with non-slotting rows to preserve the unified frame.
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with slotting columns populated for slotting rows
+        """
+        is_slotting = col("approach") == ApproachType.SLOTTING.value
+
+        non_slotting = exposures.filter(~is_slotting)
+        slotting = exposures.filter(is_slotting)
+
+        slotting = self.calculate_branch(slotting, config)
+
+        return pl.concat([non_slotting, slotting], how="diagonal_relaxed")
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate Slotting RWA on pre-filtered slotting-only rows.
+
+        Unlike calculate_unified(), expects only slotting rows — no
+        approach guards needed.
+
+        Args:
+            exposures: Pre-filtered slotting rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with slotting RWA columns populated
+        """
+        return (
+            exposures.slotting.prepare_columns()
+            .slotting.apply_slotting_weights(config)
+            .slotting.calculate_rwa()
+        )
+
     def calculate(
         self,
         data: CRMAdjustedBundle,

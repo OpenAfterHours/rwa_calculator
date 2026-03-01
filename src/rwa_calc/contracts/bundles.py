@@ -341,6 +341,42 @@ class ComparisonBundle:
     errors: list = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class TransitionalScheduleBundle:
+    """
+    Output from transitional floor schedule modelling (M3.3).
+
+    Runs the same portfolio through Basel 3.1 for each transitional year
+    (2027-2032) to show how the output floor progressively tightens.
+
+    Why: PRA PS9/24 phases in the output floor from 50% (2027) to 72.5%
+    (2032+). Firms need to model the year-by-year capital trajectory to
+    plan for the increasing floor bite. This bundle provides the timeline
+    data needed for capital planning and M3.4 Marimo visualisation.
+
+    Timeline columns:
+        reporting_date: The as-of date for each year
+        year: Calendar year (2027-2032)
+        floor_percentage: Output floor percentage for that year
+        total_rwa_pre_floor: Total IRB RWA before floor application
+        total_rwa_post_floor: Total RWA after floor (final regulatory RWA)
+        total_floor_impact: Additional RWA from the floor binding
+        floor_binding_count: Number of exposures where floor binds
+        total_irb_exposure_count: Total IRB exposures in portfolio
+        total_ead: Total EAD across all exposures
+        total_sa_rwa: Total SA-equivalent RWA (floor benchmark)
+
+    Attributes:
+        timeline: Year-by-year floor impact summary
+        yearly_results: Full pipeline results for each transitional year
+        errors: Combined errors from all pipeline runs
+    """
+
+    timeline: pl.LazyFrame
+    yearly_results: dict[int, AggregatedResultBundle] = field(default_factory=dict)
+    errors: list = field(default_factory=list)
+
+
 # =============================================================================
 # HELPER FUNCTIONS FOR BUNDLE CREATION
 # =============================================================================

@@ -29,6 +29,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
     SAResultBundle,
     SlottingResultBundle,
+    TransitionalScheduleBundle,
     create_empty_classified_bundle,
     create_empty_counterparty_lookup,
     create_empty_crm_adjusted_bundle,
@@ -165,6 +166,7 @@ __all__ = [
     # Bundles
     "AggregatedResultBundle",
     "ComparisonBundle",
+    "TransitionalScheduleBundle",
     "ClassifiedExposuresBundle",
     "CounterpartyLookup",
     "CRMAdjustedBundle",

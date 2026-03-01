@@ -42,7 +42,7 @@ import rwa_calc.engine.hierarchy_namespace  # noqa: F401
 from .aggregator import OutputAggregator, create_output_aggregator
 from .aggregator_namespace import AggregatorLazyFrame
 from .audit_namespace import AuditExpr, AuditLazyFrame
-from .comparison import DualFrameworkRunner
+from .comparison import DualFrameworkRunner, TransitionalScheduleRunner
 from .hierarchy import HierarchyResolver, create_hierarchy_resolver
 from .hierarchy_namespace import HierarchyLazyFrame
 from .loader import CSVLoader, ParquetLoader
@@ -56,6 +56,7 @@ __all__ = [
     "OutputAggregator",
     "create_output_aggregator",
     "DualFrameworkRunner",
+    "TransitionalScheduleRunner",
     "PipelineOrchestrator",
     "create_pipeline",
     "create_test_pipeline",

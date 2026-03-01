@@ -21,6 +21,11 @@ Run these after implementing to get immediate feedback:
 - Fixtures are NOT checked into git; they must be regenerated after cloning
 - If uv cache is read-only, use: `UV_CACHE_DIR=/tmp/claude-1000/uv-cache uv run ...`
 
+## Git
+
+- No global git identity configured; use `-c user.name="Phil" -c user.email="123414748+luckyphil122@users.noreply.github.com"` for commits/tags
+- GitHub push may fail in sandboxed environments (CONNECT tunnel 403)
+
 ## Operational Notes
 
 - Python 3.13+ required

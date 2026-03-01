@@ -34,8 +34,8 @@ Remaining (needs specification work before implementation):
 ### 2d. Testing and validation
 
 - [x] **Output floor phase-in validation tests** (M2.6) — Done. 11 tests covering all 6 transitional years plus edge cases.
-- [~] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON exists at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 27 scenarios (10 SA, 7 F-IRB, 3 A-IRB, 4 slotting, 3 output floor). Workbook structure at `workbooks/basel31_expected_outputs/` defines 39 scenarios across 8 groups (A-H). **Remaining:** Verify workbook calculations for groups D, G, H against regulatory formulas; extend JSON with verified values.
-- [~] **Basel 3.1 acceptance tests** (M2.5) — 62 tests across 5 test files: `test_scenario_b31_a_sa.py` (14), `test_scenario_b31_b_firb.py` (16), `test_scenario_b31_c_airb.py` (13), `test_scenario_b31_e_slotting.py` (13), and `test_scenario_b31_f_output_floor.py` (6). All 62 pass. Remaining groups D, G, H need test files.
+- [~] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 33 scenarios (10 SA, 7 F-IRB, 3 A-IRB, 6 CRM, 4 slotting, 3 output floor). Workbook structure at `workbooks/basel31_expected_outputs/` defines 39 scenarios across 8 groups (A-H). **Remaining:** Verify workbook calculations for groups G, H against regulatory formulas; extend JSON with verified values.
+- [~] **Basel 3.1 acceptance tests** (M2.5) — 77 tests across 6 test files: `test_scenario_b31_a_sa.py` (14), `test_scenario_b31_b_firb.py` (16), `test_scenario_b31_c_airb.py` (13), `test_scenario_b31_d_crm.py` (15), `test_scenario_b31_e_slotting.py` (13), and `test_scenario_b31_f_output_floor.py` (6). All 77 pass. **Remaining:** Groups G (provisions) and H (complex/combined) need test files.
 
 ### 2e. Output floor engine — COMPLETE
 
@@ -67,10 +67,10 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 | Unit | 1,302 | 1 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 87 | 0 |
-| Acceptance (Basel 3.1) | 62 | 0 |
+| Acceptance (Basel 3.1) | 77 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,583** | **22** |
+| **Total** | **1,598** | **22** |
 
 ## Learnings
 
@@ -90,3 +90,5 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - **CRM processor F-IRB LGD bug (fixed):** `_apply_collateral_unified` and `_calculate_irb_lgd_with_collateral` hardcoded `pl.lit(0.45)` for senior unsecured LGD fallback, ignoring Basel 3.1's 40% value. The framework-conditional variable `lgd_unsecured` was correctly computed earlier in each method but not used in the `.otherwise()` fallback. Fixed 3 locations in `processor.py`. The `_apply_firb_supervisory_lgd_no_collateral` path was already correct but only triggered when zero collateral rows existed portfolio-wide.
 - F-IRB acceptance tests require `IRBPermissions.firb_only()` (not `full_irb()`) and reporting date 2027-06-30 to get meaningful maturities from fixture loans (maturity dates 2028-2033). Using `full_irb()` routes to A-IRB; using dates after 2032 causes all maturities to floor at 1.0.
 - Workbook `regulatory_params.py` PD floor discrepancy: uses `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) while production config correctly uses `0.0005` (Basel 3.1 0.05% per CRE30.20). Workbook needs updating.
+- **B31-D CRM test pattern:** D-scenario loans use `sa_results_df` with `rwa_post_factor` column (matching B31-A pattern). CRM adjustments are reflected in EAD before SA calculator runs. The `pipeline_results_df` has `rwa_final` (aggregated). Only D3 (equity haircut 25% vs CRR 15%) produces different RWA; D1/D2/D4/D5/D6 are unchanged because their specific haircut values happen to be the same across frameworks.
+- **Orphaned collateral/guarantee fixtures:** `LOAN_COLL_TEST_CORP_*`, `LOAN_GUAR_TEST_*`, `LOAN_PROV_TEST_*` beneficiary references in fixtures point to non-existent loans. These are "dedicated test loans" that were never created. Safe to ignore; does not affect test outcomes.

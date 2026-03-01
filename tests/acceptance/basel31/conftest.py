@@ -96,6 +96,12 @@ def b31_c_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
+def b31_d_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-D (Credit Risk Mitigation Revised) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-D")
+
+
+@pytest.fixture(scope="session")
 def b31_e_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
     """Get B31-E (Specialised Lending Slotting) scenarios."""
     return get_scenarios_by_group(expected_outputs_df, "B31-E")

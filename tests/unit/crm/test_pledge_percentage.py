@@ -30,7 +30,6 @@ from rwa_calc.engine.crm.processor import (
     _resolve_pledge_from_joined,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -139,9 +138,7 @@ def _run_resolve(
     exposures = pl.LazyFrame(exposure_rows)
     collateral = pl.LazyFrame(collateral_rows)
     direct_lookup, facility_lookup, cp_lookup = _build_exposure_lookups(exposures)
-    joined = _join_collateral_to_lookups(
-        collateral, direct_lookup, facility_lookup, cp_lookup
-    )
+    joined = _join_collateral_to_lookups(collateral, direct_lookup, facility_lookup, cp_lookup)
     resolved = _resolve_pledge_from_joined(joined)
     return resolved.collect()
 
@@ -154,9 +151,7 @@ def _run_resolve(
 class TestNoPledgePercentageColumn:
     """When collateral has no pledge_percentage column, it passes through unchanged."""
 
-    def test_no_pledge_percentage_column_passes_through(
-        self, crm_processor: CRMProcessor
-    ) -> None:
+    def test_no_pledge_percentage_column_passes_through(self, crm_processor: CRMProcessor) -> None:
         """Collateral without pledge_percentage column is returned unchanged."""
         exposures = [_base_exposure()]
         collateral_data = {
@@ -172,9 +167,7 @@ class TestNoPledgePercentageColumn:
         exposures_lf = pl.LazyFrame(exposures)
 
         direct_lookup, facility_lookup, cp_lookup = _build_exposure_lookups(exposures_lf)
-        joined = _join_collateral_to_lookups(
-            collateral, direct_lookup, facility_lookup, cp_lookup
-        )
+        joined = _join_collateral_to_lookups(collateral, direct_lookup, facility_lookup, cp_lookup)
         result = _resolve_pledge_from_joined(joined)
         df = result.collect()
 
@@ -185,9 +178,7 @@ class TestNoPledgePercentageColumn:
 class TestDirectLevelPledgePercentage:
     """pledge_percentage on direct (exposure/loan) level collateral."""
 
-    def test_pledge_percentage_resolves_to_market_value(
-        self, crm_processor: CRMProcessor
-    ) -> None:
+    def test_pledge_percentage_resolves_to_market_value(self, crm_processor: CRMProcessor) -> None:
         """pledge_percentage=0.5 on exposure with ead_gross=1000 → market_value=500."""
         exposures = [_base_exposure(drawn=1000.0)]
         collateral = [
@@ -303,9 +294,7 @@ class TestCounterpartyLevelPledgePercentage:
 class TestMixedCollateral:
     """Some rows have market_value, others have pledge_percentage."""
 
-    def test_mixed_rows_resolved_correctly(
-        self, crm_processor: CRMProcessor
-    ) -> None:
+    def test_mixed_rows_resolved_correctly(self, crm_processor: CRMProcessor) -> None:
         """
         COLL001: market_value=200 (kept as-is)
         COLL002: pledge_percentage=0.5, no market_value → resolved from EAD
@@ -351,26 +340,32 @@ class TestEndToEndViaApplyCollateral:
         Cash has 0% haircut → adjusted_value=500.
         ead_after_collateral = 1000 - 500 = 500.
         """
-        exposures_lf = pl.LazyFrame([
-            _base_exposure(drawn=1000.0, approach="standardised", parent_facility="FAC001"),
-        ])
+        exposures_lf = pl.LazyFrame(
+            [
+                _base_exposure(drawn=1000.0, approach="standardised", parent_facility="FAC001"),
+            ]
+        )
         # Initialize EAD columns that apply_collateral expects
-        exposures_lf = exposures_lf.with_columns([
-            pl.col("ead_pre_crm").alias("ead_gross"),
-            pl.col("ead_pre_crm").alias("ead_after_collateral"),
-            pl.lit(0.45).alias("lgd_pre_crm"),
-            pl.lit(0.45).alias("lgd_post_crm"),
-        ])
+        exposures_lf = exposures_lf.with_columns(
+            [
+                pl.col("ead_pre_crm").alias("ead_gross"),
+                pl.col("ead_pre_crm").alias("ead_after_collateral"),
+                pl.lit(0.45).alias("lgd_pre_crm"),
+                pl.lit(0.45).alias("lgd_post_crm"),
+            ]
+        )
 
-        collateral_lf = pl.LazyFrame([
-            _base_collateral(
-                beneficiary_ref="EXP001",
-                beneficiary_type="loan",
-                collateral_type="cash",
-                market_value=None,
-                pledge_percentage=0.5,
-            )
-        ])
+        collateral_lf = pl.LazyFrame(
+            [
+                _base_collateral(
+                    beneficiary_ref="EXP001",
+                    beneficiary_type="loan",
+                    collateral_type="cash",
+                    market_value=None,
+                    pledge_percentage=0.5,
+                )
+            ]
+        )
 
         result = crm_processor.apply_collateral(exposures_lf, collateral_lf, sa_config)
         df = result.collect()
@@ -389,25 +384,31 @@ class TestEndToEndViaApplyCollateral:
         Cash has 0% haircut, financial collateral LGD=0%, fully secured.
         lgd_post_crm should be 0% (fully secured by financial collateral).
         """
-        exposures_lf = pl.LazyFrame([
-            _base_exposure(drawn=1000.0, approach="foundation_irb", parent_facility="FAC001"),
-        ])
-        exposures_lf = exposures_lf.with_columns([
-            pl.col("ead_pre_crm").alias("ead_gross"),
-            pl.col("ead_pre_crm").alias("ead_after_collateral"),
-            pl.lit(0.45).alias("lgd_pre_crm"),
-            pl.lit(0.45).alias("lgd_post_crm"),
-        ])
+        exposures_lf = pl.LazyFrame(
+            [
+                _base_exposure(drawn=1000.0, approach="foundation_irb", parent_facility="FAC001"),
+            ]
+        )
+        exposures_lf = exposures_lf.with_columns(
+            [
+                pl.col("ead_pre_crm").alias("ead_gross"),
+                pl.col("ead_pre_crm").alias("ead_after_collateral"),
+                pl.lit(0.45).alias("lgd_pre_crm"),
+                pl.lit(0.45).alias("lgd_post_crm"),
+            ]
+        )
 
-        collateral_lf = pl.LazyFrame([
-            _base_collateral(
-                beneficiary_ref="EXP001",
-                beneficiary_type="loan",
-                collateral_type="cash",
-                market_value=None,
-                pledge_percentage=1.0,
-            )
-        ])
+        collateral_lf = pl.LazyFrame(
+            [
+                _base_collateral(
+                    beneficiary_ref="EXP001",
+                    beneficiary_type="loan",
+                    collateral_type="cash",
+                    market_value=None,
+                    pledge_percentage=1.0,
+                )
+            ]
+        )
 
         result = crm_processor.apply_collateral(exposures_lf, collateral_lf, firb_config)
         df = result.collect()

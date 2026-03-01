@@ -26,7 +26,6 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.engine.slotting import SlottingCalculator, create_slotting_calculator
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -416,14 +415,16 @@ class TestSlottingBundleProcessing:
         crr_config: CalculationConfig,
     ):
         """Calculate method returns LazyFrameResult."""
-        bundle = create_slotting_bundle([
-            {
-                "exposure_reference": "SL001",
-                "slotting_category": "strong",
-                "is_hvcre": False,
-                "ead": 10_000_000.0,
-            },
-        ])
+        bundle = create_slotting_bundle(
+            [
+                {
+                    "exposure_reference": "SL001",
+                    "slotting_category": "strong",
+                    "is_hvcre": False,
+                    "ead": 10_000_000.0,
+                },
+            ]
+        )
         result = slotting_calculator.calculate(bundle, crr_config)
         assert isinstance(result, LazyFrameResult)
         assert result.frame is not None
@@ -434,20 +435,22 @@ class TestSlottingBundleProcessing:
         crr_config: CalculationConfig,
     ):
         """Multiple slotting exposures are processed correctly."""
-        bundle = create_slotting_bundle([
-            {
-                "exposure_reference": "SL001",
-                "slotting_category": "strong",
-                "is_hvcre": False,
-                "ead": 10_000_000.0,
-            },
-            {
-                "exposure_reference": "SL002",
-                "slotting_category": "weak",
-                "is_hvcre": True,
-                "ead": 5_000_000.0,
-            },
-        ])
+        bundle = create_slotting_bundle(
+            [
+                {
+                    "exposure_reference": "SL001",
+                    "slotting_category": "strong",
+                    "is_hvcre": False,
+                    "ead": 10_000_000.0,
+                },
+                {
+                    "exposure_reference": "SL002",
+                    "slotting_category": "weak",
+                    "is_hvcre": True,
+                    "ead": 5_000_000.0,
+                },
+            ]
+        )
         result = slotting_calculator.calculate(bundle, crr_config)
         df = result.frame.collect()
         assert len(df) == 2
@@ -484,14 +487,16 @@ class TestSlottingBundleProcessing:
         crr_config: CalculationConfig,
     ):
         """get_slotting_result_bundle returns SlottingResultBundle."""
-        bundle = create_slotting_bundle([
-            {
-                "exposure_reference": "SL001",
-                "slotting_category": "strong",
-                "is_hvcre": False,
-                "ead": 10_000_000.0,
-            },
-        ])
+        bundle = create_slotting_bundle(
+            [
+                {
+                    "exposure_reference": "SL001",
+                    "slotting_category": "strong",
+                    "is_hvcre": False,
+                    "ead": 10_000_000.0,
+                },
+            ]
+        )
         result = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
         assert isinstance(result, SlottingResultBundle)
         assert result.results is not None
@@ -627,14 +632,16 @@ class TestSlottingAuditTrail:
         crr_config: CalculationConfig,
     ):
         """Audit trail contains calculation details."""
-        bundle = create_slotting_bundle([
-            {
-                "exposure_reference": "SL001",
-                "slotting_category": "strong",
-                "is_hvcre": False,
-                "ead": 10_000_000.0,
-            },
-        ])
+        bundle = create_slotting_bundle(
+            [
+                {
+                    "exposure_reference": "SL001",
+                    "slotting_category": "strong",
+                    "is_hvcre": False,
+                    "ead": 10_000_000.0,
+                },
+            ]
+        )
         result_bundle = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
         audit_df = result_bundle.calculation_audit.collect()
 
@@ -649,14 +656,16 @@ class TestSlottingAuditTrail:
         crr_config: CalculationConfig,
     ):
         """Audit trail shows HVCRE flag when applicable."""
-        bundle = create_slotting_bundle([
-            {
-                "exposure_reference": "SL001",
-                "slotting_category": "strong",
-                "is_hvcre": True,
-                "ead": 5_000_000.0,
-            },
-        ])
+        bundle = create_slotting_bundle(
+            [
+                {
+                    "exposure_reference": "SL001",
+                    "slotting_category": "strong",
+                    "is_hvcre": True,
+                    "ead": 5_000_000.0,
+                },
+            ]
+        )
         result_bundle = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
         audit_df = result_bundle.calculation_audit.collect()
 
@@ -672,13 +681,16 @@ class TestSlottingAuditTrail:
 class TestSpecialisedLendingTypes:
     """Test handling of different specialised lending types."""
 
-    @pytest.mark.parametrize("sl_type,is_hvcre,expected_rw", [
-        ("project_finance", False, 0.90),
-        ("object_finance", False, 0.90),
-        ("commodities_finance", False, 0.90),
-        ("income_producing_re", False, 0.90),
-        ("hvcre", True, 1.20),  # HVCRE Good = 120% per Table 2
-    ])
+    @pytest.mark.parametrize(
+        "sl_type,is_hvcre,expected_rw",
+        [
+            ("project_finance", False, 0.90),
+            ("object_finance", False, 0.90),
+            ("commodities_finance", False, 0.90),
+            ("income_producing_re", False, 0.90),
+            ("hvcre", True, 1.20),  # HVCRE Good = 120% per Table 2
+        ],
+    )
     def test_all_sl_types_processed(
         self,
         slotting_calculator: SlottingCalculator,
@@ -714,14 +726,16 @@ class TestSlottingEdgeCases:
         crr_config: CalculationConfig,
     ):
         """Slotting category matching is case-insensitive."""
-        bundle = create_slotting_bundle([
-            {
-                "exposure_reference": "SL001",
-                "slotting_category": "STRONG",
-                "is_hvcre": False,
-                "ead": 10_000_000.0,
-            },
-        ])
+        bundle = create_slotting_bundle(
+            [
+                {
+                    "exposure_reference": "SL001",
+                    "slotting_category": "STRONG",
+                    "is_hvcre": False,
+                    "ead": 10_000_000.0,
+                },
+            ]
+        )
         result = slotting_calculator.calculate(bundle, crr_config)
         df = result.frame.collect()
         assert df["risk_weight"][0] == pytest.approx(0.70)
@@ -732,14 +746,16 @@ class TestSlottingEdgeCases:
         crr_config: CalculationConfig,
     ):
         """Unknown slotting category defaults to satisfactory (115%)."""
-        bundle = create_slotting_bundle([
-            {
-                "exposure_reference": "SL001",
-                "slotting_category": "unknown_category",
-                "is_hvcre": False,
-                "ead": 10_000_000.0,
-            },
-        ])
+        bundle = create_slotting_bundle(
+            [
+                {
+                    "exposure_reference": "SL001",
+                    "slotting_category": "unknown_category",
+                    "is_hvcre": False,
+                    "ead": 10_000_000.0,
+                },
+            ]
+        )
         result = slotting_calculator.calculate(bundle, crr_config)
         df = result.frame.collect()
         assert df["risk_weight"][0] == pytest.approx(1.15)

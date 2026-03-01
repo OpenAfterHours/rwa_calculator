@@ -16,8 +16,9 @@ Sovereign Risk Weights (SA) per CRE20.7:
     Unrated: 100%
 """
 
-import polars as pl
 from pathlib import Path
+
+import polars as pl
 
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 

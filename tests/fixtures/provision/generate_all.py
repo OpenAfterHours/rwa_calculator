@@ -5,9 +5,9 @@ Usage:
     uv run python tests/fixtures/provision/generate_all.py
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import polars as pl
 
@@ -151,10 +151,12 @@ def print_ifrs9_analysis(output_dir: Path) -> None:
     print("\nCoverage by Beneficiary Type:")
     by_ben = (
         provisions.group_by("beneficiary_type")
-        .agg([
-            pl.len().alias("count"),
-            pl.col("amount").sum().alias("total"),
-        ])
+        .agg(
+            [
+                pl.len().alias("count"),
+                pl.col("amount").sum().alias("total"),
+            ]
+        )
         .sort("beneficiary_type")
     )
     for row in by_ben.iter_rows(named=True):

@@ -10,7 +10,6 @@ Tests cover:
 """
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -60,7 +59,9 @@ class TestBTLExcludedFromSMEFactor:
     """BTL exposures get supporting_factor=1.0 but still count toward total_cp_drawn."""
 
     def test_btl_excluded_non_btl_gets_blended(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """
         CP with 1.5m non-BTL + 1.0m BTL (all drawn):
@@ -68,10 +69,12 @@ class TestBTLExcludedFromSMEFactor:
         - Non-BTL gets the tiered blended factor (all within tier 1 threshold)
         - BTL gets 1.0
         """
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000, "is_btl": False},
-            {"ref": "E2", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": True},
-        ])
+        exposures = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000, "is_btl": False},
+                {"ref": "E2", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": True},
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -96,13 +99,17 @@ class TestBTLExcludedFromSMEFactor:
         assert rwa_e2 == pytest.approx(400_000)
 
     def test_btl_contributes_to_total_cp_drawn(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """total_cp_drawn = 3.0m (includes 2.0m BTL)."""
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": False},
-            {"ref": "E2", "cp": "CP1", "ead": 2_000_000, "rwa": 800_000, "is_btl": True},
-        ])
+        exposures = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": False},
+                {"ref": "E2", "cp": "CP1", "ead": 2_000_000, "rwa": 800_000, "is_btl": True},
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -111,13 +118,17 @@ class TestBTLExcludedFromSMEFactor:
         assert total_cp == pytest.approx(3_000_000)
 
     def test_all_btl_no_factor(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """CP with only BTL exposures: all get 1.0."""
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": True},
-            {"ref": "E2", "cp": "CP1", "ead": 500_000, "rwa": 200_000, "is_btl": True},
-        ])
+        exposures = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": True},
+                {"ref": "E2", "cp": "CP1", "ead": 500_000, "rwa": 200_000, "is_btl": True},
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -125,7 +136,9 @@ class TestBTLExcludedFromSMEFactor:
         assert result["rwa_post_factor"].to_list() == pytest.approx([400_000, 200_000])
 
     def test_missing_btl_column_defaults_false(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """No is_buy_to_let column -> same as all False (backward compat)."""
         exposures = _make_exposures(
@@ -142,12 +155,16 @@ class TestBTLExcludedFromSMEFactor:
         assert sf < 1.0, "Without BTL column, should behave as all non-BTL"
 
     def test_btl_false_normal_factor(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """Explicit is_buy_to_let=False behaves same as column missing."""
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": False},
-        ])
+        exposures = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": False},
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -155,26 +172,54 @@ class TestBTLExcludedFromSMEFactor:
         assert sf < 1.0, "Non-BTL should get SME factor"
 
     def test_non_sme_with_btl_unaffected(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """Non-SME CP: BTL flag irrelevant, factor always 1.0."""
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_sme": False, "is_btl": True},
-            {"ref": "E2", "cp": "CP1", "ead": 500_000, "rwa": 200_000, "is_sme": False, "is_btl": False},
-        ])
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "ead": 1_000_000,
+                    "rwa": 400_000,
+                    "is_sme": False,
+                    "is_btl": True,
+                },
+                {
+                    "ref": "E2",
+                    "cp": "CP1",
+                    "ead": 500_000,
+                    "rwa": 200_000,
+                    "is_sme": False,
+                    "is_btl": False,
+                },
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
         assert result["supporting_factor"].to_list() == pytest.approx([1.0, 1.0])
 
     def test_btl_with_infrastructure(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """BTL excludes SME factor but infrastructure factor still applies."""
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000,
-             "is_btl": True, "is_infra": True},
-        ])
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "ead": 1_000_000,
+                    "rwa": 400_000,
+                    "is_btl": True,
+                    "is_infra": True,
+                },
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -188,7 +233,9 @@ class TestDrawnOnlyTierWeighting:
     """SME tier threshold uses drawn_amount + interest, not ead_final."""
 
     def test_drawn_only_determines_tier(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """
         Counterparty with 1m drawn + 2m undrawn:
@@ -196,12 +243,18 @@ class TestDrawnOnlyTierWeighting:
         - drawn_amount = 1m → tier based on 1m (all tier 1) → factor = 0.7619
         - NOT based on 3m (which would produce blended factor)
         """
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1",
-             "drawn": 1_000_000, "interest": 0.0,
-             "ead": 3_000_000,  # includes undrawn via CCF
-             "rwa": 3_000_000},
-        ])
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "drawn": 1_000_000,
+                    "interest": 0.0,
+                    "ead": 3_000_000,  # includes undrawn via CCF
+                    "rwa": 3_000_000,
+                },
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -211,7 +264,9 @@ class TestDrawnOnlyTierWeighting:
         )
 
     def test_mixed_drawn_undrawn_counterparty(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """
         Two exposures to same counterparty, total drawn = 4m.
@@ -220,14 +275,15 @@ class TestDrawnOnlyTierWeighting:
         Total drawn = 4m → blended factor based on 4m, NOT 5m.
         """
         threshold_gbp = float(
-            crr_config.supporting_factors.sme_exposure_threshold_eur
-            * crr_config.eur_gbp_rate
+            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
         )
 
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1", "drawn": 2_000_000, "ead": 3_000_000, "rwa": 3_000_000},
-            {"ref": "E2", "cp": "CP1", "drawn": 2_000_000, "ead": 2_000_000, "rwa": 2_000_000},
-        ])
+        exposures = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "drawn": 2_000_000, "ead": 3_000_000, "rwa": 3_000_000},
+                {"ref": "E2", "cp": "CP1", "drawn": 2_000_000, "ead": 2_000_000, "rwa": 2_000_000},
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -236,8 +292,7 @@ class TestDrawnOnlyTierWeighting:
 
         # Blended factor for 4m drawn
         expected_factor = (
-            min(4_000_000, threshold_gbp) * 0.7619
-            + max(4_000_000 - threshold_gbp, 0) * 0.85
+            min(4_000_000, threshold_gbp) * 0.7619 + max(4_000_000 - threshold_gbp, 0) * 0.85
         ) / 4_000_000
         sf = result["supporting_factor"][0]
         assert sf == pytest.approx(expected_factor, rel=0.001), (
@@ -245,18 +300,26 @@ class TestDrawnOnlyTierWeighting:
         )
 
     def test_zero_drawn_undrawn_only_gets_tier1(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """
         Counterparty with zero drawn (only undrawn commitments):
         - drawn_amount = 0 → falls within tier 1 → factor = 0.7619
         """
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1",
-             "drawn": 0.0, "interest": 0.0,
-             "ead": 2_000_000,  # all from undrawn via CCF
-             "rwa": 2_000_000},
-        ])
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "drawn": 0.0,
+                    "interest": 0.0,
+                    "ead": 2_000_000,  # all from undrawn via CCF
+                    "rwa": 2_000_000,
+                },
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -266,23 +329,30 @@ class TestDrawnOnlyTierWeighting:
         )
 
     def test_interest_included_in_drawn_total(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """
         drawn_amount + interest = on-balance-sheet total for tiering.
         2m drawn + 0.2m interest = 2.2m → near threshold.
         """
         threshold_gbp = float(
-            crr_config.supporting_factors.sme_exposure_threshold_eur
-            * crr_config.eur_gbp_rate
+            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
         )
 
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1",
-             "drawn": 2_000_000, "interest": 200_000.0,
-             "ead": 2_500_000,
-             "rwa": 2_500_000},
-        ])
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "drawn": 2_000_000,
+                    "interest": 200_000.0,
+                    "ead": 2_500_000,
+                    "rwa": 2_500_000,
+                },
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
@@ -293,14 +363,15 @@ class TestDrawnOnlyTierWeighting:
         # Factor based on 2.2m drawn+interest
         drawn_total = 2_200_000
         expected_factor = (
-            min(drawn_total, threshold_gbp) * 0.7619
-            + max(drawn_total - threshold_gbp, 0) * 0.85
+            min(drawn_total, threshold_gbp) * 0.7619 + max(drawn_total - threshold_gbp, 0) * 0.85
         ) / drawn_total
         sf = result["supporting_factor"][0]
         assert sf == pytest.approx(expected_factor, rel=0.001)
 
     def test_fallback_to_ead_when_drawn_missing(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """Without drawn_amount column, falls back to ead_final (backward compat)."""
         exposures = _make_exposures(
@@ -318,30 +389,36 @@ class TestDrawnOnlyTierWeighting:
         assert sf == pytest.approx(0.7619, rel=0.001)
 
     def test_large_drawn_small_ead_uses_drawn_for_tier(
-        self, calculator: SupportingFactorCalculator, crr_config: CalculationConfig,
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
     ) -> None:
         """
         Edge case: drawn > ead (possible after collateral deductions).
         Tier should still be based on drawn amount.
         """
         threshold_gbp = float(
-            crr_config.supporting_factors.sme_exposure_threshold_eur
-            * crr_config.eur_gbp_rate
+            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
         )
 
-        exposures = _make_exposures([
-            {"ref": "E1", "cp": "CP1",
-             "drawn": 5_000_000, "interest": 0.0,
-             "ead": 1_000_000,  # reduced by collateral
-             "rwa": 1_000_000},
-        ])
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "drawn": 5_000_000,
+                    "interest": 0.0,
+                    "ead": 1_000_000,  # reduced by collateral
+                    "rwa": 1_000_000,
+                },
+            ]
+        )
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
         # Factor based on 5m drawn (blended), not 1m ead
         expected_factor = (
-            min(5_000_000, threshold_gbp) * 0.7619
-            + max(5_000_000 - threshold_gbp, 0) * 0.85
+            min(5_000_000, threshold_gbp) * 0.7619 + max(5_000_000 - threshold_gbp, 0) * 0.85
         ) / 5_000_000
         sf = result["supporting_factor"][0]
         assert sf == pytest.approx(expected_factor, rel=0.001), (

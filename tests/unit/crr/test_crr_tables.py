@@ -11,54 +11,51 @@ Tests verify:
 from decimal import Decimal
 
 import polars as pl
-import pytest
 
-from rwa_calc.data.tables.crr_risk_weights import (
-    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_UK,
-    INSTITUTION_RISK_WEIGHTS_STANDARD,
-    CORPORATE_RISK_WEIGHTS,
-    RETAIL_RISK_WEIGHT,
-    RESIDENTIAL_MORTGAGE_PARAMS,
-    COMMERCIAL_RE_PARAMS,
-    get_all_risk_weight_tables,
-    get_combined_cqs_risk_weights,
-    lookup_risk_weight,
-    calculate_residential_mortgage_rw,
-    calculate_commercial_re_rw,
+from rwa_calc.data.tables.crr_firb_lgd import (
+    CRR_MATURITY_CAP,
+    CRR_MATURITY_FLOOR,
+    CRR_PD_FLOOR,
+    FIRB_SUPERVISORY_LGD,
+    apply_maturity_bounds,
+    apply_pd_floor,
+    get_firb_lgd_table,
+    lookup_firb_lgd,
 )
 from rwa_calc.data.tables.crr_haircuts import (
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,
-    get_haircut_table,
-    lookup_collateral_haircut,
-    lookup_fx_haircut,
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
+    lookup_collateral_haircut,
+    lookup_fx_haircut,
+)
+from rwa_calc.data.tables.crr_risk_weights import (
+    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+    CORPORATE_RISK_WEIGHTS,
+    INSTITUTION_RISK_WEIGHTS_STANDARD,
+    INSTITUTION_RISK_WEIGHTS_UK,
+    RESIDENTIAL_MORTGAGE_PARAMS,
+    RETAIL_RISK_WEIGHT,
+    calculate_commercial_re_rw,
+    calculate_residential_mortgage_rw,
+    get_all_risk_weight_tables,
+    get_combined_cqs_risk_weights,
+    lookup_risk_weight,
 )
 from rwa_calc.data.tables.crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
+    calculate_slotting_rwa,
     get_slotting_table,
     lookup_slotting_rw,
-    calculate_slotting_rwa,
-)
-from rwa_calc.data.tables.crr_firb_lgd import (
-    FIRB_SUPERVISORY_LGD,
-    CRR_PD_FLOOR,
-    CRR_MATURITY_FLOOR,
-    CRR_MATURITY_CAP,
-    get_firb_lgd_table,
-    lookup_firb_lgd,
-    apply_pd_floor,
-    apply_maturity_bounds,
 )
 from rwa_calc.domain.enums import CQS, SlottingCategory
-
 
 # =============================================================================
 # RISK WEIGHT TABLE TESTS
 # =============================================================================
+
 
 class TestSovereignRiskWeights:
     """Tests for sovereign risk weights (CRR Art. 114)."""
@@ -143,7 +140,7 @@ class TestRetailRiskWeight:
 
     def test_retail_seventy_five_percent(self) -> None:
         """Retail exposures get 75% RW."""
-        assert RETAIL_RISK_WEIGHT == Decimal("0.75")
+        assert Decimal("0.75") == RETAIL_RISK_WEIGHT
 
     def test_lookup_function(self) -> None:
         """Test lookup_risk_weight for retail."""
@@ -167,8 +164,9 @@ class TestResidentialMortgageRiskWeights:
         """LTV > 80% gets split treatment (weighted average)."""
         # 85% LTV: 80/85 at 35% + 5/85 at 75%
         rw, _ = calculate_residential_mortgage_rw(Decimal("0.85"))
-        expected = (Decimal("0.80") / Decimal("0.85")) * Decimal("0.35") + \
-                   (Decimal("0.05") / Decimal("0.85")) * Decimal("0.75")
+        expected = (Decimal("0.80") / Decimal("0.85")) * Decimal("0.35") + (
+            Decimal("0.05") / Decimal("0.85")
+        ) * Decimal("0.75")
         assert abs(rw - expected) < Decimal("0.001")
 
     def test_params_contain_expected_values(self) -> None:
@@ -223,6 +221,7 @@ class TestRiskWeightDataFrames:
 # HAIRCUT TABLE TESTS
 # =============================================================================
 
+
 class TestCollateralHaircuts:
     """Tests for CRM supervisory haircuts (CRR Art. 224)."""
 
@@ -250,7 +249,7 @@ class TestCollateralHaircuts:
 
     def test_fx_haircut(self) -> None:
         """FX mismatch haircut is 8%."""
-        assert FX_HAIRCUT == Decimal("0.08")
+        assert Decimal("0.08") == FX_HAIRCUT
 
 
 class TestHaircutLookup:
@@ -262,8 +261,12 @@ class TestHaircutLookup:
 
     def test_lookup_govt_bond(self) -> None:
         """Test government bond haircut lookup."""
-        assert lookup_collateral_haircut("govt_bond", cqs=1, residual_maturity_years=0.5) == Decimal("0.005")
-        assert lookup_collateral_haircut("govt_bond", cqs=1, residual_maturity_years=3.0) == Decimal("0.02")
+        assert lookup_collateral_haircut(
+            "govt_bond", cqs=1, residual_maturity_years=0.5
+        ) == Decimal("0.005")
+        assert lookup_collateral_haircut(
+            "govt_bond", cqs=1, residual_maturity_years=3.0
+        ) == Decimal("0.02")
 
     def test_lookup_equity(self) -> None:
         """Test equity haircut lookup."""
@@ -330,6 +333,7 @@ class TestMaturityMismatch:
 # SLOTTING TABLE TESTS
 # =============================================================================
 
+
 class TestSlottingRiskWeights:
     """Tests for specialised lending slotting (CRR Art. 153(5))."""
 
@@ -360,8 +364,14 @@ class TestSlottingRiskWeights:
         assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.GOOD] == Decimal("1.20")
         assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.SATISFACTORY] == Decimal("1.40")
         # Weak and Default are same across both tables
-        assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.WEAK] == SLOTTING_RISK_WEIGHTS[SlottingCategory.WEAK]
-        assert SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.DEFAULT] == SLOTTING_RISK_WEIGHTS[SlottingCategory.DEFAULT]
+        assert (
+            SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.WEAK]
+            == SLOTTING_RISK_WEIGHTS[SlottingCategory.WEAK]
+        )
+        assert (
+            SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.DEFAULT]
+            == SLOTTING_RISK_WEIGHTS[SlottingCategory.DEFAULT]
+        )
 
 
 class TestSlottingLookup:
@@ -389,8 +399,8 @@ class TestSlottingDataFrame:
     def test_table_has_both_types_and_maturities(self) -> None:
         """Table includes HVCRE/non-HVCRE and maturity splits (5 categories × 2 × 2 = 20)."""
         df = get_slotting_table()
-        hvcre_count = df.filter(pl.col("is_hvcre") == True).height
-        non_hvcre_count = df.filter(pl.col("is_hvcre") == False).height
+        hvcre_count = df.filter(pl.col("is_hvcre")).height
+        non_hvcre_count = df.filter(~pl.col("is_hvcre")).height
         assert hvcre_count == 10  # 5 categories × 2 maturities
         assert non_hvcre_count == 10  # 5 categories × 2 maturities
 
@@ -398,6 +408,7 @@ class TestSlottingDataFrame:
 # =============================================================================
 # F-IRB LGD TABLE TESTS
 # =============================================================================
+
 
 class TestFIRBSupervisoryLGD:
     """Tests for F-IRB supervisory LGD (CRR Art. 161)."""
@@ -453,15 +464,15 @@ class TestIRBParameterFloors:
 
     def test_pd_floor(self) -> None:
         """PD floor is 0.03%."""
-        assert CRR_PD_FLOOR == Decimal("0.0003")
+        assert Decimal("0.0003") == CRR_PD_FLOOR
 
     def test_maturity_floor(self) -> None:
         """Maturity floor is 1 year."""
-        assert CRR_MATURITY_FLOOR == Decimal("1.0")
+        assert Decimal("1.0") == CRR_MATURITY_FLOOR
 
     def test_maturity_cap(self) -> None:
         """Maturity cap is 5 years."""
-        assert CRR_MATURITY_CAP == Decimal("5.0")
+        assert Decimal("5.0") == CRR_MATURITY_CAP
 
     def test_apply_pd_floor(self) -> None:
         """Test PD floor application."""

@@ -165,38 +165,40 @@ class EquityLazyFrame:
         Returns:
             LazyFrame with risk_weight column added
         """
-        return self._lf.with_columns([
-            pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["central_bank"]))
-            # Speculative takes precedence
-            .when(pl.col("is_speculative") == True)  # noqa: E712
-            .then(pl.lit(SA_EQUITY_WEIGHTS["speculative"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "speculative")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["speculative"]))
-            # Exchange traded
-            .when(pl.col("is_exchange_traded") == True)  # noqa: E712
-            .then(pl.lit(SA_EQUITY_WEIGHTS["exchange_traded"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "listed")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["listed"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["exchange_traded"]))
-            # Government supported
-            .when(pl.col("is_government_supported") == True)  # noqa: E712
-            .then(pl.lit(SA_EQUITY_WEIGHTS["government_supported"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["government_supported"]))
-            # Unlisted / Private equity
-            .when(pl.col("equity_type").str.to_lowercase() == "unlisted")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["unlisted"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["private_equity"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["private_equity_diversified"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "ciu")
-            .then(pl.lit(SA_EQUITY_WEIGHTS["ciu"]))
-            .otherwise(pl.lit(SA_EQUITY_WEIGHTS["other"]))
-            .alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["central_bank"]))
+                # Speculative takes precedence
+                .when(pl.col("is_speculative") == True)  # noqa: E712
+                .then(pl.lit(SA_EQUITY_WEIGHTS["speculative"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "speculative")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["speculative"]))
+                # Exchange traded
+                .when(pl.col("is_exchange_traded") == True)  # noqa: E712
+                .then(pl.lit(SA_EQUITY_WEIGHTS["exchange_traded"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "listed")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["listed"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["exchange_traded"]))
+                # Government supported
+                .when(pl.col("is_government_supported") == True)  # noqa: E712
+                .then(pl.lit(SA_EQUITY_WEIGHTS["government_supported"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["government_supported"]))
+                # Unlisted / Private equity
+                .when(pl.col("equity_type").str.to_lowercase() == "unlisted")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["unlisted"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["private_equity"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["private_equity_diversified"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "ciu")
+                .then(pl.lit(SA_EQUITY_WEIGHTS["ciu"]))
+                .otherwise(pl.lit(SA_EQUITY_WEIGHTS["other"]))
+                .alias("risk_weight"),
+            ]
+        )
 
     def apply_equity_weights_irb_simple(self) -> pl.LazyFrame:
         """
@@ -212,33 +214,35 @@ class EquityLazyFrame:
         Returns:
             LazyFrame with risk_weight column added
         """
-        return self._lf.with_columns([
-            pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["central_bank"]))
-            # Private equity diversified
-            .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["private_equity_diversified"]))
-            .when(
-                (pl.col("equity_type").str.to_lowercase() == "private_equity") &
-                (pl.col("is_diversified_portfolio") == True)  # noqa: E712
-            )
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["private_equity_diversified"]))
-            # Government supported (treated as 190%)
-            .when(pl.col("is_government_supported") == True)  # noqa: E712
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["government_supported"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["government_supported"]))
-            # Exchange traded / Listed
-            .when(pl.col("is_exchange_traded") == True)  # noqa: E712
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["exchange_traded"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "listed")
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["listed"]))
-            .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
-            .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["exchange_traded"]))
-            # All others get 370%
-            .otherwise(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["other"]))
-            .alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["central_bank"]))
+                # Private equity diversified
+                .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["private_equity_diversified"]))
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "private_equity")
+                    & (pl.col("is_diversified_portfolio") == True)  # noqa: E712
+                )
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["private_equity_diversified"]))
+                # Government supported (treated as 190%)
+                .when(pl.col("is_government_supported") == True)  # noqa: E712
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["government_supported"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["government_supported"]))
+                # Exchange traded / Listed
+                .when(pl.col("is_exchange_traded") == True)  # noqa: E712
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["exchange_traded"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "listed")
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["listed"]))
+                .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
+                .then(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["exchange_traded"]))
+                # All others get 370%
+                .otherwise(pl.lit(IRB_SIMPLE_EQUITY_WEIGHTS["other"]))
+                .alias("risk_weight"),
+            ]
+        )
 
     # =========================================================================
     # RWA CALCULATION
@@ -251,10 +255,12 @@ class EquityLazyFrame:
         Returns:
             LazyFrame with rwa and rwa_final columns
         """
-        return self._lf.with_columns([
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
-        ])
+        return self._lf.with_columns(
+            [
+                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
+                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
+            ]
+        )
 
     # =========================================================================
     # CONVENIENCE / PIPELINE METHODS
@@ -275,8 +281,8 @@ class EquityLazyFrame:
         Returns:
             LazyFrame with all equity calculations
         """
-        return (self._lf
-            .equity.prepare_columns(config)
+        return (
+            self._lf.equity.prepare_columns(config)
             .equity.apply_equity_weights_sa()
             .equity.calculate_rwa()
         )
@@ -296,8 +302,8 @@ class EquityLazyFrame:
         Returns:
             LazyFrame with all equity calculations
         """
-        return (self._lf
-            .equity.prepare_columns(config)
+        return (
+            self._lf.equity.prepare_columns(config)
             .equity.apply_equity_weights_irb_simple()
             .equity.calculate_rwa()
         )
@@ -337,16 +343,20 @@ class EquityLazyFrame:
         article = "Art. 133 SA" if approach == "sa" else "Art. 155 IRB Simple"
 
         if "rwa" in available_cols:
-            audit = audit.with_columns([
-                pl.concat_str([
-                    pl.lit(f"Equity ({article}): Type="),
-                    pl.col("equity_type"),
-                    pl.lit(", RW="),
-                    (pl.col("risk_weight") * 100).round(0).cast(pl.String),
-                    pl.lit("%, RWA="),
-                    pl.col("rwa").round(0).cast(pl.String),
-                ]).alias("equity_calculation"),
-            ])
+            audit = audit.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit(f"Equity ({article}): Type="),
+                            pl.col("equity_type"),
+                            pl.lit(", RW="),
+                            (pl.col("risk_weight") * 100).round(0).cast(pl.String),
+                            pl.lit("%, RWA="),
+                            pl.col("rwa").round(0).cast(pl.String),
+                        ]
+                    ).alias("equity_calculation"),
+                ]
+            )
 
         return audit
 
@@ -382,10 +392,7 @@ class EquityExpr:
         Returns:
             Expression with risk weight
         """
-        if approach == "irb_simple":
-            weights = IRB_SIMPLE_EQUITY_WEIGHTS
-        else:
-            weights = SA_EQUITY_WEIGHTS
+        weights = IRB_SIMPLE_EQUITY_WEIGHTS if approach == "irb_simple" else SA_EQUITY_WEIGHTS
 
         return (
             pl.when(self._expr.str.to_lowercase() == "central_bank")

@@ -116,14 +116,22 @@ class HierarchyResolver:
             if provisions is not None:
                 provisions = fx_converter.convert_provisions(provisions, data.fx_rates, config)
             if equity_exposures is not None:
-                equity_exposures = fx_converter.convert_equity_exposures(equity_exposures, data.fx_rates, config)
+                equity_exposures = fx_converter.convert_equity_exposures(
+                    equity_exposures, data.fx_rates, config
+                )
         else:
             # Add audit trail columns with null values when no conversion
-            exposures = exposures.with_columns([
-                pl.col("currency").alias("original_currency"),
-                (pl.col("drawn_amount") + pl.col("interest").fill_null(0.0) + pl.col("nominal_amount")).alias("original_amount"),
-                pl.lit(None).cast(pl.Float64).alias("fx_rate_applied"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.col("currency").alias("original_currency"),
+                    (
+                        pl.col("drawn_amount")
+                        + pl.col("interest").fill_null(0.0)
+                        + pl.col("nominal_amount")
+                    ).alias("original_amount"),
+                    pl.lit(None).cast(pl.Float64).alias("fx_rate_applied"),
+                ]
+            )
 
         # Step 2b: Add collateral LTV to exposures (for real estate risk weights)
         exposures = self._add_collateral_ltv(exposures, collateral)
@@ -135,20 +143,24 @@ class HierarchyResolver:
         exposures = self._enrich_with_lending_group(exposures, data.lending_mappings)
 
         # Derive lending_group_totals for bundle API contract
-        lending_group_totals = exposures.filter(
-            pl.col("lending_group_reference").is_not_null()
-        ).group_by("lending_group_reference").agg([
-            pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
-            pl.col("nominal_amount").sum().alias("total_nominal"),
-            (
-                pl.col("drawn_amount").clip(lower_bound=0.0) + pl.col("nominal_amount")
-            ).sum().alias("total_exposure"),
-            pl.col("exposure_for_retail_threshold").sum().alias("adjusted_exposure"),
-            pl.col("residential_collateral_value").sum().alias(
-                "total_residential_coverage"
-            ),
-            pl.len().alias("exposure_count"),
-        ])
+        lending_group_totals = (
+            exposures.filter(pl.col("lending_group_reference").is_not_null())
+            .group_by("lending_group_reference")
+            .agg(
+                [
+                    pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
+                    pl.col("nominal_amount").sum().alias("total_nominal"),
+                    (pl.col("drawn_amount").clip(lower_bound=0.0) + pl.col("nominal_amount"))
+                    .sum()
+                    .alias("total_exposure"),
+                    pl.col("exposure_for_retail_threshold").sum().alias("adjusted_exposure"),
+                    pl.col("residential_collateral_value")
+                    .sum()
+                    .alias("total_residential_coverage"),
+                    pl.len().alias("exposure_count"),
+                ]
+            )
+        )
 
         return ResolvedHierarchyBundle(
             exposures=exposures,
@@ -177,31 +189,33 @@ class HierarchyResolver:
 
         # If org_mappings is None, create empty LazyFrame with expected schema
         if org_mappings is None:
-            org_mappings = pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            })
+            org_mappings = pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            )
 
         # Build ultimate parent mapping (LazyFrame)
         ultimate_parents = self._build_ultimate_parent_lazy(org_mappings)
 
         # If ratings is None, create empty LazyFrame with expected schema
         if ratings is None:
-            ratings = pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "rating_reference": pl.String,
-                "rating_type": pl.String,
-                "rating_agency": pl.String,
-                "rating_value": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_date": pl.Date,
-            })
+            ratings = pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "rating_reference": pl.String,
+                    "rating_type": pl.String,
+                    "rating_agency": pl.String,
+                    "rating_value": pl.String,
+                    "cqs": pl.Int8,
+                    "pd": pl.Float64,
+                    "rating_date": pl.Date,
+                }
+            )
 
         # Build rating inheritance (LazyFrame)
-        rating_info = self._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        )
+        rating_info = self._build_rating_inheritance_lazy(counterparties, ratings, ultimate_parents)
 
         # Enrich counterparties with hierarchy info
         enriched_counterparties = self._enrich_counterparties_with_hierarchy(
@@ -214,10 +228,12 @@ class HierarchyResolver:
 
         return CounterpartyLookup(
             counterparties=enriched_counterparties,
-            parent_mappings=org_mappings.select([
-                "child_counterparty_reference",
-                "parent_counterparty_reference",
-            ]),
+            parent_mappings=org_mappings.select(
+                [
+                    "child_counterparty_reference",
+                    "parent_counterparty_reference",
+                ]
+            ),
             ultimate_parent_mappings=ultimate_parents,
             rating_inheritance=rating_info,
         ), errors
@@ -238,10 +254,16 @@ class HierarchyResolver:
         - ultimate_parent_reference: Its ultimate parent
         - hierarchy_depth: Number of levels traversed
         """
-        edges = org_mappings.select([
-            "child_counterparty_reference",
-            "parent_counterparty_reference",
-        ]).unique().collect()
+        edges = (
+            org_mappings.select(
+                [
+                    "child_counterparty_reference",
+                    "parent_counterparty_reference",
+                ]
+            )
+            .unique()
+            .collect()
+        )
 
         resolved = _resolve_graph_eager(
             edges,
@@ -250,11 +272,13 @@ class HierarchyResolver:
             max_depth=max_depth,
         )
 
-        return resolved.rename({
-            "entity": "counterparty_reference",
-            "root": "ultimate_parent_reference",
-            "depth": "hierarchy_depth",
-        }).lazy()
+        return resolved.rename(
+            {
+                "entity": "counterparty_reference",
+                "root": "ultimate_parent_reference",
+                "depth": "hierarchy_depth",
+            }
+        ).lazy()
 
     def _build_rating_inheritance_lazy(
         self,
@@ -274,19 +298,20 @@ class HierarchyResolver:
         """
         # Get most recent rating per counterparty (sort by date then reference for consistency)
         first_ratings = (
-            ratings
-            .sort(["rating_date", "rating_reference"], descending=[True, True])
+            ratings.sort(["rating_date", "rating_reference"], descending=[True, True])
             .group_by("counterparty_reference")
             .first()
-            .select([
-                pl.col("counterparty_reference").alias("rated_cp"),
-                pl.col("rating_type"),
-                pl.col("rating_agency"),
-                pl.col("rating_value"),
-                pl.col("cqs"),
-                pl.col("pd"),
-                pl.col("rating_date"),
-            ])
+            .select(
+                [
+                    pl.col("counterparty_reference").alias("rated_cp"),
+                    pl.col("rating_type"),
+                    pl.col("rating_agency"),
+                    pl.col("rating_value"),
+                    pl.col("cqs"),
+                    pl.col("pd"),
+                    pl.col("rating_date"),
+                ]
+            )
         )
 
         # Start with all counterparties
@@ -302,25 +327,29 @@ class HierarchyResolver:
 
         # Join with ultimate parents
         result = result.join(
-            ultimate_parents.select([
-                pl.col("counterparty_reference").alias("_cp"),
-                pl.col("ultimate_parent_reference"),
-            ]),
+            ultimate_parents.select(
+                [
+                    pl.col("counterparty_reference").alias("_cp"),
+                    pl.col("ultimate_parent_reference"),
+                ]
+            ),
             left_on="counterparty_reference",
             right_on="_cp",
             how="left",
         )
 
         # Join to get parent's ratings
-        parent_ratings = first_ratings.select([
-            pl.col("rated_cp").alias("parent_cp"),
-            pl.col("cqs").alias("parent_cqs"),
-            pl.col("pd").alias("parent_pd"),
-            pl.col("rating_value").alias("parent_rating_value"),
-            pl.col("rating_agency").alias("parent_rating_agency"),
-            pl.col("rating_type").alias("parent_rating_type"),
-            pl.col("rating_date").alias("parent_rating_date"),
-        ])
+        parent_ratings = first_ratings.select(
+            [
+                pl.col("rated_cp").alias("parent_cp"),
+                pl.col("cqs").alias("parent_cqs"),
+                pl.col("pd").alias("parent_pd"),
+                pl.col("rating_value").alias("parent_rating_value"),
+                pl.col("rating_agency").alias("parent_rating_agency"),
+                pl.col("rating_type").alias("parent_rating_type"),
+                pl.col("rating_date").alias("parent_rating_date"),
+            ]
+        )
 
         result = result.join(
             parent_ratings,
@@ -331,34 +360,62 @@ class HierarchyResolver:
 
         # Resolve inheritance with coalesce
         has_own_rating = pl.col("cqs").is_not_null() | pl.col("rating_value").is_not_null()
-        has_parent_rating = pl.col("parent_cqs").is_not_null() | pl.col("parent_rating_value").is_not_null()
+        has_parent_rating = (
+            pl.col("parent_cqs").is_not_null() | pl.col("parent_rating_value").is_not_null()
+        )
 
-        result = result.with_columns([
-            pl.coalesce(pl.col("cqs"), pl.col("parent_cqs")).alias("cqs"),
-            pl.coalesce(pl.col("pd"), pl.col("parent_pd")).alias("pd"),
-            pl.coalesce(pl.col("rating_value"), pl.col("parent_rating_value")).alias("rating_value"),
-            pl.coalesce(pl.col("rating_agency"), pl.col("parent_rating_agency")).alias("rating_agency"),
-            pl.coalesce(pl.col("rating_type"), pl.col("parent_rating_type")).alias("rating_type"),
-            pl.coalesce(pl.col("rating_date"), pl.col("parent_rating_date")).alias("rating_date"),
-
-            pl.when(has_own_rating).then(pl.lit(False))
-            .when(has_parent_rating).then(pl.lit(True))
-            .otherwise(pl.lit(False)).alias("inherited"),
-
-            pl.when(has_own_rating).then(pl.col("counterparty_reference"))
-            .when(has_parent_rating).then(pl.col("ultimate_parent_reference"))
-            .otherwise(pl.lit(None).cast(pl.String)).alias("source_counterparty"),
-
-            pl.when(has_own_rating).then(pl.lit("own_rating"))
-            .when(has_parent_rating).then(pl.lit("parent_rating"))
-            .otherwise(pl.lit("unrated")).alias("inheritance_reason"),
-        ])
+        result = result.with_columns(
+            [
+                pl.coalesce(pl.col("cqs"), pl.col("parent_cqs")).alias("cqs"),
+                pl.coalesce(pl.col("pd"), pl.col("parent_pd")).alias("pd"),
+                pl.coalesce(pl.col("rating_value"), pl.col("parent_rating_value")).alias(
+                    "rating_value"
+                ),
+                pl.coalesce(pl.col("rating_agency"), pl.col("parent_rating_agency")).alias(
+                    "rating_agency"
+                ),
+                pl.coalesce(pl.col("rating_type"), pl.col("parent_rating_type")).alias(
+                    "rating_type"
+                ),
+                pl.coalesce(pl.col("rating_date"), pl.col("parent_rating_date")).alias(
+                    "rating_date"
+                ),
+                pl.when(has_own_rating)
+                .then(pl.lit(False))
+                .when(has_parent_rating)
+                .then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("inherited"),
+                pl.when(has_own_rating)
+                .then(pl.col("counterparty_reference"))
+                .when(has_parent_rating)
+                .then(pl.col("ultimate_parent_reference"))
+                .otherwise(pl.lit(None).cast(pl.String))
+                .alias("source_counterparty"),
+                pl.when(has_own_rating)
+                .then(pl.lit("own_rating"))
+                .when(has_parent_rating)
+                .then(pl.lit("parent_rating"))
+                .otherwise(pl.lit("unrated"))
+                .alias("inheritance_reason"),
+            ]
+        )
 
         # Drop intermediate columns
-        return result.select([
-            "counterparty_reference", "cqs", "pd", "rating_value", "rating_agency",
-            "rating_type", "rating_date", "inherited", "source_counterparty", "inheritance_reason",
-        ])
+        return result.select(
+            [
+                "counterparty_reference",
+                "cqs",
+                "pd",
+                "rating_value",
+                "rating_agency",
+                "rating_type",
+                "rating_date",
+                "inherited",
+                "source_counterparty",
+                "inheritance_reason",
+            ]
+        )
 
     def _build_facility_root_lookup(
         self,
@@ -382,11 +439,13 @@ class HierarchyResolver:
             - root_facility_reference: Its ultimate root facility
             - facility_hierarchy_depth: Number of levels traversed
         """
-        empty_result = pl.LazyFrame(schema={
-            "child_facility_reference": pl.String,
-            "root_facility_reference": pl.String,
-            "facility_hierarchy_depth": pl.Int32,
-        })
+        empty_result = pl.LazyFrame(
+            schema={
+                "child_facility_reference": pl.String,
+                "root_facility_reference": pl.String,
+                "facility_hierarchy_depth": pl.Int32,
+            }
+        )
 
         # Detect type column (child_type / node_type / neither)
         mapping_schema = facility_mappings.collect_schema()
@@ -400,12 +459,19 @@ class HierarchyResolver:
             return empty_result
 
         # Filter to facility→facility relationships and collect (small data)
-        facility_edges = facility_mappings.filter(
-            pl.col(type_col).fill_null("").str.to_lowercase() == "facility"
-        ).select([
-            pl.col("child_reference").alias("child_facility_reference"),
-            pl.col("parent_facility_reference"),
-        ]).unique().collect()
+        facility_edges = (
+            facility_mappings.filter(
+                pl.col(type_col).fill_null("").str.to_lowercase() == "facility"
+            )
+            .select(
+                [
+                    pl.col("child_reference").alias("child_facility_reference"),
+                    pl.col("parent_facility_reference"),
+                ]
+            )
+            .unique()
+            .collect()
+        )
 
         if facility_edges.height == 0:
             return empty_result
@@ -417,11 +483,13 @@ class HierarchyResolver:
             max_depth=max_depth,
         )
 
-        return resolved.rename({
-            "entity": "child_facility_reference",
-            "root": "root_facility_reference",
-            "depth": "facility_hierarchy_depth",
-        }).lazy()
+        return resolved.rename(
+            {
+                "entity": "child_facility_reference",
+                "root": "root_facility_reference",
+                "depth": "facility_hierarchy_depth",
+            }
+        ).lazy()
 
     def _enrich_counterparties_with_hierarchy(
         self,
@@ -445,53 +513,58 @@ class HierarchyResolver:
         """
         # Join with org_mappings to get parent
         enriched = counterparties.join(
-            org_mappings.select([
-                pl.col("child_counterparty_reference"),
-                pl.col("parent_counterparty_reference"),
-            ]),
+            org_mappings.select(
+                [
+                    pl.col("child_counterparty_reference"),
+                    pl.col("parent_counterparty_reference"),
+                ]
+            ),
             left_on="counterparty_reference",
             right_on="child_counterparty_reference",
             how="left",
         )
 
-        # Add has_parent flag
-        enriched = enriched.with_columns([
-            pl.col("parent_counterparty_reference").is_not_null().alias("counterparty_has_parent"),
-        ])
-
-        # Join with ultimate parents
-        enriched = enriched.join(
-            ultimate_parents.select([
-                pl.col("counterparty_reference").alias("_up_cp"),
-                pl.col("ultimate_parent_reference"),
-                pl.col("hierarchy_depth").alias("counterparty_hierarchy_depth"),
-            ]),
-            left_on="counterparty_reference",
-            right_on="_up_cp",
-            how="left",
+        # Join with ultimate parents and rating inheritance in sequence,
+        # then derive flags in a single with_columns batch.
+        enriched = (
+            enriched.join(
+                ultimate_parents.select(
+                    [
+                        pl.col("counterparty_reference").alias("_up_cp"),
+                        pl.col("ultimate_parent_reference"),
+                        pl.col("hierarchy_depth").alias("counterparty_hierarchy_depth"),
+                    ]
+                ),
+                left_on="counterparty_reference",
+                right_on="_up_cp",
+                how="left",
+            )
+            .join(
+                rating_inheritance.select(
+                    [
+                        pl.col("counterparty_reference").alias("_ri_cp"),
+                        pl.col("cqs"),
+                        pl.col("pd"),
+                        pl.col("rating_value"),
+                        pl.col("rating_agency"),
+                        pl.col("inherited").alias("rating_inherited"),
+                        pl.col("source_counterparty").alias("rating_source_counterparty"),
+                        pl.col("inheritance_reason").alias("rating_inheritance_reason"),
+                    ]
+                ),
+                left_on="counterparty_reference",
+                right_on="_ri_cp",
+                how="left",
+            )
+            .with_columns(
+                [
+                    pl.col("parent_counterparty_reference")
+                    .is_not_null()
+                    .alias("counterparty_has_parent"),
+                    pl.col("counterparty_hierarchy_depth").fill_null(0),
+                ]
+            )
         )
-
-        # Join with rating inheritance info
-        enriched = enriched.join(
-            rating_inheritance.select([
-                pl.col("counterparty_reference").alias("_ri_cp"),
-                pl.col("cqs"),
-                pl.col("pd"),
-                pl.col("rating_value"),
-                pl.col("rating_agency"),
-                pl.col("inherited").alias("rating_inherited"),
-                pl.col("source_counterparty").alias("rating_source_counterparty"),
-                pl.col("inheritance_reason").alias("rating_inheritance_reason"),
-            ]),
-            left_on="counterparty_reference",
-            right_on="_ri_cp",
-            how="left",
-        )
-
-        # Fill null hierarchy depth with 0 for entities without hierarchy
-        enriched = enriched.with_columns([
-            pl.col("counterparty_hierarchy_depth").fill_null(0),
-        ])
 
         return enriched
 
@@ -528,36 +601,41 @@ class HierarchyResolver:
         required_cols = {"facility_reference", "limit"}
         if not has_required_columns(facilities, required_cols):
             # No valid facilities, return empty LazyFrame with expected schema
-            return pl.LazyFrame(schema={
-                "exposure_reference": pl.String,
-                "exposure_type": pl.String,
-                "product_type": pl.String,
-                "book_code": pl.String,
-                "counterparty_reference": pl.String,
-                "value_date": pl.Date,
-                "maturity_date": pl.Date,
-                "currency": pl.String,
-                "drawn_amount": pl.Float64,
-                "interest": pl.Float64,
-                "undrawn_amount": pl.Float64,
-                "nominal_amount": pl.Float64,
-                "lgd": pl.Float64,
-                "beel": pl.Float64,
-                "seniority": pl.String,
-                "risk_type": pl.String,
-                "ccf_modelled": pl.Float64,
-                "is_short_term_trade_lc": pl.Boolean,
-                "is_buy_to_let": pl.Boolean,
-            })
+            return pl.LazyFrame(
+                schema={
+                    "exposure_reference": pl.String,
+                    "exposure_type": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "drawn_amount": pl.Float64,
+                    "interest": pl.Float64,
+                    "undrawn_amount": pl.Float64,
+                    "nominal_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                    "is_buy_to_let": pl.Boolean,
+                    "source_facility_reference": pl.String,
+                }
+            )
 
         # Check if facility_mappings is valid
         mapping_required_cols = {"parent_facility_reference", "child_reference"}
         if not has_required_columns(facility_mappings, mapping_required_cols):
-            facility_mappings = pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            })
+            facility_mappings = pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            )
 
         # Detect type column for filtering mappings (used by both loan and contingent sections)
         mapping_schema = facility_mappings.collect_schema()
@@ -574,10 +652,12 @@ class HierarchyResolver:
         root_lookup = (
             facility_root_lookup
             if facility_root_lookup is not None
-            else pl.LazyFrame(schema={
-                "child_facility_reference": pl.String,
-                "root_facility_reference": pl.String,
-            })
+            else pl.LazyFrame(
+                schema={
+                    "child_facility_reference": pl.String,
+                    "root_facility_reference": pl.String,
+                }
+            )
         )
 
         # Get loan schema columns to ensure we can join
@@ -586,10 +666,12 @@ class HierarchyResolver:
 
         if loan_ref_col is None:
             # No valid loans, all facilities are 100% undrawn
-            loan_drawn_totals = pl.LazyFrame(schema={
-                "aggregation_facility": pl.String,
-                "total_drawn": pl.Float64,
-            })
+            loan_drawn_totals = pl.LazyFrame(
+                schema={
+                    "aggregation_facility": pl.String,
+                    "total_drawn": pl.Float64,
+                }
+            )
         else:
             if type_col is not None:
                 loan_mappings = facility_mappings.filter(
@@ -611,24 +693,34 @@ class HierarchyResolver:
             )
 
             # For multi-level hierarchies, map each loan's drawn amount to the ROOT facility.
-            loan_with_parent = loan_with_parent.join(
-                root_lookup.select([
-                    pl.col("child_facility_reference"),
-                    pl.col("root_facility_reference").alias("_root_fac"),
-                ]),
-                left_on="parent_facility_reference",
-                right_on="child_facility_reference",
-                how="left",
-            ).with_columns([
-                pl.coalesce(
-                    pl.col("_root_fac"),
-                    pl.col("parent_facility_reference"),
-                ).alias("aggregation_facility"),
-            ]).drop("_root_fac")
+            loan_with_parent = (
+                loan_with_parent.join(
+                    root_lookup.select(
+                        [
+                            pl.col("child_facility_reference"),
+                            pl.col("root_facility_reference").alias("_root_fac"),
+                        ]
+                    ),
+                    left_on="parent_facility_reference",
+                    right_on="child_facility_reference",
+                    how="left",
+                )
+                .with_columns(
+                    [
+                        pl.coalesce(
+                            pl.col("_root_fac"),
+                            pl.col("parent_facility_reference"),
+                        ).alias("aggregation_facility"),
+                    ]
+                )
+                .drop("_root_fac")
+            )
 
-            loan_drawn_totals = loan_with_parent.group_by("aggregation_facility").agg([
-                pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
-            ])
+            loan_drawn_totals = loan_with_parent.group_by("aggregation_facility").agg(
+                [
+                    pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
+                ]
+            )
 
         # Calculate contingent utilisation (parallel to loan drawn totals)
         contingent_ref_col = None
@@ -638,10 +730,12 @@ class HierarchyResolver:
                 contingent_ref_col = "contingent_reference"
 
         if contingent_ref_col is None:
-            contingent_totals = pl.LazyFrame(schema={
-                "aggregation_facility": pl.String,
-                "total_contingent": pl.Float64,
-            })
+            contingent_totals = pl.LazyFrame(
+                schema={
+                    "aggregation_facility": pl.String,
+                    "total_contingent": pl.Float64,
+                }
+            )
         else:
             # Filter mappings to only contingent children
             if type_col is not None:
@@ -663,24 +757,34 @@ class HierarchyResolver:
 
             # For multi-level hierarchies, map to root facility.
             # Reuse root_lookup from loan section (already handles None case).
-            contingent_with_parent = contingent_with_parent.join(
-                root_lookup.select([
-                    pl.col("child_facility_reference"),
-                    pl.col("root_facility_reference").alias("_root_fac"),
-                ]),
-                left_on="parent_facility_reference",
-                right_on="child_facility_reference",
-                how="left",
-            ).with_columns([
-                pl.coalesce(
-                    pl.col("_root_fac"),
-                    pl.col("parent_facility_reference"),
-                ).alias("aggregation_facility"),
-            ]).drop("_root_fac")
+            contingent_with_parent = (
+                contingent_with_parent.join(
+                    root_lookup.select(
+                        [
+                            pl.col("child_facility_reference"),
+                            pl.col("root_facility_reference").alias("_root_fac"),
+                        ]
+                    ),
+                    left_on="parent_facility_reference",
+                    right_on="child_facility_reference",
+                    how="left",
+                )
+                .with_columns(
+                    [
+                        pl.coalesce(
+                            pl.col("_root_fac"),
+                            pl.col("parent_facility_reference"),
+                        ).alias("aggregation_facility"),
+                    ]
+                )
+                .drop("_root_fac")
+            )
 
-            contingent_totals = contingent_with_parent.group_by("aggregation_facility").agg([
-                pl.col("nominal_amount").clip(lower_bound=0.0).sum().alias("total_contingent"),
-            ])
+            contingent_totals = contingent_with_parent.group_by("aggregation_facility").agg(
+                [
+                    pl.col("nominal_amount").clip(lower_bound=0.0).sum().alias("total_contingent"),
+                ]
+            )
 
         # Identify sub-facilities to exclude from output
         # Sub-facilities appear as child_reference with child_type="facility"
@@ -691,28 +795,40 @@ class HierarchyResolver:
 
         # Join with facilities to calculate undrawn
         # Combine loan drawn + contingent utilisation
-        facility_with_drawn = facilities.join(
-            loan_drawn_totals,
-            left_on="facility_reference",
-            right_on="aggregation_facility",
-            how="left",
-        ).join(
-            contingent_totals,
-            left_on="facility_reference",
-            right_on="aggregation_facility",
-            how="left",
-        ).with_columns([
-            pl.col("total_drawn").fill_null(0.0),
-            pl.col("total_contingent").fill_null(0.0),
-        ]).with_columns([
-            # total_utilised = loans drawn + contingent nominal
-            (pl.col("total_drawn") + pl.col("total_contingent")).alias("total_utilised"),
-        ]).with_columns([
-            # undrawn = limit - total_utilised, floor at 0
-            (pl.col("limit") - pl.col("total_utilised"))
-            .clip(lower_bound=0.0)
-            .alias("undrawn_amount"),
-        ])
+        facility_with_drawn = (
+            facilities.join(
+                loan_drawn_totals,
+                left_on="facility_reference",
+                right_on="aggregation_facility",
+                how="left",
+            )
+            .join(
+                contingent_totals,
+                left_on="facility_reference",
+                right_on="aggregation_facility",
+                how="left",
+            )
+            .with_columns(
+                [
+                    pl.col("total_drawn").fill_null(0.0),
+                    pl.col("total_contingent").fill_null(0.0),
+                ]
+            )
+            .with_columns(
+                [
+                    # total_utilised = loans drawn + contingent nominal
+                    (pl.col("total_drawn") + pl.col("total_contingent")).alias("total_utilised"),
+                ]
+            )
+            .with_columns(
+                [
+                    # undrawn = limit - total_utilised, floor at 0
+                    (pl.col("limit") - pl.col("total_utilised"))
+                    .clip(lower_bound=0.0)
+                    .alias("undrawn_amount"),
+                ]
+            )
+        )
 
         # Exclude sub-facilities: only root/standalone facilities produce undrawn exposures
         facility_with_drawn = facility_with_drawn.join(
@@ -732,25 +848,53 @@ class HierarchyResolver:
         select_exprs = [
             (pl.col("facility_reference") + "_UNDRAWN").alias("exposure_reference"),
             pl.lit("facility_undrawn").alias("exposure_type"),
-            pl.col("product_type") if "product_type" in facility_cols else pl.lit(None).cast(pl.String).alias("product_type"),
-            pl.col("book_code").cast(pl.String, strict=False) if "book_code" in facility_cols else pl.lit(None).cast(pl.String).alias("book_code"),
-            pl.col("counterparty_reference") if "counterparty_reference" in facility_cols else pl.lit(None).cast(pl.String).alias("counterparty_reference"),
-            pl.col("value_date") if "value_date" in facility_cols else pl.lit(None).cast(pl.Date).alias("value_date"),
-            pl.col("maturity_date") if "maturity_date" in facility_cols else pl.lit(None).cast(pl.Date).alias("maturity_date"),
-            pl.col("currency") if "currency" in facility_cols else pl.lit(None).cast(pl.String).alias("currency"),
+            pl.col("product_type")
+            if "product_type" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("product_type"),
+            pl.col("book_code").cast(pl.String, strict=False)
+            if "book_code" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("book_code"),
+            pl.col("counterparty_reference")
+            if "counterparty_reference" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("counterparty_reference"),
+            pl.col("value_date")
+            if "value_date" in facility_cols
+            else pl.lit(None).cast(pl.Date).alias("value_date"),
+            pl.col("maturity_date")
+            if "maturity_date" in facility_cols
+            else pl.lit(None).cast(pl.Date).alias("maturity_date"),
+            pl.col("currency")
+            if "currency" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("currency"),
             pl.lit(0.0).alias("drawn_amount"),
             pl.lit(0.0).alias("interest"),  # Facility undrawn has no accrued interest
             pl.col("undrawn_amount"),
             pl.col("undrawn_amount").alias("nominal_amount"),  # CCF uses nominal_amount
-            pl.col("lgd").cast(pl.Float64, strict=False) if "lgd" in facility_cols else pl.lit(None).cast(pl.Float64).alias("lgd"),
-            pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0) if "beel" in facility_cols else pl.lit(0.0).alias("beel"),
-            pl.col("seniority") if "seniority" in facility_cols else pl.lit(None).cast(pl.String).alias("seniority"),
-            pl.col("risk_type") if "risk_type" in facility_cols else pl.lit(None).cast(pl.String).alias("risk_type"),
-            pl.col("ccf_modelled").cast(pl.Float64, strict=False) if "ccf_modelled" in facility_cols else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
-            (pl.col("is_short_term_trade_lc").fill_null(False) if "is_short_term_trade_lc" in facility_cols
-             else pl.lit(False).alias("is_short_term_trade_lc")),
-            (pl.col("is_buy_to_let").fill_null(False) if "is_buy_to_let" in facility_cols
-             else pl.lit(False).alias("is_buy_to_let")),
+            pl.col("lgd").cast(pl.Float64, strict=False)
+            if "lgd" in facility_cols
+            else pl.lit(None).cast(pl.Float64).alias("lgd"),
+            pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
+            if "beel" in facility_cols
+            else pl.lit(0.0).alias("beel"),
+            pl.col("seniority")
+            if "seniority" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("seniority"),
+            pl.col("risk_type")
+            if "risk_type" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("risk_type"),
+            pl.col("ccf_modelled").cast(pl.Float64, strict=False)
+            if "ccf_modelled" in facility_cols
+            else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
+            (
+                pl.col("is_short_term_trade_lc").fill_null(False)
+                if "is_short_term_trade_lc" in facility_cols
+                else pl.lit(False).alias("is_short_term_trade_lc")
+            ),
+            (
+                pl.col("is_buy_to_let").fill_null(False)
+                if "is_buy_to_let" in facility_cols
+                else pl.lit(False).alias("is_buy_to_let")
+            ),
             # Propagate facility reference for collateral allocation
             # This allows facility-level collateral to be linked to undrawn exposures
             pl.col("facility_reference").alias("source_facility_reference"),
@@ -802,17 +946,24 @@ class HierarchyResolver:
             pl.col("maturity_date"),
             pl.col("currency"),
             pl.col("drawn_amount"),
-            pl.col("interest").fill_null(0.0) if has_interest_col else pl.lit(0.0).alias("interest"),
+            pl.col("interest").fill_null(0.0)
+            if has_interest_col
+            else pl.lit(0.0).alias("interest"),
             pl.lit(0.0).alias("undrawn_amount"),
             pl.lit(0.0).alias("nominal_amount"),
             pl.col("lgd").cast(pl.Float64, strict=False),
-            pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0) if "beel" in loan_cols else pl.lit(0.0).alias("beel"),
+            pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
+            if "beel" in loan_cols
+            else pl.lit(0.0).alias("beel"),
             pl.col("seniority"),
             pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
-            (pl.col("is_buy_to_let").fill_null(False) if "is_buy_to_let" in loan_cols
-             else pl.lit(False).alias("is_buy_to_let")),
+            (
+                pl.col("is_buy_to_let").fill_null(False)
+                if "is_buy_to_let" in loan_cols
+                else pl.lit(False).alias("is_buy_to_let")
+            ),
         ]
         loans_unified = loans.select(loan_select_exprs)
 
@@ -833,32 +984,48 @@ class HierarchyResolver:
             # Standardize contingent columns with bs_type-dependent behavior:
             # ONB (drawn): drawn_amount=nominal, nominal=0, CCF fields nullified
             # OFB (undrawn): drawn_amount=0, nominal=X, CCF fields preserved
-            contingents_unified = contingents.select([
-                pl.col("contingent_reference").alias("exposure_reference"),
-                pl.lit("contingent").alias("exposure_type"),
-                pl.col("product_type"),
-                pl.col("book_code").cast(pl.String, strict=False),
-                pl.col("counterparty_reference"),
-                pl.col("value_date"),
-                pl.col("maturity_date"),
-                pl.col("currency"),
-                pl.when(is_drawn).then(pl.col("nominal_amount"))
-                .otherwise(pl.lit(0.0)).alias("drawn_amount"),
-                pl.lit(0.0).alias("interest"),
-                pl.lit(0.0).alias("undrawn_amount"),
-                pl.when(is_drawn).then(pl.lit(0.0))
-                .otherwise(pl.col("nominal_amount")).alias("nominal_amount"),
-                pl.col("lgd").cast(pl.Float64, strict=False),
-                pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0) if "beel" in cont_cols else pl.lit(0.0).alias("beel"),
-                pl.col("seniority"),
-                pl.when(is_drawn).then(pl.lit(None).cast(pl.String))
-                .otherwise(pl.col("risk_type")).alias("risk_type"),
-                pl.when(is_drawn).then(pl.lit(None).cast(pl.Float64))
-                .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False)).alias("ccf_modelled"),
-                pl.when(is_drawn).then(pl.lit(None).cast(pl.Boolean))
-                .otherwise(pl.col("is_short_term_trade_lc")).alias("is_short_term_trade_lc"),
-                pl.lit(False).alias("is_buy_to_let"),  # BTL is a property lending characteristic, not for contingents
-            ])
+            contingents_unified = contingents.select(
+                [
+                    pl.col("contingent_reference").alias("exposure_reference"),
+                    pl.lit("contingent").alias("exposure_type"),
+                    pl.col("product_type"),
+                    pl.col("book_code").cast(pl.String, strict=False),
+                    pl.col("counterparty_reference"),
+                    pl.col("value_date"),
+                    pl.col("maturity_date"),
+                    pl.col("currency"),
+                    pl.when(is_drawn)
+                    .then(pl.col("nominal_amount"))
+                    .otherwise(pl.lit(0.0))
+                    .alias("drawn_amount"),
+                    pl.lit(0.0).alias("interest"),
+                    pl.lit(0.0).alias("undrawn_amount"),
+                    pl.when(is_drawn)
+                    .then(pl.lit(0.0))
+                    .otherwise(pl.col("nominal_amount"))
+                    .alias("nominal_amount"),
+                    pl.col("lgd").cast(pl.Float64, strict=False),
+                    pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
+                    if "beel" in cont_cols
+                    else pl.lit(0.0).alias("beel"),
+                    pl.col("seniority"),
+                    pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.String))
+                    .otherwise(pl.col("risk_type"))
+                    .alias("risk_type"),
+                    pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.Float64))
+                    .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))
+                    .alias("ccf_modelled"),
+                    pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.Boolean))
+                    .otherwise(pl.col("is_short_term_trade_lc"))
+                    .alias("is_short_term_trade_lc"),
+                    pl.lit(False).alias(
+                        "is_buy_to_let"
+                    ),  # BTL is a property lending characteristic, not for contingents
+                ]
+            )
             exposure_frames.append(contingents_unified)
 
         # Build facility root lookup for multi-level hierarchies
@@ -889,18 +1056,26 @@ class HierarchyResolver:
             type_col = None
 
         if type_col is not None:
-            exposure_level_mappings = facility_mappings.filter(
-                pl.col(type_col).fill_null("").str.to_lowercase() != "facility"
-            ).select([
-                pl.col("child_reference"),
-                pl.col("parent_facility_reference").alias("mapped_parent_facility"),
-            ]).unique(subset=["child_reference"], keep="first")
+            exposure_level_mappings = (
+                facility_mappings.filter(
+                    pl.col(type_col).fill_null("").str.to_lowercase() != "facility"
+                )
+                .select(
+                    [
+                        pl.col("child_reference"),
+                        pl.col("parent_facility_reference").alias("mapped_parent_facility"),
+                    ]
+                )
+                .unique(subset=["child_reference"], keep="first")
+            )
         else:
             # No type column available - use all mappings as-is
-            exposure_level_mappings = facility_mappings.select([
-                pl.col("child_reference"),
-                pl.col("parent_facility_reference").alias("mapped_parent_facility"),
-            ]).unique(subset=["child_reference"], keep="first")
+            exposure_level_mappings = facility_mappings.select(
+                [
+                    pl.col("child_reference"),
+                    pl.col("parent_facility_reference").alias("mapped_parent_facility"),
+                ]
+            ).unique(subset=["child_reference"], keep="first")
 
         # Join with facility mappings to get parent facility
         exposures = exposures.join(
@@ -910,72 +1085,71 @@ class HierarchyResolver:
             how="left",
         )
 
-        # Add facility hierarchy fields
-        # For facility_undrawn exposures, use source_facility_reference as parent_facility_reference
-        # This enables facility-level collateral to be allocated to undrawn amounts
-        schema_names = set(exposures.collect_schema().names())
-        if "source_facility_reference" in schema_names:
-            exposures = exposures.with_columns([
-                # parent_facility_reference: prefer mapped value, then source_facility (for undrawn)
-                pl.coalesce(
-                    pl.col("mapped_parent_facility"),
-                    pl.col("source_facility_reference"),
-                ).alias("parent_facility_reference"),
-            ])
-        else:
-            exposures = exposures.with_columns([
-                pl.col("mapped_parent_facility").alias("parent_facility_reference"),
-            ])
-
-        exposures = exposures.with_columns([
-            pl.col("parent_facility_reference").is_not_null().alias("exposure_has_parent"),
-        ])
+        # Add facility hierarchy fields.
+        # For facility_undrawn exposures, source_facility_reference provides
+        # the parent facility; for loans/contingents it's null after diagonal_relaxed
+        # concat. Coalesce handles both cases without a collect_schema() call.
+        _parent_expr = pl.coalesce(
+            pl.col("mapped_parent_facility"),
+            pl.col("source_facility_reference"),
+        )
+        exposures = exposures.with_columns(
+            [
+                _parent_expr.alias("parent_facility_reference"),
+                _parent_expr.is_not_null().alias("exposure_has_parent"),
+            ]
+        )
 
         # Resolve root_facility_reference and facility_hierarchy_depth using root lookup
         # Left join is safe even when lookup is empty — NULLs fall through to the
         # when/then/otherwise chain, producing identical results to the no-lookup case.
-        exposures = exposures.join(
-            facility_root_lookup.select([
-                pl.col("child_facility_reference").alias("_frl_child"),
-                pl.col("root_facility_reference").alias("_frl_root"),
-                pl.col("facility_hierarchy_depth").alias("_frl_depth"),
-            ]),
-            left_on="parent_facility_reference",
-            right_on="_frl_child",
-            how="left",
-        ).with_columns([
-            # Multi-level: root from lookup; single-level: parent itself; no parent: null
-            pl.when(pl.col("_frl_root").is_not_null())
-            .then(pl.col("_frl_root"))
-            .when(pl.col("parent_facility_reference").is_not_null())
-            .then(pl.col("parent_facility_reference"))
-            .otherwise(pl.lit(None).cast(pl.String))
-            .alias("root_facility_reference"),
-            # Multi-level: lookup depth + 1; single-level: 1; no parent: 0
-            pl.when(pl.col("_frl_depth").is_not_null())
-            .then((pl.col("_frl_depth") + 1).cast(pl.Int8))
-            .when(pl.col("parent_facility_reference").is_not_null())
-            .then(pl.lit(1).cast(pl.Int8))
-            .otherwise(pl.lit(0).cast(pl.Int8))
-            .alias("facility_hierarchy_depth"),
-        ]).drop(["_frl_root", "_frl_depth"])
+        exposures = (
+            exposures.join(
+                facility_root_lookup.select(
+                    [
+                        pl.col("child_facility_reference").alias("_frl_child"),
+                        pl.col("root_facility_reference").alias("_frl_root"),
+                        pl.col("facility_hierarchy_depth").alias("_frl_depth"),
+                    ]
+                ),
+                left_on="parent_facility_reference",
+                right_on="_frl_child",
+                how="left",
+            )
+            .with_columns(
+                [
+                    # Multi-level: root from lookup; single-level: parent itself; no parent: null
+                    pl.when(pl.col("_frl_root").is_not_null())
+                    .then(pl.col("_frl_root"))
+                    .when(pl.col("parent_facility_reference").is_not_null())
+                    .then(pl.col("parent_facility_reference"))
+                    .otherwise(pl.lit(None).cast(pl.String))
+                    .alias("root_facility_reference"),
+                    # Multi-level: lookup depth + 1; single-level: 1; no parent: 0
+                    pl.when(pl.col("_frl_depth").is_not_null())
+                    .then((pl.col("_frl_depth") + 1).cast(pl.Int8))
+                    .when(pl.col("parent_facility_reference").is_not_null())
+                    .then(pl.lit(1).cast(pl.Int8))
+                    .otherwise(pl.lit(0).cast(pl.Int8))
+                    .alias("facility_hierarchy_depth"),
+                ]
+            )
+            .drop(["_frl_root", "_frl_depth"])
+        )
 
-        # Add counterparty hierarchy fields from lookup (now includes ultimate parent)
+        # Add counterparty rating fields needed by downstream calculators.
+        # Only cqs and pd are used by SA/IRB calculators; other hierarchy
+        # metadata (parent_counterparty_reference, rating_inherited, etc.)
+        # remains available on counterparty_lookup.counterparties but is not
+        # carried on the exposure frame to reduce column count through pipeline.
         exposures = exposures.join(
-            counterparty_lookup.counterparties.select([
-                pl.col("counterparty_reference"),
-                pl.col("counterparty_has_parent"),
-                pl.col("parent_counterparty_reference"),
-                pl.col("ultimate_parent_reference"),
-                pl.col("counterparty_hierarchy_depth"),
-                pl.col("cqs"),
-                pl.col("pd"),
-                pl.col("rating_value"),
-                pl.col("rating_agency"),
-                pl.col("rating_inherited"),
-                pl.col("rating_source_counterparty"),
-                pl.col("rating_inheritance_reason"),
-            ]),
+            counterparty_lookup.counterparties.select(
+                [
+                    pl.col("counterparty_reference"),
+                    pl.col("cqs"),
+                    pl.col("pd"),
+                ]
+            ),
             on="counterparty_reference",
             how="left",
         )
@@ -1014,15 +1188,20 @@ class HierarchyResolver:
         )
 
         required_cols = {
-            "beneficiary_reference", "collateral_type", "market_value", "property_type",
+            "beneficiary_reference",
+            "collateral_type",
+            "market_value",
+            "property_type",
         }
         if not has_required_columns(collateral, required_cols):
-            return exposures.with_columns([
-                pl.lit(0.0).alias("residential_collateral_value"),
-                pl.lit(0.0).alias("property_collateral_value"),
-                pl.lit(False).alias("has_facility_property_collateral"),
-                pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
-            ])
+            return exposures.with_columns(
+                [
+                    pl.lit(0.0).alias("residential_collateral_value"),
+                    pl.lit(0.0).alias("property_collateral_value"),
+                    pl.lit(False).alias("has_facility_property_collateral"),
+                    pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
+                ]
+            )
 
         collateral_schema = collateral.collect_schema()
         has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
@@ -1039,14 +1218,10 @@ class HierarchyResolver:
 
         if not has_beneficiary_type:
             # Legacy: assume direct exposure linking only
-            res_lookup = residential_collateral.group_by(
-                "beneficiary_reference"
-            ).agg(
+            res_lookup = residential_collateral.group_by("beneficiary_reference").agg(
                 pl.col("market_value").sum().alias("residential_collateral_value"),
             )
-            prop_lookup = all_property_collateral.group_by(
-                "beneficiary_reference"
-            ).agg(
+            prop_lookup = all_property_collateral.group_by("beneficiary_reference").agg(
                 pl.col("market_value").sum().alias("property_collateral_value"),
             )
             exposures = exposures.join(
@@ -1060,45 +1235,55 @@ class HierarchyResolver:
                 right_on="beneficiary_reference",
                 how="left",
             )
+            # Legacy path doesn't set has_facility_property_collateral;
+            # flag it as needs_facility_flag so we add it below without
+            # a collect_schema() call.
+            needs_facility_flag = True
         else:
             # Multi-level linking with .over() allocation weights
+            # This sets has_facility_property_collateral inline.
             exposures = self._join_property_collateral_multi_level(
-                exposures, residential_collateral, all_property_collateral,
+                exposures,
+                residential_collateral,
+                all_property_collateral,
             )
+            needs_facility_flag = False
 
         # Fill nulls, cap at exposure amount, derive threshold
-        exposures = exposures.with_columns([
-            pl.col("residential_collateral_value").fill_null(0.0),
-            pl.col("property_collateral_value").fill_null(0.0),
-        ]).with_columns([
-            pl.when(
-                pl.col("residential_collateral_value")
-                > pl.col("total_exposure_amount")
+        exposures = (
+            exposures.with_columns(
+                [
+                    pl.col("residential_collateral_value").fill_null(0.0),
+                    pl.col("property_collateral_value").fill_null(0.0),
+                ]
             )
-            .then(pl.col("total_exposure_amount"))
-            .otherwise(pl.col("residential_collateral_value"))
-            .alias("residential_collateral_value"),
-            pl.when(
-                pl.col("property_collateral_value")
-                > pl.col("total_exposure_amount")
+            .with_columns(
+                [
+                    pl.when(
+                        pl.col("residential_collateral_value") > pl.col("total_exposure_amount")
+                    )
+                    .then(pl.col("total_exposure_amount"))
+                    .otherwise(pl.col("residential_collateral_value"))
+                    .alias("residential_collateral_value"),
+                    pl.when(pl.col("property_collateral_value") > pl.col("total_exposure_amount"))
+                    .then(pl.col("total_exposure_amount"))
+                    .otherwise(pl.col("property_collateral_value"))
+                    .alias("property_collateral_value"),
+                ]
             )
-            .then(pl.col("total_exposure_amount"))
-            .otherwise(pl.col("property_collateral_value"))
-            .alias("property_collateral_value"),
-        ]).with_columns([
-            (
-                pl.col("total_exposure_amount")
-                - pl.col("residential_collateral_value")
-            ).alias("exposure_for_retail_threshold"),
-        ])
+            .with_columns(
+                [
+                    (
+                        pl.col("total_exposure_amount") - pl.col("residential_collateral_value")
+                    ).alias("exposure_for_retail_threshold"),
+                ]
+            )
+        )
 
-        # Ensure has_facility_property_collateral flag
-        schema_names = set(exposures.collect_schema().names())
-        if "has_facility_property_collateral" not in schema_names:
+        # Add has_facility_property_collateral for legacy path
+        if needs_facility_flag:
             exposures = exposures.with_columns(
-                (pl.col("property_collateral_value") > 0).alias(
-                    "has_facility_property_collateral"
-                ),
+                (pl.col("property_collateral_value") > 0).alias("has_facility_property_collateral"),
             )
 
         return exposures
@@ -1112,8 +1297,9 @@ class HierarchyResolver:
         """
         Join property collateral at direct/facility/counterparty levels.
 
-        Uses .over() window functions for allocation weights to avoid self-joins
-        that would duplicate the exposures plan tree.
+        Uses a single conditional group_by across all property collateral and
+        3 joins (one per level) instead of 6 separate aggregations + 6 joins.
+        Allocation weights use .over() window functions.
 
         Args:
             exposures: Exposures with total_exposure_amount column
@@ -1124,128 +1310,132 @@ class HierarchyResolver:
             Exposures with residential_collateral_value, property_collateral_value,
             and has_facility_property_collateral columns added
         """
-        def aggregate_by_level(
-            coll: pl.LazyFrame,
-            level: str,
-            value_alias: str,
-        ) -> pl.LazyFrame:
-            level_filter = ["exposure", "loan"] if level == "direct" else [level]
-            return coll.filter(
-                pl.col("beneficiary_type").str.to_lowercase().is_in(level_filter)
-            ).group_by("beneficiary_reference").agg(
-                pl.col("market_value").sum().alias(value_alias),
-            )
+        bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+        is_residential = pl.col("property_type").str.to_lowercase() == "residential"
 
-        # Aggregate collateral at each level (these are small from collateral, not
-        # self-joins on exposures, so they don't duplicate the plan)
-        res_direct = aggregate_by_level(residential_collateral, "direct", "res_direct")
-        res_facility = aggregate_by_level(
-            residential_collateral, "facility", "res_facility",
+        # Single conditional group_by: 6 aggregates in one pass
+        coll_agg = (
+            all_property_collateral.with_columns(
+                pl.when(bt_lower.is_in(["exposure", "loan"]))
+                .then(pl.lit("direct"))
+                .when(bt_lower == "facility")
+                .then(pl.lit("facility"))
+                .when(bt_lower == "counterparty")
+                .then(pl.lit("counterparty"))
+                .otherwise(pl.lit("direct"))
+                .alias("_level"),
+            )
+            .group_by(["_level", "beneficiary_reference"])
+            .agg(
+                [
+                    pl.col("market_value").filter(is_residential).sum().alias("_res"),
+                    pl.col("market_value").sum().alias("_prop"),
+                ]
+            )
         )
-        res_cp = aggregate_by_level(
-            residential_collateral, "counterparty", "res_cp",
+
+        # Split and rename for per-level joins
+        coll_direct = (
+            coll_agg.filter(pl.col("_level") == "direct")
+            .drop("_level")
+            .rename({"_res": "_res_d", "_prop": "_prop_d"})
         )
-        prop_direct = aggregate_by_level(
-            all_property_collateral, "direct", "prop_direct",
+        coll_facility = (
+            coll_agg.filter(pl.col("_level") == "facility")
+            .drop("_level")
+            .rename({"_res": "_res_f", "_prop": "_prop_f"})
         )
-        prop_facility = aggregate_by_level(
-            all_property_collateral, "facility", "prop_facility",
-        )
-        prop_cp = aggregate_by_level(
-            all_property_collateral, "counterparty", "prop_cp",
+        coll_cp = (
+            coll_agg.filter(pl.col("_level") == "counterparty")
+            .drop("_level")
+            .rename({"_res": "_res_c", "_prop": "_prop_c"})
         )
 
         # .over() window functions for allocation weights (no self-join!)
-        exposures = exposures.with_columns([
-            pl.when(pl.col("parent_facility_reference").is_not_null())
-            .then(
-                pl.col("total_exposure_amount").sum().over(
-                    "parent_facility_reference"
-                )
-            )
-            .otherwise(pl.col("total_exposure_amount"))
-            .alias("facility_total"),
-            pl.when(pl.col("counterparty_reference").is_not_null())
-            .then(
-                pl.col("total_exposure_amount").sum().over("counterparty_reference")
-            )
-            .otherwise(pl.col("total_exposure_amount"))
-            .alias("cp_total"),
-        ])
-
-        # Join collateral lookups (6 small joins from collateral data)
-        exposures = exposures.join(
-            res_direct,
-            left_on="exposure_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            prop_direct,
-            left_on="exposure_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            res_facility,
-            left_on="parent_facility_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            prop_facility,
-            left_on="parent_facility_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            res_cp,
-            left_on="counterparty_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            prop_cp,
-            left_on="counterparty_reference",
-            right_on="beneficiary_reference",
-            how="left",
+        exposures = exposures.with_columns(
+            [
+                pl.when(pl.col("parent_facility_reference").is_not_null())
+                .then(pl.col("total_exposure_amount").sum().over("parent_facility_reference"))
+                .otherwise(pl.col("total_exposure_amount"))
+                .alias("facility_total"),
+                pl.when(pl.col("counterparty_reference").is_not_null())
+                .then(pl.col("total_exposure_amount").sum().over("counterparty_reference"))
+                .otherwise(pl.col("total_exposure_amount"))
+                .alias("cp_total"),
+            ]
         )
 
-        # Calculate pro-rata allocation weights
-        exposures = exposures.with_columns([
-            pl.when(pl.col("facility_total") > 0)
-            .then(pl.col("total_exposure_amount") / pl.col("facility_total"))
-            .otherwise(pl.lit(0.0))
-            .alias("facility_weight"),
-            pl.when(pl.col("cp_total") > 0)
-            .then(pl.col("total_exposure_amount") / pl.col("cp_total"))
-            .otherwise(pl.lit(0.0))
-            .alias("cp_weight"),
-        ])
+        # 3 joins (one per level) instead of 6
+        exposures = (
+            exposures.join(
+                coll_direct,
+                left_on="exposure_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            )
+            .join(
+                coll_facility,
+                left_on="parent_facility_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            )
+            .join(
+                coll_cp,
+                left_on="counterparty_reference",
+                right_on="beneficiary_reference",
+                how="left",
+            )
+        )
 
-        # Combine values from all levels with pro-rata allocation
-        exposures = exposures.with_columns([
-            (
-                pl.col("res_direct").fill_null(0.0)
-                + (pl.col("res_facility").fill_null(0.0) * pl.col("facility_weight"))
-                + (pl.col("res_cp").fill_null(0.0) * pl.col("cp_weight"))
-            ).alias("residential_collateral_value"),
-            (
-                pl.col("prop_direct").fill_null(0.0)
-                + (
-                    pl.col("prop_facility").fill_null(0.0)
-                    * pl.col("facility_weight")
-                )
-                + (pl.col("prop_cp").fill_null(0.0) * pl.col("cp_weight"))
-            ).alias("property_collateral_value"),
-            (
-                (pl.col("prop_direct").fill_null(0.0) > 0)
-                | (pl.col("prop_facility").fill_null(0.0) > 0)
-                | (pl.col("prop_cp").fill_null(0.0) > 0)
-            ).alias("has_facility_property_collateral"),
-        ])
+        # Pro-rata weights + combine all levels in one batch
+        exposures = exposures.with_columns(
+            [
+                pl.when(pl.col("facility_total") > 0)
+                .then(pl.col("total_exposure_amount") / pl.col("facility_total"))
+                .otherwise(pl.lit(0.0))
+                .alias("facility_weight"),
+                pl.when(pl.col("cp_total") > 0)
+                .then(pl.col("total_exposure_amount") / pl.col("cp_total"))
+                .otherwise(pl.lit(0.0))
+                .alias("cp_weight"),
+            ]
+        )
+
+        exposures = exposures.with_columns(
+            [
+                (
+                    pl.col("_res_d").fill_null(0.0)
+                    + (pl.col("_res_f").fill_null(0.0) * pl.col("facility_weight"))
+                    + (pl.col("_res_c").fill_null(0.0) * pl.col("cp_weight"))
+                ).alias("residential_collateral_value"),
+                (
+                    pl.col("_prop_d").fill_null(0.0)
+                    + (pl.col("_prop_f").fill_null(0.0) * pl.col("facility_weight"))
+                    + (pl.col("_prop_c").fill_null(0.0) * pl.col("cp_weight"))
+                ).alias("property_collateral_value"),
+                (
+                    (pl.col("_prop_d").fill_null(0.0) > 0)
+                    | (pl.col("_prop_f").fill_null(0.0) > 0)
+                    | (pl.col("_prop_c").fill_null(0.0) > 0)
+                ).alias("has_facility_property_collateral"),
+            ]
+        )
 
         # Drop intermediate columns
-        return exposures.drop([
-            "res_direct", "res_facility", "res_cp",
-            "prop_direct", "prop_facility", "prop_cp",
-            "facility_total", "cp_total", "facility_weight", "cp_weight",
-        ])
+        return exposures.drop(
+            [
+                "_res_d",
+                "_res_f",
+                "_res_c",
+                "_prop_d",
+                "_prop_f",
+                "_prop_c",
+                "facility_total",
+                "cp_total",
+                "facility_weight",
+                "cp_weight",
+            ]
+        )
 
     def _enrich_with_lending_group(
         self,
@@ -1270,26 +1460,23 @@ class HierarchyResolver:
             and lending_group_adjusted_exposure columns added
         """
         # Build lending group membership
-        lending_groups = lending_mappings.select([
-            pl.col("parent_counterparty_reference").alias(
-                "lending_group_reference"
-            ),
-            pl.col("child_counterparty_reference").alias(
-                "member_counterparty_reference"
-            ),
-        ])
+        lending_groups = lending_mappings.select(
+            [
+                pl.col("parent_counterparty_reference").alias("lending_group_reference"),
+                pl.col("child_counterparty_reference").alias("member_counterparty_reference"),
+            ]
+        )
 
-        parent_as_member = lending_mappings.select([
-            pl.col("parent_counterparty_reference").alias(
-                "lending_group_reference"
-            ),
-            pl.col("parent_counterparty_reference").alias(
-                "member_counterparty_reference"
-            ),
-        ]).unique()
+        parent_as_member = lending_mappings.select(
+            [
+                pl.col("parent_counterparty_reference").alias("lending_group_reference"),
+                pl.col("parent_counterparty_reference").alias("member_counterparty_reference"),
+            ]
+        ).unique()
 
         all_members = pl.concat(
-            [lending_groups, parent_as_member], how="vertical",
+            [lending_groups, parent_as_member],
+            how="vertical",
         ).unique(subset=["member_counterparty_reference"], keep="first")
 
         # Join to get lending group reference
@@ -1301,26 +1488,24 @@ class HierarchyResolver:
         )
 
         # .over() window functions for group totals (no self-join!)
-        exposures = exposures.with_columns([
-            pl.when(pl.col("lending_group_reference").is_not_null())
-            .then(
-                pl.col("drawn_amount")
-                .clip(lower_bound=0.0)
-                .sum()
-                .over("lending_group_reference")
-                + pl.col("nominal_amount").sum().over("lending_group_reference")
-            )
-            .otherwise(0.0)
-            .alias("lending_group_total_exposure"),
-            pl.when(pl.col("lending_group_reference").is_not_null())
-            .then(
-                pl.col("exposure_for_retail_threshold").sum().over(
-                    "lending_group_reference"
+        exposures = exposures.with_columns(
+            [
+                pl.when(pl.col("lending_group_reference").is_not_null())
+                .then(
+                    pl.col("drawn_amount")
+                    .clip(lower_bound=0.0)
+                    .sum()
+                    .over("lending_group_reference")
+                    + pl.col("nominal_amount").sum().over("lending_group_reference")
                 )
-            )
-            .otherwise(0.0)
-            .alias("lending_group_adjusted_exposure"),
-        ])
+                .otherwise(0.0)
+                .alias("lending_group_total_exposure"),
+                pl.when(pl.col("lending_group_reference").is_not_null())
+                .then(pl.col("exposure_for_retail_threshold").sum().over("lending_group_reference"))
+                .otherwise(0.0)
+                .alias("lending_group_adjusted_exposure"),
+            ]
+        )
 
         return exposures
 
@@ -1330,10 +1515,12 @@ class HierarchyResolver:
         collateral: pl.LazyFrame | None,
     ) -> pl.LazyFrame:
         """
-        Add LTV from collateral to exposures for real estate risk weight calculations.
+        Add LTV and property metadata from collateral for real estate risk weights.
 
-        Joins collateral property_ltv to exposures where collateral is linked via
-        beneficiary_reference. For mortgages and commercial RE, LTV determines risk weight.
+        Joins collateral property_ltv, property_type, and is_income_producing to
+        exposures where collateral is linked via beneficiary_reference. For mortgages
+        and commercial RE, LTV determines risk weight. For CRE (CRR Art. 126),
+        income cover status determines 50% vs 100% risk weight.
 
         Supports three levels of collateral linking based on beneficiary_type:
         1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
@@ -1345,92 +1532,168 @@ class HierarchyResolver:
             collateral: Collateral data with beneficiary_reference and property_ltv (optional)
 
         Returns:
-            Exposures with ltv column added
+            Exposures with ltv, property_type, and has_income_cover columns added
         """
         # Check if collateral is valid for LTV processing
         # Requires beneficiary_reference and property_ltv columns
         required_cols = {"beneficiary_reference", "property_ltv"}
         if not has_required_columns(collateral, required_cols):
-            # No valid LTV data available, add null ltv column
-            return exposures.with_columns([
-                pl.lit(None).cast(pl.Float64).alias("ltv"),
-            ])
+            # No valid LTV data available, add null columns
+            return exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("ltv"),
+                    pl.lit(None).cast(pl.Utf8).alias("property_type"),
+                    pl.lit(False).alias("has_income_cover"),
+                ]
+            )
 
-        # Check if beneficiary_type column exists for multi-level linking
+        # Check which optional columns exist on collateral
         collateral_schema = collateral.collect_schema()
         has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
+        has_property_type = "property_type" in collateral_schema.names()
+        has_income_producing = "is_income_producing" in collateral_schema.names()
 
         # Filter for collateral with LTV data
         ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
 
+        # Build the list of columns to select from collateral
+        # Always include beneficiary_reference and property_ltv
+        _prop_type = (
+            pl.col("property_type")
+            if has_property_type
+            else pl.lit(None).cast(pl.Utf8).alias("property_type")
+        )
+        _income_cover = (
+            pl.col("is_income_producing").fill_null(False).alias("has_income_cover")
+            if has_income_producing
+            else pl.lit(False).alias("has_income_cover")
+        )
+
         if not has_beneficiary_type:
             # Legacy behavior: assume direct exposure linking
-            ltv_lookup = ltv_collateral.select([
-                pl.col("beneficiary_reference"),
-                pl.col("property_ltv").alias("ltv"),
-            ]).unique(subset=["beneficiary_reference"], keep="first")
+            ltv_lookup = ltv_collateral.select(
+                [
+                    pl.col("beneficiary_reference"),
+                    pl.col("property_ltv").alias("ltv"),
+                    _prop_type.alias("property_type"),
+                    _income_cover,
+                ]
+            ).unique(subset=["beneficiary_reference"], keep="first")
 
             return exposures.join(
                 ltv_lookup,
                 left_on="exposure_reference",
                 right_on="beneficiary_reference",
                 how="left",
+            ).with_columns(
+                [
+                    pl.col("has_income_cover").fill_null(False),
+                ]
             )
 
         # Multi-level linking: separate collateral by beneficiary_type
         # 1. Direct/exposure-level collateral
-        direct_ltv = ltv_collateral.filter(
-            pl.col("beneficiary_type").str.to_lowercase().is_in(["exposure", "loan"])
-        ).select([
-            pl.col("beneficiary_reference").alias("direct_ref"),
-            pl.col("property_ltv").alias("direct_ltv"),
-        ]).unique(subset=["direct_ref"], keep="first")
-
-        # 2. Facility-level collateral
-        facility_ltv = ltv_collateral.filter(
-            pl.col("beneficiary_type").str.to_lowercase() == "facility"
-        ).select([
-            pl.col("beneficiary_reference").alias("facility_ref"),
-            pl.col("property_ltv").alias("facility_ltv"),
-        ]).unique(subset=["facility_ref"], keep="first")
-
-        # 3. Counterparty-level collateral
-        counterparty_ltv = ltv_collateral.filter(
-            pl.col("beneficiary_type").str.to_lowercase() == "counterparty"
-        ).select([
-            pl.col("beneficiary_reference").alias("cp_ref"),
-            pl.col("property_ltv").alias("cp_ltv"),
-        ]).unique(subset=["cp_ref"], keep="first")
-
-        # Join all three levels
-        exposures = exposures.join(
-            direct_ltv,
-            left_on="exposure_reference",
-            right_on="direct_ref",
-            how="left",
-        ).join(
-            facility_ltv,
-            left_on="parent_facility_reference",
-            right_on="facility_ref",
-            how="left",
-        ).join(
-            counterparty_ltv,
-            left_on="counterparty_reference",
-            right_on="cp_ref",
-            how="left",
+        direct_ltv = (
+            ltv_collateral.filter(
+                pl.col("beneficiary_type").str.to_lowercase().is_in(["exposure", "loan"])
+            )
+            .select(
+                [
+                    pl.col("beneficiary_reference").alias("direct_ref"),
+                    pl.col("property_ltv").alias("direct_ltv"),
+                    _prop_type.alias("direct_property_type"),
+                    _income_cover.alias("direct_income_cover"),
+                ]
+            )
+            .unique(subset=["direct_ref"], keep="first")
         )
 
-        # Coalesce LTV: prefer direct, then facility, then counterparty
-        exposures = exposures.with_columns([
-            pl.coalesce(
-                pl.col("direct_ltv"),
-                pl.col("facility_ltv"),
-                pl.col("cp_ltv"),
-            ).alias("ltv"),
-        ]).drop(["direct_ltv", "facility_ltv", "cp_ltv"])
+        # 2. Facility-level collateral
+        facility_ltv = (
+            ltv_collateral.filter(pl.col("beneficiary_type").str.to_lowercase() == "facility")
+            .select(
+                [
+                    pl.col("beneficiary_reference").alias("facility_ref"),
+                    pl.col("property_ltv").alias("facility_ltv"),
+                    _prop_type.alias("facility_property_type"),
+                    _income_cover.alias("facility_income_cover"),
+                ]
+            )
+            .unique(subset=["facility_ref"], keep="first")
+        )
+
+        # 3. Counterparty-level collateral
+        counterparty_ltv = (
+            ltv_collateral.filter(pl.col("beneficiary_type").str.to_lowercase() == "counterparty")
+            .select(
+                [
+                    pl.col("beneficiary_reference").alias("cp_ref"),
+                    pl.col("property_ltv").alias("cp_ltv"),
+                    _prop_type.alias("cp_property_type"),
+                    _income_cover.alias("cp_income_cover"),
+                ]
+            )
+            .unique(subset=["cp_ref"], keep="first")
+        )
+
+        # Join all three levels
+        exposures = (
+            exposures.join(
+                direct_ltv,
+                left_on="exposure_reference",
+                right_on="direct_ref",
+                how="left",
+            )
+            .join(
+                facility_ltv,
+                left_on="parent_facility_reference",
+                right_on="facility_ref",
+                how="left",
+            )
+            .join(
+                counterparty_ltv,
+                left_on="counterparty_reference",
+                right_on="cp_ref",
+                how="left",
+            )
+        )
+
+        # Coalesce: prefer direct, then facility, then counterparty
+        exposures = exposures.with_columns(
+            [
+                pl.coalesce(
+                    pl.col("direct_ltv"),
+                    pl.col("facility_ltv"),
+                    pl.col("cp_ltv"),
+                ).alias("ltv"),
+                pl.coalesce(
+                    pl.col("direct_property_type"),
+                    pl.col("facility_property_type"),
+                    pl.col("cp_property_type"),
+                ).alias("property_type"),
+                pl.coalesce(
+                    pl.col("direct_income_cover"),
+                    pl.col("facility_income_cover"),
+                    pl.col("cp_income_cover"),
+                )
+                .fill_null(False)
+                .alias("has_income_cover"),
+            ]
+        ).drop(
+            [
+                "direct_ltv",
+                "facility_ltv",
+                "cp_ltv",
+                "direct_property_type",
+                "facility_property_type",
+                "cp_property_type",
+                "direct_income_cover",
+                "facility_income_cover",
+                "cp_income_cover",
+            ]
+        )
 
         return exposures
-
 
 
 def _resolve_graph_eager(

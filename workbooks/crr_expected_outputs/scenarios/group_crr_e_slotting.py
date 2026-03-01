@@ -74,19 +74,26 @@ def _(mo):
     4. **Income-Producing Real Estate (IPRE)** - Commercial RE repaid from property income
     5. **High Volatility Commercial Real Estate (HVCRE)** - Higher risk CRE (land, ADC)
 
-    **CRR Slotting Risk Weights (Art. 153(5)):**
+    **CRR Slotting Risk Weights (Art. 153(5), >=2.5yr maturity):**
 
     | Category | Non-HVCRE | HVCRE |
     |----------|-----------|-------|
-    | Strong | 70% | 70% |
-    | Good | 70% | 70% |
-    | Satisfactory | 115% | 115% |
+    | Strong | 70% | 95% |
+    | Good | 90% | 120% |
+    | Satisfactory | 115% | 140% |
     | Weak | 250% | 250% |
     | Default | 0% (provisioned) | 0% |
 
+    **Maturity split (<2.5yr remaining maturity):**
+    | Category | Non-HVCRE | HVCRE |
+    |----------|-----------|-------|
+    | Strong | 50% | 70% |
+    | Good | 70% | 95% |
+
     **Key CRR difference from Basel 3.1:**
-    - CRR has same weights for Strong and Good categories
-    - Basel 3.1 differentiates (Strong 50%, Good 70%) and has different HVCRE weights
+    - CRR differentiates by maturity (<2.5yr vs >=2.5yr)
+    - CRR has separate HVCRE table with higher weights
+    - Basel 3.1 differentiates by HVCRE/PF pre-op/operational
     """)
     return
 
@@ -108,23 +115,37 @@ def _():
         is_hvcre: bool = False
     ) -> Decimal:
         """
-        Get CRR slotting risk weight for specialised lending.
+        Get CRR slotting risk weight for specialised lending (>=2.5yr maturity).
+
+        CRR Art. 153(5) defines separate tables for non-HVCRE and HVCRE,
+        each with maturity splits. This function returns the >=2.5yr weights
+        (test fixtures use 5yr maturity).
 
         Args:
             category: Slotting category (strong, good, satisfactory, weak, default)
-            is_hvcre: Whether this is HVCRE (same weights under CRR)
+            is_hvcre: Whether this is HVCRE
 
         Returns:
             Risk weight as Decimal
         """
-        # CRR slotting weights (same for HVCRE and non-HVCRE)
-        weights = {
-            "strong": Decimal("0.70"),
-            "good": Decimal("0.70"),
-            "satisfactory": Decimal("1.15"),
-            "weak": Decimal("2.50"),
-            "default": Decimal("0.00"),
-        }
+        if is_hvcre:
+            # CRR HVCRE (Table 2) — remaining maturity >= 2.5yr
+            weights = {
+                "strong": Decimal("0.95"),
+                "good": Decimal("1.20"),
+                "satisfactory": Decimal("1.40"),
+                "weak": Decimal("2.50"),
+                "default": Decimal("0.00"),
+            }
+        else:
+            # CRR Non-HVCRE (Table 1) — remaining maturity >= 2.5yr
+            weights = {
+                "strong": Decimal("0.70"),
+                "good": Decimal("0.90"),
+                "satisfactory": Decimal("1.15"),
+                "weak": Decimal("2.50"),
+                "default": Decimal("0.00"),
+            }
         return weights.get(category.lower(), Decimal("1.15"))
 
     def calculate_slotting_rwa(
@@ -187,12 +208,12 @@ def _(mo):
     ---
     ## Scenario CRR-E1: Project Finance - Strong Category
 
-    **Input:** £10m project finance exposure, Strong category
+    **Input:** £10m project finance exposure, Strong category, >=2.5yr maturity
     **Expected:** 70% RW, £7m RWA
 
-    **CRR Treatment (Art. 153(5)):**
-    - Strong category: 70% RW
-    - Note: Same as Good category under CRR (Basel 3.1 has 50% for Strong)
+    **CRR Treatment (Art. 153(5), >=2.5yr maturity):**
+    - Strong category: 70% RW (50% if <2.5yr remaining maturity)
+    - Good category: 90% RW (70% if <2.5yr remaining maturity)
 
     **Strong Category Characteristics:**
     - Project has very robust economics
@@ -219,7 +240,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
     result_crr_e1 = CRRSlottingResult(
         scenario_id="CRR-E1",
         scenario_group="CRR-E",
-        description="Project finance - Strong category (70% RW)",
+        description="Project finance - Strong category (70% RW, >=2.5yr maturity)",
         exposure_reference="LOAN_SL_PF_001",
         counterparty_reference="SL_PF_STRONG",
         approach="Slotting",
@@ -231,11 +252,11 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         risk_weight=float(rw_e1),
         rwa=float(rwa_e1),
         calculation_details={
-            "crr_rw": "70%",
-            "basel31_rw": "50% (different from CRR)",
+            "crr_rw": "70% (>=2.5yr), 50% (<2.5yr)",
+            "basel31_rw": "70% operational, 80% PF pre-op",
             "formula": "RWA = EAD × RW",
             "calculation": f"RWA = £{ead_e1:,.0f} × 70% = £{rwa_e1:,.0f}",
-            "note": "CRR treats Strong same as Good (both 70%)",
+            "note": "CRR Strong=70% for non-HVCRE with >=2.5yr maturity",
         },
         regulatory_reference="CRR Art. 153(5)",
     )
@@ -252,8 +273,8 @@ def _(mo):
     ---
     ## Scenario CRR-E2: Project Finance - Good Category
 
-    **Input:** £10m project finance exposure, Good category
-    **Expected:** 70% RW, £7m RWA
+    **Input:** £10m project finance exposure, Good category, >=2.5yr maturity
+    **Expected:** 90% RW, £9m RWA
 
     **Good Category Characteristics:**
     - Project has robust economics
@@ -278,7 +299,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
     result_crr_e2 = CRRSlottingResult(
         scenario_id="CRR-E2",
         scenario_group="CRR-E",
-        description="Project finance - Good category (70% RW)",
+        description="Project finance - Good category (90% RW, >=2.5yr maturity)",
         exposure_reference="LOAN_SL_PF_002",
         counterparty_reference="SL_PF_GOOD",
         approach="Slotting",
@@ -290,10 +311,10 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         risk_weight=float(rw_e2),
         rwa=float(rwa_e2),
         calculation_details={
-            "crr_rw": "70%",
-            "basel31_rw": "70% (same as CRR)",
+            "crr_rw": "90% (>=2.5yr), 70% (<2.5yr)",
+            "basel31_rw": "90% operational",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_e2:,.0f} × 70% = £{rwa_e2:,.0f}",
+            "calculation": f"RWA = £{ead_e2:,.0f} × {rw_e2*100:.0f}% = £{rwa_e2:,.0f}",
         },
         regulatory_reference="CRR Art. 153(5)",
     )
@@ -374,8 +395,8 @@ def _(mo):
     ---
     ## Scenario CRR-E4: HVCRE - Strong Category
 
-    **Input:** £5m high volatility commercial real estate, Strong category
-    **Expected:** 70% RW, £3.5m RWA
+    **Input:** £5m high volatility commercial real estate, Strong category, >=2.5yr maturity
+    **Expected:** 95% RW, £4.75m RWA
 
     **HVCRE Definition:**
     - Land acquisition
@@ -383,9 +404,9 @@ def _(mo):
     - Commercial real estate with higher price volatility
     - Loans where repayment depends on sale of property
 
-    **CRR Treatment:**
-    - Same risk weights as non-HVCRE under CRR
-    - Basel 3.1 has higher weights for HVCRE
+    **CRR Treatment (Art. 153(5) Table 2):**
+    - HVCRE Strong (>=2.5yr): 95% RW (70% if <2.5yr)
+    - Higher than non-HVCRE Strong (70%)
 
     **Reference:** CRR Art. 153(5)
     """)
@@ -404,7 +425,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
     result_crr_e4 = CRRSlottingResult(
         scenario_id="CRR-E4",
         scenario_group="CRR-E",
-        description="HVCRE - Strong category (70% RW)",
+        description="HVCRE - Strong category (95% RW, >=2.5yr maturity)",
         exposure_reference="LOAN_SL_HVCRE_001",
         counterparty_reference="SL_HVCRE_STRONG",
         approach="Slotting",
@@ -416,12 +437,11 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         risk_weight=float(rw_e4),
         rwa=float(rwa_e4),
         calculation_details={
-            "crr_rw": "70%",
-            "basel31_rw": "70% (for Strong HVCRE)",
+            "crr_rw": "95% (>=2.5yr), 70% (<2.5yr)",
+            "basel31_rw": "95% (HVCRE Strong)",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_e4:,.0f} × 70% = £{rwa_e4:,.0f}",
-            "note": "CRR has same HVCRE weights as non-HVCRE",
-            "basel31_difference": "Basel 3.1 has higher HVCRE weights (70/95/120/175/350%)",
+            "calculation": f"RWA = £{ead_e4:,.0f} × {rw_e4*100:.0f}% = £{rwa_e4:,.0f}",
+            "note": "CRR HVCRE has higher weights than non-HVCRE",
         },
         regulatory_reference="CRR Art. 153(5)",
     )
@@ -438,21 +458,21 @@ def _(mo):
     ---
     ## Summary: Group CRR-E Slotting Results
 
-    Key CRR slotting observations:
-    1. **Strong = Good** - Both receive 70% RW under CRR (Basel 3.1 differentiates)
-    2. **HVCRE treatment** - Same weights as non-HVCRE under CRR
-    3. **Punitive Weak weight** - 250% RW for Weak category
+    Key CRR slotting observations (Art. 153(5), >=2.5yr maturity):
+    1. **Non-HVCRE** - Strong=70%, Good=90%, Satisfactory=115%, Weak=250%
+    2. **HVCRE** - Higher weights: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%
+    3. **Maturity split** - Lower weights for <2.5yr remaining maturity
     4. **Default = 0%** - Assumed 100% provisioned
 
-    **CRR vs Basel 3.1 Comparison:**
+    **CRR vs Basel 3.1 Comparison (>=2.5yr maturity):**
 
-    | Category | CRR (Non-HVCRE) | CRR (HVCRE) | Basel 3.1 (Non-HVCRE) | Basel 3.1 (HVCRE) |
-    |----------|-----------------|-------------|----------------------|-------------------|
-    | Strong | 70% | 70% | 50% | 70% |
-    | Good | 70% | 70% | 70% | 95% |
-    | Satisfactory | 115% | 115% | 100% | 120% |
-    | Weak | 250% | 250% | 150% | 175% |
-    | Default | 0% | 0% | 350% | 350% |
+    | Category | CRR (Non-HVCRE) | CRR (HVCRE) | Basel 3.1 (Operational) | Basel 3.1 (HVCRE) |
+    |----------|-----------------|-------------|------------------------|-------------------|
+    | Strong | 70% | 95% | 70% | 95% |
+    | Good | 90% | 120% | 90% | 120% |
+    | Satisfactory | 115% | 140% | 115% | 140% |
+    | Weak | 250% | 250% | 250% | 250% |
+    | Default | 0% | 0% | 0% | 0% |
     """)
     return
 

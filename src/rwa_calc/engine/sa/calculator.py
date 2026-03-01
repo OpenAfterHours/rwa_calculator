@@ -1,22 +1,36 @@
 """
 Standardised Approach (SA) Calculator for RWA.
 
-Implements CRR Art. 112-134 risk weight lookups and RWA calculation.
-Supports both CRR and Basel 3.1 frameworks with appropriate risk weights.
+Implements CRR Art. 112-134 and Basel 3.1 CRE20 risk weight lookups and RWA
+calculation. Supports both frameworks via config.is_basel_3_1 branching.
 
 Pipeline position:
     CRMProcessor -> SACalculator -> OutputAggregator
 
 Key responsibilities:
-- Risk weight lookup by exposure class and CQS
-- LTV-based weights for real estate
-- Supporting factor application (CRR only)
+- CQS-based risk weight lookup (sovereign, institution, corporate)
+- LTV-based weights for real estate (CRR split vs Basel 3.1 LTV bands)
+- ADC exposure treatment (Basel 3.1: 150% / 100% pre-sold)
+- Revised Basel 3.1 corporate CQS weights (CQS3: 75%, CQS5: 100%)
+- SCRA-based institution risk weights for unrated exposures (Basel 3.1)
+- Investment-grade corporate treatment (65%, Basel 3.1)
+- SME corporate treatment (85%, Basel 3.1)
+- Subordinated debt flat 150% (Basel 3.1)
+- Supporting factor application (CRR only — removed under Basel 3.1)
 - RWA calculation (EAD × RW × supporting factor)
 
 References:
 - CRR Art. 112-134: SA risk weights
 - CRR Art. 501: SME supporting factor
 - CRR Art. 501a: Infrastructure supporting factor
+- CRE20.16-21: Basel 3.1 institution ECRA/SCRA risk weights
+- CRE20.22-26: Basel 3.1 revised corporate CQS risk weights
+- CRE20.47-49: Basel 3.1 subordinated debt, investment-grade, SME corporate
+- CRE20.73: Basel 3.1 residential RE (general) whole-loan LTV bands
+- CRE20.82: Basel 3.1 residential RE (income-producing) LTV bands
+- CRE20.85: Basel 3.1 commercial RE (general) preferential treatment
+- CRE20.86: Basel 3.1 commercial RE (income-producing) LTV bands
+- CRE20.87-88: Basel 3.1 ADC exposures
 """
 
 from __future__ import annotations
@@ -34,13 +48,23 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.data.tables.crr_risk_weights import (
-    get_combined_cqs_risk_weights,
-    RESIDENTIAL_MORTGAGE_PARAMS,
-    COMMERCIAL_RE_PARAMS,
-    RETAIL_RISK_WEIGHT,
+from rwa_calc.data.tables.b31_risk_weights import (
+    B31_CORPORATE_INVESTMENT_GRADE_RW,
+    B31_CORPORATE_SME_RW,
+    B31_SCRA_RISK_WEIGHTS,
+    B31_SUBORDINATED_DEBT_RW,
+    b31_adc_rw_expr,
+    b31_commercial_rw_expr,
+    b31_residential_rw_expr,
+    get_b31_combined_cqs_risk_weights,
 )
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.data.tables.crr_risk_weights import (
+    COMMERCIAL_RE_PARAMS,
+    RESIDENTIAL_MORTGAGE_PARAMS,
+    RETAIL_RISK_WEIGHT,
+    get_combined_cqs_risk_weights,
+)
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -150,6 +174,98 @@ class SACalculator:
             errors=errors,
         )
 
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply SA risk weights to SA rows on a unified frame.
+
+        Operates on the full unified frame (SA + IRB + slotting rows together).
+        Only modifies columns for rows where approach == 'standardised'.
+
+        Steps:
+        1. Join risk weight table (unconditional — SA-equivalent RW for output floor)
+        2. Apply SA-specific RW overrides (mortgage LTV, retail fixed, etc.)
+        3. Apply SA guarantee substitution
+        4. Calculate RWA = EAD x RW (SA rows only)
+        5. Apply supporting factors (SA rows only)
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with SA columns populated for SA rows
+        """
+        is_sa = pl.col("approach") == ApproachType.SA.value
+
+        # Step 1-2: Apply risk weights (runs unconditionally — also provides
+        # SA-equivalent RW for IRB output floor)
+        exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
+        exposures = self._apply_guarantee_substitution(exposures, config)
+
+        # Step 4: Calculate pre-factor RWA (SA rows only)
+        schema = exposures.collect_schema()
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        exposures = exposures.with_columns(
+            [
+                pl.when(is_sa)
+                .then(pl.col(ead_col) * pl.col("risk_weight"))
+                .otherwise(
+                    pl.col("rwa_pre_factor")
+                    if "rwa_pre_factor" in schema.names()
+                    else pl.lit(None).cast(pl.Float64)
+                )
+                .alias("rwa_pre_factor"),
+            ]
+        )
+
+        # Step 5: Apply supporting factors (SA rows only)
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        return exposures
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate SA RWA on pre-filtered SA-only rows.
+
+        Unlike calculate_unified(), expects only SA rows — no approach guards
+        needed for RWA calculation. Risk weight join runs on ~55K SA rows
+        instead of the full 100K unified frame.
+
+        Args:
+            exposures: Pre-filtered SA rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with SA RWA columns populated
+        """
+        # Step 1-2: Apply risk weights
+        exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 3: Guarantee substitution
+        exposures = self._apply_guarantee_substitution(exposures, config)
+
+        # Step 4: Calculate pre-factor RWA (all rows are SA — no guard needed)
+        schema = exposures.collect_schema()
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        exposures = exposures.with_columns(
+            (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
+        )
+
+        # Step 5: Apply supporting factors
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        return exposures
+
     def _apply_risk_weights(
         self,
         exposures: pl.LazyFrame,
@@ -170,51 +286,67 @@ class SACalculator:
         Returns:
             Exposures with risk_weight column added
         """
-        # Get CQS-based risk weight table (includes UK deviation for institutions)
+        # Get CQS-based risk weight table — Basel 3.1 uses revised corporate weights
         use_uk_deviation = config.base_currency == "GBP"
-        rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
+        if config.is_basel_3_1:
+            rw_table = get_b31_combined_cqs_risk_weights(use_uk_deviation).lazy()
+        else:
+            rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
-        # Ensure required columns exist
+        # Ensure required columns exist (single with_columns call)
         schema = exposures.collect_schema()
+        missing_cols = []
         if "ltv" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(None).cast(pl.Float64).alias("ltv"),
-            ])
+            missing_cols.append(pl.lit(None).cast(pl.Float64).alias("ltv"))
         if "has_income_cover" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("has_income_cover"),
-            ])
+            missing_cols.append(pl.lit(False).alias("has_income_cover"))
         if "book_code" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit("").alias("book_code"),
-            ])
+            missing_cols.append(pl.lit("").alias("book_code"))
         if "cp_is_managed_as_retail" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("cp_is_managed_as_retail"),
-            ])
+            missing_cols.append(pl.lit(False).alias("cp_is_managed_as_retail"))
+        if "property_type" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("property_type"))
+        if "is_adc" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_adc"))
+        if "is_presold" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_presold"))
+        if "seniority" not in schema.names():
+            missing_cols.append(pl.lit("senior").alias("seniority"))
+        if "cp_scra_grade" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_scra_grade"))
+        if "cp_is_investment_grade" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("cp_is_investment_grade"))
+        if missing_cols:
+            exposures = exposures.with_columns(missing_cols)
 
         # Prepare exposures for join
-        # Normalize exposure class names for matching
+        # Compute uppercase once for all comparisons (avoids repeated regex)
         # Use sentinel value -1 for null CQS to allow join (null != null in joins)
-        exposures = exposures.with_columns([
-            # Map detailed classes to lookup classes
-            pl.when(pl.col("exposure_class").str.contains("(?i)central_govt"))
-            .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
-            .when(pl.col("exposure_class").str.contains("(?i)institution"))
-            .then(pl.lit("INSTITUTION"))
-            .when(pl.col("exposure_class").str.contains("(?i)corporate"))
-            .then(pl.lit("CORPORATE"))
-            .otherwise(pl.col("exposure_class").str.to_uppercase())
-            .alias("_lookup_class"),
-
-            # Use -1 as sentinel for null CQS (for join matching)
-            pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("_lookup_cqs"),
-        ])
+        _upper = pl.col("exposure_class").str.to_uppercase()
+        exposures = exposures.with_columns(
+            [
+                # Map detailed classes to lookup classes
+                pl.when(_upper.str.contains("CENTRAL_GOVT", literal=True))
+                .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
+                .when(_upper.str.contains("INSTITUTION", literal=True))
+                .then(pl.lit("INSTITUTION"))
+                .when(_upper.str.contains("CORPORATE", literal=True))
+                .then(pl.lit("CORPORATE"))
+                .otherwise(_upper)
+                .alias("_lookup_class"),
+                # Use -1 as sentinel for null CQS (for join matching)
+                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("_lookup_cqs"),
+                # Cache uppercase for risk weight override chain
+                _upper.alias("_upper_class"),
+            ]
+        )
 
         # Prepare risk weight table with same sentinel for null CQS
-        rw_table = rw_table.with_columns([
-            pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
-        ])
+        rw_table = rw_table.with_columns(
+            [
+                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
+            ]
+        )
 
         # Join risk weight table
         exposures = exposures.join(
@@ -225,69 +357,171 @@ class SACalculator:
             suffix="_rw",
         )
 
-        # Apply class-specific risk weights
+        # Apply class-specific risk weights (framework-dependent)
         retail_rw = float(RETAIL_RISK_WEIGHT)
-        resi_threshold = float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"])
-        resi_rw_low = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"])
-        resi_rw_high = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"])
-        cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
-        cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
-        cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
+        _uc = pl.col("_upper_class")
 
-        exposures = exposures.with_columns([
-            # Order matters: check specific classes before generic ones
-            # 1. Residential mortgage: LTV-based (must come before retail)
-            pl.when(pl.col("exposure_class").str.contains("(?i)mortgage|residential"))
-            .then(
-                pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
-                .then(pl.lit(resi_rw_low))
-                # High LTV: weighted average
-                .otherwise(
-                    # portion_low = threshold / ltv
-                    # portion_high = (ltv - threshold) / ltv
-                    # avg_rw = rw_low * portion_low + rw_high * portion_high
-                    (resi_rw_low * resi_threshold / pl.col("ltv").fill_null(1.0) +
-                     resi_rw_high * (pl.col("ltv").fill_null(1.0) - resi_threshold) /
-                     pl.col("ltv").fill_null(1.0))
-                )
+        if config.is_basel_3_1:
+            # Save CQS-based risk weight before override — needed for
+            # Basel 3.1 general CRE min(60%, counterparty_rw) logic (CRE20.85)
+            exposures = exposures.with_columns(
+                pl.col("risk_weight").fill_null(1.0).alias("_cqs_risk_weight")
             )
 
-            # 2. Commercial RE: LTV + income cover based
-            .when(pl.col("exposure_class").str.contains("(?i)commercial.*re|cre"))
-            .then(
-                pl.when(
-                    (pl.col("ltv").fill_null(1.0) <= cre_threshold) &
-                    pl.col("has_income_cover").fill_null(False)
-                )
-                .then(pl.lit(cre_rw_low))
-                .otherwise(pl.lit(cre_rw_standard))
+            # Basel 3.1 SCRA risk weights for unrated institutions (CRE20.16-21)
+            scra_a_rw = float(B31_SCRA_RISK_WEIGHTS["A"])
+            scra_b_rw = float(B31_SCRA_RISK_WEIGHTS["B"])
+            scra_c_rw = float(B31_SCRA_RISK_WEIGHTS["C"])
+            inv_grade_rw = float(B31_CORPORATE_INVESTMENT_GRADE_RW)
+            sme_corp_rw = float(B31_CORPORATE_SME_RW)
+            sub_debt_rw = float(B31_SUBORDINATED_DEBT_RW)
+
+            exposures = exposures.with_columns(
+                [
+                    # 0. Subordinated debt: flat 150% (CRE20.47, checked first)
+                    # Overrides all CQS-based weights for institution + corporate
+                    pl.when(
+                        (pl.col("seniority").fill_null("senior") == "subordinated")
+                        & (
+                            _uc.str.contains("INSTITUTION", literal=True)
+                            | _uc.str.contains("CORPORATE", literal=True)
+                        )
+                    )
+                    .then(pl.lit(sub_debt_rw))
+                    # 1. ADC: 150% or 100% pre-sold (CRE20.87-88)
+                    .when(pl.col("is_adc").fill_null(False))
+                    .then(b31_adc_rw_expr())
+                    # 2. Residential mortgage: LTV-band (CRE20.73/82)
+                    .when(
+                        _uc.str.contains("MORTGAGE", literal=True)
+                        | _uc.str.contains("RESIDENTIAL", literal=True)
+                    )
+                    .then(b31_residential_rw_expr())
+                    # 3. Commercial RE: LTV-band or min() (CRE20.85/86)
+                    .when(
+                        _uc.str.contains("COMMERCIAL", literal=True)
+                        | _uc.str.contains("CRE", literal=True)
+                        | (pl.col("property_type").fill_null("") == "commercial")
+                    )
+                    .then(b31_commercial_rw_expr("_cqs_risk_weight"))
+                    # 4. SCRA-based unrated institutions (CRE20.16-21)
+                    # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                        & pl.col("cp_scra_grade").is_not_null()
+                    )
+                    .then(
+                        pl.when(pl.col("cp_scra_grade") == "A")
+                        .then(pl.lit(scra_a_rw))
+                        .when(pl.col("cp_scra_grade") == "B")
+                        .then(pl.lit(scra_b_rw))
+                        .otherwise(pl.lit(scra_c_rw))
+                    )
+                    # 5. Investment-grade unrated corporate: 65% (CRE20.47-49)
+                    # Only applies to unrated corporates (CQS is null) — rated use CQS table
+                    .when(
+                        _uc.str.contains("CORPORATE", literal=True)
+                        & ~_uc.str.contains("SME", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                        & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
+                    )
+                    .then(pl.lit(inv_grade_rw))
+                    # 6. SME managed as retail: 75% (same both frameworks)
+                    .when(
+                        _uc.str.contains("SME", literal=True)
+                        & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                    )
+                    .then(pl.lit(retail_rw))
+                    # 7. Corporate SME: 85% (CRE20.47-49, Basel 3.1)
+                    .when(
+                        _uc.str.contains("CORPORATE", literal=True)
+                        & _uc.str.contains("SME", literal=True)
+                    )
+                    .then(pl.lit(sme_corp_rw))
+                    # 8. Retail (non-mortgage): 75% flat
+                    .when(_uc.str.contains("RETAIL", literal=True))
+                    .then(pl.lit(retail_rw))
+                    # 9. Default: CQS-based or 100%
+                    .otherwise(pl.col("risk_weight").fill_null(1.0))
+                    .alias("risk_weight"),
+                ]
             )
+        else:
+            # CRR risk weight overrides (Art. 112-134)
+            resi_threshold = float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"])
+            resi_rw_low = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"])
+            resi_rw_high = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"])
+            cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
+            cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
+            cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
 
-            # 3. SME managed as retail: 75% RW (CRR Art. 123)
-            .when(
-                (pl.col("exposure_class").str.contains("(?i)sme")) &
-                (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+            exposures = exposures.with_columns(
+                [
+                    # 1. Residential mortgage: LTV split (CRR Art. 125)
+                    pl.when(
+                        _uc.str.contains("MORTGAGE", literal=True)
+                        | _uc.str.contains("RESIDENTIAL", literal=True)
+                    )
+                    .then(
+                        pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
+                        .then(pl.lit(resi_rw_low))
+                        .otherwise(
+                            resi_rw_low * resi_threshold / pl.col("ltv").fill_null(1.0)
+                            + resi_rw_high
+                            * (pl.col("ltv").fill_null(1.0) - resi_threshold)
+                            / pl.col("ltv").fill_null(1.0)
+                        )
+                    )
+                    # 2. Commercial RE: LTV + income cover (CRR Art. 126)
+                    .when(
+                        _uc.str.contains("COMMERCIAL", literal=True)
+                        | _uc.str.contains("CRE", literal=True)
+                        | (pl.col("property_type").fill_null("") == "commercial")
+                    )
+                    .then(
+                        pl.when(
+                            (pl.col("ltv").fill_null(1.0) <= cre_threshold)
+                            & pl.col("has_income_cover").fill_null(False)
+                        )
+                        .then(pl.lit(cre_rw_low))
+                        .otherwise(pl.lit(cre_rw_standard))
+                    )
+                    # 3. SME managed as retail: 75% (CRR Art. 123)
+                    .when(
+                        _uc.str.contains("SME", literal=True)
+                        & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                    )
+                    .then(pl.lit(retail_rw))
+                    # 4. Corporate SME: 100%
+                    .when(
+                        _uc.str.contains("CORPORATE", literal=True)
+                        & _uc.str.contains("SME", literal=True)
+                    )
+                    .then(pl.lit(1.0))
+                    # 5. Retail (non-mortgage): 75% flat
+                    .when(_uc.str.contains("RETAIL", literal=True))
+                    .then(pl.lit(retail_rw))
+                    # 6. Default: CQS-based or 100%
+                    .otherwise(pl.col("risk_weight").fill_null(1.0))
+                    .alias("risk_weight"),
+                ]
             )
-            .then(pl.lit(retail_rw))
-
-            # 4. Corporate SME: 100% RW (then reduced by SME supporting factor)
-            .when(pl.col("exposure_class").str.contains("(?i)corporate.*sme|sme.*corporate"))
-            .then(pl.lit(1.0))
-
-            # 5. Retail (non-mortgage): 75% flat
-            .when(pl.col("exposure_class").str.contains("(?i)retail"))
-            .then(pl.lit(retail_rw))
-
-            # 5. Default: use joined CQS-based risk weight, or 100%
-            .otherwise(pl.col("risk_weight").fill_null(1.0))
-            .alias("risk_weight"),
-        ])
 
         # Clean up temporary columns
-        exposures = exposures.drop([
-            col for col in ["_lookup_class", "_lookup_cqs", "risk_weight_rw"]
-            if col in exposures.collect_schema().names()
-        ])
+        exposures = exposures.drop(
+            [
+                col
+                for col in [
+                    "_lookup_class",
+                    "_lookup_cqs",
+                    "_upper_class",
+                    "_cqs_risk_weight",
+                    "risk_weight_rw",
+                ]
+                if col in exposures.collect_schema().names()
+            ]
+        )
 
         return exposures
 
@@ -322,9 +556,11 @@ class SACalculator:
 
         # Preserve pre-CRM risk weight before any guarantee substitution
         # This is needed for regulatory reporting (pre-CRM vs post-CRM views)
-        exposures = exposures.with_columns([
-            pl.col("risk_weight").alias("pre_crm_risk_weight"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.col("risk_weight").alias("pre_crm_risk_weight"),
+            ]
+        )
 
         # Calculate guarantor's risk weight based on entity type and CQS
         # Use UK deviation for institutions (30% for CQS 2 instead of 50%)
@@ -334,94 +570,118 @@ class SACalculator:
         # Sovereign: 0%, 20%, 50%, 100%, 100%, 150%
         # Institution (UK): 20%, 30%, 50%, 100%, 100%, 150%
         # Corporate: 20%, 50%, 100%, 100%, 150%, 150%
-        exposures = exposures.with_columns([
-            pl.when(pl.col("guaranteed_portion") <= 0)
-            .then(pl.lit(None).cast(pl.Float64))
-            # Sovereign guarantors
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)sovereign"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.0))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
-                .otherwise(pl.lit(1.0))  # Unrated
-            )
-            # Institution guarantors (UK deviation: CQS 2 = 30%)
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)institution"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
-                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
-                .otherwise(pl.lit(0.40))  # Unrated
-            )
-            # Corporate guarantors
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)corporate"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([3, 4])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs").is_in([5, 6])).then(pl.lit(1.50))
-                .otherwise(pl.lit(1.0))  # Unrated
-            )
-            # Unknown entity type - no substitution
-            .otherwise(pl.lit(None).cast(pl.Float64))
-            .alias("guarantor_rw"),
-        ])
+        _ugt = pl.col("guarantor_entity_type").str.to_uppercase()
+        exposures = exposures.with_columns(
+            [
+                pl.when(pl.col("guaranteed_portion") <= 0)
+                .then(pl.lit(None).cast(pl.Float64))
+                # Sovereign guarantors
+                .when(_ugt.str.contains("SOVEREIGN", literal=True))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.0))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(1.0))  # Unrated
+                )
+                # Institution guarantors (UK deviation: CQS 2 = 30%)
+                .when(_ugt.str.contains("INSTITUTION", literal=True))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(0.40))  # Unrated
+                )
+                # Corporate guarantors
+                .when(_ugt.str.contains("CORPORATE", literal=True))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([3, 4]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs").is_in([5, 6]))
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(1.0))  # Unrated
+                )
+                # Unknown entity type - no substitution
+                .otherwise(pl.lit(None).cast(pl.Float64))
+                .alias("guarantor_rw"),
+            ]
+        )
 
         # Check if guarantee is beneficial (guarantor RW < borrower RW)
         # Non-beneficial guarantees should NOT be applied per CRR Art. 213
-        exposures = exposures.with_columns([
-            pl.when(
-                (pl.col("guaranteed_portion") > 0) &
-                (pl.col("guarantor_rw").is_not_null()) &
-                (pl.col("guarantor_rw") < pl.col("pre_crm_risk_weight"))
-            )
-            .then(pl.lit(True))
-            .otherwise(pl.lit(False))
-            .alias("is_guarantee_beneficial"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.when(
+                    (pl.col("guaranteed_portion") > 0)
+                    & (pl.col("guarantor_rw").is_not_null())
+                    & (pl.col("guarantor_rw") < pl.col("pre_crm_risk_weight"))
+                )
+                .then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("is_guarantee_beneficial"),
+            ]
+        )
 
         # Calculate blended risk weight using substitution approach
         # Only apply if guarantee is beneficial
         # RWA = (unguaranteed_portion * borrower_rw + guaranteed_portion * guarantor_rw) / ead_final
         ead_col = "ead_final" if "ead_final" in cols else "ead"
 
-        exposures = exposures.with_columns([
-            # Blended risk weight when guarantee exists AND is beneficial
-            pl.when(
-                (pl.col("guaranteed_portion") > 0) &
-                (pl.col("guarantor_rw").is_not_null()) &
-                (pl.col("is_guarantee_beneficial"))
-            ).then(
-                # weighted average of borrower and guarantor risk weights
-                (
-                    pl.col("unguaranteed_portion") * pl.col("pre_crm_risk_weight") +
-                    pl.col("guaranteed_portion") * pl.col("guarantor_rw")
-                ) / pl.col(ead_col)
-            )
-            # No guarantee, no guarantor RW, or non-beneficial - use original risk weight
-            .otherwise(pl.col("pre_crm_risk_weight"))
-            .alias("risk_weight"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                # Blended risk weight when guarantee exists AND is beneficial
+                pl.when(
+                    (pl.col("guaranteed_portion") > 0)
+                    & (pl.col("guarantor_rw").is_not_null())
+                    & (pl.col("is_guarantee_beneficial"))
+                )
+                .then(
+                    # weighted average of borrower and guarantor risk weights
+                    (
+                        pl.col("unguaranteed_portion") * pl.col("pre_crm_risk_weight")
+                        + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
+                    )
+                    / pl.col(ead_col)
+                )
+                # No guarantee, no guarantor RW, or non-beneficial - use original risk weight
+                .otherwise(pl.col("pre_crm_risk_weight"))
+                .alias("risk_weight"),
+            ]
+        )
 
         # Track guarantee status for reporting
-        exposures = exposures.with_columns([
-            pl.when(pl.col("guaranteed_portion") <= 0)
-            .then(pl.lit("NO_GUARANTEE"))
-            .when(~pl.col("is_guarantee_beneficial"))
-            .then(pl.lit("GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"))
-            .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
-            .alias("guarantee_status"),
-
-            # Calculate RW benefit from guarantee (positive = RW reduced)
-            pl.when(pl.col("is_guarantee_beneficial"))
-            .then(pl.col("pre_crm_risk_weight") - pl.col("risk_weight"))
-            .otherwise(pl.lit(0.0))
-            .alias("guarantee_benefit_rw"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.when(pl.col("guaranteed_portion") <= 0)
+                .then(pl.lit("NO_GUARANTEE"))
+                .when(~pl.col("is_guarantee_beneficial"))
+                .then(pl.lit("GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"))
+                .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
+                .alias("guarantee_status"),
+                # Calculate RW benefit from guarantee (positive = RW reduced)
+                pl.when(pl.col("is_guarantee_beneficial"))
+                .then(pl.col("pre_crm_risk_weight") - pl.col("risk_weight"))
+                .otherwise(pl.lit(0.0))
+                .alias("guarantee_benefit_rw"),
+            ]
+        )
 
         return exposures
 
@@ -442,9 +702,11 @@ class SACalculator:
         schema = exposures.collect_schema()
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
 
-        return exposures.with_columns([
-            (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
-        ])
+        return exposures.with_columns(
+            [
+                (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
+            ]
+        )
 
     def _apply_supporting_factors(
         self,
@@ -465,19 +727,25 @@ class SACalculator:
         schema = exposures.collect_schema()
 
         if "is_sme" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("is_sme"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(False).alias("is_sme"),
+                ]
+            )
 
         if "is_infrastructure" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(False).alias("is_infrastructure"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(False).alias("is_infrastructure"),
+                ]
+            )
 
         if "ead_final" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.col("ead").alias("ead_final"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.col("ead").alias("ead_final"),
+                ]
+            )
 
         return self._supporting_factor_calc.apply_factors(exposures, config)
 
@@ -519,18 +787,22 @@ class SACalculator:
         audit = exposures.select(select_cols)
 
         # Add calculation string
-        audit = audit.with_columns([
-            pl.concat_str([
-                pl.lit("SA: EAD="),
-                pl.col("ead_final").round(0).cast(pl.String),
-                pl.lit(" × RW="),
-                (pl.col("risk_weight") * 100).round(1).cast(pl.String),
-                pl.lit("% × SF="),
-                (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
-                pl.lit("% → RWA="),
-                pl.col("rwa_post_factor").round(0).cast(pl.String),
-            ]).alias("sa_calculation"),
-        ])
+        audit = audit.with_columns(
+            [
+                pl.concat_str(
+                    [
+                        pl.lit("SA: EAD="),
+                        pl.col("ead_final").round(0).cast(pl.String),
+                        pl.lit(" × RW="),
+                        (pl.col("risk_weight") * 100).round(1).cast(pl.String),
+                        pl.lit("% × SF="),
+                        (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
+                        pl.lit("% → RWA="),
+                        pl.col("rwa_post_factor").round(0).cast(pl.String),
+                    ]
+                ).alias("sa_calculation"),
+            ]
+        )
 
         return audit
 
@@ -543,6 +815,13 @@ class SACalculator:
         is_sme: bool = False,
         is_infrastructure: bool = False,
         is_managed_as_retail: bool = False,
+        has_income_cover: bool = False,
+        property_type: str | None = None,
+        is_adc: bool = False,
+        is_presold: bool = False,
+        seniority: str = "senior",
+        scra_grade: str | None = None,
+        is_investment_grade: bool = False,
         config: CalculationConfig | None = None,
     ) -> dict:
         """
@@ -556,29 +835,45 @@ class SACalculator:
             is_sme: Whether SME supporting factor applies
             is_infrastructure: Whether infrastructure factor applies
             is_managed_as_retail: Whether SME is managed on pooled retail basis (CRR Art. 123)
+            has_income_cover: Whether income materially depends on property cash flows
+            property_type: Property type ("residential" or "commercial") from collateral
+            is_adc: Whether this is an ADC (Acquisition/Development/Construction) exposure
+            is_presold: Whether ADC exposure is pre-sold to qualifying buyer
+            seniority: "senior" or "subordinated" — subordinated gets 150% under Basel 3.1
+            scra_grade: SCRA grade for unrated institutions ("A"/"B"/"C", Basel 3.1 only)
+            is_investment_grade: Whether counterparty qualifies as investment grade (Basel 3.1)
             config: Calculation configuration (defaults to CRR)
 
         Returns:
             Dictionary with calculation results
         """
         from datetime import date
+
         from rwa_calc.contracts.config import CalculationConfig
 
         if config is None:
             config = CalculationConfig.crr(reporting_date=date.today())
 
         # Create single-row DataFrame
-        df = pl.DataFrame({
-            "exposure_reference": ["SINGLE"],
-            "ead_final": [float(ead)],
-            "exposure_class": [exposure_class],
-            "cqs": [cqs],
-            "ltv": [float(ltv) if ltv else None],
-            "is_sme": [is_sme],
-            "is_infrastructure": [is_infrastructure],
-            "has_income_cover": [False],
-            "cp_is_managed_as_retail": [is_managed_as_retail],
-        }).lazy()
+        df = pl.DataFrame(
+            {
+                "exposure_reference": ["SINGLE"],
+                "ead_final": [float(ead)],
+                "exposure_class": [exposure_class],
+                "cqs": [cqs],
+                "ltv": [float(ltv) if ltv else None],
+                "is_sme": [is_sme],
+                "is_infrastructure": [is_infrastructure],
+                "has_income_cover": [has_income_cover],
+                "cp_is_managed_as_retail": [is_managed_as_retail],
+                "property_type": [property_type],
+                "is_adc": [is_adc],
+                "is_presold": [is_presold],
+                "seniority": [seniority],
+                "cp_scra_grade": [scra_grade],
+                "cp_is_investment_grade": [is_investment_grade],
+            }
+        ).lazy()
 
         # Apply risk weights
         df = self._apply_risk_weights(df, config)

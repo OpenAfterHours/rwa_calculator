@@ -96,6 +96,7 @@ def create_loans() -> pl.DataFrame:
         *_airb_scenario_loans(),
         *_retail_loans(),
         *_hierarchy_test_loans(),
+        *_commercial_re_loans(),
         *_defaulted_loans(),
         *_crm_scenario_loans(),
         *_slotting_scenario_loans(),
@@ -777,6 +778,34 @@ def _airb_scenario_loans() -> list[Loan]:
     ]
 
 
+def _commercial_re_loans() -> list[Loan]:
+    """
+    Commercial real estate loans.
+
+    CRR Art. 126: Commercial RE with LTV <= 50% and income cover gets 50% RW.
+    Scenario CRR-A7: £400,000 loan at 40% LTV with income cover.
+    """
+    return [
+        # CRR-A7: Commercial RE - 50% RW (LTV 40%, income cover met)
+        # Property value £1m, loan £400k → LTV 40%
+        # Income-producing property meeting 1.5x interest coverage
+        Loan(
+            loan_reference="LOAN_CRE_001",
+            product_type="CRE_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_CRE_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2031, 1, 1),
+            currency="GBP",
+            drawn_amount=400_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+    ]
+
+
 def _defaulted_loans() -> list[Loan]:
     """
     Loans to defaulted counterparties.
@@ -966,7 +995,7 @@ def _slotting_scenario_loans() -> list[Loan]:
         ),
         # =============================================================================
         # CRR-E2: Project Finance - Good
-        # £10m project finance, Good slotting category = 70% RW (same as Strong under CRR)
+        # £10m project finance, Good slotting category = 90% RW (>=2.5yr maturity)
         # =============================================================================
         Loan(
             loan_reference="LOAN_SL_PF_002",
@@ -1002,8 +1031,8 @@ def _slotting_scenario_loans() -> list[Loan]:
         ),
         # =============================================================================
         # CRR-E4: HVCRE - Strong
-        # £5m high-volatility CRE, Strong slotting category = 70% RW
-        # Note: CRR uses same weights as non-HVCRE; Basel 3.1 has higher HVCRE weights
+        # £5m high-volatility CRE, Strong slotting category = 95% RW (>=2.5yr maturity)
+        # CRR HVCRE Table 2 has higher weights than non-HVCRE Table 1
         # =============================================================================
         Loan(
             loan_reference="LOAN_SL_HVCRE_001",
@@ -1405,7 +1434,11 @@ def print_summary(output_path: Path) -> None:
         print(f"  {row['book_code']}: {row['len']}")
 
     print("\nTotal drawn by book:")
-    book_totals = df.group_by("book_code").agg(pl.col("drawn_amount").sum().alias("total_drawn")).sort("book_code")
+    book_totals = (
+        df.group_by("book_code")
+        .agg(pl.col("drawn_amount").sum().alias("total_drawn"))
+        .sort("book_code")
+    )
     for row in book_totals.iter_rows(named=True):
         print(f"  {row['book_code']}: £{row['total_drawn']:,.0f}")
 

@@ -27,8 +27,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.sa import SALazyFrame, SAExpr  # noqa: F401 - imports register namespace
-
+from rwa_calc.engine.sa import SAExpr, SALazyFrame  # noqa: F401 - imports register namespace
 
 # =============================================================================
 # Fixtures
@@ -44,16 +43,17 @@ def crr_config() -> CalculationConfig:
 @pytest.fixture
 def crr_config_eur() -> CalculationConfig:
     """Return a CRR configuration with EUR (no UK deviation)."""
-    from rwa_calc.contracts.config import (
-        RegulatoryFramework,
-        PDFloors,
-        LGDFloors,
-        SupportingFactors,
-        OutputFloorConfig,
-        RetailThresholds,
-        IRBPermissions,
-    )
     from decimal import Decimal
+
+    from rwa_calc.contracts.config import (
+        IRBPermissions,
+        LGDFloors,
+        OutputFloorConfig,
+        PDFloors,
+        RegulatoryFramework,
+        RetailThresholds,
+        SupportingFactors,
+    )
 
     return CalculationConfig(
         framework=RegulatoryFramework.CRR,
@@ -79,56 +79,70 @@ def basel31_config() -> CalculationConfig:
 @pytest.fixture
 def basic_lazyframe() -> pl.LazyFrame:
     """Return a basic LazyFrame with SA columns."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-        "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
-        "exposure_class": ["CORPORATE", "CENTRAL_GOVT_CENTRAL_BANK", "INSTITUTION"],
-        "cqs": [2, 1, 3],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+            "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
+            "exposure_class": ["CORPORATE", "CENTRAL_GOVT_CENTRAL_BANK", "INSTITUTION"],
+            "cqs": [2, 1, 3],
+        }
+    )
 
 
 @pytest.fixture
 def mortgage_lazyframe() -> pl.LazyFrame:
     """Return a LazyFrame with residential mortgages."""
-    return pl.LazyFrame({
-        "exposure_reference": ["MORT001", "MORT002", "MORT003"],
-        "ead_final": [500_000.0, 400_000.0, 300_000.0],
-        "exposure_class": ["RESIDENTIAL_MORTGAGE", "RESIDENTIAL_MORTGAGE", "RESIDENTIAL_MORTGAGE"],
-        "ltv": [0.60, 0.80, 0.95],  # Below, at, above threshold
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["MORT001", "MORT002", "MORT003"],
+            "ead_final": [500_000.0, 400_000.0, 300_000.0],
+            "exposure_class": [
+                "RESIDENTIAL_MORTGAGE",
+                "RESIDENTIAL_MORTGAGE",
+                "RESIDENTIAL_MORTGAGE",
+            ],
+            "ltv": [0.60, 0.80, 0.95],  # Below, at, above threshold
+        }
+    )
 
 
 @pytest.fixture
 def cre_lazyframe() -> pl.LazyFrame:
     """Return a LazyFrame with commercial real estate."""
-    return pl.LazyFrame({
-        "exposure_reference": ["CRE001", "CRE002", "CRE003"],
-        "ead_final": [2_000_000.0, 1_500_000.0, 1_000_000.0],
-        "exposure_class": ["COMMERCIAL_RE", "COMMERCIAL_RE", "COMMERCIAL_RE"],
-        "ltv": [0.50, 0.70, 0.50],
-        "has_income_cover": [True, True, False],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["CRE001", "CRE002", "CRE003"],
+            "ead_final": [2_000_000.0, 1_500_000.0, 1_000_000.0],
+            "exposure_class": ["COMMERCIAL_RE", "COMMERCIAL_RE", "COMMERCIAL_RE"],
+            "ltv": [0.50, 0.70, 0.50],
+            "has_income_cover": [True, True, False],
+        }
+    )
 
 
 @pytest.fixture
 def retail_lazyframe() -> pl.LazyFrame:
     """Return a LazyFrame with retail exposures."""
-    return pl.LazyFrame({
-        "exposure_reference": ["RET001", "RET002"],
-        "ead_final": [50_000.0, 100_000.0],
-        "exposure_class": ["RETAIL", "RETAIL"],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["RET001", "RET002"],
+            "ead_final": [50_000.0, 100_000.0],
+            "exposure_class": ["RETAIL", "RETAIL"],
+        }
+    )
 
 
 @pytest.fixture
 def sme_lazyframe() -> pl.LazyFrame:
     """Return a LazyFrame with SME exposures."""
-    return pl.LazyFrame({
-        "exposure_reference": ["SME001", "SME002"],
-        "ead_final": [1_000_000.0, 500_000.0],
-        "exposure_class": ["CORPORATE_SME", "CORPORATE_SME"],
-        "is_sme": [True, True],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SME001", "SME002"],
+            "ead_final": [1_000_000.0, 500_000.0],
+            "exposure_class": ["CORPORATE_SME", "CORPORATE_SME"],
+            "is_sme": [True, True],
+        }
+    )
 
 
 # =============================================================================
@@ -178,10 +192,12 @@ class TestPrepareColumns:
 
     def test_adds_missing_columns(self, crr_config: CalculationConfig) -> None:
         """prepare_columns should add missing columns with defaults."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead": [100_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead": [100_000.0],
+            }
+        )
         result = lf.sa.prepare_columns(crr_config).collect()
 
         assert "ead_final" in result.columns
@@ -191,7 +207,9 @@ class TestPrepareColumns:
         assert "is_sme" in result.columns
         assert "is_infrastructure" in result.columns
 
-    def test_preserves_existing_columns(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_preserves_existing_columns(
+        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """prepare_columns should preserve existing columns."""
         result = basic_lazyframe.sa.prepare_columns(crr_config).collect()
 
@@ -200,10 +218,12 @@ class TestPrepareColumns:
 
     def test_ead_final_from_ead(self, crr_config: CalculationConfig) -> None:
         """ead_final should be populated from ead if available."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead": [100_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead": [100_000.0],
+            }
+        )
         result = lf.sa.prepare_columns(crr_config).collect()
 
         assert result["ead_final"][0] == pytest.approx(100_000.0)
@@ -219,36 +239,42 @@ class TestApplyRiskWeights:
 
     def test_corporate_cqs2_risk_weight(self, crr_config: CalculationConfig) -> None:
         """Corporate CQS 2 should get 50% risk weight."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1_000_000.0],
-            "exposure_class": ["CORPORATE"],
-            "cqs": [2],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [2],
+            }
+        )
         result = lf.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
 
         assert result["risk_weight"][0] == pytest.approx(0.50)
 
     def test_sovereign_cqs1_risk_weight(self, crr_config: CalculationConfig) -> None:
         """Sovereign CQS 1 should get 0% risk weight."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1_000_000.0],
-            "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK"],
-            "cqs": [1],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK"],
+                "cqs": [1],
+            }
+        )
         result = lf.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
 
         assert result["risk_weight"][0] == pytest.approx(0.0)
 
     def test_institution_cqs2_uk_deviation(self, crr_config: CalculationConfig) -> None:
         """Institution CQS 2 with UK deviation (GBP) should get 30% risk weight."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1_000_000.0],
-            "exposure_class": ["INSTITUTION"],
-            "cqs": [2],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [2],
+            }
+        )
         result = lf.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
 
         # GBP config uses UK deviation: CQS 2 institutions get 30%
@@ -256,24 +282,30 @@ class TestApplyRiskWeights:
 
     def test_institution_cqs2_no_deviation(self, crr_config_eur: CalculationConfig) -> None:
         """Institution CQS 2 without UK deviation (EUR) should get 50% risk weight."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1_000_000.0],
-            "exposure_class": ["INSTITUTION"],
-            "cqs": [2],
-        })
-        result = lf.sa.prepare_columns(crr_config_eur).sa.apply_risk_weights(crr_config_eur).collect()
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [2],
+            }
+        )
+        result = (
+            lf.sa.prepare_columns(crr_config_eur).sa.apply_risk_weights(crr_config_eur).collect()
+        )
 
         assert result["risk_weight"][0] == pytest.approx(0.50)
 
     def test_unrated_corporate_100_percent(self, crr_config: CalculationConfig) -> None:
         """Unrated corporate should get 100% risk weight."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1_000_000.0],
-            "exposure_class": ["CORPORATE"],
-            "cqs": [None],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [None],
+            }
+        )
         result = lf.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
 
         assert result["risk_weight"][0] == pytest.approx(1.0)
@@ -287,10 +319,12 @@ class TestApplyRiskWeights:
 class TestResidentialMortgageRW:
     """Tests for residential mortgage risk weights."""
 
-    def test_low_ltv_35_percent(self, mortgage_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_low_ltv_35_percent(
+        self, mortgage_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """LTV <= 80% should get 35% risk weight."""
-        result = (mortgage_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            mortgage_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .collect()
         )
@@ -298,10 +332,12 @@ class TestResidentialMortgageRW:
         # First exposure has LTV = 0.60
         assert result["risk_weight"][0] == pytest.approx(0.35)
 
-    def test_at_threshold_35_percent(self, mortgage_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_at_threshold_35_percent(
+        self, mortgage_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """LTV = 80% should get 35% risk weight."""
-        result = (mortgage_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            mortgage_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .collect()
         )
@@ -309,17 +345,19 @@ class TestResidentialMortgageRW:
         # Second exposure has LTV = 0.80
         assert result["risk_weight"][1] == pytest.approx(0.35)
 
-    def test_high_ltv_blended(self, mortgage_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_high_ltv_blended(
+        self, mortgage_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """LTV > 80% should get blended risk weight."""
-        result = (mortgage_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            mortgage_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .collect()
         )
 
         # Third exposure has LTV = 0.95
         # Blended: 0.35 * (0.8/0.95) + 0.75 * (0.15/0.95)
-        expected = 0.35 * (0.8/0.95) + 0.75 * ((0.95-0.8)/0.95)
+        expected = 0.35 * (0.8 / 0.95) + 0.75 * ((0.95 - 0.8) / 0.95)
         assert result["risk_weight"][2] == pytest.approx(expected, rel=0.01)
 
 
@@ -331,34 +369,34 @@ class TestResidentialMortgageRW:
 class TestCommercialRERW:
     """Tests for commercial real estate risk weights."""
 
-    def test_low_ltv_with_income_cover(self, cre_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_low_ltv_with_income_cover(
+        self, cre_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """CRE with LTV <= 60% and income cover should get 50% risk weight."""
-        result = (cre_lazyframe
-            .sa.prepare_columns(crr_config)
-            .sa.apply_risk_weights(crr_config)
-            .collect()
+        result = (
+            cre_lazyframe.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
         )
 
         # First exposure: LTV = 0.50, has_income_cover = True
         assert result["risk_weight"][0] == pytest.approx(0.50)
 
-    def test_high_ltv_with_income_cover(self, cre_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_high_ltv_with_income_cover(
+        self, cre_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """CRE with LTV > 60% should get 100% risk weight."""
-        result = (cre_lazyframe
-            .sa.prepare_columns(crr_config)
-            .sa.apply_risk_weights(crr_config)
-            .collect()
+        result = (
+            cre_lazyframe.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
         )
 
         # Second exposure: LTV = 0.70, has_income_cover = True
         assert result["risk_weight"][1] == pytest.approx(1.0)
 
-    def test_low_ltv_no_income_cover(self, cre_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_low_ltv_no_income_cover(
+        self, cre_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """CRE with low LTV but no income cover should get 100% risk weight."""
-        result = (cre_lazyframe
-            .sa.prepare_columns(crr_config)
-            .sa.apply_risk_weights(crr_config)
-            .collect()
+        result = (
+            cre_lazyframe.sa.prepare_columns(crr_config).sa.apply_risk_weights(crr_config).collect()
         )
 
         # Third exposure: LTV = 0.50, has_income_cover = False
@@ -373,10 +411,12 @@ class TestCommercialRERW:
 class TestRetailRW:
     """Tests for retail risk weights."""
 
-    def test_retail_75_percent(self, retail_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_retail_75_percent(
+        self, retail_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Retail exposures should get 75% risk weight."""
-        result = (retail_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            retail_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .collect()
         )
@@ -395,19 +435,23 @@ class TestCalculateRWA:
 
     def test_rwa_formula(self, crr_config: CalculationConfig) -> None:
         """RWA = EAD x RW."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [0.50],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [0.50],
+            }
+        )
         result = lf.sa.calculate_rwa().collect()
 
         assert result["rwa_pre_factor"][0] == pytest.approx(500_000.0)
 
-    def test_rwa_multiple_exposures(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_rwa_multiple_exposures(
+        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """RWA calculation should work for multiple exposures."""
-        result = (basic_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            basic_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .sa.calculate_rwa()
             .collect()
@@ -426,10 +470,12 @@ class TestCalculateRWA:
 class TestSupportingFactors:
     """Tests for supporting factor application."""
 
-    def test_sme_factor_applied(self, sme_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_sme_factor_applied(
+        self, sme_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """SME supporting factor should reduce RWA."""
-        result = (sme_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            sme_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .sa.calculate_rwa()
             .sa.apply_supporting_factors(crr_config)
@@ -453,7 +499,9 @@ class TestSupportingFactors:
 class TestApplyAll:
     """Tests for full SA calculation pipeline."""
 
-    def test_apply_all_adds_expected_columns(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_apply_all_adds_expected_columns(
+        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """apply_all should add all expected columns."""
         result = basic_lazyframe.sa.apply_all(crr_config).collect()
 
@@ -466,7 +514,9 @@ class TestApplyAll:
         for col in expected_columns:
             assert col in result.columns, f"Missing column: {col}"
 
-    def test_apply_all_preserves_rows(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_apply_all_preserves_rows(
+        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Number of rows should be preserved."""
         original_count = basic_lazyframe.collect().shape[0]
         result = basic_lazyframe.sa.apply_all(crr_config).collect()
@@ -481,10 +531,12 @@ class TestApplyAll:
 class TestMethodChaining:
     """Tests for method chaining."""
 
-    def test_full_pipeline_chain(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_full_pipeline_chain(
+        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Full pipeline should work with method chaining."""
-        result = (basic_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            basic_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .sa.calculate_rwa()
             .sa.apply_supporting_factors(crr_config)
@@ -522,18 +574,20 @@ class TestExprNamespace:
             pl.col("cqs").sa.lookup_cqs_rw("CENTRAL_GOVT_CENTRAL_BANK").alias("risk_weight")
         )
 
-        assert result["risk_weight"][0] == pytest.approx(0.0)   # CQS 1
+        assert result["risk_weight"][0] == pytest.approx(0.0)  # CQS 1
         assert result["risk_weight"][1] == pytest.approx(0.20)  # CQS 2
         assert result["risk_weight"][2] == pytest.approx(0.50)  # CQS 3
-        assert result["risk_weight"][3] == pytest.approx(1.0)   # CQS 4
-        assert result["risk_weight"][4] == pytest.approx(1.0)   # CQS 5
+        assert result["risk_weight"][3] == pytest.approx(1.0)  # CQS 4
+        assert result["risk_weight"][4] == pytest.approx(1.0)  # CQS 5
         assert result["risk_weight"][5] == pytest.approx(1.50)  # CQS 6
 
     def test_lookup_cqs_rw_institution_uk(self) -> None:
         """lookup_cqs_rw should use UK deviation for institutions."""
         df = pl.DataFrame({"cqs": [2]})
         result = df.with_columns(
-            pl.col("cqs").sa.lookup_cqs_rw("INSTITUTION", use_uk_deviation=True).alias("risk_weight")
+            pl.col("cqs")
+            .sa.lookup_cqs_rw("INSTITUTION", use_uk_deviation=True)
+            .alias("risk_weight")
         )
 
         assert result["risk_weight"][0] == pytest.approx(0.30)
@@ -547,13 +601,11 @@ class TestExprNamespace:
 class TestBuildAudit:
     """Tests for audit trail generation."""
 
-    def test_build_audit_includes_calculation_string(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_build_audit_includes_calculation_string(
+        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """build_audit should include sa_calculation string."""
-        result = (basic_lazyframe
-            .sa.apply_all(crr_config)
-            .sa.build_audit()
-            .collect()
-        )
+        result = basic_lazyframe.sa.apply_all(crr_config).sa.build_audit().collect()
 
         assert "sa_calculation" in result.columns
         calc_str = result["sa_calculation"][0]
@@ -570,10 +622,12 @@ class TestBuildAudit:
 class TestIntegrationWithCalculator:
     """Tests to ensure namespace produces compatible results."""
 
-    def test_rwa_calculation_equivalent(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
+    def test_rwa_calculation_equivalent(
+        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
+    ) -> None:
         """Namespace RWA calculation should be equivalent to manual calculation."""
-        result = (basic_lazyframe
-            .sa.prepare_columns(crr_config)
+        result = (
+            basic_lazyframe.sa.prepare_columns(crr_config)
             .sa.apply_risk_weights(crr_config)
             .sa.calculate_rwa()
             .collect()

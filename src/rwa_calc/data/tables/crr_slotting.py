@@ -18,7 +18,6 @@ import polars as pl
 
 from rwa_calc.domain.enums import SlottingCategory
 
-
 # =============================================================================
 # SLOTTING RISK WEIGHTS (CRR Art. 153(5))
 # =============================================================================
@@ -66,57 +65,156 @@ def _create_slotting_df() -> pl.DataFrame:
     """Create slotting risk weight lookup DataFrame with maturity splits."""
     rows = [
         # Non-HVCRE, >= 2.5yr (CRR Art. 153(5) Table 1)
-        {"slotting_category": "strong", "is_hvcre": False, "is_short_maturity": False,
-         "risk_weight": 0.70, "description": "Strong >= 2.5yr"},
-        {"slotting_category": "good", "is_hvcre": False, "is_short_maturity": False,
-         "risk_weight": 0.90, "description": "Good >= 2.5yr"},
-        {"slotting_category": "satisfactory", "is_hvcre": False, "is_short_maturity": False,
-         "risk_weight": 1.15, "description": "Satisfactory >= 2.5yr"},
-        {"slotting_category": "weak", "is_hvcre": False, "is_short_maturity": False,
-         "risk_weight": 2.50, "description": "Weak >= 2.5yr"},
-        {"slotting_category": "default", "is_hvcre": False, "is_short_maturity": False,
-         "risk_weight": 0.00, "description": "Default >= 2.5yr"},
-
+        {
+            "slotting_category": "strong",
+            "is_hvcre": False,
+            "is_short_maturity": False,
+            "risk_weight": 0.70,
+            "description": "Strong >= 2.5yr",
+        },
+        {
+            "slotting_category": "good",
+            "is_hvcre": False,
+            "is_short_maturity": False,
+            "risk_weight": 0.90,
+            "description": "Good >= 2.5yr",
+        },
+        {
+            "slotting_category": "satisfactory",
+            "is_hvcre": False,
+            "is_short_maturity": False,
+            "risk_weight": 1.15,
+            "description": "Satisfactory >= 2.5yr",
+        },
+        {
+            "slotting_category": "weak",
+            "is_hvcre": False,
+            "is_short_maturity": False,
+            "risk_weight": 2.50,
+            "description": "Weak >= 2.5yr",
+        },
+        {
+            "slotting_category": "default",
+            "is_hvcre": False,
+            "is_short_maturity": False,
+            "risk_weight": 0.00,
+            "description": "Default >= 2.5yr",
+        },
         # Non-HVCRE, < 2.5yr (CRR Art. 153(5) Table 1)
-        {"slotting_category": "strong", "is_hvcre": False, "is_short_maturity": True,
-         "risk_weight": 0.50, "description": "Strong < 2.5yr"},
-        {"slotting_category": "good", "is_hvcre": False, "is_short_maturity": True,
-         "risk_weight": 0.70, "description": "Good < 2.5yr"},
-        {"slotting_category": "satisfactory", "is_hvcre": False, "is_short_maturity": True,
-         "risk_weight": 1.15, "description": "Satisfactory < 2.5yr"},
-        {"slotting_category": "weak", "is_hvcre": False, "is_short_maturity": True,
-         "risk_weight": 2.50, "description": "Weak < 2.5yr"},
-        {"slotting_category": "default", "is_hvcre": False, "is_short_maturity": True,
-         "risk_weight": 0.00, "description": "Default < 2.5yr"},
-
+        {
+            "slotting_category": "strong",
+            "is_hvcre": False,
+            "is_short_maturity": True,
+            "risk_weight": 0.50,
+            "description": "Strong < 2.5yr",
+        },
+        {
+            "slotting_category": "good",
+            "is_hvcre": False,
+            "is_short_maturity": True,
+            "risk_weight": 0.70,
+            "description": "Good < 2.5yr",
+        },
+        {
+            "slotting_category": "satisfactory",
+            "is_hvcre": False,
+            "is_short_maturity": True,
+            "risk_weight": 1.15,
+            "description": "Satisfactory < 2.5yr",
+        },
+        {
+            "slotting_category": "weak",
+            "is_hvcre": False,
+            "is_short_maturity": True,
+            "risk_weight": 2.50,
+            "description": "Weak < 2.5yr",
+        },
+        {
+            "slotting_category": "default",
+            "is_hvcre": False,
+            "is_short_maturity": True,
+            "risk_weight": 0.00,
+            "description": "Default < 2.5yr",
+        },
         # HVCRE, >= 2.5yr (CRR Art. 153(5) Table 2)
-        {"slotting_category": "strong", "is_hvcre": True, "is_short_maturity": False,
-         "risk_weight": 0.95, "description": "HVCRE Strong >= 2.5yr"},
-        {"slotting_category": "good", "is_hvcre": True, "is_short_maturity": False,
-         "risk_weight": 1.20, "description": "HVCRE Good >= 2.5yr"},
-        {"slotting_category": "satisfactory", "is_hvcre": True, "is_short_maturity": False,
-         "risk_weight": 1.40, "description": "HVCRE Satisfactory >= 2.5yr"},
-        {"slotting_category": "weak", "is_hvcre": True, "is_short_maturity": False,
-         "risk_weight": 2.50, "description": "HVCRE Weak >= 2.5yr"},
-        {"slotting_category": "default", "is_hvcre": True, "is_short_maturity": False,
-         "risk_weight": 0.00, "description": "HVCRE Default >= 2.5yr"},
-
+        {
+            "slotting_category": "strong",
+            "is_hvcre": True,
+            "is_short_maturity": False,
+            "risk_weight": 0.95,
+            "description": "HVCRE Strong >= 2.5yr",
+        },
+        {
+            "slotting_category": "good",
+            "is_hvcre": True,
+            "is_short_maturity": False,
+            "risk_weight": 1.20,
+            "description": "HVCRE Good >= 2.5yr",
+        },
+        {
+            "slotting_category": "satisfactory",
+            "is_hvcre": True,
+            "is_short_maturity": False,
+            "risk_weight": 1.40,
+            "description": "HVCRE Satisfactory >= 2.5yr",
+        },
+        {
+            "slotting_category": "weak",
+            "is_hvcre": True,
+            "is_short_maturity": False,
+            "risk_weight": 2.50,
+            "description": "HVCRE Weak >= 2.5yr",
+        },
+        {
+            "slotting_category": "default",
+            "is_hvcre": True,
+            "is_short_maturity": False,
+            "risk_weight": 0.00,
+            "description": "HVCRE Default >= 2.5yr",
+        },
         # HVCRE, < 2.5yr (CRR Art. 153(5) Table 2)
-        {"slotting_category": "strong", "is_hvcre": True, "is_short_maturity": True,
-         "risk_weight": 0.70, "description": "HVCRE Strong < 2.5yr"},
-        {"slotting_category": "good", "is_hvcre": True, "is_short_maturity": True,
-         "risk_weight": 0.95, "description": "HVCRE Good < 2.5yr"},
-        {"slotting_category": "satisfactory", "is_hvcre": True, "is_short_maturity": True,
-         "risk_weight": 1.40, "description": "HVCRE Satisfactory < 2.5yr"},
-        {"slotting_category": "weak", "is_hvcre": True, "is_short_maturity": True,
-         "risk_weight": 2.50, "description": "HVCRE Weak < 2.5yr"},
-        {"slotting_category": "default", "is_hvcre": True, "is_short_maturity": True,
-         "risk_weight": 0.00, "description": "HVCRE Default < 2.5yr"},
+        {
+            "slotting_category": "strong",
+            "is_hvcre": True,
+            "is_short_maturity": True,
+            "risk_weight": 0.70,
+            "description": "HVCRE Strong < 2.5yr",
+        },
+        {
+            "slotting_category": "good",
+            "is_hvcre": True,
+            "is_short_maturity": True,
+            "risk_weight": 0.95,
+            "description": "HVCRE Good < 2.5yr",
+        },
+        {
+            "slotting_category": "satisfactory",
+            "is_hvcre": True,
+            "is_short_maturity": True,
+            "risk_weight": 1.40,
+            "description": "HVCRE Satisfactory < 2.5yr",
+        },
+        {
+            "slotting_category": "weak",
+            "is_hvcre": True,
+            "is_short_maturity": True,
+            "risk_weight": 2.50,
+            "description": "HVCRE Weak < 2.5yr",
+        },
+        {
+            "slotting_category": "default",
+            "is_hvcre": True,
+            "is_short_maturity": True,
+            "risk_weight": 0.00,
+            "description": "HVCRE Default < 2.5yr",
+        },
     ]
 
-    return pl.DataFrame(rows).with_columns([
-        pl.col("risk_weight").cast(pl.Float64),
-    ])
+    return pl.DataFrame(rows).with_columns(
+        [
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
 
 
 def get_slotting_table() -> pl.DataFrame:
@@ -139,8 +237,8 @@ def get_slotting_table_by_type() -> dict[str, pl.DataFrame]:
     """
     full_table = _create_slotting_df()
     return {
-        "standard": full_table.filter(pl.col("is_hvcre") == False),
-        "hvcre": full_table.filter(pl.col("is_hvcre") == True),
+        "standard": full_table.filter(~pl.col("is_hvcre")),
+        "hvcre": full_table.filter(pl.col("is_hvcre")),
     }
 
 
@@ -174,7 +272,9 @@ def lookup_slotting_rw(
 
     # Select appropriate weight table
     if is_hvcre:
-        table = SLOTTING_RISK_WEIGHTS_HVCRE_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS_HVCRE
+        table = (
+            SLOTTING_RISK_WEIGHTS_HVCRE_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS_HVCRE
+        )
     else:
         table = SLOTTING_RISK_WEIGHTS_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS
 
@@ -230,15 +330,22 @@ def get_specialised_lending_types_df() -> pl.DataFrame:
     Returns:
         DataFrame with columns: sl_type, description, applies_hvcre
     """
-    return pl.DataFrame({
-        "sl_type": ["project_finance", "object_finance", "commodities_finance",
-                    "income_producing_re", "hvcre"],
-        "description": [
-            "Project Finance - Large, complex capital expenditure",
-            "Object Finance - Ships, aircraft, satellites",
-            "Commodities Finance - Structured financing of reserves",
-            "IPRE - Income Producing Real Estate",
-            "HVCRE - High Volatility Commercial Real Estate",
-        ],
-        "applies_hvcre": [False, False, False, False, True],
-    })
+    return pl.DataFrame(
+        {
+            "sl_type": [
+                "project_finance",
+                "object_finance",
+                "commodities_finance",
+                "income_producing_re",
+                "hvcre",
+            ],
+            "description": [
+                "Project Finance - Large, complex capital expenditure",
+                "Object Finance - Ships, aircraft, satellites",
+                "Commodities Finance - Structured financing of reserves",
+                "IPRE - Income Producing Real Estate",
+                "HVCRE - High Volatility Commercial Real Estate",
+            ],
+            "applies_hvcre": [False, False, False, False, True],
+        }
+    )

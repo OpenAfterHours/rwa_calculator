@@ -342,24 +342,30 @@ def create_empty_counterparty_lookup() -> CounterpartyLookup:
 
     return CounterpartyLookup(
         counterparties=pl.LazyFrame(schema={"counterparty_reference": pl.String}),
-        parent_mappings=pl.LazyFrame(schema={
-            "child_counterparty_reference": pl.String,
-            "parent_counterparty_reference": pl.String,
-        }),
-        ultimate_parent_mappings=pl.LazyFrame(schema={
-            "counterparty_reference": pl.String,
-            "ultimate_parent_reference": pl.String,
-            "hierarchy_depth": pl.Int32,
-        }),
-        rating_inheritance=pl.LazyFrame(schema={
-            "counterparty_reference": pl.String,
-            "cqs": pl.Int8,
-            "pd": pl.Float64,
-            "rating_value": pl.String,
-            "inherited": pl.Boolean,
-            "source_counterparty": pl.String,
-            "inheritance_reason": pl.String,
-        }),
+        parent_mappings=pl.LazyFrame(
+            schema={
+                "child_counterparty_reference": pl.String,
+                "parent_counterparty_reference": pl.String,
+            }
+        ),
+        ultimate_parent_mappings=pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }
+        ),
+        rating_inheritance=pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "cqs": pl.Int8,
+                "pd": pl.Float64,
+                "rating_value": pl.String,
+                "inherited": pl.Boolean,
+                "source_counterparty": pl.String,
+                "inheritance_reason": pl.String,
+            }
+        ),
     )
 
 

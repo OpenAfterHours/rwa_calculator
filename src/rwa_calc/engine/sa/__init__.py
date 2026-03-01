@@ -25,13 +25,12 @@ Usage with namespace:
 
 # Import namespace module to register namespaces on module load
 import rwa_calc.engine.sa.namespace  # noqa: F401
-
 from rwa_calc.engine.sa.calculator import SACalculator, create_sa_calculator
+from rwa_calc.engine.sa.namespace import SAExpr, SALazyFrame
 from rwa_calc.engine.sa.supporting_factors import (
     SupportingFactorCalculator,
     create_supporting_factor_calculator,
 )
-from rwa_calc.engine.sa.namespace import SALazyFrame, SAExpr
 
 __all__ = [
     "SACalculator",

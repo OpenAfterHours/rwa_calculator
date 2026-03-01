@@ -183,21 +183,20 @@ class SlottingRiskWeights(TypedDict):
     default: Decimal
 
 
-# CRR slotting risk weights (Art. 153(5))
-# Note: CRR has same weights for Strong and Good categories
+# CRR slotting risk weights (Art. 153(5)) — Non-HVCRE, remaining maturity >= 2.5yr
 CRR_SLOTTING_RW: SlottingRiskWeights = {
-    "strong": Decimal("0.70"),
-    "good": Decimal("0.70"),         # Same as Strong under CRR
+    "strong": Decimal("0.70"),       # 50% if <2.5yr
+    "good": Decimal("0.90"),         # 70% if <2.5yr
     "satisfactory": Decimal("1.15"),
     "weak": Decimal("2.50"),
     "default": Decimal("0.00"),      # 100% provisioned
 }
 
-# HVCRE uses same weights under CRR (unlike Basel 3.1)
+# CRR HVCRE slotting risk weights (Art. 153(5)) — remaining maturity >= 2.5yr
 CRR_SLOTTING_RW_HVCRE: SlottingRiskWeights = {
-    "strong": Decimal("0.70"),
-    "good": Decimal("0.70"),
-    "satisfactory": Decimal("1.15"),
+    "strong": Decimal("0.95"),       # 70% if <2.5yr
+    "good": Decimal("1.20"),         # 95% if <2.5yr
+    "satisfactory": Decimal("1.40"),
     "weak": Decimal("2.50"),
     "default": Decimal("0.00"),
 }

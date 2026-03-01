@@ -102,17 +102,29 @@ def _sovereign_external_ratings() -> list[Rating]:
     """
     return [
         # CQS 1 Sovereigns - 0% Risk Weight
-        Rating("RTG_SOV_UK_001", "SOV_UK_001", "external", "S&P", "AAA", 1, None, RATING_DATE, True),
-        Rating("RTG_SOV_US_001", "SOV_US_001", "external", "Moodys", "Aaa", 1, None, RATING_DATE, True),
-        Rating("RTG_SOV_DE_001", "SOV_DE_001", "external", "Fitch", "AAA", 1, None, RATING_DATE, True),
+        Rating(
+            "RTG_SOV_UK_001", "SOV_UK_001", "external", "S&P", "AAA", 1, None, RATING_DATE, True
+        ),
+        Rating(
+            "RTG_SOV_US_001", "SOV_US_001", "external", "Moodys", "Aaa", 1, None, RATING_DATE, True
+        ),
+        Rating(
+            "RTG_SOV_DE_001", "SOV_DE_001", "external", "Fitch", "AAA", 1, None, RATING_DATE, True
+        ),
         # CQS 2 Sovereign - 20% Risk Weight
         Rating("RTG_SOV_SA_001", "SOV_SA_001", "external", "S&P", "A+", 2, None, RATING_DATE, True),
         # CQS 3 Sovereign - 50% Risk Weight
-        Rating("RTG_SOV_MX_001", "SOV_MX_001", "external", "S&P", "BBB+", 3, None, RATING_DATE, True),
+        Rating(
+            "RTG_SOV_MX_001", "SOV_MX_001", "external", "S&P", "BBB+", 3, None, RATING_DATE, True
+        ),
         # CQS 4 Sovereign - 100% Risk Weight
-        Rating("RTG_SOV_BR_001", "SOV_BR_001", "external", "S&P", "BB-", 4, None, RATING_DATE, True),
+        Rating(
+            "RTG_SOV_BR_001", "SOV_BR_001", "external", "S&P", "BB-", 4, None, RATING_DATE, True
+        ),
         # CQS 6 Sovereign - 150% Risk Weight
-        Rating("RTG_SOV_AR_001", "SOV_AR_001", "external", "S&P", "CCC+", 6, None, RATING_DATE, True),
+        Rating(
+            "RTG_SOV_AR_001", "SOV_AR_001", "external", "S&P", "CCC+", 6, None, RATING_DATE, True
+        ),
         # SOV_XX_001 (Unrated) and SOV_DF_001 (Defaulted) have no external rating
     ]
 
@@ -135,19 +147,53 @@ def _institution_external_ratings() -> list[Rating]:
     """
     return [
         # CQS 1 Institutions - 20% Risk Weight
-        Rating("RTG_INST_UK_001", "INST_UK_001", "external", "S&P", "AA-", 1, None, RATING_DATE, True),
-        Rating("RTG_INST_UK_002", "INST_UK_002", "external", "Moodys", "Aa3", 1, None, RATING_DATE, True),
-        Rating("RTG_INST_US_001", "INST_US_001", "external", "S&P", "AA-", 1, None, RATING_DATE, True),
-        Rating("RTG_INST_CCP_001", "INST_CCP_001", "external", "S&P", "AA", 1, None, RATING_DATE, True),
+        Rating(
+            "RTG_INST_UK_001", "INST_UK_001", "external", "S&P", "AA-", 1, None, RATING_DATE, True
+        ),
+        Rating(
+            "RTG_INST_UK_002",
+            "INST_UK_002",
+            "external",
+            "Moodys",
+            "Aa3",
+            1,
+            None,
+            RATING_DATE,
+            True,
+        ),
+        Rating(
+            "RTG_INST_US_001", "INST_US_001", "external", "S&P", "AA-", 1, None, RATING_DATE, True
+        ),
+        Rating(
+            "RTG_INST_CCP_001", "INST_CCP_001", "external", "S&P", "AA", 1, None, RATING_DATE, True
+        ),
         # CQS 2 Institutions - 30% Risk Weight (UK deviation)
-        Rating("RTG_INST_UK_003", "INST_UK_003", "external", "Fitch", "A", 2, None, RATING_DATE, True),
-        Rating("RTG_INST_UK_004", "INST_UK_004", "external", "S&P", "A-", 2, None, RATING_DATE, True),
+        Rating(
+            "RTG_INST_UK_003", "INST_UK_003", "external", "Fitch", "A", 2, None, RATING_DATE, True
+        ),
+        Rating(
+            "RTG_INST_UK_004", "INST_UK_004", "external", "S&P", "A-", 2, None, RATING_DATE, True
+        ),
         # CQS 3 Institution - 50% Risk Weight
-        Rating("RTG_INST_IT_001", "INST_IT_001", "external", "Moodys", "Baa2", 3, None, RATING_DATE, True),
+        Rating(
+            "RTG_INST_IT_001",
+            "INST_IT_001",
+            "external",
+            "Moodys",
+            "Baa2",
+            3,
+            None,
+            RATING_DATE,
+            True,
+        ),
         # CQS 4 Institution - 100% Risk Weight
-        Rating("RTG_INST_TR_001", "INST_TR_001", "external", "Fitch", "BB", 4, None, RATING_DATE, True),
+        Rating(
+            "RTG_INST_TR_001", "INST_TR_001", "external", "Fitch", "BB", 4, None, RATING_DATE, True
+        ),
         # CQS 6 Institution - 150% Risk Weight
-        Rating("RTG_INST_XX_001", "INST_XX_001", "external", "S&P", "CCC", 6, None, RATING_DATE, True),
+        Rating(
+            "RTG_INST_XX_001", "INST_XX_001", "external", "S&P", "CCC", 6, None, RATING_DATE, True
+        ),
         # INST_UR_001 (Unrated) and INST_DF_001 (Defaulted) have no external rating
     ]
 
@@ -164,28 +210,90 @@ def _corporate_external_ratings() -> list[Rating]:
     return [
         # CQS 1 Corporates - 20% Risk Weight
         # Note: CORP_UK_001 intentionally unrated for A12 test (large corp, no SME factor)
-        Rating("RTG_CORP_UK_002", "CORP_UK_002", "external", "Moodys", "Aa2", 1, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_UK_002",
+            "CORP_UK_002",
+            "external",
+            "Moodys",
+            "Aa2",
+            1,
+            None,
+            RATING_DATE,
+            True,
+        ),
         # CQS 2 Corporates - 50% Risk Weight
-        Rating("RTG_CORP_UK_003", "CORP_UK_003", "external", "Fitch", "A", 2, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_UK_003", "CORP_UK_003", "external", "Fitch", "A", 2, None, RATING_DATE, True
+        ),
         # CQS 3 Corporates - 75% Risk Weight
-        Rating("RTG_CORP_UK_004", "CORP_UK_004", "external", "S&P", "BBB", 3, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_UK_004", "CORP_UK_004", "external", "S&P", "BBB", 3, None, RATING_DATE, True
+        ),
         # CQS 4 Corporates - 100% Risk Weight
-        Rating("RTG_CORP_UK_005", "CORP_UK_005", "external", "S&P", "BB+", 4, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_UK_005", "CORP_UK_005", "external", "S&P", "BB+", 4, None, RATING_DATE, True
+        ),
         # CQS 5/6 Corporates - 150% Risk Weight
-        Rating("RTG_CORP_XX_001", "CORP_XX_001", "external", "Fitch", "B-", 5, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_XX_001", "CORP_XX_001", "external", "Fitch", "B-", 5, None, RATING_DATE, True
+        ),
         # Group 1 Parent - rated CQS 2 for inheritance testing
-        Rating("RTG_CORP_GRP1_PARENT", "CORP_GRP1_PARENT", "external", "S&P", "A-", 2, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_GRP1_PARENT",
+            "CORP_GRP1_PARENT",
+            "external",
+            "S&P",
+            "A-",
+            2,
+            None,
+            RATING_DATE,
+            True,
+        ),
         # Group 1 subsidiaries intentionally have NO external rating - test inheritance
         # Group 2 Ultimate Parent - rated CQS 1 for multi-level inheritance
-        Rating("RTG_CORP_GRP2_ULTIMATE", "CORP_GRP2_ULTIMATE", "external", "Moodys", "Aa3", 1, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_GRP2_ULTIMATE",
+            "CORP_GRP2_ULTIMATE",
+            "external",
+            "Moodys",
+            "Aa3",
+            1,
+            None,
+            RATING_DATE,
+            True,
+        ),
         # Group 2 intermediate and operating subs have NO external rating - test inheritance
         # Group 3 SME Parent - rated CQS 3
-        Rating("RTG_CORP_GRP3_PARENT", "CORP_GRP3_PARENT", "external", "Fitch", "BBB-", 3, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_GRP3_PARENT",
+            "CORP_GRP3_PARENT",
+            "external",
+            "Fitch",
+            "BBB-",
+            3,
+            None,
+            RATING_DATE,
+            True,
+        ),
         # SME Corporates
-        Rating("RTG_CORP_SME_001", "CORP_SME_001", "external", "S&P", "BBB", 3, None, RATING_DATE, True),
-        Rating("RTG_CORP_SME_002", "CORP_SME_002", "external", "Fitch", "BBB-", 3, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_SME_001", "CORP_SME_001", "external", "S&P", "BBB", 3, None, RATING_DATE, True
+        ),
+        Rating(
+            "RTG_CORP_SME_002",
+            "CORP_SME_002",
+            "external",
+            "Fitch",
+            "BBB-",
+            3,
+            None,
+            RATING_DATE,
+            True,
+        ),
         # Large Corporate
-        Rating("RTG_CORP_LRG_001", "CORP_LRG_001", "external", "S&P", "A", 2, None, RATING_DATE, True),
+        Rating(
+            "RTG_CORP_LRG_001", "CORP_LRG_001", "external", "S&P", "A", 2, None, RATING_DATE, True
+        ),
         # CORP_UR_001 intentionally unrated for testing 100% RW unrated treatment
         # CORP_DF_001 (Defaulted) has no external rating
     ]
@@ -204,28 +312,188 @@ def _corporate_internal_ratings() -> list[Rating]:
     return [
         # Large corporates - low PD
         # Note: CORP_UK_001 intentionally unrated for A12 test
-        Rating("RTG_INT_CORP_UK_002", "CORP_UK_002", "internal", "internal", "1B", 1, 0.0008, RATING_DATE, False),
-        Rating("RTG_INT_CORP_UK_003", "CORP_UK_003", "internal", "internal", "2A", 2, 0.0015, RATING_DATE, False),
+        Rating(
+            "RTG_INT_CORP_UK_002",
+            "CORP_UK_002",
+            "internal",
+            "internal",
+            "1B",
+            1,
+            0.0008,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_CORP_UK_003",
+            "CORP_UK_003",
+            "internal",
+            "internal",
+            "2A",
+            2,
+            0.0015,
+            RATING_DATE,
+            False,
+        ),
         # Mid-tier corporates
-        Rating("RTG_INT_CORP_UK_004", "CORP_UK_004", "internal", "internal", "3A", 3, 0.0050, RATING_DATE, False),
-        Rating("RTG_INT_CORP_UK_005", "CORP_UK_005", "internal", "internal", "4A", 4, 0.0150, RATING_DATE, False),
+        Rating(
+            "RTG_INT_CORP_UK_004",
+            "CORP_UK_004",
+            "internal",
+            "internal",
+            "3A",
+            3,
+            0.0050,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_CORP_UK_005",
+            "CORP_UK_005",
+            "internal",
+            "internal",
+            "4A",
+            4,
+            0.0150,
+            RATING_DATE,
+            False,
+        ),
         # Higher risk
-        Rating("RTG_INT_CORP_XX_001", "CORP_XX_001", "internal", "internal", "5B", 5, 0.0500, RATING_DATE, False),
+        Rating(
+            "RTG_INT_CORP_XX_001",
+            "CORP_XX_001",
+            "internal",
+            "internal",
+            "5B",
+            5,
+            0.0500,
+            RATING_DATE,
+            False,
+        ),
         # SME corporates
-        Rating("RTG_INT_CORP_SME_001", "CORP_SME_001", "internal", "internal", "3B", 3, 0.0100, RATING_DATE, False),
-        Rating("RTG_INT_CORP_SME_002", "CORP_SME_002", "internal", "internal", "3C", 3, 0.0120, RATING_DATE, False),
-        Rating("RTG_INT_CORP_SME_003", "CORP_SME_003", "internal", "internal", "4B", 4, 0.0200, RATING_DATE, False),
+        Rating(
+            "RTG_INT_CORP_SME_001",
+            "CORP_SME_001",
+            "internal",
+            "internal",
+            "3B",
+            3,
+            0.0100,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_CORP_SME_002",
+            "CORP_SME_002",
+            "internal",
+            "internal",
+            "3C",
+            3,
+            0.0120,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_CORP_SME_003",
+            "CORP_SME_003",
+            "internal",
+            "internal",
+            "4B",
+            4,
+            0.0200,
+            RATING_DATE,
+            False,
+        ),
         # Group hierarchy - internal ratings for all entities
-        Rating("RTG_INT_GRP1_PARENT", "CORP_GRP1_PARENT", "internal", "internal", "2A", 2, 0.0020, RATING_DATE, False),
-        Rating("RTG_INT_GRP1_SUB1", "CORP_GRP1_SUB1", "internal", "internal", "2B", 2, 0.0025, RATING_DATE, False),
-        Rating("RTG_INT_GRP1_SUB2", "CORP_GRP1_SUB2", "internal", "internal", "2B", 2, 0.0028, RATING_DATE, False),
-        Rating("RTG_INT_GRP1_SUB3", "CORP_GRP1_SUB3", "internal", "internal", "2C", 2, 0.0030, RATING_DATE, False),
+        Rating(
+            "RTG_INT_GRP1_PARENT",
+            "CORP_GRP1_PARENT",
+            "internal",
+            "internal",
+            "2A",
+            2,
+            0.0020,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_GRP1_SUB1",
+            "CORP_GRP1_SUB1",
+            "internal",
+            "internal",
+            "2B",
+            2,
+            0.0025,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_GRP1_SUB2",
+            "CORP_GRP1_SUB2",
+            "internal",
+            "internal",
+            "2B",
+            2,
+            0.0028,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_GRP1_SUB3",
+            "CORP_GRP1_SUB3",
+            "internal",
+            "internal",
+            "2C",
+            2,
+            0.0030,
+            RATING_DATE,
+            False,
+        ),
         # Institutions - internal ratings
-        Rating("RTG_INT_INST_UK_001", "INST_UK_001", "internal", "internal", "1A", 1, 0.0003, RATING_DATE, False),
-        Rating("RTG_INT_INST_UK_002", "INST_UK_002", "internal", "internal", "1A", 1, 0.0003, RATING_DATE, False),
-        Rating("RTG_INT_INST_UK_003", "INST_UK_003", "internal", "internal", "2A", 2, 0.0012, RATING_DATE, False),
+        Rating(
+            "RTG_INT_INST_UK_001",
+            "INST_UK_001",
+            "internal",
+            "internal",
+            "1A",
+            1,
+            0.0003,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_INST_UK_002",
+            "INST_UK_002",
+            "internal",
+            "internal",
+            "1A",
+            1,
+            0.0003,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_INST_UK_003",
+            "INST_UK_003",
+            "internal",
+            "internal",
+            "2A",
+            2,
+            0.0012,
+            RATING_DATE,
+            False,
+        ),
         # PD floor test - internal PD below regulatory floor (use CORP_UK_002 instead)
-        Rating("RTG_INT_FLOOR_TEST", "CORP_UK_002", "internal", "internal", "1A+", 1, 0.0001, RATING_DATE, False),
+        Rating(
+            "RTG_INT_FLOOR_TEST",
+            "CORP_UK_002",
+            "internal",
+            "internal",
+            "1A+",
+            1,
+            0.0001,
+            RATING_DATE,
+            False,
+        ),
     ]
 
 
@@ -257,32 +525,67 @@ def _firb_scenario_internal_ratings() -> list[Rating]:
         # CRR-B1: Corporate F-IRB - Low PD (0.10%)
         # Tests standard F-IRB calculation with low credit risk
         Rating(
-            "RTG_INT_FIRB_B1", "CORP_UK_001", "internal", "internal",
-            "1C", 1, 0.0010, firb_rating_date, False
+            "RTG_INT_FIRB_B1",
+            "CORP_UK_001",
+            "internal",
+            "internal",
+            "1C",
+            1,
+            0.0010,
+            firb_rating_date,
+            False,
         ),
         # CRR-B2: Corporate F-IRB - High PD (5.00%)
         # Tests F-IRB with elevated credit risk (correlation decreases with PD)
         Rating(
-            "RTG_INT_FIRB_B2", "CORP_UK_005", "internal", "internal",
-            "5A", 5, 0.0500, firb_rating_date, False
+            "RTG_INT_FIRB_B2",
+            "CORP_UK_005",
+            "internal",
+            "internal",
+            "5A",
+            5,
+            0.0500,
+            firb_rating_date,
+            False,
         ),
         # CRR-B3: Subordinated Exposure - PD 1.00%
         # Tests 75% supervisory LGD for subordinated claims
         Rating(
-            "RTG_INT_FIRB_B3", "CORP_UK_004", "internal", "internal",
-            "4A", 4, 0.0100, firb_rating_date, False
+            "RTG_INT_FIRB_B3",
+            "CORP_UK_004",
+            "internal",
+            "internal",
+            "4A",
+            4,
+            0.0100,
+            firb_rating_date,
+            False,
         ),
         # CRR-B4: Financial Collateral - PD 0.50%
         # Tests blended LGD with 50% cash collateral coverage
         Rating(
-            "RTG_INT_FIRB_B4", "CORP_SME_002", "internal", "internal",
-            "3B", 3, 0.0050, firb_rating_date, False
+            "RTG_INT_FIRB_B4",
+            "CORP_SME_002",
+            "internal",
+            "internal",
+            "3B",
+            3,
+            0.0050,
+            firb_rating_date,
+            False,
         ),
         # CRR-B5: SME with Supporting Factor - PD 2.00%
         # Tests SME firm size adjustment + 0.7619 supporting factor
         Rating(
-            "RTG_INT_FIRB_B5", "CORP_SME_001", "internal", "internal",
-            "4B", 4, 0.0200, firb_rating_date, False
+            "RTG_INT_FIRB_B5",
+            "CORP_SME_001",
+            "internal",
+            "internal",
+            "4B",
+            4,
+            0.0200,
+            firb_rating_date,
+            False,
         ),
         # CRR-B6: PD Floor Binding - PD 0.01% (uses existing RTG_INT_FLOOR_TEST)
         # The existing CORP_UK_002 rating with PD 0.0001 demonstrates floor binding
@@ -290,8 +593,15 @@ def _firb_scenario_internal_ratings() -> list[Rating]:
         # CRR-B7: Long Maturity - PD 0.80%
         # Tests maturity cap of 5 years (7Y contractual -> 5Y capped)
         Rating(
-            "RTG_INT_FIRB_B7", "CORP_LRG_001", "internal", "internal",
-            "2C", 2, 0.0080, firb_rating_date, False
+            "RTG_INT_FIRB_B7",
+            "CORP_LRG_001",
+            "internal",
+            "internal",
+            "2C",
+            2,
+            0.0080,
+            firb_rating_date,
+            False,
         ),
     ]
 
@@ -318,21 +628,42 @@ def _airb_scenario_internal_ratings() -> list[Rating]:
         # CRR-C1: Corporate A-IRB - PD 1.00%
         # Tests A-IRB corporate with bank's own LGD (35% vs F-IRB 45%)
         Rating(
-            "RTG_INT_AIRB_C1", "CORP_AIRB_001", "internal", "internal",
-            "3A", 3, 0.0100, airb_rating_date, False
+            "RTG_INT_AIRB_C1",
+            "CORP_AIRB_001",
+            "internal",
+            "internal",
+            "3A",
+            3,
+            0.0100,
+            airb_rating_date,
+            False,
         ),
         # CRR-C2: Retail A-IRB - PD 0.30%
         # Tests A-IRB retail with bank's own LGD (15%)
         # Retail MUST use A-IRB (F-IRB not available)
         Rating(
-            "RTG_INT_AIRB_C2", "RTL_AIRB_001", "internal", "internal",
-            "R1B", 1, 0.0030, airb_rating_date, False
+            "RTG_INT_AIRB_C2",
+            "RTL_AIRB_001",
+            "internal",
+            "internal",
+            "R1B",
+            1,
+            0.0030,
+            airb_rating_date,
+            False,
         ),
         # CRR-C3: Specialised Lending A-IRB - PD 1.50%
         # Tests A-IRB for project finance with bank's own LGD (25%)
         Rating(
-            "RTG_INT_AIRB_C3", "SL_PF_001", "internal", "internal",
-            "3B", 3, 0.0150, airb_rating_date, False
+            "RTG_INT_AIRB_C3",
+            "SL_PF_001",
+            "internal",
+            "internal",
+            "3B",
+            3,
+            0.0150,
+            airb_rating_date,
+            False,
         ),
     ]
 
@@ -355,14 +686,28 @@ def _provision_scenario_internal_ratings() -> list[Rating]:
         # CRR-G2: IRB EL Shortfall - PD 2.00%
         # EL = 2% × 45% × £5m = £45,000 (provisions = £30k -> shortfall)
         Rating(
-            "RTG_INT_PROV_G2", "CORP_PROV_G2", "internal", "internal",
-            "4B", 4, 0.0200, provision_rating_date, False
+            "RTG_INT_PROV_G2",
+            "CORP_PROV_G2",
+            "internal",
+            "internal",
+            "4B",
+            4,
+            0.0200,
+            provision_rating_date,
+            False,
         ),
         # CRR-G3: IRB EL Excess - PD 0.50%
         # EL = 0.5% × 45% × £5m = £11,250 (provisions = £50k -> excess)
         Rating(
-            "RTG_INT_PROV_G3", "CORP_PROV_G3", "internal", "internal",
-            "3A", 3, 0.0050, provision_rating_date, False
+            "RTG_INT_PROV_G3",
+            "CORP_PROV_G3",
+            "internal",
+            "internal",
+            "3A",
+            3,
+            0.0050,
+            provision_rating_date,
+            False,
         ),
     ]
 
@@ -385,48 +730,328 @@ def _retail_internal_ratings() -> list[Rating]:
     """
     return [
         # Standard retail individuals - typical consumer lending
-        Rating("RTG_INT_RTL_IND_001", "RTL_IND_001", "internal", "internal", "R2A", 2, 0.0080, RATING_DATE, False),
-        Rating("RTG_INT_RTL_IND_002", "RTL_IND_002", "internal", "internal", "R1B", 1, 0.0050, RATING_DATE, False),
-        Rating("RTG_INT_RTL_IND_003", "RTL_IND_003", "internal", "internal", "R3A", 3, 0.0150, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_IND_001",
+            "RTL_IND_001",
+            "internal",
+            "internal",
+            "R2A",
+            2,
+            0.0080,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_IND_002",
+            "RTL_IND_002",
+            "internal",
+            "internal",
+            "R1B",
+            1,
+            0.0050,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_IND_003",
+            "RTL_IND_003",
+            "internal",
+            "internal",
+            "R3A",
+            3,
+            0.0150,
+            RATING_DATE,
+            False,
+        ),
         # Mortgage borrowers - lower PD due to secured nature
-        Rating("RTG_INT_RTL_MTG_001", "RTL_MTG_001", "internal", "internal", "M1A", 1, 0.0030, RATING_DATE, False),
-        Rating("RTG_INT_RTL_MTG_002", "RTL_MTG_002", "internal", "internal", "M1B", 1, 0.0025, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_MTG_001",
+            "RTL_MTG_001",
+            "internal",
+            "internal",
+            "M1A",
+            1,
+            0.0030,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_MTG_002",
+            "RTL_MTG_002",
+            "internal",
+            "internal",
+            "M1B",
+            1,
+            0.0025,
+            RATING_DATE,
+            False,
+        ),
         # SME retail - small businesses
-        Rating("RTG_INT_RTL_SME_001", "RTL_SME_001", "internal", "internal", "S2A", 2, 0.0100, RATING_DATE, False),
-        Rating("RTG_INT_RTL_SME_002", "RTL_SME_002", "internal", "internal", "S2B", 2, 0.0120, RATING_DATE, False),
-        Rating("RTG_INT_RTL_SME_003", "RTL_SME_003", "internal", "internal", "S3A", 3, 0.0180, RATING_DATE, False),
-        Rating("RTG_INT_RTL_SME_004", "RTL_SME_004", "internal", "internal", "S2C", 2, 0.0095, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_SME_001",
+            "RTL_SME_001",
+            "internal",
+            "internal",
+            "S2A",
+            2,
+            0.0100,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_SME_002",
+            "RTL_SME_002",
+            "internal",
+            "internal",
+            "S2B",
+            2,
+            0.0120,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_SME_003",
+            "RTL_SME_003",
+            "internal",
+            "internal",
+            "S3A",
+            3,
+            0.0180,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_SME_004",
+            "RTL_SME_004",
+            "internal",
+            "internal",
+            "S2C",
+            2,
+            0.0095,
+            RATING_DATE,
+            False,
+        ),
         # QRRE - qualifying revolving retail exposures (credit cards, overdrafts)
         # Higher PD floor of 0.10% applies
-        Rating("RTG_INT_RTL_QRRE_001", "RTL_QRRE_001", "internal", "internal", "Q2A", 2, 0.0150, RATING_DATE, False),
-        Rating("RTG_INT_RTL_QRRE_002", "RTL_QRRE_002", "internal", "internal", "Q2B", 2, 0.0200, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_QRRE_001",
+            "RTL_QRRE_001",
+            "internal",
+            "internal",
+            "Q2A",
+            2,
+            0.0150,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_QRRE_002",
+            "RTL_QRRE_002",
+            "internal",
+            "internal",
+            "Q2B",
+            2,
+            0.0200,
+            RATING_DATE,
+            False,
+        ),
         # High net worth individual
-        Rating("RTG_INT_RTL_HNW_001", "RTL_HNW_001", "internal", "internal", "R1A", 1, 0.0040, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_HNW_001",
+            "RTL_HNW_001",
+            "internal",
+            "internal",
+            "R1A",
+            1,
+            0.0040,
+            RATING_DATE,
+            False,
+        ),
         # Lending Group 1 - Married couple
-        Rating("RTG_INT_RTL_LG1_SP1", "RTL_LG1_SPOUSE1", "internal", "internal", "R2A", 2, 0.0070, RATING_DATE, False),
-        Rating("RTG_INT_RTL_LG1_SP2", "RTL_LG1_SPOUSE2", "internal", "internal", "R2A", 2, 0.0075, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_LG1_SP1",
+            "RTL_LG1_SPOUSE1",
+            "internal",
+            "internal",
+            "R2A",
+            2,
+            0.0070,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_LG1_SP2",
+            "RTL_LG1_SPOUSE2",
+            "internal",
+            "internal",
+            "R2A",
+            2,
+            0.0075,
+            RATING_DATE,
+            False,
+        ),
         # Lending Group 2 - Business owner and company
-        Rating("RTG_INT_RTL_LG2_OWN", "RTL_LG2_OWNER", "internal", "internal", "R2B", 2, 0.0085, RATING_DATE, False),
-        Rating("RTG_INT_RTL_LG2_CO", "RTL_LG2_COMPANY", "internal", "internal", "S2A", 2, 0.0110, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_LG2_OWN",
+            "RTL_LG2_OWNER",
+            "internal",
+            "internal",
+            "R2B",
+            2,
+            0.0085,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_LG2_CO",
+            "RTL_LG2_COMPANY",
+            "internal",
+            "internal",
+            "S2A",
+            2,
+            0.0110,
+            RATING_DATE,
+            False,
+        ),
         # Lending Group 3 - Family business group
-        Rating("RTG_INT_RTL_LG3_P1", "RTL_LG3_PERSON1", "internal", "internal", "R2A", 2, 0.0090, RATING_DATE, False),
-        Rating("RTG_INT_RTL_LG3_P2", "RTL_LG3_PERSON2", "internal", "internal", "R2B", 2, 0.0100, RATING_DATE, False),
-        Rating("RTG_INT_RTL_LG3_B1", "RTL_LG3_BIZ1", "internal", "internal", "S2A", 2, 0.0105, RATING_DATE, False),
-        Rating("RTG_INT_RTL_LG3_B2", "RTL_LG3_BIZ2", "internal", "internal", "S2B", 2, 0.0115, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_LG3_P1",
+            "RTL_LG3_PERSON1",
+            "internal",
+            "internal",
+            "R2A",
+            2,
+            0.0090,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_LG3_P2",
+            "RTL_LG3_PERSON2",
+            "internal",
+            "internal",
+            "R2B",
+            2,
+            0.0100,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_LG3_B1",
+            "RTL_LG3_BIZ1",
+            "internal",
+            "internal",
+            "S2A",
+            2,
+            0.0105,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_LG3_B2",
+            "RTL_LG3_BIZ2",
+            "internal",
+            "internal",
+            "S2B",
+            2,
+            0.0115,
+            RATING_DATE,
+            False,
+        ),
         # Lending Group 4 - Boundary threshold test
-        Rating("RTG_INT_RTL_LG4_P", "RTL_LG4_PERSON", "internal", "internal", "R2A", 2, 0.0080, RATING_DATE, False),
-        Rating("RTG_INT_RTL_LG4_B", "RTL_LG4_BIZ", "internal", "internal", "S2A", 2, 0.0095, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_LG4_P",
+            "RTL_LG4_PERSON",
+            "internal",
+            "internal",
+            "R2A",
+            2,
+            0.0080,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_LG4_B",
+            "RTL_LG4_BIZ",
+            "internal",
+            "internal",
+            "S2A",
+            2,
+            0.0095,
+            RATING_DATE,
+            False,
+        ),
         # Lending Group 5 - Over threshold test
-        Rating("RTG_INT_RTL_LG5_P", "RTL_LG5_PERSON", "internal", "internal", "R2B", 2, 0.0085, RATING_DATE, False),
-        Rating("RTG_INT_RTL_LG5_B", "RTL_LG5_BIZ", "internal", "internal", "S2B", 2, 0.0100, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_LG5_P",
+            "RTL_LG5_PERSON",
+            "internal",
+            "internal",
+            "R2B",
+            2,
+            0.0085,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_LG5_B",
+            "RTL_LG5_BIZ",
+            "internal",
+            "internal",
+            "S2B",
+            2,
+            0.0100,
+            RATING_DATE,
+            False,
+        ),
         # Defaulted retail - PD = 100%
-        Rating("RTG_INT_RTL_DF_001", "RTL_DF_001", "internal", "internal", "D", 6, 1.0000, RATING_DATE, False),
-        Rating("RTG_INT_RTL_DF_002", "RTL_DF_002", "internal", "internal", "D", 6, 1.0000, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_DF_001",
+            "RTL_DF_001",
+            "internal",
+            "internal",
+            "D",
+            6,
+            1.0000,
+            RATING_DATE,
+            False,
+        ),
+        Rating(
+            "RTG_INT_RTL_DF_002",
+            "RTL_DF_002",
+            "internal",
+            "internal",
+            "D",
+            6,
+            1.0000,
+            RATING_DATE,
+            False,
+        ),
         # PD floor tests - internal PD below regulatory floor
         # Retail non-QRRE floor is 0.05% (0.0005)
-        Rating("RTG_INT_RTL_FLOOR_001", "RTL_MTG_001", "internal", "internal", "M1A+", 1, 0.0003, RATING_DATE, False),
+        Rating(
+            "RTG_INT_RTL_FLOOR_001",
+            "RTL_MTG_001",
+            "internal",
+            "internal",
+            "M1A+",
+            1,
+            0.0003,
+            RATING_DATE,
+            False,
+        ),
         # QRRE floor is 0.10% (0.0010)
-        Rating("RTG_INT_QRRE_FLOOR_001", "RTL_QRRE_001", "internal", "internal", "Q1A+", 1, 0.0005, RATING_DATE, False),
+        Rating(
+            "RTG_INT_QRRE_FLOOR_001",
+            "RTL_QRRE_001",
+            "internal",
+            "internal",
+            "Q1A+",
+            1,
+            0.0005,
+            RATING_DATE,
+            False,
+        ),
     ]
 
 

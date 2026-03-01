@@ -9,7 +9,6 @@ Tests cover:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -27,7 +26,6 @@ from rwa_calc.api.service import (
     create_service,
     quick_calculate,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -101,17 +99,13 @@ class TestRWAServiceValidateDataPath:
 
     def test_valid_path(self, service: RWAService, temp_valid_dir: Path) -> None:
         """Should return valid response for valid path."""
-        response = service.validate_data_path(
-            ValidationRequest(data_path=temp_valid_dir)
-        )
+        response = service.validate_data_path(ValidationRequest(data_path=temp_valid_dir))
         assert isinstance(response, ValidationResponse)
         assert response.valid is True
 
     def test_invalid_path(self, service: RWAService, tmp_path: Path) -> None:
         """Should return invalid response for non-existent path."""
-        response = service.validate_data_path(
-            ValidationRequest(data_path=tmp_path / "nonexistent")
-        )
+        response = service.validate_data_path(ValidationRequest(data_path=tmp_path / "nonexistent"))
         assert response.valid is False
         assert len(response.errors) > 0
 
@@ -192,11 +186,13 @@ class TestRWAServiceCalculate:
         """Should return properly structured response."""
         # Mock the pipeline to avoid full calculation
         mock_bundle = MagicMock()
-        mock_bundle.results = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1000000.0],
-            "rwa_final": [500000.0],
-        })
+        mock_bundle.results = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1000000.0],
+                "rwa_final": [500000.0],
+            }
+        )
         mock_bundle.sa_results = None
         mock_bundle.irb_results = None
         mock_bundle.slotting_results = None
@@ -264,9 +260,8 @@ class TestRWAServiceCreateConfig:
 
         # IRB permissions should allow FIRB and AIRB
         from rwa_calc.domain.enums import ApproachType, ExposureClass
-        assert config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.FIRB
-        )
+
+        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
 
 
 class TestRWAServiceCreateLoader:

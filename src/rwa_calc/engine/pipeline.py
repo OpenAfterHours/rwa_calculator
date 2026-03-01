@@ -34,27 +34,27 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
-    RawDataBundle,
-    ResolvedHierarchyBundle,
     ClassifiedExposuresBundle,
     CRMAdjustedBundle,
-    SAResultBundle,
-    IRBResultBundle,
-    SlottingResultBundle,
     EquityResultBundle,
+    IRBResultBundle,
+    RawDataBundle,
+    ResolvedHierarchyBundle,
+    SAResultBundle,
+    SlottingResultBundle,
 )
 from rwa_calc.contracts.protocols import (
-    LoaderProtocol,
-    HierarchyResolverProtocol,
     ClassifierProtocol,
     CRMProcessorProtocol,
-    SACalculatorProtocol,
-    IRBCalculatorProtocol,
-    SlottingCalculatorProtocol,
     EquityCalculatorProtocol,
+    HierarchyResolverProtocol,
+    IRBCalculatorProtocol,
+    LoaderProtocol,
     OutputAggregatorProtocol,
+    SACalculatorProtocol,
+    SlottingCalculatorProtocol,
 )
-from rwa_calc.engine.utils import has_rows
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -173,9 +173,7 @@ class PipelineOrchestrator:
             ValueError: If no loader is configured
         """
         if self._loader is None:
-            raise ValueError(
-                "No loader configured. Use run_with_data() or provide a loader."
-            )
+            raise ValueError("No loader configured. Use run_with_data() or provide a loader.")
 
         # Reset errors for new run
         self._errors = []
@@ -184,11 +182,13 @@ class PipelineOrchestrator:
         try:
             raw_data = self._loader.load()
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="loader",
-                error_type="load_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="loader",
+                    error_type="load_error",
+                    message=str(e),
+                )
+            )
             return self._create_error_result()
 
         return self.run_with_data(raw_data, config)
@@ -201,8 +201,9 @@ class PipelineOrchestrator:
         """
         Execute pipeline with pre-loaded data.
 
-        Bypasses the loader stage, useful for testing or
-        when data is already available.
+        Uses single-pass architecture: all approach-specific calculators
+        run sequentially on one unified LazyFrame, avoiding plan tree
+        duplication and mid-pipeline materialisation.
 
         Args:
             data: Pre-loaded raw data bundle
@@ -230,25 +231,13 @@ class PipelineOrchestrator:
         if classified is None:
             return self._create_error_result()
 
-        # Stage 4: Apply CRM
-        crm_adjusted = self._run_crm_processor(classified, config)
+        # Stage 4: Apply CRM (unified — no fan-out split)
+        crm_adjusted = self._run_crm_processor_unified(classified, config)
         if crm_adjusted is None:
             return self._create_error_result()
 
-        # Stage 5-8: Run calculators in parallel (conceptually)
-        sa_bundle = self._run_sa_calculator(crm_adjusted, config)
-        irb_bundle = self._run_irb_calculator(crm_adjusted, config)
-        slotting_bundle = self._run_slotting_calculator(crm_adjusted, config)
-        equity_bundle = self._run_equity_calculator(crm_adjusted, config)
-
-        # Stage 9: Aggregate results
-        result = self._run_aggregator(
-            sa_bundle,
-            irb_bundle,
-            slotting_bundle,
-            equity_bundle,
-            config,
-        )
+        # Stages 5-8: Single-pass calculation and aggregation
+        result = self._run_single_pass(crm_adjusted, config)
 
         # Add pipeline errors to result
         if self._errors:
@@ -276,14 +265,14 @@ class PipelineOrchestrator:
 
     def _ensure_components_initialized(self) -> None:
         """Ensure all required components are initialized."""
-        from rwa_calc.engine.hierarchy import HierarchyResolver
+        from rwa_calc.engine.aggregator import OutputAggregator
         from rwa_calc.engine.classifier import ExposureClassifier
         from rwa_calc.engine.crm.processor import CRMProcessor
-        from rwa_calc.engine.sa.calculator import SACalculator
-        from rwa_calc.engine.irb.calculator import IRBCalculator
-        from rwa_calc.engine.slotting.calculator import SlottingCalculator
         from rwa_calc.engine.equity.calculator import EquityCalculator
-        from rwa_calc.engine.aggregator import OutputAggregator
+        from rwa_calc.engine.hierarchy import HierarchyResolver
+        from rwa_calc.engine.irb.calculator import IRBCalculator
+        from rwa_calc.engine.sa.calculator import SACalculator
+        from rwa_calc.engine.slotting.calculator import SlottingCalculator
 
         if self._hierarchy_resolver is None:
             self._hierarchy_resolver = HierarchyResolver()
@@ -313,17 +302,21 @@ class PipelineOrchestrator:
 
             validation_errors = validate_bundle_values(data)
             for error in validation_errors:
-                self._errors.append(PipelineError(
-                    stage="input_validation",
-                    error_type="invalid_value",
-                    message=error.message,
-                ))
+                self._errors.append(
+                    PipelineError(
+                        stage="input_validation",
+                        error_type="invalid_value",
+                        message=error.message,
+                    )
+                )
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="input_validation",
-                error_type="validation_error",
-                message=f"Value validation failed: {e}",
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="input_validation",
+                    error_type="validation_error",
+                    message=f"Value validation failed: {e}",
+                )
+            )
 
     def _run_hierarchy_resolver(
         self,
@@ -336,19 +329,23 @@ class PipelineOrchestrator:
             # Accumulate hierarchy errors
             if result.hierarchy_errors:
                 for error in result.hierarchy_errors:
-                    self._errors.append(PipelineError(
-                        stage="hierarchy_resolver",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                        context=getattr(error, "context", {}),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="hierarchy_resolver",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="hierarchy_resolver",
-                error_type="resolution_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="hierarchy_resolver",
+                    error_type="resolution_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_classifier(
@@ -362,19 +359,23 @@ class PipelineOrchestrator:
             # Accumulate classification errors
             if result.classification_errors:
                 for error in result.classification_errors:
-                    self._errors.append(PipelineError(
-                        stage="classifier",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                        context=getattr(error, "context", {}),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="classifier",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="classifier",
-                error_type="classification_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="classifier",
+                    error_type="classification_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_crm_processor(
@@ -388,19 +389,23 @@ class PipelineOrchestrator:
             # Accumulate CRM errors
             if result.crm_errors:
                 for error in result.crm_errors:
-                    self._errors.append(PipelineError(
-                        stage="crm_processor",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                        context=getattr(error, "context", {}),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="crm_processor",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="crm_processor",
-                error_type="crm_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="crm_processor",
+                    error_type="crm_error",
+                    message=str(e),
+                )
+            )
             return None
 
     def _run_sa_calculator(
@@ -410,34 +415,27 @@ class PipelineOrchestrator:
     ) -> SAResultBundle | None:
         """Run SA calculation stage."""
         try:
-            if not has_rows(data.sa_exposures):
-                return SAResultBundle(
-                    results=self._create_empty_sa_frame(),
-                    calculation_audit=self._create_empty_sa_frame(),
-                    errors=[],
-                )
-
             result = self._sa_calculator.get_sa_result_bundle(data, config)
             # Accumulate SA errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="sa_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="sa_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="sa_calculator",
-                error_type="sa_calculation_error",
-                message=str(e),
-            ))
-            return SAResultBundle(
-                results=self._create_empty_sa_frame(),
-                calculation_audit=self._create_empty_sa_frame(),
-                errors=[],
+            self._errors.append(
+                PipelineError(
+                    stage="sa_calculator",
+                    error_type="sa_calculation_error",
+                    message=str(e),
+                )
             )
+            return None
 
     def _run_irb_calculator(
         self,
@@ -446,36 +444,27 @@ class PipelineOrchestrator:
     ) -> IRBResultBundle | None:
         """Run IRB calculation stage."""
         try:
-            if not has_rows(data.irb_exposures):
-                return IRBResultBundle(
-                    results=self._create_empty_irb_frame(),
-                    expected_loss=self._create_empty_irb_frame(),
-                    calculation_audit=self._create_empty_irb_frame(),
-                    errors=[],
-                )
-
             result = self._irb_calculator.get_irb_result_bundle(data, config)
             # Accumulate IRB errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="irb_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="irb_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="irb_calculator",
-                error_type="irb_calculation_error",
-                message=str(e),
-            ))
-            return IRBResultBundle(
-                results=self._create_empty_irb_frame(),
-                expected_loss=self._create_empty_irb_frame(),
-                calculation_audit=self._create_empty_irb_frame(),
-                errors=[],
+            self._errors.append(
+                PipelineError(
+                    stage="irb_calculator",
+                    error_type="irb_calculation_error",
+                    message=str(e),
+                )
             )
+            return None
 
     def _run_slotting_calculator(
         self,
@@ -484,36 +473,27 @@ class PipelineOrchestrator:
     ) -> SlottingResultBundle | None:
         """Run Slotting calculation stage."""
         try:
-            if data.slotting_exposures is None or not has_rows(
-                data.slotting_exposures
-            ):
-                return SlottingResultBundle(
-                    results=self._create_empty_slotting_frame(),
-                    calculation_audit=self._create_empty_slotting_frame(),
-                    errors=[],
-                )
-
             result = self._slotting_calculator.get_slotting_result_bundle(data, config)
             # Accumulate Slotting errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="slotting_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="slotting_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="slotting_calculator",
-                error_type="slotting_calculation_error",
-                message=str(e),
-            ))
-            return SlottingResultBundle(
-                results=self._create_empty_slotting_frame(),
-                calculation_audit=self._create_empty_slotting_frame(),
-                errors=[],
+            self._errors.append(
+                PipelineError(
+                    stage="slotting_calculator",
+                    error_type="slotting_calculation_error",
+                    message=str(e),
+                )
             )
+            return None
 
     def _run_equity_calculator(
         self,
@@ -522,38 +502,27 @@ class PipelineOrchestrator:
     ) -> EquityResultBundle | None:
         """Run Equity calculation stage."""
         try:
-            if data.equity_exposures is None or not has_rows(
-                data.equity_exposures
-            ):
-                return EquityResultBundle(
-                    results=self._create_empty_equity_frame(),
-                    calculation_audit=self._create_empty_equity_frame(),
-                    approach="sa",
-                    errors=[],
-                )
-
             result = self._equity_calculator.get_equity_result_bundle(data, config)
             # Accumulate Equity errors
             if result.errors:
                 for error in result.errors:
-                    self._errors.append(PipelineError(
-                        stage="equity_calculator",
-                        error_type=getattr(error, "error_type", "unknown"),
-                        message=getattr(error, "message", str(error)),
-                    ))
+                    self._errors.append(
+                        PipelineError(
+                            stage="equity_calculator",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                        )
+                    )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="equity_calculator",
-                error_type="equity_calculation_error",
-                message=str(e),
-            ))
-            return EquityResultBundle(
-                results=self._create_empty_equity_frame(),
-                calculation_audit=self._create_empty_equity_frame(),
-                approach="sa",
-                errors=[],
+            self._errors.append(
+                PipelineError(
+                    stage="equity_calculator",
+                    error_type="equity_calculation_error",
+                    message=str(e),
+                )
             )
+            return None
 
     def _run_aggregator(
         self,
@@ -578,18 +547,240 @@ class PipelineOrchestrator:
                     if isinstance(error, PipelineError):
                         self._errors.append(error)
                     else:
-                        self._errors.append(PipelineError(
-                            stage="aggregator",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                        ))
+                        self._errors.append(
+                            PipelineError(
+                                stage="aggregator",
+                                error_type=getattr(error, "error_type", "unknown"),
+                                message=getattr(error, "message", str(error)),
+                            )
+                        )
             return result
         except Exception as e:
-            self._errors.append(PipelineError(
-                stage="aggregator",
-                error_type="aggregation_error",
-                message=str(e),
-            ))
+            self._errors.append(
+                PipelineError(
+                    stage="aggregator",
+                    error_type="aggregation_error",
+                    message=str(e),
+                )
+            )
+            return self._create_error_result()
+
+    # =========================================================================
+    # Private Methods - Single-Pass Pipeline
+    # =========================================================================
+
+    def _run_crm_processor_unified(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle | None:
+        """Run CRM processing without fan-out split (single-pass mode)."""
+        try:
+            result = self._crm_processor.get_crm_unified_bundle(data, config)
+            if result.crm_errors:
+                for error in result.crm_errors:
+                    self._errors.append(
+                        PipelineError(
+                            stage="crm_processor",
+                            error_type=getattr(error, "error_type", "unknown"),
+                            message=getattr(error, "message", str(error)),
+                            context=getattr(error, "context", {}),
+                        )
+                    )
+            return result
+        except Exception as e:
+            self._errors.append(
+                PipelineError(
+                    stage="crm_processor",
+                    error_type="crm_error",
+                    message=str(e),
+                )
+            )
+            return None
+
+    def _run_single_pass(
+        self,
+        crm_adjusted: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> AggregatedResultBundle:
+        """
+        Split-once calculation with parallel collect.
+
+        Splits the CRM-adjusted frame by approach, runs each calculator
+        on its subset, then collects all three branches in parallel via
+        pl.collect_all(). CSE (Common Subplan Elimination) ensures the
+        shared CRM upstream computes only once.
+        """
+        from rwa_calc.domain.enums import ApproachType
+
+        try:
+            exposures = crm_adjusted.exposures  # Lazy (materialised at init_ead)
+
+            # Materialise CRM plan before calculator split.
+            # CRM output is a deep lazy plan; without this, collect_all
+            # re-optimizes it 3× (once per SA/IRB/Slotting branch).
+            exposures = exposures.collect().lazy()
+
+            # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
+            if config.output_floor.enabled:
+                exposures = self._sa_calculator.calculate_unified(exposures, config)
+
+            # Split once by approach
+            is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
+                pl.col("approach") == ApproachType.AIRB.value
+            )
+            is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
+
+            sa_branch = exposures.filter(~is_irb & ~is_slotting)
+            irb_branch = exposures.filter(is_irb)
+            slotting_branch = exposures.filter(is_slotting)
+
+            # Process each branch (all still lazy)
+            if config.output_floor.enabled:
+                # SA already calculated by calculate_unified above
+                sa_result = sa_branch
+            else:
+                sa_result = self._sa_calculator.calculate_branch(sa_branch, config)
+
+            irb_result = self._irb_calculator.calculate_branch(irb_branch, config)
+            slotting_result = self._slotting_calculator.calculate_branch(slotting_branch, config)
+
+            # Standardize output columns on each branch
+            sa_result = self._standardize_branch_output(sa_result)
+            irb_result = self._standardize_branch_output(irb_result)
+            slotting_result = self._standardize_branch_output(slotting_result)
+
+            # Collect all in parallel — CSE computes shared upstream once.
+            # Force cpu engine: streaming doesn't support CSE, so each branch
+            # would re-execute the full CRM plan independently (~9x slower).
+            sa_df, irb_df, slotting_df = pl.collect_all(
+                [sa_result, irb_result, slotting_result],
+            )
+
+            # Equity — separate path (not in unified frame)
+            equity_bundle = self._run_equity_calculator(crm_adjusted, config)
+
+            # Aggregate from already-collected DataFrames
+            return self._aggregate_single_pass(sa_df, irb_df, slotting_df, equity_bundle, config)
+        except Exception as e:
+            self._errors.append(
+                PipelineError(
+                    stage="single_pass",
+                    error_type="single_pass_error",
+                    message=str(e),
+                )
+            )
+            return self._create_error_result()
+
+    @staticmethod
+    def _standardize_branch_output(exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Add approach_applied and rwa_final columns for aggregation."""
+        schema = exposures.collect_schema()
+        cols = []
+
+        if "approach" in schema.names():
+            cols.append(pl.col("approach").alias("approach_applied"))
+
+        if "rwa_post_factor" in schema.names():
+            cols.append(
+                pl.coalesce(
+                    pl.col("rwa_post_factor"),
+                    pl.col("rwa") if "rwa" in schema.names() else pl.lit(0.0),
+                ).alias("rwa_final")
+            )
+        elif "rwa" in schema.names():
+            cols.append(pl.col("rwa").alias("rwa_final"))
+
+        if cols:
+            exposures = exposures.with_columns(cols)
+
+        return exposures
+
+    def _aggregate_single_pass(
+        self,
+        sa_df: pl.DataFrame,
+        irb_df: pl.DataFrame,
+        slotting_df: pl.DataFrame,
+        equity_bundle: EquityResultBundle | None,
+        config: CalculationConfig,
+    ) -> AggregatedResultBundle:
+        """Aggregate results from collect_all DataFrames."""
+        try:
+            # Per-approach results — already separated, no filtering needed
+            sa_results = sa_df.lazy()
+            irb_results = irb_df.lazy()
+            slotting_results = slotting_df.lazy()
+
+            # Combine for summaries (data already materialised — cheap concat)
+            combined = pl.concat([sa_df, irb_df, slotting_df], how="diagonal_relaxed").lazy()
+
+            # Concat equity if present
+            equity_results = None
+            if equity_bundle and equity_bundle.results is not None:
+                equity_prepared = equity_bundle.results.with_columns(
+                    [
+                        pl.lit("EQUITY").alias("approach_applied"),
+                        pl.col(
+                            "rwa"
+                            if "rwa" in equity_bundle.results.collect_schema().names()
+                            else "rwa_final"
+                        ).alias("rwa_final"),
+                    ]
+                )
+                schema = equity_prepared.collect_schema()
+                if "exposure_class" not in schema.names():
+                    equity_prepared = equity_prepared.with_columns(
+                        pl.lit("equity").alias("exposure_class")
+                    )
+                combined = pl.concat([combined, equity_prepared], how="diagonal_relaxed")
+                equity_results = equity_bundle.results
+
+            # Generate summaries using the aggregator's methods
+            pre_crm_summary = self._aggregator._generate_pre_crm_summary(combined)
+            post_crm_detailed = self._aggregator._generate_post_crm_detailed(combined)
+            post_crm_summary = self._aggregator._generate_post_crm_summary(post_crm_detailed)
+            summary_by_class = self._aggregator._generate_summary_by_class(post_crm_detailed)
+            summary_by_approach = self._aggregator._generate_summary_by_approach(post_crm_detailed)
+
+            # Apply output floor if enabled
+            floor_impact = None
+            if config.output_floor.enabled:
+                combined, floor_impact = self._aggregator._apply_floor_with_impact(
+                    combined,
+                    combined,  # SA-equivalent RW already joined by SA calculator
+                    config,
+                )
+
+            # Supporting factor impact
+            supporting_factor_impact = None
+            if config.supporting_factors.enabled:
+                supporting_factor_impact = self._aggregator._generate_supporting_factor_impact(
+                    combined
+                )
+
+            return AggregatedResultBundle(
+                results=combined,
+                sa_results=sa_results,
+                irb_results=irb_results,
+                slotting_results=slotting_results,
+                equity_results=equity_results,
+                floor_impact=floor_impact,
+                supporting_factor_impact=supporting_factor_impact,
+                summary_by_class=summary_by_class,
+                summary_by_approach=summary_by_approach,
+                pre_crm_summary=pre_crm_summary,
+                post_crm_detailed=post_crm_detailed,
+                post_crm_summary=post_crm_summary,
+                errors=[],
+            )
+        except Exception as e:
+            self._errors.append(
+                PipelineError(
+                    stage="aggregator",
+                    error_type="aggregation_error",
+                    message=str(e),
+                )
+            )
             return self._create_error_result()
 
     # =========================================================================
@@ -599,66 +790,22 @@ class PipelineOrchestrator:
     def _create_error_result(self) -> AggregatedResultBundle:
         """Create error result when pipeline fails."""
         return AggregatedResultBundle(
-            results=pl.LazyFrame({
-                "exposure_reference": pl.Series([], dtype=pl.String),
-                "approach_applied": pl.Series([], dtype=pl.String),
-                "exposure_class": pl.Series([], dtype=pl.String),
-                "ead_final": pl.Series([], dtype=pl.Float64),
-                "risk_weight": pl.Series([], dtype=pl.Float64),
-                "rwa_final": pl.Series([], dtype=pl.Float64),
-            }),
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": pl.Series([], dtype=pl.String),
+                    "approach_applied": pl.Series([], dtype=pl.String),
+                    "exposure_class": pl.Series([], dtype=pl.String),
+                    "ead_final": pl.Series([], dtype=pl.Float64),
+                    "risk_weight": pl.Series([], dtype=pl.Float64),
+                    "rwa_final": pl.Series([], dtype=pl.Float64),
+                }
+            ),
             errors=[self._convert_pipeline_error(e) for e in self._errors],
         )
 
-    def _create_empty_sa_frame(self) -> pl.LazyFrame:
-        """Create empty SA results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "exposure_class": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa_pre_factor": pl.Series([], dtype=pl.Float64),
-            "supporting_factor": pl.Series([], dtype=pl.Float64),
-            "rwa_post_factor": pl.Series([], dtype=pl.Float64),
-        })
-
-    def _create_empty_irb_frame(self) -> pl.LazyFrame:
-        """Create empty IRB results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "exposure_class": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "pd_floored": pl.Series([], dtype=pl.Float64),
-            "lgd_floored": pl.Series([], dtype=pl.Float64),
-            "correlation": pl.Series([], dtype=pl.Float64),
-            "k": pl.Series([], dtype=pl.Float64),
-            "rwa": pl.Series([], dtype=pl.Float64),
-        })
-
-    def _create_empty_slotting_frame(self) -> pl.LazyFrame:
-        """Create empty Slotting results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "slotting_category": pl.Series([], dtype=pl.String),
-            "is_hvcre": pl.Series([], dtype=pl.Boolean),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa": pl.Series([], dtype=pl.Float64),
-        })
-
-    def _create_empty_equity_frame(self) -> pl.LazyFrame:
-        """Create empty Equity results frame."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "equity_type": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa": pl.Series([], dtype=pl.Float64),
-        })
-
     def _convert_pipeline_error(self, error: PipelineError) -> object:
         """Convert PipelineError to standard error format."""
-        from rwa_calc.contracts.errors import CalculationError, ErrorSeverity, ErrorCategory
+        from rwa_calc.contracts.errors import CalculationError, ErrorCategory, ErrorSeverity
 
         return CalculationError(
             code=f"PIPELINE_{error.stage.upper()}",

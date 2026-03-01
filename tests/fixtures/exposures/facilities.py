@@ -50,8 +50,12 @@ class Facility:
     is_revolving: bool
     seniority: str
     risk_type: str  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
-    ccf_modelled: float | None = None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
-    is_short_term_trade_lc: bool | None = None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
+    ccf_modelled: float | None = (
+        None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
+    )
+    is_short_term_trade_lc: bool | None = (
+        None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -534,7 +538,9 @@ def print_summary(output_path: Path) -> None:
         print(f"  {row['seniority']}: {row['len']}")
 
     print("\nTotal limit by book:")
-    book_totals = df.group_by("book_code").agg(pl.col("limit").sum().alias("total_limit")).sort("book_code")
+    book_totals = (
+        df.group_by("book_code").agg(pl.col("limit").sum().alias("total_limit")).sort("book_code")
+    )
     for row in book_totals.iter_rows(named=True):
         print(f"  {row['book_code']}: £{row['total_limit']:,.0f}")
 

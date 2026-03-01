@@ -120,6 +120,7 @@ nav:
     - Pipeline Architecture: architecture/pipeline.md
     - Data Flow: architecture/data-flow.md
     - Component Overview: architecture/components.md
+    - Pipeline Collect Barriers: architecture/pipeline-collect-barriers.md
   - Features:
     - features/index.md
     - Classification: features/classification.md
@@ -152,6 +153,16 @@ nav:
       - Framework Differences: specifications/basel31/framework-differences.md
     - Common:
       - Hierarchy & Classification: specifications/common/hierarchy-classification.md
+    - Project:
+      - Overview: specifications/overview.md
+      - Architecture: specifications/architecture.md
+      - Configuration: specifications/configuration.md
+      - Output & Reporting: specifications/output-reporting.md
+      - Interfaces: specifications/interfaces.md
+      - NFRs: specifications/nfr.md
+      - Milestones: specifications/milestones.md
+      - Compliance Matrix: specifications/regulatory-compliance.md
+      - Glossary: specifications/glossary.md
   - Development:
     - development/index.md
     - Testing Guide: development/testing.md

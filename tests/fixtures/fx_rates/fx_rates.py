@@ -56,26 +56,24 @@ def create_fx_rates() -> pl.DataFrame:
     """
     rates = [
         # Rates TO GBP (default reporting currency)
-        FXRate("GBP", "GBP", 1.0),       # Identity rate
-        FXRate("USD", "GBP", 0.79),      # 1 USD = 0.79 GBP
-        FXRate("EUR", "GBP", 0.88),      # 1 EUR = 0.88 GBP (used for CRR threshold conversions)
-        FXRate("JPY", "GBP", 0.0053),    # 1 JPY = 0.0053 GBP
-        FXRate("CHF", "GBP", 0.89),      # 1 CHF = 0.89 GBP
-        FXRate("AUD", "GBP", 0.52),      # 1 AUD = 0.52 GBP
-        FXRate("CAD", "GBP", 0.58),      # 1 CAD = 0.58 GBP
-        FXRate("CNY", "GBP", 0.11),      # 1 CNY = 0.11 GBP
-        FXRate("HKD", "GBP", 0.10),      # 1 HKD = 0.10 GBP
-        FXRate("SGD", "GBP", 0.59),      # 1 SGD = 0.59 GBP
-
+        FXRate("GBP", "GBP", 1.0),  # Identity rate
+        FXRate("USD", "GBP", 0.79),  # 1 USD = 0.79 GBP
+        FXRate("EUR", "GBP", 0.88),  # 1 EUR = 0.88 GBP (used for CRR threshold conversions)
+        FXRate("JPY", "GBP", 0.0053),  # 1 JPY = 0.0053 GBP
+        FXRate("CHF", "GBP", 0.89),  # 1 CHF = 0.89 GBP
+        FXRate("AUD", "GBP", 0.52),  # 1 AUD = 0.52 GBP
+        FXRate("CAD", "GBP", 0.58),  # 1 CAD = 0.58 GBP
+        FXRate("CNY", "GBP", 0.11),  # 1 CNY = 0.11 GBP
+        FXRate("HKD", "GBP", 0.10),  # 1 HKD = 0.10 GBP
+        FXRate("SGD", "GBP", 0.59),  # 1 SGD = 0.59 GBP
         # Rates TO EUR (alternative reporting currency)
-        FXRate("GBP", "EUR", 1.14),      # 1 GBP = 1.14 EUR
-        FXRate("EUR", "EUR", 1.0),       # Identity rate
-        FXRate("USD", "EUR", 0.90),      # 1 USD = 0.90 EUR
-
+        FXRate("GBP", "EUR", 1.14),  # 1 GBP = 1.14 EUR
+        FXRate("EUR", "EUR", 1.0),  # Identity rate
+        FXRate("USD", "EUR", 0.90),  # 1 USD = 0.90 EUR
         # Rates TO USD (alternative reporting currency)
-        FXRate("GBP", "USD", 1.27),      # 1 GBP = 1.27 USD
-        FXRate("EUR", "USD", 1.11),      # 1 EUR = 1.11 USD
-        FXRate("USD", "USD", 1.0),       # Identity rate
+        FXRate("GBP", "USD", 1.27),  # 1 GBP = 1.27 USD
+        FXRate("EUR", "USD", 1.11),  # 1 EUR = 1.11 USD
+        FXRate("USD", "USD", 1.0),  # Identity rate
     ]
 
     return pl.DataFrame([r.to_dict() for r in rates], schema=FX_RATES_SCHEMA)

@@ -18,7 +18,6 @@ References:
 
 from __future__ import annotations
 
-import math
 from datetime import date
 from decimal import Decimal
 
@@ -36,7 +35,6 @@ from rwa_calc.engine.irb import (
     calculate_maturity_adjustment,
     create_irb_calculator,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -435,11 +433,17 @@ class TestIRBRWACalculation:
     def test_scaling_factor_difference(self) -> None:
         """CRR RWA should be 6% higher than Basel 3.1 due to scaling."""
         result_crr = calculate_irb_rwa(
-            ead=1000000.0, pd=0.01, lgd=0.45, correlation=0.15,
+            ead=1000000.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.15,
             apply_scaling_factor=True,
         )
         result_basel = calculate_irb_rwa(
-            ead=1000000.0, pd=0.01, lgd=0.45, correlation=0.15,
+            ead=1000000.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.15,
             apply_scaling_factor=False,
         )
 
@@ -511,15 +515,17 @@ class TestIRBCalculatorBundleProcessing:
         crr_config: CalculationConfig,
     ) -> None:
         """calculate() should return LazyFrameResult."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1000000.0],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "exposure_class": ["CORPORATE"],
-            "maturity": [2.5],
-            "approach": ["foundation_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1000000.0],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "exposure_class": ["CORPORATE"],
+                "maturity": [2.5],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -538,15 +544,17 @@ class TestIRBCalculatorBundleProcessing:
         crr_config: CalculationConfig,
     ) -> None:
         """Multiple exposures should all be processed."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-            "ead_final": [1000000.0, 500000.0, 100000.0],
-            "pd": [0.01, 0.05, 0.02],
-            "lgd": [0.45, 0.45, 0.30],
-            "exposure_class": ["CORPORATE", "CORPORATE", "RETAIL_MORTGAGE"],
-            "maturity": [2.5, 3.0, 5.0],
-            "approach": ["foundation_irb", "foundation_irb", "advanced_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "ead_final": [1000000.0, 500000.0, 100000.0],
+                "pd": [0.01, 0.05, 0.02],
+                "lgd": [0.45, 0.45, 0.30],
+                "exposure_class": ["CORPORATE", "CORPORATE", "RETAIL_MORTGAGE"],
+                "maturity": [2.5, 3.0, 5.0],
+                "approach": ["foundation_irb", "foundation_irb", "advanced_irb"],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -571,15 +579,17 @@ class TestIRBCalculatorBundleProcessing:
         crr_config: CalculationConfig,
     ) -> None:
         """get_irb_result_bundle() should return IRBResultBundle."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1000000.0],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "exposure_class": ["CORPORATE"],
-            "maturity": [2.5],
-            "approach": ["foundation_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1000000.0],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "exposure_class": ["CORPORATE"],
+                "maturity": [2.5],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -691,16 +701,18 @@ class TestIRBAuditTrail:
         crr_config: CalculationConfig,
     ) -> None:
         """Audit should contain calculation breakdown."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "ead_final": [1000000.0],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "exposure_class": ["CORPORATE"],
-            "maturity": [2.5],
-            "approach": ["foundation_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "ead_final": [1000000.0],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "exposure_class": ["CORPORATE"],
+                "maturity": [2.5],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,

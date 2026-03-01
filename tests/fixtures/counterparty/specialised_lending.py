@@ -26,15 +26,16 @@ HVCRE (High Volatility Commercial Real Estate):
     Weak:         250%
     Default:        0%
 
-Scenarios from plan:
+Scenarios (fixtures use 5yr maturity, i.e. >=2.5yr):
     E1: Project finance Strong - £10m = £7m RWA (70% RW)
     E2: Project finance Good - £10m = £9m RWA (90% RW)
-    E3: IPRE Speculative - £5m = £5.75m RWA (115% RW)
-    E4: HVCRE - Higher RW applied
+    E3: IPRE Weak - £5m = £12.5m RWA (250% RW)
+    E4: HVCRE Strong - £5m = £4.75m RWA (95% RW)
 """
 
-import polars as pl
 from pathlib import Path
+
+import polars as pl
 
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 
@@ -244,7 +245,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "is_regulated": True,
             "is_managed_as_retail": False,
         },
-        # CRR-E2: Project Finance - Good (70% RW under CRR, same as Strong)
+        # CRR-E2: Project Finance - Good (90% RW under CRR, >=2.5yr maturity)
         {
             "counterparty_reference": "SL_PF_GOOD",
             "counterparty_name": "Good Project Finance SPV - CRR-E2",
@@ -270,7 +271,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "is_regulated": True,
             "is_managed_as_retail": False,
         },
-        # CRR-E4: HVCRE - Strong (70% RW under CRR, same as non-HVCRE)
+        # CRR-E4: HVCRE - Strong (95% RW under CRR, >=2.5yr maturity)
         {
             "counterparty_reference": "SL_HVCRE_STRONG",
             "counterparty_name": "Strong HVCRE SPV - CRR-E4",

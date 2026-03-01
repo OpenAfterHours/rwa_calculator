@@ -25,9 +25,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ExposureClass, ApproachType
 from rwa_calc.engine.irb import IRBLazyFrame  # noqa: F401 - registers namespace
-
 
 # =============================================================================
 # Fixtures
@@ -55,19 +53,21 @@ def _build_defaulted_exposure(
     maturity: float = 2.5,
 ) -> pl.LazyFrame:
     """Build a single defaulted exposure for acceptance testing."""
-    return pl.LazyFrame({
-        "exposure_reference": [exposure_ref],
-        "counterparty_reference": [f"CP_{exposure_ref}"],
-        "pd": [1.0],  # Defaulted = PD 100%
-        "lgd": [lgd],
-        "beel": [beel],
-        "ead_final": [ead_final],
-        "exposure_class": [exposure_class],
-        "maturity": [maturity],
-        "approach": [approach],
-        "is_airb": [is_airb],
-        "is_defaulted": [True],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [exposure_ref],
+            "counterparty_reference": [f"CP_{exposure_ref}"],
+            "pd": [1.0],  # Defaulted = PD 100%
+            "lgd": [lgd],
+            "beel": [beel],
+            "ead_final": [ead_final],
+            "exposure_class": [exposure_class],
+            "maturity": [maturity],
+            "approach": [approach],
+            "is_airb": [is_airb],
+            "is_defaulted": [True],
+        }
+    )
 
 
 # =============================================================================
@@ -94,10 +94,8 @@ class TestCRRI1_FIRBCorporateDefaulted:
             beel=0.0,
             ead_final=500_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         assert result["k"][0] == pytest.approx(0.0, abs=1e-10)
 
@@ -112,10 +110,8 @@ class TestCRRI1_FIRBCorporateDefaulted:
             beel=0.0,
             ead_final=500_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         assert result["rwa"][0] == pytest.approx(0.0, abs=1e-6)
         assert result["risk_weight"][0] == pytest.approx(0.0, abs=1e-6)
@@ -131,10 +127,8 @@ class TestCRRI1_FIRBCorporateDefaulted:
             beel=0.0,
             ead_final=500_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         assert result["expected_loss"][0] == pytest.approx(225_000.0, rel=1e-6)
 
@@ -164,10 +158,8 @@ class TestCRRI2_AIRBRetailDefaulted:
             beel=0.50,
             ead_final=25_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         assert result["k"][0] == pytest.approx(0.15, abs=1e-10)
 
@@ -182,10 +174,8 @@ class TestCRRI2_AIRBRetailDefaulted:
             beel=0.50,
             ead_final=25_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         expected_rwa = 0.15 * 12.5 * 1.0 * 25_000.0  # 46,875
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
@@ -201,10 +191,8 @@ class TestCRRI2_AIRBRetailDefaulted:
             beel=0.50,
             ead_final=25_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         assert result["expected_loss"][0] == pytest.approx(12_500.0, rel=1e-6)
 
@@ -235,10 +223,8 @@ class TestCRRI3_AIRBCorporateDefaultedCRRScaling:
             beel=0.45,
             ead_final=500_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         assert result["k"][0] == pytest.approx(0.15, abs=1e-10)
 
@@ -253,10 +239,8 @@ class TestCRRI3_AIRBCorporateDefaultedCRRScaling:
             beel=0.45,
             ead_final=500_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         expected_rwa = 0.15 * 12.5 * 1.06 * 500_000.0  # 993,750
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
@@ -272,9 +256,7 @@ class TestCRRI3_AIRBCorporateDefaultedCRRScaling:
             beel=0.45,
             ead_final=500_000.0,
         )
-        result = (lf
-            .irb.prepare_columns(crr_irb_config)
-            .irb.apply_all_formulas(crr_irb_config)
-            .collect()
+        result = (
+            lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
         assert result["expected_loss"][0] == pytest.approx(225_000.0, rel=1e-6)

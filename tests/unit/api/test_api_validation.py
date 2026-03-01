@@ -22,7 +22,6 @@ from rwa_calc.api.validation import (
     validate_data_path,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -154,9 +153,7 @@ class TestDataPathValidator:
     def test_validate_valid_directory(self, temp_valid_dir: Path) -> None:
         """Valid directory should pass validation."""
         validator = DataPathValidator()
-        response = validator.validate(
-            ValidationRequest(data_path=temp_valid_dir)
-        )
+        response = validator.validate(ValidationRequest(data_path=temp_valid_dir))
         assert response.valid is True
         assert len(response.errors) == 0
         assert response.found_count > 0
@@ -164,9 +161,7 @@ class TestDataPathValidator:
     def test_validate_nonexistent_path(self, tmp_path: Path) -> None:
         """Non-existent path should fail validation."""
         validator = DataPathValidator()
-        response = validator.validate(
-            ValidationRequest(data_path=tmp_path / "nonexistent")
-        )
+        response = validator.validate(ValidationRequest(data_path=tmp_path / "nonexistent"))
         assert response.valid is False
         assert len(response.errors) > 0
         assert any("does not exist" in e.message for e in response.errors)
@@ -177,18 +172,14 @@ class TestDataPathValidator:
         file_path.write_text("test")
 
         validator = DataPathValidator()
-        response = validator.validate(
-            ValidationRequest(data_path=file_path)
-        )
+        response = validator.validate(ValidationRequest(data_path=file_path))
         assert response.valid is False
         assert any("not a directory" in e.message for e in response.errors)
 
     def test_validate_partial_directory(self, temp_partial_dir: Path) -> None:
         """Partial directory should report missing files."""
         validator = DataPathValidator()
-        response = validator.validate(
-            ValidationRequest(data_path=temp_partial_dir)
-        )
+        response = validator.validate(ValidationRequest(data_path=temp_partial_dir))
         assert response.valid is False
         assert response.missing_count > 0
         assert "exposures/loans.parquet" in response.files_missing
@@ -220,9 +211,7 @@ class TestDataPathValidator:
         empty_df.write_csv(tmp_path / "mapping" / "lending_mapping.csv")
 
         validator = DataPathValidator()
-        response = validator.validate(
-            ValidationRequest(data_path=tmp_path, data_format="csv")
-        )
+        response = validator.validate(ValidationRequest(data_path=tmp_path, data_format="csv"))
         # Should pass with at least one counterparty file
         assert response.found_count > 0
 
@@ -252,9 +241,7 @@ class TestDataPathValidator:
         empty_df.write_parquet(tmp_path / "mapping" / "lending_mapping.parquet")
 
         validator = DataPathValidator()
-        response = validator.validate(
-            ValidationRequest(data_path=tmp_path)
-        )
+        response = validator.validate(ValidationRequest(data_path=tmp_path))
         assert response.valid is False
         assert any("counterparty" in e.message.lower() for e in response.errors)
 
@@ -265,9 +252,7 @@ class TestDataPathValidator:
         (temp_valid_dir / "counterparty" / "institution.parquet").unlink()
 
         validator = DataPathValidator()
-        response = validator.validate(
-            ValidationRequest(data_path=temp_valid_dir)
-        )
+        response = validator.validate(ValidationRequest(data_path=temp_valid_dir))
         # Should still pass with corporate and retail counterparty files
         assert response.valid is True
 

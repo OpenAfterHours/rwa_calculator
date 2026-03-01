@@ -1,53 +1,83 @@
 """
-CRR regulatory lookup tables for RWA calculations.
+Regulatory lookup tables for RWA calculations.
 
 This module provides static lookup tables as Polars DataFrames for efficient
 joins in the calculation pipeline. Tables are defined per CRR (EU 575/2013)
-as onshored into UK law.
+as onshored into UK law, plus Basel 3.1 (PRA PS9/24) tables.
 
 Modules:
     crr_risk_weights: SA risk weights by exposure class and CQS
+    b31_risk_weights: Basel 3.1 LTV-band SA risk weights for real estate
     crr_haircuts: CRM supervisory haircuts
     crr_slotting: Specialised lending slotting risk weights
     crr_firb_lgd: F-IRB supervisory LGD values
     crr_equity_rw: Equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
 """
 
-from .crr_risk_weights import (
-    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_UK,
-    INSTITUTION_RISK_WEIGHTS_STANDARD,
-    CORPORATE_RISK_WEIGHTS,
-    RESIDENTIAL_MORTGAGE_PARAMS,
-    COMMERCIAL_RE_PARAMS,
-    RETAIL_RISK_WEIGHT,
-    get_all_risk_weight_tables,
+from .b31_risk_weights import (
+    B31_ADC_PRESOLD_RISK_WEIGHT,
+    B31_ADC_RISK_WEIGHT,
+    B31_COMMERCIAL_GENERAL_LTV_THRESHOLD,
+    B31_COMMERCIAL_GENERAL_PREFERENTIAL_CAP,
+    B31_COMMERCIAL_INCOME_LTV_BANDS,
+    B31_RESIDENTIAL_GENERAL_LTV_BANDS,
+    B31_RESIDENTIAL_INCOME_LTV_BANDS,
+    b31_adc_rw_expr,
+    b31_commercial_rw_expr,
+    b31_residential_rw_expr,
+    lookup_b31_commercial_rw,
+    lookup_b31_residential_rw,
+)
+from .crr_equity_rw import (
+    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
+    SA_EQUITY_RISK_WEIGHTS,
+    get_combined_equity_rw_table,
+    get_equity_risk_weights,
+    get_equity_rw_table,
+    lookup_equity_rw,
+)
+from .crr_firb_lgd import (
+    BASEL31_FIRB_SUPERVISORY_LGD,
+    FIRB_SUPERVISORY_LGD,
+    get_firb_lgd_table,
+    get_firb_lgd_table_for_framework,
 )
 from .crr_haircuts import (
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,
     get_haircut_table,
 )
+from .crr_risk_weights import (
+    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+    COMMERCIAL_RE_PARAMS,
+    CORPORATE_RISK_WEIGHTS,
+    INSTITUTION_RISK_WEIGHTS_STANDARD,
+    INSTITUTION_RISK_WEIGHTS_UK,
+    RESIDENTIAL_MORTGAGE_PARAMS,
+    RETAIL_RISK_WEIGHT,
+    get_all_risk_weight_tables,
+)
 from .crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
     get_slotting_table,
 )
-from .crr_firb_lgd import (
-    FIRB_SUPERVISORY_LGD,
-    get_firb_lgd_table,
-)
-from .crr_equity_rw import (
-    SA_EQUITY_RISK_WEIGHTS,
-    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
-    get_equity_risk_weights,
-    lookup_equity_rw,
-    get_equity_rw_table,
-    get_combined_equity_rw_table,
-)
 
 __all__ = [
-    # Risk weights
+    # Basel 3.1 risk weights
+    "B31_RESIDENTIAL_GENERAL_LTV_BANDS",
+    "B31_RESIDENTIAL_INCOME_LTV_BANDS",
+    "B31_COMMERCIAL_INCOME_LTV_BANDS",
+    "B31_COMMERCIAL_GENERAL_LTV_THRESHOLD",
+    "B31_COMMERCIAL_GENERAL_PREFERENTIAL_CAP",
+    "B31_ADC_RISK_WEIGHT",
+    "B31_ADC_PRESOLD_RISK_WEIGHT",
+    "b31_residential_rw_expr",
+    "b31_commercial_rw_expr",
+    "b31_adc_rw_expr",
+    "lookup_b31_residential_rw",
+    "lookup_b31_commercial_rw",
+    # CRR risk weights
     "CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS",
     "INSTITUTION_RISK_WEIGHTS_UK",
     "INSTITUTION_RISK_WEIGHTS_STANDARD",
@@ -66,7 +96,9 @@ __all__ = [
     "get_slotting_table",
     # F-IRB LGD
     "FIRB_SUPERVISORY_LGD",
+    "BASEL31_FIRB_SUPERVISORY_LGD",
     "get_firb_lgd_table",
+    "get_firb_lgd_table_for_framework",
     # Equity risk weights
     "SA_EQUITY_RISK_WEIGHTS",
     "IRB_SIMPLE_EQUITY_RISK_WEIGHTS",

@@ -24,24 +24,17 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date
-from decimal import Decimal
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
-    SAResultBundle,
-    IRBResultBundle,
-    SlottingResultBundle,
     EquityResultBundle,
-)
-from rwa_calc.contracts.errors import (
-    CalculationError,
-    ErrorCategory,
-    ErrorSeverity,
+    IRBResultBundle,
+    SAResultBundle,
+    SlottingResultBundle,
 )
 
 if TYPE_CHECKING:
@@ -230,16 +223,20 @@ class OutputAggregator:
             return irb_rwa
 
         # Get floor percentage (supports transitional schedule)
-        floor_pct = float(
-            config.output_floor.get_floor_percentage(config.reporting_date)
-        )
+        floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
 
         # Join IRB and SA results on exposure_reference
         floored = irb_rwa.join(
-            sa_equivalent_rwa.select([
-                pl.col("exposure_reference"),
-                pl.col("rwa_post_factor" if "rwa_post_factor" in sa_equivalent_rwa.collect_schema().names() else "rwa").alias("sa_rwa"),
-            ]),
+            sa_equivalent_rwa.select(
+                [
+                    pl.col("exposure_reference"),
+                    pl.col(
+                        "rwa_post_factor"
+                        if "rwa_post_factor" in sa_equivalent_rwa.collect_schema().names()
+                        else "rwa"
+                    ).alias("sa_rwa"),
+                ]
+            ),
             on="exposure_reference",
             how="left",
         )
@@ -248,24 +245,28 @@ class OutputAggregator:
         irb_rwa_col = "rwa" if "rwa" in floored.collect_schema().names() else "rwa_post_factor"
 
         # Apply floor
-        floored = floored.with_columns([
-            # Floor RWA = SA RWA × floor percentage
-            (pl.col("sa_rwa").fill_null(0.0) * floor_pct).alias("floor_rwa"),
-            pl.lit(floor_pct).alias("output_floor_pct"),
-        ]).with_columns([
-            # Is floor binding?
-            (pl.col("floor_rwa") > pl.col(irb_rwa_col)).alias("is_floor_binding"),
-            # Floor impact (additional RWA)
-            pl.max_horizontal(
-                pl.lit(0.0),
-                pl.col("floor_rwa") - pl.col(irb_rwa_col),
-            ).alias("floor_impact_rwa"),
-            # Final RWA = max(IRB RWA, floor RWA)
-            pl.max_horizontal(
-                pl.col(irb_rwa_col),
-                pl.col("floor_rwa"),
-            ).alias("rwa_final"),
-        ])
+        floored = floored.with_columns(
+            [
+                # Floor RWA = SA RWA × floor percentage
+                (pl.col("sa_rwa").fill_null(0.0) * floor_pct).alias("floor_rwa"),
+                pl.lit(floor_pct).alias("output_floor_pct"),
+            ]
+        ).with_columns(
+            [
+                # Is floor binding?
+                (pl.col("floor_rwa") > pl.col(irb_rwa_col)).alias("is_floor_binding"),
+                # Floor impact (additional RWA)
+                pl.max_horizontal(
+                    pl.lit(0.0),
+                    pl.col("floor_rwa") - pl.col(irb_rwa_col),
+                ).alias("floor_impact_rwa"),
+                # Final RWA = max(IRB RWA, floor RWA)
+                pl.max_horizontal(
+                    pl.col(irb_rwa_col),
+                    pl.col("floor_rwa"),
+                ).alias("rwa_final"),
+            ]
+        )
 
         return floored
 
@@ -309,10 +310,7 @@ class OutputAggregator:
             return self._create_empty_result_frame()
 
         # Combine all frames
-        if len(frames) == 1:
-            combined = frames[0]
-        else:
-            combined = pl.concat(frames, how="diagonal_relaxed")
+        combined = frames[0] if len(frames) == 1 else pl.concat(frames, how="diagonal_relaxed")
 
         return combined
 
@@ -323,10 +321,12 @@ class OutputAggregator:
         # Determine RWA column
         rwa_col = "rwa_post_factor" if "rwa_post_factor" in schema.names() else "rwa"
 
-        return sa_results.with_columns([
-            pl.lit("SA").alias("approach_applied"),
-            pl.col(rwa_col).alias("rwa_final"),
-        ])
+        return sa_results.with_columns(
+            [
+                pl.lit("SA").alias("approach_applied"),
+                pl.col(rwa_col).alias("rwa_final"),
+            ]
+        )
 
     def _prepare_irb_results(self, irb_results: pl.LazyFrame) -> pl.LazyFrame:
         """Prepare IRB results with standard columns."""
@@ -334,19 +334,13 @@ class OutputAggregator:
         cols = schema.names()
 
         # Determine base approach expression
-        if "approach" in cols:
-            base_approach_expr = pl.col("approach")
-        else:
-            base_approach_expr = pl.lit("FIRB")
+        base_approach_expr = pl.col("approach") if "approach" in cols else pl.lit("FIRB")
 
         # Post-CRM approach: fully SA-guaranteed IRB exposures report as "standardised"
         has_guarantee_cols = "guarantor_approach" in cols and "guarantee_ratio" in cols
         if has_guarantee_cols:
             approach_expr = (
-                pl.when(
-                    (pl.col("guarantor_approach") == "sa")
-                    & (pl.col("guarantee_ratio") >= 1.0)
-                )
+                pl.when((pl.col("guarantor_approach") == "sa") & (pl.col("guarantee_ratio") >= 1.0))
                 .then(pl.lit("standardised"))
                 .otherwise(base_approach_expr)
             )
@@ -356,10 +350,12 @@ class OutputAggregator:
         # Determine RWA column
         rwa_col = "rwa" if "rwa" in cols else "rwa_post_factor"
 
-        return irb_results.with_columns([
-            approach_expr.alias("approach_applied"),
-            pl.col(rwa_col).alias("rwa_final"),
-        ])
+        return irb_results.with_columns(
+            [
+                approach_expr.alias("approach_applied"),
+                pl.col(rwa_col).alias("rwa_final"),
+            ]
+        )
 
     def _prepare_slotting_results(self, slotting_results: pl.LazyFrame) -> pl.LazyFrame:
         """Prepare Slotting results with standard columns."""
@@ -368,10 +364,12 @@ class OutputAggregator:
         # Determine RWA column
         rwa_col = "rwa" if "rwa" in schema.names() else "rwa_post_factor"
 
-        return slotting_results.with_columns([
-            pl.lit("SLOTTING").alias("approach_applied"),
-            pl.col(rwa_col).alias("rwa_final"),
-        ])
+        return slotting_results.with_columns(
+            [
+                pl.lit("SLOTTING").alias("approach_applied"),
+                pl.col(rwa_col).alias("rwa_final"),
+            ]
+        )
 
     def _prepare_equity_results(self, equity_results: pl.LazyFrame) -> pl.LazyFrame:
         """Prepare Equity results with standard columns."""
@@ -383,25 +381,31 @@ class OutputAggregator:
         # Add exposure_class if not present
         result = equity_results
         if "exposure_class" not in schema.names():
-            result = result.with_columns([
-                pl.lit("equity").alias("exposure_class"),
-            ])
+            result = result.with_columns(
+                [
+                    pl.lit("equity").alias("exposure_class"),
+                ]
+            )
 
-        return result.with_columns([
-            pl.lit("EQUITY").alias("approach_applied"),
-            pl.col(rwa_col).alias("rwa_final"),
-        ])
+        return result.with_columns(
+            [
+                pl.lit("EQUITY").alias("approach_applied"),
+                pl.col(rwa_col).alias("rwa_final"),
+            ]
+        )
 
     def _create_empty_result_frame(self) -> pl.LazyFrame:
         """Create empty result frame with expected schema."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "approach_applied": pl.Series([], dtype=pl.String),
-            "exposure_class": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa_final": pl.Series([], dtype=pl.Float64),
-        })
+        return pl.LazyFrame(
+            {
+                "exposure_reference": pl.Series([], dtype=pl.String),
+                "approach_applied": pl.Series([], dtype=pl.String),
+                "exposure_class": pl.Series([], dtype=pl.String),
+                "ead_final": pl.Series([], dtype=pl.Float64),
+                "risk_weight": pl.Series([], dtype=pl.Float64),
+                "rwa_final": pl.Series([], dtype=pl.Float64),
+            }
+        )
 
     # =========================================================================
     # Private Methods - Output Floor
@@ -420,9 +424,7 @@ class OutputAggregator:
             Tuple of (floored results, floor impact analysis)
         """
         # Get floor percentage
-        floor_pct = float(
-            config.output_floor.get_floor_percentage(config.reporting_date)
-        )
+        floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
 
         # Determine SA RWA column
         sa_schema = sa_results.collect_schema()
@@ -435,10 +437,12 @@ class OutputAggregator:
             return combined, self._create_empty_floor_impact_frame()
 
         # Prepare SA results for comparison
-        sa_rwa = sa_results.select([
-            pl.col("exposure_reference"),
-            pl.col(sa_rwa_col).alias("sa_rwa"),
-        ])
+        sa_rwa = sa_results.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col(sa_rwa_col).alias("sa_rwa"),
+            ]
+        )
 
         # Ensure combined has rwa_final column
         combined_schema = combined.collect_schema()
@@ -451,9 +455,11 @@ class OutputAggregator:
                 combined = combined.with_columns([pl.lit(0.0).alias("rwa_final")])
 
         # Store pre-floor RWA for impact calculation
-        combined = combined.with_columns([
-            pl.col("rwa_final").alias("rwa_pre_floor"),
-        ])
+        combined = combined.with_columns(
+            [
+                pl.col("rwa_final").alias("rwa_pre_floor"),
+            ]
+        )
 
         # Join with SA for floor comparison (only for IRB exposures)
         result = combined.join(
@@ -468,60 +474,74 @@ class OutputAggregator:
         irb_approaches = ["foundation_irb", "advanced_irb", "FIRB"]
 
         # Apply floor only to IRB exposures
-        result = result.with_columns([
-            # Calculate floor RWA
-            (pl.col("sa_rwa").fill_null(0.0) * floor_pct).alias("floor_rwa"),
-            pl.lit(floor_pct).alias("output_floor_pct"),
-        ]).with_columns([
-            # Is floor binding? (only for IRB approaches)
-            pl.when(pl.col("approach_applied").is_in(irb_approaches))
-            .then(pl.col("floor_rwa") > pl.col("rwa_pre_floor"))
-            .otherwise(pl.lit(False))
-            .alias("is_floor_binding"),
-            # Apply floor to final RWA for IRB exposures
-            pl.when(pl.col("approach_applied").is_in(irb_approaches))
-            .then(pl.max_horizontal(pl.col("rwa_pre_floor"), pl.col("floor_rwa")))
-            .otherwise(pl.col("rwa_pre_floor"))
-            .alias("rwa_final"),
-        ]).with_columns([
-            # Floor impact (additional RWA from floor)
-            pl.when(pl.col("is_floor_binding"))
-            .then(pl.col("floor_rwa") - pl.col("rwa_pre_floor"))
-            .otherwise(pl.lit(0.0))
-            .alias("floor_impact_rwa"),
-        ])
+        result = (
+            result.with_columns(
+                [
+                    # Calculate floor RWA
+                    (pl.col("sa_rwa").fill_null(0.0) * floor_pct).alias("floor_rwa"),
+                    pl.lit(floor_pct).alias("output_floor_pct"),
+                ]
+            )
+            .with_columns(
+                [
+                    # Is floor binding? (only for IRB approaches)
+                    pl.when(pl.col("approach_applied").is_in(irb_approaches))
+                    .then(pl.col("floor_rwa") > pl.col("rwa_pre_floor"))
+                    .otherwise(pl.lit(False))
+                    .alias("is_floor_binding"),
+                    # Apply floor to final RWA for IRB exposures
+                    pl.when(pl.col("approach_applied").is_in(irb_approaches))
+                    .then(pl.max_horizontal(pl.col("rwa_pre_floor"), pl.col("floor_rwa")))
+                    .otherwise(pl.col("rwa_pre_floor"))
+                    .alias("rwa_final"),
+                ]
+            )
+            .with_columns(
+                [
+                    # Floor impact (additional RWA from floor)
+                    pl.when(pl.col("is_floor_binding"))
+                    .then(pl.col("floor_rwa") - pl.col("rwa_pre_floor"))
+                    .otherwise(pl.lit(0.0))
+                    .alias("floor_impact_rwa"),
+                ]
+            )
+        )
 
         # Generate floor impact analysis
         result_schema = result.collect_schema()
-        floor_impact = result.select([
-            pl.col("exposure_reference"),
-            pl.col("approach_applied"),
-            pl.col("exposure_class") if "exposure_class" in result_schema.names() else pl.lit(None).cast(pl.String).alias("exposure_class"),
-            pl.col("rwa_pre_floor"),
-            pl.col("floor_rwa"),
-            pl.col("is_floor_binding"),
-            pl.col("floor_impact_rwa"),
-            pl.col("rwa_final").alias("rwa_post_floor"),
-            pl.col("output_floor_pct"),
-        ]).filter(
-            pl.col("approach_applied").is_in(irb_approaches)
-        )
+        floor_impact = result.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col("approach_applied"),
+                pl.col("exposure_class")
+                if "exposure_class" in result_schema.names()
+                else pl.lit(None).cast(pl.String).alias("exposure_class"),
+                pl.col("rwa_pre_floor"),
+                pl.col("floor_rwa"),
+                pl.col("is_floor_binding"),
+                pl.col("floor_impact_rwa"),
+                pl.col("rwa_final").alias("rwa_post_floor"),
+                pl.col("output_floor_pct"),
+            ]
+        ).filter(pl.col("approach_applied").is_in(irb_approaches))
 
         return result, floor_impact
 
     def _create_empty_floor_impact_frame(self) -> pl.LazyFrame:
         """Create empty floor impact frame with expected schema."""
-        return pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "approach_applied": pl.Series([], dtype=pl.String),
-            "exposure_class": pl.Series([], dtype=pl.String),
-            "rwa_pre_floor": pl.Series([], dtype=pl.Float64),
-            "floor_rwa": pl.Series([], dtype=pl.Float64),
-            "is_floor_binding": pl.Series([], dtype=pl.Boolean),
-            "floor_impact_rwa": pl.Series([], dtype=pl.Float64),
-            "rwa_post_floor": pl.Series([], dtype=pl.Float64),
-            "output_floor_pct": pl.Series([], dtype=pl.Float64),
-        })
+        return pl.LazyFrame(
+            {
+                "exposure_reference": pl.Series([], dtype=pl.String),
+                "approach_applied": pl.Series([], dtype=pl.String),
+                "exposure_class": pl.Series([], dtype=pl.String),
+                "rwa_pre_floor": pl.Series([], dtype=pl.Float64),
+                "floor_rwa": pl.Series([], dtype=pl.Float64),
+                "is_floor_binding": pl.Series([], dtype=pl.Boolean),
+                "floor_impact_rwa": pl.Series([], dtype=pl.Float64),
+                "rwa_post_floor": pl.Series([], dtype=pl.Float64),
+                "output_floor_pct": pl.Series([], dtype=pl.Float64),
+            }
+        )
 
     # =========================================================================
     # Private Methods - Supporting Factor Impact
@@ -546,30 +566,42 @@ class OutputAggregator:
 
         if not (has_sf and has_pre and has_post):
             # Return empty impact frame
-            return pl.LazyFrame({
-                "exposure_reference": pl.Series([], dtype=pl.String),
-                "supporting_factor": pl.Series([], dtype=pl.Float64),
-                "rwa_pre_factor": pl.Series([], dtype=pl.Float64),
-                "rwa_post_factor": pl.Series([], dtype=pl.Float64),
-                "supporting_factor_impact": pl.Series([], dtype=pl.Float64),
-                "supporting_factor_applied": pl.Series([], dtype=pl.Boolean),
-            })
+            return pl.LazyFrame(
+                {
+                    "exposure_reference": pl.Series([], dtype=pl.String),
+                    "supporting_factor": pl.Series([], dtype=pl.Float64),
+                    "rwa_pre_factor": pl.Series([], dtype=pl.Float64),
+                    "rwa_post_factor": pl.Series([], dtype=pl.Float64),
+                    "supporting_factor_impact": pl.Series([], dtype=pl.Float64),
+                    "supporting_factor_applied": pl.Series([], dtype=pl.Boolean),
+                }
+            )
 
         # Calculate impact
-        impact = sa_results.select([
-            pl.col("exposure_reference"),
-            pl.col("exposure_class") if "exposure_class" in schema.names() else pl.lit(None).alias("exposure_class"),
-            pl.col("is_sme") if "is_sme" in schema.names() else pl.lit(False).alias("is_sme"),
-            pl.col("is_infrastructure") if "is_infrastructure" in schema.names() else pl.lit(False).alias("is_infrastructure"),
-            pl.col("ead_final") if "ead_final" in schema.names() else pl.lit(0.0).alias("ead_final"),
-            pl.col("supporting_factor"),
-            pl.col("rwa_pre_factor"),
-            pl.col("rwa_post_factor"),
-            (pl.col("rwa_pre_factor") - pl.col("rwa_post_factor")).alias("supporting_factor_impact"),
-            pl.col("supporting_factor_applied") if has_applied else (pl.col("supporting_factor") < 1.0).alias("supporting_factor_applied"),
-        ]).filter(
-            pl.col("supporting_factor_applied")
-        )
+        impact = sa_results.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col("exposure_class")
+                if "exposure_class" in schema.names()
+                else pl.lit(None).alias("exposure_class"),
+                pl.col("is_sme") if "is_sme" in schema.names() else pl.lit(False).alias("is_sme"),
+                pl.col("is_infrastructure")
+                if "is_infrastructure" in schema.names()
+                else pl.lit(False).alias("is_infrastructure"),
+                pl.col("ead_final")
+                if "ead_final" in schema.names()
+                else pl.lit(0.0).alias("ead_final"),
+                pl.col("supporting_factor"),
+                pl.col("rwa_pre_factor"),
+                pl.col("rwa_post_factor"),
+                (pl.col("rwa_pre_factor") - pl.col("rwa_post_factor")).alias(
+                    "supporting_factor_impact"
+                ),
+                pl.col("supporting_factor_applied")
+                if has_applied
+                else (pl.col("supporting_factor") < 1.0).alias("supporting_factor_applied"),
+            ]
+        ).filter(pl.col("supporting_factor_applied"))
 
         return impact
 
@@ -599,9 +631,19 @@ class OutputAggregator:
 
         # Use post-CRM reporting columns when available, otherwise fall back
         has_reporting = "reporting_exposure_class" in cols and "reporting_ead" in cols
-        ead_col = "reporting_ead" if has_reporting else ("ead_final" if "ead_final" in cols else None)
-        rw_col = "reporting_rw" if (has_reporting and "reporting_rw" in cols) else ("risk_weight" if "risk_weight" in cols else None)
-        group_col = "reporting_exposure_class" if has_reporting else ("exposure_class" if "exposure_class" in cols else None)
+        ead_col = (
+            "reporting_ead" if has_reporting else ("ead_final" if "ead_final" in cols else None)
+        )
+        rw_col = (
+            "reporting_rw"
+            if (has_reporting and "reporting_rw" in cols)
+            else ("risk_weight" if "risk_weight" in cols else None)
+        )
+        group_col = (
+            "reporting_exposure_class"
+            if has_reporting
+            else ("exposure_class" if "exposure_class" in cols else None)
+        )
 
         # Build aggregation expressions
         agg_exprs = [
@@ -638,18 +680,22 @@ class OutputAggregator:
             if group_col != "exposure_class":
                 summary = summary.rename({group_col: "exposure_class"})
         else:
-            summary = results.select(agg_exprs).with_columns([
-                pl.lit("ALL").alias("exposure_class"),
-            ])
+            summary = results.select(agg_exprs).with_columns(
+                [
+                    pl.lit("ALL").alias("exposure_class"),
+                ]
+            )
 
         # Calculate average risk weight
         if ead_col and rw_col:
-            summary = summary.with_columns([
-                pl.when(pl.col("total_ead") > 0)
-                .then(pl.col("_weighted_rw") / pl.col("total_ead"))
-                .otherwise(pl.lit(0.0))
-                .alias("avg_risk_weight"),
-            ]).drop("_weighted_rw")
+            summary = summary.with_columns(
+                [
+                    pl.when(pl.col("total_ead") > 0)
+                    .then(pl.col("_weighted_rw") / pl.col("total_ead"))
+                    .otherwise(pl.lit(0.0))
+                    .alias("avg_risk_weight"),
+                ]
+            ).drop("_weighted_rw")
 
         return summary
 
@@ -674,9 +720,15 @@ class OutputAggregator:
 
         # Use post-CRM reporting columns when available
         has_reporting = "reporting_approach" in cols and "reporting_ead" in cols
-        ead_col = "reporting_ead" if has_reporting else ("ead_final" if "ead_final" in cols else None)
+        ead_col = (
+            "reporting_ead" if has_reporting else ("ead_final" if "ead_final" in cols else None)
+        )
         rw_col = "reporting_rw" if (has_reporting and "reporting_rw" in cols) else None
-        group_col = "reporting_approach" if has_reporting else ("approach_applied" if "approach_applied" in cols else None)
+        group_col = (
+            "reporting_approach"
+            if has_reporting
+            else ("approach_applied" if "approach_applied" in cols else None)
+        )
 
         # Build aggregation expressions
         agg_exprs = [
@@ -713,9 +765,11 @@ class OutputAggregator:
             if group_col != "approach_applied":
                 summary = summary.rename({group_col: "approach_applied"})
         else:
-            summary = results.select(agg_exprs).with_columns([
-                pl.lit("ALL").alias("approach_applied"),
-            ])
+            summary = results.select(agg_exprs).with_columns(
+                [
+                    pl.lit("ALL").alias("approach_applied"),
+                ]
+            )
 
         return summary
 
@@ -745,12 +799,14 @@ class OutputAggregator:
         # Check if pre-CRM columns exist
         if "pre_crm_exposure_class" not in cols:
             # No pre-CRM data, return empty
-            return pl.LazyFrame({
-                "pre_crm_exposure_class": pl.Series([], dtype=pl.String),
-                "total_ead": pl.Series([], dtype=pl.Float64),
-                "total_rwa_blended": pl.Series([], dtype=pl.Float64),
-                "exposure_count": pl.Series([], dtype=pl.UInt32),
-            })
+            return pl.LazyFrame(
+                {
+                    "pre_crm_exposure_class": pl.Series([], dtype=pl.String),
+                    "total_ead": pl.Series([], dtype=pl.Float64),
+                    "total_rwa_blended": pl.Series([], dtype=pl.Float64),
+                    "exposure_count": pl.Series([], dtype=pl.UInt32),
+                }
+            )
 
         ead_col = "ead_final" if "ead_final" in cols else "ead"
         rwa_col = "rwa_final" if "rwa_final" in cols else "rwa"
@@ -808,14 +864,16 @@ class OutputAggregator:
         # Check if minimum required columns exist
         if not ead_col or not exposure_class_col:
             # Cannot generate detailed view without basic columns
-            return pl.LazyFrame({
-                "reporting_counterparty": pl.Series([], dtype=pl.String),
-                "reporting_exposure_class": pl.Series([], dtype=pl.String),
-                "reporting_ead": pl.Series([], dtype=pl.Float64),
-                "reporting_rw": pl.Series([], dtype=pl.Float64),
-                "reporting_approach": pl.Series([], dtype=pl.String),
-                "crm_portion_type": pl.Series([], dtype=pl.String),
-            })
+            return pl.LazyFrame(
+                {
+                    "reporting_counterparty": pl.Series([], dtype=pl.String),
+                    "reporting_exposure_class": pl.Series([], dtype=pl.String),
+                    "reporting_ead": pl.Series([], dtype=pl.Float64),
+                    "reporting_rw": pl.Series([], dtype=pl.Float64),
+                    "reporting_approach": pl.Series([], dtype=pl.String),
+                    "crm_portion_type": pl.Series([], dtype=pl.String),
+                }
+            )
 
         # Check if guarantee columns exist
         required_cols = ["is_guaranteed", "guaranteed_portion", "unguaranteed_portion"]
@@ -823,25 +881,39 @@ class OutputAggregator:
 
         if not has_guarantee_data:
             # No guarantee data, return simplified results with reporting columns
-            counterparty_expr = pl.col(counterparty_col) if counterparty_col else pl.lit(None).cast(pl.String)
+            counterparty_expr = (
+                pl.col(counterparty_col) if counterparty_col else pl.lit(None).cast(pl.String)
+            )
             rw_expr = pl.col(rw_col) if rw_col else pl.lit(1.0)
-            approach_expr = pl.col("approach_applied") if "approach_applied" in cols else pl.lit(None).cast(pl.String)
+            approach_expr = (
+                pl.col("approach_applied")
+                if "approach_applied" in cols
+                else pl.lit(None).cast(pl.String)
+            )
 
-            return results.with_columns([
-                counterparty_expr.alias("reporting_counterparty"),
-                pl.col(exposure_class_col).alias("reporting_exposure_class"),
-                pl.col(ead_col).alias("reporting_ead"),
-                rw_expr.alias("reporting_rw"),
-                approach_expr.alias("reporting_approach"),
-                pl.lit("original").alias("crm_portion_type"),
-            ])
+            return results.with_columns(
+                [
+                    counterparty_expr.alias("reporting_counterparty"),
+                    pl.col(exposure_class_col).alias("reporting_exposure_class"),
+                    pl.col(ead_col).alias("reporting_ead"),
+                    rw_expr.alias("reporting_rw"),
+                    approach_expr.alias("reporting_approach"),
+                    pl.lit("original").alias("crm_portion_type"),
+                ]
+            )
 
         # Get pre-CRM risk weight column (fallback to risk_weight for non-guaranteed)
-        pre_crm_rw_col = "pre_crm_risk_weight" if "pre_crm_risk_weight" in cols else (rw_col if rw_col else None)
-        guarantor_rw_col = "guarantor_rw" if "guarantor_rw" in cols else (rw_col if rw_col else None)
+        pre_crm_rw_col = (
+            "pre_crm_risk_weight" if "pre_crm_risk_weight" in cols else (rw_col if rw_col else None)
+        )
+        guarantor_rw_col = (
+            "guarantor_rw" if "guarantor_rw" in cols else (rw_col if rw_col else None)
+        )
 
         # Build expressions with fallbacks
-        counterparty_expr = pl.col(counterparty_col) if counterparty_col else pl.lit(None).cast(pl.String)
+        counterparty_expr = (
+            pl.col(counterparty_col) if counterparty_col else pl.lit(None).cast(pl.String)
+        )
         rw_expr = pl.col(rw_col) if rw_col else pl.lit(1.0)
         pre_crm_rw_expr = pl.col(pre_crm_rw_col) if pre_crm_rw_col else pl.lit(1.0)
         guarantor_rw_expr = pl.col(guarantor_rw_col) if guarantor_rw_col else pl.lit(1.0)
@@ -862,49 +934,61 @@ class OutputAggregator:
             guaranteed_approach_expr = approach_expr
 
         # Non-guaranteed exposures (single row)
-        non_guaranteed = results.filter(
-            ~pl.col("is_guaranteed")
-        ).with_columns([
-            counterparty_expr.alias("reporting_counterparty"),
-            pl.col(exposure_class_col).alias("reporting_exposure_class"),
-            pl.col(ead_col).alias("reporting_ead"),
-            rw_expr.alias("reporting_rw"),
-            approach_expr.alias("reporting_approach"),
-            pl.lit("original").alias("crm_portion_type"),
-        ])
+        non_guaranteed = results.filter(~pl.col("is_guaranteed")).with_columns(
+            [
+                counterparty_expr.alias("reporting_counterparty"),
+                pl.col(exposure_class_col).alias("reporting_exposure_class"),
+                pl.col(ead_col).alias("reporting_ead"),
+                rw_expr.alias("reporting_rw"),
+                approach_expr.alias("reporting_approach"),
+                pl.lit("original").alias("crm_portion_type"),
+            ]
+        )
 
         # Guaranteed exposures - unguaranteed portion
-        pre_crm_class_col = "pre_crm_exposure_class" if "pre_crm_exposure_class" in cols else exposure_class_col
-        guar_unguar_portion = results.filter(
-            pl.col("is_guaranteed")
-        ).with_columns([
-            counterparty_expr.alias("reporting_counterparty"),
-            pl.col(pre_crm_class_col).alias("reporting_exposure_class"),
-            pl.col("unguaranteed_portion").alias("reporting_ead"),
-            pre_crm_rw_expr.alias("reporting_rw"),
-            approach_expr.alias("reporting_approach"),
-            pl.lit("unguaranteed").alias("crm_portion_type"),
-        ])
+        pre_crm_class_col = (
+            "pre_crm_exposure_class" if "pre_crm_exposure_class" in cols else exposure_class_col
+        )
+        guar_unguar_portion = results.filter(pl.col("is_guaranteed")).with_columns(
+            [
+                counterparty_expr.alias("reporting_counterparty"),
+                pl.col(pre_crm_class_col).alias("reporting_exposure_class"),
+                pl.col("unguaranteed_portion").alias("reporting_ead"),
+                pre_crm_rw_expr.alias("reporting_rw"),
+                approach_expr.alias("reporting_approach"),
+                pl.lit("unguaranteed").alias("crm_portion_type"),
+            ]
+        )
 
         # Guaranteed exposures - guaranteed portion
-        guarantor_ref_col = "guarantor_reference" if "guarantor_reference" in cols else counterparty_col
-        post_crm_class_col = "post_crm_exposure_class_guaranteed" if "post_crm_exposure_class_guaranteed" in cols else exposure_class_col
+        guarantor_ref_col = (
+            "guarantor_reference" if "guarantor_reference" in cols else counterparty_col
+        )
+        post_crm_class_col = (
+            "post_crm_exposure_class_guaranteed"
+            if "post_crm_exposure_class_guaranteed" in cols
+            else exposure_class_col
+        )
 
-        guarantor_ref_expr = pl.col(guarantor_ref_col) if guarantor_ref_col else pl.lit(None).cast(pl.String)
+        guarantor_ref_expr = (
+            pl.col(guarantor_ref_col) if guarantor_ref_col else pl.lit(None).cast(pl.String)
+        )
 
-        guar_guar_portion = results.filter(
-            pl.col("is_guaranteed")
-        ).with_columns([
-            guarantor_ref_expr.alias("reporting_counterparty"),
-            pl.col(post_crm_class_col).alias("reporting_exposure_class"),
-            pl.col("guaranteed_portion").alias("reporting_ead"),
-            guarantor_rw_expr.alias("reporting_rw"),
-            guaranteed_approach_expr.alias("reporting_approach"),
-            pl.lit("guaranteed").alias("crm_portion_type"),
-        ])
+        guar_guar_portion = results.filter(pl.col("is_guaranteed")).with_columns(
+            [
+                guarantor_ref_expr.alias("reporting_counterparty"),
+                pl.col(post_crm_class_col).alias("reporting_exposure_class"),
+                pl.col("guaranteed_portion").alias("reporting_ead"),
+                guarantor_rw_expr.alias("reporting_rw"),
+                guaranteed_approach_expr.alias("reporting_approach"),
+                pl.lit("guaranteed").alias("crm_portion_type"),
+            ]
+        )
 
         # Combine all rows
-        return pl.concat([non_guaranteed, guar_unguar_portion, guar_guar_portion], how="diagonal_relaxed")
+        return pl.concat(
+            [non_guaranteed, guar_unguar_portion, guar_guar_portion], how="diagonal_relaxed"
+        )
 
     def _generate_post_crm_summary(
         self,
@@ -927,21 +1011,26 @@ class OutputAggregator:
 
         # Check if required columns exist
         if "reporting_exposure_class" not in cols:
-            return pl.LazyFrame({
-                "reporting_exposure_class": pl.Series([], dtype=pl.String),
-                "total_ead": pl.Series([], dtype=pl.Float64),
-                "total_rwa": pl.Series([], dtype=pl.Float64),
-                "exposure_count": pl.Series([], dtype=pl.UInt32),
-            })
+            return pl.LazyFrame(
+                {
+                    "reporting_exposure_class": pl.Series([], dtype=pl.String),
+                    "total_ead": pl.Series([], dtype=pl.Float64),
+                    "total_rwa": pl.Series([], dtype=pl.Float64),
+                    "exposure_count": pl.Series([], dtype=pl.UInt32),
+                }
+            )
 
-        return detailed.group_by("reporting_exposure_class").agg([
-            pl.col("reporting_ead").sum().alias("total_ead"),
-            (pl.col("reporting_ead") * pl.col("reporting_rw")).sum().alias("total_rwa"),
-            pl.len().alias("exposure_count"),
-            pl.col("crm_portion_type").filter(
-                pl.col("crm_portion_type") == "guaranteed"
-            ).len().alias("guaranteed_portions"),
-        ])
+        return detailed.group_by("reporting_exposure_class").agg(
+            [
+                pl.col("reporting_ead").sum().alias("total_ead"),
+                (pl.col("reporting_ead") * pl.col("reporting_rw")).sum().alias("total_rwa"),
+                pl.len().alias("exposure_count"),
+                pl.col("crm_portion_type")
+                .filter(pl.col("crm_portion_type") == "guaranteed")
+                .len()
+                .alias("guaranteed_portions"),
+            ]
+        )
 
 
 # =============================================================================

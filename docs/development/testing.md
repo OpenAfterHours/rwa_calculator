@@ -1,6 +1,6 @@
 # Testing Guide
 
-This guide covers the testing approach, test organization, and how to write effective tests. The test suite currently contains **~1,286 tests** across unit, acceptance, and benchmark categories.
+This guide covers the testing approach, test organization, and how to write effective tests. The test suite currently contains **~1,285 tests** across unit, acceptance, and benchmark categories (1,253 non-benchmark + 32 benchmark).
 
 ## Test Organization
 

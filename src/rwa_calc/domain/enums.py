@@ -264,10 +264,28 @@ class Seniority(Enum):
     Seniority of exposure for LGD determination.
 
     Under F-IRB, senior exposures get 45% LGD, subordinated get 75%.
+    Under Basel 3.1 SA, subordinated debt gets flat 150% RW (CRE20.47).
     """
 
     SENIOR = "senior"
     SUBORDINATED = "subordinated"
+
+
+class SCRAGrade(Enum):
+    """
+    Standardised Credit Risk Assessment Approach grades for unrated institutions.
+
+    Basel 3.1 (CRE20.16-21) replaces CRR due-diligence assessment with SCRA.
+    Grade determines risk weight for unrated institution exposures.
+
+    Grade A: CET1 > 14%, Leverage > 5%, meets all regulatory requirements → 40% RW
+    Grade B: CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW
+    Grade C: Below minimum regulatory requirements → 150% RW
+    """
+
+    A = "A"
+    B = "B"
+    C = "C"
 
 
 class CommitmentType(Enum):

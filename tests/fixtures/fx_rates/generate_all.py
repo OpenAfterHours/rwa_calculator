@@ -20,7 +20,7 @@ def main() -> None:
     print(f"Output directory: {output_dir}\n")
 
     df = create_fx_rates()
-    output_path = save_fx_rates(output_dir)
+    save_fx_rates(output_dir)
 
     print(f"[OK] fx_rates.parquet: {len(df)} records")
     print("=" * 60)

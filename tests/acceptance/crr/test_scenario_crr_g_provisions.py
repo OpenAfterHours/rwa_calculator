@@ -11,16 +11,15 @@ Regulatory References:
 - CRR Art. 62(d): Excess provisions as T2 capital (capped)
 """
 
-import pytest
-import polars as pl
 from typing import Any
 
+import polars as pl
+import pytest
 from tests.acceptance.crr.conftest import (
-    assert_rwa_within_tolerance,
     assert_ead_match,
+    assert_rwa_within_tolerance,
     get_result_for_exposure,
 )
-
 
 # Mapping of scenario IDs to exposure references
 SCENARIO_EXPOSURE_MAP = {
@@ -143,9 +142,7 @@ class TestCRRGroupG_ParameterizedValidation:
     ) -> None:
         """Verify CRR-G1 (SA provision) uses SA approach."""
         scenario = expected_outputs_dict["CRR-G1"]
-        assert scenario["approach"] == "SA", (
-            "CRR-G1 should use SA approach"
-        )
+        assert scenario["approach"] == "SA", "CRR-G1 should use SA approach"
 
     def test_crr_g2_g3_use_firb_approach(
         self,
@@ -154,9 +151,7 @@ class TestCRRGroupG_ParameterizedValidation:
         """Verify CRR-G2 and G3 (EL shortfall/excess) use F-IRB approach."""
         for scenario_id in ["CRR-G2", "CRR-G3"]:
             scenario = expected_outputs_dict[scenario_id]
-            assert scenario["approach"] == "F-IRB", (
-                f"{scenario_id} should use F-IRB approach"
-            )
+            assert scenario["approach"] == "F-IRB", f"{scenario_id} should use F-IRB approach"
 
     def test_crr_g_irb_scenarios_have_expected_loss(
         self,
@@ -165,9 +160,7 @@ class TestCRRGroupG_ParameterizedValidation:
         """Verify IRB provision scenarios have expected loss calculated."""
         for scenario_id in ["CRR-G2", "CRR-G3"]:
             scenario = expected_outputs_dict[scenario_id]
-            assert scenario["expected_loss"] is not None, (
-                f"{scenario_id} should have expected loss"
-            )
+            assert scenario["expected_loss"] is not None, f"{scenario_id} should have expected loss"
             assert scenario["expected_loss"] > 0, (
                 f"{scenario_id} should have positive expected loss"
             )

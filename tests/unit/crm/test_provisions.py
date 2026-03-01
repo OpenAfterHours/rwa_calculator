@@ -29,7 +29,6 @@ from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.processor import CRMProcessor
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -99,16 +98,18 @@ class TestDirectLevelProvision:
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Direct provision should match on exposure_reference."""
-        exposures = _make_exposures(
-            drawn_amount=1_000_000.0, interest=0.0, nominal_amount=0.0
+        exposures = _make_exposures(drawn_amount=1_000_000.0, interest=0.0, nominal_amount=0.0)
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 50_000.0,
-            "provision_type": "SCRA",
-        }])
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -122,13 +123,17 @@ class TestDirectLevelProvision:
         exposures = _make_exposures(
             drawn_amount=800_000.0, interest=10_000.0, nominal_amount=200_000.0
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 50_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -144,13 +149,17 @@ class TestDirectLevelProvision:
         exposures = _make_exposures(
             drawn_amount=30_000.0, interest=5_000.0, nominal_amount=200_000.0
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 50_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -172,16 +181,18 @@ class TestOBSOnlyProvision:
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Contingent with drawn=0: provision goes entirely to nominal."""
-        exposures = _make_exposures(
-            drawn_amount=0.0, interest=0.0, nominal_amount=500_000.0
+        exposures = _make_exposures(drawn_amount=0.0, interest=0.0, nominal_amount=500_000.0)
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 20_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 20_000.0,
-            "provision_type": "SCRA",
-        }])
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -202,16 +213,18 @@ class TestProvisionCapping:
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Provision cannot exceed drawn + nominal."""
-        exposures = _make_exposures(
-            drawn_amount=50_000.0, interest=0.0, nominal_amount=50_000.0
+        exposures = _make_exposures(drawn_amount=50_000.0, interest=0.0, nominal_amount=50_000.0)
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 200_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 200_000.0,
-            "provision_type": "SCRA",
-        }])
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -237,13 +250,17 @@ class TestNegativeDrawnAmount:
         exposures = _make_exposures(
             drawn_amount=-50_000.0, interest=5_000.0, nominal_amount=200_000.0
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 30_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 30_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -267,15 +284,21 @@ class TestIRBProvisions:
         """F-IRB exposure: provision_deducted=0, provision_allocated tracked."""
         exposures = _make_exposures(
             approach=ApproachType.FIRB.value,
-            drawn_amount=1_000_000.0, interest=0.0, nominal_amount=0.0
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            nominal_amount=0.0,
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 50_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, irb_config).collect()
 
@@ -291,15 +314,21 @@ class TestIRBProvisions:
         """Slotting exposure: provision_deducted=0."""
         exposures = _make_exposures(
             approach=ApproachType.SLOTTING.value,
-            drawn_amount=1_000_000.0, interest=0.0, nominal_amount=500_000.0
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            nominal_amount=500_000.0,
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 100_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 100_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, irb_config).collect()
 
@@ -333,22 +362,24 @@ class TestMixedSAIRBProvisions:
             lgd=[0.45, 0.45],
             seniority=["senior", "senior"],
         )
-        provisions = _make_provisions([
-            {
-                "provision_reference": "P1",
-                "beneficiary_reference": "EXP_SA",
-                "beneficiary_type": "loan",
-                "amount": 50_000.0,
-                "provision_type": "SCRA",
-            },
-            {
-                "provision_reference": "P2",
-                "beneficiary_reference": "EXP_IRB",
-                "beneficiary_type": "loan",
-                "amount": 50_000.0,
-                "provision_type": "SCRA",
-            },
-        ])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP_SA",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                },
+                {
+                    "provision_reference": "P2",
+                    "beneficiary_reference": "EXP_IRB",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                },
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, irb_config).collect()
 
@@ -386,13 +417,17 @@ class TestFacilityLevelProvision:
             lgd=[0.45, 0.45],
             seniority=["senior", "senior"],
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "FAC001",
-            "beneficiary_type": "facility",
-            "amount": 100_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "FAC001",
+                    "beneficiary_type": "facility",
+                    "amount": 100_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -429,13 +464,17 @@ class TestCounterpartyLevelProvision:
             lgd=[0.45, 0.45],
             seniority=["senior", "senior"],
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "CP001",
-            "beneficiary_type": "counterparty",
-            "amount": 100_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "CP001",
+                    "beneficiary_type": "counterparty",
+                    "amount": 100_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -458,16 +497,18 @@ class TestNoBeneficiaryTypeFallback:
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Provisions without beneficiary_type column use direct exposure join."""
-        exposures = _make_exposures(
-            drawn_amount=1_000_000.0, interest=0.0, nominal_amount=0.0
-        )
+        exposures = _make_exposures(drawn_amount=1_000_000.0, interest=0.0, nominal_amount=0.0)
         # No beneficiary_type column
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "EXP001",
-            "amount": 50_000.0,
-            "provision_type": "SCRA",
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -487,16 +528,18 @@ class TestNoMatchingProvision:
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Exposure with no matching provision gets all-zero provision columns."""
-        exposures = _make_exposures(
-            drawn_amount=500_000.0, interest=0.0, nominal_amount=200_000.0
+        exposures = _make_exposures(drawn_amount=500_000.0, interest=0.0, nominal_amount=200_000.0)
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "NO_MATCH",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
         )
-        provisions = _make_provisions([{
-            "provision_reference": "P1",
-            "beneficiary_reference": "NO_MATCH",
-            "beneficiary_type": "loan",
-            "amount": 50_000.0,
-            "provision_type": "SCRA",
-        }])
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
@@ -519,25 +562,25 @@ class TestMultipleProvisions:
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Two direct provisions should sum before drawn-first deduction."""
-        exposures = _make_exposures(
-            drawn_amount=100_000.0, interest=0.0, nominal_amount=200_000.0
+        exposures = _make_exposures(drawn_amount=100_000.0, interest=0.0, nominal_amount=200_000.0)
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 60_000.0,
+                    "provision_type": "SCRA",
+                },
+                {
+                    "provision_reference": "P2",
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 80_000.0,
+                    "provision_type": "SCRA",
+                },
+            ]
         )
-        provisions = _make_provisions([
-            {
-                "provision_reference": "P1",
-                "beneficiary_reference": "EXP001",
-                "beneficiary_type": "loan",
-                "amount": 60_000.0,
-                "provision_type": "SCRA",
-            },
-            {
-                "provision_reference": "P2",
-                "beneficiary_reference": "EXP001",
-                "beneficiary_type": "loan",
-                "amount": 80_000.0,
-                "provision_type": "SCRA",
-            },
-        ])
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 

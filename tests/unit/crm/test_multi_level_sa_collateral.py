@@ -32,7 +32,6 @@ from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.processor import CRMProcessor
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -71,10 +70,17 @@ def _make_bundle(
     """Build a ClassifiedExposuresBundle with collateral only."""
     empty_cp = pl.LazyFrame(schema={"counterparty_reference": pl.String, "entity_type": pl.String})
     empty_mappings = pl.LazyFrame(
-        schema={"child_counterparty_reference": pl.String, "parent_counterparty_reference": pl.String}
+        schema={
+            "child_counterparty_reference": pl.String,
+            "parent_counterparty_reference": pl.String,
+        }
     )
     empty_ultimate = pl.LazyFrame(
-        schema={"counterparty_reference": pl.String, "ultimate_parent_reference": pl.String, "hierarchy_depth": pl.Int32}
+        schema={
+            "counterparty_reference": pl.String,
+            "ultimate_parent_reference": pl.String,
+            "hierarchy_depth": pl.Int32,
+        }
     )
     empty_ri = pl.LazyFrame(
         schema={"counterparty_reference": pl.String, "cqs": pl.Int8, "rating_type": pl.String}
@@ -337,9 +343,7 @@ class TestIRBExposuresUnaffected:
 class TestCollateralCap:
     """EAD cannot go below 0."""
 
-    def test_collateral_capped_at_ead(
-        self, processor: CRMProcessor, sa_config: CalculationConfig
-    ):
+    def test_collateral_capped_at_ead(self, processor: CRMProcessor, sa_config: CalculationConfig):
         """SA EAD after collateral is floored at 0 when collateral exceeds exposure."""
         result = _run_crm(
             processor,
@@ -365,7 +369,11 @@ class TestFXHaircutMultiLevel:
             processor,
             sa_config,
             [_sa_exposure("EXP001", drawn=1000.0, facility_ref="FAC001", currency="GBP")],
-            [_cash_collateral("FAC001", market_value=400.0, beneficiary_type="facility", currency="USD")],
+            [
+                _cash_collateral(
+                    "FAC001", market_value=400.0, beneficiary_type="facility", currency="USD"
+                )
+            ],
         )
         row = result.filter(pl.col("exposure_reference") == "EXP001")
         ead_after = row["ead_after_collateral"][0]
@@ -383,7 +391,11 @@ class TestFXHaircutMultiLevel:
             processor,
             sa_config,
             [_sa_exposure("EXP001", drawn=1000.0, facility_ref="FAC001", currency="GBP")],
-            [_cash_collateral("FAC001", market_value=400.0, beneficiary_type="facility", currency="GBP")],
+            [
+                _cash_collateral(
+                    "FAC001", market_value=400.0, beneficiary_type="facility", currency="GBP"
+                )
+            ],
         )
         row = result.filter(pl.col("exposure_reference") == "EXP001")
         ead_after = row["ead_after_collateral"][0]

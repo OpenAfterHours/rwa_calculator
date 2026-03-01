@@ -66,21 +66,27 @@ class FXConverter:
         """
         if fx_rates is None or not config.apply_fx_conversion:
             # No FX rates or conversion disabled - add null audit columns
-            return exposures.with_columns([
-                pl.col("currency").alias("original_currency"),
-                (pl.col("drawn_amount") + pl.col("interest").fill_null(0.0) + pl.col("nominal_amount")).alias("original_amount"),
-                pl.lit(None).cast(pl.Float64).alias("fx_rate_applied"),
-            ])
+            return exposures.with_columns(
+                [
+                    pl.col("currency").alias("original_currency"),
+                    (
+                        pl.col("drawn_amount")
+                        + pl.col("interest").fill_null(0.0)
+                        + pl.col("nominal_amount")
+                    ).alias("original_amount"),
+                    pl.lit(None).cast(pl.Float64).alias("fx_rate_applied"),
+                ]
+            )
 
         target_currency = config.base_currency
 
         # Filter FX rates to only those targeting our base currency
-        rates_to_target = fx_rates.filter(
-            pl.col("currency_to") == target_currency
-        ).select([
-            pl.col("currency_from"),
-            pl.col("rate"),
-        ])
+        rates_to_target = fx_rates.filter(pl.col("currency_to") == target_currency).select(
+            [
+                pl.col("currency_from"),
+                pl.col("rate"),
+            ]
+        )
 
         # Join exposures with FX rates on currency
         converted = exposures.join(
@@ -91,60 +97,64 @@ class FXConverter:
         )
 
         # Apply conversion with audit trail
-        converted = converted.with_columns([
-            # Preserve original currency
-            pl.col("currency").alias("original_currency"),
-            # Preserve original total amount (including accrued interest)
-            (pl.col("drawn_amount") + pl.col("interest").fill_null(0.0) + pl.col("nominal_amount")).alias("original_amount"),
-            # Track rate applied (null if same currency or no rate)
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.lit(None).cast(pl.Float64))
-            .otherwise(pl.col("rate"))
-            .alias("fx_rate_applied"),
-        ])
+        converted = converted.with_columns(
+            [
+                # Preserve original currency
+                pl.col("currency").alias("original_currency"),
+                # Preserve original total amount (including accrued interest)
+                (
+                    pl.col("drawn_amount")
+                    + pl.col("interest").fill_null(0.0)
+                    + pl.col("nominal_amount")
+                ).alias("original_amount"),
+                # Track rate applied (null if same currency or no rate)
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.lit(None).cast(pl.Float64))
+                .otherwise(pl.col("rate"))
+                .alias("fx_rate_applied"),
+            ]
+        )
 
         # Convert amounts where rate is available
         # If currency matches target or no rate found, keep original amounts
-        converted = converted.with_columns([
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("drawn_amount"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("drawn_amount") * pl.col("rate"))
-            .otherwise(pl.col("drawn_amount"))
-            .alias("drawn_amount"),
-
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("undrawn_amount"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("undrawn_amount") * pl.col("rate"))
-            .otherwise(pl.col("undrawn_amount"))
-            .alias("undrawn_amount"),
-
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("nominal_amount"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("nominal_amount") * pl.col("rate"))
-            .otherwise(pl.col("nominal_amount"))
-            .alias("nominal_amount"),
-
-            # Convert interest (nullable - preserve nulls through conversion)
-            pl.when(pl.col("interest").is_null())
-            .then(pl.lit(None).cast(pl.Float64))
-            .when(pl.col("currency") == target_currency)
-            .then(pl.col("interest"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("interest") * pl.col("rate"))
-            .otherwise(pl.col("interest"))
-            .alias("interest"),
-
-            # Update currency to target where conversion applied
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("currency"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.lit(target_currency))
-            .otherwise(pl.col("currency"))
-            .alias("currency"),
-        ])
+        converted = converted.with_columns(
+            [
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("drawn_amount"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("drawn_amount") * pl.col("rate"))
+                .otherwise(pl.col("drawn_amount"))
+                .alias("drawn_amount"),
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("undrawn_amount"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("undrawn_amount") * pl.col("rate"))
+                .otherwise(pl.col("undrawn_amount"))
+                .alias("undrawn_amount"),
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("nominal_amount"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("nominal_amount") * pl.col("rate"))
+                .otherwise(pl.col("nominal_amount"))
+                .alias("nominal_amount"),
+                # Convert interest (nullable - preserve nulls through conversion)
+                pl.when(pl.col("interest").is_null())
+                .then(pl.lit(None).cast(pl.Float64))
+                .when(pl.col("currency") == target_currency)
+                .then(pl.col("interest"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("interest") * pl.col("rate"))
+                .otherwise(pl.col("interest"))
+                .alias("interest"),
+                # Update currency to target where conversion applied
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("currency"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.lit(target_currency))
+                .otherwise(pl.col("currency"))
+                .alias("currency"),
+            ]
+        )
 
         # Drop the temporary rate column from join
         converted = converted.drop("rate")
@@ -174,12 +184,12 @@ class FXConverter:
         target_currency = config.base_currency
 
         # Filter FX rates to only those targeting our base currency
-        rates_to_target = fx_rates.filter(
-            pl.col("currency_to") == target_currency
-        ).select([
-            pl.col("currency_from"),
-            pl.col("rate"),
-        ])
+        rates_to_target = fx_rates.filter(pl.col("currency_to") == target_currency).select(
+            [
+                pl.col("currency_from"),
+                pl.col("rate"),
+            ]
+        )
 
         # Join collateral with FX rates on currency
         converted = collateral.join(
@@ -190,29 +200,29 @@ class FXConverter:
         )
 
         # Convert amounts where rate is available
-        converted = converted.with_columns([
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("market_value"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("market_value") * pl.col("rate"))
-            .otherwise(pl.col("market_value"))
-            .alias("market_value"),
-
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("nominal_value"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("nominal_value") * pl.col("rate"))
-            .otherwise(pl.col("nominal_value"))
-            .alias("nominal_value"),
-
-            # Update currency to target where conversion applied
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("currency"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.lit(target_currency))
-            .otherwise(pl.col("currency"))
-            .alias("currency"),
-        ])
+        converted = converted.with_columns(
+            [
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("market_value"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("market_value") * pl.col("rate"))
+                .otherwise(pl.col("market_value"))
+                .alias("market_value"),
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("nominal_value"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("nominal_value") * pl.col("rate"))
+                .otherwise(pl.col("nominal_value"))
+                .alias("nominal_value"),
+                # Update currency to target where conversion applied
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("currency"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.lit(target_currency))
+                .otherwise(pl.col("currency"))
+                .alias("currency"),
+            ]
+        )
 
         # Drop the temporary rate column from join
         converted = converted.drop("rate")
@@ -242,12 +252,12 @@ class FXConverter:
         target_currency = config.base_currency
 
         # Filter FX rates to only those targeting our base currency
-        rates_to_target = fx_rates.filter(
-            pl.col("currency_to") == target_currency
-        ).select([
-            pl.col("currency_from"),
-            pl.col("rate"),
-        ])
+        rates_to_target = fx_rates.filter(pl.col("currency_to") == target_currency).select(
+            [
+                pl.col("currency_from"),
+                pl.col("rate"),
+            ]
+        )
 
         # Join guarantees with FX rates on currency
         converted = guarantees.join(
@@ -258,22 +268,23 @@ class FXConverter:
         )
 
         # Convert amounts where rate is available
-        converted = converted.with_columns([
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("amount_covered"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("amount_covered") * pl.col("rate"))
-            .otherwise(pl.col("amount_covered"))
-            .alias("amount_covered"),
-
-            # Update currency to target where conversion applied
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("currency"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.lit(target_currency))
-            .otherwise(pl.col("currency"))
-            .alias("currency"),
-        ])
+        converted = converted.with_columns(
+            [
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("amount_covered"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("amount_covered") * pl.col("rate"))
+                .otherwise(pl.col("amount_covered"))
+                .alias("amount_covered"),
+                # Update currency to target where conversion applied
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("currency"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.lit(target_currency))
+                .otherwise(pl.col("currency"))
+                .alias("currency"),
+            ]
+        )
 
         # Drop the temporary rate column from join
         converted = converted.drop("rate")
@@ -303,12 +314,12 @@ class FXConverter:
         target_currency = config.base_currency
 
         # Filter FX rates to only those targeting our base currency
-        rates_to_target = fx_rates.filter(
-            pl.col("currency_to") == target_currency
-        ).select([
-            pl.col("currency_from"),
-            pl.col("rate"),
-        ])
+        rates_to_target = fx_rates.filter(pl.col("currency_to") == target_currency).select(
+            [
+                pl.col("currency_from"),
+                pl.col("rate"),
+            ]
+        )
 
         # Join provisions with FX rates on currency
         converted = provisions.join(
@@ -319,28 +330,28 @@ class FXConverter:
         )
 
         # Convert amounts where rate is available
-        converted = converted.with_columns([
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("amount"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("amount") * pl.col("rate"))
-            .otherwise(pl.col("amount"))
-            .alias("amount"),
-
-            # Update currency to target where conversion applied
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("currency"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.lit(target_currency))
-            .otherwise(pl.col("currency"))
-            .alias("currency"),
-        ])
+        converted = converted.with_columns(
+            [
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("amount"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("amount") * pl.col("rate"))
+                .otherwise(pl.col("amount"))
+                .alias("amount"),
+                # Update currency to target where conversion applied
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("currency"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.lit(target_currency))
+                .otherwise(pl.col("currency"))
+                .alias("currency"),
+            ]
+        )
 
         # Drop the temporary rate column from join
         converted = converted.drop("rate")
 
         return converted
-
 
     def convert_equity_exposures(
         self,
@@ -365,12 +376,12 @@ class FXConverter:
         target_currency = config.base_currency
 
         # Filter FX rates to only those targeting our base currency
-        rates_to_target = fx_rates.filter(
-            pl.col("currency_to") == target_currency
-        ).select([
-            pl.col("currency_from"),
-            pl.col("rate"),
-        ])
+        rates_to_target = fx_rates.filter(pl.col("currency_to") == target_currency).select(
+            [
+                pl.col("currency_from"),
+                pl.col("rate"),
+            ]
+        )
 
         # Join equity exposures with FX rates on currency
         converted = equity_exposures.join(
@@ -381,29 +392,29 @@ class FXConverter:
         )
 
         # Convert amounts where rate is available
-        converted = converted.with_columns([
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("carrying_value"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("carrying_value") * pl.col("rate"))
-            .otherwise(pl.col("carrying_value"))
-            .alias("carrying_value"),
-
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("fair_value"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.col("fair_value") * pl.col("rate"))
-            .otherwise(pl.col("fair_value"))
-            .alias("fair_value"),
-
-            # Update currency to target where conversion applied
-            pl.when(pl.col("currency") == target_currency)
-            .then(pl.col("currency"))
-            .when(pl.col("rate").is_not_null())
-            .then(pl.lit(target_currency))
-            .otherwise(pl.col("currency"))
-            .alias("currency"),
-        ])
+        converted = converted.with_columns(
+            [
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("carrying_value"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("carrying_value") * pl.col("rate"))
+                .otherwise(pl.col("carrying_value"))
+                .alias("carrying_value"),
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("fair_value"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.col("fair_value") * pl.col("rate"))
+                .otherwise(pl.col("fair_value"))
+                .alias("fair_value"),
+                # Update currency to target where conversion applied
+                pl.when(pl.col("currency") == target_currency)
+                .then(pl.col("currency"))
+                .when(pl.col("rate").is_not_null())
+                .then(pl.lit(target_currency))
+                .otherwise(pl.col("currency"))
+                .alias("currency"),
+            ]
+        )
 
         # Drop the temporary rate column from join
         converted = converted.drop("rate")

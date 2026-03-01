@@ -23,7 +23,6 @@ from rwa_calc.api.models import APIError
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -76,27 +75,21 @@ class TestConvertToApiError:
         assert api_error.severity == "error"
         assert api_error.category == "Data Quality"
 
-    def test_preserves_exposure_reference(
-        self, sample_calculation_error: CalculationError
-    ) -> None:
+    def test_preserves_exposure_reference(self, sample_calculation_error: CalculationError) -> None:
         """Should preserve exposure reference in details."""
         api_error = convert_to_api_error(sample_calculation_error)
 
         assert "exposure_reference" in api_error.details
         assert api_error.details["exposure_reference"] == "EXP001"
 
-    def test_preserves_field_name(
-        self, sample_calculation_error: CalculationError
-    ) -> None:
+    def test_preserves_field_name(self, sample_calculation_error: CalculationError) -> None:
         """Should preserve field name in details."""
         api_error = convert_to_api_error(sample_calculation_error)
 
         assert "field_name" in api_error.details
         assert api_error.details["field_name"] == "amount"
 
-    def test_detailed_conversion(
-        self, detailed_calculation_error: CalculationError
-    ) -> None:
+    def test_detailed_conversion(self, detailed_calculation_error: CalculationError) -> None:
         """Should convert error with all fields."""
         api_error = convert_to_api_error(detailed_calculation_error)
 

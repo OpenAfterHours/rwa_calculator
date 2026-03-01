@@ -9,6 +9,18 @@ Provides fluent API for Specialised Lending slotting approach via registered nam
 CRR weights vary by maturity (<2.5yr vs >=2.5yr) and HVCRE flag per Art. 153(5).
 Basel 3.1 weights vary by HVCRE flag and PF pre-operational status per BCBS CRE33.
 
+Usage:
+    import polars as pl
+    from rwa_calc.contracts.config import CalculationConfig
+    import rwa_calc.engine.slotting.namespace  # Register namespace
+
+    config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+    result = (exposures
+        .slotting.prepare_columns(config)
+        .slotting.apply_slotting_weights(config)
+        .slotting.calculate_rwa()
+    )
+
 References:
 - CRR Art. 153(5): Supervisory slotting approach (Tables 1 & 2)
 - BCBS CRE33: Basel 3.1 specialised lending slotting
@@ -88,6 +100,15 @@ SLOTTING_WEIGHTS = {
 class SlottingLazyFrame:
     """
     Slotting calculation namespace for Polars LazyFrames.
+
+    Provides fluent API for Specialised Lending slotting approach.
+
+    Example:
+        result = (exposures
+            .slotting.prepare_columns(config)
+            .slotting.apply_slotting_weights(config)
+            .slotting.calculate_rwa()
+        )
     """
 
     def __init__(self, lf: pl.LazyFrame) -> None:
@@ -201,6 +222,13 @@ class SlottingLazyFrame:
 class SlottingExpr:
     """
     Slotting calculation namespace for Polars Expressions.
+
+    Provides column-level operations for slotting calculations.
+
+    Example:
+        df.with_columns(
+            pl.col("slotting_category").slotting.lookup_rw(is_crr=True),
+        )
     """
 
     def __init__(self, expr: pl.Expr) -> None:

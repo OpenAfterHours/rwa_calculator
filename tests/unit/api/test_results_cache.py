@@ -11,10 +11,8 @@ import json
 from pathlib import Path
 
 import polars as pl
-import pytest
 
 from rwa_calc.api.results_cache import CachedResults, ResultsCache
-
 
 # =============================================================================
 # CachedResults Tests
@@ -182,10 +180,12 @@ class TestResultsCache:
     def test_sink_empty_lazyframe(self, tmp_path: Path) -> None:
         """Should handle sinking an empty LazyFrame."""
         cache = ResultsCache(tmp_path / "cache")
-        lf = pl.LazyFrame({
-            "a": pl.Series([], dtype=pl.String),
-            "b": pl.Series([], dtype=pl.Float64),
-        })
+        lf = pl.LazyFrame(
+            {
+                "a": pl.Series([], dtype=pl.String),
+                "b": pl.Series([], dtype=pl.Float64),
+            }
+        )
 
         cached = cache.sink_results(results=lf)
 

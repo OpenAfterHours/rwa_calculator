@@ -34,7 +34,6 @@ To update the rate:
 from decimal import Decimal
 from typing import Literal
 
-
 # =============================================================================
 # CONFIGURABLE FX RATE
 # =============================================================================
@@ -49,6 +48,7 @@ EUR_GBP_RATE: Decimal = Decimal("0.8732")
 # =============================================================================
 # CONVERSION FUNCTIONS
 # =============================================================================
+
 
 def eur_to_gbp(eur_amount: Decimal) -> Decimal:
     """
@@ -104,18 +104,14 @@ CRR_REGULATORY_THRESHOLDS_EUR: dict[ThresholdKey, Decimal] = {
     # Exposures up to this amount get 0.7619 factor
     # Exposures above get 0.85 factor
     "sme_exposure": Decimal("2500000"),  # EUR 2.5m
-
     # SME turnover threshold for eligibility (CRR Art. 501)
     # Counterparties with turnover below this qualify as SME
     "sme_turnover": Decimal("50000000"),  # EUR 50m
-
     # Retail exposure threshold (CRR Art. 123(c))
     # Aggregated exposure to lending group must be below this
     "retail_exposure": Decimal("1000000"),  # EUR 1m
-
     # QRRE maximum limit per exposure (CRR Art. 123)
     "qrre_limit": Decimal("100000"),  # EUR 100k
-
     # Large financial sector entity total assets threshold (CRR Art. 4(1)(146))
     # Entities with total assets >= this threshold are LFSE
     "lfse_total_assets": Decimal("70000000000"),  # EUR 70bn
@@ -125,6 +121,7 @@ CRR_REGULATORY_THRESHOLDS_EUR: dict[ThresholdKey, Decimal] = {
 # =============================================================================
 # DERIVED GBP THRESHOLDS
 # =============================================================================
+
 
 def get_crr_threshold_gbp(threshold_key: ThresholdKey) -> Decimal:
     """
@@ -157,6 +154,5 @@ def get_all_crr_thresholds_gbp() -> dict[ThresholdKey, Decimal]:
         Dictionary of threshold keys to GBP amounts
     """
     return {
-        key: eur_to_gbp(eur_amount)
-        for key, eur_amount in CRR_REGULATORY_THRESHOLDS_EUR.items()
+        key: eur_to_gbp(eur_amount) for key, eur_amount in CRR_REGULATORY_THRESHOLDS_EUR.items()
     }

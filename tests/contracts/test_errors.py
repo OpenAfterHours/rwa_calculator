@@ -210,7 +210,9 @@ class TestLazyFrameResult:
             frame=lf,
             errors=[
                 CalculationError("W1", "Warning", ErrorSeverity.WARNING, ErrorCategory.CRM),
-                CalculationError("C1", "Critical", ErrorSeverity.CRITICAL, ErrorCategory.CALCULATION),
+                CalculationError(
+                    "C1", "Critical", ErrorSeverity.CRITICAL, ErrorCategory.CALCULATION
+                ),
                 CalculationError("E1", "Error", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY),
             ],
         )
@@ -245,16 +247,25 @@ class TestLazyFrameResult:
             frame=lf,
             errors=[
                 CalculationError(
-                    "E1", "Error 1", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY,
-                    exposure_reference="EXP001"
+                    "E1",
+                    "Error 1",
+                    ErrorSeverity.ERROR,
+                    ErrorCategory.DATA_QUALITY,
+                    exposure_reference="EXP001",
                 ),
                 CalculationError(
-                    "E2", "Error 2", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY,
-                    exposure_reference="EXP002"
+                    "E2",
+                    "Error 2",
+                    ErrorSeverity.ERROR,
+                    ErrorCategory.DATA_QUALITY,
+                    exposure_reference="EXP002",
                 ),
                 CalculationError(
-                    "E3", "Error 3", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY,
-                    exposure_reference="EXP001"
+                    "E3",
+                    "Error 3",
+                    ErrorSeverity.ERROR,
+                    ErrorCategory.DATA_QUALITY,
+                    exposure_reference="EXP001",
                 ),
             ],
         )
@@ -279,10 +290,12 @@ class TestLazyFrameResult:
         lf = pl.LazyFrame({"col1": [1]})
         result = LazyFrameResult(frame=lf)
 
-        result.add_errors([
-            CalculationError("E1", "Error 1", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY),
-            CalculationError("E2", "Error 2", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY),
-        ])
+        result.add_errors(
+            [
+                CalculationError("E1", "Error 1", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY),
+                CalculationError("E2", "Error 2", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY),
+            ]
+        )
 
         assert len(result.errors) == 2
 
@@ -293,11 +306,13 @@ class TestLazyFrameResult:
 
         result1 = LazyFrameResult(
             frame=lf1,
-            errors=[CalculationError("E1", "Error 1", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY)]
+            errors=[
+                CalculationError("E1", "Error 1", ErrorSeverity.ERROR, ErrorCategory.DATA_QUALITY)
+            ],
         )
         result2 = LazyFrameResult(
             frame=lf2,
-            errors=[CalculationError("E2", "Error 2", ErrorSeverity.ERROR, ErrorCategory.CRM)]
+            errors=[CalculationError("E2", "Error 2", ErrorSeverity.ERROR, ErrorCategory.CRM)],
         )
 
         merged = result1.merge(result2)

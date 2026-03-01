@@ -5,9 +5,9 @@ Usage:
     uv run python tests/fixtures/guarantee/generate_all.py
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import polars as pl
 
@@ -130,8 +130,10 @@ def print_guarantor_analysis(output_dir: Path) -> None:
     d4_guar = guarantees.filter(pl.col("guarantee_reference") == "GUAR_BANK_001")
     if d4_guar.height > 0:
         row = d4_guar.row(0, named=True)
-        print(f"  D4 - Bank guarantee substitution:")
-        print(f"       {row['guarantor']} guarantees {row['percentage_covered']:.0%} of {row['beneficiary_reference']}")
+        print("  D4 - Bank guarantee substitution:")
+        print(
+            f"       {row['guarantor']} guarantees {row['percentage_covered']:.0%} of {row['beneficiary_reference']}"
+        )
 
     # H4: Full CRM chain
     h4_guar = guarantees.filter(pl.col("guarantee_reference").str.contains("CRM_CHAIN"))
@@ -150,11 +152,13 @@ def print_guarantor_analysis(output_dir: Path) -> None:
 
     # Coverage analysis
     print("\nCoverage Analysis:")
-    coverage_stats = guarantees.select([
-        pl.col("percentage_covered").min().alias("min_coverage"),
-        pl.col("percentage_covered").max().alias("max_coverage"),
-        pl.col("percentage_covered").mean().alias("avg_coverage"),
-    ]).row(0, named=True)
+    coverage_stats = guarantees.select(
+        [
+            pl.col("percentage_covered").min().alias("min_coverage"),
+            pl.col("percentage_covered").max().alias("max_coverage"),
+            pl.col("percentage_covered").mean().alias("avg_coverage"),
+        ]
+    ).row(0, named=True)
 
     print(f"  Min coverage: {coverage_stats['min_coverage']:.0%}")
     print(f"  Max coverage: {coverage_stats['max_coverage']:.0%}")

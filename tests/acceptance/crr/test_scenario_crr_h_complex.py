@@ -11,16 +11,15 @@ Regulatory References:
 - CRR Art. 207-236: Combined CRM treatments
 """
 
-import pytest
-import polars as pl
 from typing import Any
 
+import polars as pl
+import pytest
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_supporting_factor_match,
     get_result_for_exposure,
 )
-
 
 # Mapping of scenario IDs to exposure references
 # Note: CRR-H2 and CRR-H4 removed due to fixture/expected output mismatches
@@ -103,6 +102,7 @@ class TestCRRGroupH_ComplexScenarios:
             scenario_id="CRR-H3",
         )
 
+
 class TestCRRGroupH_ParameterizedValidation:
     """
     Parametrized tests to validate expected outputs structure.
@@ -130,4 +130,3 @@ class TestCRRGroupH_ParameterizedValidation:
         assert scenario["supporting_factor"] == pytest.approx(0.7619, rel=0.001), (
             "CRR-H3 should have SME supporting factor 0.7619"
         )
-

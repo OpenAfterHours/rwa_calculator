@@ -99,7 +99,7 @@ known-first-party = ["rwa_calc"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --benchmark-skip"
+addopts = "-v --tb=short --benchmark-disable -m 'not slow'"
 markers = [
     "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
     "slow: mark test as slow (10M+ scale, may take several minutes)",
@@ -115,6 +115,25 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+ignore_missing_imports = true
+# Polars custom namespaces (register_lazyframe_namespace) return types mypy
+# cannot resolve. Polars type[DataType] vs DataType also causes false positives.
+disable_error_code = [
+    "attr-defined",   # Polars custom namespaces (.rwa_sa, .irb, .slotting, etc.)
+    "union-attr",     # Protocol | None narrowing in pipeline orchestrator
+    "no-any-return",  # Polars namespace methods returning self._lf via pipe()
+    "arg-type",       # Polars type[DataType] vs DataType in loader schemas
+    "dict-item",      # Polars type[DataType] vs DataType in schema dicts
+    "assignment",     # Polars ChainedThen vs Then in when/then chains
+]
+
+[[tool.mypy.overrides]]
+module = "rwa_calc.ui.marimo.*"
+ignore_errors = true
 
 [dependency-groups]
 dev = [

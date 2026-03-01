@@ -5,10 +5,10 @@ This module provides functions to create and save counterparty test data
 for all exposure classes required by the RWA calculator acceptance tests.
 """
 
-from .sovereign import create_sovereign_counterparties, save_sovereign_counterparties
-from .institution import create_institution_counterparties, save_institution_counterparties
 from .corporate import create_corporate_counterparties, save_corporate_counterparties
+from .institution import create_institution_counterparties, save_institution_counterparties
 from .retail import create_retail_counterparties, save_retail_counterparties
+from .sovereign import create_sovereign_counterparties, save_sovereign_counterparties
 from .specialised_lending import (
     create_specialised_lending_counterparties,
     save_specialised_lending_counterparties,
@@ -36,10 +36,10 @@ def generate_all_counterparties() -> dict[str, int]:
     Returns:
         dict[str, int]: Dictionary mapping counterparty type to record count
     """
-    from .sovereign import create_sovereign_counterparties, save_sovereign_counterparties
-    from .institution import create_institution_counterparties, save_institution_counterparties
     from .corporate import create_corporate_counterparties, save_corporate_counterparties
+    from .institution import create_institution_counterparties, save_institution_counterparties
     from .retail import create_retail_counterparties, save_retail_counterparties
+    from .sovereign import create_sovereign_counterparties, save_sovereign_counterparties
     from .specialised_lending import (
         create_specialised_lending_counterparties,
         save_specialised_lending_counterparties,

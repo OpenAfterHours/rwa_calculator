@@ -32,6 +32,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+# Import namespace to ensure it's registered
+import rwa_calc.engine.irb.namespace  # noqa: F401
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, IRBResultBundle
 from rwa_calc.contracts.errors import (
     CalculationError,
@@ -40,17 +42,13 @@ from rwa_calc.contracts.errors import (
     LazyFrameResult,
 )
 from rwa_calc.data.tables.crr_firb_lgd import lookup_firb_lgd
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
     calculate_correlation,
-    calculate_irb_rwa,
-    calculate_k,
-    calculate_maturity_adjustment,
     calculate_expected_loss,
+    calculate_irb_rwa,
 )
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
-
-# Import namespace to ensure it's registered
-import rwa_calc.engine.irb.namespace  # noqa: F401
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -143,8 +141,8 @@ class IRBCalculator:
         errors: list[IRBCalculationError] = []
 
         # Apply IRB calculations using namespace for fluent pipeline
-        exposures = (data.irb_exposures
-            .irb.classify_approach(config)
+        exposures = (
+            data.irb_exposures.irb.classify_approach(config)
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
@@ -160,6 +158,79 @@ class IRBCalculator:
             calculation_audit=exposures.irb.build_audit(),
             errors=errors,
         )
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply IRB formulas to IRB rows on a unified frame.
+
+        Uses filter-process-merge to avoid running expensive IRB formulas
+        (normal_ppf, normal_cdf) on non-IRB rows. Filters IRB rows out,
+        runs the namespace chain on the subset, then concats back.
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with IRB columns populated for IRB rows
+        """
+        is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
+            pl.col("approach") == ApproachType.AIRB.value
+        )
+
+        # Split: separate IRB rows from non-IRB
+        non_irb = exposures.filter(~is_irb)
+        irb = exposures.filter(is_irb)
+
+        # Process: run IRB namespace chain on IRB rows only
+        irb = (
+            irb.irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .irb.apply_all_formulas(config)
+            .irb.apply_guarantee_substitution(config)
+        )
+
+        # Apply supporting factors (CRR only — Art. 501)
+        irb = self._apply_supporting_factors(irb, config)
+
+        # Merge: concat IRB results back with non-IRB rows
+        return pl.concat([non_irb, irb], how="diagonal_relaxed")
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate IRB RWA on pre-filtered IRB-only rows.
+
+        Unlike calculate_unified(), expects only IRB rows — no filter/concat
+        wrapper needed. Runs the namespace chain directly.
+
+        Args:
+            exposures: Pre-filtered IRB rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with IRB RWA columns populated
+        """
+        exposures = (
+            exposures.irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .irb.apply_all_formulas(config)
+            .irb.apply_guarantee_substitution(config)
+        )
+
+        # Apply supporting factors (CRR only — Art. 501)
+        exposures = self._apply_supporting_factors(exposures, config)
+
+        return exposures
 
     def calculate_expected_loss(
         self,
@@ -183,28 +254,38 @@ class IRBCalculator:
         # Ensure required columns
         schema = exposures.collect_schema()
         if "pd" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(0.01).alias("pd"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(0.01).alias("pd"),
+                ]
+            )
         if "lgd" not in schema.names():
-            exposures = exposures.with_columns([
-                pl.lit(0.45).alias("lgd"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(0.45).alias("lgd"),
+                ]
+            )
 
         # Determine EAD column
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
 
         # Calculate EL
-        exposures = exposures.with_columns([
-            (pl.col("pd") * pl.col("lgd") * pl.col(ead_col)).alias("expected_loss"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                (pl.col("pd") * pl.col("lgd") * pl.col(ead_col)).alias("expected_loss"),
+            ]
+        )
 
         return LazyFrameResult(
-            frame=exposures.select([
-                "exposure_reference",
-                "pd", "lgd", ead_col,
-                "expected_loss",
-            ]),
+            frame=exposures.select(
+                [
+                    "exposure_reference",
+                    "pd",
+                    "lgd",
+                    ead_col,
+                    "expected_loss",
+                ]
+            ),
             errors=[],
         )
 
@@ -224,15 +305,19 @@ class IRBCalculator:
         """
         if not config.supporting_factors.enabled:
             # Basel 3.1 or supporting factors disabled - no adjustment
-            return exposures.with_columns([
-                pl.lit(1.0).alias("supporting_factor"),
-            ])
+            return exposures.with_columns(
+                [
+                    pl.lit(1.0).alias("supporting_factor"),
+                ]
+            )
 
         # Prepare RWA column for factor application
         # The rwa column from formulas is pre-factor
-        exposures = exposures.with_columns([
-            pl.col("rwa").alias("rwa_pre_factor"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.col("rwa").alias("rwa_pre_factor"),
+            ]
+        )
 
         # Use the SA supporting factor calculator
         sf_calc = SupportingFactorCalculator()
@@ -240,9 +325,11 @@ class IRBCalculator:
 
         # Rename rwa_post_factor back to rwa for consistency
         if "rwa_post_factor" in exposures.collect_schema().names():
-            exposures = exposures.with_columns([
-                pl.col("rwa_post_factor").alias("rwa"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.col("rwa_post_factor").alias("rwa"),
+                ]
+            )
 
         return exposures
 
@@ -276,6 +363,7 @@ class IRBCalculator:
             Dictionary with calculation results
         """
         from datetime import date
+
         from rwa_calc.contracts.config import CalculationConfig
 
         if config is None:

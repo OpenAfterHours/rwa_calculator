@@ -13,7 +13,6 @@ This is the main entry point for UI and CLI integration.
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -27,7 +26,6 @@ from rwa_calc.api.models import (
 )
 from rwa_calc.api.results_cache import ResultsCache
 from rwa_calc.api.validation import DataPathValidator
-
 
 # =============================================================================
 # RWA Service
@@ -200,7 +198,7 @@ class RWAService:
             ),
         }
 
-    def _create_config(self, request: CalculationRequest) -> "CalculationConfig":
+    def _create_config(self, request: CalculationRequest) -> CalculationConfig:
         """
         Create CalculationConfig from request parameters.
 
@@ -238,7 +236,7 @@ class RWAService:
                 irb_permissions=irb_permissions,
             )
 
-    def _create_loader(self, request: CalculationRequest) -> "LoaderProtocol":
+    def _create_loader(self, request: CalculationRequest) -> LoaderProtocol:
         """
         Create data loader based on request format.
 
@@ -255,7 +253,7 @@ class RWAService:
         else:
             return ParquetLoader(base_path=request.path)
 
-    def _create_pipeline(self, loader: "LoaderProtocol") -> "PipelineOrchestrator":
+    def _create_pipeline(self, loader: LoaderProtocol) -> PipelineOrchestrator:
         """
         Create pipeline orchestrator with loader.
 
@@ -307,7 +305,8 @@ def quick_calculate(
     data_path: str | Path,
     framework: Literal["CRR", "BASEL_3_1"] = "CRR",
     reporting_date: date | None = None,
-    irb_approach: Literal["sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"] | None = None,
+    irb_approach: Literal["sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"]
+    | None = None,
     data_format: Literal["parquet", "csv"] = "parquet",
     cache_dir: Path | None = None,
 ) -> CalculationResponse:

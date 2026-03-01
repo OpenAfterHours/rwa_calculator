@@ -18,16 +18,14 @@ Regulatory References:
 - CRR Art. 163: PD floor (0.03% - single floor for all classes)
 """
 
-import pytest
-import polars as pl
 from typing import Any
 
+import polars as pl
+import pytest
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
-    assert_risk_weight_match,
     get_result_for_exposure,
 )
-
 
 # Mapping of scenario IDs to exposure references
 SCENARIO_EXPOSURE_MAP = {
@@ -175,9 +173,7 @@ class TestCRRGroupC_ParameterizedValidation:
         for scenario in crr_c_scenarios:
             lgd = scenario["lgd"]
             # A-IRB allows own estimates - some should be below 45%
-            assert lgd is not None, (
-                f"Scenario {scenario['scenario_id']} missing LGD"
-            )
+            assert lgd is not None, f"Scenario {scenario['scenario_id']} missing LGD"
         # At least one scenario should have LGD < 45%
         lgds = [s["lgd"] for s in crr_c_scenarios]
         assert any(lgd < 0.45 for lgd in lgds), (

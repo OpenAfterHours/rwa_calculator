@@ -442,6 +442,30 @@ def _commercial_real_estate() -> list[Collateral]:
             is_adc=False,
             is_presold=None,
         ),
+        # CRR-A7: Commercial property 40% LTV (£400k loan / £1m property)
+        # Income-producing property that meets 1.5x interest coverage
+        Collateral(
+            collateral_reference="COLL_CRE_A7",
+            collateral_type="real_estate",
+            currency="GBP",
+            maturity_date=None,
+            market_value=1_000_000.0,  # £1m property value
+            nominal_value=1_000_000.0,
+            beneficiary_type="loan",
+            beneficiary_reference="LOAN_CRE_001",
+            issuer_cqs=None,
+            issuer_type=None,
+            residual_maturity_years=None,
+            is_eligible_financial_collateral=False,
+            is_eligible_irb_collateral=True,
+            valuation_date=VALUE_DATE,
+            valuation_type="independent",
+            property_type="commercial",
+            property_ltv=0.40,  # 40% LTV
+            is_income_producing=True,  # Meets 1.5x interest coverage
+            is_adc=False,
+            is_presold=None,
+        ),
         # ADC property (150% RW unless pre-sold)
         Collateral(
             collateral_reference="COLL_CRE_003",

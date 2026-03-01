@@ -12,15 +12,13 @@ from datetime import date
 
 import polars as pl
 
-from tests.benchmarks.data_generators import get_or_create_dataset
-from tests.benchmarks.test_pipeline_benchmark import create_raw_data_bundle
-
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.utils import has_required_columns
-
+from tests.benchmarks.data_generators import get_or_create_dataset
+from tests.benchmarks.test_pipeline_benchmark import create_raw_data_bundle
 
 REPORTING_DATE = date(2026, 1, 1)
 
@@ -30,13 +28,17 @@ def count_plan_nodes(plan_str: str) -> dict[str, int]:
     lines = plan_str.strip().split("\n")
     return {
         "total_lines": len(lines),
-        "joins": sum(1 for l in lines if "JOIN" in l.upper()),
-        "filters": sum(1 for l in lines if "FILTER" in l or "σ" in l),
-        "projections": sum(1 for l in lines if "PROJECT" in l or "π" in l or "SELECT" in l),
-        "with_columns": sum(1 for l in lines if "WITH_COLUMNS" in l or "WITH COLUMNS" in l.upper()),
-        "group_by": sum(1 for l in lines if "GROUP" in l.upper() or "AGG" in l.upper()),
-        "unions": sum(1 for l in lines if "UNION" in l.upper() or "CONCAT" in l.upper()),
-        "sorts": sum(1 for l in lines if "SORT" in l.upper()),
+        "joins": sum(1 for line in lines if "JOIN" in line.upper()),
+        "filters": sum(1 for line in lines if "FILTER" in line or "σ" in line),
+        "projections": sum(
+            1 for line in lines if "PROJECT" in line or "π" in line or "SELECT" in line
+        ),
+        "with_columns": sum(
+            1 for line in lines if "WITH_COLUMNS" in line or "WITH COLUMNS" in line.upper()
+        ),
+        "group_by": sum(1 for line in lines if "GROUP" in line.upper() or "AGG" in line.upper()),
+        "unions": sum(1 for line in lines if "UNION" in line.upper() or "CONCAT" in line.upper()),
+        "sorts": sum(1 for line in lines if "SORT" in line.upper()),
     }
 
 
@@ -72,8 +74,8 @@ def measure_plan(label: str, lf: pl.LazyFrame) -> None:
     print(f"\n--- {label} ---")
     print(f"  Unoptimized plan: {unopt_stats['total_lines']} lines")
     print(f"  Optimized plan:   {opt_stats['total_lines']} lines")
-    print(f"  Optimization time: {opt_time*1000:.1f}ms")
-    print(f"  Collect time:      {collect_time*1000:.1f}ms")
+    print(f"  Optimization time: {opt_time * 1000:.1f}ms")
+    print(f"  Collect time:      {collect_time * 1000:.1f}ms")
     print(f"  Plan ops: {opt_stats}")
 
 
@@ -161,7 +163,7 @@ def inspect_plans(dataset: dict[str, pl.LazyFrame]) -> None:
     t0 = time.perf_counter()
     exposures = exposures.collect().lazy()
     mid_collect = time.perf_counter() - t0
-    print(f"\nMid-point collect time: {mid_collect*1000:.1f}ms")
+    print(f"\nMid-point collect time: {mid_collect * 1000:.1f}ms")
 
     if has_guarantees:
         exposures = crm.apply_guarantees(
@@ -178,8 +180,8 @@ def inspect_plans(dataset: dict[str, pl.LazyFrame]) -> None:
     t0 = time.perf_counter()
     _ = exposures.collect()
     final_collect = time.perf_counter() - t0
-    print(f"  Final collect time: {final_collect*1000:.1f}ms")
-    print(f"  Total (mid + final): {(mid_collect + final_collect)*1000:.1f}ms")
+    print(f"  Final collect time: {final_collect * 1000:.1f}ms")
+    print(f"  Total (mid + final): {(mid_collect + final_collect) * 1000:.1f}ms")
 
 
 def dump_full_plan(dataset: dict[str, pl.LazyFrame]) -> None:
@@ -196,9 +198,12 @@ def dump_full_plan(dataset: dict[str, pl.LazyFrame]) -> None:
     data = classified
 
     has_provisions = has_required_columns(data.provisions, crm.PROVISION_REQUIRED_COLUMNS)
-    has_collateral = has_required_columns(data.collateral, crm.COLLATERAL_REQUIRED_REQUIRED_COLUMNS
-        if hasattr(crm, 'COLLATERAL_REQUIRED_REQUIRED_COLUMNS')
-        else crm.COLLATERAL_REQUIRED_COLUMNS)
+    has_collateral = has_required_columns(
+        data.collateral,
+        crm.COLLATERAL_REQUIRED_REQUIRED_COLUMNS
+        if hasattr(crm, "COLLATERAL_REQUIRED_REQUIRED_COLUMNS")
+        else crm.COLLATERAL_REQUIRED_COLUMNS,
+    )
     has_guarantees = (
         has_required_columns(data.guarantees, crm.GUARANTEE_REQUIRED_COLUMNS)
         and data.counterparty_lookup is not None
@@ -228,7 +233,7 @@ def dump_full_plan(dataset: dict[str, pl.LazyFrame]) -> None:
     plan = exposures.explain(optimized=True)
     lines = plan.split("\n")
     for i, line in enumerate(lines[:200]):
-        print(f"  {i+1:3d} | {line}")
+        print(f"  {i + 1:3d} | {line}")
     if len(lines) > 200:
         print(f"  ... ({len(lines) - 200} more lines)")
     print(f"\n  Total plan lines: {len(lines)}")

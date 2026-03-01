@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.engine.utils import has_rows
 from rwa_calc.data.schemas import (
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
+    EQUITY_EXPOSURE_SCHEMA,
     FACILITY_MAPPING_SCHEMA,
     FACILITY_SCHEMA,
     FX_RATES_SCHEMA,
@@ -42,12 +42,11 @@ from rwa_calc.data.schemas import (
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
     SPECIALISED_LENDING_SCHEMA,
-    EQUITY_EXPOSURE_SCHEMA,
 )
+from rwa_calc.engine.utils import has_rows
 
 if TYPE_CHECKING:
     pass
-
 
 
 def enforce_schema(
@@ -87,9 +86,7 @@ def enforce_schema(
             continue
 
         # Cast to expected type
-        cast_exprs.append(
-            pl.col(col_name).cast(expected_type, strict=strict).alias(col_name)
-        )
+        cast_exprs.append(pl.col(col_name).cast(expected_type, strict=strict).alias(col_name))
 
     if not cast_exprs:
         return lf
@@ -138,12 +135,14 @@ class DataSourceConfig:
         fx_rates_file: Optional path to FX rates data for currency conversion
     """
 
-    counterparty_files: list[str] = field(default_factory=lambda: [
-        "counterparty/sovereign.parquet",
-        "counterparty/institution.parquet",
-        "counterparty/corporate.parquet",
-        "counterparty/retail.parquet",
-    ])
+    counterparty_files: list[str] = field(
+        default_factory=lambda: [
+            "counterparty/sovereign.parquet",
+            "counterparty/institution.parquet",
+            "counterparty/corporate.parquet",
+            "counterparty/retail.parquet",
+        ]
+    )
     facilities_file: str = "exposures/facilities.parquet"
     loans_file: str = "exposures/loans.parquet"
     contingents_file: str = "exposures/contingents.parquet"
@@ -329,8 +328,7 @@ class ParquetLoader:
                     frames.append(lf)
                 except Exception as e:
                     raise DataLoadError(
-                        f"Failed to load counterparty file: {e}",
-                        source=file_path
+                        f"Failed to load counterparty file: {e}", source=file_path
                     ) from e
 
         if not frames:
@@ -353,17 +351,11 @@ class ParquetLoader:
         Raises:
             DataLoadError: If required data cannot be loaded
         """
-        contingents = self._load_parquet_optional(
-            self.config.contingents_file, CONTINGENTS_SCHEMA
-        )
+        contingents = self._load_parquet_optional(self.config.contingents_file, CONTINGENTS_SCHEMA)
 
         return RawDataBundle(
-            facilities=self._load_parquet(
-                self.config.facilities_file, FACILITY_SCHEMA
-            ),
-            loans=self._load_parquet(
-                self.config.loans_file, LOAN_SCHEMA
-            ),
+            facilities=self._load_parquet(self.config.facilities_file, FACILITY_SCHEMA),
+            loans=self._load_parquet(self.config.loans_file, LOAN_SCHEMA),
             counterparties=self._load_and_combine_counterparties(),
             facility_mappings=self._load_parquet(
                 self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
@@ -375,27 +367,17 @@ class ParquetLoader:
                 self.config.lending_mappings_file, LENDING_MAPPING_SCHEMA
             ),
             contingents=contingents,
-            collateral=self._load_parquet_optional(
-                self.config.collateral_file, COLLATERAL_SCHEMA
-            ),
-            guarantees=self._load_parquet_optional(
-                self.config.guarantees_file, GUARANTEE_SCHEMA
-            ),
-            provisions=self._load_parquet_optional(
-                self.config.provisions_file, PROVISION_SCHEMA
-            ),
-            ratings=self._load_parquet_optional(
-                self.config.ratings_file, RATINGS_SCHEMA
-            ),
+            collateral=self._load_parquet_optional(self.config.collateral_file, COLLATERAL_SCHEMA),
+            guarantees=self._load_parquet_optional(self.config.guarantees_file, GUARANTEE_SCHEMA),
+            provisions=self._load_parquet_optional(self.config.provisions_file, PROVISION_SCHEMA),
+            ratings=self._load_parquet_optional(self.config.ratings_file, RATINGS_SCHEMA),
             specialised_lending=self._load_parquet_optional(
                 self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
             ),
             equity_exposures=self._load_parquet_optional(
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
             ),
-            fx_rates=self._load_parquet_optional(
-                self.config.fx_rates_file, FX_RATES_SCHEMA
-            ),
+            fx_rates=self._load_parquet_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
         )
 
 
@@ -564,8 +546,7 @@ class CSVLoader:
                     frames.append(lf)
                 except Exception as e:
                     raise DataLoadError(
-                        f"Failed to load counterparty file: {e}",
-                        source=file_path
+                        f"Failed to load counterparty file: {e}", source=file_path
                     ) from e
 
         if not frames:
@@ -586,49 +567,31 @@ class CSVLoader:
         Raises:
             DataLoadError: If required data cannot be loaded
         """
-        contingents = self._load_csv_optional(
-            self.config.contingents_file, CONTINGENTS_SCHEMA
-        )
+        contingents = self._load_csv_optional(self.config.contingents_file, CONTINGENTS_SCHEMA)
 
         return RawDataBundle(
-            facilities=self._load_csv(
-                self.config.facilities_file, FACILITY_SCHEMA
-            ),
-            loans=self._load_csv(
-                self.config.loans_file, LOAN_SCHEMA
-            ),
+            facilities=self._load_csv(self.config.facilities_file, FACILITY_SCHEMA),
+            loans=self._load_csv(self.config.loans_file, LOAN_SCHEMA),
             counterparties=self._load_and_combine_counterparties(),
             facility_mappings=self._load_csv(
                 self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
             ),
-            org_mappings=self._load_csv_optional(
-                self.config.org_mappings_file, ORG_MAPPING_SCHEMA
-            ),
+            org_mappings=self._load_csv_optional(self.config.org_mappings_file, ORG_MAPPING_SCHEMA),
             lending_mappings=self._load_csv(
                 self.config.lending_mappings_file, LENDING_MAPPING_SCHEMA
             ),
             contingents=contingents,
-            collateral=self._load_csv_optional(
-                self.config.collateral_file, COLLATERAL_SCHEMA
-            ),
-            guarantees=self._load_csv_optional(
-                self.config.guarantees_file, GUARANTEE_SCHEMA
-            ),
-            provisions=self._load_csv_optional(
-                self.config.provisions_file, PROVISION_SCHEMA
-            ),
-            ratings=self._load_csv_optional(
-                self.config.ratings_file, RATINGS_SCHEMA
-            ),
+            collateral=self._load_csv_optional(self.config.collateral_file, COLLATERAL_SCHEMA),
+            guarantees=self._load_csv_optional(self.config.guarantees_file, GUARANTEE_SCHEMA),
+            provisions=self._load_csv_optional(self.config.provisions_file, PROVISION_SCHEMA),
+            ratings=self._load_csv_optional(self.config.ratings_file, RATINGS_SCHEMA),
             specialised_lending=self._load_csv_optional(
                 self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
             ),
             equity_exposures=self._load_csv_optional(
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
             ),
-            fx_rates=self._load_csv_optional(
-                self.config.fx_rates_file, FX_RATES_SCHEMA
-            ),
+            fx_rates=self._load_csv_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
         )
 
 

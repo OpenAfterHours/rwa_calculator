@@ -44,6 +44,10 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
+from rwa_calc.data.tables.crr_slotting import (
+    lookup_slotting_rw,
+)
+from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -132,7 +136,7 @@ class SlottingCalculator:
         Returns:
             SlottingResultBundle with results and audit trail
         """
-        import rwa_calc.engine.slotting.namespace  # noqa: F401
+        errors: list[SlottingCalculationError] = []
 
         # Get slotting exposures (may be None)
         exposures = data.slotting_exposures
@@ -204,6 +208,11 @@ class SlottingCalculator:
         if config is None:
             config = CalculationConfig.crr(reporting_date=date.today())
 
+        # Look up risk weight
+        if config.is_crr:
+            risk_weight = lookup_slotting_rw(category, is_hvcre, is_short_maturity)
+        else:
+            risk_weight = self._get_basel31_slotting_rw(category, is_hvcre, is_pre_operational)
         # Use expression namespace for lookup logic
         df = pl.DataFrame(
             {

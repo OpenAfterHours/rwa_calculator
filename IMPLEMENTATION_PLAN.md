@@ -4,7 +4,7 @@ Status legend: `[ ]` = not started, `[~]` = partial, `[x]` = done
 
 ## Priority 1 — CRR Completion (v1.0) — COMPLETE
 
-All Priority 1 items are done. **87/87 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed. All 3 quality gates pass: ruff clean, mypy clean, all tests pass.
+All Priority 1 items are done. **91/91 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed. All 3 quality gates pass: ruff clean, mypy clean, all tests pass.
 
 ## Priority 2 — Basel 3.1 Core (v1.1)
 
@@ -58,6 +58,8 @@ Remaining:
 
 ## Infrastructure & Cleanup
 
+- [x] **Remove .pyc files from git** — 39 `.pyc` files were committed before `.gitignore` was in place. Removed from tracking 2026-03-01.
+- [x] **Spec documentation refresh** — 7 spec files updated to reflect actual implementation status (2026-03-01).
 - [ ] **BDD test scaffold** — Empty scaffold, no actual BDD tests. Low priority.
 - [ ] **Runtime skip pattern inconsistency** — Audit remaining runtime skips.
 
@@ -65,14 +67,16 @@ Remaining:
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,414 | 6 |
+| Unit | ~1,414 | 6 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 91 | 0 |
 | Acceptance (Basel 3.1) | 112 | 0 |
 | Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
-| Benchmarks | 27 | 0 |
-| **Total** | **1,834** | **6** |
+| Benchmarks | 4 | 23 |
+| **Total** | **1,813** | **27** |
+
+Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass: ruff clean, mypy clean.
 
 ## Learnings
 
@@ -113,7 +117,7 @@ Remaining:
 
 - Workbook `regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027). Engine is correct for UK firms.
 - Workbook PD floor: `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) vs production config `0.0005` (Basel 3.1 0.05% per CRE30.20). Workbook needs updating.
-- **Spec inconsistencies:** `specs/regulatory-compliance.md`, `specs/nfr.md`, `specs/milestones.md` have stale test counts and status flags.
+- ~~**Spec inconsistencies:** `specs/regulatory-compliance.md`, `specs/nfr.md`, `specs/milestones.md` had stale test counts and status flags.~~ Fixed 2026-03-01: all 7 spec files updated (milestones, nfr, regulatory-compliance, airb-calculation, sa-risk-weights, configuration, slotting-approach).
 
 ### SA RWA back-calculation
 

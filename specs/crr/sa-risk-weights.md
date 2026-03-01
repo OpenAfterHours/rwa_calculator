@@ -156,6 +156,4 @@ Whole-loan approach (PRA PS9/24):
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-A: Standardised Approach | A1–A12 | 14 | 86% (12/14, 2 skip) |
-
-Skipped: A7 (commercial RE), A8 (OBS CCF)
+| CRR-A: Standardised Approach | A1–A12 | 14 | 100% (14/14) |

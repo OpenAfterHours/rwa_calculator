@@ -20,6 +20,8 @@ Run these after implementing to get immediate feedback:
 - Generate parquet fixtures before running acceptance tests: `uv run python tests/fixtures/generate_all.py`
 - Fixtures are NOT checked into git; they must be regenerated after cloning
 - If uv cache is read-only, use: `UV_CACHE_DIR=/tmp/claude-1000/uv-cache uv run ...`
+- If network is blocked and uv cannot resolve deps: create venv with `UV_CACHE_DIR=/home/philm/.cache/uv uv sync --offline --extra all --python 3.13`, then run directly via `.venv/bin/python -m pytest ...` etc.
+- If uv sync --offline fails (missing simple indices): manually symlink packages from `/home/philm/.cache/uv/archive-v0/` into `.venv/lib/python3.13/site-packages/`. Ensure cp313-specific archives are used (not cp314).
 
 ## Git
 

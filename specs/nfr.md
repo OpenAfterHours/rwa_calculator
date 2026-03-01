@@ -13,8 +13,8 @@
 
 | ID | Requirement | Target | Status |
 |----|-------------|--------|--------|
-| NFR-2.1 | CRR acceptance test pass rate | 100% | 96% (71/74, 3 skip) |
-| NFR-2.2 | Hand-calculated expected outputs | Full coverage | Done (38 CRR scenarios) |
+| NFR-2.1 | Acceptance test pass rate (CRR + Basel 3.1 + Comparison) | 100% | 100% (91 CRR + 112 B31 + 62 comparison = 265 tests) |
+| NFR-2.2 | Hand-calculated expected outputs | Full coverage | Done (CRR + Basel 3.1 scenarios) |
 | NFR-2.3 | Numerical precision vs hand calcs | < 0.01% error | Met |
 | NFR-2.4 | Regulatory article traceability | Full coverage | Done |
 
@@ -22,7 +22,7 @@
 
 | ID | Requirement | Target | Status |
 |----|-------------|--------|--------|
-| NFR-3.1 | Unit test coverage | > 1,000 tests | Met (1,050) |
+| NFR-3.1 | Total test coverage | > 1,000 tests | Met (1,834+ total: ~1,414 unit, 265 acceptance, 123 contracts, 5 integration, 27 benchmarks) |
 | NFR-3.2 | Zero data loss (immutable pipeline) | Guaranteed | Met |
 | NFR-3.3 | Graceful invalid data handling | All data quality issues | Met |
 
@@ -57,6 +57,6 @@
 |--------|--------|--------------|
 | Regulatory Accuracy | 100% acceptance test pass rate | Automated test suite |
 | Performance | < 2s/100K, < 20s/1M | pytest-benchmark |
-| Test Coverage | > 1,200 tests | `pytest --co -q` |
+| Test Coverage | > 1,800 tests | `pytest --co -q` (1,834+ total) |
 | Documentation | All public APIs documented | MkDocs site review |
 | Transition Readiness | Full Basel 3.1 before 1 Jan 2027 | B31 acceptance tests |

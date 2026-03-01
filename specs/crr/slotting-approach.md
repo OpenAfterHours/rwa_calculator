@@ -33,15 +33,27 @@ The slotting approach assigns risk weights based on qualitative category assessm
 
 ## CRR Slotting Risk Weights
 
-Under CRR, the same risk weights apply regardless of HVCRE status:
+Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remaining maturity.
 
-| Category | Risk Weight | Description |
-|----------|-------------|-------------|
-| Strong | 70% | Highly favourable financial and risk characteristics |
-| Good | 70% | Favourable characteristics |
-| Satisfactory | 115% | Acceptable characteristics |
-| Weak | 250% | Weakened characteristics |
-| Default | 0% | Fully provisioned |
+### Non-HVCRE (Table 1)
+
+| Category | Remaining Maturity >= 2.5yr | Remaining Maturity < 2.5yr |
+|----------|----------------------------|---------------------------|
+| Strong | 70% | 50% |
+| Good | 90% | 70% |
+| Satisfactory | 115% | 115% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
+
+### HVCRE (Table 2)
+
+| Category | Remaining Maturity >= 2.5yr | Remaining Maturity < 2.5yr |
+|----------|----------------------------|---------------------------|
+| Strong | 95% | 70% |
+| Good | 120% | 95% |
+| Satisfactory | 140% | 140% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
 
 ## Basel 3.1 Slotting Risk Weights
 

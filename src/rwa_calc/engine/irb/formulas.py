@@ -508,6 +508,110 @@ def _polars_maturity_adjustment_expr(
 
 
 # =============================================================================
+# PARAMETRIC IRB RISK WEIGHT (for guarantee parameter substitution)
+# =============================================================================
+
+
+def _parametric_irb_risk_weight_expr(
+    pd_expr: pl.Expr,
+    lgd: float,
+    scaling_factor: float = 1.0,
+    eur_gbp_rate: float = 0.8732,
+) -> pl.Expr:
+    """
+    Compute IRB risk weight from arbitrary PD expression and fixed LGD.
+
+    Used for Basel 3.1 parameter substitution (CRE22.70-85): when an IRB
+    exposure is guaranteed by an F-IRB counterparty, the guaranteed portion
+    uses the guarantor's PD and F-IRB supervisory LGD instead of the
+    borrower's parameters.
+
+    Reads exposure_class, turnover_m, maturity, requires_fi_scalar columns
+    from the LazyFrame. PD and LGD are substituted externally.
+
+    Args:
+        pd_expr: Polars expression for the substituted PD (e.g. guarantor PD, floored)
+        lgd: Fixed LGD value (e.g. F-IRB supervisory unsecured senior)
+        scaling_factor: 1.06 for CRR, 1.0 for Basel 3.1
+        eur_gbp_rate: EUR/GBP rate for SME turnover conversion
+
+    Returns:
+        Expression computing risk_weight = K × 12.5 × scaling × MA
+    """
+    # ---- Correlation (same formula as _polars_correlation_expr) ----
+    exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
+
+    corporate_denom = 1.0 - math.exp(-50.0)
+    retail_denom = 1.0 - math.exp(-35.0)
+
+    f_pd_corp = (1.0 - (-50.0 * pd_expr).exp()) / corporate_denom
+    f_pd_retail = (1.0 - (-35.0 * pd_expr).exp()) / retail_denom
+
+    r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)
+    r_retail_other = 0.03 * f_pd_retail + 0.16 * (1.0 - f_pd_retail)
+
+    # SME adjustment
+    turnover = pl.col("turnover_m").cast(pl.Float64)
+    turnover_eur = turnover / eur_gbp_rate
+    s_clamped = turnover_eur.clip(5.0, 50.0)
+    sme_adjustment = 0.04 * (1.0 - (s_clamped - 5.0) / 45.0)
+
+    is_corporate = exp_class.str.contains("CORPORATE")
+    has_valid_turnover = turnover_eur.is_not_null() & turnover_eur.is_finite()
+    is_sme = has_valid_turnover & (turnover_eur < 50.0)
+
+    r_corporate_with_sme = (
+        pl.when(is_corporate & is_sme).then(r_corporate - sme_adjustment).otherwise(r_corporate)
+    )
+
+    correlation = (
+        pl.when(exp_class.str.contains("MORTGAGE") | exp_class.str.contains("RESIDENTIAL"))
+        .then(pl.lit(0.15))
+        .when(exp_class.str.contains("QRRE"))
+        .then(pl.lit(0.04))
+        .when(exp_class.str.contains("RETAIL"))
+        .then(r_retail_other)
+        .otherwise(r_corporate_with_sme)
+    )
+
+    # FI scalar (1.25x for large/unregulated financial sector entities)
+    fi_scalar = (
+        pl.when(pl.col("requires_fi_scalar").fill_null(False) == True)  # noqa: E712
+        .then(pl.lit(1.25))
+        .otherwise(pl.lit(1.0))
+    )
+    correlation = correlation * fi_scalar
+
+    # ---- K formula ----
+    pd_safe = pd_expr.clip(1e-10, 0.9999)
+    g_pd = normal_ppf(pd_safe)
+
+    one_minus_r = 1.0 - correlation
+    term1 = (1.0 / one_minus_r).sqrt() * g_pd
+    term2 = (correlation / one_minus_r).sqrt() * G_999
+    conditional_pd = normal_cdf(term1 + term2)
+
+    k = lgd * conditional_pd - pd_safe * lgd
+    k = pl.max_horizontal(k, pl.lit(0.0))
+
+    # ---- Maturity adjustment ----
+    m = pl.col("maturity").clip(1.0, 5.0)
+    pd_safe_log = pd_expr.clip(lower_bound=1e-10)
+    b = (0.11852 - 0.05478 * pd_safe_log.log()) ** 2
+    ma = (1.0 + (m - 2.5) * b) / (1.0 - 1.5 * b)
+
+    # Retail: no maturity adjustment (MA = 1.0)
+    is_retail = (
+        exp_class.str.contains("RETAIL")
+        | exp_class.str.contains("MORTGAGE")
+        | exp_class.str.contains("QRRE")
+    )
+    ma = pl.when(is_retail).then(pl.lit(1.0)).otherwise(ma)
+
+    return k * 12.5 * scaling_factor * ma
+
+
+# =============================================================================
 # CORRELATION PARAMETERS (for scalar functions)
 # =============================================================================
 

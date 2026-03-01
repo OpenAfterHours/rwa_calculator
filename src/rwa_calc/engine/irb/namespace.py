@@ -40,6 +40,7 @@ from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
     _lgd_floor_expression,
     _lgd_floor_expression_with_collateral,
+    _parametric_irb_risk_weight_expr,
     _pd_floor_expression,
     _polars_capital_k_expr,
     _polars_correlation_expr,
@@ -656,18 +657,18 @@ class IRBLazyFrame:
         """
         Apply guarantee substitution for IRB exposures with unfunded credit protection.
 
-        For guaranteed portions with eligible guarantors (e.g., sovereign CQS 1),
-        the RWA for the guaranteed portion is calculated using the guarantor's
-        risk characteristics instead of the borrower's.
+        Two methods depending on framework and guarantor approach:
 
-        Under CRR Art. 215-217 for IRB:
-        - For sovereign guarantors with CQS 1: apply 0% RW to guaranteed portion
-        - For other guarantors: apply SA risk weight based on guarantor entity type/CQS
-        - Unguaranteed portion uses borrower's IRB-calculated RWA
+        1. **SA risk weight substitution** (CRR Art. 215-217, Basel 3.1 SA guarantors):
+           Guaranteed portion uses guarantor's SA risk weight.
 
-        The final RWA is a blend of:
-        - Unguaranteed portion × borrower's IRB RWA
-        - Guaranteed portion × guarantor's equivalent RWA (0 for sovereign CQS 1)
+        2. **Parameter substitution** (Basel 3.1 CRE22.70-85, IRB guarantors):
+           Guaranteed portion recalculated using guarantor's PD and F-IRB supervisory
+           LGD through the full IRB formula (K × 12.5 × scaling × MA).
+
+        The final RWA blends:
+        - Unguaranteed portion: borrower's IRB RWA (pro-rated)
+        - Guaranteed portion: guarantor's equivalent RWA (SA RW or IRB parameter sub)
 
         Args:
             config: Calculation configuration
@@ -680,18 +681,16 @@ class IRBLazyFrame:
 
         # Check if guarantee columns exist
         if "guaranteed_portion" not in cols or "guarantor_entity_type" not in cols:
-            # No guarantee data, return as-is
             return self._lf
 
-        # Check if expected_loss column exists (may not be present in all pipelines)
         has_expected_loss = "expected_loss" in cols
+        has_guarantor_pd = "guarantor_pd" in cols
+        use_parameter_substitution = config.is_basel_3_1 and has_guarantor_pd
 
         # Store original IRB values before substitution (pre-CRM values)
-        # These are needed for regulatory reporting (pre-CRM vs post-CRM views)
         store_originals = [
             pl.col("rwa").alias("rwa_irb_original"),
             pl.col("risk_weight").alias("risk_weight_irb_original"),
-            # Consistent naming for pre-CRM reporting
             pl.col("risk_weight").alias("pre_crm_risk_weight"),
             pl.col("rwa").alias("pre_crm_rwa"),
         ]
@@ -700,15 +699,13 @@ class IRBLazyFrame:
 
         lf = self._lf.with_columns(store_originals)
 
-        # Calculate guarantor's risk weight based on entity type and CQS
-        # Using SA risk weights for substitution (per CRR Art. 215-217)
+        # --- Compute SA risk weight for guarantor (used for SA guarantors) ---
         use_uk_deviation = config.base_currency == "GBP"
 
         lf = lf.with_columns(
             [
                 pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
                 .then(pl.lit(None).cast(pl.Float64))
-                # Sovereign guarantors - CQS 1 gets 0%
                 .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)sovereign"))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
@@ -721,9 +718,8 @@ class IRBLazyFrame:
                     .then(pl.lit(1.0))
                     .when(pl.col("guarantor_cqs") == 6)
                     .then(pl.lit(1.50))
-                    .otherwise(pl.lit(1.0))  # Unrated
+                    .otherwise(pl.lit(1.0))
                 )
-                # Institution guarantors (UK deviation: CQS 2 = 30%)
                 .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)institution"))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
@@ -736,9 +732,8 @@ class IRBLazyFrame:
                     .then(pl.lit(1.0))
                     .when(pl.col("guarantor_cqs") == 6)
                     .then(pl.lit(1.50))
-                    .otherwise(pl.lit(0.40))  # Unrated
+                    .otherwise(pl.lit(0.40))
                 )
-                # Corporate guarantors
                 .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)corporate"))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
@@ -749,13 +744,79 @@ class IRBLazyFrame:
                     .then(pl.lit(1.0))
                     .when(pl.col("guarantor_cqs").is_in([5, 6]))
                     .then(pl.lit(1.50))
-                    .otherwise(pl.lit(1.0))  # Unrated
+                    .otherwise(pl.lit(1.0))
                 )
-                # Unknown entity type - no substitution
                 .otherwise(pl.lit(None).cast(pl.Float64))
-                .alias("guarantor_rw"),
+                .alias("guarantor_rw_sa"),
             ]
         )
+
+        # --- Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85) ---
+        # Compute IRB risk weight using guarantor's PD and F-IRB supervisory LGD
+        if use_parameter_substitution:
+            from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+
+            firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=True)
+            firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])  # 0.40
+
+            # Ensure columns required by _parametric_irb_risk_weight_expr exist
+            # These are normally set by apply_all_formulas() batch 1 but may be
+            # absent in unit test LazyFrames.
+            ensure_cols: list[pl.Expr] = []
+            if "turnover_m" not in cols:
+                ensure_cols.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
+            if "requires_fi_scalar" not in cols:
+                ensure_cols.append(pl.lit(False).alias("requires_fi_scalar"))
+            if ensure_cols:
+                lf = lf.with_columns(ensure_cols)
+
+            # Floor the guarantor's PD using same floor rules as borrower
+            pd_floor_expr = _pd_floor_expression(config)
+            guarantor_pd_floored = pl.max_horizontal(
+                pl.col("guarantor_pd"), pd_floor_expr
+            )
+
+            scaling_factor = 1.06 if config.is_crr else 1.0
+            eur_gbp_rate = float(config.eur_gbp_rate)
+
+            # Compute IRB risk weight from guarantor's PD and F-IRB supervisory LGD
+            guarantor_rw_irb = _parametric_irb_risk_weight_expr(
+                pd_expr=guarantor_pd_floored,
+                lgd=firb_lgd_senior,
+                scaling_factor=scaling_factor,
+                eur_gbp_rate=eur_gbp_rate,
+            )
+
+            # Select method: IRB guarantor under Basel 3.1 → parameter substitution,
+            # SA guarantor → SA RW substitution
+            is_irb_guarantor = (
+                (pl.col("guarantor_approach").fill_null("") == "irb")
+                & pl.col("guarantor_pd").is_not_null()
+            )
+
+            lf = lf.with_columns(
+                [
+                    pl.when(is_irb_guarantor)
+                    .then(guarantor_rw_irb)
+                    .otherwise(pl.col("guarantor_rw_sa"))
+                    .alias("guarantor_rw"),
+                    # Track which method is being used per-row
+                    pl.when(
+                        (pl.col("guaranteed_portion").fill_null(0) > 0) & is_irb_guarantor
+                    )
+                    .then(pl.lit(True))
+                    .otherwise(pl.lit(False))
+                    .alias("_is_pd_substitution"),
+                ]
+            )
+        else:
+            # CRR or no guarantor PD: always SA RW substitution
+            lf = lf.with_columns(
+                [
+                    pl.col("guarantor_rw_sa").alias("guarantor_rw"),
+                    pl.lit(False).alias("_is_pd_substitution"),
+                ]
+            )
 
         # Determine EAD column
         ead_col = "ead_final" if "ead_final" in cols else "ead"
@@ -776,26 +837,20 @@ class IRBLazyFrame:
         )
 
         # Calculate blended RWA using substitution approach
-        # Only apply if guarantee is beneficial
         # For guaranteed portion: use guarantor_rw × guaranteed_portion
         # For unguaranteed portion: use IRB-calculated RWA proportionally
         lf = lf.with_columns(
             [
-                # Calculate RWA for guaranteed portion using guarantor RW
-                # Only if guarantee is beneficial
                 pl.when(
                     (pl.col("guaranteed_portion").fill_null(0) > 0)
                     & (pl.col("guarantor_rw").is_not_null())
                     & (pl.col("is_guarantee_beneficial"))
                 )
                 .then(
-                    # Blended RWA = unguaranteed_IRB_RWA + guaranteed_portion × guarantor_RW
-                    # The IRB RWA is for the full exposure, so we need to pro-rate it
                     pl.col("rwa_irb_original")
                     * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
                     + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
                 )
-                # No guarantee, no guarantor RW, or non-beneficial - use original IRB RWA
                 .otherwise(pl.col("rwa_irb_original"))
                 .alias("rwa"),
             ]
@@ -808,42 +863,93 @@ class IRBLazyFrame:
             ]
         )
 
-        # Adjust expected loss for SA-guaranteed portion
-        # SA has no EL concept (CRR Art. 158-159), so only unguaranteed portion retains IRB EL
-        # For IRB guarantors, EL unchanged (PD substitution not yet implemented)
+        # Adjust expected loss for guaranteed portion
+        # SA guarantor: no EL concept — only unguaranteed portion retains IRB EL
+        # IRB guarantor (parameter sub): EL = guarantor_pd × firb_lgd × guaranteed_portion
         if has_expected_loss:
-            lf = lf.with_columns(
-                [
-                    pl.when(
-                        (pl.col("guaranteed_portion").fill_null(0) > 0)
-                        & (pl.col("guarantor_rw").is_not_null())
-                        & (pl.col("is_guarantee_beneficial"))
-                        & (pl.col("guarantor_approach").fill_null("") == "sa")
-                    )
-                    .then(
-                        # SA portion has no EL — only unguaranteed portion retains IRB EL
-                        pl.col("expected_loss_irb_original")
-                        * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
-                    )
-                    .otherwise(pl.col("expected_loss_irb_original"))
-                    .alias("expected_loss"),
-                ]
-            )
+            if use_parameter_substitution:
+                from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
 
-        # Track guarantee status for reporting
+                firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=True)
+                firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
+
+                pd_floor_expr = _pd_floor_expression(config)
+                guarantor_pd_floored = pl.max_horizontal(
+                    pl.col("guarantor_pd"), pd_floor_expr
+                )
+
+                lf = lf.with_columns(
+                    [
+                        pl.when(
+                            (pl.col("guaranteed_portion").fill_null(0) > 0)
+                            & (pl.col("guarantor_rw").is_not_null())
+                            & (pl.col("is_guarantee_beneficial"))
+                        )
+                        .then(
+                            pl.when(pl.col("_is_pd_substitution"))
+                            .then(
+                                # IRB guarantor: blend IRB EL for unguaranteed +
+                                # substituted EL for guaranteed
+                                pl.col("expected_loss_irb_original")
+                                * (
+                                    pl.col("unguaranteed_portion") / pl.col(ead_col)
+                                ).fill_null(1.0)
+                                + guarantor_pd_floored
+                                * firb_lgd_senior
+                                * pl.col("guaranteed_portion")
+                            )
+                            .otherwise(
+                                # SA guarantor: SA has no EL — only unguaranteed retains EL
+                                pl.col("expected_loss_irb_original")
+                                * (
+                                    pl.col("unguaranteed_portion") / pl.col(ead_col)
+                                ).fill_null(1.0)
+                            )
+                        )
+                        .otherwise(pl.col("expected_loss_irb_original"))
+                        .alias("expected_loss"),
+                    ]
+                )
+            else:
+                # CRR: SA guarantors only — no EL for guaranteed portion
+                lf = lf.with_columns(
+                    [
+                        pl.when(
+                            (pl.col("guaranteed_portion").fill_null(0) > 0)
+                            & (pl.col("guarantor_rw").is_not_null())
+                            & (pl.col("is_guarantee_beneficial"))
+                            & (pl.col("guarantor_approach").fill_null("") == "sa")
+                        )
+                        .then(
+                            pl.col("expected_loss_irb_original")
+                            * (
+                                pl.col("unguaranteed_portion") / pl.col(ead_col)
+                            ).fill_null(1.0)
+                        )
+                        .otherwise(pl.col("expected_loss_irb_original"))
+                        .alias("expected_loss"),
+                    ]
+                )
+
+        # Track guarantee status and method for reporting
+        is_beneficial_guaranteed = (
+            (pl.col("guaranteed_portion").fill_null(0) > 0)
+            & (pl.col("is_guarantee_beneficial"))
+        )
+
         lf = lf.with_columns(
             [
                 pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
                 .then(pl.lit("NO_GUARANTEE"))
                 .when(~pl.col("is_guarantee_beneficial"))
                 .then(pl.lit("GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"))
+                .when(pl.col("_is_pd_substitution"))
+                .then(pl.lit("PD_PARAMETER_SUBSTITUTION"))
                 .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
                 .alias("guarantee_status"),
-                # Track which method was used (SA RW for now, PD substitution not yet implemented)
-                pl.when(
-                    (pl.col("guaranteed_portion").fill_null(0) > 0)
-                    & (pl.col("is_guarantee_beneficial"))
-                )
+                pl.when(is_beneficial_guaranteed & pl.col("_is_pd_substitution"))
+                .then(pl.lit("PD_PARAMETER_SUBSTITUTION"))
+                .when(is_beneficial_guaranteed)
                 .then(pl.lit("SA_RW_SUBSTITUTION"))
                 .otherwise(pl.lit("NO_SUBSTITUTION"))
                 .alias("guarantee_method_used"),
@@ -854,6 +960,9 @@ class IRBLazyFrame:
                 .alias("guarantee_benefit_rw"),
             ]
         )
+
+        # Drop internal tracking columns
+        lf = lf.drop("_is_pd_substitution", "guarantor_rw_sa")
 
         return lf
 

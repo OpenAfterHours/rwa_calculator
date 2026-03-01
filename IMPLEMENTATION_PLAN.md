@@ -17,18 +17,16 @@ Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB sup
 - [x] **LTV-based residential RE risk weights** (FR-1.2 / CRE20.71-88) — Done.
 - [x] **Revised SA risk weight tables** (FR-1.2 / CRE20.7-26) — Done.
 
-### 2c. CRM Basel 3.1 adjustments — PARTIAL
+### 2c. CRM Basel 3.1 adjustments — COMPLETE
 
-Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB supervisory LGD framework dispatch (CRE32.9-12), framework-conditional HaircutCalculator/CRMProcessor, A-IRB LGD floor enforcement (CRE30.41, `is_airb` gating).
+Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB supervisory LGD framework dispatch (CRE32.9-12), framework-conditional HaircutCalculator/CRMProcessor, A-IRB LGD floor enforcement (CRE30.41, `is_airb` gating), **Basel 3.1 parameter substitution for IRB guarantors** (CRE22.70-85).
 
-Remaining (needs specification work):
-
-- [ ] **SFT minimum haircut floors** (CRE56) — New Basel 3.1 requirement for securities financing transactions.
-- [ ] **Unfunded credit protection eligibility restrictions** (CRE22.70-85) — Revised eligibility criteria for guarantees and credit derivatives.
+- [x] **Parameter substitution for IRB guarantors** (CRE22.70-85 / PRA PS9/24 Ch4) — Done. When a Basel 3.1 F-IRB exposure is guaranteed by a counterparty under IRB, the guaranteed portion uses the guarantor's PD and F-IRB supervisory LGD (40%) through the full IRB formula instead of SA risk weight substitution. CRM processor propagates guarantor PD from rating_inheritance; IRB namespace dispatches per-row between SA RW substitution (SA guarantors) and PD parameter substitution (IRB guarantors). Non-beneficial guarantees (guarantor RW >= borrower RW) are not applied. EL adjusted: IRB guarantor EL = guarantor_pd × firb_lgd × guaranteed_portion. 14 unit tests + 5 acceptance tests.
+- [N/A] **SFT minimum haircut floors** (CRE56) — PRA has NOT implemented CRE56 in the UK capital framework. Explicitly deferred in CP16/22, PS17/23, PS9/24, and PS1/26. Not required for UK Basel 3.1 compliance.
 
 ### 2d. Testing and validation — COMPLETE
 
-111 Basel 3.1 acceptance tests across 8 files (SA 14, F-IRB 16, A-IRB 13, CRM 15, slotting 13, output floor 6, provisions 20, complex 10). Expected outputs at `tests/expected_outputs/basel31/expected_rwa_b31.json`.
+112 Basel 3.1 acceptance tests across 9 files (SA 14, F-IRB 16, A-IRB 13, CRM 15, parameter sub 5, slotting 13, output floor 6, provisions 20, complex 10). Expected outputs at `tests/expected_outputs/basel31/expected_rwa_b31.json`.
 
 ### 2e. Output floor engine — COMPLETE
 
@@ -67,14 +65,14 @@ Remaining:
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,402 | 0 |
+| Unit | 1,414 | 6 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 91 | 0 |
-| Acceptance (Basel 3.1) | 111 | 0 |
+| Acceptance (Basel 3.1) | 112 | 0 |
 | Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
-| Benchmarks | 4 | 22 |
-| **Total** | **1,794** | **22** |
+| Benchmarks | 27 | 0 |
+| **Total** | **1,834** | **6** |
 
 ## Learnings
 
@@ -86,6 +84,7 @@ Remaining:
 - `approach_applied` column uses enum string values: `"standardised"`, `"foundation_irb"`, `"advanced_irb"`, `"slotting"` — not the enum names `"SA"`, `"FIRB"`, etc. Tests must filter on the `.value` form.
 - `ResultExporter` reads from `CalculationResponse`'s cached parquet files via lazy scan, so export doesn't require re-running the pipeline. `CalculationResponse.to_parquet()` / `to_csv()` / `to_excel()` are convenience wrappers.
 - Excel export requires `xlsxwriter` (Polars uses it for `DataFrame.write_excel()`). `fastexcel` is for reading only.
+- `_parametric_irb_risk_weight_expr()` in `engine/irb/formulas.py` computes IRB risk weight from an arbitrary PD expression and fixed LGD. Used by parameter substitution to compute guarantor's equivalent IRB RW inline without collecting/re-querying. Returns `K × 12.5 × scaling_factor × MA`.
 
 ### Regulatory rules
 
@@ -98,6 +97,9 @@ Remaining:
 - **Maturity effect in transitional schedule:** Total post-floor RWA is NOT monotonically non-decreasing across years because effective maturity shortens as reporting date advances (e.g., a 2033 loan has 6y maturity from 2027 but only 5y from 2028). The maturity adjustment decrease can outweigh the floor increase. The correct monotonicity invariant is that `floor_impact_rwa` is non-decreasing, not total RWA.
 - **Capital impact waterfall ordering:** The 4-driver waterfall is sequential and additive: (1) scaling factor removal = CRR_rwa × (1/1.06 - 1), (2) supporting factor removal = (CRR_rpf - CRR_rf) / 1.06 for IRB or CRR_rpf - CRR_rf for SA, (3) output floor = floor_impact_rwa from aggregator, (4) methodology = residual. The sum equals delta_rwa exactly by construction.
 - EL shortfall/excess: T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) is not yet computed at portfolio level — only per-exposure shortfall/excess is tracked.
+- **Parameter substitution (CRE22.70-85):** Under Basel 3.1, IRB guarantors use PD parameter substitution (guarantor's PD + F-IRB supervisory LGD through IRB formula) instead of SA RW substitution. Under CRR, all guarantors use SA RW substitution. The guarantor's approach is determined per-row: IRB if the firm has IRB permission for the guarantor's exposure class AND the guarantor has an internal rating; SA otherwise.
+- **IRB maturity effect on parameter substitution:** At 5-year maturity, the IRB formula with PD=0.2% and LGD=40% gives ~60% RW, exceeding the SA corporate CQS 2 RW of 50%. Parameter substitution only provides a RW benefit over SA when maturity adjustment is moderate (e.g., ~39% at M=2.5y). This is expected behavior: long maturities inflate IRB RWs via the maturity adjustment factor.
+- **CRE56 SFT minimum haircut floors:** PRA has explicitly deferred CRE56 from UK implementation across CP16/22, PS17/23, PS9/24, and PS1/26. Not required for UK Basel 3.1 compliance.
 
 ### Testing patterns
 
@@ -105,6 +107,7 @@ Remaining:
 - For QRRE PD floors, `is_qrre_transactor` column does not exist yet. Defaults to revolver floor (0.10%) which is conservative.
 - For LGD floors, `collateral_type` column may not be available at IRB stage. Default unsecured floor (25%) is applied when absent.
 - Orphaned collateral/guarantee fixtures (`LOAN_COLL_TEST_CORP_*`, `LOAN_GUAR_TEST_*`, `LOAN_PROV_TEST_*`) are safe to ignore — beneficiary references point to non-existent dedicated test loans.
+- CRM processor's `apply_guarantees()` calls `_apply_cross_approach_ccf()` which requires `ccf`, `nominal_amount`, `drawn_amount`, and `ead_from_ccf` columns. Synthetic test data must include these even for drawn-only exposures (use `ccf=1.0`, `nominal_amount=0.0`, `drawn_amount=ead`, `ead_from_ccf=0.0`).
 
 ### Known discrepancies
 

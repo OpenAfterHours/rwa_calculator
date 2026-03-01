@@ -1171,6 +1171,18 @@
   </span>
 </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../pipeline-collect-barriers/">
+<span class="md-ellipsis">
+    
+  
+    Pipeline Collect Barriers
+  
+
+    
+  </span>
+</a>
+</li>
 </ul>
 </nav>
 </li>
@@ -1612,6 +1624,140 @@
     
   
     Hierarchy &amp; Classification
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle md-toggle--indeterminate" id="__nav_8_5" type="checkbox"/>
+<label class="md-nav__link" for="__nav_8_5" id="__nav_8_5_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_8_5_label" class="md-nav" data-md-level="2">
+<label class="md-nav__title" for="__nav_8_5">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/overview/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/architecture/">
+<span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/configuration/">
+<span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/output-reporting/">
+<span class="md-ellipsis">
+    
+  
+    Output &amp; Reporting
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/interfaces/">
+<span class="md-ellipsis">
+    
+  
+    Interfaces
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/nfr/">
+<span class="md-ellipsis">
+    
+  
+    NFRs
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/milestones/">
+<span class="md-ellipsis">
+    
+  
+    Milestones
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/regulatory-compliance/">
+<span class="md-ellipsis">
+    
+  
+    Compliance Matrix
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../specifications/glossary/">
+<span class="md-ellipsis">
+    
+  
+    Glossary
   
 
     
@@ -2463,22 +2609,22 @@
 </span><span id="__span-1-92"><a href="#__codelineno-1-92" id="__codelineno-1-92" name="__codelineno-1-92"></a><span class="sd">            ValueError: If no loader is configured</span>
 </span><span id="__span-1-93"><a href="#__codelineno-1-93" id="__codelineno-1-93" name="__codelineno-1-93"></a><span class="sd">        """</span>
 </span><span id="__span-1-94"><a href="#__codelineno-1-94" id="__codelineno-1-94" name="__codelineno-1-94"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loader</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-1-95"><a href="#__codelineno-1-95" id="__codelineno-1-95" name="__codelineno-1-95"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-1-96"><a href="#__codelineno-1-96" id="__codelineno-1-96" name="__codelineno-1-96"></a>                <span class="s2">"No loader configured. Use run_with_data() or provide a loader."</span>
-</span><span id="__span-1-97"><a href="#__codelineno-1-97" id="__codelineno-1-97" name="__codelineno-1-97"></a>            <span class="p">)</span>
-</span><span id="__span-1-98"><a href="#__codelineno-1-98" id="__codelineno-1-98" name="__codelineno-1-98"></a>
-</span><span id="__span-1-99"><a href="#__codelineno-1-99" id="__codelineno-1-99" name="__codelineno-1-99"></a>        <span class="c1"># Reset errors for new run</span>
-</span><span id="__span-1-100"><a href="#__codelineno-1-100" id="__codelineno-1-100" name="__codelineno-1-100"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_errors</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-1-101"><a href="#__codelineno-1-101" id="__codelineno-1-101" name="__codelineno-1-101"></a>
-</span><span id="__span-1-102"><a href="#__codelineno-1-102" id="__codelineno-1-102" name="__codelineno-1-102"></a>        <span class="c1"># Stage 1: Load data</span>
-</span><span id="__span-1-103"><a href="#__codelineno-1-103" id="__codelineno-1-103" name="__codelineno-1-103"></a>        <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-1-104"><a href="#__codelineno-1-104" id="__codelineno-1-104" name="__codelineno-1-104"></a>            <span class="n">raw_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loader</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
-</span><span id="__span-1-105"><a href="#__codelineno-1-105" id="__codelineno-1-105" name="__codelineno-1-105"></a>        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-1-106"><a href="#__codelineno-1-106" id="__codelineno-1-106" name="__codelineno-1-106"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">PipelineError</span><span class="p">(</span>
-</span><span id="__span-1-107"><a href="#__codelineno-1-107" id="__codelineno-1-107" name="__codelineno-1-107"></a>                <span class="n">stage</span><span class="o">=</span><span class="s2">"loader"</span><span class="p">,</span>
-</span><span id="__span-1-108"><a href="#__codelineno-1-108" id="__codelineno-1-108" name="__codelineno-1-108"></a>                <span class="n">error_type</span><span class="o">=</span><span class="s2">"load_error"</span><span class="p">,</span>
-</span><span id="__span-1-109"><a href="#__codelineno-1-109" id="__codelineno-1-109" name="__codelineno-1-109"></a>                <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
-</span><span id="__span-1-110"><a href="#__codelineno-1-110" id="__codelineno-1-110" name="__codelineno-1-110"></a>            <span class="p">))</span>
+</span><span id="__span-1-95"><a href="#__codelineno-1-95" id="__codelineno-1-95" name="__codelineno-1-95"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"No loader configured. Use run_with_data() or provide a loader."</span><span class="p">)</span>
+</span><span id="__span-1-96"><a href="#__codelineno-1-96" id="__codelineno-1-96" name="__codelineno-1-96"></a>
+</span><span id="__span-1-97"><a href="#__codelineno-1-97" id="__codelineno-1-97" name="__codelineno-1-97"></a>        <span class="c1"># Reset errors for new run</span>
+</span><span id="__span-1-98"><a href="#__codelineno-1-98" id="__codelineno-1-98" name="__codelineno-1-98"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_errors</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-1-99"><a href="#__codelineno-1-99" id="__codelineno-1-99" name="__codelineno-1-99"></a>
+</span><span id="__span-1-100"><a href="#__codelineno-1-100" id="__codelineno-1-100" name="__codelineno-1-100"></a>        <span class="c1"># Stage 1: Load data</span>
+</span><span id="__span-1-101"><a href="#__codelineno-1-101" id="__codelineno-1-101" name="__codelineno-1-101"></a>        <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-1-102"><a href="#__codelineno-1-102" id="__codelineno-1-102" name="__codelineno-1-102"></a>            <span class="n">raw_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loader</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+</span><span id="__span-1-103"><a href="#__codelineno-1-103" id="__codelineno-1-103" name="__codelineno-1-103"></a>        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-1-104"><a href="#__codelineno-1-104" id="__codelineno-1-104" name="__codelineno-1-104"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+</span><span id="__span-1-105"><a href="#__codelineno-1-105" id="__codelineno-1-105" name="__codelineno-1-105"></a>                <span class="n">PipelineError</span><span class="p">(</span>
+</span><span id="__span-1-106"><a href="#__codelineno-1-106" id="__codelineno-1-106" name="__codelineno-1-106"></a>                    <span class="n">stage</span><span class="o">=</span><span class="s2">"loader"</span><span class="p">,</span>
+</span><span id="__span-1-107"><a href="#__codelineno-1-107" id="__codelineno-1-107" name="__codelineno-1-107"></a>                    <span class="n">error_type</span><span class="o">=</span><span class="s2">"load_error"</span><span class="p">,</span>
+</span><span id="__span-1-108"><a href="#__codelineno-1-108" id="__codelineno-1-108" name="__codelineno-1-108"></a>                    <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+</span><span id="__span-1-109"><a href="#__codelineno-1-109" id="__codelineno-1-109" name="__codelineno-1-109"></a>                <span class="p">)</span>
+</span><span id="__span-1-110"><a href="#__codelineno-1-110" id="__codelineno-1-110" name="__codelineno-1-110"></a>            <span class="p">)</span>
 </span><span id="__span-1-111"><a href="#__codelineno-1-111" id="__codelineno-1-111" name="__codelineno-1-111"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_error_result</span><span class="p">()</span>
 </span><span id="__span-1-112"><a href="#__codelineno-1-112" id="__codelineno-1-112" name="__codelineno-1-112"></a>
 </span><span id="__span-1-113"><a href="#__codelineno-1-113" id="__codelineno-1-113" name="__codelineno-1-113"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_with_data</span><span class="p">(</span><span class="n">raw_data</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
@@ -2505,8 +2651,8 @@
 </span><span id="__span-1-134"><a href="#__codelineno-1-134" id="__codelineno-1-134" name="__codelineno-1-134"></a>        <span class="c1"># Reset errors for new run</span>
 </span><span id="__span-1-135"><a href="#__codelineno-1-135" id="__codelineno-1-135" name="__codelineno-1-135"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_errors</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-1-136"><a href="#__codelineno-1-136" id="__codelineno-1-136" name="__codelineno-1-136"></a>
-</span><span id="__span-1-137"><a href="#__codelineno-1-137" id="__codelineno-1-137" name="__codelineno-1-137"></a>        <span class="c1"># Ensure components are initialized</span>
-</span><span id="__span-1-138"><a href="#__codelineno-1-138" id="__codelineno-1-138" name="__codelineno-1-138"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_components_initialized</span><span class="p">()</span>
+</span><span id="__span-1-137"><a href="#__codelineno-1-137" id="__codelineno-1-137" name="__codelineno-1-137"></a>        <span class="c1"># Ensure components are initialized (config needed for framework-specific CRM)</span>
+</span><span id="__span-1-138"><a href="#__codelineno-1-138" id="__codelineno-1-138" name="__codelineno-1-138"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_components_initialized</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
 </span><span id="__span-1-139"><a href="#__codelineno-1-139" id="__codelineno-1-139" name="__codelineno-1-139"></a>
 </span><span id="__span-1-140"><a href="#__codelineno-1-140" id="__codelineno-1-140" name="__codelineno-1-140"></a>        <span class="c1"># Validate input data values</span>
 </span><span id="__span-1-141"><a href="#__codelineno-1-141" id="__codelineno-1-141" name="__codelineno-1-141"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_input_data</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -2548,8 +2694,6 @@
 </span><span id="__span-1-177"><a href="#__codelineno-1-177" id="__codelineno-1-177" name="__codelineno-1-177"></a>            <span class="p">)</span>
 </span><span id="__span-1-178"><a href="#__codelineno-1-178" id="__codelineno-1-178" name="__codelineno-1-178"></a>
 </span><span id="__span-1-179"><a href="#__codelineno-1-179" id="__codelineno-1-179" name="__codelineno-1-179"></a>        <span class="k">return</span> <span class="n">result</span>
-</span><span id="__span-1-180"><a href="#__codelineno-1-180" id="__codelineno-1-180" name="__codelineno-1-180"></a>
-</span><span id="__span-1-181"><a href="#__codelineno-1-181" id="__codelineno-1-181" name="__codelineno-1-181"></a>    <span class="c1"># =========================================================================</span>
 </span></code></pre></div>
 </details>
 <h2 id="stage-1-data-loading">Stage 1: Data Loading<a class="headerlink" href="#stage-1-data-loading" title="Permanent link">¶</a></h2>
@@ -2636,75 +2780,75 @@ traversal, and returns the result as a LazyFrame for downstream joins.</p>
 </div>
 </div><details class="example">
 <summary>Actual Implementation (hierarchy.py)</summary>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a href="#__codelineno-4-1" id="__codelineno-4-1" name="__codelineno-4-1"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_build_rating_inheritance_lazy</span><span class="p">(</span>
-</span><span id="__span-4-2"><a href="#__codelineno-4-2" id="__codelineno-4-2" name="__codelineno-4-2"></a>        <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-4-3"><a href="#__codelineno-4-3" id="__codelineno-4-3" name="__codelineno-4-3"></a>        <span class="n">counterparties</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-4-4"><a href="#__codelineno-4-4" id="__codelineno-4-4" name="__codelineno-4-4"></a>        <span class="n">ratings</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-4-5"><a href="#__codelineno-4-5" id="__codelineno-4-5" name="__codelineno-4-5"></a>        <span class="n">ultimate_parents</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-4-6"><a href="#__codelineno-4-6" id="__codelineno-4-6" name="__codelineno-4-6"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
-</span><span id="__span-4-7"><a href="#__codelineno-4-7" id="__codelineno-4-7" name="__codelineno-4-7"></a><span class="w">        </span><span class="sd">"""</span>
-</span><span id="__span-4-8"><a href="#__codelineno-4-8" id="__codelineno-4-8" name="__codelineno-4-8"></a><span class="sd">        Build rating lookup with inheritance via LazyFrame joins.</span>
-</span><span id="__span-4-9"><a href="#__codelineno-4-9" id="__codelineno-4-9" name="__codelineno-4-9"></a>
-</span><span id="__span-4-10"><a href="#__codelineno-4-10" id="__codelineno-4-10" name="__codelineno-4-10"></a><span class="sd">        Returns LazyFrame with columns:</span>
-</span><span id="__span-4-11"><a href="#__codelineno-4-11" id="__codelineno-4-11" name="__codelineno-4-11"></a><span class="sd">        - counterparty_reference: The entity</span>
-</span><span id="__span-4-12"><a href="#__codelineno-4-12" id="__codelineno-4-12" name="__codelineno-4-12"></a><span class="sd">        - cqs, pd, rating_value, rating_agency, rating_type, rating_date: Rating info</span>
-</span><span id="__span-4-13"><a href="#__codelineno-4-13" id="__codelineno-4-13" name="__codelineno-4-13"></a><span class="sd">        - inherited: Whether the rating was inherited</span>
-</span><span id="__span-4-14"><a href="#__codelineno-4-14" id="__codelineno-4-14" name="__codelineno-4-14"></a><span class="sd">        - source_counterparty: Where the rating came from</span>
-</span><span id="__span-4-15"><a href="#__codelineno-4-15" id="__codelineno-4-15" name="__codelineno-4-15"></a><span class="sd">        - inheritance_reason: own_rating, parent_rating, or unrated</span>
-</span><span id="__span-4-16"><a href="#__codelineno-4-16" id="__codelineno-4-16" name="__codelineno-4-16"></a><span class="sd">        """</span>
-</span><span id="__span-4-17"><a href="#__codelineno-4-17" id="__codelineno-4-17" name="__codelineno-4-17"></a>        <span class="c1"># Get most recent rating per counterparty (sort by date then reference for consistency)</span>
-</span><span id="__span-4-18"><a href="#__codelineno-4-18" id="__codelineno-4-18" name="__codelineno-4-18"></a>        <span class="n">first_ratings</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-4-19"><a href="#__codelineno-4-19" id="__codelineno-4-19" name="__codelineno-4-19"></a>            <span class="n">ratings</span>
-</span><span id="__span-4-20"><a href="#__codelineno-4-20" id="__codelineno-4-20" name="__codelineno-4-20"></a>            <span class="o">.</span><span class="n">sort</span><span class="p">([</span><span class="s2">"rating_date"</span><span class="p">,</span> <span class="s2">"rating_reference"</span><span class="p">],</span> <span class="n">descending</span><span class="o">=</span><span class="p">[</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">])</span>
-</span><span id="__span-4-21"><a href="#__codelineno-4-21" id="__codelineno-4-21" name="__codelineno-4-21"></a>            <span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span>
-</span><span id="__span-4-22"><a href="#__codelineno-4-22" id="__codelineno-4-22" name="__codelineno-4-22"></a>            <span class="o">.</span><span class="n">first</span><span class="p">()</span>
-</span><span id="__span-4-23"><a href="#__codelineno-4-23" id="__codelineno-4-23" name="__codelineno-4-23"></a>            <span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-4-24"><a href="#__codelineno-4-24" id="__codelineno-4-24" name="__codelineno-4-24"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rated_cp"</span><span class="p">),</span>
-</span><span id="__span-4-25"><a href="#__codelineno-4-25" id="__codelineno-4-25" name="__codelineno-4-25"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_type"</span><span class="p">),</span>
-</span><span id="__span-4-26"><a href="#__codelineno-4-26" id="__codelineno-4-26" name="__codelineno-4-26"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">),</span>
-</span><span id="__span-4-27"><a href="#__codelineno-4-27" id="__codelineno-4-27" name="__codelineno-4-27"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">),</span>
-</span><span id="__span-4-28"><a href="#__codelineno-4-28" id="__codelineno-4-28" name="__codelineno-4-28"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">),</span>
-</span><span id="__span-4-29"><a href="#__codelineno-4-29" id="__codelineno-4-29" name="__codelineno-4-29"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">),</span>
-</span><span id="__span-4-30"><a href="#__codelineno-4-30" id="__codelineno-4-30" name="__codelineno-4-30"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_date"</span><span class="p">),</span>
-</span><span id="__span-4-31"><a href="#__codelineno-4-31" id="__codelineno-4-31" name="__codelineno-4-31"></a>            <span class="p">])</span>
-</span><span id="__span-4-32"><a href="#__codelineno-4-32" id="__codelineno-4-32" name="__codelineno-4-32"></a>        <span class="p">)</span>
-</span><span id="__span-4-33"><a href="#__codelineno-4-33" id="__codelineno-4-33" name="__codelineno-4-33"></a>
-</span><span id="__span-4-34"><a href="#__codelineno-4-34" id="__codelineno-4-34" name="__codelineno-4-34"></a>        <span class="c1"># Start with all counterparties</span>
-</span><span id="__span-4-35"><a href="#__codelineno-4-35" id="__codelineno-4-35" name="__codelineno-4-35"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span>
-</span><span id="__span-4-36"><a href="#__codelineno-4-36" id="__codelineno-4-36" name="__codelineno-4-36"></a>
-</span><span id="__span-4-37"><a href="#__codelineno-4-37" id="__codelineno-4-37" name="__codelineno-4-37"></a>        <span class="c1"># Join with own ratings</span>
-</span><span id="__span-4-38"><a href="#__codelineno-4-38" id="__codelineno-4-38" name="__codelineno-4-38"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-</span><span id="__span-4-39"><a href="#__codelineno-4-39" id="__codelineno-4-39" name="__codelineno-4-39"></a>            <span class="n">first_ratings</span><span class="p">,</span>
-</span><span id="__span-4-40"><a href="#__codelineno-4-40" id="__codelineno-4-40" name="__codelineno-4-40"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
-</span><span id="__span-4-41"><a href="#__codelineno-4-41" id="__codelineno-4-41" name="__codelineno-4-41"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"rated_cp"</span><span class="p">,</span>
-</span><span id="__span-4-42"><a href="#__codelineno-4-42" id="__codelineno-4-42" name="__codelineno-4-42"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
-</span><span id="__span-4-43"><a href="#__codelineno-4-43" id="__codelineno-4-43" name="__codelineno-4-43"></a>        <span class="p">)</span>
-</span><span id="__span-4-44"><a href="#__codelineno-4-44" id="__codelineno-4-44" name="__codelineno-4-44"></a>
-</span><span id="__span-4-45"><a href="#__codelineno-4-45" id="__codelineno-4-45" name="__codelineno-4-45"></a>        <span class="c1"># Join with ultimate parents</span>
-</span><span id="__span-4-46"><a href="#__codelineno-4-46" id="__codelineno-4-46" name="__codelineno-4-46"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-</span><span id="__span-4-47"><a href="#__codelineno-4-47" id="__codelineno-4-47" name="__codelineno-4-47"></a>            <span class="n">ultimate_parents</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-4-48"><a href="#__codelineno-4-48" id="__codelineno-4-48" name="__codelineno-4-48"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"_cp"</span><span class="p">),</span>
-</span><span id="__span-4-49"><a href="#__codelineno-4-49" id="__codelineno-4-49" name="__codelineno-4-49"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"ultimate_parent_reference"</span><span class="p">),</span>
-</span><span id="__span-4-50"><a href="#__codelineno-4-50" id="__codelineno-4-50" name="__codelineno-4-50"></a>            <span class="p">]),</span>
-</span><span id="__span-4-51"><a href="#__codelineno-4-51" id="__codelineno-4-51" name="__codelineno-4-51"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
-</span><span id="__span-4-52"><a href="#__codelineno-4-52" id="__codelineno-4-52" name="__codelineno-4-52"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"_cp"</span><span class="p">,</span>
-</span><span id="__span-4-53"><a href="#__codelineno-4-53" id="__codelineno-4-53" name="__codelineno-4-53"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
-</span><span id="__span-4-54"><a href="#__codelineno-4-54" id="__codelineno-4-54" name="__codelineno-4-54"></a>        <span class="p">)</span>
-</span><span id="__span-4-55"><a href="#__codelineno-4-55" id="__codelineno-4-55" name="__codelineno-4-55"></a>
-</span><span id="__span-4-56"><a href="#__codelineno-4-56" id="__codelineno-4-56" name="__codelineno-4-56"></a>        <span class="c1"># Join to get parent's ratings</span>
-</span><span id="__span-4-57"><a href="#__codelineno-4-57" id="__codelineno-4-57" name="__codelineno-4-57"></a>        <span class="n">parent_ratings</span> <span class="o">=</span> <span class="n">first_ratings</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-4-58"><a href="#__codelineno-4-58" id="__codelineno-4-58" name="__codelineno-4-58"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rated_cp"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_cp"</span><span class="p">),</span>
-</span><span id="__span-4-59"><a href="#__codelineno-4-59" id="__codelineno-4-59" name="__codelineno-4-59"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_cqs"</span><span class="p">),</span>
-</span><span id="__span-4-60"><a href="#__codelineno-4-60" id="__codelineno-4-60" name="__codelineno-4-60"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_pd"</span><span class="p">),</span>
-</span><span id="__span-4-61"><a href="#__codelineno-4-61" id="__codelineno-4-61" name="__codelineno-4-61"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_value"</span><span class="p">),</span>
-</span><span id="__span-4-62"><a href="#__codelineno-4-62" id="__codelineno-4-62" name="__codelineno-4-62"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_agency"</span><span class="p">),</span>
-</span><span id="__span-4-63"><a href="#__codelineno-4-63" id="__codelineno-4-63" name="__codelineno-4-63"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_type"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_type"</span><span class="p">),</span>
-</span><span id="__span-4-64"><a href="#__codelineno-4-64" id="__codelineno-4-64" name="__codelineno-4-64"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_date"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_date"</span><span class="p">),</span>
-</span><span id="__span-4-65"><a href="#__codelineno-4-65" id="__codelineno-4-65" name="__codelineno-4-65"></a>        <span class="p">])</span>
-</span><span id="__span-4-66"><a href="#__codelineno-4-66" id="__codelineno-4-66" name="__codelineno-4-66"></a>
-</span><span id="__span-4-67"><a href="#__codelineno-4-67" id="__codelineno-4-67" name="__codelineno-4-67"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-</span><span id="__span-4-68"><a href="#__codelineno-4-68" id="__codelineno-4-68" name="__codelineno-4-68"></a>            <span class="n">parent_ratings</span><span class="p">,</span>
-</span><span id="__span-4-69"><a href="#__codelineno-4-69" id="__codelineno-4-69" name="__codelineno-4-69"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"ultimate_parent_reference"</span><span class="p">,</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a href="#__codelineno-4-1" id="__codelineno-4-1" name="__codelineno-4-1"></a>            <span class="n">org_mappings</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-4-2"><a href="#__codelineno-4-2" id="__codelineno-4-2" name="__codelineno-4-2"></a>                <span class="p">[</span>
+</span><span id="__span-4-3"><a href="#__codelineno-4-3" id="__codelineno-4-3" name="__codelineno-4-3"></a>                    <span class="s2">"child_counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-4-4"><a href="#__codelineno-4-4" id="__codelineno-4-4" name="__codelineno-4-4"></a>                    <span class="s2">"parent_counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-4-5"><a href="#__codelineno-4-5" id="__codelineno-4-5" name="__codelineno-4-5"></a>                <span class="p">]</span>
+</span><span id="__span-4-6"><a href="#__codelineno-4-6" id="__codelineno-4-6" name="__codelineno-4-6"></a>            <span class="p">)</span>
+</span><span id="__span-4-7"><a href="#__codelineno-4-7" id="__codelineno-4-7" name="__codelineno-4-7"></a>            <span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+</span><span id="__span-4-8"><a href="#__codelineno-4-8" id="__codelineno-4-8" name="__codelineno-4-8"></a>            <span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+</span><span id="__span-4-9"><a href="#__codelineno-4-9" id="__codelineno-4-9" name="__codelineno-4-9"></a>        <span class="p">)</span>
+</span><span id="__span-4-10"><a href="#__codelineno-4-10" id="__codelineno-4-10" name="__codelineno-4-10"></a>
+</span><span id="__span-4-11"><a href="#__codelineno-4-11" id="__codelineno-4-11" name="__codelineno-4-11"></a>        <span class="n">resolved</span> <span class="o">=</span> <span class="n">_resolve_graph_eager</span><span class="p">(</span>
+</span><span id="__span-4-12"><a href="#__codelineno-4-12" id="__codelineno-4-12" name="__codelineno-4-12"></a>            <span class="n">edges</span><span class="p">,</span>
+</span><span id="__span-4-13"><a href="#__codelineno-4-13" id="__codelineno-4-13" name="__codelineno-4-13"></a>            <span class="n">child_col</span><span class="o">=</span><span class="s2">"child_counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-4-14"><a href="#__codelineno-4-14" id="__codelineno-4-14" name="__codelineno-4-14"></a>            <span class="n">parent_col</span><span class="o">=</span><span class="s2">"parent_counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-4-15"><a href="#__codelineno-4-15" id="__codelineno-4-15" name="__codelineno-4-15"></a>            <span class="n">max_depth</span><span class="o">=</span><span class="n">max_depth</span><span class="p">,</span>
+</span><span id="__span-4-16"><a href="#__codelineno-4-16" id="__codelineno-4-16" name="__codelineno-4-16"></a>        <span class="p">)</span>
+</span><span id="__span-4-17"><a href="#__codelineno-4-17" id="__codelineno-4-17" name="__codelineno-4-17"></a>
+</span><span id="__span-4-18"><a href="#__codelineno-4-18" id="__codelineno-4-18" name="__codelineno-4-18"></a>        <span class="k">return</span> <span class="n">resolved</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span>
+</span><span id="__span-4-19"><a href="#__codelineno-4-19" id="__codelineno-4-19" name="__codelineno-4-19"></a>            <span class="p">{</span>
+</span><span id="__span-4-20"><a href="#__codelineno-4-20" id="__codelineno-4-20" name="__codelineno-4-20"></a>                <span class="s2">"entity"</span><span class="p">:</span> <span class="s2">"counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-4-21"><a href="#__codelineno-4-21" id="__codelineno-4-21" name="__codelineno-4-21"></a>                <span class="s2">"root"</span><span class="p">:</span> <span class="s2">"ultimate_parent_reference"</span><span class="p">,</span>
+</span><span id="__span-4-22"><a href="#__codelineno-4-22" id="__codelineno-4-22" name="__codelineno-4-22"></a>                <span class="s2">"depth"</span><span class="p">:</span> <span class="s2">"hierarchy_depth"</span><span class="p">,</span>
+</span><span id="__span-4-23"><a href="#__codelineno-4-23" id="__codelineno-4-23" name="__codelineno-4-23"></a>            <span class="p">}</span>
+</span><span id="__span-4-24"><a href="#__codelineno-4-24" id="__codelineno-4-24" name="__codelineno-4-24"></a>        <span class="p">)</span><span class="o">.</span><span class="n">lazy</span><span class="p">()</span>
+</span><span id="__span-4-25"><a href="#__codelineno-4-25" id="__codelineno-4-25" name="__codelineno-4-25"></a>
+</span><span id="__span-4-26"><a href="#__codelineno-4-26" id="__codelineno-4-26" name="__codelineno-4-26"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_build_rating_inheritance_lazy</span><span class="p">(</span>
+</span><span id="__span-4-27"><a href="#__codelineno-4-27" id="__codelineno-4-27" name="__codelineno-4-27"></a>        <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-4-28"><a href="#__codelineno-4-28" id="__codelineno-4-28" name="__codelineno-4-28"></a>        <span class="n">counterparties</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-4-29"><a href="#__codelineno-4-29" id="__codelineno-4-29" name="__codelineno-4-29"></a>        <span class="n">ratings</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-4-30"><a href="#__codelineno-4-30" id="__codelineno-4-30" name="__codelineno-4-30"></a>        <span class="n">ultimate_parents</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-4-31"><a href="#__codelineno-4-31" id="__codelineno-4-31" name="__codelineno-4-31"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
+</span><span id="__span-4-32"><a href="#__codelineno-4-32" id="__codelineno-4-32" name="__codelineno-4-32"></a><span class="w">        </span><span class="sd">"""</span>
+</span><span id="__span-4-33"><a href="#__codelineno-4-33" id="__codelineno-4-33" name="__codelineno-4-33"></a><span class="sd">        Build rating lookup with inheritance via LazyFrame joins.</span>
+</span><span id="__span-4-34"><a href="#__codelineno-4-34" id="__codelineno-4-34" name="__codelineno-4-34"></a>
+</span><span id="__span-4-35"><a href="#__codelineno-4-35" id="__codelineno-4-35" name="__codelineno-4-35"></a><span class="sd">        Returns LazyFrame with columns:</span>
+</span><span id="__span-4-36"><a href="#__codelineno-4-36" id="__codelineno-4-36" name="__codelineno-4-36"></a><span class="sd">        - counterparty_reference: The entity</span>
+</span><span id="__span-4-37"><a href="#__codelineno-4-37" id="__codelineno-4-37" name="__codelineno-4-37"></a><span class="sd">        - cqs, pd, rating_value, rating_agency, rating_type, rating_date: Rating info</span>
+</span><span id="__span-4-38"><a href="#__codelineno-4-38" id="__codelineno-4-38" name="__codelineno-4-38"></a><span class="sd">        - inherited: Whether the rating was inherited</span>
+</span><span id="__span-4-39"><a href="#__codelineno-4-39" id="__codelineno-4-39" name="__codelineno-4-39"></a><span class="sd">        - source_counterparty: Where the rating came from</span>
+</span><span id="__span-4-40"><a href="#__codelineno-4-40" id="__codelineno-4-40" name="__codelineno-4-40"></a><span class="sd">        - inheritance_reason: own_rating, parent_rating, or unrated</span>
+</span><span id="__span-4-41"><a href="#__codelineno-4-41" id="__codelineno-4-41" name="__codelineno-4-41"></a><span class="sd">        """</span>
+</span><span id="__span-4-42"><a href="#__codelineno-4-42" id="__codelineno-4-42" name="__codelineno-4-42"></a>        <span class="c1"># Get most recent rating per counterparty (sort by date then reference for consistency)</span>
+</span><span id="__span-4-43"><a href="#__codelineno-4-43" id="__codelineno-4-43" name="__codelineno-4-43"></a>        <span class="n">first_ratings</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-4-44"><a href="#__codelineno-4-44" id="__codelineno-4-44" name="__codelineno-4-44"></a>            <span class="n">ratings</span><span class="o">.</span><span class="n">sort</span><span class="p">([</span><span class="s2">"rating_date"</span><span class="p">,</span> <span class="s2">"rating_reference"</span><span class="p">],</span> <span class="n">descending</span><span class="o">=</span><span class="p">[</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">])</span>
+</span><span id="__span-4-45"><a href="#__codelineno-4-45" id="__codelineno-4-45" name="__codelineno-4-45"></a>            <span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span>
+</span><span id="__span-4-46"><a href="#__codelineno-4-46" id="__codelineno-4-46" name="__codelineno-4-46"></a>            <span class="o">.</span><span class="n">first</span><span class="p">()</span>
+</span><span id="__span-4-47"><a href="#__codelineno-4-47" id="__codelineno-4-47" name="__codelineno-4-47"></a>            <span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-4-48"><a href="#__codelineno-4-48" id="__codelineno-4-48" name="__codelineno-4-48"></a>                <span class="p">[</span>
+</span><span id="__span-4-49"><a href="#__codelineno-4-49" id="__codelineno-4-49" name="__codelineno-4-49"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rated_cp"</span><span class="p">),</span>
+</span><span id="__span-4-50"><a href="#__codelineno-4-50" id="__codelineno-4-50" name="__codelineno-4-50"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_type"</span><span class="p">),</span>
+</span><span id="__span-4-51"><a href="#__codelineno-4-51" id="__codelineno-4-51" name="__codelineno-4-51"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">),</span>
+</span><span id="__span-4-52"><a href="#__codelineno-4-52" id="__codelineno-4-52" name="__codelineno-4-52"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">),</span>
+</span><span id="__span-4-53"><a href="#__codelineno-4-53" id="__codelineno-4-53" name="__codelineno-4-53"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">),</span>
+</span><span id="__span-4-54"><a href="#__codelineno-4-54" id="__codelineno-4-54" name="__codelineno-4-54"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">),</span>
+</span><span id="__span-4-55"><a href="#__codelineno-4-55" id="__codelineno-4-55" name="__codelineno-4-55"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_date"</span><span class="p">),</span>
+</span><span id="__span-4-56"><a href="#__codelineno-4-56" id="__codelineno-4-56" name="__codelineno-4-56"></a>                <span class="p">]</span>
+</span><span id="__span-4-57"><a href="#__codelineno-4-57" id="__codelineno-4-57" name="__codelineno-4-57"></a>            <span class="p">)</span>
+</span><span id="__span-4-58"><a href="#__codelineno-4-58" id="__codelineno-4-58" name="__codelineno-4-58"></a>        <span class="p">)</span>
+</span><span id="__span-4-59"><a href="#__codelineno-4-59" id="__codelineno-4-59" name="__codelineno-4-59"></a>
+</span><span id="__span-4-60"><a href="#__codelineno-4-60" id="__codelineno-4-60" name="__codelineno-4-60"></a>        <span class="c1"># Start with all counterparties</span>
+</span><span id="__span-4-61"><a href="#__codelineno-4-61" id="__codelineno-4-61" name="__codelineno-4-61"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span>
+</span><span id="__span-4-62"><a href="#__codelineno-4-62" id="__codelineno-4-62" name="__codelineno-4-62"></a>
+</span><span id="__span-4-63"><a href="#__codelineno-4-63" id="__codelineno-4-63" name="__codelineno-4-63"></a>        <span class="c1"># Join with own ratings</span>
+</span><span id="__span-4-64"><a href="#__codelineno-4-64" id="__codelineno-4-64" name="__codelineno-4-64"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+</span><span id="__span-4-65"><a href="#__codelineno-4-65" id="__codelineno-4-65" name="__codelineno-4-65"></a>            <span class="n">first_ratings</span><span class="p">,</span>
+</span><span id="__span-4-66"><a href="#__codelineno-4-66" id="__codelineno-4-66" name="__codelineno-4-66"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-4-67"><a href="#__codelineno-4-67" id="__codelineno-4-67" name="__codelineno-4-67"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"rated_cp"</span><span class="p">,</span>
+</span><span id="__span-4-68"><a href="#__codelineno-4-68" id="__codelineno-4-68" name="__codelineno-4-68"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
+</span><span id="__span-4-69"><a href="#__codelineno-4-69" id="__codelineno-4-69" name="__codelineno-4-69"></a>        <span class="p">)</span>
 </span></code></pre></div>
 </details>
 <h3 id="rating-inheritance">Rating Inheritance<a class="headerlink" href="#rating-inheritance" title="Permanent link">¶</a></h3>
@@ -2715,109 +2859,109 @@ traversal, and returns the result as a LazyFrame for downstream joins.</p>
 3. Mark as unrated</p>
 <details class="example">
 <summary>Actual Implementation (hierarchy.py)</summary>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a href="#__codelineno-5-1" id="__codelineno-5-1" name="__codelineno-5-1"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
-</span><span id="__span-5-2"><a href="#__codelineno-5-2" id="__codelineno-5-2" name="__codelineno-5-2"></a>        <span class="p">)</span>
-</span><span id="__span-5-3"><a href="#__codelineno-5-3" id="__codelineno-5-3" name="__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a href="#__codelineno-5-4" id="__codelineno-5-4" name="__codelineno-5-4"></a>        <span class="c1"># Resolve inheritance with coalesce</span>
-</span><span id="__span-5-5"><a href="#__codelineno-5-5" id="__codelineno-5-5" name="__codelineno-5-5"></a>        <span class="n">has_own_rating</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span> <span class="o">|</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span>
-</span><span id="__span-5-6"><a href="#__codelineno-5-6" id="__codelineno-5-6" name="__codelineno-5-6"></a>        <span class="n">has_parent_rating</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_cqs"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span> <span class="o">|</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_value"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span>
-</span><span id="__span-5-7"><a href="#__codelineno-5-7" id="__codelineno-5-7" name="__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a href="#__codelineno-5-8" id="__codelineno-5-8" name="__codelineno-5-8"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
-</span><span id="__span-5-9"><a href="#__codelineno-5-9" id="__codelineno-5-9" name="__codelineno-5-9"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_cqs"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">),</span>
-</span><span id="__span-5-10"><a href="#__codelineno-5-10" id="__codelineno-5-10" name="__codelineno-5-10"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_pd"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">),</span>
-</span><span id="__span-5-11"><a href="#__codelineno-5-11" id="__codelineno-5-11" name="__codelineno-5-11"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_value"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">),</span>
-</span><span id="__span-5-12"><a href="#__codelineno-5-12" id="__codelineno-5-12" name="__codelineno-5-12"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_agency"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">),</span>
-</span><span id="__span-5-13"><a href="#__codelineno-5-13" id="__codelineno-5-13" name="__codelineno-5-13"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_type"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_type"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rating_type"</span><span class="p">),</span>
-</span><span id="__span-5-14"><a href="#__codelineno-5-14" id="__codelineno-5-14" name="__codelineno-5-14"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_date"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_date"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rating_date"</span><span class="p">),</span>
-</span><span id="__span-5-15"><a href="#__codelineno-5-15" id="__codelineno-5-15" name="__codelineno-5-15"></a>
-</span><span id="__span-5-16"><a href="#__codelineno-5-16" id="__codelineno-5-16" name="__codelineno-5-16"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_own_rating</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
-</span><span id="__span-5-17"><a href="#__codelineno-5-17" id="__codelineno-5-17" name="__codelineno-5-17"></a>            <span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_parent_rating</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">True</span><span class="p">))</span>
-</span><span id="__span-5-18"><a href="#__codelineno-5-18" id="__codelineno-5-18" name="__codelineno-5-18"></a>            <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"inherited"</span><span class="p">),</span>
-</span><span id="__span-5-19"><a href="#__codelineno-5-19" id="__codelineno-5-19" name="__codelineno-5-19"></a>
-</span><span id="__span-5-20"><a href="#__codelineno-5-20" id="__codelineno-5-20" name="__codelineno-5-20"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_own_rating</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">))</span>
-</span><span id="__span-5-21"><a href="#__codelineno-5-21" id="__codelineno-5-21" name="__codelineno-5-21"></a>            <span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_parent_rating</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"ultimate_parent_reference"</span><span class="p">))</span>
-</span><span id="__span-5-22"><a href="#__codelineno-5-22" id="__codelineno-5-22" name="__codelineno-5-22"></a>            <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"source_counterparty"</span><span class="p">),</span>
-</span><span id="__span-5-23"><a href="#__codelineno-5-23" id="__codelineno-5-23" name="__codelineno-5-23"></a>
-</span><span id="__span-5-24"><a href="#__codelineno-5-24" id="__codelineno-5-24" name="__codelineno-5-24"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_own_rating</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">"own_rating"</span><span class="p">))</span>
-</span><span id="__span-5-25"><a href="#__codelineno-5-25" id="__codelineno-5-25" name="__codelineno-5-25"></a>            <span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_parent_rating</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">"parent_rating"</span><span class="p">))</span>
-</span><span id="__span-5-26"><a href="#__codelineno-5-26" id="__codelineno-5-26" name="__codelineno-5-26"></a>            <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">"unrated"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"inheritance_reason"</span><span class="p">),</span>
-</span><span id="__span-5-27"><a href="#__codelineno-5-27" id="__codelineno-5-27" name="__codelineno-5-27"></a>        <span class="p">])</span>
-</span><span id="__span-5-28"><a href="#__codelineno-5-28" id="__codelineno-5-28" name="__codelineno-5-28"></a>
-</span><span id="__span-5-29"><a href="#__codelineno-5-29" id="__codelineno-5-29" name="__codelineno-5-29"></a>        <span class="c1"># Drop intermediate columns</span>
-</span><span id="__span-5-30"><a href="#__codelineno-5-30" id="__codelineno-5-30" name="__codelineno-5-30"></a>        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-5-31"><a href="#__codelineno-5-31" id="__codelineno-5-31" name="__codelineno-5-31"></a>            <span class="s2">"counterparty_reference"</span><span class="p">,</span> <span class="s2">"cqs"</span><span class="p">,</span> <span class="s2">"pd"</span><span class="p">,</span> <span class="s2">"rating_value"</span><span class="p">,</span> <span class="s2">"rating_agency"</span><span class="p">,</span>
-</span><span id="__span-5-32"><a href="#__codelineno-5-32" id="__codelineno-5-32" name="__codelineno-5-32"></a>            <span class="s2">"rating_type"</span><span class="p">,</span> <span class="s2">"rating_date"</span><span class="p">,</span> <span class="s2">"inherited"</span><span class="p">,</span> <span class="s2">"source_counterparty"</span><span class="p">,</span> <span class="s2">"inheritance_reason"</span><span class="p">,</span>
-</span><span id="__span-5-33"><a href="#__codelineno-5-33" id="__codelineno-5-33" name="__codelineno-5-33"></a>        <span class="p">])</span>
-</span><span id="__span-5-34"><a href="#__codelineno-5-34" id="__codelineno-5-34" name="__codelineno-5-34"></a>
-</span><span id="__span-5-35"><a href="#__codelineno-5-35" id="__codelineno-5-35" name="__codelineno-5-35"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_build_facility_root_lookup</span><span class="p">(</span>
-</span><span id="__span-5-36"><a href="#__codelineno-5-36" id="__codelineno-5-36" name="__codelineno-5-36"></a>        <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-5-37"><a href="#__codelineno-5-37" id="__codelineno-5-37" name="__codelineno-5-37"></a>        <span class="n">facility_mappings</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-5-38"><a href="#__codelineno-5-38" id="__codelineno-5-38" name="__codelineno-5-38"></a>        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
-</span><span id="__span-5-39"><a href="#__codelineno-5-39" id="__codelineno-5-39" name="__codelineno-5-39"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
-</span><span id="__span-5-40"><a href="#__codelineno-5-40" id="__codelineno-5-40" name="__codelineno-5-40"></a><span class="w">        </span><span class="sd">"""</span>
-</span><span id="__span-5-41"><a href="#__codelineno-5-41" id="__codelineno-5-41" name="__codelineno-5-41"></a><span class="sd">        Build root facility lookup using eager graph traversal.</span>
-</span><span id="__span-5-42"><a href="#__codelineno-5-42" id="__codelineno-5-42" name="__codelineno-5-42"></a>
-</span><span id="__span-5-43"><a href="#__codelineno-5-43" id="__codelineno-5-43" name="__codelineno-5-43"></a><span class="sd">        Collects the small facility edge data eagerly, resolves the full graph</span>
-</span><span id="__span-5-44"><a href="#__codelineno-5-44" id="__codelineno-5-44" name="__codelineno-5-44"></a><span class="sd">        via dict traversal, and returns the result as a LazyFrame.</span>
-</span><span id="__span-5-45"><a href="#__codelineno-5-45" id="__codelineno-5-45" name="__codelineno-5-45"></a>
-</span><span id="__span-5-46"><a href="#__codelineno-5-46" id="__codelineno-5-46" name="__codelineno-5-46"></a><span class="sd">        Args:</span>
-</span><span id="__span-5-47"><a href="#__codelineno-5-47" id="__codelineno-5-47" name="__codelineno-5-47"></a><span class="sd">            facility_mappings: Facility mappings with parent_facility_reference,</span>
-</span><span id="__span-5-48"><a href="#__codelineno-5-48" id="__codelineno-5-48" name="__codelineno-5-48"></a><span class="sd">                             child_reference, and child_type/node_type columns</span>
-</span><span id="__span-5-49"><a href="#__codelineno-5-49" id="__codelineno-5-49" name="__codelineno-5-49"></a><span class="sd">            max_depth: Maximum hierarchy depth to traverse</span>
-</span><span id="__span-5-50"><a href="#__codelineno-5-50" id="__codelineno-5-50" name="__codelineno-5-50"></a>
-</span><span id="__span-5-51"><a href="#__codelineno-5-51" id="__codelineno-5-51" name="__codelineno-5-51"></a><span class="sd">        Returns:</span>
-</span><span id="__span-5-52"><a href="#__codelineno-5-52" id="__codelineno-5-52" name="__codelineno-5-52"></a><span class="sd">            LazyFrame with columns:</span>
-</span><span id="__span-5-53"><a href="#__codelineno-5-53" id="__codelineno-5-53" name="__codelineno-5-53"></a><span class="sd">            - child_facility_reference: The sub-facility</span>
-</span><span id="__span-5-54"><a href="#__codelineno-5-54" id="__codelineno-5-54" name="__codelineno-5-54"></a><span class="sd">            - root_facility_reference: Its ultimate root facility</span>
-</span><span id="__span-5-55"><a href="#__codelineno-5-55" id="__codelineno-5-55" name="__codelineno-5-55"></a><span class="sd">            - facility_hierarchy_depth: Number of levels traversed</span>
-</span><span id="__span-5-56"><a href="#__codelineno-5-56" id="__codelineno-5-56" name="__codelineno-5-56"></a><span class="sd">        """</span>
-</span><span id="__span-5-57"><a href="#__codelineno-5-57" id="__codelineno-5-57" name="__codelineno-5-57"></a>        <span class="n">empty_result</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-5-58"><a href="#__codelineno-5-58" id="__codelineno-5-58" name="__codelineno-5-58"></a>            <span class="s2">"child_facility_reference"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-5-59"><a href="#__codelineno-5-59" id="__codelineno-5-59" name="__codelineno-5-59"></a>            <span class="s2">"root_facility_reference"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-5-60"><a href="#__codelineno-5-60" id="__codelineno-5-60" name="__codelineno-5-60"></a>            <span class="s2">"facility_hierarchy_depth"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Int32</span><span class="p">,</span>
-</span><span id="__span-5-61"><a href="#__codelineno-5-61" id="__codelineno-5-61" name="__codelineno-5-61"></a>        <span class="p">})</span>
-</span><span id="__span-5-62"><a href="#__codelineno-5-62" id="__codelineno-5-62" name="__codelineno-5-62"></a>
-</span><span id="__span-5-63"><a href="#__codelineno-5-63" id="__codelineno-5-63" name="__codelineno-5-63"></a>        <span class="c1"># Detect type column (child_type / node_type / neither)</span>
-</span><span id="__span-5-64"><a href="#__codelineno-5-64" id="__codelineno-5-64" name="__codelineno-5-64"></a>        <span class="n">mapping_schema</span> <span class="o">=</span> <span class="n">facility_mappings</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span>
-</span><span id="__span-5-65"><a href="#__codelineno-5-65" id="__codelineno-5-65" name="__codelineno-5-65"></a>        <span class="n">mapping_cols</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">mapping_schema</span><span class="o">.</span><span class="n">names</span><span class="p">())</span>
-</span><span id="__span-5-66"><a href="#__codelineno-5-66" id="__codelineno-5-66" name="__codelineno-5-66"></a>
-</span><span id="__span-5-67"><a href="#__codelineno-5-67" id="__codelineno-5-67" name="__codelineno-5-67"></a>        <span class="k">if</span> <span class="s2">"child_type"</span> <span class="ow">in</span> <span class="n">mapping_cols</span><span class="p">:</span>
-</span><span id="__span-5-68"><a href="#__codelineno-5-68" id="__codelineno-5-68" name="__codelineno-5-68"></a>            <span class="n">type_col</span> <span class="o">=</span> <span class="s2">"child_type"</span>
-</span><span id="__span-5-69"><a href="#__codelineno-5-69" id="__codelineno-5-69" name="__codelineno-5-69"></a>        <span class="k">elif</span> <span class="s2">"node_type"</span> <span class="ow">in</span> <span class="n">mapping_cols</span><span class="p">:</span>
-</span><span id="__span-5-70"><a href="#__codelineno-5-70" id="__codelineno-5-70" name="__codelineno-5-70"></a>            <span class="n">type_col</span> <span class="o">=</span> <span class="s2">"node_type"</span>
-</span><span id="__span-5-71"><a href="#__codelineno-5-71" id="__codelineno-5-71" name="__codelineno-5-71"></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-5-72"><a href="#__codelineno-5-72" id="__codelineno-5-72" name="__codelineno-5-72"></a>            <span class="k">return</span> <span class="n">empty_result</span>
-</span><span id="__span-5-73"><a href="#__codelineno-5-73" id="__codelineno-5-73" name="__codelineno-5-73"></a>
-</span><span id="__span-5-74"><a href="#__codelineno-5-74" id="__codelineno-5-74" name="__codelineno-5-74"></a>        <span class="c1"># Filter to facility→facility relationships and collect (small data)</span>
-</span><span id="__span-5-75"><a href="#__codelineno-5-75" id="__codelineno-5-75" name="__codelineno-5-75"></a>        <span class="n">facility_edges</span> <span class="o">=</span> <span class="n">facility_mappings</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-</span><span id="__span-5-76"><a href="#__codelineno-5-76" id="__codelineno-5-76" name="__codelineno-5-76"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="n">type_col</span><span class="p">)</span><span class="o">.</span><span class="n">fill_null</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">to_lowercase</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"facility"</span>
-</span><span id="__span-5-77"><a href="#__codelineno-5-77" id="__codelineno-5-77" name="__codelineno-5-77"></a>        <span class="p">)</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-5-78"><a href="#__codelineno-5-78" id="__codelineno-5-78" name="__codelineno-5-78"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"child_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"child_facility_reference"</span><span class="p">),</span>
-</span><span id="__span-5-79"><a href="#__codelineno-5-79" id="__codelineno-5-79" name="__codelineno-5-79"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_facility_reference"</span><span class="p">),</span>
-</span><span id="__span-5-80"><a href="#__codelineno-5-80" id="__codelineno-5-80" name="__codelineno-5-80"></a>        <span class="p">])</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
-</span><span id="__span-5-81"><a href="#__codelineno-5-81" id="__codelineno-5-81" name="__codelineno-5-81"></a>
-</span><span id="__span-5-82"><a href="#__codelineno-5-82" id="__codelineno-5-82" name="__codelineno-5-82"></a>        <span class="k">if</span> <span class="n">facility_edges</span><span class="o">.</span><span class="n">height</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-</span><span id="__span-5-83"><a href="#__codelineno-5-83" id="__codelineno-5-83" name="__codelineno-5-83"></a>            <span class="k">return</span> <span class="n">empty_result</span>
-</span><span id="__span-5-84"><a href="#__codelineno-5-84" id="__codelineno-5-84" name="__codelineno-5-84"></a>
-</span><span id="__span-5-85"><a href="#__codelineno-5-85" id="__codelineno-5-85" name="__codelineno-5-85"></a>        <span class="n">resolved</span> <span class="o">=</span> <span class="n">_resolve_graph_eager</span><span class="p">(</span>
-</span><span id="__span-5-86"><a href="#__codelineno-5-86" id="__codelineno-5-86" name="__codelineno-5-86"></a>            <span class="n">facility_edges</span><span class="p">,</span>
-</span><span id="__span-5-87"><a href="#__codelineno-5-87" id="__codelineno-5-87" name="__codelineno-5-87"></a>            <span class="n">child_col</span><span class="o">=</span><span class="s2">"child_facility_reference"</span><span class="p">,</span>
-</span><span id="__span-5-88"><a href="#__codelineno-5-88" id="__codelineno-5-88" name="__codelineno-5-88"></a>            <span class="n">parent_col</span><span class="o">=</span><span class="s2">"parent_facility_reference"</span><span class="p">,</span>
-</span><span id="__span-5-89"><a href="#__codelineno-5-89" id="__codelineno-5-89" name="__codelineno-5-89"></a>            <span class="n">max_depth</span><span class="o">=</span><span class="n">max_depth</span><span class="p">,</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a href="#__codelineno-5-1" id="__codelineno-5-1" name="__codelineno-5-1"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+</span><span id="__span-5-2"><a href="#__codelineno-5-2" id="__codelineno-5-2" name="__codelineno-5-2"></a>            <span class="n">ultimate_parents</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-5-3"><a href="#__codelineno-5-3" id="__codelineno-5-3" name="__codelineno-5-3"></a>                <span class="p">[</span>
+</span><span id="__span-5-4"><a href="#__codelineno-5-4" id="__codelineno-5-4" name="__codelineno-5-4"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"_cp"</span><span class="p">),</span>
+</span><span id="__span-5-5"><a href="#__codelineno-5-5" id="__codelineno-5-5" name="__codelineno-5-5"></a>                    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"ultimate_parent_reference"</span><span class="p">),</span>
+</span><span id="__span-5-6"><a href="#__codelineno-5-6" id="__codelineno-5-6" name="__codelineno-5-6"></a>                <span class="p">]</span>
+</span><span id="__span-5-7"><a href="#__codelineno-5-7" id="__codelineno-5-7" name="__codelineno-5-7"></a>            <span class="p">),</span>
+</span><span id="__span-5-8"><a href="#__codelineno-5-8" id="__codelineno-5-8" name="__codelineno-5-8"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-5-9"><a href="#__codelineno-5-9" id="__codelineno-5-9" name="__codelineno-5-9"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"_cp"</span><span class="p">,</span>
+</span><span id="__span-5-10"><a href="#__codelineno-5-10" id="__codelineno-5-10" name="__codelineno-5-10"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
+</span><span id="__span-5-11"><a href="#__codelineno-5-11" id="__codelineno-5-11" name="__codelineno-5-11"></a>        <span class="p">)</span>
+</span><span id="__span-5-12"><a href="#__codelineno-5-12" id="__codelineno-5-12" name="__codelineno-5-12"></a>
+</span><span id="__span-5-13"><a href="#__codelineno-5-13" id="__codelineno-5-13" name="__codelineno-5-13"></a>        <span class="c1"># Join to get parent's ratings</span>
+</span><span id="__span-5-14"><a href="#__codelineno-5-14" id="__codelineno-5-14" name="__codelineno-5-14"></a>        <span class="n">parent_ratings</span> <span class="o">=</span> <span class="n">first_ratings</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-5-15"><a href="#__codelineno-5-15" id="__codelineno-5-15" name="__codelineno-5-15"></a>            <span class="p">[</span>
+</span><span id="__span-5-16"><a href="#__codelineno-5-16" id="__codelineno-5-16" name="__codelineno-5-16"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rated_cp"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_cp"</span><span class="p">),</span>
+</span><span id="__span-5-17"><a href="#__codelineno-5-17" id="__codelineno-5-17" name="__codelineno-5-17"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_cqs"</span><span class="p">),</span>
+</span><span id="__span-5-18"><a href="#__codelineno-5-18" id="__codelineno-5-18" name="__codelineno-5-18"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_pd"</span><span class="p">),</span>
+</span><span id="__span-5-19"><a href="#__codelineno-5-19" id="__codelineno-5-19" name="__codelineno-5-19"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_value"</span><span class="p">),</span>
+</span><span id="__span-5-20"><a href="#__codelineno-5-20" id="__codelineno-5-20" name="__codelineno-5-20"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_agency"</span><span class="p">),</span>
+</span><span id="__span-5-21"><a href="#__codelineno-5-21" id="__codelineno-5-21" name="__codelineno-5-21"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_type"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_type"</span><span class="p">),</span>
+</span><span id="__span-5-22"><a href="#__codelineno-5-22" id="__codelineno-5-22" name="__codelineno-5-22"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_date"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"parent_rating_date"</span><span class="p">),</span>
+</span><span id="__span-5-23"><a href="#__codelineno-5-23" id="__codelineno-5-23" name="__codelineno-5-23"></a>            <span class="p">]</span>
+</span><span id="__span-5-24"><a href="#__codelineno-5-24" id="__codelineno-5-24" name="__codelineno-5-24"></a>        <span class="p">)</span>
+</span><span id="__span-5-25"><a href="#__codelineno-5-25" id="__codelineno-5-25" name="__codelineno-5-25"></a>
+</span><span id="__span-5-26"><a href="#__codelineno-5-26" id="__codelineno-5-26" name="__codelineno-5-26"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+</span><span id="__span-5-27"><a href="#__codelineno-5-27" id="__codelineno-5-27" name="__codelineno-5-27"></a>            <span class="n">parent_ratings</span><span class="p">,</span>
+</span><span id="__span-5-28"><a href="#__codelineno-5-28" id="__codelineno-5-28" name="__codelineno-5-28"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"ultimate_parent_reference"</span><span class="p">,</span>
+</span><span id="__span-5-29"><a href="#__codelineno-5-29" id="__codelineno-5-29" name="__codelineno-5-29"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"parent_cp"</span><span class="p">,</span>
+</span><span id="__span-5-30"><a href="#__codelineno-5-30" id="__codelineno-5-30" name="__codelineno-5-30"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
+</span><span id="__span-5-31"><a href="#__codelineno-5-31" id="__codelineno-5-31" name="__codelineno-5-31"></a>        <span class="p">)</span>
+</span><span id="__span-5-32"><a href="#__codelineno-5-32" id="__codelineno-5-32" name="__codelineno-5-32"></a>
+</span><span id="__span-5-33"><a href="#__codelineno-5-33" id="__codelineno-5-33" name="__codelineno-5-33"></a>        <span class="c1"># Resolve inheritance with coalesce</span>
+</span><span id="__span-5-34"><a href="#__codelineno-5-34" id="__codelineno-5-34" name="__codelineno-5-34"></a>        <span class="n">has_own_rating</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span> <span class="o">|</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span>
+</span><span id="__span-5-35"><a href="#__codelineno-5-35" id="__codelineno-5-35" name="__codelineno-5-35"></a>        <span class="n">has_parent_rating</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-5-36"><a href="#__codelineno-5-36" id="__codelineno-5-36" name="__codelineno-5-36"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_cqs"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span> <span class="o">|</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_value"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span>
+</span><span id="__span-5-37"><a href="#__codelineno-5-37" id="__codelineno-5-37" name="__codelineno-5-37"></a>        <span class="p">)</span>
+</span><span id="__span-5-38"><a href="#__codelineno-5-38" id="__codelineno-5-38" name="__codelineno-5-38"></a>
+</span><span id="__span-5-39"><a href="#__codelineno-5-39" id="__codelineno-5-39" name="__codelineno-5-39"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
+</span><span id="__span-5-40"><a href="#__codelineno-5-40" id="__codelineno-5-40" name="__codelineno-5-40"></a>            <span class="p">[</span>
+</span><span id="__span-5-41"><a href="#__codelineno-5-41" id="__codelineno-5-41" name="__codelineno-5-41"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_cqs"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">),</span>
+</span><span id="__span-5-42"><a href="#__codelineno-5-42" id="__codelineno-5-42" name="__codelineno-5-42"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_pd"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">),</span>
+</span><span id="__span-5-43"><a href="#__codelineno-5-43" id="__codelineno-5-43" name="__codelineno-5-43"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_value"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span>
+</span><span id="__span-5-44"><a href="#__codelineno-5-44" id="__codelineno-5-44" name="__codelineno-5-44"></a>                    <span class="s2">"rating_value"</span>
+</span><span id="__span-5-45"><a href="#__codelineno-5-45" id="__codelineno-5-45" name="__codelineno-5-45"></a>                <span class="p">),</span>
+</span><span id="__span-5-46"><a href="#__codelineno-5-46" id="__codelineno-5-46" name="__codelineno-5-46"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_agency"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span>
+</span><span id="__span-5-47"><a href="#__codelineno-5-47" id="__codelineno-5-47" name="__codelineno-5-47"></a>                    <span class="s2">"rating_agency"</span>
+</span><span id="__span-5-48"><a href="#__codelineno-5-48" id="__codelineno-5-48" name="__codelineno-5-48"></a>                <span class="p">),</span>
+</span><span id="__span-5-49"><a href="#__codelineno-5-49" id="__codelineno-5-49" name="__codelineno-5-49"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_type"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_type"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span>
+</span><span id="__span-5-50"><a href="#__codelineno-5-50" id="__codelineno-5-50" name="__codelineno-5-50"></a>                    <span class="s2">"rating_type"</span>
+</span><span id="__span-5-51"><a href="#__codelineno-5-51" id="__codelineno-5-51" name="__codelineno-5-51"></a>                <span class="p">),</span>
+</span><span id="__span-5-52"><a href="#__codelineno-5-52" id="__codelineno-5-52" name="__codelineno-5-52"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_date"</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_rating_date"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span>
+</span><span id="__span-5-53"><a href="#__codelineno-5-53" id="__codelineno-5-53" name="__codelineno-5-53"></a>                    <span class="s2">"rating_date"</span>
+</span><span id="__span-5-54"><a href="#__codelineno-5-54" id="__codelineno-5-54" name="__codelineno-5-54"></a>                <span class="p">),</span>
+</span><span id="__span-5-55"><a href="#__codelineno-5-55" id="__codelineno-5-55" name="__codelineno-5-55"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_own_rating</span><span class="p">)</span>
+</span><span id="__span-5-56"><a href="#__codelineno-5-56" id="__codelineno-5-56" name="__codelineno-5-56"></a>                <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-5-57"><a href="#__codelineno-5-57" id="__codelineno-5-57" name="__codelineno-5-57"></a>                <span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_parent_rating</span><span class="p">)</span>
+</span><span id="__span-5-58"><a href="#__codelineno-5-58" id="__codelineno-5-58" name="__codelineno-5-58"></a>                <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">True</span><span class="p">))</span>
+</span><span id="__span-5-59"><a href="#__codelineno-5-59" id="__codelineno-5-59" name="__codelineno-5-59"></a>                <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-5-60"><a href="#__codelineno-5-60" id="__codelineno-5-60" name="__codelineno-5-60"></a>                <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"inherited"</span><span class="p">),</span>
+</span><span id="__span-5-61"><a href="#__codelineno-5-61" id="__codelineno-5-61" name="__codelineno-5-61"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_own_rating</span><span class="p">)</span>
+</span><span id="__span-5-62"><a href="#__codelineno-5-62" id="__codelineno-5-62" name="__codelineno-5-62"></a>                <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">))</span>
+</span><span id="__span-5-63"><a href="#__codelineno-5-63" id="__codelineno-5-63" name="__codelineno-5-63"></a>                <span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_parent_rating</span><span class="p">)</span>
+</span><span id="__span-5-64"><a href="#__codelineno-5-64" id="__codelineno-5-64" name="__codelineno-5-64"></a>                <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"ultimate_parent_reference"</span><span class="p">))</span>
+</span><span id="__span-5-65"><a href="#__codelineno-5-65" id="__codelineno-5-65" name="__codelineno-5-65"></a>                <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">))</span>
+</span><span id="__span-5-66"><a href="#__codelineno-5-66" id="__codelineno-5-66" name="__codelineno-5-66"></a>                <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"source_counterparty"</span><span class="p">),</span>
+</span><span id="__span-5-67"><a href="#__codelineno-5-67" id="__codelineno-5-67" name="__codelineno-5-67"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_own_rating</span><span class="p">)</span>
+</span><span id="__span-5-68"><a href="#__codelineno-5-68" id="__codelineno-5-68" name="__codelineno-5-68"></a>                <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">"own_rating"</span><span class="p">))</span>
+</span><span id="__span-5-69"><a href="#__codelineno-5-69" id="__codelineno-5-69" name="__codelineno-5-69"></a>                <span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">has_parent_rating</span><span class="p">)</span>
+</span><span id="__span-5-70"><a href="#__codelineno-5-70" id="__codelineno-5-70" name="__codelineno-5-70"></a>                <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">"parent_rating"</span><span class="p">))</span>
+</span><span id="__span-5-71"><a href="#__codelineno-5-71" id="__codelineno-5-71" name="__codelineno-5-71"></a>                <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">"unrated"</span><span class="p">))</span>
+</span><span id="__span-5-72"><a href="#__codelineno-5-72" id="__codelineno-5-72" name="__codelineno-5-72"></a>                <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"inheritance_reason"</span><span class="p">),</span>
+</span><span id="__span-5-73"><a href="#__codelineno-5-73" id="__codelineno-5-73" name="__codelineno-5-73"></a>            <span class="p">]</span>
+</span><span id="__span-5-74"><a href="#__codelineno-5-74" id="__codelineno-5-74" name="__codelineno-5-74"></a>        <span class="p">)</span>
+</span><span id="__span-5-75"><a href="#__codelineno-5-75" id="__codelineno-5-75" name="__codelineno-5-75"></a>
+</span><span id="__span-5-76"><a href="#__codelineno-5-76" id="__codelineno-5-76" name="__codelineno-5-76"></a>        <span class="c1"># Drop intermediate columns</span>
+</span><span id="__span-5-77"><a href="#__codelineno-5-77" id="__codelineno-5-77" name="__codelineno-5-77"></a>        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-5-78"><a href="#__codelineno-5-78" id="__codelineno-5-78" name="__codelineno-5-78"></a>            <span class="p">[</span>
+</span><span id="__span-5-79"><a href="#__codelineno-5-79" id="__codelineno-5-79" name="__codelineno-5-79"></a>                <span class="s2">"counterparty_reference"</span><span class="p">,</span>
+</span><span id="__span-5-80"><a href="#__codelineno-5-80" id="__codelineno-5-80" name="__codelineno-5-80"></a>                <span class="s2">"cqs"</span><span class="p">,</span>
+</span><span id="__span-5-81"><a href="#__codelineno-5-81" id="__codelineno-5-81" name="__codelineno-5-81"></a>                <span class="s2">"pd"</span><span class="p">,</span>
+</span><span id="__span-5-82"><a href="#__codelineno-5-82" id="__codelineno-5-82" name="__codelineno-5-82"></a>                <span class="s2">"rating_value"</span><span class="p">,</span>
+</span><span id="__span-5-83"><a href="#__codelineno-5-83" id="__codelineno-5-83" name="__codelineno-5-83"></a>                <span class="s2">"rating_agency"</span><span class="p">,</span>
+</span><span id="__span-5-84"><a href="#__codelineno-5-84" id="__codelineno-5-84" name="__codelineno-5-84"></a>                <span class="s2">"rating_type"</span><span class="p">,</span>
+</span><span id="__span-5-85"><a href="#__codelineno-5-85" id="__codelineno-5-85" name="__codelineno-5-85"></a>                <span class="s2">"rating_date"</span><span class="p">,</span>
+</span><span id="__span-5-86"><a href="#__codelineno-5-86" id="__codelineno-5-86" name="__codelineno-5-86"></a>                <span class="s2">"inherited"</span><span class="p">,</span>
+</span><span id="__span-5-87"><a href="#__codelineno-5-87" id="__codelineno-5-87" name="__codelineno-5-87"></a>                <span class="s2">"source_counterparty"</span><span class="p">,</span>
+</span><span id="__span-5-88"><a href="#__codelineno-5-88" id="__codelineno-5-88" name="__codelineno-5-88"></a>                <span class="s2">"inheritance_reason"</span><span class="p">,</span>
+</span><span id="__span-5-89"><a href="#__codelineno-5-89" id="__codelineno-5-89" name="__codelineno-5-89"></a>            <span class="p">]</span>
 </span><span id="__span-5-90"><a href="#__codelineno-5-90" id="__codelineno-5-90" name="__codelineno-5-90"></a>        <span class="p">)</span>
 </span><span id="__span-5-91"><a href="#__codelineno-5-91" id="__codelineno-5-91" name="__codelineno-5-91"></a>
-</span><span id="__span-5-92"><a href="#__codelineno-5-92" id="__codelineno-5-92" name="__codelineno-5-92"></a>        <span class="k">return</span> <span class="n">resolved</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span>
-</span><span id="__span-5-93"><a href="#__codelineno-5-93" id="__codelineno-5-93" name="__codelineno-5-93"></a>            <span class="s2">"entity"</span><span class="p">:</span> <span class="s2">"child_facility_reference"</span><span class="p">,</span>
-</span><span id="__span-5-94"><a href="#__codelineno-5-94" id="__codelineno-5-94" name="__codelineno-5-94"></a>            <span class="s2">"root"</span><span class="p">:</span> <span class="s2">"root_facility_reference"</span><span class="p">,</span>
-</span><span id="__span-5-95"><a href="#__codelineno-5-95" id="__codelineno-5-95" name="__codelineno-5-95"></a>            <span class="s2">"depth"</span><span class="p">:</span> <span class="s2">"facility_hierarchy_depth"</span><span class="p">,</span>
-</span><span id="__span-5-96"><a href="#__codelineno-5-96" id="__codelineno-5-96" name="__codelineno-5-96"></a>        <span class="p">})</span><span class="o">.</span><span class="n">lazy</span><span class="p">()</span>
-</span><span id="__span-5-97"><a href="#__codelineno-5-97" id="__codelineno-5-97" name="__codelineno-5-97"></a>
-</span><span id="__span-5-98"><a href="#__codelineno-5-98" id="__codelineno-5-98" name="__codelineno-5-98"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_enrich_counterparties_with_hierarchy</span><span class="p">(</span>
-</span><span id="__span-5-99"><a href="#__codelineno-5-99" id="__codelineno-5-99" name="__codelineno-5-99"></a>        <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-5-100"><a href="#__codelineno-5-100" id="__codelineno-5-100" name="__codelineno-5-100"></a>        <span class="n">counterparties</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-5-101"><a href="#__codelineno-5-101" id="__codelineno-5-101" name="__codelineno-5-101"></a>        <span class="n">org_mappings</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-5-102"><a href="#__codelineno-5-102" id="__codelineno-5-102" name="__codelineno-5-102"></a>        <span class="n">ratings</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-5-103"><a href="#__codelineno-5-103" id="__codelineno-5-103" name="__codelineno-5-103"></a>        <span class="n">ultimate_parents</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-5-92"><a href="#__codelineno-5-92" id="__codelineno-5-92" name="__codelineno-5-92"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_build_facility_root_lookup</span><span class="p">(</span>
+</span><span id="__span-5-93"><a href="#__codelineno-5-93" id="__codelineno-5-93" name="__codelineno-5-93"></a>        <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-5-94"><a href="#__codelineno-5-94" id="__codelineno-5-94" name="__codelineno-5-94"></a>        <span class="n">facility_mappings</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-5-95"><a href="#__codelineno-5-95" id="__codelineno-5-95" name="__codelineno-5-95"></a>        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+</span><span id="__span-5-96"><a href="#__codelineno-5-96" id="__codelineno-5-96" name="__codelineno-5-96"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
+</span><span id="__span-5-97"><a href="#__codelineno-5-97" id="__codelineno-5-97" name="__codelineno-5-97"></a>        <span class="s2">"""</span>
+</span><span id="__span-5-98"><a href="#__codelineno-5-98" id="__codelineno-5-98" name="__codelineno-5-98"></a><span class="s2">        Build root facility lookup using eager graph traversal.</span>
+</span><span id="__span-5-99"><a href="#__codelineno-5-99" id="__codelineno-5-99" name="__codelineno-5-99"></a>
+</span><span id="__span-5-100"><a href="#__codelineno-5-100" id="__codelineno-5-100" name="__codelineno-5-100"></a><span class="s2">        Collects the small facility edge data eagerly, resolves the full graph</span>
+</span><span id="__span-5-101"><a href="#__codelineno-5-101" id="__codelineno-5-101" name="__codelineno-5-101"></a><span class="s2">        via dict traversal, and returns the result as a LazyFrame.</span>
+</span><span id="__span-5-102"><a href="#__codelineno-5-102" id="__codelineno-5-102" name="__codelineno-5-102"></a>
+</span><span id="__span-5-103"><a href="#__codelineno-5-103" id="__codelineno-5-103" name="__codelineno-5-103"></a><span class="s2">        Args:</span>
 </span></code></pre></div>
 </details>
 <h3 id="facility-hierarchy">Facility Hierarchy<a class="headerlink" href="#facility-hierarchy" title="Permanent link">¶</a></h3>
@@ -2830,111 +2974,111 @@ traversal, and returns the result as a LazyFrame for downstream joins.</p>
 - Only root/standalone facilities with <code>undrawn_amount &gt; 0</code> generate <code>facility_undrawn</code> exposures</p>
 <details class="example">
 <summary>Actual Implementation (hierarchy.py)</summary>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a href="#__codelineno-6-1" id="__codelineno-6-1" name="__codelineno-6-1"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
-</span><span id="__span-6-2"><a href="#__codelineno-6-2" id="__codelineno-6-2" name="__codelineno-6-2"></a><span class="w">        </span><span class="sd">"""</span>
-</span><span id="__span-6-3"><a href="#__codelineno-6-3" id="__codelineno-6-3" name="__codelineno-6-3"></a><span class="sd">        Enrich counterparties with hierarchy and rating information.</span>
-</span><span id="__span-6-4"><a href="#__codelineno-6-4" id="__codelineno-6-4" name="__codelineno-6-4"></a>
-</span><span id="__span-6-5"><a href="#__codelineno-6-5" id="__codelineno-6-5" name="__codelineno-6-5"></a><span class="sd">        Adds columns:</span>
-</span><span id="__span-6-6"><a href="#__codelineno-6-6" id="__codelineno-6-6" name="__codelineno-6-6"></a><span class="sd">        - counterparty_has_parent: bool</span>
-</span><span id="__span-6-7"><a href="#__codelineno-6-7" id="__codelineno-6-7" name="__codelineno-6-7"></a><span class="sd">        - parent_counterparty_reference: str | null</span>
-</span><span id="__span-6-8"><a href="#__codelineno-6-8" id="__codelineno-6-8" name="__codelineno-6-8"></a><span class="sd">        - ultimate_parent_reference: str | null</span>
-</span><span id="__span-6-9"><a href="#__codelineno-6-9" id="__codelineno-6-9" name="__codelineno-6-9"></a><span class="sd">        - counterparty_hierarchy_depth: int</span>
-</span><span id="__span-6-10"><a href="#__codelineno-6-10" id="__codelineno-6-10" name="__codelineno-6-10"></a><span class="sd">        - rating_inherited: bool</span>
-</span><span id="__span-6-11"><a href="#__codelineno-6-11" id="__codelineno-6-11" name="__codelineno-6-11"></a><span class="sd">        - rating_source_counterparty: str | null</span>
-</span><span id="__span-6-12"><a href="#__codelineno-6-12" id="__codelineno-6-12" name="__codelineno-6-12"></a><span class="sd">        - rating_inheritance_reason: str</span>
-</span><span id="__span-6-13"><a href="#__codelineno-6-13" id="__codelineno-6-13" name="__codelineno-6-13"></a><span class="sd">        """</span>
-</span><span id="__span-6-14"><a href="#__codelineno-6-14" id="__codelineno-6-14" name="__codelineno-6-14"></a>        <span class="c1"># Join with org_mappings to get parent</span>
-</span><span id="__span-6-15"><a href="#__codelineno-6-15" id="__codelineno-6-15" name="__codelineno-6-15"></a>        <span class="n">enriched</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-</span><span id="__span-6-16"><a href="#__codelineno-6-16" id="__codelineno-6-16" name="__codelineno-6-16"></a>            <span class="n">org_mappings</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-6-17"><a href="#__codelineno-6-17" id="__codelineno-6-17" name="__codelineno-6-17"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"child_counterparty_reference"</span><span class="p">),</span>
-</span><span id="__span-6-18"><a href="#__codelineno-6-18" id="__codelineno-6-18" name="__codelineno-6-18"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_counterparty_reference"</span><span class="p">),</span>
-</span><span id="__span-6-19"><a href="#__codelineno-6-19" id="__codelineno-6-19" name="__codelineno-6-19"></a>            <span class="p">]),</span>
-</span><span id="__span-6-20"><a href="#__codelineno-6-20" id="__codelineno-6-20" name="__codelineno-6-20"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
-</span><span id="__span-6-21"><a href="#__codelineno-6-21" id="__codelineno-6-21" name="__codelineno-6-21"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"child_counterparty_reference"</span><span class="p">,</span>
-</span><span id="__span-6-22"><a href="#__codelineno-6-22" id="__codelineno-6-22" name="__codelineno-6-22"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
-</span><span id="__span-6-23"><a href="#__codelineno-6-23" id="__codelineno-6-23" name="__codelineno-6-23"></a>        <span class="p">)</span>
-</span><span id="__span-6-24"><a href="#__codelineno-6-24" id="__codelineno-6-24" name="__codelineno-6-24"></a>
-</span><span id="__span-6-25"><a href="#__codelineno-6-25" id="__codelineno-6-25" name="__codelineno-6-25"></a>        <span class="c1"># Join with ultimate parents and rating inheritance in sequence,</span>
-</span><span id="__span-6-26"><a href="#__codelineno-6-26" id="__codelineno-6-26" name="__codelineno-6-26"></a>        <span class="c1"># then derive flags in a single with_columns batch.</span>
-</span><span id="__span-6-27"><a href="#__codelineno-6-27" id="__codelineno-6-27" name="__codelineno-6-27"></a>        <span class="n">enriched</span> <span class="o">=</span> <span class="n">enriched</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-</span><span id="__span-6-28"><a href="#__codelineno-6-28" id="__codelineno-6-28" name="__codelineno-6-28"></a>            <span class="n">ultimate_parents</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-6-29"><a href="#__codelineno-6-29" id="__codelineno-6-29" name="__codelineno-6-29"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"_up_cp"</span><span class="p">),</span>
-</span><span id="__span-6-30"><a href="#__codelineno-6-30" id="__codelineno-6-30" name="__codelineno-6-30"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"ultimate_parent_reference"</span><span class="p">),</span>
-</span><span id="__span-6-31"><a href="#__codelineno-6-31" id="__codelineno-6-31" name="__codelineno-6-31"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"hierarchy_depth"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"counterparty_hierarchy_depth"</span><span class="p">),</span>
-</span><span id="__span-6-32"><a href="#__codelineno-6-32" id="__codelineno-6-32" name="__codelineno-6-32"></a>            <span class="p">]),</span>
-</span><span id="__span-6-33"><a href="#__codelineno-6-33" id="__codelineno-6-33" name="__codelineno-6-33"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
-</span><span id="__span-6-34"><a href="#__codelineno-6-34" id="__codelineno-6-34" name="__codelineno-6-34"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"_up_cp"</span><span class="p">,</span>
-</span><span id="__span-6-35"><a href="#__codelineno-6-35" id="__codelineno-6-35" name="__codelineno-6-35"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
-</span><span id="__span-6-36"><a href="#__codelineno-6-36" id="__codelineno-6-36" name="__codelineno-6-36"></a>        <span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-</span><span id="__span-6-37"><a href="#__codelineno-6-37" id="__codelineno-6-37" name="__codelineno-6-37"></a>            <span class="n">rating_inheritance</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-6-38"><a href="#__codelineno-6-38" id="__codelineno-6-38" name="__codelineno-6-38"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"_ri_cp"</span><span class="p">),</span>
-</span><span id="__span-6-39"><a href="#__codelineno-6-39" id="__codelineno-6-39" name="__codelineno-6-39"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"cqs"</span><span class="p">),</span>
-</span><span id="__span-6-40"><a href="#__codelineno-6-40" id="__codelineno-6-40" name="__codelineno-6-40"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"pd"</span><span class="p">),</span>
-</span><span id="__span-6-41"><a href="#__codelineno-6-41" id="__codelineno-6-41" name="__codelineno-6-41"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_value"</span><span class="p">),</span>
-</span><span id="__span-6-42"><a href="#__codelineno-6-42" id="__codelineno-6-42" name="__codelineno-6-42"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"rating_agency"</span><span class="p">),</span>
-</span><span id="__span-6-43"><a href="#__codelineno-6-43" id="__codelineno-6-43" name="__codelineno-6-43"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"inherited"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rating_inherited"</span><span class="p">),</span>
-</span><span id="__span-6-44"><a href="#__codelineno-6-44" id="__codelineno-6-44" name="__codelineno-6-44"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"source_counterparty"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rating_source_counterparty"</span><span class="p">),</span>
-</span><span id="__span-6-45"><a href="#__codelineno-6-45" id="__codelineno-6-45" name="__codelineno-6-45"></a>                <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"inheritance_reason"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"rating_inheritance_reason"</span><span class="p">),</span>
-</span><span id="__span-6-46"><a href="#__codelineno-6-46" id="__codelineno-6-46" name="__codelineno-6-46"></a>            <span class="p">]),</span>
-</span><span id="__span-6-47"><a href="#__codelineno-6-47" id="__codelineno-6-47" name="__codelineno-6-47"></a>            <span class="n">left_on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
-</span><span id="__span-6-48"><a href="#__codelineno-6-48" id="__codelineno-6-48" name="__codelineno-6-48"></a>            <span class="n">right_on</span><span class="o">=</span><span class="s2">"_ri_cp"</span><span class="p">,</span>
-</span><span id="__span-6-49"><a href="#__codelineno-6-49" id="__codelineno-6-49" name="__codelineno-6-49"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
-</span><span id="__span-6-50"><a href="#__codelineno-6-50" id="__codelineno-6-50" name="__codelineno-6-50"></a>        <span class="p">)</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span>
-</span><span id="__span-6-51"><a href="#__codelineno-6-51" id="__codelineno-6-51" name="__codelineno-6-51"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"parent_counterparty_reference"</span><span class="p">)</span><span class="o">.</span><span class="n">is_not_null</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"counterparty_has_parent"</span><span class="p">),</span>
-</span><span id="__span-6-52"><a href="#__codelineno-6-52" id="__codelineno-6-52" name="__codelineno-6-52"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_hierarchy_depth"</span><span class="p">)</span><span class="o">.</span><span class="n">fill_null</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
-</span><span id="__span-6-53"><a href="#__codelineno-6-53" id="__codelineno-6-53" name="__codelineno-6-53"></a>        <span class="p">])</span>
-</span><span id="__span-6-54"><a href="#__codelineno-6-54" id="__codelineno-6-54" name="__codelineno-6-54"></a>
-</span><span id="__span-6-55"><a href="#__codelineno-6-55" id="__codelineno-6-55" name="__codelineno-6-55"></a>        <span class="k">return</span> <span class="n">enriched</span>
-</span><span id="__span-6-56"><a href="#__codelineno-6-56" id="__codelineno-6-56" name="__codelineno-6-56"></a>
-</span><span id="__span-6-57"><a href="#__codelineno-6-57" id="__codelineno-6-57" name="__codelineno-6-57"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_facility_undrawn</span><span class="p">(</span>
-</span><span id="__span-6-58"><a href="#__codelineno-6-58" id="__codelineno-6-58" name="__codelineno-6-58"></a>        <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-6-59"><a href="#__codelineno-6-59" id="__codelineno-6-59" name="__codelineno-6-59"></a>        <span class="n">facilities</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-6-60"><a href="#__codelineno-6-60" id="__codelineno-6-60" name="__codelineno-6-60"></a>        <span class="n">loans</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-6-61"><a href="#__codelineno-6-61" id="__codelineno-6-61" name="__codelineno-6-61"></a>        <span class="n">contingents</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-6-62"><a href="#__codelineno-6-62" id="__codelineno-6-62" name="__codelineno-6-62"></a>        <span class="n">facility_mappings</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-6-63"><a href="#__codelineno-6-63" id="__codelineno-6-63" name="__codelineno-6-63"></a>        <span class="n">facility_root_lookup</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-6-64"><a href="#__codelineno-6-64" id="__codelineno-6-64" name="__codelineno-6-64"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
-</span><span id="__span-6-65"><a href="#__codelineno-6-65" id="__codelineno-6-65" name="__codelineno-6-65"></a><span class="w">        </span><span class="sd">"""</span>
-</span><span id="__span-6-66"><a href="#__codelineno-6-66" id="__codelineno-6-66" name="__codelineno-6-66"></a><span class="sd">        Calculate undrawn amounts for facilities.</span>
-</span><span id="__span-6-67"><a href="#__codelineno-6-67" id="__codelineno-6-67" name="__codelineno-6-67"></a>
-</span><span id="__span-6-68"><a href="#__codelineno-6-68" id="__codelineno-6-68" name="__codelineno-6-68"></a><span class="sd">        For each root/standalone facility:</span>
-</span><span id="__span-6-69"><a href="#__codelineno-6-69" id="__codelineno-6-69" name="__codelineno-6-69"></a><span class="sd">            undrawn = facility.limit - sum(descendant loans' drawn_amount)</span>
-</span><span id="__span-6-70"><a href="#__codelineno-6-70" id="__codelineno-6-70" name="__codelineno-6-70"></a><span class="sd">                                     - sum(descendant contingents' nominal_amount)</span>
-</span><span id="__span-6-71"><a href="#__codelineno-6-71" id="__codelineno-6-71" name="__codelineno-6-71"></a>
-</span><span id="__span-6-72"><a href="#__codelineno-6-72" id="__codelineno-6-72" name="__codelineno-6-72"></a><span class="sd">        For multi-level hierarchies, amounts from loans and contingents under</span>
-</span><span id="__span-6-73"><a href="#__codelineno-6-73" id="__codelineno-6-73" name="__codelineno-6-73"></a><span class="sd">        sub-facilities are aggregated up to the root facility. Sub-facilities</span>
-</span><span id="__span-6-74"><a href="#__codelineno-6-74" id="__codelineno-6-74" name="__codelineno-6-74"></a><span class="sd">        do not produce their own undrawn exposure records.</span>
-</span><span id="__span-6-75"><a href="#__codelineno-6-75" id="__codelineno-6-75" name="__codelineno-6-75"></a>
-</span><span id="__span-6-76"><a href="#__codelineno-6-76" id="__codelineno-6-76" name="__codelineno-6-76"></a><span class="sd">        Args:</span>
-</span><span id="__span-6-77"><a href="#__codelineno-6-77" id="__codelineno-6-77" name="__codelineno-6-77"></a><span class="sd">            facilities: Facilities with limit, risk_type, and other CCF fields</span>
-</span><span id="__span-6-78"><a href="#__codelineno-6-78" id="__codelineno-6-78" name="__codelineno-6-78"></a><span class="sd">            loans: Loans with drawn_amount</span>
-</span><span id="__span-6-79"><a href="#__codelineno-6-79" id="__codelineno-6-79" name="__codelineno-6-79"></a><span class="sd">            contingents: Contingents with nominal_amount (optional)</span>
-</span><span id="__span-6-80"><a href="#__codelineno-6-80" id="__codelineno-6-80" name="__codelineno-6-80"></a><span class="sd">            facility_mappings: Mappings between facilities and children</span>
-</span><span id="__span-6-81"><a href="#__codelineno-6-81" id="__codelineno-6-81" name="__codelineno-6-81"></a><span class="sd">            facility_root_lookup: Root lookup from _build_facility_root_lookup</span>
-</span><span id="__span-6-82"><a href="#__codelineno-6-82" id="__codelineno-6-82" name="__codelineno-6-82"></a>
-</span><span id="__span-6-83"><a href="#__codelineno-6-83" id="__codelineno-6-83" name="__codelineno-6-83"></a><span class="sd">        Returns:</span>
-</span><span id="__span-6-84"><a href="#__codelineno-6-84" id="__codelineno-6-84" name="__codelineno-6-84"></a><span class="sd">            LazyFrame with facility_undrawn exposure records</span>
-</span><span id="__span-6-85"><a href="#__codelineno-6-85" id="__codelineno-6-85" name="__codelineno-6-85"></a><span class="sd">        """</span>
-</span><span id="__span-6-86"><a href="#__codelineno-6-86" id="__codelineno-6-86" name="__codelineno-6-86"></a>        <span class="c1"># Validate facilities have required columns</span>
-</span><span id="__span-6-87"><a href="#__codelineno-6-87" id="__codelineno-6-87" name="__codelineno-6-87"></a>        <span class="n">required_cols</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"facility_reference"</span><span class="p">,</span> <span class="s2">"limit"</span><span class="p">}</span>
-</span><span id="__span-6-88"><a href="#__codelineno-6-88" id="__codelineno-6-88" name="__codelineno-6-88"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">has_required_columns</span><span class="p">(</span><span class="n">facilities</span><span class="p">,</span> <span class="n">required_cols</span><span class="p">):</span>
-</span><span id="__span-6-89"><a href="#__codelineno-6-89" id="__codelineno-6-89" name="__codelineno-6-89"></a>            <span class="c1"># No valid facilities, return empty LazyFrame with expected schema</span>
-</span><span id="__span-6-90"><a href="#__codelineno-6-90" id="__codelineno-6-90" name="__codelineno-6-90"></a>            <span class="k">return</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-6-91"><a href="#__codelineno-6-91" id="__codelineno-6-91" name="__codelineno-6-91"></a>                <span class="s2">"exposure_reference"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-6-92"><a href="#__codelineno-6-92" id="__codelineno-6-92" name="__codelineno-6-92"></a>                <span class="s2">"exposure_type"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-6-93"><a href="#__codelineno-6-93" id="__codelineno-6-93" name="__codelineno-6-93"></a>                <span class="s2">"product_type"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-6-94"><a href="#__codelineno-6-94" id="__codelineno-6-94" name="__codelineno-6-94"></a>                <span class="s2">"book_code"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-6-95"><a href="#__codelineno-6-95" id="__codelineno-6-95" name="__codelineno-6-95"></a>                <span class="s2">"counterparty_reference"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-6-96"><a href="#__codelineno-6-96" id="__codelineno-6-96" name="__codelineno-6-96"></a>                <span class="s2">"value_date"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Date</span><span class="p">,</span>
-</span><span id="__span-6-97"><a href="#__codelineno-6-97" id="__codelineno-6-97" name="__codelineno-6-97"></a>                <span class="s2">"maturity_date"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Date</span><span class="p">,</span>
-</span><span id="__span-6-98"><a href="#__codelineno-6-98" id="__codelineno-6-98" name="__codelineno-6-98"></a>                <span class="s2">"currency"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
-</span><span id="__span-6-99"><a href="#__codelineno-6-99" id="__codelineno-6-99" name="__codelineno-6-99"></a>                <span class="s2">"drawn_amount"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span>
-</span><span id="__span-6-100"><a href="#__codelineno-6-100" id="__codelineno-6-100" name="__codelineno-6-100"></a>                <span class="s2">"interest"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span>
-</span><span id="__span-6-101"><a href="#__codelineno-6-101" id="__codelineno-6-101" name="__codelineno-6-101"></a>                <span class="s2">"undrawn_amount"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span>
-</span><span id="__span-6-102"><a href="#__codelineno-6-102" id="__codelineno-6-102" name="__codelineno-6-102"></a>                <span class="s2">"nominal_amount"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span>
-</span><span id="__span-6-103"><a href="#__codelineno-6-103" id="__codelineno-6-103" name="__codelineno-6-103"></a>                <span class="s2">"lgd"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span>
-</span><span id="__span-6-104"><a href="#__codelineno-6-104" id="__codelineno-6-104" name="__codelineno-6-104"></a>                <span class="s2">"beel"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span>
-</span><span id="__span-6-105"><a href="#__codelineno-6-105" id="__codelineno-6-105" name="__codelineno-6-105"></a>                <span class="s2">"seniority"</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">,</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a href="#__codelineno-6-1" id="__codelineno-6-1" name="__codelineno-6-1"></a>                             <span class="n">child_reference</span><span class="p">,</span> <span class="ow">and</span> <span class="n">child_type</span><span class="o">/</span><span class="n">node_type</span> <span class="n">columns</span>
+</span><span id="__span-6-2"><a href="#__codelineno-6-2" id="__codelineno-6-2" name="__codelineno-6-2"></a>            <span class="n">max_depth</span><span class="p">:</span> <span class="n">Maximum</span> <span class="n">hierarchy</span> <span class="n">depth</span> <span class="n">to</span> <span class="n">traverse</span>
+</span><span id="__span-6-3"><a href="#__codelineno-6-3" id="__codelineno-6-3" name="__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a href="#__codelineno-6-4" id="__codelineno-6-4" name="__codelineno-6-4"></a>        <span class="n">Returns</span><span class="p">:</span>
+</span><span id="__span-6-5"><a href="#__codelineno-6-5" id="__codelineno-6-5" name="__codelineno-6-5"></a>            <span class="n">LazyFrame</span> <span class="k">with</span> <span class="n">columns</span><span class="p">:</span>
+</span><span id="__span-6-6"><a href="#__codelineno-6-6" id="__codelineno-6-6" name="__codelineno-6-6"></a>            <span class="o">-</span> <span class="n">child_facility_reference</span><span class="p">:</span> <span class="n">The</span> <span class="n">sub</span><span class="o">-</span><span class="n">facility</span>
+</span><span id="__span-6-7"><a href="#__codelineno-6-7" id="__codelineno-6-7" name="__codelineno-6-7"></a>            <span class="o">-</span> <span class="n">root_facility_reference</span><span class="p">:</span> <span class="n">Its</span> <span class="n">ultimate</span> <span class="n">root</span> <span class="n">facility</span>
+</span><span id="__span-6-8"><a href="#__codelineno-6-8" id="__codelineno-6-8" name="__codelineno-6-8"></a>            <span class="o">-</span> <span class="n">facility_hierarchy_depth</span><span class="p">:</span> <span class="n">Number</span> <span class="n">of</span> <span class="n">levels</span> <span class="n">traversed</span>
+</span><span id="__span-6-9"><a href="#__codelineno-6-9" id="__codelineno-6-9" name="__codelineno-6-9"></a><span class="w">        </span><span class="sd">"""</span>
+</span><span id="__span-6-10"><a href="#__codelineno-6-10" id="__codelineno-6-10" name="__codelineno-6-10"></a><span class="sd">        empty_result = pl.LazyFrame(</span>
+</span><span id="__span-6-11"><a href="#__codelineno-6-11" id="__codelineno-6-11" name="__codelineno-6-11"></a><span class="sd">            schema={</span>
+</span><span id="__span-6-12"><a href="#__codelineno-6-12" id="__codelineno-6-12" name="__codelineno-6-12"></a><span class="sd">                "child_facility_reference": pl.String,</span>
+</span><span id="__span-6-13"><a href="#__codelineno-6-13" id="__codelineno-6-13" name="__codelineno-6-13"></a><span class="sd">                "root_facility_reference": pl.String,</span>
+</span><span id="__span-6-14"><a href="#__codelineno-6-14" id="__codelineno-6-14" name="__codelineno-6-14"></a><span class="sd">                "facility_hierarchy_depth": pl.Int32,</span>
+</span><span id="__span-6-15"><a href="#__codelineno-6-15" id="__codelineno-6-15" name="__codelineno-6-15"></a><span class="sd">            }</span>
+</span><span id="__span-6-16"><a href="#__codelineno-6-16" id="__codelineno-6-16" name="__codelineno-6-16"></a><span class="sd">        )</span>
+</span><span id="__span-6-17"><a href="#__codelineno-6-17" id="__codelineno-6-17" name="__codelineno-6-17"></a>
+</span><span id="__span-6-18"><a href="#__codelineno-6-18" id="__codelineno-6-18" name="__codelineno-6-18"></a><span class="sd">        # Detect type column (child_type / node_type / neither)</span>
+</span><span id="__span-6-19"><a href="#__codelineno-6-19" id="__codelineno-6-19" name="__codelineno-6-19"></a><span class="sd">        mapping_schema = facility_mappings.collect_schema()</span>
+</span><span id="__span-6-20"><a href="#__codelineno-6-20" id="__codelineno-6-20" name="__codelineno-6-20"></a><span class="sd">        mapping_cols = set(mapping_schema.names())</span>
+</span><span id="__span-6-21"><a href="#__codelineno-6-21" id="__codelineno-6-21" name="__codelineno-6-21"></a>
+</span><span id="__span-6-22"><a href="#__codelineno-6-22" id="__codelineno-6-22" name="__codelineno-6-22"></a><span class="sd">        if "child_type" in mapping_cols:</span>
+</span><span id="__span-6-23"><a href="#__codelineno-6-23" id="__codelineno-6-23" name="__codelineno-6-23"></a><span class="sd">            type_col = "child_type"</span>
+</span><span id="__span-6-24"><a href="#__codelineno-6-24" id="__codelineno-6-24" name="__codelineno-6-24"></a><span class="sd">        elif "node_type" in mapping_cols:</span>
+</span><span id="__span-6-25"><a href="#__codelineno-6-25" id="__codelineno-6-25" name="__codelineno-6-25"></a><span class="sd">            type_col = "node_type"</span>
+</span><span id="__span-6-26"><a href="#__codelineno-6-26" id="__codelineno-6-26" name="__codelineno-6-26"></a><span class="sd">        else:</span>
+</span><span id="__span-6-27"><a href="#__codelineno-6-27" id="__codelineno-6-27" name="__codelineno-6-27"></a><span class="sd">            return empty_result</span>
+</span><span id="__span-6-28"><a href="#__codelineno-6-28" id="__codelineno-6-28" name="__codelineno-6-28"></a>
+</span><span id="__span-6-29"><a href="#__codelineno-6-29" id="__codelineno-6-29" name="__codelineno-6-29"></a><span class="sd">        # Filter to facility→facility relationships and collect (small data)</span>
+</span><span id="__span-6-30"><a href="#__codelineno-6-30" id="__codelineno-6-30" name="__codelineno-6-30"></a><span class="sd">        facility_edges = (</span>
+</span><span id="__span-6-31"><a href="#__codelineno-6-31" id="__codelineno-6-31" name="__codelineno-6-31"></a><span class="sd">            facility_mappings.filter(</span>
+</span><span id="__span-6-32"><a href="#__codelineno-6-32" id="__codelineno-6-32" name="__codelineno-6-32"></a><span class="sd">                pl.col(type_col).fill_null("").str.to_lowercase() == "facility"</span>
+</span><span id="__span-6-33"><a href="#__codelineno-6-33" id="__codelineno-6-33" name="__codelineno-6-33"></a><span class="sd">            )</span>
+</span><span id="__span-6-34"><a href="#__codelineno-6-34" id="__codelineno-6-34" name="__codelineno-6-34"></a><span class="sd">            .select(</span>
+</span><span id="__span-6-35"><a href="#__codelineno-6-35" id="__codelineno-6-35" name="__codelineno-6-35"></a><span class="sd">                [</span>
+</span><span id="__span-6-36"><a href="#__codelineno-6-36" id="__codelineno-6-36" name="__codelineno-6-36"></a><span class="sd">                    pl.col("child_reference").alias("child_facility_reference"),</span>
+</span><span id="__span-6-37"><a href="#__codelineno-6-37" id="__codelineno-6-37" name="__codelineno-6-37"></a><span class="sd">                    pl.col("parent_facility_reference"),</span>
+</span><span id="__span-6-38"><a href="#__codelineno-6-38" id="__codelineno-6-38" name="__codelineno-6-38"></a><span class="sd">                ]</span>
+</span><span id="__span-6-39"><a href="#__codelineno-6-39" id="__codelineno-6-39" name="__codelineno-6-39"></a><span class="sd">            )</span>
+</span><span id="__span-6-40"><a href="#__codelineno-6-40" id="__codelineno-6-40" name="__codelineno-6-40"></a><span class="sd">            .unique()</span>
+</span><span id="__span-6-41"><a href="#__codelineno-6-41" id="__codelineno-6-41" name="__codelineno-6-41"></a><span class="sd">            .collect()</span>
+</span><span id="__span-6-42"><a href="#__codelineno-6-42" id="__codelineno-6-42" name="__codelineno-6-42"></a><span class="sd">        )</span>
+</span><span id="__span-6-43"><a href="#__codelineno-6-43" id="__codelineno-6-43" name="__codelineno-6-43"></a>
+</span><span id="__span-6-44"><a href="#__codelineno-6-44" id="__codelineno-6-44" name="__codelineno-6-44"></a><span class="sd">        if facility_edges.height == 0:</span>
+</span><span id="__span-6-45"><a href="#__codelineno-6-45" id="__codelineno-6-45" name="__codelineno-6-45"></a><span class="sd">            return empty_result</span>
+</span><span id="__span-6-46"><a href="#__codelineno-6-46" id="__codelineno-6-46" name="__codelineno-6-46"></a>
+</span><span id="__span-6-47"><a href="#__codelineno-6-47" id="__codelineno-6-47" name="__codelineno-6-47"></a><span class="sd">        resolved = _resolve_graph_eager(</span>
+</span><span id="__span-6-48"><a href="#__codelineno-6-48" id="__codelineno-6-48" name="__codelineno-6-48"></a><span class="sd">            facility_edges,</span>
+</span><span id="__span-6-49"><a href="#__codelineno-6-49" id="__codelineno-6-49" name="__codelineno-6-49"></a><span class="sd">            child_col="child_facility_reference",</span>
+</span><span id="__span-6-50"><a href="#__codelineno-6-50" id="__codelineno-6-50" name="__codelineno-6-50"></a><span class="sd">            parent_col="parent_facility_reference",</span>
+</span><span id="__span-6-51"><a href="#__codelineno-6-51" id="__codelineno-6-51" name="__codelineno-6-51"></a><span class="sd">            max_depth=max_depth,</span>
+</span><span id="__span-6-52"><a href="#__codelineno-6-52" id="__codelineno-6-52" name="__codelineno-6-52"></a><span class="sd">        )</span>
+</span><span id="__span-6-53"><a href="#__codelineno-6-53" id="__codelineno-6-53" name="__codelineno-6-53"></a>
+</span><span id="__span-6-54"><a href="#__codelineno-6-54" id="__codelineno-6-54" name="__codelineno-6-54"></a><span class="sd">        return resolved.rename(</span>
+</span><span id="__span-6-55"><a href="#__codelineno-6-55" id="__codelineno-6-55" name="__codelineno-6-55"></a><span class="sd">            {</span>
+</span><span id="__span-6-56"><a href="#__codelineno-6-56" id="__codelineno-6-56" name="__codelineno-6-56"></a><span class="sd">                "entity": "child_facility_reference",</span>
+</span><span id="__span-6-57"><a href="#__codelineno-6-57" id="__codelineno-6-57" name="__codelineno-6-57"></a><span class="sd">                "root": "root_facility_reference",</span>
+</span><span id="__span-6-58"><a href="#__codelineno-6-58" id="__codelineno-6-58" name="__codelineno-6-58"></a><span class="sd">                "depth": "facility_hierarchy_depth",</span>
+</span><span id="__span-6-59"><a href="#__codelineno-6-59" id="__codelineno-6-59" name="__codelineno-6-59"></a><span class="sd">            }</span>
+</span><span id="__span-6-60"><a href="#__codelineno-6-60" id="__codelineno-6-60" name="__codelineno-6-60"></a><span class="sd">        ).lazy()</span>
+</span><span id="__span-6-61"><a href="#__codelineno-6-61" id="__codelineno-6-61" name="__codelineno-6-61"></a>
+</span><span id="__span-6-62"><a href="#__codelineno-6-62" id="__codelineno-6-62" name="__codelineno-6-62"></a><span class="sd">    def _enrich_counterparties_with_hierarchy(</span>
+</span><span id="__span-6-63"><a href="#__codelineno-6-63" id="__codelineno-6-63" name="__codelineno-6-63"></a><span class="sd">        self,</span>
+</span><span id="__span-6-64"><a href="#__codelineno-6-64" id="__codelineno-6-64" name="__codelineno-6-64"></a><span class="sd">        counterparties: pl.LazyFrame,</span>
+</span><span id="__span-6-65"><a href="#__codelineno-6-65" id="__codelineno-6-65" name="__codelineno-6-65"></a><span class="sd">        org_mappings: pl.LazyFrame,</span>
+</span><span id="__span-6-66"><a href="#__codelineno-6-66" id="__codelineno-6-66" name="__codelineno-6-66"></a><span class="sd">        ratings: pl.LazyFrame,</span>
+</span><span id="__span-6-67"><a href="#__codelineno-6-67" id="__codelineno-6-67" name="__codelineno-6-67"></a><span class="sd">        ultimate_parents: pl.LazyFrame,</span>
+</span><span id="__span-6-68"><a href="#__codelineno-6-68" id="__codelineno-6-68" name="__codelineno-6-68"></a><span class="sd">        rating_inheritance: pl.LazyFrame,</span>
+</span><span id="__span-6-69"><a href="#__codelineno-6-69" id="__codelineno-6-69" name="__codelineno-6-69"></a><span class="sd">    ) -&gt; pl.LazyFrame:</span>
+</span><span id="__span-6-70"><a href="#__codelineno-6-70" id="__codelineno-6-70" name="__codelineno-6-70"></a><span class="sd">        """</span>
+</span><span id="__span-6-71"><a href="#__codelineno-6-71" id="__codelineno-6-71" name="__codelineno-6-71"></a>        <span class="n">Enrich</span> <span class="n">counterparties</span> <span class="k">with</span> <span class="n">hierarchy</span> <span class="ow">and</span> <span class="n">rating</span> <span class="n">information</span><span class="o">.</span>
+</span><span id="__span-6-72"><a href="#__codelineno-6-72" id="__codelineno-6-72" name="__codelineno-6-72"></a>
+</span><span id="__span-6-73"><a href="#__codelineno-6-73" id="__codelineno-6-73" name="__codelineno-6-73"></a>        <span class="n">Adds</span> <span class="n">columns</span><span class="p">:</span>
+</span><span id="__span-6-74"><a href="#__codelineno-6-74" id="__codelineno-6-74" name="__codelineno-6-74"></a>        <span class="o">-</span> <span class="n">counterparty_has_parent</span><span class="p">:</span> <span class="nb">bool</span>
+</span><span id="__span-6-75"><a href="#__codelineno-6-75" id="__codelineno-6-75" name="__codelineno-6-75"></a>        <span class="o">-</span> <span class="n">parent_counterparty_reference</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">null</span>
+</span><span id="__span-6-76"><a href="#__codelineno-6-76" id="__codelineno-6-76" name="__codelineno-6-76"></a>        <span class="o">-</span> <span class="n">ultimate_parent_reference</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">null</span>
+</span><span id="__span-6-77"><a href="#__codelineno-6-77" id="__codelineno-6-77" name="__codelineno-6-77"></a>        <span class="o">-</span> <span class="n">counterparty_hierarchy_depth</span><span class="p">:</span> <span class="nb">int</span>
+</span><span id="__span-6-78"><a href="#__codelineno-6-78" id="__codelineno-6-78" name="__codelineno-6-78"></a>        <span class="o">-</span> <span class="n">rating_inherited</span><span class="p">:</span> <span class="nb">bool</span>
+</span><span id="__span-6-79"><a href="#__codelineno-6-79" id="__codelineno-6-79" name="__codelineno-6-79"></a>        <span class="o">-</span> <span class="n">rating_source_counterparty</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">null</span>
+</span><span id="__span-6-80"><a href="#__codelineno-6-80" id="__codelineno-6-80" name="__codelineno-6-80"></a>        <span class="o">-</span> <span class="n">rating_inheritance_reason</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-6-81"><a href="#__codelineno-6-81" id="__codelineno-6-81" name="__codelineno-6-81"></a>        <span class="s2">"""</span>
+</span><span id="__span-6-82"><a href="#__codelineno-6-82" id="__codelineno-6-82" name="__codelineno-6-82"></a><span class="s2">        # Join with org_mappings to get parent</span>
+</span><span id="__span-6-83"><a href="#__codelineno-6-83" id="__codelineno-6-83" name="__codelineno-6-83"></a><span class="s2">        enriched = counterparties.join(</span>
+</span><span id="__span-6-84"><a href="#__codelineno-6-84" id="__codelineno-6-84" name="__codelineno-6-84"></a><span class="s2">            org_mappings.select(</span>
+</span><span id="__span-6-85"><a href="#__codelineno-6-85" id="__codelineno-6-85" name="__codelineno-6-85"></a><span class="s2">                [</span>
+</span><span id="__span-6-86"><a href="#__codelineno-6-86" id="__codelineno-6-86" name="__codelineno-6-86"></a><span class="s2">                    pl.col("child_counterparty_reference"),</span>
+</span><span id="__span-6-87"><a href="#__codelineno-6-87" id="__codelineno-6-87" name="__codelineno-6-87"></a><span class="s2">                    pl.col("parent_counterparty_reference"),</span>
+</span><span id="__span-6-88"><a href="#__codelineno-6-88" id="__codelineno-6-88" name="__codelineno-6-88"></a><span class="s2">                ]</span>
+</span><span id="__span-6-89"><a href="#__codelineno-6-89" id="__codelineno-6-89" name="__codelineno-6-89"></a><span class="s2">            ),</span>
+</span><span id="__span-6-90"><a href="#__codelineno-6-90" id="__codelineno-6-90" name="__codelineno-6-90"></a><span class="s2">            left_on="counterparty_reference",</span>
+</span><span id="__span-6-91"><a href="#__codelineno-6-91" id="__codelineno-6-91" name="__codelineno-6-91"></a><span class="s2">            right_on="child_counterparty_reference",</span>
+</span><span id="__span-6-92"><a href="#__codelineno-6-92" id="__codelineno-6-92" name="__codelineno-6-92"></a><span class="s2">            how="left",</span>
+</span><span id="__span-6-93"><a href="#__codelineno-6-93" id="__codelineno-6-93" name="__codelineno-6-93"></a><span class="s2">        )</span>
+</span><span id="__span-6-94"><a href="#__codelineno-6-94" id="__codelineno-6-94" name="__codelineno-6-94"></a>
+</span><span id="__span-6-95"><a href="#__codelineno-6-95" id="__codelineno-6-95" name="__codelineno-6-95"></a><span class="s2">        # Join with ultimate parents and rating inheritance in sequence,</span>
+</span><span id="__span-6-96"><a href="#__codelineno-6-96" id="__codelineno-6-96" name="__codelineno-6-96"></a><span class="s2">        # then derive flags in a single with_columns batch.</span>
+</span><span id="__span-6-97"><a href="#__codelineno-6-97" id="__codelineno-6-97" name="__codelineno-6-97"></a><span class="s2">        enriched = (</span>
+</span><span id="__span-6-98"><a href="#__codelineno-6-98" id="__codelineno-6-98" name="__codelineno-6-98"></a><span class="s2">            enriched.join(</span>
+</span><span id="__span-6-99"><a href="#__codelineno-6-99" id="__codelineno-6-99" name="__codelineno-6-99"></a><span class="s2">                ultimate_parents.select(</span>
+</span><span id="__span-6-100"><a href="#__codelineno-6-100" id="__codelineno-6-100" name="__codelineno-6-100"></a><span class="s2">                    [</span>
+</span><span id="__span-6-101"><a href="#__codelineno-6-101" id="__codelineno-6-101" name="__codelineno-6-101"></a><span class="s2">                        pl.col("counterparty_reference").alias("_up_cp"),</span>
+</span><span id="__span-6-102"><a href="#__codelineno-6-102" id="__codelineno-6-102" name="__codelineno-6-102"></a><span class="s2">                        pl.col("ultimate_parent_reference"),</span>
+</span><span id="__span-6-103"><a href="#__codelineno-6-103" id="__codelineno-6-103" name="__codelineno-6-103"></a><span class="s2">                        pl.col("hierarchy_depth").alias("counterparty_hierarchy_depth"),</span>
+</span><span id="__span-6-104"><a href="#__codelineno-6-104" id="__codelineno-6-104" name="__codelineno-6-104"></a><span class="s2">                    ]</span>
+</span><span id="__span-6-105"><a href="#__codelineno-6-105" id="__codelineno-6-105" name="__codelineno-6-105"></a><span class="s2">                ),</span>
 </span></code></pre></div>
 </details>
 <h2 id="stage-3-classification">Stage 3: Classification<a class="headerlink" href="#stage-3-classification" title="Permanent link">¶</a></h2>
@@ -3057,56 +3201,56 @@ to keep the query plan shallow (5 nodes instead of 21).</p>
 </div>
 <details class="example">
 <summary>Actual Implementation (classifier.py)</summary>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a href="#__codelineno-7-1" id="__codelineno-7-1" name="__codelineno-7-1"></a>            <span class="n">provisions</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">provisions</span><span class="p">,</span>
-</span><span id="__span-7-2"><a href="#__codelineno-7-2" id="__codelineno-7-2" name="__codelineno-7-2"></a>            <span class="n">counterparty_lookup</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">counterparty_lookup</span><span class="p">,</span>
-</span><span id="__span-7-3"><a href="#__codelineno-7-3" id="__codelineno-7-3" name="__codelineno-7-3"></a>            <span class="n">classification_audit</span><span class="o">=</span><span class="n">classification_audit</span><span class="p">,</span>
-</span><span id="__span-7-4"><a href="#__codelineno-7-4" id="__codelineno-7-4" name="__codelineno-7-4"></a>            <span class="n">classification_errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
-</span><span id="__span-7-5"><a href="#__codelineno-7-5" id="__codelineno-7-5" name="__codelineno-7-5"></a>        <span class="p">)</span>
-</span><span id="__span-7-6"><a href="#__codelineno-7-6" id="__codelineno-7-6" name="__codelineno-7-6"></a>
-</span><span id="__span-7-7"><a href="#__codelineno-7-7" id="__codelineno-7-7" name="__codelineno-7-7"></a>    <span class="c1"># =========================================================================</span>
-</span><span id="__span-7-8"><a href="#__codelineno-7-8" id="__codelineno-7-8" name="__codelineno-7-8"></a>    <span class="c1"># Phase 1: Counterparty join (retained unchanged)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a href="#__codelineno-7-1" id="__codelineno-7-1" name="__codelineno-7-1"></a>            <span class="n">collateral</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">collateral</span><span class="p">,</span>
+</span><span id="__span-7-2"><a href="#__codelineno-7-2" id="__codelineno-7-2" name="__codelineno-7-2"></a>            <span class="n">guarantees</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">guarantees</span><span class="p">,</span>
+</span><span id="__span-7-3"><a href="#__codelineno-7-3" id="__codelineno-7-3" name="__codelineno-7-3"></a>            <span class="n">provisions</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">provisions</span><span class="p">,</span>
+</span><span id="__span-7-4"><a href="#__codelineno-7-4" id="__codelineno-7-4" name="__codelineno-7-4"></a>            <span class="n">counterparty_lookup</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">counterparty_lookup</span><span class="p">,</span>
+</span><span id="__span-7-5"><a href="#__codelineno-7-5" id="__codelineno-7-5" name="__codelineno-7-5"></a>            <span class="n">classification_audit</span><span class="o">=</span><span class="n">classification_audit</span><span class="p">,</span>
+</span><span id="__span-7-6"><a href="#__codelineno-7-6" id="__codelineno-7-6" name="__codelineno-7-6"></a>            <span class="n">classification_errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+</span><span id="__span-7-7"><a href="#__codelineno-7-7" id="__codelineno-7-7" name="__codelineno-7-7"></a>        <span class="p">)</span>
+</span><span id="__span-7-8"><a href="#__codelineno-7-8" id="__codelineno-7-8" name="__codelineno-7-8"></a>
 </span><span id="__span-7-9"><a href="#__codelineno-7-9" id="__codelineno-7-9" name="__codelineno-7-9"></a>    <span class="c1"># =========================================================================</span>
-</span><span id="__span-7-10"><a href="#__codelineno-7-10" id="__codelineno-7-10" name="__codelineno-7-10"></a>
-</span><span id="__span-7-11"><a href="#__codelineno-7-11" id="__codelineno-7-11" name="__codelineno-7-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_add_counterparty_attributes</span><span class="p">(</span>
-</span><span id="__span-7-12"><a href="#__codelineno-7-12" id="__codelineno-7-12" name="__codelineno-7-12"></a>        <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-7-13"><a href="#__codelineno-7-13" id="__codelineno-7-13" name="__codelineno-7-13"></a>        <span class="n">exposures</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-7-14"><a href="#__codelineno-7-14" id="__codelineno-7-14" name="__codelineno-7-14"></a>        <span class="n">counterparties</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
-</span><span id="__span-7-15"><a href="#__codelineno-7-15" id="__codelineno-7-15" name="__codelineno-7-15"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
-</span><span id="__span-7-16"><a href="#__codelineno-7-16" id="__codelineno-7-16" name="__codelineno-7-16"></a><span class="w">        </span><span class="sd">"""</span>
-</span><span id="__span-7-17"><a href="#__codelineno-7-17" id="__codelineno-7-17" name="__codelineno-7-17"></a><span class="sd">        Add counterparty attributes needed for classification.</span>
-</span><span id="__span-7-18"><a href="#__codelineno-7-18" id="__codelineno-7-18" name="__codelineno-7-18"></a>
-</span><span id="__span-7-19"><a href="#__codelineno-7-19" id="__codelineno-7-19" name="__codelineno-7-19"></a><span class="sd">        Joins exposures with counterparty data to get:</span>
-</span><span id="__span-7-20"><a href="#__codelineno-7-20" id="__codelineno-7-20" name="__codelineno-7-20"></a><span class="sd">        - entity_type (single source of truth for exposure class)</span>
-</span><span id="__span-7-21"><a href="#__codelineno-7-21" id="__codelineno-7-21" name="__codelineno-7-21"></a><span class="sd">        - annual_revenue (for SME check)</span>
-</span><span id="__span-7-22"><a href="#__codelineno-7-22" id="__codelineno-7-22" name="__codelineno-7-22"></a><span class="sd">        - total_assets (for large financial sector entity threshold)</span>
-</span><span id="__span-7-23"><a href="#__codelineno-7-23" id="__codelineno-7-23" name="__codelineno-7-23"></a><span class="sd">        - default_status</span>
-</span><span id="__span-7-24"><a href="#__codelineno-7-24" id="__codelineno-7-24" name="__codelineno-7-24"></a><span class="sd">        - country_code</span>
-</span><span id="__span-7-25"><a href="#__codelineno-7-25" id="__codelineno-7-25" name="__codelineno-7-25"></a><span class="sd">        - is_regulated (for FI scalar - unregulated FSE)</span>
-</span><span id="__span-7-26"><a href="#__codelineno-7-26" id="__codelineno-7-26" name="__codelineno-7-26"></a><span class="sd">        - is_managed_as_retail (for SME retail treatment)</span>
-</span><span id="__span-7-27"><a href="#__codelineno-7-27" id="__codelineno-7-27" name="__codelineno-7-27"></a><span class="sd">        """</span>
-</span><span id="__span-7-28"><a href="#__codelineno-7-28" id="__codelineno-7-28" name="__codelineno-7-28"></a>        <span class="n">cp_cols</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-7-29"><a href="#__codelineno-7-29" id="__codelineno-7-29" name="__codelineno-7-29"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">),</span>
-</span><span id="__span-7-30"><a href="#__codelineno-7-30" id="__codelineno-7-30" name="__codelineno-7-30"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"entity_type"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_entity_type"</span><span class="p">),</span>
-</span><span id="__span-7-31"><a href="#__codelineno-7-31" id="__codelineno-7-31" name="__codelineno-7-31"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"country_code"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_country_code"</span><span class="p">),</span>
-</span><span id="__span-7-32"><a href="#__codelineno-7-32" id="__codelineno-7-32" name="__codelineno-7-32"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"annual_revenue"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_annual_revenue"</span><span class="p">),</span>
-</span><span id="__span-7-33"><a href="#__codelineno-7-33" id="__codelineno-7-33" name="__codelineno-7-33"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"total_assets"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_total_assets"</span><span class="p">),</span>
-</span><span id="__span-7-34"><a href="#__codelineno-7-34" id="__codelineno-7-34" name="__codelineno-7-34"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"default_status"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_default_status"</span><span class="p">),</span>
-</span><span id="__span-7-35"><a href="#__codelineno-7-35" id="__codelineno-7-35" name="__codelineno-7-35"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"is_regulated"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_is_regulated"</span><span class="p">),</span>
-</span><span id="__span-7-36"><a href="#__codelineno-7-36" id="__codelineno-7-36" name="__codelineno-7-36"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"is_managed_as_retail"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_is_managed_as_retail"</span><span class="p">),</span>
-</span><span id="__span-7-37"><a href="#__codelineno-7-37" id="__codelineno-7-37" name="__codelineno-7-37"></a>        <span class="p">])</span>
-</span><span id="__span-7-38"><a href="#__codelineno-7-38" id="__codelineno-7-38" name="__codelineno-7-38"></a>
-</span><span id="__span-7-39"><a href="#__codelineno-7-39" id="__codelineno-7-39" name="__codelineno-7-39"></a>        <span class="k">return</span> <span class="n">exposures</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-</span><span id="__span-7-40"><a href="#__codelineno-7-40" id="__codelineno-7-40" name="__codelineno-7-40"></a>            <span class="n">cp_cols</span><span class="p">,</span>
-</span><span id="__span-7-41"><a href="#__codelineno-7-41" id="__codelineno-7-41" name="__codelineno-7-41"></a>            <span class="n">on</span><span class="o">=</span><span class="s2">"counterparty_reference"</span><span class="p">,</span>
-</span><span id="__span-7-42"><a href="#__codelineno-7-42" id="__codelineno-7-42" name="__codelineno-7-42"></a>            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
-</span><span id="__span-7-43"><a href="#__codelineno-7-43" id="__codelineno-7-43" name="__codelineno-7-43"></a>        <span class="p">)</span>
-</span><span id="__span-7-44"><a href="#__codelineno-7-44" id="__codelineno-7-44" name="__codelineno-7-44"></a>
-</span><span id="__span-7-45"><a href="#__codelineno-7-45" id="__codelineno-7-45" name="__codelineno-7-45"></a>    <span class="c1"># =========================================================================</span>
-</span><span id="__span-7-46"><a href="#__codelineno-7-46" id="__codelineno-7-46" name="__codelineno-7-46"></a>    <span class="c1"># Phase 2: Independent flags (1 .with_columns — 11 expressions)</span>
-</span><span id="__span-7-47"><a href="#__codelineno-7-47" id="__codelineno-7-47" name="__codelineno-7-47"></a>    <span class="c1"># =========================================================================</span>
-</span><span id="__span-7-48"><a href="#__codelineno-7-48" id="__codelineno-7-48" name="__codelineno-7-48"></a>
-</span><span id="__span-7-49"><a href="#__codelineno-7-49" id="__codelineno-7-49" name="__codelineno-7-49"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_derive_independent_flags</span><span class="p">(</span>
-</span><span id="__span-7-50"><a href="#__codelineno-7-50" id="__codelineno-7-50" name="__codelineno-7-50"></a>        <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-7-10"><a href="#__codelineno-7-10" id="__codelineno-7-10" name="__codelineno-7-10"></a>    <span class="c1"># Phase 1: Counterparty join (retained unchanged)</span>
+</span><span id="__span-7-11"><a href="#__codelineno-7-11" id="__codelineno-7-11" name="__codelineno-7-11"></a>    <span class="c1"># =========================================================================</span>
+</span><span id="__span-7-12"><a href="#__codelineno-7-12" id="__codelineno-7-12" name="__codelineno-7-12"></a>
+</span><span id="__span-7-13"><a href="#__codelineno-7-13" id="__codelineno-7-13" name="__codelineno-7-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_add_counterparty_attributes</span><span class="p">(</span>
+</span><span id="__span-7-14"><a href="#__codelineno-7-14" id="__codelineno-7-14" name="__codelineno-7-14"></a>        <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-7-15"><a href="#__codelineno-7-15" id="__codelineno-7-15" name="__codelineno-7-15"></a>        <span class="n">exposures</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-7-16"><a href="#__codelineno-7-16" id="__codelineno-7-16" name="__codelineno-7-16"></a>        <span class="n">counterparties</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">,</span>
+</span><span id="__span-7-17"><a href="#__codelineno-7-17" id="__codelineno-7-17" name="__codelineno-7-17"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">:</span>
+</span><span id="__span-7-18"><a href="#__codelineno-7-18" id="__codelineno-7-18" name="__codelineno-7-18"></a><span class="w">        </span><span class="sd">"""</span>
+</span><span id="__span-7-19"><a href="#__codelineno-7-19" id="__codelineno-7-19" name="__codelineno-7-19"></a><span class="sd">        Add counterparty attributes needed for classification.</span>
+</span><span id="__span-7-20"><a href="#__codelineno-7-20" id="__codelineno-7-20" name="__codelineno-7-20"></a>
+</span><span id="__span-7-21"><a href="#__codelineno-7-21" id="__codelineno-7-21" name="__codelineno-7-21"></a><span class="sd">        Joins exposures with counterparty data to get:</span>
+</span><span id="__span-7-22"><a href="#__codelineno-7-22" id="__codelineno-7-22" name="__codelineno-7-22"></a><span class="sd">        - entity_type (single source of truth for exposure class)</span>
+</span><span id="__span-7-23"><a href="#__codelineno-7-23" id="__codelineno-7-23" name="__codelineno-7-23"></a><span class="sd">        - annual_revenue (for SME check)</span>
+</span><span id="__span-7-24"><a href="#__codelineno-7-24" id="__codelineno-7-24" name="__codelineno-7-24"></a><span class="sd">        - total_assets (for large financial sector entity threshold)</span>
+</span><span id="__span-7-25"><a href="#__codelineno-7-25" id="__codelineno-7-25" name="__codelineno-7-25"></a><span class="sd">        - default_status</span>
+</span><span id="__span-7-26"><a href="#__codelineno-7-26" id="__codelineno-7-26" name="__codelineno-7-26"></a><span class="sd">        - country_code</span>
+</span><span id="__span-7-27"><a href="#__codelineno-7-27" id="__codelineno-7-27" name="__codelineno-7-27"></a><span class="sd">        - is_regulated (for FI scalar - unregulated FSE)</span>
+</span><span id="__span-7-28"><a href="#__codelineno-7-28" id="__codelineno-7-28" name="__codelineno-7-28"></a><span class="sd">        - is_managed_as_retail (for SME retail treatment)</span>
+</span><span id="__span-7-29"><a href="#__codelineno-7-29" id="__codelineno-7-29" name="__codelineno-7-29"></a><span class="sd">        """</span>
+</span><span id="__span-7-30"><a href="#__codelineno-7-30" id="__codelineno-7-30" name="__codelineno-7-30"></a>        <span class="n">cp_schema</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span>
+</span><span id="__span-7-31"><a href="#__codelineno-7-31" id="__codelineno-7-31" name="__codelineno-7-31"></a>        <span class="n">cp_col_names</span> <span class="o">=</span> <span class="n">cp_schema</span><span class="o">.</span><span class="n">names</span><span class="p">()</span>
+</span><span id="__span-7-32"><a href="#__codelineno-7-32" id="__codelineno-7-32" name="__codelineno-7-32"></a>
+</span><span id="__span-7-33"><a href="#__codelineno-7-33" id="__codelineno-7-33" name="__codelineno-7-33"></a>        <span class="n">select_cols</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-7-34"><a href="#__codelineno-7-34" id="__codelineno-7-34" name="__codelineno-7-34"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"counterparty_reference"</span><span class="p">),</span>
+</span><span id="__span-7-35"><a href="#__codelineno-7-35" id="__codelineno-7-35" name="__codelineno-7-35"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"entity_type"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_entity_type"</span><span class="p">),</span>
+</span><span id="__span-7-36"><a href="#__codelineno-7-36" id="__codelineno-7-36" name="__codelineno-7-36"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"country_code"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_country_code"</span><span class="p">),</span>
+</span><span id="__span-7-37"><a href="#__codelineno-7-37" id="__codelineno-7-37" name="__codelineno-7-37"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"annual_revenue"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_annual_revenue"</span><span class="p">),</span>
+</span><span id="__span-7-38"><a href="#__codelineno-7-38" id="__codelineno-7-38" name="__codelineno-7-38"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"total_assets"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_total_assets"</span><span class="p">),</span>
+</span><span id="__span-7-39"><a href="#__codelineno-7-39" id="__codelineno-7-39" name="__codelineno-7-39"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"default_status"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_default_status"</span><span class="p">),</span>
+</span><span id="__span-7-40"><a href="#__codelineno-7-40" id="__codelineno-7-40" name="__codelineno-7-40"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"is_regulated"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_is_regulated"</span><span class="p">),</span>
+</span><span id="__span-7-41"><a href="#__codelineno-7-41" id="__codelineno-7-41" name="__codelineno-7-41"></a>            <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"is_managed_as_retail"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_is_managed_as_retail"</span><span class="p">),</span>
+</span><span id="__span-7-42"><a href="#__codelineno-7-42" id="__codelineno-7-42" name="__codelineno-7-42"></a>        <span class="p">]</span>
+</span><span id="__span-7-43"><a href="#__codelineno-7-43" id="__codelineno-7-43" name="__codelineno-7-43"></a>
+</span><span id="__span-7-44"><a href="#__codelineno-7-44" id="__codelineno-7-44" name="__codelineno-7-44"></a>        <span class="c1"># Basel 3.1 fields — propagate if present (optional in input data)</span>
+</span><span id="__span-7-45"><a href="#__codelineno-7-45" id="__codelineno-7-45" name="__codelineno-7-45"></a>        <span class="k">if</span> <span class="s2">"scra_grade"</span> <span class="ow">in</span> <span class="n">cp_col_names</span><span class="p">:</span>
+</span><span id="__span-7-46"><a href="#__codelineno-7-46" id="__codelineno-7-46" name="__codelineno-7-46"></a>            <span class="n">select_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"scra_grade"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_scra_grade"</span><span class="p">))</span>
+</span><span id="__span-7-47"><a href="#__codelineno-7-47" id="__codelineno-7-47" name="__codelineno-7-47"></a>        <span class="k">if</span> <span class="s2">"is_investment_grade"</span> <span class="ow">in</span> <span class="n">cp_col_names</span><span class="p">:</span>
+</span><span id="__span-7-48"><a href="#__codelineno-7-48" id="__codelineno-7-48" name="__codelineno-7-48"></a>            <span class="n">select_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"is_investment_grade"</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"cp_is_investment_grade"</span><span class="p">))</span>
+</span><span id="__span-7-49"><a href="#__codelineno-7-49" id="__codelineno-7-49" name="__codelineno-7-49"></a>
+</span><span id="__span-7-50"><a href="#__codelineno-7-50" id="__codelineno-7-50" name="__codelineno-7-50"></a>        <span class="n">cp_cols</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">select_cols</span><span class="p">)</span>
 </span></code></pre></div>
 </details>
 <h2 id="stage-4-crm-processing">Stage 4: CRM Processing<a class="headerlink" href="#stage-4-crm-processing" title="Permanent link">¶</a></h2>

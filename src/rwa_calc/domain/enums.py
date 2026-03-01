@@ -13,410 +13,452 @@ These enums provide type safety and self-documenting code for the
 dual-framework support (CRR until Dec 2026, Basel 3.1 from Jan 2027).
 """
 
-from enum import Enum
+from enum import IntEnum, StrEnum
 
 
-class RegulatoryFramework(Enum):
+class RegulatoryFramework(StrEnum):
     """
     Regulatory framework for RWA calculations.
-
-    CRR: Capital Requirements Regulation (EU 575/2013) - Basel 3.0
-         Effective until 31 December 2026
-         Key features: SME supporting factors, simpler LTV treatment
-
-    BASEL_3_1: PRA PS9/24 UK implementation of Basel 3.1
-               Effective from 1 January 2027
-               Key features: Output floor, LGD floors, differentiated PD floors
     """
 
     CRR = "CRR"
+    """
+    Capital Requirements Regulation (EU 575/2013) - Basel 3.0.
+
+    Effective until 31 December 2026.
+    Key features: SME supporting factors, simpler LTV treatment.
+    """
+
     BASEL_3_1 = "BASEL_3_1"
-
-
-class ExposureClass(Enum):
     """
-    Exposure classes for credit risk classification.
+    PRA PS9/24 UK implementation of Basel 3.1.
 
-    Aligned with both CRR (Art. 112) and Basel 3.1 (CRE20).
-    Used for determining applicable risk weights and IRB parameters.
+    Effective from 1 January 2027.
+    Key features: Output floor, LGD floors, differentiated PD floors.
     """
 
-    # Central government and central bank exposures (CRR Art. 112(a), CRE20.7-15)
+
+class ExposureClass(StrEnum):
+    """
+    Exposure classes for credit risk classification (CRR Art. 112, Basel 3.1 CRE20).
+    """
+
     CENTRAL_GOVT_CENTRAL_BANK = "central_govt_central_bank"
+    """Central government and central bank exposures (CRR Art. 112(a), CRE20.7-15)"""
 
-    # Exposures to institutions (CRR Art. 112(d), CRE20.16-21)
     INSTITUTION = "institution"
+    """Exposures to institutions (CRR Art. 112(d), CRE20.16-21)"""
 
-    # Corporate exposures (CRR Art. 112(g), CRE20.22-25)
     CORPORATE = "corporate"
+    """Corporate exposures (CRR Art. 112(g), CRE20.22-25)"""
 
-    # SME corporate (turnover <= EUR 50m / GBP 44m)
     CORPORATE_SME = "corporate_sme"
+    """SME corporate (turnover <= EUR 50m / GBP 44m)"""
 
-    # Retail - residential mortgages (CRR Art. 112(h), CRE20.71-81)
     RETAIL_MORTGAGE = "retail_mortgage"
+    """Retail - residential mortgages (CRR Art. 112(h), CRE20.71-81)"""
 
-    # Retail - qualifying revolving retail exposures (CRE30.23-24)
     RETAIL_QRRE = "retail_qrre"
+    """Retail - qualifying revolving retail exposures (CRE30.23-24)"""
 
-    # Retail - other (CRR Art. 112(h), CRE20.65-70)
     RETAIL_OTHER = "retail_other"
+    """Retail - other (CRR Art. 112(h), CRE20.65-70)"""
 
-    # Specialised lending - slotting approach (CRE33)
     SPECIALISED_LENDING = "specialised_lending"
+    """Specialised lending - slotting approach (CRE33)"""
 
-    # Equity exposures (CRR Art. 112(p), CRE20.58-62)
     EQUITY = "equity"
+    """Equity exposures (CRR Art. 112(p), CRE20.58-62)"""
 
-    # Exposures in default (CRR Art. 112(j), CRE20.88-90)
     DEFAULTED = "defaulted"
+    """Exposures in default (CRR Art. 112(j), CRE20.88-90)"""
 
-    # Exposures to PSEs (CRR Art. 112(c), CRE20.7-15)
     PSE = "pse"
+    """Exposures to PSEs (CRR Art. 112(c), CRE20.7-15)"""
 
-    # Exposures to MDBs and international organisations (CRR Art. 117-118)
     MDB = "mdb"
+    """Exposures to MDBs and international organisations (CRR Art. 117-118)"""
 
-    # Regional government and local authorities (CRR Art. 115)
     RGLA = "rgla"
+    """Regional government and local authorities (CRR Art. 115)"""
 
-    # Other items (CRR Art. 112(q))
     OTHER = "other"
+    """Other items (CRR Art. 112(q))"""
 
 
-class ApproachType(Enum):
+class ApproachType(StrEnum):
     """
     Calculation approach for credit risk.
-
-    Determines the methodology used for risk weight calculation.
-    Must be approved by the regulator (PRA) for each exposure class.
     """
 
-    # Standardised Approach - risk weights from lookup tables
     SA = "standardised"
+    """Standardised Approach - risk weights from lookup tables"""
 
-    # Foundation IRB - bank-estimated PD, supervisory LGD/EAD
     FIRB = "foundation_irb"
+    """Foundation IRB - bank-estimated PD, supervisory LGD/EAD"""
 
-    # Advanced IRB - bank-estimated PD, LGD, EAD
     AIRB = "advanced_irb"
+    """Advanced IRB - bank-estimated PD, LGD, EAD"""
 
-    # Slotting approach for specialised lending (CRE33)
     SLOTTING = "slotting"
+    """Slotting approach for specialised lending (CRE33)"""
 
 
-class CQS(Enum):
+class CQS(IntEnum):
     """
     Credit Quality Steps for external ratings mapping.
-
-    Maps external agency ratings to standardised risk weight lookup.
-    CQS 1-6 correspond to decreasing credit quality.
-    UNRATED applies when no eligible rating exists.
-
-    Mapping (approximate):
-        CQS1: AAA to AA- (S&P/Fitch), Aaa to Aa3 (Moody's)
-        CQS2: A+ to A-
-        CQS3: BBB+ to BBB-
-        CQS4: BB+ to BB-
-        CQS5: B+ to B-
-        CQS6: CCC+ and below
     """
 
     CQS1 = 1
+    """CQS 1: AAA to AA- (S&P/Fitch), Aaa to Aa3 (Moody's)"""
+
     CQS2 = 2
+    """CQS 2: A+ to A-"""
+
     CQS3 = 3
+    """CQS 3: BBB+ to BBB-"""
+
     CQS4 = 4
+    """CQS 4: BB+ to BB-"""
+
     CQS5 = 5
+    """CQS 5: B+ to B-"""
+
     CQS6 = 6
-    UNRATED = 0  # Using 0 instead of None for better type handling
+    """CQS 6: CCC+ and below"""
+
+    UNRATED = 0
+    """UNRATED: Applies when no eligible rating exists (uses 0 for type handling)"""
 
 
-class CollateralType(Enum):
+class CollateralType(StrEnum):
     """
     Categories of eligible collateral for CRM.
 
-    Determines applicable haircuts and LGD treatment.
-    Based on CRR Art. 197-199 and CRE22.
+    Determines applicable haircuts and LGD treatment based on CRR Art. 197-199 and CRE22.
     """
 
-    # Cash and eligible financial collateral (CRE22.40)
     FINANCIAL = "financial"
+    """Cash and eligible financial collateral (CRE22.40)"""
 
-    # Real estate / immovable property (CRE22.72-78)
     IMMOVABLE = "immovable"
+    """Real estate / immovable property (CRE22.72-78)"""
 
-    # Eligible receivables (CRE22.65-66)
     RECEIVABLES = "receivables"
+    """Eligible receivables (CRE22.65-66)"""
 
-    # Other eligible physical collateral (CRE22.67-71)
     OTHER_PHYSICAL = "other_physical"
+    """Other eligible physical collateral (CRE22.67-71)"""
 
-    # Collateral not eligible for CRM
     OTHER = "other"
+    """Collateral not eligible for CRM"""
 
 
-class IFRSStage(Enum):
+class IFRSStage(IntEnum):
     """
     IFRS 9 expected credit loss staging.
-
-    Determines provision recognition and expected loss comparison.
     """
 
-    # Stage 1: 12-month ECL (performing)
     STAGE_1 = 1
+    """Stage 1: 12-month ECL (performing)"""
 
-    # Stage 2: Lifetime ECL, not credit-impaired
     STAGE_2 = 2
+    """Stage 2: Lifetime ECL, not credit-impaired"""
 
-    # Stage 3: Lifetime ECL, credit-impaired (defaulted)
     STAGE_3 = 3
+    """Stage 3: Lifetime ECL, credit-impaired (defaulted)"""
 
 
-class ErrorSeverity(Enum):
+class ErrorSeverity(StrEnum):
     """
     Severity levels for calculation errors.
-
-    Used to classify issues encountered during RWA calculation.
     """
 
-    # Informational warning - calculation proceeds
     WARNING = "warning"
+    """Informational warning - calculation proceeds"""
 
-    # Error that may affect result accuracy
     ERROR = "error"
+    """Error that may affect result accuracy"""
 
-    # Critical error that may invalidate results
     CRITICAL = "critical"
+    """Critical error that may invalidate results"""
 
 
-class ErrorCategory(Enum):
+class ErrorCategory(StrEnum):
     """
     Categories for calculation errors.
-
-    Enables filtering and analysis of error types.
     """
 
-    # Missing or invalid input data
     DATA_QUALITY = "data_quality"
+    """Missing or invalid input data"""
 
-    # Violation of regulatory business rules
     BUSINESS_RULE = "business_rule"
+    """Violation of regulatory business rules"""
 
-    # Schema validation failures
     SCHEMA_VALIDATION = "schema_validation"
+    """Schema validation failures"""
 
-    # Configuration issues
     CONFIGURATION = "configuration"
+    """Configuration issues"""
 
-    # Internal calculation errors
     CALCULATION = "calculation"
+    """Internal calculation errors"""
 
-    # Hierarchy resolution issues
     HIERARCHY = "hierarchy"
+    """Hierarchy resolution issues"""
 
-    # CRM application issues
     CRM = "crm"
+    """CRM application issues"""
 
 
-class SlottingCategory(Enum):
+class SlottingCategory(StrEnum):
     """
-    Supervisory slotting categories for specialised lending.
-
-    Based on CRE33.5-8. Determines risk weights for project finance,
-    object finance, commodities finance, and IPRE.
+    Supervisory slotting categories for specialised lending (CRE33.5-8).
     """
 
-    STRONG = "strong"  # 70% RW (50% if < 2.5yr maturity)
-    GOOD = "good"  # 90% RW (70% if < 2.5yr maturity)
-    SATISFACTORY = "satisfactory"  # 115% RW
-    WEAK = "weak"  # 250% RW
-    DEFAULT = "default"  # 0% RW (100% provisioning expected)
+    STRONG = "strong"
+    """70% RW (50% if < 2.5yr maturity)"""
+
+    GOOD = "good"
+    """90% RW (70% if < 2.5yr maturity)"""
+
+    SATISFACTORY = "satisfactory"
+    """115% RW"""
+
+    WEAK = "weak"
+    """250% RW"""
+
+    DEFAULT = "default"
+    """0% RW (100% provisioning expected)"""
 
 
-class SpecialisedLendingType(Enum):
+class SpecialisedLendingType(StrEnum):
     """
-    Types of specialised lending exposures.
-
-    Based on CRE33.1-4.
+    Types of specialised lending exposures (CRE33.1-4).
     """
 
     PROJECT_FINANCE = "project_finance"
+    """Project Finance"""
+
     OBJECT_FINANCE = "object_finance"
+    """Object Finance"""
+
     COMMODITIES_FINANCE = "commodities_finance"
-    IPRE = "ipre"  # Income-producing real estate
-    HVCRE = "hvcre"  # High-volatility commercial real estate
+    """Commodities Finance"""
+
+    IPRE = "ipre"
+    """Income-producing real estate"""
+
+    HVCRE = "hvcre"
+    """High-volatility commercial real estate"""
 
 
-class PropertyType(Enum):
+class PropertyType(StrEnum):
     """
     Property types for real estate collateral.
-
-    Determines applicable LTV bands and risk weights.
     """
 
     RESIDENTIAL = "residential"
+    """Residential property"""
+
     COMMERCIAL = "commercial"
-    ADC = "adc"  # Acquisition, Development, Construction
+    """Commercial property"""
+
+    ADC = "adc"
+    """Acquisition, Development, Construction (ADC)"""
 
 
-class Seniority(Enum):
+class Seniority(StrEnum):
     """
     Seniority of exposure for LGD determination.
-
-    Under F-IRB, senior exposures get 45% LGD, subordinated get 75%.
-    Under Basel 3.1 SA, subordinated debt gets flat 150% RW (CRE20.47).
     """
 
     SENIOR = "senior"
-    SUBORDINATED = "subordinated"
-
-
-class SCRAGrade(Enum):
     """
-    Standardised Credit Risk Assessment Approach grades for unrated institutions.
+    Senior unsecured debt - first claim after secured creditors.
 
-    Basel 3.1 (CRE20.16-21) replaces CRR due-diligence assessment with SCRA.
-    Grade determines risk weight for unrated institution exposures.
+    Under F-IRB, senior exposures get 45% LGD.
+    """
 
-    Grade A: CET1 > 14%, Leverage > 5%, meets all regulatory requirements → 40% RW
-    Grade B: CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW
-    Grade C: Below minimum regulatory requirements → 150% RW
+    SUBORDINATED = "subordinated"
+    """
+    Subordinated unsecured debt - claim after senior unsecured creditors.
+
+    Under F-IRB, subordinated exposures get 75% LGD.
+    Under Basel 3.1 SA, subordinated debt gets flat 150% RW (CRE20.47).
+    """
+
+
+class SCRAGrade(StrEnum):
+    """
+    Standardised Credit Risk Assessment Approach (SCRA) grades (Basel 3.1 CRE20.16-21).
     """
 
     A = "A"
+    """CET1 > 14%, Leverage > 5%, meets all regulatory requirements → 40% RW"""
+
     B = "B"
+    """CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW"""
+
     C = "C"
+    """Below minimum regulatory requirements → 150% RW"""
 
 
-class CommitmentType(Enum):
+class CommitmentType(StrEnum):
     """
     Commitment types for CCF determination.
 
     Affects credit conversion factors for undrawn amounts.
     """
 
-    # Unconditionally cancellable - 0% CCF under SA (10% under Basel 3.1)
     UNCONDITIONALLY_CANCELLABLE = "unconditionally_cancellable"
+    """Unconditionally Cancellable - 0% CCF under SA (10% under Basel 3.1)"""
 
-    # Other committed facilities - 40% or higher CCF
     COMMITTED = "committed"
+    """Other committed facilities - 40% or higher CCF"""
 
-    # Trade finance - 20% CCF
     TRADE_FINANCE = "trade_finance"
+    """Trade finance - 20% CCF"""
 
-    # Direct credit substitutes - 100% CCF
     DIRECT_CREDIT_SUBSTITUTE = "direct_credit_substitute"
+    """Direct credit substitutes - 100% CCF"""
 
 
-class RiskType(Enum):
+class RiskType(StrEnum):
     """
     Off-balance sheet risk categories for CCF determination.
 
     Based on CRR Art. 111 CCF categories.
-    Under F-IRB (CRR Art. 166(8)), MR and MLR become 75% CCF.
-
-    Values:
-        FR (full_risk): 100% CCF under SA and F-IRB
-            Direct credit substitutes, guarantees, acceptances
-
-        MR (medium_risk): 50% CCF under SA, 75% CCF under F-IRB
-            NIFs, RUFs, standby LCs, committed undrawn facilities
-
-        MLR (medium_low_risk): 20% CCF under SA, 75% CCF under F-IRB
-            Documentary credits, trade finance, short-term self-liquidating
-
-        LR (low_risk): 0% CCF under SA and F-IRB
-            Unconditionally cancellable commitments
     """
 
     FR = "full_risk"
+    """
+    Full Risk - 100% CCF under SA and F-IRB
+
+    -- Direct credit substitutes, guarantees, acceptances
+    """
+
     MR = "medium_risk"
+    """
+    Medium Risk - 50% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
+
+    -- NIFs, RUFs, standby LCs, committed undrawn facilities
+    """
+
     MLR = "medium_low_risk"
+    """
+    Medium Low Risk - 20% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
+
+    -- Documentary credits, trade finance, short-term self-liquidating
+    """
+
     LR = "low_risk"
+    """
+    Low Risk - 0% CCF under SA and F-IRB
+    -- Unconditionally cancellable commitments
+    """
 
 
-class IRBApproachOption(Enum):
+class IRBApproachOption(StrEnum):
     """
     User-selectable IRB approach options.
 
     Determines which IRB approaches are permitted for the calculation.
-    Used by the API and UI for explicit approach selection.
-
-    Values:
-        SA_ONLY: Standardised Approach only - no IRB permissions
-        FIRB: Foundation IRB permitted (where regulatory allowed)
-            - Retail classes fall back to SA (FIRB not permitted for retail)
-            - Specialised lending can use FIRB or slotting
-        AIRB: Advanced IRB permitted (where regulatory allowed)
-            - Specialised lending uses slotting (AIRB not permitted)
-        FULL_IRB: Both FIRB and AIRB permitted
-            - AIRB takes precedence when both are permitted
-        RETAIL_AIRB_CORPORATE_FIRB: Hybrid approach for firms with:
-            - AIRB approval for retail exposures
-            - FIRB approval for corporate exposures
-            Corporates can be reclassified to retail if:
-            - Managed as part of retail pool (is_managed_as_retail=True)
-            - Aggregated exposure < EUR 1m
-            - Has internally modelled LGD
-            With property collateral → RETAIL_MORTGAGE, otherwise → RETAIL_OTHER
     """
 
     SA_ONLY = "sa_only"
+    """Standardised Approach only - no IRB permissions"""
+
     FIRB = "firb"
+    """
+    Foundation IRB permitted (where regulatory allowed).
+
+    - Retail classes fall back to SA (FIRB not permitted for retail)
+    - Specialised lending can use FIRB or slotting
+    """
+
     AIRB = "airb"
+    """
+    Advanced IRB permitted (where regulatory allowed).
+
+    - Specialised lending uses slotting (AIRB not permitted)
+    """
+
     FULL_IRB = "full_irb"
+    """
+    Full IRB permissions (FIRB and AIRB).
+
+    - AIRB takes precedence when both are permitted
+    """
+
     RETAIL_AIRB_CORPORATE_FIRB = "retail_airb_corporate_firb"
+    """
+    Hybrid approach: AIRB for retail and FIRB for corporate.
+
+    Corporates can be reclassified to retail if:
+    - Managed as part of retail pool (is_managed_as_retail=True)
+    - Aggregated exposure < EUR 1m
+    - Has internally modelled LGD
+    With property collateral → RETAIL_MORTGAGE, otherwise → RETAIL_OTHER
+    """
 
 
-class EquityType(Enum):
+class EquityType(StrEnum):
     """
     Types of equity exposures for risk weight determination.
 
     Used for both Article 133 (SA) and Article 155 (IRB Simple) approaches.
-
-    Values:
-        CENTRAL_BANK: Central bank equity - 0% SA (Art. 133(6))
-        LISTED: Listed equity on recognised exchange - 100% SA / 290% IRB
-        EXCHANGE_TRADED: Explicitly exchange-traded - 100% SA / 290% IRB
-        GOVERNMENT_SUPPORTED: Government programme equity - 100% SA / 190% IRB
-        UNLISTED: Unlisted equity - 250% SA / 370% IRB
-        SPECULATIVE: Speculative unlisted/venture capital - 400% SA / 370% IRB
-        PRIVATE_EQUITY: Private equity holdings - 250% SA / 370% IRB
-        PRIVATE_EQUITY_DIVERSIFIED: Private equity in diversified portfolio - 250% SA / 190% IRB
-        CIU: Collective investment undertakings - 250% SA / 370% IRB (or look-through)
-        OTHER: Other equity exposures - 250% SA / 370% IRB
     """
 
     CENTRAL_BANK = "central_bank"
+    """Central bank equity - 0% SA (Art. 133(6))"""
+
     LISTED = "listed"
+    """Listed equity on recognised exchange - 100% SA / 290% IRB"""
+
     EXCHANGE_TRADED = "exchange_traded"
+    """Explicitly exchange-traded - 100% SA / 290% IRB"""
+
     GOVERNMENT_SUPPORTED = "government_supported"
+    """Government programme equity - 100% SA / 190% IRB"""
+
     UNLISTED = "unlisted"
+    """Unlisted equity - 250% SA / 370% IRB"""
+
     SPECULATIVE = "speculative"
+    """Speculative unlisted/venture capital - 400% SA / 370% IRB"""
+
     PRIVATE_EQUITY = "private_equity"
+    """Private equity holdings - 250% SA / 370% IRB"""
+
     PRIVATE_EQUITY_DIVERSIFIED = "private_equity_diversified"
+    """Private equity in diversified portfolio - 250% SA / 190% IRB"""
+
     CIU = "ciu"
+    """Collective investment undertakings - 250% SA / 370% IRB (or look-through)"""
+
     OTHER = "other"
+    """Other equity exposures - 250% SA / 370% IRB"""
 
 
-class EquityApproach(Enum):
+class EquityApproach(StrEnum):
     """
     Equity exposure calculation approach.
-
-    Determines which regulatory article applies for equity risk weights.
-
-    Values:
-        SA: Article 133 Standardised Approach
-            - 0% for central bank
-            - 100% for listed/government-supported
-            - 250% for unlisted
-            - 400% for speculative
-
-        IRB_SIMPLE: Article 155 IRB Simple Risk Weight Method
-            - 190% for diversified private equity
-            - 290% for exchange-traded
-            - 370% for other equity
     """
 
     SA = "sa"
+    """
+    Article 133 Standardised Approach:
+    - 0% for central bank
+    - 100% for listed/government-supported
+    - 250% for unlisted
+    - 400% for speculative
+    """
+
     IRB_SIMPLE = "irb_simple"
+    """
+    Article 155 IRB Simple Risk Weight Method:
+    - 190% for diversified private equity
+    - 290% for exchange-traded
+    - 370% for other equity
+    """

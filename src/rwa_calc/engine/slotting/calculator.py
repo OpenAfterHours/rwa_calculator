@@ -35,6 +35,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
+from polars import col
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
 from rwa_calc.contracts.errors import (
@@ -86,6 +87,57 @@ class SlottingCalculator:
     def __init__(self) -> None:
         """Initialize slotting calculator."""
         self._slotting_table: pl.DataFrame | None = None
+
+    def calculate_unified(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply slotting weights on unified frame (single-pass pipeline).
+
+        Filters slotting rows, applies the namespace chain, then concats
+        back with non-slotting rows to preserve the unified frame.
+
+        Args:
+            exposures: Unified frame with all approaches
+            config: Calculation configuration
+
+        Returns:
+            Unified frame with slotting columns populated for slotting rows
+        """
+        is_slotting = col("approach") == ApproachType.SLOTTING.value
+
+        non_slotting = exposures.filter(~is_slotting)
+        slotting = exposures.filter(is_slotting)
+
+        slotting = self.calculate_branch(slotting, config)
+
+        return pl.concat([non_slotting, slotting], how="diagonal_relaxed")
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate Slotting RWA on pre-filtered slotting-only rows.
+
+        Unlike calculate_unified(), expects only slotting rows — no
+        approach guards needed.
+
+        Args:
+            exposures: Pre-filtered slotting rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with slotting RWA columns populated
+        """
+        return (
+            exposures.slotting.prepare_columns()
+            .slotting.apply_slotting_weights(config)
+            .slotting.calculate_rwa()
+        )
 
     def calculate(
         self,
@@ -158,333 +210,21 @@ class SlottingCalculator:
                 errors=[],
             )
 
-        # Step 1: Ensure required columns exist
-        exposures = self._prepare_columns(exposures, config)
+        # Apply calculation pipeline using registered namespace
+        exposures = (
+            exposures.slotting.prepare_columns()
+            .slotting.apply_slotting_weights(config)
+            .slotting.calculate_rwa()
+        )
 
-        # Step 2: Look up risk weights based on slotting category
-        exposures = self._apply_slotting_weights(exposures, config)
-
-        # Step 3: Calculate RWA
-        exposures = self._calculate_rwa(exposures)
-
-        # Step 4: Build audit trail
-        audit = self._build_audit(exposures)
+        # Build audit trail
+        audit = exposures.slotting.build_audit()
 
         return SlottingResultBundle(
             results=exposures,
             calculation_audit=audit,
-            errors=errors,
+            errors=[],
         )
-
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply slotting weights to slotting rows on a unified frame.
-
-        Uses filter-process-merge to isolate slotting processing from
-        other approaches' columns.
-
-        Args:
-            exposures: Unified frame with all approaches
-            config: Calculation configuration
-
-        Returns:
-            Unified frame with slotting columns populated for slotting rows
-        """
-        is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
-
-        # Split: separate slotting rows from non-slotting
-        non_slotting = exposures.filter(~is_slotting)
-        slotting = exposures.filter(is_slotting)
-
-        # Process: run slotting chain on slotting rows only
-        slotting = self._prepare_columns(slotting, config)
-        slotting = self._apply_slotting_weights(slotting, config)
-        slotting = self._calculate_rwa(slotting)
-
-        # Merge: concat slotting results back with non-slotting rows
-        return pl.concat([non_slotting, slotting], how="diagonal_relaxed")
-
-    def calculate_branch(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Calculate Slotting RWA on pre-filtered slotting-only rows.
-
-        Unlike calculate_unified(), expects only slotting rows — no
-        filter/concat wrapper needed.
-
-        Args:
-            exposures: Pre-filtered slotting rows only
-            config: Calculation configuration
-
-        Returns:
-            LazyFrame with slotting RWA columns populated
-        """
-        exposures = self._prepare_columns(exposures, config)
-        exposures = self._apply_slotting_weights(exposures, config)
-        exposures = self._calculate_rwa(exposures)
-        return exposures
-
-    def _prepare_columns(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """Ensure all required columns exist with defaults."""
-        schema = exposures.collect_schema()
-
-        # EAD
-        if "ead_final" not in schema.names():
-            if "ead" in schema.names():
-                exposures = exposures.with_columns(
-                    [
-                        pl.col("ead").alias("ead_final"),
-                    ]
-                )
-            else:
-                exposures = exposures.with_columns(
-                    [
-                        pl.lit(0.0).alias("ead_final"),
-                    ]
-                )
-
-        # Slotting category
-        if "slotting_category" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit("satisfactory").alias("slotting_category"),
-                ]
-            )
-
-        # HVCRE flag
-        if "is_hvcre" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_hvcre"),
-                ]
-            )
-
-        # Specialised lending type
-        if "sl_type" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit("project_finance").alias("sl_type"),
-                ]
-            )
-
-        # CRR maturity flag (default >= 2.5yr = more conservative)
-        if "is_short_maturity" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_short_maturity"),
-                ]
-            )
-
-        # Basel 3.1 pre-operational flag (default operational)
-        if "is_pre_operational" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_pre_operational"),
-                ]
-            )
-
-        return exposures
-
-    def _apply_slotting_weights(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply slotting risk weights based on category, HVCRE flag, and maturity.
-
-        CRR: Maturity-based split with separate HVCRE table (Art. 153(5)).
-        Basel 3.1: HVCRE and PF pre-operational differentiated (BCBS CRE33).
-        """
-        if config.is_crr:
-            return self._apply_crr_weights(exposures)
-        else:
-            return self._apply_basel31_weights(exposures)
-
-    def _apply_crr_weights(self, exposures: pl.LazyFrame) -> pl.LazyFrame:
-        """Apply CRR slotting weights with maturity and HVCRE differentiation."""
-        from rwa_calc.engine.slotting.namespace import (
-            CRR_SLOTTING_WEIGHTS,
-            CRR_SLOTTING_WEIGHTS_HVCRE,
-            CRR_SLOTTING_WEIGHTS_HVCRE_SHORT,
-            CRR_SLOTTING_WEIGHTS_SHORT,
-        )
-
-        cat = pl.col("slotting_category").str.to_lowercase()
-        is_hvcre = pl.col("is_hvcre")
-        is_short = pl.col("is_short_maturity")
-
-        return exposures.with_columns(
-            [
-                # Non-HVCRE, >= 2.5yr
-                pl.when(~is_hvcre & ~is_short & (cat == "strong"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS["strong"]))
-                .when(~is_hvcre & ~is_short & (cat == "good"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS["good"]))
-                .when(~is_hvcre & ~is_short & (cat == "satisfactory"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
-                .when(~is_hvcre & ~is_short & (cat == "weak"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS["weak"]))
-                .when(~is_hvcre & ~is_short & (cat == "default"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS["default"]))
-                # Non-HVCRE, < 2.5yr
-                .when(~is_hvcre & is_short & (cat == "strong"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["strong"]))
-                .when(~is_hvcre & is_short & (cat == "good"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["good"]))
-                .when(~is_hvcre & is_short & (cat == "satisfactory"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["satisfactory"]))
-                .when(~is_hvcre & is_short & (cat == "weak"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["weak"]))
-                .when(~is_hvcre & is_short & (cat == "default"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["default"]))
-                # HVCRE, >= 2.5yr
-                .when(is_hvcre & ~is_short & (cat == "strong"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["strong"]))
-                .when(is_hvcre & ~is_short & (cat == "good"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["good"]))
-                .when(is_hvcre & ~is_short & (cat == "satisfactory"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
-                .when(is_hvcre & ~is_short & (cat == "weak"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["weak"]))
-                .when(is_hvcre & ~is_short & (cat == "default"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["default"]))
-                # HVCRE, < 2.5yr
-                .when(is_hvcre & is_short & (cat == "strong"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["strong"]))
-                .when(is_hvcre & is_short & (cat == "good"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["good"]))
-                .when(is_hvcre & is_short & (cat == "satisfactory"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["satisfactory"]))
-                .when(is_hvcre & is_short & (cat == "weak"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["weak"]))
-                .when(is_hvcre & is_short & (cat == "default"))
-                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["default"]))
-                .otherwise(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
-                .alias("risk_weight"),
-            ]
-        )
-
-    def _apply_basel31_weights(self, exposures: pl.LazyFrame) -> pl.LazyFrame:
-        """Apply Basel 3.1 slotting weights (BCBS CRE33)."""
-        from rwa_calc.engine.slotting.namespace import (
-            BASEL31_SLOTTING_WEIGHTS,
-            BASEL31_SLOTTING_WEIGHTS_HVCRE,
-            BASEL31_SLOTTING_WEIGHTS_PF_PREOP,
-        )
-
-        cat = pl.col("slotting_category").str.to_lowercase()
-        is_hvcre = pl.col("is_hvcre")
-        is_preop = pl.col("is_pre_operational")
-
-        return exposures.with_columns(
-            [
-                # HVCRE weights
-                pl.when(is_hvcre & (cat == "strong"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["strong"]))
-                .when(is_hvcre & (cat == "good"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["good"]))
-                .when(is_hvcre & (cat == "satisfactory"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
-                .when(is_hvcre & (cat == "weak"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["weak"]))
-                .when(is_hvcre & (cat == "default"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["default"]))
-                # PF pre-operational weights
-                .when(~is_hvcre & is_preop & (cat == "strong"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["strong"]))
-                .when(~is_hvcre & is_preop & (cat == "good"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["good"]))
-                .when(~is_hvcre & is_preop & (cat == "satisfactory"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["satisfactory"]))
-                .when(~is_hvcre & is_preop & (cat == "weak"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["weak"]))
-                .when(~is_hvcre & is_preop & (cat == "default"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["default"]))
-                # Non-HVCRE operational weights (default)
-                .when(~is_hvcre & ~is_preop & (cat == "strong"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["strong"]))
-                .when(~is_hvcre & ~is_preop & (cat == "good"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["good"]))
-                .when(~is_hvcre & ~is_preop & (cat == "satisfactory"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
-                .when(~is_hvcre & ~is_preop & (cat == "weak"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["weak"]))
-                .when(~is_hvcre & ~is_preop & (cat == "default"))
-                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["default"]))
-                .otherwise(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
-                .alias("risk_weight"),
-            ]
-        )
-
-    def _calculate_rwa(
-        self,
-        exposures: pl.LazyFrame,
-    ) -> pl.LazyFrame:
-        """Calculate RWA = EAD x RW."""
-        return exposures.with_columns(
-            [
-                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
-                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
-            ]
-        )
-
-    def _build_audit(
-        self,
-        exposures: pl.LazyFrame,
-    ) -> pl.LazyFrame:
-        """Build slotting calculation audit trail."""
-        schema = exposures.collect_schema()
-        available_cols = schema.names()
-
-        # Select available audit columns
-        select_cols = ["exposure_reference"]
-        optional_cols = [
-            "counterparty_reference",
-            "exposure_class",
-            "sl_type",
-            "slotting_category",
-            "is_hvcre",
-            "ead_final",
-            "risk_weight",
-            "rwa",
-        ]
-
-        for col in optional_cols:
-            if col in available_cols:
-                select_cols.append(col)
-
-        audit = exposures.select(select_cols)
-
-        # Add calculation string
-        audit = audit.with_columns(
-            [
-                pl.concat_str(
-                    [
-                        pl.lit("Slotting: Category="),
-                        pl.col("slotting_category"),
-                        pl.when(pl.col("is_hvcre")).then(pl.lit(" (HVCRE)")).otherwise(pl.lit("")),
-                        pl.lit(", RW="),
-                        (pl.col("risk_weight") * 100).round(0).cast(pl.String),
-                        pl.lit("%, RWA="),
-                        pl.col("rwa").round(0).cast(pl.String),
-                    ]
-                ).alias("slotting_calculation"),
-            ]
-        )
-
-        return audit
 
     def calculate_single_exposure(
         self,
@@ -513,6 +253,7 @@ class SlottingCalculator:
         """
         from datetime import date
 
+        import rwa_calc.engine.slotting.namespace  # noqa: F401
         from rwa_calc.contracts.config import CalculationConfig
 
         if config is None:
@@ -523,6 +264,24 @@ class SlottingCalculator:
             risk_weight = lookup_slotting_rw(category, is_hvcre, is_short_maturity)
         else:
             risk_weight = self._get_basel31_slotting_rw(category, is_hvcre, is_pre_operational)
+        # Use expression namespace for lookup logic
+        df = pl.DataFrame(
+            {
+                "slotting_category": [category],
+                "is_hvcre": [is_hvcre],
+                "is_short_maturity": [is_short_maturity],
+                "is_pre_operational": [is_pre_operational],
+            }
+        )
+
+        rw_expr = col("slotting_category").slotting.lookup_rw(
+            is_crr=config.is_crr,
+            is_hvcre=col("is_hvcre"),
+            is_short=col("is_short_maturity"),
+            is_preop=col("is_pre_operational"),
+        )
+
+        risk_weight = Decimal(str(df.select(rw_expr).item()))
 
         # Calculate RWA
         rwa = ead * risk_weight
@@ -544,34 +303,24 @@ class SlottingCalculator:
         is_pre_operational: bool = False,
     ) -> Decimal:
         """Get Basel 3.1 slotting risk weight (BCBS CRE33)."""
-        cat_lower = category.lower()
+        import rwa_calc.engine.slotting.namespace  # noqa: F401
 
-        if is_hvcre:
-            weights = {
-                "strong": Decimal("0.95"),
-                "good": Decimal("1.20"),
-                "satisfactory": Decimal("1.40"),
-                "weak": Decimal("2.50"),
-                "default": Decimal("0.00"),
+        # Use expression namespace for lookup logic
+        df = pl.DataFrame(
+            {
+                "slotting_category": [category],
+                "is_hvcre": [is_hvcre],
+                "is_pre_operational": [is_pre_operational],
             }
-        elif is_pre_operational:
-            weights = {
-                "strong": Decimal("0.80"),
-                "good": Decimal("1.00"),
-                "satisfactory": Decimal("1.20"),
-                "weak": Decimal("3.50"),
-                "default": Decimal("0.00"),
-            }
-        else:
-            weights = {
-                "strong": Decimal("0.70"),
-                "good": Decimal("0.90"),
-                "satisfactory": Decimal("1.15"),
-                "weak": Decimal("2.50"),
-                "default": Decimal("0.00"),
-            }
+        )
 
-        return weights.get(cat_lower, Decimal("1.15"))
+        rw_expr = col("slotting_category").slotting.lookup_rw(
+            is_crr=False,
+            is_hvcre=col("is_hvcre"),
+            is_preop=col("is_pre_operational"),
+        )
+
+        return Decimal(str(df.select(rw_expr).item()))
 
 
 def create_slotting_calculator() -> SlottingCalculator:

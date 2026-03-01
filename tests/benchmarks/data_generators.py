@@ -188,6 +188,8 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "is_central_counterparty": pl.Series(is_ccp),
                 "is_regional_govt_local_auth": pl.Series(is_rgla),
                 "is_managed_as_retail": pl.Series(np.zeros(n, dtype=bool)),
+                "scra_grade": pl.Series([None] * n, dtype=pl.String),
+                "is_investment_grade": pl.Series(np.zeros(n, dtype=bool)),
             }
         )
         .cast(COUNTERPARTY_SCHEMA)

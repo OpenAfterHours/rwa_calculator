@@ -14,7 +14,7 @@ Usage with namespace:
 
     config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
     result = (lf
-        .slotting.prepare_columns(config)
+        .slotting.prepare_columns()
         .slotting.apply_slotting_weights(config)
         .slotting.calculate_rwa()
     )

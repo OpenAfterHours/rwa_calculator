@@ -1,22 +1,28 @@
 """
 Standardised Approach (SA) Calculator for RWA.
 
-Implements CRR Art. 112-134 risk weight lookups and RWA calculation.
-Supports both CRR and Basel 3.1 frameworks with appropriate risk weights.
+Implements CRR Art. 112-134 and Basel 3.1 CRE20 risk weight lookups and RWA
+calculation. Supports both frameworks via config.is_basel_3_1 branching.
 
 Pipeline position:
     CRMProcessor -> SACalculator -> OutputAggregator
 
 Key responsibilities:
-- Risk weight lookup by exposure class and CQS
-- LTV-based weights for real estate
-- Supporting factor application (CRR only)
+- CQS-based risk weight lookup (sovereign, institution, corporate)
+- LTV-based weights for real estate (CRR split vs Basel 3.1 LTV bands)
+- ADC exposure treatment (Basel 3.1: 150% / 100% pre-sold)
+- Supporting factor application (CRR only — removed under Basel 3.1)
 - RWA calculation (EAD × RW × supporting factor)
 
 References:
 - CRR Art. 112-134: SA risk weights
 - CRR Art. 501: SME supporting factor
 - CRR Art. 501a: Infrastructure supporting factor
+- CRE20.73: Basel 3.1 residential RE (general) whole-loan LTV bands
+- CRE20.82: Basel 3.1 residential RE (income-producing) LTV bands
+- CRE20.85: Basel 3.1 commercial RE (general) preferential treatment
+- CRE20.86: Basel 3.1 commercial RE (income-producing) LTV bands
+- CRE20.87-88: Basel 3.1 ADC exposures
 """
 
 from __future__ import annotations
@@ -33,6 +39,11 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
     LazyFrameResult,
+)
+from rwa_calc.data.tables.b31_risk_weights import (
+    b31_adc_rw_expr,
+    b31_commercial_rw_expr,
+    b31_residential_rw_expr,
 )
 from rwa_calc.data.tables.crr_risk_weights import (
     COMMERCIAL_RE_PARAMS,
@@ -279,6 +290,10 @@ class SACalculator:
             missing_cols.append(pl.lit(False).alias("cp_is_managed_as_retail"))
         if "property_type" not in schema.names():
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("property_type"))
+        if "is_adc" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_adc"))
+        if "is_presold" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_presold"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -320,79 +335,127 @@ class SACalculator:
             suffix="_rw",
         )
 
-        # Apply class-specific risk weights
+        # Apply class-specific risk weights (framework-dependent)
         retail_rw = float(RETAIL_RISK_WEIGHT)
-        resi_threshold = float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"])
-        resi_rw_low = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"])
-        resi_rw_high = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"])
-        cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
-        cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
-        cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
-
         _uc = pl.col("_upper_class")
-        exposures = exposures.with_columns(
-            [
-                # Order matters: check specific classes before generic ones
-                # 1. Residential mortgage: LTV-based (must come before retail)
-                pl.when(
-                    _uc.str.contains("MORTGAGE", literal=True)
-                    | _uc.str.contains("RESIDENTIAL", literal=True)
-                )
-                .then(
-                    pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
-                    .then(pl.lit(resi_rw_low))
-                    # High LTV: weighted average
-                    .otherwise(
-                        # portion_low = threshold / ltv
-                        # portion_high = (ltv - threshold) / ltv
-                        # avg_rw = rw_low * portion_low + rw_high * portion_high
-                        resi_rw_low * resi_threshold / pl.col("ltv").fill_null(1.0)
-                        + resi_rw_high
-                        * (pl.col("ltv").fill_null(1.0) - resi_threshold)
-                        / pl.col("ltv").fill_null(1.0)
+
+        if config.is_basel_3_1:
+            # Save CQS-based risk weight before override — needed for
+            # Basel 3.1 general CRE min(60%, counterparty_rw) logic (CRE20.85)
+            exposures = exposures.with_columns(
+                pl.col("risk_weight").fill_null(1.0).alias("_cqs_risk_weight")
+            )
+
+            exposures = exposures.with_columns(
+                [
+                    # 0. ADC: 150% or 100% pre-sold (CRE20.87-88, checked first)
+                    pl.when(pl.col("is_adc").fill_null(False))
+                    .then(b31_adc_rw_expr())
+                    # 1. Residential mortgage: LTV-band (CRE20.73/82)
+                    .when(
+                        _uc.str.contains("MORTGAGE", literal=True)
+                        | _uc.str.contains("RESIDENTIAL", literal=True)
                     )
-                )
-                # 2. Commercial RE: LTV + income cover based (CRR Art. 126)
-                # Detected via exposure_class OR property_type from collateral
-                .when(
-                    _uc.str.contains("COMMERCIAL", literal=True)
-                    | _uc.str.contains("CRE", literal=True)
-                    | (pl.col("property_type").fill_null("") == "commercial")
-                )
-                .then(
+                    .then(b31_residential_rw_expr())
+                    # 2. Commercial RE: LTV-band or min() (CRE20.85/86)
+                    .when(
+                        _uc.str.contains("COMMERCIAL", literal=True)
+                        | _uc.str.contains("CRE", literal=True)
+                        | (pl.col("property_type").fill_null("") == "commercial")
+                    )
+                    .then(b31_commercial_rw_expr("_cqs_risk_weight"))
+                    # 3. SME managed as retail: 75% (same both frameworks)
+                    .when(
+                        _uc.str.contains("SME", literal=True)
+                        & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                    )
+                    .then(pl.lit(retail_rw))
+                    # 4. Corporate SME: 100%
+                    .when(
+                        _uc.str.contains("CORPORATE", literal=True)
+                        & _uc.str.contains("SME", literal=True)
+                    )
+                    .then(pl.lit(1.0))
+                    # 5. Retail (non-mortgage): 75% flat
+                    .when(_uc.str.contains("RETAIL", literal=True))
+                    .then(pl.lit(retail_rw))
+                    # 6. Default: CQS-based or 100%
+                    .otherwise(pl.col("risk_weight").fill_null(1.0))
+                    .alias("risk_weight"),
+                ]
+            )
+        else:
+            # CRR risk weight overrides (Art. 112-134)
+            resi_threshold = float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"])
+            resi_rw_low = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"])
+            resi_rw_high = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"])
+            cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
+            cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
+            cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
+
+            exposures = exposures.with_columns(
+                [
+                    # 1. Residential mortgage: LTV split (CRR Art. 125)
                     pl.when(
-                        (pl.col("ltv").fill_null(1.0) <= cre_threshold)
-                        & pl.col("has_income_cover").fill_null(False)
+                        _uc.str.contains("MORTGAGE", literal=True)
+                        | _uc.str.contains("RESIDENTIAL", literal=True)
                     )
-                    .then(pl.lit(cre_rw_low))
-                    .otherwise(pl.lit(cre_rw_standard))
-                )
-                # 3. SME managed as retail: 75% RW (CRR Art. 123)
-                .when(
-                    _uc.str.contains("SME", literal=True)
-                    & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
-                )
-                .then(pl.lit(retail_rw))
-                # 4. Corporate SME: 100% RW (then reduced by SME supporting factor)
-                .when(
-                    _uc.str.contains("CORPORATE", literal=True)
-                    & _uc.str.contains("SME", literal=True)
-                )
-                .then(pl.lit(1.0))
-                # 5. Retail (non-mortgage): 75% flat
-                .when(_uc.str.contains("RETAIL", literal=True))
-                .then(pl.lit(retail_rw))
-                # 6. Default: use joined CQS-based risk weight, or 100%
-                .otherwise(pl.col("risk_weight").fill_null(1.0))
-                .alias("risk_weight"),
-            ]
-        )
+                    .then(
+                        pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
+                        .then(pl.lit(resi_rw_low))
+                        .otherwise(
+                            resi_rw_low * resi_threshold / pl.col("ltv").fill_null(1.0)
+                            + resi_rw_high
+                            * (pl.col("ltv").fill_null(1.0) - resi_threshold)
+                            / pl.col("ltv").fill_null(1.0)
+                        )
+                    )
+                    # 2. Commercial RE: LTV + income cover (CRR Art. 126)
+                    .when(
+                        _uc.str.contains("COMMERCIAL", literal=True)
+                        | _uc.str.contains("CRE", literal=True)
+                        | (pl.col("property_type").fill_null("") == "commercial")
+                    )
+                    .then(
+                        pl.when(
+                            (pl.col("ltv").fill_null(1.0) <= cre_threshold)
+                            & pl.col("has_income_cover").fill_null(False)
+                        )
+                        .then(pl.lit(cre_rw_low))
+                        .otherwise(pl.lit(cre_rw_standard))
+                    )
+                    # 3. SME managed as retail: 75% (CRR Art. 123)
+                    .when(
+                        _uc.str.contains("SME", literal=True)
+                        & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                    )
+                    .then(pl.lit(retail_rw))
+                    # 4. Corporate SME: 100%
+                    .when(
+                        _uc.str.contains("CORPORATE", literal=True)
+                        & _uc.str.contains("SME", literal=True)
+                    )
+                    .then(pl.lit(1.0))
+                    # 5. Retail (non-mortgage): 75% flat
+                    .when(_uc.str.contains("RETAIL", literal=True))
+                    .then(pl.lit(retail_rw))
+                    # 6. Default: CQS-based or 100%
+                    .otherwise(pl.col("risk_weight").fill_null(1.0))
+                    .alias("risk_weight"),
+                ]
+            )
 
         # Clean up temporary columns
         exposures = exposures.drop(
             [
                 col
-                for col in ["_lookup_class", "_lookup_cqs", "_upper_class", "risk_weight_rw"]
+                for col in [
+                    "_lookup_class",
+                    "_lookup_cqs",
+                    "_upper_class",
+                    "_cqs_risk_weight",
+                    "risk_weight_rw",
+                ]
                 if col in exposures.collect_schema().names()
             ]
         )
@@ -689,6 +752,10 @@ class SACalculator:
         is_sme: bool = False,
         is_infrastructure: bool = False,
         is_managed_as_retail: bool = False,
+        has_income_cover: bool = False,
+        property_type: str | None = None,
+        is_adc: bool = False,
+        is_presold: bool = False,
         config: CalculationConfig | None = None,
     ) -> dict:
         """
@@ -702,6 +769,10 @@ class SACalculator:
             is_sme: Whether SME supporting factor applies
             is_infrastructure: Whether infrastructure factor applies
             is_managed_as_retail: Whether SME is managed on pooled retail basis (CRR Art. 123)
+            has_income_cover: Whether income materially depends on property cash flows
+            property_type: Property type ("residential" or "commercial") from collateral
+            is_adc: Whether this is an ADC (Acquisition/Development/Construction) exposure
+            is_presold: Whether ADC exposure is pre-sold to qualifying buyer
             config: Calculation configuration (defaults to CRR)
 
         Returns:
@@ -724,8 +795,11 @@ class SACalculator:
                 "ltv": [float(ltv) if ltv else None],
                 "is_sme": [is_sme],
                 "is_infrastructure": [is_infrastructure],
-                "has_income_cover": [False],
+                "has_income_cover": [has_income_cover],
                 "cp_is_managed_as_retail": [is_managed_as_retail],
+                "property_type": [property_type],
+                "is_adc": [is_adc],
+                "is_presold": [is_presold],
             }
         ).lazy()
 

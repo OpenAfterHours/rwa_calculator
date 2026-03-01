@@ -6,7 +6,7 @@ Status legend: `[ ]` = not started, `[~]` = partial, `[x]` = done
 
 All Priority 1 items are done. **91/91 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed.
 
-- [x] **CI/CD pipeline** (M1.6) — `.github/workflows/ci.yml` created with 3 parallel jobs: (1) Lint & Format (ruff check + ruff format --check), (2) Type Check (mypy), (3) Tests (pytest with benchmarks disabled, slow tests excluded). Triggers on push to master and PRs targeting master. All 3 quality gates pass locally: ruff clean, mypy clean, 1406 tests pass. Added `[tool.mypy]` config to `pyproject.toml`.
+All items complete including CI/CD pipeline (M1.6). All 3 quality gates pass: ruff clean, mypy clean, all tests pass.
 
 ## Priority 2 — Basel 3.1 Core (v1.1)
 
@@ -18,8 +18,8 @@ Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB sup
 
 ### 2b. SA risk weight revisions
 
-- [ ] **LTV-based residential RE risk weights** (FR-1.2 / CRE20.71–81) — Current SA calculator implements only CRR Art. 125 (35%/75% split at 80% LTV). Basel 3.1 requires granular LTV-band risk weights (20%/25%/30%/40%/50%/70%) with separate tables for whole-loan vs loan-splitting, and income-producing vs general residential. The schema (`data/schemas.py:980`) references LTV bands but the calculator doesn't use them. **Action:** Implement Basel 3.1 LTV-band SA risk weight tables and calculator logic. See `specs/crr/sa-risk-weights.md`.
-- [~] **Revised SA risk weight tables** (FR-1.2 / CRE20.7–26) — `data/tables/crr_risk_weights.py` is CRR-only. Basel 3.1 introduces SCRA-based institution weights, investment-grade corporate at 65%, subordinated debt at 150%, granular CRE LTV bands. **Action:** Create Basel 3.1 SA risk weight data tables and add framework-conditional lookup in SA calculator. See `specs/crr/sa-risk-weights.md`.
+- [x] **LTV-based residential RE risk weights** (FR-1.2 / CRE20.71–88) — Done. Implemented Basel 3.1 LTV-band risk weights (CRE20.73/82/85/86/87-88) in `data/tables/b31_risk_weights.py` and `engine/sa/calculator.py`. Covers general residential (7 bands: 20%-70%), income-producing residential (7 bands: 30%-105%), general commercial RE (min(60%, cp_rw) if LTV <= 60%), income-producing commercial RE (3 bands: 70%/90%/110%), and ADC (150%/100% pre-sold). 59 unit tests in `tests/unit/test_b31_sa_risk_weights.py`. All 1444 tests pass.
+- [~] **Revised SA risk weight tables** (FR-1.2 / CRE20.7–26) — Real estate LTV-band tables are done (via `b31_risk_weights.py`). Remaining: Basel 3.1 CQS-based risk weight changes (SCRA-based institutions, investment-grade corporate at 65%, subordinated debt at 150%). **Action:** Add SCRA and investment-grade lookups to Basel 3.1 SA risk weight tables and framework-conditional logic in SA calculator. See `specs/crr/sa-risk-weights.md`.
 
 ### 2c. CRM Basel 3.1 adjustments
 
@@ -27,7 +27,7 @@ Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB sup
 
 ### 2d. Testing and validation
 
-- [x] **Output floor phase-in validation tests** (M2.6) — 11 new tests added in `TestOutputFloorTransitionalPhaseIn`: parametrized sweep of all 6 years (2027-2032), pre-2027 edge case (no floor), exactly-on-transition-date, far-future (2040), floor-equals-IRB boundary, and floor impact RWA calculation. Also fixed bug in `OutputFloorConfig.get_floor_percentage()` where pre-2027 dates incorrectly returned 72.5% instead of 0%.
+- [x] **Output floor phase-in validation tests** (M2.6) — Done. 11 tests covering all 6 transitional years plus edge cases.
 - [ ] **Basel 3.1 expected outputs** (M2.1) — Workbook structure exists at `workbooks/basel31_expected_outputs/` but values are hardcoded stubs, not verified hand calculations. `tests/expected_outputs/basel31/` directory doesn't exist. **Action:** Verify workbook calculations against regulatory formulas; generate expected output CSV/JSON files. See `specs/milestones.md`.
 - [ ] **Basel 3.1 acceptance tests** (M2.5) — `tests/acceptance/basel31/` directory doesn't exist. No B31 tests anywhere. **Action:** Create acceptance test suite for B31-A (SA revised, 10 scenarios) and B31-F (output floor, 3 scenarios). See `specs/regulatory-compliance.md`.
 
@@ -49,7 +49,7 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 
 - [ ] **BDD test scaffold** — `tests/bdd/conftest.py` references `docs/specifications/` which is being deleted (git status shows `D docs/specifications/*.md`). No actual BDD step definitions or feature files exist. **Action:** Either implement BDD tests or remove the empty scaffold. Low priority.
 - [ ] **Runtime skip pattern inconsistency** — CRR-A tests used `@pytest.mark.skip` for known gaps; CRR-C/D/E/F/G/H use `if result is None: pytest.skip()` inside test body, silently skipping if pipeline doesn't produce results. CRR-A7/A8 skips now resolved. **Action:** Audit remaining runtime skips to ensure they are visible and justified.
-- [x] **Pre-existing lint/format/type errors across codebase** — Fixed all ~247 ruff lint errors (auto-fixed 215, manually fixed 32), formatted 121 files via `ruff format`, and configured mypy in `pyproject.toml` with appropriate suppressions for Polars custom namespace limitations. All three CI gates now pass: ruff check clean, ruff format clean, mypy 0 errors, 1406 tests pass.
+- [x] **Pre-existing lint/format/type errors across codebase** — Done. All CI gates pass.
 
 ## Learnings
 
@@ -64,3 +64,6 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - For LGD floors, the `collateral_type` column may not be available at the IRB calculation stage since the CRM processor consumes collateral data but doesn't propagate a single `collateral_type` to each exposure row. The default unsecured floor (25%) is applied when the column is absent, which is conservative. Future work: propagate `primary_collateral_type` from CRM processor to IRB stage.
 - The large corporate correlation multiplier (CRE31.5) requires knowledge of the counterparty group's total consolidated assets (not revenue). The threshold is EUR 500m. This needs a schema extension (`consolidated_assets` field on counterparty data) before it can be implemented.
 - F-IRB supervisory LGD revisions affect the overcollateralisation-based effective LGD calculation. The `calculate_effective_lgd_secured()` function in `crr_firb_lgd.py` still uses CRR values via `lookup_firb_lgd()`. It will automatically pick up Basel 3.1 values when called with `is_basel_3_1=True`.
+- The SA calculator now branches on `config.is_basel_3_1` in `_apply_risk_weights()` — CRR uses Art. 125/126 split treatment while Basel 3.1 uses LTV-band lookups from `b31_risk_weights.py`. The CQS join is common to both.
+- For Basel 3.1 general CRE (CRE20.85), the counterparty's CQS-based risk weight is saved before the override chain as `_cqs_risk_weight` and used in the `min(60%, counterparty_rw)` logic. This column is cleaned up after the override chain.
+- The `calculate_single_exposure()` method now accepts `has_income_cover`, `property_type`, `is_adc`, and `is_presold` parameters for convenient single-exposure Basel 3.1 testing.

@@ -34,8 +34,8 @@ Remaining (needs specification work before implementation):
 ### 2d. Testing and validation
 
 - [x] **Output floor phase-in validation tests** (M2.6) — Done. 11 tests covering all 6 transitional years plus edge cases.
-- [~] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON exists at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 23 scenarios (10 SA, 7 F-IRB, 3 A-IRB, 3 output floor). Workbook structure at `workbooks/basel31_expected_outputs/` defines 39 scenarios across 8 groups (A-H). **Remaining:** Verify workbook calculations for groups D-H against regulatory formulas; extend JSON with verified values.
-- [~] **Basel 3.1 acceptance tests** (M2.5) — 49 tests across 4 test files: `test_scenario_b31_a_sa.py` (14 tests), `test_scenario_b31_b_firb.py` (16 tests), `test_scenario_b31_c_airb.py` (13 tests), and `test_scenario_b31_f_output_floor.py` (6 tests). All 49 pass. Remaining groups D-H need test files.
+- [~] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON exists at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 27 scenarios (10 SA, 7 F-IRB, 3 A-IRB, 4 slotting, 3 output floor). Workbook structure at `workbooks/basel31_expected_outputs/` defines 39 scenarios across 8 groups (A-H). **Remaining:** Verify workbook calculations for groups D, G, H against regulatory formulas; extend JSON with verified values.
+- [~] **Basel 3.1 acceptance tests** (M2.5) — 62 tests across 5 test files: `test_scenario_b31_a_sa.py` (14), `test_scenario_b31_b_firb.py` (16), `test_scenario_b31_c_airb.py` (13), `test_scenario_b31_e_slotting.py` (13), and `test_scenario_b31_f_output_floor.py` (6). All 62 pass. Remaining groups D, G, H need test files.
 
 ### 2e. Output floor engine — COMPLETE
 
@@ -67,10 +67,10 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 | Unit | 1,302 | 1 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 87 | 0 |
-| Acceptance (Basel 3.1) | 49 | 0 |
+| Acceptance (Basel 3.1) | 62 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,570** | **22** |
+| **Total** | **1,583** | **22** |
 
 ## Learnings
 

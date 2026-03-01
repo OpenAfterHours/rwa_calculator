@@ -96,6 +96,12 @@ def b31_c_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
+def b31_e_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-E (Specialised Lending Slotting) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-E")
+
+
+@pytest.fixture(scope="session")
 def b31_f_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
     """Get B31-F (Output Floor) scenarios."""
     return get_scenarios_by_group(expected_outputs_df, "B31-F")
@@ -157,6 +163,35 @@ def b31_firb_calculation_config():
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30),
         irb_permissions=IRBPermissions.firb_only(),
+    )
+
+
+@pytest.fixture(scope="session")
+def b31_slotting_calculation_config():
+    """
+    Create Basel 3.1 CalculationConfig with Slotting permissions.
+
+    Permits Slotting (but not A-IRB) for SPECIALISED_LENDING.
+    This ensures SL exposures route to slotting, not A-IRB.
+
+    Key Basel 3.1 slotting differences from CRR:
+    - Uses operational/pre-operational split (not maturity split)
+    - PF pre-operational: higher weights (80/100/120/350 vs 70/90/115/250)
+    - HVCRE weights unchanged
+    """
+    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.domain.enums import ApproachType, ExposureClass
+
+    return CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 6, 30),
+        irb_permissions=IRBPermissions(
+            permissions={
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                },
+            }
+        ),
     )
 
 
@@ -420,6 +455,27 @@ def airb_results_df(transitional_pipeline_results) -> pl.DataFrame:
     if transitional_pipeline_results.irb_results is None:
         return pl.DataFrame()
     return transitional_pipeline_results.irb_results.collect()
+
+
+@pytest.fixture(scope="session")
+def slotting_pipeline_results(raw_data_bundle, b31_slotting_calculation_config):
+    """
+    Run all fixtures through the Basel 3.1 pipeline with Slotting permissions.
+
+    Used for B31-E slotting acceptance tests. Session-scoped.
+    """
+    from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+    pipeline = PipelineOrchestrator()
+    return pipeline.run_with_data(raw_data_bundle, b31_slotting_calculation_config)
+
+
+@pytest.fixture(scope="session")
+def slotting_results_df(slotting_pipeline_results) -> pl.DataFrame:
+    """Get slotting results from the Basel 3.1 pipeline."""
+    if slotting_pipeline_results.slotting_results is None:
+        return pl.DataFrame()
+    return slotting_pipeline_results.slotting_results.collect()
 
 
 def get_result_for_exposure(

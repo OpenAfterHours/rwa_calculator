@@ -10,7 +10,7 @@ All Priority 1 items are done. **87/87 CRR acceptance tests pass (100%)**. CI/CD
 
 ### 2a. Engine gaps — COMPLETE
 
-Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB supervisory LGD, A-IRB CCF floor, CCF for unconditionally cancellable commitments, Equity calculator Basel 3.1 routing.
+Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB supervisory LGD, A-IRB CCF floor, CCF for unconditionally cancellable commitments, Equity calculator Basel 3.1 routing, A-IRB LGD floor enforcement (gated on `is_airb`, subordinated unsecured 50%).
 
 ### 2b. SA risk weight revisions — COMPLETE
 
@@ -29,7 +29,7 @@ Remaining (needs specification work before implementation):
 
 - [ ] **SFT minimum haircut floors** (CRE56) — New Basel 3.1 requirement for securities financing transactions. Needs detailed specification from PRA PS9/24 CRE56 mapping.
 - [ ] **Unfunded credit protection eligibility restrictions** (CRE22.70-85) — Revised eligibility criteria for guarantees and credit derivatives under Basel 3.1. Needs specification work.
-- [ ] **A-IRB LGD floor enforcement** (CRE30.41) — Config already exists (`LGDFloors`), engine needs wiring. Separate from CRM proper; tracked here for visibility.
+- [x] **A-IRB LGD floor enforcement** (CRE30.41) — Done. LGD floors now gated on `is_airb` column: only A-IRB own-estimate LGDs are floored; F-IRB supervisory LGDs pass through unchanged. Subordinated unsecured detection (50% floor vs 25% senior) added via `has_seniority` parameter. 24 unit tests (was 16). Fixed in `formulas.py` (apply_irb_formulas), `namespace.py` (apply_lgd_floor, apply_all_formulas).
 
 ### 2d. Testing and validation
 
@@ -64,13 +64,13 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,292 | 1 |
+| Unit | 1,302 | 1 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 87 | 0 |
 | Acceptance (Basel 3.1) | 20 | 0 |
 | Integration | 5 | 0 |
-| Benchmarks | 6 | 21 |
-| **Total** | **1,533** | **22** |
+| Benchmarks | 4 | 21 |
+| **Total** | **1,541** | **22** |
 
 ## Learnings
 
@@ -83,6 +83,7 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - **Workbook schedule inconsistency:** `workbooks/basel31_expected_outputs/data/regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027). Engine is correct for UK firms.
 - CRR Art. 126 CRE treatment: Commercial RE is not a separate exposure class — it's a corporate exposure with commercial property collateral.
 - For QRRE PD floors, `is_qrre_transactor` column does not exist yet. Defaults to revolver floor (0.10%) which is conservative.
-- For LGD floors, `collateral_type` column may not be available at IRB stage. Default unsecured floor (25%) is applied when absent.
+- For LGD floors, `collateral_type` column may not be available at IRB stage. Default unsecured floor (25%) is applied when absent. Subordinated unsecured gets 50% floor when `seniority` column is present.
+- **A-IRB LGD floor bug (fixed):** LGD floors were applied to ALL Basel 3.1 IRB rows (F-IRB and A-IRB). Fixed to only apply to A-IRB rows using `is_airb` column gating. F-IRB supervisory LGDs are regulatory values and don't need flooring (CRE30.41). Without `is_airb` column, defaults to no floor (conservative).
 - Investment-grade corporate 65% only applies to unrated corporates. SCRA grading only applies to unrated institutions.
 - Subordinated debt 150% is checked first in Basel 3.1 override chain because it overrides ALL other treatments.

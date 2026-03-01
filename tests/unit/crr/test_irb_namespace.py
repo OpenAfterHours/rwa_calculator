@@ -200,11 +200,12 @@ class TestApplyLgdFloor:
         assert result["lgd_floored"][1] == pytest.approx(0.20)
         assert result["lgd_floored"][2] == pytest.approx(0.45)
 
-    def test_basel31_lgd_floor_applied(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 should apply 25% LGD floor for unsecured."""
+    def test_basel31_lgd_floor_applied_airb(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 should apply 25% LGD floor for A-IRB unsecured (CRE30.41)."""
         lf = pl.LazyFrame(
             {
                 "lgd": [0.10, 0.20, 0.45],  # First two below 25% floor
+                "is_airb": [True, True, True],
             }
         )
         result = lf.irb.apply_lgd_floor(basel31_config).collect()
@@ -213,6 +214,21 @@ class TestApplyLgdFloor:
         assert result["lgd_floored"][0] == pytest.approx(0.25)
         assert result["lgd_floored"][1] == pytest.approx(0.25)
         # Third is above floor, unchanged
+        assert result["lgd_floored"][2] == pytest.approx(0.45)
+
+    def test_basel31_lgd_floor_not_applied_firb(self, basel31_config: CalculationConfig) -> None:
+        """Basel 3.1 should NOT apply LGD floor to F-IRB (supervisory LGD)."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.20, 0.45],
+                "is_airb": [False, False, False],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+
+        # F-IRB: all LGDs unchanged (no floor)
+        assert result["lgd_floored"][0] == pytest.approx(0.10)
+        assert result["lgd_floored"][1] == pytest.approx(0.20)
         assert result["lgd_floored"][2] == pytest.approx(0.45)
 
 

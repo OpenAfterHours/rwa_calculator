@@ -221,18 +221,27 @@ class ExposureClassifier:
         - is_regulated (for FI scalar - unregulated FSE)
         - is_managed_as_retail (for SME retail treatment)
         """
-        cp_cols = counterparties.select(
-            [
-                pl.col("counterparty_reference"),
-                pl.col("entity_type").alias("cp_entity_type"),
-                pl.col("country_code").alias("cp_country_code"),
-                pl.col("annual_revenue").alias("cp_annual_revenue"),
-                pl.col("total_assets").alias("cp_total_assets"),
-                pl.col("default_status").alias("cp_default_status"),
-                pl.col("is_regulated").alias("cp_is_regulated"),
-                pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
-            ]
-        )
+        cp_schema = counterparties.collect_schema()
+        cp_col_names = cp_schema.names()
+
+        select_cols = [
+            pl.col("counterparty_reference"),
+            pl.col("entity_type").alias("cp_entity_type"),
+            pl.col("country_code").alias("cp_country_code"),
+            pl.col("annual_revenue").alias("cp_annual_revenue"),
+            pl.col("total_assets").alias("cp_total_assets"),
+            pl.col("default_status").alias("cp_default_status"),
+            pl.col("is_regulated").alias("cp_is_regulated"),
+            pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
+        ]
+
+        # Basel 3.1 fields — propagate if present (optional in input data)
+        if "scra_grade" in cp_col_names:
+            select_cols.append(pl.col("scra_grade").alias("cp_scra_grade"))
+        if "is_investment_grade" in cp_col_names:
+            select_cols.append(pl.col("is_investment_grade").alias("cp_is_investment_grade"))
+
+        cp_cols = counterparties.select(select_cols)
 
         return exposures.join(
             cp_cols,

@@ -1,8 +1,10 @@
 """
 Basel 3.1 SA risk weight tables (PRA PS9/24 / BCBS CRE20).
 
-Provides LTV-band based risk weight tables for real estate exposures
-and ADC treatment under the Basel 3.1 framework (whole-loan approach).
+Provides LTV-band based risk weight tables for real estate exposures,
+ADC treatment, revised CQS-based risk weights, SCRA institution weights,
+investment-grade corporate treatment, and subordinated debt treatment
+under the Basel 3.1 framework.
 
 Pipeline position:
     Used by SACalculator._apply_risk_weights() when config.is_basel_3_1
@@ -11,9 +13,18 @@ Key responsibilities:
 - LTV-band risk weight lookup for residential RE (general + income-producing)
 - LTV-band risk weight lookup for commercial RE (general + income-producing)
 - ADC exposure risk weight (150% / 100% pre-sold)
+- Revised CQS-based corporate risk weights (CQS3: 75%, CQS5: 100%)
+- SCRA-based institution risk weights for unrated exposures (Grade A/B/C)
+- Investment-grade corporate treatment (65%)
+- SME corporate treatment (85%)
+- Subordinated debt treatment (150% flat)
 - Polars expression builders for vectorized lookups
 
 References:
+    - CRE20.7-15: Sovereign risk weights (unchanged from CRR)
+    - CRE20.16-21: Institution risk weights (ECRA rated + SCRA unrated)
+    - CRE20.22-26: Corporate risk weights (revised CQS, investment-grade, SME)
+    - CRE20.47: Subordinated debt (150% flat)
     - CRE20.73: Residential RE (general) whole-loan approach
     - CRE20.82: Residential RE (income-producing) whole-loan approach
     - CRE20.85: Commercial RE (general) preferential treatment
@@ -85,6 +96,94 @@ B31_COMMERCIAL_GENERAL_PREFERENTIAL_CAP = Decimal("0.60")
 
 B31_ADC_RISK_WEIGHT = Decimal("1.50")
 B31_ADC_PRESOLD_RISK_WEIGHT = Decimal("1.00")
+
+# =============================================================================
+# CORPORATE CQS-BASED RISK WEIGHTS — BASEL 3.1 (CRE20.22-26)
+# Differs from CRR: CQS3 = 75% (was 100%), CQS5 = 100% (was 150%)
+# =============================================================================
+
+B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = {
+    1: Decimal("0.20"),  # AAA to AA-
+    2: Decimal("0.50"),  # A+ to A-
+    3: Decimal("0.75"),  # BBB+ to BBB- (CRR: 100%)
+    4: Decimal("1.00"),  # BB+ to BB-
+    5: Decimal("1.00"),  # B+ to B- (CRR: 150%)
+    6: Decimal("1.50"),  # CCC+ and below
+    None: Decimal("1.00"),  # Unrated
+}
+
+# Investment-grade corporate: 65% (CRE20.47-49)
+# Qualifying: publicly traded + investment grade external rating
+B31_CORPORATE_INVESTMENT_GRADE_RW = Decimal("0.65")
+
+# SME corporate: 85% (CRE20.47-49)
+# Qualifying: turnover <= EUR 50m, unrated
+B31_CORPORATE_SME_RW = Decimal("0.85")
+
+# =============================================================================
+# SCRA-BASED INSTITUTION RISK WEIGHTS — BASEL 3.1 (CRE20.16-21)
+# Standardised Credit Risk Assessment Approach for unrated institutions.
+# Replaces CRR due-diligence assessment for unrated.
+# Rated institutions use ECRA (same as CRR Art. 120-121).
+# =============================================================================
+
+B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
+    "A": Decimal("0.40"),  # CET1 > 14%, Leverage > 5%, meets all requirements
+    "B": Decimal("0.75"),  # CET1 > 5.5%, Leverage > 3%, meets minimums
+    "C": Decimal("1.50"),  # Below minimum requirements
+}
+
+# =============================================================================
+# SUBORDINATED DEBT RISK WEIGHT — BASEL 3.1 (CRE20.47)
+# Flat 150% for all subordinated debt (institution + corporate)
+# =============================================================================
+
+B31_SUBORDINATED_DEBT_RW = Decimal("1.50")
+
+
+def _create_b31_corporate_df() -> pl.DataFrame:
+    """Create Basel 3.1 corporate risk weight lookup DataFrame."""
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6, None],
+            "risk_weight": [0.20, 0.50, 0.75, 1.00, 1.00, 1.50, 1.00],
+            "exposure_class": ["CORPORATE"] * 7,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
+
+
+def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame:
+    """
+    Get combined CQS-based risk weight table for Basel 3.1 joins.
+
+    Uses Basel 3.1 corporate weights (CQS3=75%, CQS5=100%) while
+    sovereign and institution ECRA weights remain the same as CRR.
+
+    Args:
+        use_uk_deviation: Whether to use UK-specific institution weights
+
+    Returns:
+        Combined DataFrame with columns: exposure_class, cqs, risk_weight
+    """
+    from rwa_calc.data.tables.crr_risk_weights import (
+        _create_cgcb_df,
+        _create_institution_df,
+    )
+
+    return pl.concat(
+        [
+            _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_institution_df(use_uk_deviation).select(
+                ["exposure_class", "cqs", "risk_weight"]
+            ),
+            _create_b31_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
+        ]
+    )
 
 
 # =============================================================================

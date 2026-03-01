@@ -11,6 +11,11 @@ Key responsibilities:
 - CQS-based risk weight lookup (sovereign, institution, corporate)
 - LTV-based weights for real estate (CRR split vs Basel 3.1 LTV bands)
 - ADC exposure treatment (Basel 3.1: 150% / 100% pre-sold)
+- Revised Basel 3.1 corporate CQS weights (CQS3: 75%, CQS5: 100%)
+- SCRA-based institution risk weights for unrated exposures (Basel 3.1)
+- Investment-grade corporate treatment (65%, Basel 3.1)
+- SME corporate treatment (85%, Basel 3.1)
+- Subordinated debt flat 150% (Basel 3.1)
 - Supporting factor application (CRR only — removed under Basel 3.1)
 - RWA calculation (EAD × RW × supporting factor)
 
@@ -18,6 +23,9 @@ References:
 - CRR Art. 112-134: SA risk weights
 - CRR Art. 501: SME supporting factor
 - CRR Art. 501a: Infrastructure supporting factor
+- CRE20.16-21: Basel 3.1 institution ECRA/SCRA risk weights
+- CRE20.22-26: Basel 3.1 revised corporate CQS risk weights
+- CRE20.47-49: Basel 3.1 subordinated debt, investment-grade, SME corporate
 - CRE20.73: Basel 3.1 residential RE (general) whole-loan LTV bands
 - CRE20.82: Basel 3.1 residential RE (income-producing) LTV bands
 - CRE20.85: Basel 3.1 commercial RE (general) preferential treatment
@@ -41,9 +49,14 @@ from rwa_calc.contracts.errors import (
     LazyFrameResult,
 )
 from rwa_calc.data.tables.b31_risk_weights import (
+    B31_CORPORATE_INVESTMENT_GRADE_RW,
+    B31_CORPORATE_SME_RW,
+    B31_SCRA_RISK_WEIGHTS,
+    B31_SUBORDINATED_DEBT_RW,
     b31_adc_rw_expr,
     b31_commercial_rw_expr,
     b31_residential_rw_expr,
+    get_b31_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.crr_risk_weights import (
     COMMERCIAL_RE_PARAMS,
@@ -273,9 +286,12 @@ class SACalculator:
         Returns:
             Exposures with risk_weight column added
         """
-        # Get CQS-based risk weight table (includes UK deviation for institutions)
+        # Get CQS-based risk weight table — Basel 3.1 uses revised corporate weights
         use_uk_deviation = config.base_currency == "GBP"
-        rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
+        if config.is_basel_3_1:
+            rw_table = get_b31_combined_cqs_risk_weights(use_uk_deviation).lazy()
+        else:
+            rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
         # Ensure required columns exist (single with_columns call)
         schema = exposures.collect_schema()
@@ -294,6 +310,12 @@ class SACalculator:
             missing_cols.append(pl.lit(False).alias("is_adc"))
         if "is_presold" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_presold"))
+        if "seniority" not in schema.names():
+            missing_cols.append(pl.lit("senior").alias("seniority"))
+        if "cp_scra_grade" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_scra_grade"))
+        if "cp_is_investment_grade" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("cp_is_investment_grade"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -346,40 +368,81 @@ class SACalculator:
                 pl.col("risk_weight").fill_null(1.0).alias("_cqs_risk_weight")
             )
 
+            # Basel 3.1 SCRA risk weights for unrated institutions (CRE20.16-21)
+            scra_a_rw = float(B31_SCRA_RISK_WEIGHTS["A"])
+            scra_b_rw = float(B31_SCRA_RISK_WEIGHTS["B"])
+            scra_c_rw = float(B31_SCRA_RISK_WEIGHTS["C"])
+            inv_grade_rw = float(B31_CORPORATE_INVESTMENT_GRADE_RW)
+            sme_corp_rw = float(B31_CORPORATE_SME_RW)
+            sub_debt_rw = float(B31_SUBORDINATED_DEBT_RW)
+
             exposures = exposures.with_columns(
                 [
-                    # 0. ADC: 150% or 100% pre-sold (CRE20.87-88, checked first)
-                    pl.when(pl.col("is_adc").fill_null(False))
+                    # 0. Subordinated debt: flat 150% (CRE20.47, checked first)
+                    # Overrides all CQS-based weights for institution + corporate
+                    pl.when(
+                        (pl.col("seniority").fill_null("senior") == "subordinated")
+                        & (
+                            _uc.str.contains("INSTITUTION", literal=True)
+                            | _uc.str.contains("CORPORATE", literal=True)
+                        )
+                    )
+                    .then(pl.lit(sub_debt_rw))
+                    # 1. ADC: 150% or 100% pre-sold (CRE20.87-88)
+                    .when(pl.col("is_adc").fill_null(False))
                     .then(b31_adc_rw_expr())
-                    # 1. Residential mortgage: LTV-band (CRE20.73/82)
+                    # 2. Residential mortgage: LTV-band (CRE20.73/82)
                     .when(
                         _uc.str.contains("MORTGAGE", literal=True)
                         | _uc.str.contains("RESIDENTIAL", literal=True)
                     )
                     .then(b31_residential_rw_expr())
-                    # 2. Commercial RE: LTV-band or min() (CRE20.85/86)
+                    # 3. Commercial RE: LTV-band or min() (CRE20.85/86)
                     .when(
                         _uc.str.contains("COMMERCIAL", literal=True)
                         | _uc.str.contains("CRE", literal=True)
                         | (pl.col("property_type").fill_null("") == "commercial")
                     )
                     .then(b31_commercial_rw_expr("_cqs_risk_weight"))
-                    # 3. SME managed as retail: 75% (same both frameworks)
+                    # 4. SCRA-based unrated institutions (CRE20.16-21)
+                    # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                        & pl.col("cp_scra_grade").is_not_null()
+                    )
+                    .then(
+                        pl.when(pl.col("cp_scra_grade") == "A")
+                        .then(pl.lit(scra_a_rw))
+                        .when(pl.col("cp_scra_grade") == "B")
+                        .then(pl.lit(scra_b_rw))
+                        .otherwise(pl.lit(scra_c_rw))
+                    )
+                    # 5. Investment-grade unrated corporate: 65% (CRE20.47-49)
+                    # Only applies to unrated corporates (CQS is null) — rated use CQS table
+                    .when(
+                        _uc.str.contains("CORPORATE", literal=True)
+                        & ~_uc.str.contains("SME", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                        & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
+                    )
+                    .then(pl.lit(inv_grade_rw))
+                    # 6. SME managed as retail: 75% (same both frameworks)
                     .when(
                         _uc.str.contains("SME", literal=True)
                         & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
                     )
                     .then(pl.lit(retail_rw))
-                    # 4. Corporate SME: 100%
+                    # 7. Corporate SME: 85% (CRE20.47-49, Basel 3.1)
                     .when(
                         _uc.str.contains("CORPORATE", literal=True)
                         & _uc.str.contains("SME", literal=True)
                     )
-                    .then(pl.lit(1.0))
-                    # 5. Retail (non-mortgage): 75% flat
+                    .then(pl.lit(sme_corp_rw))
+                    # 8. Retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
-                    # 6. Default: CQS-based or 100%
+                    # 9. Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
                 ]
@@ -756,6 +819,9 @@ class SACalculator:
         property_type: str | None = None,
         is_adc: bool = False,
         is_presold: bool = False,
+        seniority: str = "senior",
+        scra_grade: str | None = None,
+        is_investment_grade: bool = False,
         config: CalculationConfig | None = None,
     ) -> dict:
         """
@@ -773,6 +839,9 @@ class SACalculator:
             property_type: Property type ("residential" or "commercial") from collateral
             is_adc: Whether this is an ADC (Acquisition/Development/Construction) exposure
             is_presold: Whether ADC exposure is pre-sold to qualifying buyer
+            seniority: "senior" or "subordinated" — subordinated gets 150% under Basel 3.1
+            scra_grade: SCRA grade for unrated institutions ("A"/"B"/"C", Basel 3.1 only)
+            is_investment_grade: Whether counterparty qualifies as investment grade (Basel 3.1)
             config: Calculation configuration (defaults to CRR)
 
         Returns:
@@ -800,6 +869,9 @@ class SACalculator:
                 "property_type": [property_type],
                 "is_adc": [is_adc],
                 "is_presold": [is_presold],
+                "seniority": [seniority],
+                "cp_scra_grade": [scra_grade],
+                "cp_is_investment_grade": [is_investment_grade],
             }
         ).lazy()
 

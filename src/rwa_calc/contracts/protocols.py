@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from rwa_calc.contracts.bundles import (
         AggregatedResultBundle,
+        CapitalImpactBundle,
         ClassifiedExposuresBundle,
         ComparisonBundle,
         CRMAdjustedBundle,
@@ -599,6 +600,37 @@ class ComparisonRunnerProtocol(Protocol):
 
         Returns:
             ComparisonBundle with per-exposure deltas and summaries
+        """
+        ...
+
+
+@runtime_checkable
+class CapitalImpactAnalyzerProtocol(Protocol):
+    """
+    Protocol for capital impact analysis (M3.2).
+
+    Decomposes the RWA delta between CRR and Basel 3.1 into attributable
+    regulatory drivers using a sequential waterfall methodology.
+
+    Why: Understanding WHY RWA changes between frameworks (not just by
+    how much) is essential for capital planning. This protocol defines
+    the interface for decomposing the total delta into its component
+    drivers: scaling factor removal, supporting factor removal, output
+    floor impact, and methodology/parameter changes.
+    """
+
+    def analyze(
+        self,
+        comparison: ComparisonBundle,
+    ) -> CapitalImpactBundle:
+        """
+        Decompose comparison deltas into driver-level attribution.
+
+        Args:
+            comparison: Pre-computed dual-framework comparison bundle
+
+        Returns:
+            CapitalImpactBundle with per-exposure and portfolio attribution
         """
         ...
 

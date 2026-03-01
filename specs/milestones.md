@@ -27,9 +27,9 @@
 
 | Milestone | Description | Status |
 |-----------|-------------|--------|
-| M3.1 | Side-by-side CRR vs Basel 3.1 RWA comparison | Not Started |
-| M3.2 | Capital impact analysis (delta RWA) | Not Started |
-| M3.3 | Transitional floor schedule modelling | Not Started |
+| M3.1 | Side-by-side CRR vs Basel 3.1 RWA comparison | Done |
+| M3.2 | Capital impact analysis (delta RWA) | Done |
+| M3.3 | Transitional floor schedule modelling | Done |
 | M3.4 | Enhanced Marimo workbooks for impact analysis | Not Started |
 
 ## v2.0 — Enterprise Features (Future)

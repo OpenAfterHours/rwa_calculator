@@ -377,6 +377,41 @@ class TransitionalScheduleBundle:
     errors: list = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class CapitalImpactBundle:
+    """
+    Output from capital impact analysis (M3.2).
+
+    Decomposes the RWA delta between CRR and Basel 3.1 into attributable
+    regulatory drivers using a sequential waterfall methodology:
+
+    1. Scaling factor removal — CRR applies 1.06x to IRB RWA; Basel 3.1 removes it
+    2. Supporting factor removal — CRR applies SME/infrastructure factors; Basel 3.1 removes them
+    3. Output floor impact — Basel 3.1 floors IRB RWA at X% of SA RWA
+    4. Methodology & parameter changes — residual (PD/LGD floors, SA RW changes, etc.)
+
+    Why: During Basel 3.1 transition, firms need to understand not just
+    the total capital impact but WHY RWA changes — which regulatory
+    drivers are responsible. This enables targeted capital planning and
+    stakeholder communication about transition effects.
+
+    The waterfall is additive: scaling + supporting + floor + methodology = delta_rwa.
+
+    Attributes:
+        exposure_attribution: Per-exposure driver attribution
+        portfolio_waterfall: Portfolio-level waterfall steps (CRR baseline to B31)
+        summary_by_class: Attribution aggregated by exposure class
+        summary_by_approach: Attribution aggregated by calculation approach
+        errors: Any errors during analysis
+    """
+
+    exposure_attribution: pl.LazyFrame
+    portfolio_waterfall: pl.LazyFrame
+    summary_by_class: pl.LazyFrame
+    summary_by_approach: pl.LazyFrame
+    errors: list = field(default_factory=list)
+
+
 # =============================================================================
 # HELPER FUNCTIONS FOR BUNDLE CREATION
 # =============================================================================

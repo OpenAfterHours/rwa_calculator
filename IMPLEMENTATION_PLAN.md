@@ -44,15 +44,13 @@ Remaining (needs specification work):
 
 - [x] **Side-by-side CRR vs Basel 3.1 comparison output** (M3.1) — Done. `DualFrameworkRunner` in `engine/comparison.py` orchestrates two separate `PipelineOrchestrator` instances (one per framework) on the same `RawDataBundle`. Produces `ComparisonBundle` with per-exposure deltas (delta_rwa, delta_risk_weight, delta_ead, delta_rwa_pct) and summary views by exposure class and approach. 22 unit tests + 19 acceptance tests (SA and F-IRB comparison scenarios).
 
-### 3b. Transitional floor schedule modelling — PARTIAL
+### 3b. Capital impact & transitional modelling — COMPLETE (M3.2, M3.3)
 
-Done:
-
-- [x] **Transitional floor schedule modelling** (M3.3) — Done. `TransitionalScheduleRunner` in `engine/comparison.py` runs 6 separate `PipelineOrchestrator` instances (one per transitional year 2027-2032) with freshly created `CalculationConfig.basel_3_1()` configs. Produces `TransitionalScheduleBundle` (frozen dataclass in `contracts/bundles.py`) with a `timeline` LazyFrame (reporting_date, floor_pct, total_rwa, total_ead, irb_rwa_pre_floor, sa_rwa, floor_impact_rwa, floor_binding_count, floor_non_binding_count) and collected errors. `_extract_floor_metrics()` back-calculates SA RWA from `floor_rwa / floor_pct` since `floor_rwa = floor_pct x SA_RWA`. 19 unit tests + 19 acceptance tests.
+- [x] **Capital impact analysis** (M3.2) — Done. `CapitalImpactAnalyzer` in `engine/comparison.py` with `CapitalImpactAnalyzerProtocol` in `contracts/protocols.py`. Produces `CapitalImpactBundle` (frozen dataclass in `contracts/bundles.py`). 4-driver waterfall decomposition: scaling factor removal, supporting factor removal, output floor impact, methodology & parameter changes. Additivity invariant: all 4 drivers sum to `delta_rwa` per exposure. Per-exposure attribution, portfolio waterfall, summary by class/approach. 26 unit tests + 24 acceptance tests (SA and F-IRB scenarios).
+- [x] **Transitional floor schedule modelling** (M3.3) — Done. `TransitionalScheduleRunner` in `engine/comparison.py`. Produces `TransitionalScheduleBundle` with timeline LazyFrame across 6 transitional years (2027-2032). 19 unit tests + 19 acceptance tests.
 
 Remaining:
 
-- [ ] **Capital impact analysis** (M3.2) — Not Started. Would add delta attribution by driver (PD floor changes, LGD floor changes, scaling factor removal, supporting factor removal, output floor binding).
 - [ ] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Not Started. Would add comparison visualization, floor schedule slider, drill-down from portfolio delta to exposure-level drivers.
 
 ## Priority 4 — Output & Export
@@ -69,14 +67,14 @@ Remaining:
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,357 | 0 |
+| Unit | 1,383 | 0 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 91 | 0 |
 | Acceptance (Basel 3.1) | 111 | 0 |
-| Acceptance (Comparison) | 38 | 0 |
+| Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 22 |
-| **Total** | **1,725** | **22** |
+| **Total** | **1,775** | **22** |
 
 ## Learnings
 
@@ -96,6 +94,7 @@ Remaining:
 - A-IRB LGD floors apply only to A-IRB own-estimate LGDs (`is_airb` gating); F-IRB supervisory LGDs are regulatory values and don't need flooring (CRE30.41).
 - **B31 SME impact:** Basel 3.1 SME corporates get 85% RW (vs CRR 100%) but lose the 0.7619 supporting factor. Net effect: effective RW rises from 76.19% to 85%, a 12% RWA increase.
 - **Maturity effect in transitional schedule:** Total post-floor RWA is NOT monotonically non-decreasing across years because effective maturity shortens as reporting date advances (e.g., a 2033 loan has 6y maturity from 2027 but only 5y from 2028). The maturity adjustment decrease can outweigh the floor increase. The correct monotonicity invariant is that `floor_impact_rwa` is non-decreasing, not total RWA.
+- **Capital impact waterfall ordering:** The 4-driver waterfall is sequential and additive: (1) scaling factor removal = CRR_rwa × (1/1.06 - 1), (2) supporting factor removal = (CRR_rpf - CRR_rf) / 1.06 for IRB or CRR_rpf - CRR_rf for SA, (3) output floor = floor_impact_rwa from aggregator, (4) methodology = residual. The sum equals delta_rwa exactly by construction.
 - EL shortfall/excess: T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) is not yet computed at portfolio level — only per-exposure shortfall/excess is tracked.
 
 ### Testing patterns

@@ -20,6 +20,7 @@ Submodules:
 # Data bundle contracts
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
+    CapitalImpactBundle,
     ClassifiedExposuresBundle,
     ComparisonBundle,
     CounterpartyLookup,
@@ -85,6 +86,7 @@ from rwa_calc.contracts.errors import (
 
 # Protocol definitions
 from rwa_calc.contracts.protocols import (
+    CapitalImpactAnalyzerProtocol,
     ClassifierProtocol,
     ComparisonRunnerProtocol,
     CRMProcessorProtocol,
@@ -165,6 +167,7 @@ __all__ = [
     "ERROR_UNKNOWN_EXPOSURE_CLASS",
     # Bundles
     "AggregatedResultBundle",
+    "CapitalImpactBundle",
     "ComparisonBundle",
     "TransitionalScheduleBundle",
     "ClassifiedExposuresBundle",
@@ -181,6 +184,7 @@ __all__ = [
     "create_empty_raw_data_bundle",
     "create_empty_resolved_hierarchy_bundle",
     # Protocols
+    "CapitalImpactAnalyzerProtocol",
     "ClassifierProtocol",
     "ComparisonRunnerProtocol",
     "CRMProcessorProtocol",

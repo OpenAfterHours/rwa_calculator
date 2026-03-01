@@ -43,6 +43,7 @@ from .crr_firb_lgd import (
     get_firb_lgd_table_for_framework,
 )
 from .crr_haircuts import (
+    BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,
     get_haircut_table,
@@ -88,6 +89,7 @@ __all__ = [
     "get_all_risk_weight_tables",
     # Haircuts
     "COLLATERAL_HAIRCUTS",
+    "BASEL31_COLLATERAL_HAIRCUTS",
     "FX_HAIRCUT",
     "get_haircut_table",
     # Slotting

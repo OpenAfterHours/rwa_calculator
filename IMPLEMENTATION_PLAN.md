@@ -44,12 +44,12 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 
 ### 3b. Capital impact & transitional modelling — COMPLETE (M3.2, M3.3)
 
-- [x] **Capital impact analysis** (M3.2) — Done. `CapitalImpactAnalyzer` in `engine/comparison.py` with `CapitalImpactAnalyzerProtocol` in `contracts/protocols.py`. Produces `CapitalImpactBundle` (frozen dataclass in `contracts/bundles.py`). 4-driver waterfall decomposition: scaling factor removal, supporting factor removal, output floor impact, methodology & parameter changes. Additivity invariant: all 4 drivers sum to `delta_rwa` per exposure. Per-exposure attribution, portfolio waterfall, summary by class/approach. 26 unit tests + 24 acceptance tests (SA and F-IRB scenarios).
-- [x] **Transitional floor schedule modelling** (M3.3) — Done. `TransitionalScheduleRunner` in `engine/comparison.py`. Produces `TransitionalScheduleBundle` with timeline LazyFrame across 6 transitional years (2027-2032). 19 unit tests + 19 acceptance tests.
+- [x] **Capital impact analysis** (M3.2) — Done. `CapitalImpactAnalyzer` in `engine/comparison.py`. 26 unit tests + 24 acceptance tests.
+- [x] **Transitional floor schedule modelling** (M3.3) — Done. `TransitionalScheduleRunner` in `engine/comparison.py`. 19 unit tests + 19 acceptance tests.
 
-Remaining:
+### 3c. Enhanced Marimo workbooks for impact analysis — COMPLETE (M3.4)
 
-- [ ] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Not Started. Would add comparison visualization, floor schedule slider, drill-down from portfolio delta to exposure-level drivers.
+- [x] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Done. `comparison_app.py` in `ui/marimo/` provides interactive dual-framework impact analysis. Features: data path/IRB approach/reporting date configuration, dual-framework comparison runner (DualFrameworkRunner), executive summary with headline deltas (CRR vs B31 total RWA, EAD, avg risk weight), capital impact waterfall (4-driver decomposition table), summary by exposure class and approach, capital impact attribution by exposure class, transitional floor schedule timeline (2027-2032) with interactive year slider for drill-down, exposure-level delta drill-down with filters (class, approach, sort), exposure-level driver attribution, CSV export for all views. Registered at `/comparison` in multi-app server. Sidebar nav updated across all 4 apps. Also fixed: `CapitalImpactAnalyzer` now exported from `engine/__init__.py`.
 
 ## Priority 4 — Output & Export
 

@@ -44,6 +44,7 @@ def _(mo):
                 {
                     "/calculator": f"{mo.icon('calculator')} Calculator",
                     "/results": f"{mo.icon('table')} Results Explorer",
+                    "/comparison": f"{mo.icon('git-compare')} Impact Analysis",
                     "/reference": f"{mo.icon('book')} Framework Reference",
                 },
                 orientation="vertical",

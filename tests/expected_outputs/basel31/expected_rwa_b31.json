@@ -18,6 +18,10 @@
       "name": "Foundation IRB (Revised)",
       "count": 7
     },
+    "B31-C": {
+      "name": "Advanced IRB (Revised)",
+      "count": 3
+    },
     "B31-F": {
       "name": "Output Floor",
       "count": 3
@@ -38,7 +42,7 @@
     "Subordinated debt: 150% flat for institution/corporate",
     "Income-producing commercial RE: LTV-banded (70%/90%/110%)"
   ],
-  "scenario_count": 20,
+  "scenario_count": 23,
   "scenarios": [
     {
       "scenario_id": "B31-A1",
@@ -447,6 +451,78 @@
       "expected_loss": 25600.0,
       "regulatory_reference": "CRE32.9, CRE31.34",
       "calculation_notes": "Long maturity capped at 5Y. LGD 40% and no scaling result in ~16% RWA reduction vs CRR."
+    },
+    {
+      "scenario_id": "B31-C1",
+      "scenario_group": "B31-C",
+      "description": "Corporate A-IRB — own LGD 35% (above 25% floor, not binding)",
+      "regulatory_framework": "Basel 3.1",
+      "approach": "A-IRB",
+      "exposure_class": "CORPORATE",
+      "exposure_reference": "LOAN_CORP_AIRB_001",
+      "counterparty_reference": "CORP_AIRB_001",
+      "ead": 5000000.0,
+      "pd": 0.01,
+      "lgd": 0.35,
+      "maturity": 1.0027397260273974,
+      "cqs": null,
+      "ltv": null,
+      "turnover": null,
+      "risk_weight": 0.570213427817719,
+      "rwa_before_sf": 2851067.14,
+      "supporting_factor": 1.0,
+      "rwa_after_sf": 2851067.14,
+      "expected_loss": 17500.0,
+      "regulatory_reference": "CRE30-32, CRE30.41",
+      "calculation_notes": "A-IRB own LGD estimate 35% above 25% floor — floor not binding. No 1.06 scaling. RWA 25% lower than CRR (0.5702 vs 0.7611) due to shorter maturity from later reporting date and no scaling."
+    },
+    {
+      "scenario_id": "B31-C2",
+      "scenario_group": "B31-C",
+      "description": "Retail A-IRB — own LGD 15% floored to 25% (LGD floor binding)",
+      "regulatory_framework": "Basel 3.1",
+      "approach": "A-IRB",
+      "exposure_class": "RETAIL_OTHER",
+      "exposure_reference": "LOAN_RTL_AIRB_001",
+      "counterparty_reference": "RTL_AIRB_001",
+      "ead": 100000.0,
+      "pd": 0.003,
+      "lgd": 0.15,
+      "maturity": null,
+      "cqs": null,
+      "ltv": null,
+      "turnover": null,
+      "risk_weight": 0.13221426861928243,
+      "rwa_before_sf": 13221.43,
+      "supporting_factor": 1.0,
+      "rwa_after_sf": 13221.43,
+      "expected_loss": 450.0,
+      "regulatory_reference": "CRE30.41, CRE31.8-9",
+      "calculation_notes": "A-IRB retail own LGD estimate 15% floored to 25% (CRE30.41). RW computed with floored LGD. No maturity adjustment for retail. RWA 57% higher than CRR (0.1322 vs 0.0841) due to LGD floor overriding low own-estimate."
+    },
+    {
+      "scenario_id": "B31-C3",
+      "scenario_group": "B31-C",
+      "description": "Specialised Lending A-IRB — own LGD 25% (at floor, A-IRB over slotting)",
+      "regulatory_framework": "Basel 3.1",
+      "approach": "A-IRB",
+      "exposure_class": "SPECIALISED_LENDING",
+      "exposure_reference": "LOAN_SL_AIRB_001",
+      "counterparty_reference": "SL_PF_001",
+      "ead": 10000000.0,
+      "pd": 0.015,
+      "lgd": 0.25,
+      "maturity": 2.506849315068493,
+      "cqs": null,
+      "ltv": null,
+      "turnover": null,
+      "risk_weight": 0.5871164625020694,
+      "rwa_before_sf": 5871164.63,
+      "supporting_factor": 1.0,
+      "rwa_after_sf": 5871164.63,
+      "expected_loss": 37500.0,
+      "regulatory_reference": "CRE30-32, CRE33",
+      "calculation_notes": "Specialised lending routed to A-IRB (not slotting) when A-IRB permitted. Own LGD 25% equals unsecured floor. RWA 20% lower than CRR due to shorter maturity and no 1.06 scaling."
     },
     {
       "scenario_id": "B31-F1",

@@ -90,6 +90,12 @@ def b31_b_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
+def b31_c_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-C (Advanced IRB Revised) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-C")
+
+
+@pytest.fixture(scope="session")
 def b31_f_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
     """Get B31-F (Output Floor) scenarios."""
     return get_scenarios_by_group(expected_outputs_df, "B31-F")
@@ -402,6 +408,18 @@ def transitional_pipeline_results(raw_data_bundle, b31_irb_transitional_config):
 def transitional_results_df(transitional_pipeline_results) -> pl.DataFrame:
     """Get transitional pipeline results as a collected DataFrame."""
     return transitional_pipeline_results.results.collect()
+
+
+@pytest.fixture(scope="session")
+def airb_results_df(transitional_pipeline_results) -> pl.DataFrame:
+    """Get A-IRB results from the Basel 3.1 pipeline.
+
+    Reuses transitional pipeline (2027-06-30, full_irb) which provides
+    meaningful maturities for A-IRB exposures. Session-scoped.
+    """
+    if transitional_pipeline_results.irb_results is None:
+        return pl.DataFrame()
+    return transitional_pipeline_results.irb_results.collect()
 
 
 def get_result_for_exposure(

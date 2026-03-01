@@ -26,12 +26,11 @@ Usage:
 
 import logging
 
-import pytest
 import polars as pl
+import pytest
 
 from tests.benchmarks.data_generators import (
     BenchmarkDataConfig,
-    generate_benchmark_dataset,
     get_dataset_statistics,
     get_or_create_dataset,
 )
@@ -77,9 +76,7 @@ def should_regenerate(force_all: bool, scale: str | None, current_scale: str) ->
     """Determine if a specific scale should be regenerated."""
     if force_all:
         return True
-    if scale is not None and scale.lower() == current_scale.lower():
-        return True
-    return False
+    return scale is not None and scale.lower() == current_scale.lower()
 
 
 # =============================================================================

@@ -179,14 +179,16 @@ class ResultFormatter:
             average_risk_weight=Decimal("0"),
         )
 
-        empty_lf = pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "approach_applied": pl.Series([], dtype=pl.String),
-            "exposure_class": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "risk_weight": pl.Series([], dtype=pl.Float64),
-            "rwa_final": pl.Series([], dtype=pl.Float64),
-        })
+        empty_lf = pl.LazyFrame(
+            {
+                "exposure_reference": pl.Series([], dtype=pl.String),
+                "approach_applied": pl.Series([], dtype=pl.String),
+                "exposure_class": pl.Series([], dtype=pl.String),
+                "ead_final": pl.Series([], dtype=pl.Float64),
+                "risk_weight": pl.Series([], dtype=pl.Float64),
+                "rwa_final": pl.Series([], dtype=pl.Float64),
+            }
+        )
 
         cached = cache.sink_results(results=empty_lf)
 

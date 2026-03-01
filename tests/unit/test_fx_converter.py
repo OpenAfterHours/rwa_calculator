@@ -11,10 +11,9 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import RegulatoryFramework
 from rwa_calc.engine.fx_converter import FXConverter, create_fx_converter
-
 
 # =============================================================================
 # FIXTURES
@@ -30,11 +29,13 @@ def fx_converter() -> FXConverter:
 @pytest.fixture
 def fx_rates() -> pl.LazyFrame:
     """Create sample FX rates for testing."""
-    return pl.LazyFrame({
-        "currency_from": ["GBP", "USD", "EUR", "JPY", "CHF"],
-        "currency_to": ["GBP", "GBP", "GBP", "GBP", "GBP"],
-        "rate": [1.0, 0.79, 0.88, 0.0053, 0.89],
-    })
+    return pl.LazyFrame(
+        {
+            "currency_from": ["GBP", "USD", "EUR", "JPY", "CHF"],
+            "currency_to": ["GBP", "GBP", "GBP", "GBP", "GBP"],
+            "rate": [1.0, 0.79, 0.88, 0.0053, 0.89],
+        }
+    )
 
 
 @pytest.fixture
@@ -62,74 +63,86 @@ def config_fx_disabled() -> CalculationConfig:
 @pytest.fixture
 def usd_exposures() -> pl.LazyFrame:
     """Create sample USD exposures for testing."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP_USD_001", "EXP_USD_002"],
-        "exposure_type": ["loan", "loan"],
-        "currency": ["USD", "USD"],
-        "drawn_amount": [1000000.0, 500000.0],
-        "interest": [5000.0, 2500.0],
-        "undrawn_amount": [200000.0, 100000.0],
-        "nominal_amount": [0.0, 0.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP_USD_001", "EXP_USD_002"],
+            "exposure_type": ["loan", "loan"],
+            "currency": ["USD", "USD"],
+            "drawn_amount": [1000000.0, 500000.0],
+            "interest": [5000.0, 2500.0],
+            "undrawn_amount": [200000.0, 100000.0],
+            "nominal_amount": [0.0, 0.0],
+        }
+    )
 
 
 @pytest.fixture
 def gbp_exposures() -> pl.LazyFrame:
     """Create sample GBP exposures for testing."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP_GBP_001"],
-        "exposure_type": ["loan"],
-        "currency": ["GBP"],
-        "drawn_amount": [1000000.0],
-        "interest": [3000.0],
-        "undrawn_amount": [200000.0],
-        "nominal_amount": [0.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP_GBP_001"],
+            "exposure_type": ["loan"],
+            "currency": ["GBP"],
+            "drawn_amount": [1000000.0],
+            "interest": [3000.0],
+            "undrawn_amount": [200000.0],
+            "nominal_amount": [0.0],
+        }
+    )
 
 
 @pytest.fixture
 def multi_currency_exposures() -> pl.LazyFrame:
     """Create exposures in multiple currencies."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP_GBP", "EXP_USD", "EXP_EUR", "EXP_UNK"],
-        "exposure_type": ["loan", "loan", "loan", "loan"],
-        "currency": ["GBP", "USD", "EUR", "ZAR"],  # ZAR has no rate
-        "drawn_amount": [1000000.0, 1000000.0, 1000000.0, 1000000.0],
-        "interest": [1000.0, 2000.0, 3000.0, 4000.0],
-        "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
-        "nominal_amount": [0.0, 0.0, 0.0, 0.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP_GBP", "EXP_USD", "EXP_EUR", "EXP_UNK"],
+            "exposure_type": ["loan", "loan", "loan", "loan"],
+            "currency": ["GBP", "USD", "EUR", "ZAR"],  # ZAR has no rate
+            "drawn_amount": [1000000.0, 1000000.0, 1000000.0, 1000000.0],
+            "interest": [1000.0, 2000.0, 3000.0, 4000.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 0.0, 0.0, 0.0],
+        }
+    )
 
 
 @pytest.fixture
 def collateral() -> pl.LazyFrame:
     """Create sample collateral for testing."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL_001", "COLL_002"],
-        "currency": ["USD", "EUR"],
-        "market_value": [500000.0, 300000.0],
-        "nominal_value": [500000.0, 300000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL_001", "COLL_002"],
+            "currency": ["USD", "EUR"],
+            "market_value": [500000.0, 300000.0],
+            "nominal_value": [500000.0, 300000.0],
+        }
+    )
 
 
 @pytest.fixture
 def guarantees() -> pl.LazyFrame:
     """Create sample guarantees for testing."""
-    return pl.LazyFrame({
-        "guarantee_reference": ["GUAR_001", "GUAR_002"],
-        "currency": ["USD", "GBP"],
-        "amount_covered": [250000.0, 150000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "guarantee_reference": ["GUAR_001", "GUAR_002"],
+            "currency": ["USD", "GBP"],
+            "amount_covered": [250000.0, 150000.0],
+        }
+    )
 
 
 @pytest.fixture
 def provisions() -> pl.LazyFrame:
     """Create sample provisions for testing."""
-    return pl.LazyFrame({
-        "provision_reference": ["PROV_001", "PROV_002"],
-        "currency": ["EUR", "GBP"],
-        "amount": [50000.0, 30000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "provision_reference": ["PROV_001", "PROV_002"],
+            "currency": ["EUR", "GBP"],
+            "amount": [50000.0, 30000.0],
+        }
+    )
 
 
 # =============================================================================
@@ -384,15 +397,23 @@ class TestFXConverterIntegration:
         config: CalculationConfig,
     ) -> None:
         """Test conversion of multiple currencies in a single batch."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_GBP", "EXP_USD", "EXP_EUR", "EXP_JPY", "EXP_CHF"],
-            "exposure_type": ["loan"] * 5,
-            "currency": ["GBP", "USD", "EUR", "JPY", "CHF"],
-            "drawn_amount": [1000.0, 1000.0, 1000.0, 100000.0, 1000.0],  # JPY needs larger amount
-            "interest": [0.0] * 5,
-            "undrawn_amount": [0.0] * 5,
-            "nominal_amount": [0.0] * 5,
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_GBP", "EXP_USD", "EXP_EUR", "EXP_JPY", "EXP_CHF"],
+                "exposure_type": ["loan"] * 5,
+                "currency": ["GBP", "USD", "EUR", "JPY", "CHF"],
+                "drawn_amount": [
+                    1000.0,
+                    1000.0,
+                    1000.0,
+                    100000.0,
+                    1000.0,
+                ],  # JPY needs larger amount
+                "interest": [0.0] * 5,
+                "undrawn_amount": [0.0] * 5,
+                "nominal_amount": [0.0] * 5,
+            }
+        )
 
         result = fx_converter.convert_exposures(exposures, fx_rates, config)
         df = result.collect()
@@ -421,11 +442,13 @@ class TestFXConverterIntegration:
         fx_converter: FXConverter,
     ) -> None:
         """Test conversion to EUR instead of GBP."""
-        fx_rates_to_eur = pl.LazyFrame({
-            "currency_from": ["GBP", "EUR", "USD"],
-            "currency_to": ["EUR", "EUR", "EUR"],
-            "rate": [1.14, 1.0, 0.90],
-        })
+        fx_rates_to_eur = pl.LazyFrame(
+            {
+                "currency_from": ["GBP", "EUR", "USD"],
+                "currency_to": ["EUR", "EUR", "EUR"],
+                "rate": [1.14, 1.0, 0.90],
+            }
+        )
 
         config_eur = CalculationConfig(
             framework=RegulatoryFramework.CRR,
@@ -434,15 +457,17 @@ class TestFXConverterIntegration:
             apply_fx_conversion=True,
         )
 
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_GBP", "EXP_USD"],
-            "exposure_type": ["loan", "loan"],
-            "currency": ["GBP", "USD"],
-            "drawn_amount": [1000.0, 1000.0],
-            "interest": [0.0, 0.0],
-            "undrawn_amount": [0.0, 0.0],
-            "nominal_amount": [0.0, 0.0],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_GBP", "EXP_USD"],
+                "exposure_type": ["loan", "loan"],
+                "currency": ["GBP", "USD"],
+                "drawn_amount": [1000.0, 1000.0],
+                "interest": [0.0, 0.0],
+                "undrawn_amount": [0.0, 0.0],
+                "nominal_amount": [0.0, 0.0],
+            }
+        )
 
         result = fx_converter.convert_exposures(exposures, fx_rates_to_eur, config_eur)
         df = result.collect()
@@ -487,15 +512,17 @@ class TestConvertInterest:
         config: CalculationConfig,
     ) -> None:
         """Test that original_amount includes interest."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "exposure_type": ["loan"],
-            "currency": ["USD"],
-            "drawn_amount": [100000.0],
-            "interest": [5000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [10000.0],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "exposure_type": ["loan"],
+                "currency": ["USD"],
+                "drawn_amount": [100000.0],
+                "interest": [5000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [10000.0],
+            }
+        )
         result = fx_converter.convert_exposures(exposures, fx_rates, config)
         df = result.collect()
 
@@ -509,15 +536,17 @@ class TestConvertInterest:
         config: CalculationConfig,
     ) -> None:
         """Test that null interest is preserved as null after conversion."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001", "EXP_002"],
-            "exposure_type": ["loan", "loan"],
-            "currency": ["USD", "USD"],
-            "drawn_amount": [100000.0, 200000.0],
-            "interest": [None, 3000.0],
-            "undrawn_amount": [0.0, 0.0],
-            "nominal_amount": [0.0, 0.0],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001", "EXP_002"],
+                "exposure_type": ["loan", "loan"],
+                "currency": ["USD", "USD"],
+                "drawn_amount": [100000.0, 200000.0],
+                "interest": [None, 3000.0],
+                "undrawn_amount": [0.0, 0.0],
+                "nominal_amount": [0.0, 0.0],
+            }
+        )
         result = fx_converter.convert_exposures(exposures, fx_rates, config)
         df = result.collect()
 
@@ -545,15 +574,17 @@ class TestConvertInterest:
         config_fx_disabled: CalculationConfig,
     ) -> None:
         """Test original_amount with null interest when FX disabled."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "exposure_type": ["loan"],
-            "currency": ["USD"],
-            "drawn_amount": [100000.0],
-            "interest": [None],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [10000.0],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "exposure_type": ["loan"],
+                "currency": ["USD"],
+                "drawn_amount": [100000.0],
+                "interest": [None],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [10000.0],
+            }
+        )
         result = fx_converter.convert_exposures(exposures, None, config_fx_disabled)
         df = result.collect()
 
@@ -572,12 +603,14 @@ class TestConvertEquityExposures:
     @pytest.fixture
     def equity_exposures(self) -> pl.LazyFrame:
         """Create sample equity exposures."""
-        return pl.LazyFrame({
-            "equity_reference": ["EQ_001", "EQ_002", "EQ_003"],
-            "currency": ["USD", "EUR", "GBP"],
-            "carrying_value": [500000.0, 300000.0, 200000.0],
-            "fair_value": [550000.0, 310000.0, 200000.0],
-        })
+        return pl.LazyFrame(
+            {
+                "equity_reference": ["EQ_001", "EQ_002", "EQ_003"],
+                "currency": ["USD", "EUR", "GBP"],
+                "carrying_value": [500000.0, 300000.0, 200000.0],
+                "fair_value": [550000.0, 310000.0, 200000.0],
+            }
+        )
 
     def test_equity_values_converted(
         self,
@@ -636,7 +669,9 @@ class TestConvertEquityExposures:
         config_fx_disabled: CalculationConfig,
     ) -> None:
         """Test that equity conversion is skipped when disabled."""
-        result = fx_converter.convert_equity_exposures(equity_exposures, fx_rates, config_fx_disabled)
+        result = fx_converter.convert_equity_exposures(
+            equity_exposures, fx_rates, config_fx_disabled
+        )
         df = result.collect()
 
         assert df["carrying_value"][0] == 500000.0

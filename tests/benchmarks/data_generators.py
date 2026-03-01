@@ -34,14 +34,13 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-
 # Configure logger for benchmark data generation
 logger = logging.getLogger("rwa_calc.benchmarks")
 
 # Default directory for cached benchmark data
 BENCHMARK_DATA_DIR = Path(__file__).parent / "data"
 
-from rwa_calc.data.schemas import (
+from rwa_calc.data.schemas import (  # noqa: E402
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -119,7 +118,9 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
         config.sovereign_pct,
         config.specialised_lending_pct,
     ]
-    entity_types_arr = np.array(["corporate", "individual", "institution", "sovereign", "specialised_lending"])
+    entity_types_arr = np.array(
+        ["corporate", "individual", "institution", "sovereign", "specialised_lending"]
+    )
     entity_indices = rng.choice(5, size=n, p=entity_probs)
     entities = entity_types_arr[entity_indices]
 
@@ -168,24 +169,30 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
     is_rgla = sov_mask & rgla_rand
 
     # Build DataFrame using Polars native operations
-    return pl.DataFrame({
-        "counterparty_reference": pl.Series([f"CP_{i:08d}" for i in range(n)]),
-        "counterparty_name": pl.Series([f"Entity_{i}" for i in range(n)]),
-        "entity_type": pl.Series(entities),
-        "country_code": pl.Series(countries),
-        "annual_revenue": pl.Series(revenues),
-        "total_assets": pl.Series(assets),
-        "default_status": pl.Series(defaults),
-        "sector_code": pl.Series(sector_codes),
-        "is_financial_institution": pl.Series(is_fi),
-        "is_regulated": pl.Series(is_regulated),
-        "is_pse": pl.Series(is_pse),
-        "is_mdb": pl.Series(np.zeros(n, dtype=bool)),
-        "is_international_org": pl.Series(np.zeros(n, dtype=bool)),
-        "is_central_counterparty": pl.Series(is_ccp),
-        "is_regional_govt_local_auth": pl.Series(is_rgla),
-        "is_managed_as_retail": pl.Series(np.zeros(n, dtype=bool)),
-    }).cast(COUNTERPARTY_SCHEMA).lazy()
+    return (
+        pl.DataFrame(
+            {
+                "counterparty_reference": pl.Series([f"CP_{i:08d}" for i in range(n)]),
+                "counterparty_name": pl.Series([f"Entity_{i}" for i in range(n)]),
+                "entity_type": pl.Series(entities),
+                "country_code": pl.Series(countries),
+                "annual_revenue": pl.Series(revenues),
+                "total_assets": pl.Series(assets),
+                "default_status": pl.Series(defaults),
+                "sector_code": pl.Series(sector_codes),
+                "is_financial_institution": pl.Series(is_fi),
+                "is_regulated": pl.Series(is_regulated),
+                "is_pse": pl.Series(is_pse),
+                "is_mdb": pl.Series(np.zeros(n, dtype=bool)),
+                "is_international_org": pl.Series(np.zeros(n, dtype=bool)),
+                "is_central_counterparty": pl.Series(is_ccp),
+                "is_regional_govt_local_auth": pl.Series(is_rgla),
+                "is_managed_as_retail": pl.Series(np.zeros(n, dtype=bool)),
+            }
+        )
+        .cast(COUNTERPARTY_SCHEMA)
+        .lazy()
+    )
 
 
 def generate_org_mappings(
@@ -236,13 +243,25 @@ def generate_org_mappings(
 
     # VECTORIZED: Generate all parent assignments at once
     # Depth 2: parents from roots
-    depth_2_parents = rng.choice(root_indices, size=len(depth_2_children)) if len(root_indices) > 0 else np.zeros(len(depth_2_children), dtype=int)
+    depth_2_parents = (
+        rng.choice(root_indices, size=len(depth_2_children))
+        if len(root_indices) > 0
+        else np.zeros(len(depth_2_children), dtype=int)
+    )
 
     # Depth 3: parents from depth 2
-    depth_3_parents = rng.choice(depth_2_children, size=len(depth_3_children)) if len(depth_2_children) > 0 else np.zeros(len(depth_3_children), dtype=int)
+    depth_3_parents = (
+        rng.choice(depth_2_children, size=len(depth_3_children))
+        if len(depth_2_children) > 0
+        else np.zeros(len(depth_3_children), dtype=int)
+    )
 
     # Depth 4: parents from depth 3
-    depth_4_parents = rng.choice(depth_3_children, size=len(depth_4_children)) if len(depth_3_children) > 0 else np.zeros(len(depth_4_children), dtype=int)
+    depth_4_parents = (
+        rng.choice(depth_3_children, size=len(depth_4_children))
+        if len(depth_3_children) > 0
+        else np.zeros(len(depth_4_children), dtype=int)
+    )
 
     # Concatenate all mappings
     all_parents = np.concatenate([depth_2_parents, depth_3_parents, depth_4_parents])
@@ -252,10 +271,16 @@ def generate_org_mappings(
     parent_refs = refs_arr[all_parents]
     child_refs = refs_arr[all_children]
 
-    return pl.DataFrame({
-        "parent_counterparty_reference": parent_refs,
-        "child_counterparty_reference": child_refs,
-    }).cast(ORG_MAPPING_SCHEMA).lazy()
+    return (
+        pl.DataFrame(
+            {
+                "parent_counterparty_reference": parent_refs,
+                "child_counterparty_reference": child_refs,
+            }
+        )
+        .cast(ORG_MAPPING_SCHEMA)
+        .lazy()
+    )
 
 
 def generate_facilities(
@@ -352,25 +377,31 @@ def generate_facilities(
     )
 
     # Build DataFrame using numpy arrays
-    return pl.DataFrame({
-        "facility_reference": [f"FAC_{i:08d}" for i in range(n_facilities)],
-        "product_type": product_types,
-        "book_code": book_codes,
-        "counterparty_reference": cp_refs_arr[cp_assignments],
-        "value_date": [base_date] * n_facilities,
-        "maturity_date": maturity_dates,
-        "currency": currencies,
-        "limit": limits,
-        "committed": committed,
-        "lgd": np.full(n_facilities, 0.45),
-        "beel": np.zeros(n_facilities),
-        "is_revolving": is_revolving,
-        "seniority": seniority,
-        "risk_type": risk_types,
-        "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
-        "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
-        "is_buy_to_let": np.full(n_facilities, None),  # BTL flag for SME supporting factor
-    }).cast(FACILITY_SCHEMA).lazy()
+    return (
+        pl.DataFrame(
+            {
+                "facility_reference": [f"FAC_{i:08d}" for i in range(n_facilities)],
+                "product_type": product_types,
+                "book_code": book_codes,
+                "counterparty_reference": cp_refs_arr[cp_assignments],
+                "value_date": [base_date] * n_facilities,
+                "maturity_date": maturity_dates,
+                "currency": currencies,
+                "limit": limits,
+                "committed": committed,
+                "lgd": np.full(n_facilities, 0.45),
+                "beel": np.zeros(n_facilities),
+                "is_revolving": is_revolving,
+                "seniority": seniority,
+                "risk_type": risk_types,
+                "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
+                "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
+                "is_buy_to_let": np.full(n_facilities, None),  # BTL flag for SME supporting factor
+            }
+        )
+        .cast(FACILITY_SCHEMA)
+        .lazy()
+    )
 
 
 def generate_loans(
@@ -427,14 +458,14 @@ def generate_loans(
     if n_ind > 0:
         product_types[ind_mask] = rng.choice(
             ["PERSONAL_LOAN", "RESIDENTIAL_MORTGAGE", "CREDIT_CARD"],
-            size=n_ind, p=[0.30, 0.50, 0.20]
+            size=n_ind,
+            p=[0.30, 0.50, 0.20],
         )
 
     n_inst = inst_mask.sum()
     if n_inst > 0:
         product_types[inst_mask] = rng.choice(
-            ["INTERBANK_LOAN", "TERM_LOAN"],
-            size=n_inst, p=[0.70, 0.30]
+            ["INTERBANK_LOAN", "TERM_LOAN"], size=n_inst, p=[0.70, 0.30]
         )
 
     product_types[sov_mask] = "SOVEREIGN_LOAN"
@@ -442,8 +473,7 @@ def generate_loans(
     n_corp = corp_mask.sum()
     if n_corp > 0:
         product_types[corp_mask] = rng.choice(
-            ["TERM_LOAN", "RCF_DRAWING", "TRADE_LOAN"],
-            size=n_corp, p=[0.50, 0.35, 0.15]
+            ["TERM_LOAN", "RCF_DRAWING", "TRADE_LOAN"], size=n_corp, p=[0.50, 0.35, 0.15]
         )
 
     # Specialised lending - slotting product types
@@ -451,7 +481,8 @@ def generate_loans(
     if n_sl > 0:
         product_types[sl_mask] = rng.choice(
             ["PROJECT_FINANCE", "OBJECT_FINANCE", "COMMODITIES_FINANCE", "IPRE", "HVCRE"],
-            size=n_sl, p=[0.30, 0.20, 0.15, 0.25, 0.10]
+            size=n_sl,
+            p=[0.30, 0.20, 0.15, 0.25, 0.10],
         )
 
     # VECTORIZED: Book codes using numpy where/select
@@ -472,12 +503,21 @@ def generate_loans(
             product_types == "HVCRE",
         ],
         [
-            "CORP_LENDING", "CORP_LENDING", "TRADE_FINANCE", "FI_LENDING",
-            "SOVEREIGN", "RETAIL_UNSECURED", "RETAIL_MORTGAGES", "RETAIL_CARDS",
-            "SPECIALISED_LENDING", "SPECIALISED_LENDING", "SPECIALISED_LENDING",
-            "SPECIALISED_LENDING", "SPECIALISED_LENDING",
+            "CORP_LENDING",
+            "CORP_LENDING",
+            "TRADE_FINANCE",
+            "FI_LENDING",
+            "SOVEREIGN",
+            "RETAIL_UNSECURED",
+            "RETAIL_MORTGAGES",
+            "RETAIL_CARDS",
+            "SPECIALISED_LENDING",
+            "SPECIALISED_LENDING",
+            "SPECIALISED_LENDING",
+            "SPECIALISED_LENDING",
+            "SPECIALISED_LENDING",
         ],
-        default="CORP_LENDING"
+        default="CORP_LENDING",
     )
 
     # Generate slotting categories for specialised lending loans
@@ -493,8 +533,7 @@ def generate_loans(
             config.slotting_default_pct,
         ]
         sl_categories = rng.choice(
-            ["STRONG", "GOOD", "SATISFACTORY", "WEAK", "DEFAULT"],
-            size=n_sl, p=sl_cat_probs
+            ["STRONG", "GOOD", "SATISFACTORY", "WEAK", "DEFAULT"], size=n_sl, p=sl_cat_probs
         )
         slotting_categories[sl_mask] = sl_categories
 
@@ -528,23 +567,27 @@ def generate_loans(
             loan_refs.append(f"LOAN_{i:08d}")
 
     # Build DataFrame - use polars for date arithmetic
-    df = pl.DataFrame({
-        "loan_reference": loan_refs,
-        "product_type": product_types,
-        "book_code": book_codes,
-        "counterparty_reference": cp_refs_arr[cp_assignments],
-        "value_date": pl.Series([base_date] * n_loans),
-        "maturity_date": pl.Series([base_date] * n_loans).dt.offset_by(
-            pl.Series([f"{d}d" for d in maturity_days])
-        ) if False else [base_date + timedelta(days=int(d)) for d in maturity_days],
-        "currency": currencies,
-        "drawn_amount": drawn_amounts,
-        "interest": np.zeros(n_loans),  # Accrued interest
-        "lgd": lgd,
-        "beel": np.zeros(n_loans),
-        "seniority": seniority,
-        "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
-    }).cast(LOAN_SCHEMA)
+    df = pl.DataFrame(
+        {
+            "loan_reference": loan_refs,
+            "product_type": product_types,
+            "book_code": book_codes,
+            "counterparty_reference": cp_refs_arr[cp_assignments],
+            "value_date": pl.Series([base_date] * n_loans),
+            "maturity_date": pl.Series([base_date] * n_loans).dt.offset_by(
+                pl.Series([f"{d}d" for d in maturity_days])
+            )
+            if False
+            else [base_date + timedelta(days=int(d)) for d in maturity_days],
+            "currency": currencies,
+            "drawn_amount": drawn_amounts,
+            "interest": np.zeros(n_loans),  # Accrued interest
+            "lgd": lgd,
+            "beel": np.zeros(n_loans),
+            "seniority": seniority,
+            "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
+        }
+    ).cast(LOAN_SCHEMA)
 
     return df.lazy()
 
@@ -633,11 +676,17 @@ def generate_facility_mappings(
     all_children = np.concatenate([fac_children, sub_loan_children, root_loan_children])
     all_types = np.concatenate([fac_types, sub_loan_types, root_loan_types])
 
-    return pl.DataFrame({
-        "parent_facility_reference": all_parents,
-        "child_reference": all_children,
-        "child_type": all_types,
-    }).cast(FACILITY_MAPPING_SCHEMA).lazy()
+    return (
+        pl.DataFrame(
+            {
+                "parent_facility_reference": all_parents,
+                "child_reference": all_children,
+                "child_type": all_types,
+            }
+        )
+        .cast(FACILITY_MAPPING_SCHEMA)
+        .lazy()
+    )
 
 
 def generate_ratings(
@@ -701,7 +750,9 @@ def generate_ratings(
         sov_ext_mask = ext_entities == "sovereign"
         n_sov = sov_ext_mask.sum()
         if n_sov > 0:
-            sov_cqs = rng.choice([1, 2, 3, 4, 5, 6], size=n_sov, p=[0.30, 0.25, 0.20, 0.15, 0.07, 0.03])
+            sov_cqs = rng.choice(
+                [1, 2, 3, 4, 5, 6], size=n_sov, p=[0.30, 0.25, 0.20, 0.15, 0.07, 0.03]
+            )
             ext_indices = np.where(ext_mask)[0]
             cqs_arr[ext_indices[sov_ext_mask]] = sov_cqs
 
@@ -709,7 +760,9 @@ def generate_ratings(
         inst_ext_mask = ext_entities == "institution"
         n_inst = inst_ext_mask.sum()
         if n_inst > 0:
-            inst_cqs = rng.choice([1, 2, 3, 4, 5, 6], size=n_inst, p=[0.15, 0.35, 0.30, 0.12, 0.06, 0.02])
+            inst_cqs = rng.choice(
+                [1, 2, 3, 4, 5, 6], size=n_inst, p=[0.15, 0.35, 0.30, 0.12, 0.06, 0.02]
+            )
             ext_indices = np.where(ext_mask)[0]
             cqs_arr[ext_indices[inst_ext_mask]] = inst_cqs
 
@@ -717,7 +770,9 @@ def generate_ratings(
         other_ext_mask = ~sov_ext_mask & ~inst_ext_mask
         n_other = other_ext_mask.sum()
         if n_other > 0:
-            other_cqs = rng.choice([1, 2, 3, 4, 5, 6], size=n_other, p=[0.05, 0.20, 0.35, 0.25, 0.10, 0.05])
+            other_cqs = rng.choice(
+                [1, 2, 3, 4, 5, 6], size=n_other, p=[0.05, 0.20, 0.35, 0.25, 0.10, 0.05]
+            )
             ext_indices = np.where(ext_mask)[0]
             cqs_arr[ext_indices[other_ext_mask]] = other_cqs
 
@@ -755,17 +810,23 @@ def generate_ratings(
     rating_dates = [base_date - timedelta(days=int(d)) for d in days_ago]
 
     # Build DataFrame
-    return pl.DataFrame({
-        "rating_reference": [f"RAT_{i:08d}" for i in range(n_rated)],
-        "counterparty_reference": rated_refs,
-        "rating_type": np.where(is_external, "external", "internal"),
-        "rating_agency": agencies,
-        "rating_value": values,
-        "cqs": cqs_arr,
-        "pd": pds_arr,
-        "rating_date": rating_dates,
-        "is_solicited": solicited,
-    }).cast(RATINGS_SCHEMA).lazy()
+    return (
+        pl.DataFrame(
+            {
+                "rating_reference": [f"RAT_{i:08d}" for i in range(n_rated)],
+                "counterparty_reference": rated_refs,
+                "rating_type": np.where(is_external, "external", "internal"),
+                "rating_agency": agencies,
+                "rating_value": values,
+                "cqs": cqs_arr,
+                "pd": pds_arr,
+                "rating_date": rating_dates,
+                "is_solicited": solicited,
+            }
+        )
+        .cast(RATINGS_SCHEMA)
+        .lazy()
+    )
 
 
 def generate_contingents(
@@ -829,31 +890,41 @@ def generate_contingents(
             product_types == "FINANCIAL_GUARANTEE",
             product_types == "UNDRAWN_COMMITMENT",
         ],
-        ["MLR", "FR", "MR"],  # Medium-low risk for trade, full risk for guarantees, medium for commitments
-        default="MR"
+        [
+            "MLR",
+            "FR",
+            "MR",
+        ],  # Medium-low risk for trade, full risk for guarantees, medium for commitments
+        default="MR",
     )
 
     # VECTORIZED: Short-term trade LC flag (True for LCs)
     is_short_term_trade_lc = product_types == "TRADE_LC"
 
     # Build DataFrame using numpy arrays
-    return pl.DataFrame({
-        "contingent_reference": [f"CONT_{i:08d}" for i in range(n_contingents)],
-        "product_type": product_types,
-        "book_code": np.full(n_contingents, "CONTINGENT"),
-        "counterparty_reference": cp_refs_arr[cp_assignments],
-        "value_date": [base_date] * n_contingents,
-        "maturity_date": maturity_dates,
-        "currency": currencies,
-        "nominal_amount": nominal_amounts,
-        "lgd": np.full(n_contingents, 0.45),
-        "beel": np.zeros(n_contingents),
-        "seniority": np.full(n_contingents, "senior"),
-        "risk_type": risk_types,
-        "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
-        "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
-        "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default
-    }).cast(CONTINGENTS_SCHEMA).lazy()
+    return (
+        pl.DataFrame(
+            {
+                "contingent_reference": [f"CONT_{i:08d}" for i in range(n_contingents)],
+                "product_type": product_types,
+                "book_code": np.full(n_contingents, "CONTINGENT"),
+                "counterparty_reference": cp_refs_arr[cp_assignments],
+                "value_date": [base_date] * n_contingents,
+                "maturity_date": maturity_dates,
+                "currency": currencies,
+                "nominal_amount": nominal_amounts,
+                "lgd": np.full(n_contingents, 0.45),
+                "beel": np.zeros(n_contingents),
+                "seniority": np.full(n_contingents, "senior"),
+                "risk_type": risk_types,
+                "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
+                "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
+                "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default
+            }
+        )
+        .cast(CONTINGENTS_SCHEMA)
+        .lazy()
+    )
 
 
 def generate_collateral(
@@ -930,7 +1001,9 @@ def generate_collateral(
     # VECTORIZED: Issuer types - use empty string for missing
     issuer_types = np.full(n_collateral, "", dtype="<U20")
     if n_bonds > 0:
-        issuer_types[bond_mask] = rng.choice(["sovereign", "corporate"], size=n_bonds, p=[0.60, 0.40])
+        issuer_types[bond_mask] = rng.choice(
+            ["sovereign", "corporate"], size=n_bonds, p=[0.60, 0.40]
+        )
     issuer_types[equity_mask] = "corporate"
 
     # VECTORIZED: Residual maturities (only for bonds)
@@ -974,43 +1047,67 @@ def generate_collateral(
             is_presold[adc_indices] = rng.random(len(adc_indices)) < 0.5
 
     # Build DataFrame with proper null handling for nullable columns
-    df = pl.DataFrame({
-        "collateral_reference": [f"COLL_{i:08d}" for i in range(n_collateral)],
-        "collateral_type": coll_types,
-        "currency": currencies,
-        "maturity_date": maturity_dates,
-        "market_value": market_values,
-        "nominal_value": nominal_values,
-        "pledge_percentage": np.full(n_collateral, None),  # Not used in benchmarks
-        "beneficiary_type": np.full(n_collateral, "loan"),
-        "beneficiary_reference": beneficiary_refs,
-        "issuer_cqs": issuer_cqs,
-        "issuer_type": issuer_types,
-        "residual_maturity_years": residual_maturities,
-        "is_eligible_financial_collateral": is_eligible_fc,
-        "is_eligible_irb_collateral": is_eligible_irb,
-        "valuation_date": valuation_dates,
-        "valuation_type": valuation_types,
-        "property_type": property_types,
-        "property_ltv": property_ltvs,
-        "is_income_producing": is_income_producing,
-        "is_adc": is_adc,
-        "is_presold": is_presold,
-    })
+    df = pl.DataFrame(
+        {
+            "collateral_reference": [f"COLL_{i:08d}" for i in range(n_collateral)],
+            "collateral_type": coll_types,
+            "currency": currencies,
+            "maturity_date": maturity_dates,
+            "market_value": market_values,
+            "nominal_value": nominal_values,
+            "pledge_percentage": np.full(n_collateral, None),  # Not used in benchmarks
+            "beneficiary_type": np.full(n_collateral, "loan"),
+            "beneficiary_reference": beneficiary_refs,
+            "issuer_cqs": issuer_cqs,
+            "issuer_type": issuer_types,
+            "residual_maturity_years": residual_maturities,
+            "is_eligible_financial_collateral": is_eligible_fc,
+            "is_eligible_irb_collateral": is_eligible_irb,
+            "valuation_date": valuation_dates,
+            "valuation_type": valuation_types,
+            "property_type": property_types,
+            "property_ltv": property_ltvs,
+            "is_income_producing": is_income_producing,
+            "is_adc": is_adc,
+            "is_presold": is_presold,
+        }
+    )
 
     # Replace NaN/empty with proper null values before casting
-    return df.with_columns([
-        # issuer_cqs: NaN -> null, then cast to Int8
-        pl.when(pl.col("issuer_cqs").is_nan()).then(None).otherwise(pl.col("issuer_cqs")).cast(pl.Int8).alias("issuer_cqs"),
-        # issuer_type: empty string -> null
-        pl.when(pl.col("issuer_type") == "").then(None).otherwise(pl.col("issuer_type")).alias("issuer_type"),
-        # residual_maturity_years: NaN -> null
-        pl.when(pl.col("residual_maturity_years").is_nan()).then(None).otherwise(pl.col("residual_maturity_years")).alias("residual_maturity_years"),
-        # property_type: empty string -> null
-        pl.when(pl.col("property_type") == "").then(None).otherwise(pl.col("property_type")).alias("property_type"),
-        # property_ltv: NaN -> null
-        pl.when(pl.col("property_ltv").is_nan()).then(None).otherwise(pl.col("property_ltv")).alias("property_ltv"),
-    ]).cast(COLLATERAL_SCHEMA).lazy()
+    return (
+        df.with_columns(
+            [
+                # issuer_cqs: NaN -> null, then cast to Int8
+                pl.when(pl.col("issuer_cqs").is_nan())
+                .then(None)
+                .otherwise(pl.col("issuer_cqs"))
+                .cast(pl.Int8)
+                .alias("issuer_cqs"),
+                # issuer_type: empty string -> null
+                pl.when(pl.col("issuer_type") == "")
+                .then(None)
+                .otherwise(pl.col("issuer_type"))
+                .alias("issuer_type"),
+                # residual_maturity_years: NaN -> null
+                pl.when(pl.col("residual_maturity_years").is_nan())
+                .then(None)
+                .otherwise(pl.col("residual_maturity_years"))
+                .alias("residual_maturity_years"),
+                # property_type: empty string -> null
+                pl.when(pl.col("property_type") == "")
+                .then(None)
+                .otherwise(pl.col("property_type"))
+                .alias("property_type"),
+                # property_ltv: NaN -> null
+                pl.when(pl.col("property_ltv").is_nan())
+                .then(None)
+                .otherwise(pl.col("property_ltv"))
+                .alias("property_ltv"),
+            ]
+        )
+        .cast(COLLATERAL_SCHEMA)
+        .lazy()
+    )
 
 
 def generate_benchmark_dataset(
@@ -1089,6 +1186,7 @@ def get_dataset_statistics(dataset: dict[str, pl.LazyFrame]) -> dict:
         zip(
             entity_counts["entity_type"].to_list(),
             entity_counts["len"].to_list(),
+            strict=True,
         )
     )
 
@@ -1112,6 +1210,7 @@ def get_dataset_statistics(dataset: dict[str, pl.LazyFrame]) -> dict:
                 zip(
                     child_type_counts["child_type"].to_list(),
                     child_type_counts["len"].to_list(),
+                    strict=True,
                 )
             ),
         }

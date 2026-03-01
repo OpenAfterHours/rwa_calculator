@@ -18,34 +18,37 @@ from typing import TypedDict
 
 import polars as pl
 
-from rwa_calc.domain.enums import CQS, ExposureClass
-
+from rwa_calc.domain.enums import CQS
 
 # =============================================================================
 # CENTRAL GOVT / CENTRAL BANK RISK WEIGHTS (CRR Art. 114)
 # =============================================================================
 
 CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.00"),     # AAA to AA-
-    CQS.CQS2: Decimal("0.20"),     # A+ to A-
-    CQS.CQS3: Decimal("0.50"),     # BBB+ to BBB-
-    CQS.CQS4: Decimal("1.00"),     # BB+ to BB-
-    CQS.CQS5: Decimal("1.00"),     # B+ to B-
-    CQS.CQS6: Decimal("1.50"),     # CCC+ and below
+    CQS.CQS1: Decimal("0.00"),  # AAA to AA-
+    CQS.CQS2: Decimal("0.20"),  # A+ to A-
+    CQS.CQS3: Decimal("0.50"),  # BBB+ to BBB-
+    CQS.CQS4: Decimal("1.00"),  # BB+ to BB-
+    CQS.CQS5: Decimal("1.00"),  # B+ to B-
+    CQS.CQS6: Decimal("1.50"),  # CCC+ and below
     CQS.UNRATED: Decimal("1.00"),  # Unrated
 }
 
 
 def _create_cgcb_df() -> pl.DataFrame:
     """Create central govt/central bank risk weight lookup DataFrame."""
-    return pl.DataFrame({
-        "cqs": [1, 2, 3, 4, 5, 6, None],
-        "risk_weight": [0.00, 0.20, 0.50, 1.00, 1.00, 1.50, 1.00],
-        "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK"] * 7,
-    }).with_columns([
-        pl.col("cqs").cast(pl.Int8),
-        pl.col("risk_weight").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6, None],
+            "risk_weight": [0.00, 0.20, 0.50, 1.00, 1.00, 1.50, 1.00],
+            "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK"] * 7,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
 
 
 # =============================================================================
@@ -54,18 +57,18 @@ def _create_cgcb_df() -> pl.DataFrame:
 
 # UK deviation: CQS 2 gets 30% instead of standard Basel 50%
 INSTITUTION_RISK_WEIGHTS_UK: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.20"),     # AAA to AA-
-    CQS.CQS2: Decimal("0.30"),     # A+ to A- (UK deviation)
-    CQS.CQS3: Decimal("0.50"),     # BBB+ to BBB-
-    CQS.CQS4: Decimal("1.00"),     # BB+ to BB-
-    CQS.CQS5: Decimal("1.00"),     # B+ to B-
-    CQS.CQS6: Decimal("1.50"),     # CCC+ and below
+    CQS.CQS1: Decimal("0.20"),  # AAA to AA-
+    CQS.CQS2: Decimal("0.30"),  # A+ to A- (UK deviation)
+    CQS.CQS3: Decimal("0.50"),  # BBB+ to BBB-
+    CQS.CQS4: Decimal("1.00"),  # BB+ to BB-
+    CQS.CQS5: Decimal("1.00"),  # B+ to B-
+    CQS.CQS6: Decimal("1.50"),  # CCC+ and below
     CQS.UNRATED: Decimal("0.40"),  # Unrated (derived from sovereign CQS2)
 }
 
 INSTITUTION_RISK_WEIGHTS_STANDARD: dict[CQS, Decimal] = {
     CQS.CQS1: Decimal("0.20"),
-    CQS.CQS2: Decimal("0.50"),     # Standard Basel
+    CQS.CQS2: Decimal("0.50"),  # Standard Basel
     CQS.CQS3: Decimal("0.50"),
     CQS.CQS4: Decimal("1.00"),
     CQS.CQS5: Decimal("1.00"),
@@ -81,15 +84,19 @@ def _create_institution_df(use_uk_deviation: bool = True) -> pl.DataFrame:
     else:
         weights = [0.20, 0.50, 0.50, 1.00, 1.00, 1.50, 0.40]
 
-    return pl.DataFrame({
-        "cqs": [1, 2, 3, 4, 5, 6, None],
-        "risk_weight": weights,
-        "exposure_class": ["INSTITUTION"] * 7,
-        "uk_deviation": [use_uk_deviation] * 7,
-    }).with_columns([
-        pl.col("cqs").cast(pl.Int8),
-        pl.col("risk_weight").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6, None],
+            "risk_weight": weights,
+            "exposure_class": ["INSTITUTION"] * 7,
+            "uk_deviation": [use_uk_deviation] * 7,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
 
 
 # =============================================================================
@@ -97,26 +104,30 @@ def _create_institution_df(use_uk_deviation: bool = True) -> pl.DataFrame:
 # =============================================================================
 
 CORPORATE_RISK_WEIGHTS: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.20"),     # AAA to AA-
-    CQS.CQS2: Decimal("0.50"),     # A+ to A-
-    CQS.CQS3: Decimal("1.00"),     # BBB+ to BBB-
-    CQS.CQS4: Decimal("1.00"),     # BB+ to BB-
-    CQS.CQS5: Decimal("1.50"),     # B+ to B-
-    CQS.CQS6: Decimal("1.50"),     # CCC+ and below
+    CQS.CQS1: Decimal("0.20"),  # AAA to AA-
+    CQS.CQS2: Decimal("0.50"),  # A+ to A-
+    CQS.CQS3: Decimal("1.00"),  # BBB+ to BBB-
+    CQS.CQS4: Decimal("1.00"),  # BB+ to BB-
+    CQS.CQS5: Decimal("1.50"),  # B+ to B-
+    CQS.CQS6: Decimal("1.50"),  # CCC+ and below
     CQS.UNRATED: Decimal("1.00"),  # Unrated
 }
 
 
 def _create_corporate_df() -> pl.DataFrame:
     """Create corporate risk weight lookup DataFrame."""
-    return pl.DataFrame({
-        "cqs": [1, 2, 3, 4, 5, 6, None],
-        "risk_weight": [0.20, 0.50, 1.00, 1.00, 1.50, 1.50, 1.00],
-        "exposure_class": ["CORPORATE"] * 7,
-    }).with_columns([
-        pl.col("cqs").cast(pl.Int8),
-        pl.col("risk_weight").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6, None],
+            "risk_weight": [0.20, 0.50, 1.00, 1.00, 1.50, 1.50, 1.00],
+            "exposure_class": ["CORPORATE"] * 7,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
 
 
 # =============================================================================
@@ -128,22 +139,28 @@ RETAIL_RISK_WEIGHT: Decimal = Decimal("0.75")
 
 def _create_retail_df() -> pl.DataFrame:
     """Create retail risk weight DataFrame (single row, no CQS dependency)."""
-    return pl.DataFrame({
-        "cqs": [None],
-        "risk_weight": [0.75],
-        "exposure_class": ["RETAIL"],
-    }).with_columns([
-        pl.col("cqs").cast(pl.Int8),
-        pl.col("risk_weight").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "cqs": [None],
+            "risk_weight": [0.75],
+            "exposure_class": ["RETAIL"],
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
 
 
 # =============================================================================
 # RESIDENTIAL MORTGAGE RISK WEIGHTS (CRR Art. 125)
 # =============================================================================
 
+
 class ResidentialMortgageParams(TypedDict):
     """Parameters for residential mortgage risk weighting."""
+
     ltv_threshold: Decimal
     rw_low_ltv: Decimal
     rw_high_ltv: Decimal
@@ -151,8 +168,8 @@ class ResidentialMortgageParams(TypedDict):
 
 RESIDENTIAL_MORTGAGE_PARAMS: ResidentialMortgageParams = {
     "ltv_threshold": Decimal("0.80"),
-    "rw_low_ltv": Decimal("0.35"),      # LTV <= 80%
-    "rw_high_ltv": Decimal("0.75"),     # Portion above 80% LTV
+    "rw_low_ltv": Decimal("0.35"),  # LTV <= 80%
+    "rw_high_ltv": Decimal("0.75"),  # Portion above 80% LTV
 }
 
 
@@ -166,24 +183,30 @@ def _create_residential_mortgage_df() -> pl.DataFrame:
 
     The DataFrame provides parameters for the calculation engine.
     """
-    return pl.DataFrame({
-        "exposure_class": ["RESIDENTIAL_MORTGAGE"],
-        "ltv_threshold": [0.80],
-        "rw_low_ltv": [0.35],
-        "rw_high_ltv": [0.75],
-    }).with_columns([
-        pl.col("ltv_threshold").cast(pl.Float64),
-        pl.col("rw_low_ltv").cast(pl.Float64),
-        pl.col("rw_high_ltv").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "exposure_class": ["RESIDENTIAL_MORTGAGE"],
+            "ltv_threshold": [0.80],
+            "rw_low_ltv": [0.35],
+            "rw_high_ltv": [0.75],
+        }
+    ).with_columns(
+        [
+            pl.col("ltv_threshold").cast(pl.Float64),
+            pl.col("rw_low_ltv").cast(pl.Float64),
+            pl.col("rw_high_ltv").cast(pl.Float64),
+        ]
+    )
 
 
 # =============================================================================
 # COMMERCIAL REAL ESTATE RISK WEIGHTS (CRR Art. 126)
 # =============================================================================
 
+
 class CommercialREParams(TypedDict):
     """Parameters for commercial real estate risk weighting."""
+
     ltv_threshold: Decimal
     rw_low_ltv: Decimal
     rw_standard: Decimal
@@ -191,8 +214,8 @@ class CommercialREParams(TypedDict):
 
 COMMERCIAL_RE_PARAMS: CommercialREParams = {
     "ltv_threshold": Decimal("0.50"),
-    "rw_low_ltv": Decimal("0.50"),       # LTV <= 50% with income cover
-    "rw_standard": Decimal("1.00"),       # Otherwise
+    "rw_low_ltv": Decimal("0.50"),  # LTV <= 50% with income cover
+    "rw_standard": Decimal("1.00"),  # Otherwise
 }
 
 
@@ -204,22 +227,27 @@ def _create_commercial_re_df() -> pl.DataFrame:
     - LTV <= 50% AND rental income >= 1.5x interest: 50%
     - Otherwise: 100% (standard corporate treatment)
     """
-    return pl.DataFrame({
-        "exposure_class": ["COMMERCIAL_RE"],
-        "ltv_threshold": [0.50],
-        "rw_low_ltv": [0.50],
-        "rw_standard": [1.00],
-        "income_cover_required": [True],
-    }).with_columns([
-        pl.col("ltv_threshold").cast(pl.Float64),
-        pl.col("rw_low_ltv").cast(pl.Float64),
-        pl.col("rw_standard").cast(pl.Float64),
-    ])
+    return pl.DataFrame(
+        {
+            "exposure_class": ["COMMERCIAL_RE"],
+            "ltv_threshold": [0.50],
+            "rw_low_ltv": [0.50],
+            "rw_standard": [1.00],
+            "income_cover_required": [True],
+        }
+    ).with_columns(
+        [
+            pl.col("ltv_threshold").cast(pl.Float64),
+            pl.col("rw_low_ltv").cast(pl.Float64),
+            pl.col("rw_standard").cast(pl.Float64),
+        ]
+    )
 
 
 # =============================================================================
 # COMBINED RISK WEIGHT TABLE
 # =============================================================================
+
 
 def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.DataFrame]:
     """
@@ -254,11 +282,15 @@ def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame
     Returns:
         Combined DataFrame with columns: exposure_class, cqs, risk_weight
     """
-    return pl.concat([
-        _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
-        _create_institution_df(use_uk_deviation).select(["exposure_class", "cqs", "risk_weight"]),
-        _create_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
-    ])
+    return pl.concat(
+        [
+            _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_institution_df(use_uk_deviation).select(
+                ["exposure_class", "cqs", "risk_weight"]
+            ),
+            _create_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
+        ]
+    )
 
 
 def lookup_risk_weight(
@@ -290,10 +322,14 @@ def lookup_risk_weight(
 
     if exposure_upper == "CENTRAL_GOVT_CENTRAL_BANK":
         cqs_enum = _get_cqs_enum(cqs)
-        return CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS.get(cqs_enum, CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED])
+        return CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS.get(
+            cqs_enum, CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED]
+        )
 
     if exposure_upper == "INSTITUTION":
-        table = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+        table = (
+            INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+        )
         cqs_enum = _get_cqs_enum(cqs)
         return table.get(cqs_enum, table[CQS.UNRATED])
 

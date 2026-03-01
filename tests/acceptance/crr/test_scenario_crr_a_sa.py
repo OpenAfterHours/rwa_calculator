@@ -14,17 +14,15 @@ Regulatory References:
 - CRR Art. 501: SME supporting factor (0.7619)
 """
 
-import pytest
 from typing import Any
 
 import polars as pl
-
+import pytest
 from tests.acceptance.crr.conftest import (
-    assert_rwa_within_tolerance,
-    assert_risk_weight_match,
-    assert_supporting_factor_match,
     assert_ead_match,
-    get_result_for_exposure,
+    assert_risk_weight_match,
+    assert_rwa_within_tolerance,
+    assert_supporting_factor_match,
     get_sa_result_for_exposure,
 )
 
@@ -52,8 +50,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_SOV_UK_001")
 
         assert result is not None, "Exposure LOAN_SOV_UK_001 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A1")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A1")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A1"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A1"
+        )
 
     def test_crr_a2_unrated_corporate(
         self,
@@ -70,8 +72,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_CORP_UR_001")
 
         assert result is not None, "Exposure LOAN_CORP_UR_001 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A2")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A2")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A2"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A2"
+        )
 
     def test_crr_a3_rated_corporate_cqs2(
         self,
@@ -88,8 +94,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_CORP_UK_003")
 
         assert result is not None, "Exposure LOAN_CORP_UK_003 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A3")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A3")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A3"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A3"
+        )
 
     def test_crr_a4_uk_institution_cqs2_deviation(
         self,
@@ -106,8 +116,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_INST_UK_003")
 
         assert result is not None, "Exposure LOAN_INST_UK_003 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A4")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A4")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A4"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A4"
+        )
 
     def test_crr_a5_residential_mortgage_low_ltv(
         self,
@@ -124,8 +138,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_RTL_MTG_001")
 
         assert result is not None, "Exposure LOAN_RTL_MTG_001 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A5")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A5")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A5"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A5"
+        )
 
     def test_crr_a6_residential_mortgage_high_ltv_split(
         self,
@@ -142,8 +160,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_RTL_MTG_002")
 
         assert result is not None, "Exposure LOAN_RTL_MTG_002 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A6")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A6")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A6"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A6"
+        )
 
     def test_crr_a7_commercial_re_low_ltv(
         self,
@@ -160,8 +182,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_CRE_001")
 
         assert result is not None, "Exposure LOAN_CRE_001 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A7")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A7")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A7"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A7"
+        )
 
     def test_crr_a8_obs_commitment_ccf(
         self,
@@ -179,7 +205,9 @@ class TestCRRGroupA_StandardisedApproach:
 
         assert result is not None, "Exposure CONT_CCF_001 not found in SA results"
         assert_ead_match(result["ead_final"], expected["ead"], scenario_id="CRR-A8")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A8")
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A8"
+        )
 
     def test_crr_a9_retail_exposure(
         self,
@@ -196,8 +224,12 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_RTL_IND_001")
 
         assert result is not None, "Exposure LOAN_RTL_IND_001 not found in SA results"
-        assert_risk_weight_match(result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A9")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A9")
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A9"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A9"
+        )
 
     def test_crr_a11_sme_retail_with_supporting_factor(
         self,
@@ -214,8 +246,13 @@ class TestCRRGroupA_StandardisedApproach:
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_RTL_SME_001")
 
         assert result is not None, "Exposure LOAN_RTL_SME_001 not found in SA results"
-        assert_supporting_factor_match(result["supporting_factor"], expected["supporting_factor"], scenario_id="CRR-A11")
-        assert_rwa_within_tolerance(result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A11")
+        assert_supporting_factor_match(
+            result["supporting_factor"], expected["supporting_factor"], scenario_id="CRR-A11"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A11"
+        )
+
 
 class TestCRRGroupA_ParameterizedValidation:
     """
@@ -253,9 +290,7 @@ class TestCRRGroupA_ParameterizedValidation:
         """Verify all CRR-A scenarios have valid risk weights."""
         for scenario in crr_a_scenarios:
             rw = scenario["risk_weight"]
-            assert 0.0 <= rw <= 2.5, (
-                f"Scenario {scenario['scenario_id']} has invalid RW: {rw}"
-            )
+            assert 0.0 <= rw <= 2.5, f"Scenario {scenario['scenario_id']} has invalid RW: {rw}"
 
     def test_crr_a_sme_scenarios_have_supporting_factor(
         self,

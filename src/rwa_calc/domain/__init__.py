@@ -6,10 +6,10 @@ used throughout the calculation pipeline.
 """
 
 from rwa_calc.domain.enums import (
+    CQS,
     ApproachType,
     CollateralType,
     CommitmentType,
-    CQS,
     ErrorCategory,
     ErrorSeverity,
     ExposureClass,

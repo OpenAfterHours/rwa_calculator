@@ -24,7 +24,6 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.hierarchy import (
-    HierarchyError,
     HierarchyResolver,
     create_hierarchy_resolver,
 )
@@ -59,163 +58,183 @@ def fixtures_path() -> Path:
 @pytest.fixture
 def simple_counterparties() -> pl.LazyFrame:
     """Simple counterparties LazyFrame for testing."""
-    return pl.DataFrame({
-        "counterparty_reference": ["CP001", "CP002", "CP003", "CP004"],
-        "counterparty_name": ["Parent Corp", "Child Corp 1", "Child Corp 2", "Standalone"],
-        "entity_type": ["corporate", "corporate", "corporate", "corporate"],
-        "country_code": ["GB", "GB", "GB", "GB"],
-        "annual_revenue": [100000000.0, 20000000.0, 30000000.0, 5000000.0],
-        "total_assets": [500000000.0, 100000000.0, 150000000.0, 25000000.0],
-        "default_status": [False, False, False, False],
-        "sector_code": ["MANU", "MANU", "MANU", "SERV"],
-        "is_financial_institution": [False, False, False, False],
-        "is_regulated": [False, False, False, False],
-        "is_pse": [False, False, False, False],
-        "is_mdb": [False, False, False, False],
-        "is_international_org": [False, False, False, False],
-        "is_central_counterparty": [False, False, False, False],
-        "is_regional_govt_local_auth": [False, False, False, False],
-        "is_managed_as_retail": [False, False, False, False],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "counterparty_reference": ["CP001", "CP002", "CP003", "CP004"],
+            "counterparty_name": ["Parent Corp", "Child Corp 1", "Child Corp 2", "Standalone"],
+            "entity_type": ["corporate", "corporate", "corporate", "corporate"],
+            "country_code": ["GB", "GB", "GB", "GB"],
+            "annual_revenue": [100000000.0, 20000000.0, 30000000.0, 5000000.0],
+            "total_assets": [500000000.0, 100000000.0, 150000000.0, 25000000.0],
+            "default_status": [False, False, False, False],
+            "sector_code": ["MANU", "MANU", "MANU", "SERV"],
+            "is_financial_institution": [False, False, False, False],
+            "is_regulated": [False, False, False, False],
+            "is_pse": [False, False, False, False],
+            "is_mdb": [False, False, False, False],
+            "is_international_org": [False, False, False, False],
+            "is_central_counterparty": [False, False, False, False],
+            "is_regional_govt_local_auth": [False, False, False, False],
+            "is_managed_as_retail": [False, False, False, False],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def simple_org_mappings() -> pl.LazyFrame:
     """Simple org mappings for single-level hierarchy."""
-    return pl.DataFrame({
-        "parent_counterparty_reference": ["CP001", "CP001"],
-        "child_counterparty_reference": ["CP002", "CP003"],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "parent_counterparty_reference": ["CP001", "CP001"],
+            "child_counterparty_reference": ["CP002", "CP003"],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def multi_level_org_mappings() -> pl.LazyFrame:
     """Multi-level org hierarchy for testing transitive resolution."""
-    return pl.DataFrame({
-        "parent_counterparty_reference": ["ULTIMATE", "HOLDING", "HOLDING"],
-        "child_counterparty_reference": ["HOLDING", "OPSUB1", "OPSUB2"],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "parent_counterparty_reference": ["ULTIMATE", "HOLDING", "HOLDING"],
+            "child_counterparty_reference": ["HOLDING", "OPSUB1", "OPSUB2"],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def simple_ratings() -> pl.LazyFrame:
     """Simple ratings - only parent has rating."""
-    return pl.DataFrame({
-        "rating_reference": ["RAT001"],
-        "counterparty_reference": ["CP001"],
-        "rating_type": ["external"],
-        "rating_agency": ["MOODYS"],
-        "rating_value": ["A2"],
-        "cqs": [2],
-        "pd": [0.001],
-        "rating_date": [date(2024, 6, 1)],
-        "is_solicited": [True],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "rating_reference": ["RAT001"],
+            "counterparty_reference": ["CP001"],
+            "rating_type": ["external"],
+            "rating_agency": ["MOODYS"],
+            "rating_value": ["A2"],
+            "cqs": [2],
+            "pd": [0.001],
+            "rating_date": [date(2024, 6, 1)],
+            "is_solicited": [True],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def simple_loans() -> pl.LazyFrame:
     """Simple loans for testing."""
-    return pl.DataFrame({
-        "loan_reference": ["LOAN001", "LOAN002", "LOAN003"],
-        "product_type": ["TERM_LOAN", "TERM_LOAN", "TERM_LOAN"],
-        "book_code": ["CORP", "CORP", "CORP"],
-        "counterparty_reference": ["CP002", "CP003", "CP004"],
-        "value_date": [date(2023, 1, 1)] * 3,
-        "maturity_date": [date(2026, 1, 1)] * 3,
-        "currency": ["GBP", "GBP", "GBP"],
-        "drawn_amount": [1000000.0, 2000000.0, 500000.0],
-        "lgd": [0.45, 0.45, 0.45],
-        "beel": [0.01, 0.01, 0.01],
-        "seniority": ["senior", "senior", "senior"],
-        "risk_type": ["FR", "FR", "FR"],  # Full risk for drawn loans
-        "ccf_modelled": [None, None, None],  # No modelled CCF
-        "is_short_term_trade_lc": [None, None, None],  # N/A for loans
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "loan_reference": ["LOAN001", "LOAN002", "LOAN003"],
+            "product_type": ["TERM_LOAN", "TERM_LOAN", "TERM_LOAN"],
+            "book_code": ["CORP", "CORP", "CORP"],
+            "counterparty_reference": ["CP002", "CP003", "CP004"],
+            "value_date": [date(2023, 1, 1)] * 3,
+            "maturity_date": [date(2026, 1, 1)] * 3,
+            "currency": ["GBP", "GBP", "GBP"],
+            "drawn_amount": [1000000.0, 2000000.0, 500000.0],
+            "lgd": [0.45, 0.45, 0.45],
+            "beel": [0.01, 0.01, 0.01],
+            "seniority": ["senior", "senior", "senior"],
+            "risk_type": ["FR", "FR", "FR"],  # Full risk for drawn loans
+            "ccf_modelled": [None, None, None],  # No modelled CCF
+            "is_short_term_trade_lc": [None, None, None],  # N/A for loans
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def simple_contingents() -> pl.LazyFrame:
     """Simple contingents for testing."""
-    return pl.DataFrame({
-        "contingent_reference": ["CONT001", "CONT002"],
-        "product_type": ["FINANCIAL_GUARANTEE", "LETTER_OF_CREDIT"],
-        "book_code": ["CORP", "CORP"],
-        "counterparty_reference": ["CP002", "CP004"],
-        "value_date": [date(2023, 1, 1)] * 2,
-        "maturity_date": [date(2025, 1, 1)] * 2,
-        "currency": ["GBP", "GBP"],
-        "nominal_amount": [250000.0, 100000.0],
-        "lgd": [0.45, 0.45],
-        "beel": [0.01, 0.01],
-        "seniority": ["senior", "senior"],
-        "risk_type": ["MR", "MR"],  # Medium risk
-        "ccf_modelled": [None, None],  # No modelled CCF
-        "is_short_term_trade_lc": [False, False],  # Not trade LCs
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "contingent_reference": ["CONT001", "CONT002"],
+            "product_type": ["FINANCIAL_GUARANTEE", "LETTER_OF_CREDIT"],
+            "book_code": ["CORP", "CORP"],
+            "counterparty_reference": ["CP002", "CP004"],
+            "value_date": [date(2023, 1, 1)] * 2,
+            "maturity_date": [date(2025, 1, 1)] * 2,
+            "currency": ["GBP", "GBP"],
+            "nominal_amount": [250000.0, 100000.0],
+            "lgd": [0.45, 0.45],
+            "beel": [0.01, 0.01],
+            "seniority": ["senior", "senior"],
+            "risk_type": ["MR", "MR"],  # Medium risk
+            "ccf_modelled": [None, None],  # No modelled CCF
+            "is_short_term_trade_lc": [False, False],  # Not trade LCs
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def simple_facility_mappings() -> pl.LazyFrame:
     """Simple facility mappings."""
-    return pl.DataFrame({
-        "parent_facility_reference": ["FAC001", "FAC001", "FAC002"],
-        "child_reference": ["LOAN001", "CONT001", "LOAN002"],
-        "child_type": ["loan", "contingent", "loan"],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "parent_facility_reference": ["FAC001", "FAC001", "FAC002"],
+            "child_reference": ["LOAN001", "CONT001", "LOAN002"],
+            "child_type": ["loan", "contingent", "loan"],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def lending_group_mappings() -> pl.LazyFrame:
     """Lending group mappings for retail threshold testing."""
-    return pl.DataFrame({
-        "parent_counterparty_reference": ["LG_ANCHOR", "LG_ANCHOR"],
-        "child_counterparty_reference": ["LG_MEMBER1", "LG_MEMBER2"],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "parent_counterparty_reference": ["LG_ANCHOR", "LG_ANCHOR"],
+            "child_counterparty_reference": ["LG_MEMBER1", "LG_MEMBER2"],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def lending_group_counterparties() -> pl.LazyFrame:
     """Counterparties for lending group testing."""
-    return pl.DataFrame({
-        "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2", "STANDALONE"],
-        "counterparty_name": ["Anchor Person", "Member 1", "Member 2", "Standalone"],
-        "entity_type": ["individual", "individual", "corporate", "individual"],
-        "country_code": ["GB", "GB", "GB", "GB"],
-        "annual_revenue": [0.0, 0.0, 500000.0, 0.0],
-        "total_assets": [0.0, 0.0, 1000000.0, 0.0],
-        "default_status": [False, False, False, False],
-        "sector_code": ["RETAIL", "RETAIL", "RETAIL", "RETAIL"],
-        "is_financial_institution": [False, False, False, False],
-        "is_regulated": [False, False, False, False],
-        "is_pse": [False, False, False, False],
-        "is_mdb": [False, False, False, False],
-        "is_international_org": [False, False, False, False],
-        "is_central_counterparty": [False, False, False, False],
-        "is_regional_govt_local_auth": [False, False, False, False],
-        "is_managed_as_retail": [False, False, False, False],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2", "STANDALONE"],
+            "counterparty_name": ["Anchor Person", "Member 1", "Member 2", "Standalone"],
+            "entity_type": ["individual", "individual", "corporate", "individual"],
+            "country_code": ["GB", "GB", "GB", "GB"],
+            "annual_revenue": [0.0, 0.0, 500000.0, 0.0],
+            "total_assets": [0.0, 0.0, 1000000.0, 0.0],
+            "default_status": [False, False, False, False],
+            "sector_code": ["RETAIL", "RETAIL", "RETAIL", "RETAIL"],
+            "is_financial_institution": [False, False, False, False],
+            "is_regulated": [False, False, False, False],
+            "is_pse": [False, False, False, False],
+            "is_mdb": [False, False, False, False],
+            "is_international_org": [False, False, False, False],
+            "is_central_counterparty": [False, False, False, False],
+            "is_regional_govt_local_auth": [False, False, False, False],
+            "is_managed_as_retail": [False, False, False, False],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def lending_group_loans() -> pl.LazyFrame:
     """Loans for lending group testing."""
-    return pl.DataFrame({
-        "loan_reference": ["LG_LOAN1", "LG_LOAN2", "LG_LOAN3", "STANDALONE_LOAN"],
-        "product_type": ["MORTGAGE", "PERSONAL", "BUSINESS", "PERSONAL"],
-        "book_code": ["RETAIL", "RETAIL", "RETAIL", "RETAIL"],
-        "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2", "STANDALONE"],
-        "value_date": [date(2023, 1, 1)] * 4,
-        "maturity_date": [date(2028, 1, 1)] * 4,
-        "currency": ["GBP", "GBP", "GBP", "GBP"],
-        "drawn_amount": [300000.0, 200000.0, 400000.0, 50000.0],
-        "lgd": [0.15, 0.45, 0.45, 0.45],
-        "beel": [0.01, 0.01, 0.01, 0.01],
-        "seniority": ["senior", "senior", "senior", "senior"],
-        "risk_type": ["FR", "FR", "FR", "FR"],  # Full risk for drawn loans
-        "ccf_modelled": [None, None, None, None],  # No modelled CCF
-        "is_short_term_trade_lc": [None, None, None, None],  # N/A for loans
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "loan_reference": ["LG_LOAN1", "LG_LOAN2", "LG_LOAN3", "STANDALONE_LOAN"],
+            "product_type": ["MORTGAGE", "PERSONAL", "BUSINESS", "PERSONAL"],
+            "book_code": ["RETAIL", "RETAIL", "RETAIL", "RETAIL"],
+            "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2", "STANDALONE"],
+            "value_date": [date(2023, 1, 1)] * 4,
+            "maturity_date": [date(2028, 1, 1)] * 4,
+            "currency": ["GBP", "GBP", "GBP", "GBP"],
+            "drawn_amount": [300000.0, 200000.0, 400000.0, 50000.0],
+            "lgd": [0.15, 0.45, 0.45, 0.45],
+            "beel": [0.01, 0.01, 0.01, 0.01],
+            "seniority": ["senior", "senior", "senior", "senior"],
+            "risk_type": ["FR", "FR", "FR", "FR"],  # Full risk for drawn loans
+            "ccf_modelled": [None, None, None, None],  # No modelled CCF
+            "is_short_term_trade_lc": [None, None, None, None],  # N/A for loans
+        }
+    ).lazy()
 
 
 @pytest.fixture
@@ -245,10 +264,12 @@ def simple_raw_data_bundle(
         ratings=simple_ratings,
         facility_mappings=simple_facility_mappings,
         org_mappings=simple_org_mappings,
-        lending_mappings=pl.LazyFrame(schema={
-            "parent_counterparty_reference": pl.String,
-            "child_counterparty_reference": pl.String,
-        }),
+        lending_mappings=pl.LazyFrame(
+            schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }
+        ),
     )
 
 
@@ -301,10 +322,12 @@ class TestBuildUltimateParentLazy:
 
     def test_empty_mappings(self, resolver: HierarchyResolver) -> None:
         """Empty mappings should return empty LazyFrame."""
-        empty_mappings = pl.LazyFrame(schema={
-            "parent_counterparty_reference": pl.String,
-            "child_counterparty_reference": pl.String,
-        })
+        empty_mappings = pl.LazyFrame(
+            schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }
+        )
 
         ultimate_parents = resolver._build_ultimate_parent_lazy(empty_mappings)
         df = ultimate_parents.collect()
@@ -376,10 +399,12 @@ class TestBuildRatingInheritanceLazy:
     ) -> None:
         """Standalone unrated entity should be marked as unrated."""
         # Empty org mappings - no hierarchy
-        empty_mappings = pl.LazyFrame(schema={
-            "parent_counterparty_reference": pl.String,
-            "child_counterparty_reference": pl.String,
-        })
+        empty_mappings = pl.LazyFrame(
+            schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }
+        )
         ultimate_parents = resolver._build_ultimate_parent_lazy(empty_mappings)
 
         rating_inheritance = resolver._build_rating_inheritance_lazy(
@@ -526,32 +551,36 @@ class TestLendingGroupAggregation:
         bundle = RawDataBundle(
             facilities=pl.LazyFrame(),
             loans=lending_group_loans,
-            contingents=pl.LazyFrame(schema={
-                "contingent_reference": pl.String,
-                "product_type": pl.String,
-                "book_code": pl.String,
-                "counterparty_reference": pl.String,
-                "value_date": pl.Date,
-                "maturity_date": pl.Date,
-                "currency": pl.String,
-                "nominal_amount": pl.Float64,
-                "lgd": pl.Float64,
-                "beel": pl.Float64,
-                "seniority": pl.String,
-                "risk_type": pl.String,
-                "ccf_modelled": pl.Float64,
-                "is_short_term_trade_lc": pl.Boolean,
-            }),
+            contingents=pl.LazyFrame(
+                schema={
+                    "contingent_reference": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "nominal_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                }
+            ),
             counterparties=lending_group_counterparties,
             collateral=pl.LazyFrame(),
             guarantees=pl.LazyFrame(),
             provisions=pl.LazyFrame(),
             ratings=None,
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
             org_mappings=None,
             lending_mappings=lending_group_mappings,
         )
@@ -580,32 +609,36 @@ class TestLendingGroupAggregation:
         bundle = RawDataBundle(
             facilities=pl.LazyFrame(),
             loans=lending_group_loans,
-            contingents=pl.LazyFrame(schema={
-                "contingent_reference": pl.String,
-                "product_type": pl.String,
-                "book_code": pl.String,
-                "counterparty_reference": pl.String,
-                "value_date": pl.Date,
-                "maturity_date": pl.Date,
-                "currency": pl.String,
-                "nominal_amount": pl.Float64,
-                "lgd": pl.Float64,
-                "beel": pl.Float64,
-                "seniority": pl.String,
-                "risk_type": pl.String,
-                "ccf_modelled": pl.Float64,
-                "is_short_term_trade_lc": pl.Boolean,
-            }),
+            contingents=pl.LazyFrame(
+                schema={
+                    "contingent_reference": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "nominal_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                }
+            ),
             counterparties=lending_group_counterparties,
             collateral=pl.LazyFrame(),
             guarantees=pl.LazyFrame(),
             provisions=pl.LazyFrame(),
             ratings=None,
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
             org_mappings=None,
             lending_mappings=lending_group_mappings,
         )
@@ -709,68 +742,82 @@ class TestEdgeCases:
         """Should handle empty loans and contingents."""
         empty_bundle = RawDataBundle(
             facilities=pl.LazyFrame(),
-            loans=pl.LazyFrame(schema={
-                "loan_reference": pl.String,
-                "product_type": pl.String,
-                "book_code": pl.String,
-                "counterparty_reference": pl.String,
-                "value_date": pl.Date,
-                "maturity_date": pl.Date,
-                "currency": pl.String,
-                "drawn_amount": pl.Float64,
-                "lgd": pl.Float64,
-                "beel": pl.Float64,
-                "seniority": pl.String,
-                "risk_type": pl.String,
-                "ccf_modelled": pl.Float64,
-                "is_short_term_trade_lc": pl.Boolean,
-            }),
-            contingents=pl.LazyFrame(schema={
-                "contingent_reference": pl.String,
-                "product_type": pl.String,
-                "book_code": pl.String,
-                "counterparty_reference": pl.String,
-                "value_date": pl.Date,
-                "maturity_date": pl.Date,
-                "currency": pl.String,
-                "nominal_amount": pl.Float64,
-                "lgd": pl.Float64,
-                "beel": pl.Float64,
-                "seniority": pl.String,
-                "risk_type": pl.String,
-                "ccf_modelled": pl.Float64,
-                "is_short_term_trade_lc": pl.Boolean,
-            }),
-            counterparties=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-            }),
+            loans=pl.LazyFrame(
+                schema={
+                    "loan_reference": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "drawn_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                }
+            ),
+            contingents=pl.LazyFrame(
+                schema={
+                    "contingent_reference": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "nominal_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                }
+            ),
+            counterparties=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                }
+            ),
             collateral=pl.LazyFrame(),
             guarantees=pl.LazyFrame(),
             provisions=pl.LazyFrame(),
-            ratings=pl.LazyFrame(schema={
-                "rating_reference": pl.String,
-                "counterparty_reference": pl.String,
-                "rating_type": pl.String,
-                "rating_agency": pl.String,
-                "rating_value": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_date": pl.Date,
-                "is_solicited": pl.Boolean,
-            }),
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
-            org_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            ratings=pl.LazyFrame(
+                schema={
+                    "rating_reference": pl.String,
+                    "counterparty_reference": pl.String,
+                    "rating_type": pl.String,
+                    "rating_agency": pl.String,
+                    "rating_value": pl.String,
+                    "cqs": pl.Int8,
+                    "pd": pl.Float64,
+                    "rating_date": pl.Date,
+                    "is_solicited": pl.Boolean,
+                }
+            ),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
+            org_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(empty_bundle, crr_config)
@@ -799,19 +846,25 @@ class TestEdgeCases:
             guarantees=pl.LazyFrame(),
             provisions=pl.LazyFrame(),
             ratings=simple_ratings,
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
-            org_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
+            org_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(bundle, crr_config)
@@ -832,50 +885,56 @@ class TestFacilityUndrawnCalculation:
     @pytest.fixture
     def facilities_with_undrawn(self) -> pl.LazyFrame:
         """Facilities for testing undrawn calculation."""
-        return pl.DataFrame({
-            "facility_reference": ["FAC001", "FAC002", "FAC003", "FAC004", "FAC005"],
-            "product_type": ["RCF", "TERM", "OVERDRAFT", "RCF", "RCF"],
-            "book_code": ["CORP", "CORP", "CORP", "CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005"],
-            "value_date": [date(2023, 1, 1)] * 5,
-            "maturity_date": [date(2028, 1, 1)] * 5,
-            "currency": ["GBP"] * 5,
-            "limit": [5000000.0, 1000000.0, 500000.0, 1000000.0, 1000000.0],
-            "committed": [True, True, True, True, True],
-            "lgd": [0.45] * 5,
-            "beel": [0.01] * 5,
-            "is_revolving": [True, False, True, True, True],
-            "seniority": ["senior"] * 5,
-            "risk_type": ["MR", "MR", "MR", "MR", "LR"],  # MR=50% CCF, LR=0% CCF
-            "ccf_modelled": [None, None, None, 0.80, None],  # FAC004 has modelled CCF
-            "is_short_term_trade_lc": [False, False, False, False, False],
-        }).lazy()
+        return pl.DataFrame(
+            {
+                "facility_reference": ["FAC001", "FAC002", "FAC003", "FAC004", "FAC005"],
+                "product_type": ["RCF", "TERM", "OVERDRAFT", "RCF", "RCF"],
+                "book_code": ["CORP", "CORP", "CORP", "CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005"],
+                "value_date": [date(2023, 1, 1)] * 5,
+                "maturity_date": [date(2028, 1, 1)] * 5,
+                "currency": ["GBP"] * 5,
+                "limit": [5000000.0, 1000000.0, 500000.0, 1000000.0, 1000000.0],
+                "committed": [True, True, True, True, True],
+                "lgd": [0.45] * 5,
+                "beel": [0.01] * 5,
+                "is_revolving": [True, False, True, True, True],
+                "seniority": ["senior"] * 5,
+                "risk_type": ["MR", "MR", "MR", "MR", "LR"],  # MR=50% CCF, LR=0% CCF
+                "ccf_modelled": [None, None, None, 0.80, None],  # FAC004 has modelled CCF
+                "is_short_term_trade_lc": [False, False, False, False, False],
+            }
+        ).lazy()
 
     @pytest.fixture
     def loans_for_facilities(self) -> pl.LazyFrame:
         """Loans linked to facilities."""
-        return pl.DataFrame({
-            "loan_reference": ["LOAN001", "LOAN002", "LOAN003", "LOAN004"],
-            "product_type": ["TERM_LOAN", "TERM_LOAN", "OVERDRAFT_DRAW", "TERM_LOAN"],
-            "book_code": ["CORP"] * 4,
-            "counterparty_reference": ["CP001", "CP001", "CP002", "CP003"],
-            "value_date": [date(2023, 6, 1)] * 4,
-            "maturity_date": [date(2028, 1, 1)] * 4,
-            "currency": ["GBP"] * 4,
-            "drawn_amount": [4000000.0, 500000.0, 1000000.0, 700000.0],
-            "lgd": [0.45] * 4,
-            "beel": [0.01] * 4,
-            "seniority": ["senior"] * 4,
-        }).lazy()
+        return pl.DataFrame(
+            {
+                "loan_reference": ["LOAN001", "LOAN002", "LOAN003", "LOAN004"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN", "OVERDRAFT_DRAW", "TERM_LOAN"],
+                "book_code": ["CORP"] * 4,
+                "counterparty_reference": ["CP001", "CP001", "CP002", "CP003"],
+                "value_date": [date(2023, 6, 1)] * 4,
+                "maturity_date": [date(2028, 1, 1)] * 4,
+                "currency": ["GBP"] * 4,
+                "drawn_amount": [4000000.0, 500000.0, 1000000.0, 700000.0],
+                "lgd": [0.45] * 4,
+                "beel": [0.01] * 4,
+                "seniority": ["senior"] * 4,
+            }
+        ).lazy()
 
     @pytest.fixture
     def facility_loan_mappings(self) -> pl.LazyFrame:
         """Mappings between facilities and loans."""
-        return pl.DataFrame({
-            "parent_facility_reference": ["FAC001", "FAC001", "FAC002", "FAC003"],
-            "child_reference": ["LOAN001", "LOAN002", "LOAN003", "LOAN004"],
-            "child_type": ["loan", "loan", "loan", "loan"],
-        }).lazy()
+        return pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC001", "FAC001", "FAC002", "FAC003"],
+                "child_reference": ["LOAN001", "LOAN002", "LOAN003", "LOAN004"],
+                "child_type": ["loan", "loan", "loan", "loan"],
+            }
+        ).lazy()
 
     def test_normal_facility_undrawn_calculation(
         self,
@@ -950,43 +1009,47 @@ class TestFacilityUndrawnCalculation:
         resolver: HierarchyResolver,
     ) -> None:
         """Overdrawn facility (drawn > limit) should have undrawn capped at 0."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["OVERDRAWN_FAC"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "committed": [True],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["OVERDRAWN_FAC"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["OVERDRAWN_LOAN"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [1200000.0],  # Drawn > limit
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["OVERDRAWN_LOAN"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [1200000.0],  # Drawn > limit
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        mappings = pl.DataFrame({
-            "parent_facility_reference": ["OVERDRAWN_FAC"],
-            "child_reference": ["OVERDRAWN_LOAN"],
-            "child_type": ["loan"],
-        }).lazy()
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["OVERDRAWN_FAC"],
+                "child_reference": ["OVERDRAWN_LOAN"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
-        )
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Should not create exposure since undrawn is capped at 0
@@ -1002,43 +1065,47 @@ class TestFacilityUndrawnCalculation:
         not increase the facility's undrawn headroom beyond the limit.
         Formula: undrawn = max(0, limit - max(0, drawn))
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_NEG"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "committed": [True],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_NEG"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_NEG"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [-50000.0],  # Negative drawn (credit balance)
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_NEG"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [-50000.0],  # Negative drawn (credit balance)
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_NEG"],
-            "child_reference": ["LOAN_NEG"],
-            "child_type": ["loan"],
-        }).lazy()
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_NEG"],
+                "child_reference": ["LOAN_NEG"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
-        )
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Undrawn should be exactly the limit (1M), not limit + |negative| (1.05M)
@@ -1055,45 +1122,49 @@ class TestFacilityUndrawnCalculation:
         When multiple loans are linked to a facility, only positive drawn amounts
         should count towards the total drawn. Negative amounts are floored at 0.
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_MIX"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "committed": [True],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_MIX"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
         # Two loans: one positive (400k), one negative (-100k)
         # Total drawn should be 400k (not 300k), undrawn = 600k
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_POS", "LOAN_NEG"],
-            "product_type": ["TERM_LOAN", "TERM_LOAN"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 6, 1), date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1), date(2028, 1, 1)],
-            "currency": ["GBP", "GBP"],
-            "drawn_amount": [400000.0, -100000.0],
-            "lgd": [0.45, 0.45],
-            "seniority": ["senior", "senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_POS", "LOAN_NEG"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 6, 1), date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1), date(2028, 1, 1)],
+                "currency": ["GBP", "GBP"],
+                "drawn_amount": [400000.0, -100000.0],
+                "lgd": [0.45, 0.45],
+                "seniority": ["senior", "senior"],
+            }
+        ).lazy()
 
-        mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_MIX", "FAC_MIX"],
-            "child_reference": ["LOAN_POS", "LOAN_NEG"],
-            "child_type": ["loan", "loan"],
-        }).lazy()
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_MIX", "FAC_MIX"],
+                "child_reference": ["LOAN_POS", "LOAN_NEG"],
+                "child_type": ["loan", "loan"],
+            }
+        ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
-        )
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Undrawn = 1M - 400k = 600k (NOT 1M - 300k = 700k)
@@ -1106,43 +1177,47 @@ class TestFacilityUndrawnCalculation:
         resolver: HierarchyResolver,
     ) -> None:
         """All negative drawn amounts should result in full limit as undrawn."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_ALL_NEG"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [500000.0],
-            "committed": [True],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_ALL_NEG"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [500000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_NEG1", "LOAN_NEG2"],
-            "product_type": ["TERM_LOAN", "TERM_LOAN"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 6, 1), date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1), date(2028, 1, 1)],
-            "currency": ["GBP", "GBP"],
-            "drawn_amount": [-25000.0, -75000.0],  # Both negative
-            "lgd": [0.45, 0.45],
-            "seniority": ["senior", "senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_NEG1", "LOAN_NEG2"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 6, 1), date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1), date(2028, 1, 1)],
+                "currency": ["GBP", "GBP"],
+                "drawn_amount": [-25000.0, -75000.0],  # Both negative
+                "lgd": [0.45, 0.45],
+                "seniority": ["senior", "senior"],
+            }
+        ).lazy()
 
-        mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_ALL_NEG", "FAC_ALL_NEG"],
-            "child_reference": ["LOAN_NEG1", "LOAN_NEG2"],
-            "child_type": ["loan", "loan"],
-        }).lazy()
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ALL_NEG", "FAC_ALL_NEG"],
+                "child_reference": ["LOAN_NEG1", "LOAN_NEG2"],
+                "child_type": ["loan", "loan"],
+            }
+        ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
-        )
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Both loans are negative, so total_drawn = 0, undrawn = full limit
@@ -1160,44 +1235,48 @@ class TestFacilityUndrawnCalculation:
         should carry interest=100, but the facility undrawn should still equal
         the full limit (interest doesn't consume headroom).
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_INT"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "committed": [True],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_INT"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_NEG_INT"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [-100000.0],
-            "interest": [100.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_NEG_INT"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [-100000.0],
+                "interest": [100.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_INT"],
-            "child_reference": ["LOAN_NEG_INT"],
-            "child_type": ["loan"],
-        }).lazy()
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_INT"],
+                "child_reference": ["LOAN_NEG_INT"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
-        )
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Facility undrawn should be full limit (interest doesn't reduce headroom)
@@ -1255,45 +1334,49 @@ class TestFacilityUndrawnCalculation:
         resolver: HierarchyResolver,
     ) -> None:
         """Facility undrawn should inherit CCF-related fields from facility."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_CCF"],
-            "product_type": ["TRADE_LC"],
-            "book_code": ["TRADE"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2024, 6, 1)],
-            "currency": ["GBP"],
-            "limit": [500000.0],
-            "committed": [True],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MLR"],  # Medium-low risk (20% SA, 75% F-IRB, or 20% if trade LC)
-            "ccf_modelled": [0.65],
-            "is_short_term_trade_lc": [True],  # Art. 166(9) exception
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_CCF"],
+                "product_type": ["TRADE_LC"],
+                "book_code": ["TRADE"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2024, 6, 1)],
+                "currency": ["GBP"],
+                "limit": [500000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MLR"],  # Medium-low risk (20% SA, 75% F-IRB, or 20% if trade LC)
+                "ccf_modelled": [0.65],
+                "is_short_term_trade_lc": [True],  # Art. 166(9) exception
+            }
+        ).lazy()
 
-        loans = pl.LazyFrame(schema={
-            "loan_reference": pl.String,
-            "product_type": pl.String,
-            "book_code": pl.String,
-            "counterparty_reference": pl.String,
-            "value_date": pl.Date,
-            "maturity_date": pl.Date,
-            "currency": pl.String,
-            "drawn_amount": pl.Float64,
-            "lgd": pl.Float64,
-            "seniority": pl.String,
-        })
-
-        mappings = pl.LazyFrame(schema={
-            "parent_facility_reference": pl.String,
-            "child_reference": pl.String,
-            "child_type": pl.String,
-        })
-
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "counterparty_reference": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "currency": pl.String,
+                "drawn_amount": pl.Float64,
+                "lgd": pl.Float64,
+                "seniority": pl.String,
+            }
         )
+
+        mappings = pl.LazyFrame(
+            schema={
+                "parent_facility_reference": pl.String,
+                "child_reference": pl.String,
+                "child_type": pl.String,
+            }
+        )
+
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         assert len(df) == 1
@@ -1308,25 +1391,29 @@ class TestFacilityUndrawnCalculation:
         resolver: HierarchyResolver,
     ) -> None:
         """Empty facilities should return empty LazyFrame."""
-        facilities = pl.LazyFrame(schema={
-            "facility_reference": pl.String,
-            "limit": pl.Float64,
-        })
-
-        loans = pl.LazyFrame(schema={
-            "loan_reference": pl.String,
-            "drawn_amount": pl.Float64,
-        })
-
-        mappings = pl.LazyFrame(schema={
-            "parent_facility_reference": pl.String,
-            "child_reference": pl.String,
-            "child_type": pl.String,
-        })
-
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
+        facilities = pl.LazyFrame(
+            schema={
+                "facility_reference": pl.String,
+                "limit": pl.Float64,
+            }
         )
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "drawn_amount": pl.Float64,
+            }
+        )
+
+        mappings = pl.LazyFrame(
+            schema={
+                "parent_facility_reference": pl.String,
+                "child_reference": pl.String,
+                "child_type": pl.String,
+            }
+        )
+
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         assert len(df) == 0
@@ -1343,38 +1430,44 @@ class TestFacilityUndrawnInUnifyExposures:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """_unify_exposures should include facility_undrawn exposure type."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_UNIFY"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_UNIFY"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_UNIFY"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [600000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_UNIFY"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [600000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_UNIFY"],
-            "child_reference": ["LOAN_UNIFY"],
-            "child_type": ["loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_UNIFY"],
+                "child_reference": ["LOAN_UNIFY"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
             simple_counterparties,
@@ -1413,51 +1506,59 @@ class TestFacilityUndrawnInUnifyExposures:
         crr_config: CalculationConfig,
     ) -> None:
         """Full resolve() should include facility_undrawn exposures."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_RESOLVE"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_RESOLVE"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [2000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_RESOLVE"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_RESOLVE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [2000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_RESOLVE"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_RESOLVE"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_RESOLVE"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_RESOLVE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CP_RESOLVE"],
-            "counterparty_name": ["Test Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [50000000.0],
-            "total_assets": [100000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [False],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_RESOLVE"],
+                "counterparty_name": ["Test Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],
+                "total_assets": [100000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_RESOLVE"],
-            "child_reference": ["LOAN_RESOLVE"],
-            "child_type": ["loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_RESOLVE"],
+                "child_reference": ["LOAN_RESOLVE"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=facilities,
@@ -1470,10 +1571,12 @@ class TestFacilityUndrawnInUnifyExposures:
             ratings=None,
             facility_mappings=facility_mappings,
             org_mappings=None,
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(bundle, crr_config)
@@ -1505,52 +1608,60 @@ class TestFacilityUndrawnInUnifyExposures:
         - Undrawn = 1000 - 500 = 500 (interest excluded from undrawn calc)
         - On-balance-sheet = 500 + 10 = 510
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_INT"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_INT"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000.0],  # Limit = 1000
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_INT"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_INT"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000.0],  # Limit = 1000
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_INT"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_INT"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500.0],  # Drawn = 500
-            "interest": [10.0],  # Interest = 10 (should NOT reduce undrawn)
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_INT"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_INT"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500.0],  # Drawn = 500
+                "interest": [10.0],  # Interest = 10 (should NOT reduce undrawn)
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CP_INT"],
-            "counterparty_name": ["Interest Test Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [50000000.0],
-            "total_assets": [100000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [False],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_INT"],
+                "counterparty_name": ["Interest Test Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],
+                "total_assets": [100000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_INT"],
-            "child_reference": ["LOAN_INT"],
-            "child_type": ["loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_INT"],
+                "child_reference": ["LOAN_INT"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=facilities,
@@ -1563,10 +1674,12 @@ class TestFacilityUndrawnInUnifyExposures:
             ratings=None,
             facility_mappings=facility_mappings,
             org_mappings=None,
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(bundle, crr_config)
@@ -1607,67 +1720,75 @@ class TestSameFacilityAndLoanReference:
     @pytest.fixture
     def same_ref_facility(self) -> pl.LazyFrame:
         """Facility with reference that matches its loan."""
-        return pl.DataFrame({
-            "facility_reference": ["REF001"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_SAME_REF"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "committed": [True],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "is_revolving": [True],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-            "ccf_modelled": [None],
-            "is_short_term_trade_lc": [False],
-        }).lazy()
+        return pl.DataFrame(
+            {
+                "facility_reference": ["REF001"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_SAME_REF"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "is_revolving": [True],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [False],
+            }
+        ).lazy()
 
     @pytest.fixture
     def same_ref_loan(self) -> pl.LazyFrame:
         """Loan with reference that matches its parent facility."""
-        return pl.DataFrame({
-            "loan_reference": ["REF001"],  # Same as facility_reference
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_SAME_REF"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [600000.0],
-            "interest": [5000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-        }).lazy()
+        return pl.DataFrame(
+            {
+                "loan_reference": ["REF001"],  # Same as facility_reference
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_SAME_REF"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [600000.0],
+                "interest": [5000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
     @pytest.fixture
     def same_ref_mapping(self) -> pl.LazyFrame:
         """Facility mapping linking facility REF001 to loan REF001."""
-        return pl.DataFrame({
-            "parent_facility_reference": ["REF001"],
-            "child_reference": ["REF001"],  # Same reference for both
-            "child_type": ["loan"],
-        }).lazy()
+        return pl.DataFrame(
+            {
+                "parent_facility_reference": ["REF001"],
+                "child_reference": ["REF001"],  # Same reference for both
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
     @pytest.fixture
     def same_ref_counterparty(self) -> pl.LazyFrame:
         """Counterparty for same-reference test."""
-        return pl.DataFrame({
-            "counterparty_reference": ["CP_SAME_REF"],
-            "counterparty_name": ["Same Reference Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [50000000.0],
-            "total_assets": [100000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [False],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        return pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_SAME_REF"],
+                "counterparty_name": ["Same Reference Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],
+                "total_assets": [100000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
     def test_undrawn_calculation_with_same_reference(
         self,
@@ -1711,40 +1832,48 @@ class TestSameFacilityAndLoanReference:
         - Facility undrawn: exposure_reference = "REF001_UNDRAWN", exposure_type = "facility_undrawn"
         """
         # Build counterparty lookup
-        enriched_counterparties = same_ref_counterparty.with_columns([
-            pl.lit(False).alias("counterparty_has_parent"),
-            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-            pl.lit(None).cast(pl.Int8).alias("cqs"),
-            pl.lit(None).cast(pl.Float64).alias("pd"),
-            pl.lit(None).cast(pl.String).alias("rating_value"),
-            pl.lit(None).cast(pl.String).alias("rating_agency"),
-            pl.lit(False).alias("rating_inherited"),
-            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-            pl.lit("unrated").alias("rating_inheritance_reason"),
-        ])
+        enriched_counterparties = same_ref_counterparty.with_columns(
+            [
+                pl.lit(False).alias("counterparty_has_parent"),
+                pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
+                pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
+                pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
+                pl.lit(None).cast(pl.Int8).alias("cqs"),
+                pl.lit(None).cast(pl.Float64).alias("pd"),
+                pl.lit(None).cast(pl.String).alias("rating_value"),
+                pl.lit(None).cast(pl.String).alias("rating_agency"),
+                pl.lit(False).alias("rating_inherited"),
+                pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
+                pl.lit("unrated").alias("rating_inheritance_reason"),
+            ]
+        )
 
         counterparty_lookup = CounterpartyLookup(
             counterparties=enriched_counterparties,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
+            parent_mappings=pl.LazyFrame(
+                schema={
+                    "child_counterparty_reference": pl.String,
+                    "parent_counterparty_reference": pl.String,
+                }
+            ),
+            ultimate_parent_mappings=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "ultimate_parent_reference": pl.String,
+                    "hierarchy_depth": pl.Int32,
+                }
+            ),
+            rating_inheritance=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "cqs": pl.Int8,
+                    "pd": pl.Float64,
+                    "rating_value": pl.String,
+                    "inherited": pl.Boolean,
+                    "source_counterparty": pl.String,
+                    "inheritance_reason": pl.String,
+                }
+            ),
         )
 
         exposures, errors = resolver._unify_exposures(
@@ -1787,40 +1916,48 @@ class TestSameFacilityAndLoanReference:
         This is not a circular reference - they are different entity types.
         """
         # Build counterparty lookup
-        enriched_counterparties = same_ref_counterparty.with_columns([
-            pl.lit(False).alias("counterparty_has_parent"),
-            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-            pl.lit(None).cast(pl.Int8).alias("cqs"),
-            pl.lit(None).cast(pl.Float64).alias("pd"),
-            pl.lit(None).cast(pl.String).alias("rating_value"),
-            pl.lit(None).cast(pl.String).alias("rating_agency"),
-            pl.lit(False).alias("rating_inherited"),
-            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-            pl.lit("unrated").alias("rating_inheritance_reason"),
-        ])
+        enriched_counterparties = same_ref_counterparty.with_columns(
+            [
+                pl.lit(False).alias("counterparty_has_parent"),
+                pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
+                pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
+                pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
+                pl.lit(None).cast(pl.Int8).alias("cqs"),
+                pl.lit(None).cast(pl.Float64).alias("pd"),
+                pl.lit(None).cast(pl.String).alias("rating_value"),
+                pl.lit(None).cast(pl.String).alias("rating_agency"),
+                pl.lit(False).alias("rating_inherited"),
+                pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
+                pl.lit("unrated").alias("rating_inheritance_reason"),
+            ]
+        )
 
         counterparty_lookup = CounterpartyLookup(
             counterparties=enriched_counterparties,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
+            parent_mappings=pl.LazyFrame(
+                schema={
+                    "child_counterparty_reference": pl.String,
+                    "parent_counterparty_reference": pl.String,
+                }
+            ),
+            ultimate_parent_mappings=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "ultimate_parent_reference": pl.String,
+                    "hierarchy_depth": pl.Int32,
+                }
+            ),
+            rating_inheritance=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "cqs": pl.Int8,
+                    "pd": pl.Float64,
+                    "rating_value": pl.String,
+                    "inherited": pl.Boolean,
+                    "source_counterparty": pl.String,
+                    "inheritance_reason": pl.String,
+                }
+            ),
         )
 
         exposures, errors = resolver._unify_exposures(
@@ -1865,10 +2002,12 @@ class TestSameFacilityAndLoanReference:
             ratings=None,
             facility_mappings=same_ref_mapping,
             org_mappings=None,
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(bundle, crr_config)
@@ -1903,53 +2042,61 @@ class TestSameFacilityAndLoanReference:
 
         This tests that the pattern works for multiple independent facility-loan pairs.
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_A", "FAC_B"],
-            "product_type": ["RCF", "TERM"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP_A", "CP_B"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP", "GBP"],
-            "limit": [500000.0, 800000.0],
-            "lgd": [0.45, 0.45],
-            "seniority": ["senior", "senior"],
-            "risk_type": ["MR", "MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_A", "FAC_B"],
+                "product_type": ["RCF", "TERM"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP_A", "CP_B"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP", "GBP"],
+                "limit": [500000.0, 800000.0],
+                "lgd": [0.45, 0.45],
+                "seniority": ["senior", "senior"],
+                "risk_type": ["MR", "MR"],
+            }
+        ).lazy()
 
         # Loans with SAME references as their parent facilities
-        loans = pl.DataFrame({
-            "loan_reference": ["FAC_A", "FAC_B"],  # Same as facility references
-            "product_type": ["TERM_LOAN", "TERM_LOAN"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP_A", "CP_B"],
-            "value_date": [date(2023, 6, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP", "GBP"],
-            "drawn_amount": [300000.0, 500000.0],
-            "lgd": [0.45, 0.45],
-            "seniority": ["senior", "senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["FAC_A", "FAC_B"],  # Same as facility references
+                "product_type": ["TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP_A", "CP_B"],
+                "value_date": [date(2023, 6, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP", "GBP"],
+                "drawn_amount": [300000.0, 500000.0],
+                "lgd": [0.45, 0.45],
+                "seniority": ["senior", "senior"],
+            }
+        ).lazy()
 
         # Mappings where parent = child reference
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_A", "FAC_B"],
-            "child_reference": ["FAC_A", "FAC_B"],
-            "child_type": ["loan", "loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_A", "FAC_B"],
+                "child_reference": ["FAC_A", "FAC_B"],
+                "child_type": ["loan", "loan"],
+            }
+        ).lazy()
 
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CP_A", "CP_B"],
-            "counterparty_name": ["Corp A", "Corp B"],
-            "entity_type": ["corporate", "corporate"],
-            "country_code": ["GB", "GB"],
-            "annual_revenue": [50000000.0, 60000000.0],
-            "total_assets": [100000000.0, 120000000.0],
-            "default_status": [False, False],
-            "sector_code": ["MANU", "MANU"],
-            "is_regulated": [False, False],
-            "is_managed_as_retail": [False, False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_A", "CP_B"],
+                "counterparty_name": ["Corp A", "Corp B"],
+                "entity_type": ["corporate", "corporate"],
+                "country_code": ["GB", "GB"],
+                "annual_revenue": [50000000.0, 60000000.0],
+                "total_assets": [100000000.0, 120000000.0],
+                "default_status": [False, False],
+                "sector_code": ["MANU", "MANU"],
+                "is_regulated": [False, False],
+                "is_managed_as_retail": [False, False],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=facilities,
@@ -1962,10 +2109,12 @@ class TestSameFacilityAndLoanReference:
             ratings=None,
             facility_mappings=facility_mappings,
             org_mappings=None,
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(bundle, crr_config)
@@ -1980,7 +2129,9 @@ class TestSameFacilityAndLoanReference:
         assert loans_df["parent_facility_reference"].to_list() == ["FAC_A", "FAC_B"]
 
         # Check facility_undrawn exposures
-        undrawn_df = df.filter(pl.col("exposure_type") == "facility_undrawn").sort("exposure_reference")
+        undrawn_df = df.filter(pl.col("exposure_type") == "facility_undrawn").sort(
+            "exposure_reference"
+        )
         assert undrawn_df["exposure_reference"].to_list() == ["FAC_A_UNDRAWN", "FAC_B_UNDRAWN"]
 
         # Verify undrawn amounts
@@ -2006,52 +2157,60 @@ class TestSameFacilityAndLoanReference:
         Without the fix, the left join in _unify_exposures produces a cartesian
         product, duplicating the loan exposure row.
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_PARENT"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_SUB"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [2000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_PARENT"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_SUB"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [2000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["SUB001"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_SUB"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["SUB001"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_SUB"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
         # Two rows for SUB001: one as a sub-facility, one as a loan
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_PARENT", "FAC_PARENT"],
-            "child_reference": ["SUB001", "SUB001"],
-            "child_type": ["facility", "loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_PARENT", "FAC_PARENT"],
+                "child_reference": ["SUB001", "SUB001"],
+                "child_type": ["facility", "loan"],
+            }
+        ).lazy()
 
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CP_SUB"],
-            "counterparty_name": ["Sub-Facility Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [50000000.0],
-            "total_assets": [100000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [False],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_SUB"],
+                "counterparty_name": ["Sub-Facility Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],
+                "total_assets": [100000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=facilities,
@@ -2064,10 +2223,12 @@ class TestSameFacilityAndLoanReference:
             ratings=None,
             facility_mappings=facility_mappings,
             org_mappings=None,
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(bundle, crr_config)
@@ -2075,8 +2236,7 @@ class TestSameFacilityAndLoanReference:
 
         # Loan SUB001 should appear exactly once (not duplicated by the facility mapping row)
         loan_rows = df.filter(
-            (pl.col("exposure_type") == "loan") &
-            (pl.col("exposure_reference") == "SUB001")
+            (pl.col("exposure_type") == "loan") & (pl.col("exposure_reference") == "SUB001")
         )
         assert len(loan_rows) == 1, (
             f"Expected 1 loan row for SUB001, got {len(loan_rows)}. "
@@ -2089,52 +2249,60 @@ class TestSameFacilityAndLoanReference:
         crr_config: CalculationConfig,
     ) -> None:
         """When facility is fully drawn, only loan exposure should exist."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["FULL_DRAW"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_FULL"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FULL_DRAW"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_FULL"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
         # Loan with same reference, fully drawn
-        loans = pl.DataFrame({
-            "loan_reference": ["FULL_DRAW"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_FULL"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],  # Fully drawn = limit
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["FULL_DRAW"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_FULL"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],  # Fully drawn = limit
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FULL_DRAW"],
-            "child_reference": ["FULL_DRAW"],
-            "child_type": ["loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FULL_DRAW"],
+                "child_reference": ["FULL_DRAW"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CP_FULL"],
-            "counterparty_name": ["Fully Drawn Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [50000000.0],
-            "total_assets": [100000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [False],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_FULL"],
+                "counterparty_name": ["Fully Drawn Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],
+                "total_assets": [100000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=facilities,
@@ -2147,10 +2315,12 @@ class TestSameFacilityAndLoanReference:
             ratings=None,
             facility_mappings=facility_mappings,
             org_mappings=None,
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
 
         result = resolver.resolve(bundle, crr_config)
@@ -2177,43 +2347,49 @@ class TestLendingGroupDuplicateMembership:
     causing row duplication when joined to exposures.
     """
 
-    def _build_counterparty_lookup(
-        self, counterparties: pl.LazyFrame
-    ) -> CounterpartyLookup:
+    def _build_counterparty_lookup(self, counterparties: pl.LazyFrame) -> CounterpartyLookup:
         """Helper to build a minimal counterparty lookup for lending group tests."""
-        enriched = counterparties.with_columns([
-            pl.lit(False).alias("counterparty_has_parent"),
-            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-            pl.lit(None).cast(pl.Int8).alias("cqs"),
-            pl.lit(None).cast(pl.Float64).alias("pd"),
-            pl.lit(None).cast(pl.String).alias("rating_value"),
-            pl.lit(None).cast(pl.String).alias("rating_agency"),
-            pl.lit(False).alias("rating_inherited"),
-            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-            pl.lit("unrated").alias("rating_inheritance_reason"),
-        ])
+        enriched = counterparties.with_columns(
+            [
+                pl.lit(False).alias("counterparty_has_parent"),
+                pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
+                pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
+                pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
+                pl.lit(None).cast(pl.Int8).alias("cqs"),
+                pl.lit(None).cast(pl.Float64).alias("pd"),
+                pl.lit(None).cast(pl.String).alias("rating_value"),
+                pl.lit(None).cast(pl.String).alias("rating_agency"),
+                pl.lit(False).alias("rating_inherited"),
+                pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
+                pl.lit("unrated").alias("rating_inheritance_reason"),
+            ]
+        )
         return CounterpartyLookup(
             counterparties=enriched,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
+            parent_mappings=pl.LazyFrame(
+                schema={
+                    "child_counterparty_reference": pl.String,
+                    "parent_counterparty_reference": pl.String,
+                }
+            ),
+            ultimate_parent_mappings=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "ultimate_parent_reference": pl.String,
+                    "hierarchy_depth": pl.Int32,
+                }
+            ),
+            rating_inheritance=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "cqs": pl.Int8,
+                    "pd": pl.Float64,
+                    "rating_value": pl.String,
+                    "inherited": pl.Boolean,
+                    "source_counterparty": pl.String,
+                    "inheritance_reason": pl.String,
+                }
+            ),
         )
 
     def test_counterparty_in_multiple_groups_no_row_duplication(
@@ -2230,36 +2406,42 @@ class TestLendingGroupDuplicateMembership:
         SHARED_CP appears in all_members twice (once per group). Without the fix,
         joining exposures to all_members duplicates the loan row.
         """
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["LG_A", "LG_B", "SHARED_CP"],
-            "counterparty_name": ["Group A", "Group B", "Shared CP"],
-            "entity_type": ["individual", "individual", "individual"],
-            "country_code": ["GB", "GB", "GB"],
-            "annual_revenue": [0.0, 0.0, 0.0],
-            "total_assets": [0.0, 0.0, 0.0],
-            "default_status": [False, False, False],
-            "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-            "is_regulated": [False, False, False],
-            "is_managed_as_retail": [False, False, False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["LG_A", "LG_B", "SHARED_CP"],
+                "counterparty_name": ["Group A", "Group B", "Shared CP"],
+                "entity_type": ["individual", "individual", "individual"],
+                "country_code": ["GB", "GB", "GB"],
+                "annual_revenue": [0.0, 0.0, 0.0],
+                "total_assets": [0.0, 0.0, 0.0],
+                "default_status": [False, False, False],
+                "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
+                "is_regulated": [False, False, False],
+                "is_managed_as_retail": [False, False, False],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_SHARED"],
-            "product_type": ["PERSONAL"],
-            "book_code": ["RETAIL"],
-            "counterparty_reference": ["SHARED_CP"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [100000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_SHARED"],
+                "product_type": ["PERSONAL"],
+                "book_code": ["RETAIL"],
+                "counterparty_reference": ["SHARED_CP"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [100000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        lending_mappings = pl.DataFrame({
-            "parent_counterparty_reference": ["LG_A", "LG_B"],
-            "child_counterparty_reference": ["SHARED_CP", "SHARED_CP"],
-        }).lazy()
+        lending_mappings = pl.DataFrame(
+            {
+                "parent_counterparty_reference": ["LG_A", "LG_B"],
+                "child_counterparty_reference": ["SHARED_CP", "SHARED_CP"],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=None,
@@ -2270,11 +2452,13 @@ class TestLendingGroupDuplicateMembership:
             guarantees=None,
             provisions=None,
             ratings=None,
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
             org_mappings=None,
             lending_mappings=lending_mappings,
         )
@@ -2304,37 +2488,43 @@ class TestLendingGroupDuplicateMembership:
         LG_A) and once from parent_as_member (as parent of the CP_DUAL group).
         Without the fix, LOAN_DUAL is duplicated.
         """
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["LG_A", "CP_DUAL", "CP_OTHER"],
-            "counterparty_name": ["Group A", "Dual Role CP", "Other CP"],
-            "entity_type": ["individual", "individual", "individual"],
-            "country_code": ["GB", "GB", "GB"],
-            "annual_revenue": [0.0, 0.0, 0.0],
-            "total_assets": [0.0, 0.0, 0.0],
-            "default_status": [False, False, False],
-            "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-            "is_regulated": [False, False, False],
-            "is_managed_as_retail": [False, False, False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["LG_A", "CP_DUAL", "CP_OTHER"],
+                "counterparty_name": ["Group A", "Dual Role CP", "Other CP"],
+                "entity_type": ["individual", "individual", "individual"],
+                "country_code": ["GB", "GB", "GB"],
+                "annual_revenue": [0.0, 0.0, 0.0],
+                "total_assets": [0.0, 0.0, 0.0],
+                "default_status": [False, False, False],
+                "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
+                "is_regulated": [False, False, False],
+                "is_managed_as_retail": [False, False, False],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_DUAL", "LOAN_OTHER"],
-            "product_type": ["PERSONAL", "PERSONAL"],
-            "book_code": ["RETAIL", "RETAIL"],
-            "counterparty_reference": ["CP_DUAL", "CP_OTHER"],
-            "value_date": [date(2023, 1, 1), date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1), date(2028, 1, 1)],
-            "currency": ["GBP", "GBP"],
-            "drawn_amount": [200000.0, 150000.0],
-            "lgd": [0.45, 0.45],
-            "seniority": ["senior", "senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_DUAL", "LOAN_OTHER"],
+                "product_type": ["PERSONAL", "PERSONAL"],
+                "book_code": ["RETAIL", "RETAIL"],
+                "counterparty_reference": ["CP_DUAL", "CP_OTHER"],
+                "value_date": [date(2023, 1, 1), date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1), date(2028, 1, 1)],
+                "currency": ["GBP", "GBP"],
+                "drawn_amount": [200000.0, 150000.0],
+                "lgd": [0.45, 0.45],
+                "seniority": ["senior", "senior"],
+            }
+        ).lazy()
 
         # CP_DUAL is a child of LG_A, AND CP_DUAL is a parent of CP_OTHER
-        lending_mappings = pl.DataFrame({
-            "parent_counterparty_reference": ["LG_A", "CP_DUAL"],
-            "child_counterparty_reference": ["CP_DUAL", "CP_OTHER"],
-        }).lazy()
+        lending_mappings = pl.DataFrame(
+            {
+                "parent_counterparty_reference": ["LG_A", "CP_DUAL"],
+                "child_counterparty_reference": ["CP_DUAL", "CP_OTHER"],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=None,
@@ -2345,11 +2535,13 @@ class TestLendingGroupDuplicateMembership:
             guarantees=None,
             provisions=None,
             ratings=None,
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
             org_mappings=None,
             lending_mappings=lending_mappings,
         )
@@ -2365,9 +2557,7 @@ class TestLendingGroupDuplicateMembership:
         )
 
         # Total should be 2 rows (LOAN_DUAL + LOAN_OTHER)
-        assert len(df) == 2, (
-            f"Expected 2 total rows, got {len(df)}."
-        )
+        assert len(df) == 2, f"Expected 2 total rows, got {len(df)}."
 
 
 class TestNegativeDrawnAmountInHierarchy:
@@ -2382,76 +2572,86 @@ class TestNegativeDrawnAmountInHierarchy:
         resolver: HierarchyResolver,
     ) -> None:
         """total_exposure_amount in property coverage should floor at 0."""
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CP001"],
-            "counterparty_name": ["Test"],
-            "entity_type": ["individual"],
-            "country_code": ["GB"],
-            "annual_revenue": [0.0],
-            "total_assets": [0.0],
-            "default_status": [False],
-            "sector_code": ["RETAIL"],
-            "is_financial_institution": [False],
-            "is_regulated": [False],
-            "is_pse": [False],
-            "is_mdb": [False],
-            "is_international_org": [False],
-            "is_central_counterparty": [False],
-            "is_regional_govt_local_auth": [False],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP001"],
+                "counterparty_name": ["Test"],
+                "entity_type": ["individual"],
+                "country_code": ["GB"],
+                "annual_revenue": [0.0],
+                "total_assets": [0.0],
+                "default_status": [False],
+                "sector_code": ["RETAIL"],
+                "is_financial_institution": [False],
+                "is_regulated": [False],
+                "is_pse": [False],
+                "is_mdb": [False],
+                "is_international_org": [False],
+                "is_central_counterparty": [False],
+                "is_regional_govt_local_auth": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_NEG"],
-            "product_type": ["MORTGAGE"],
-            "book_code": ["RETAIL"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [-50000.0],
-            "lgd": [0.15],
-            "beel": [0.01],
-            "seniority": ["senior"],
-            "risk_type": ["FR"],
-            "ccf_modelled": [None],
-            "is_short_term_trade_lc": [None],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_NEG"],
+                "product_type": ["MORTGAGE"],
+                "book_code": ["RETAIL"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [-50000.0],
+                "lgd": [0.15],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["FR"],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [None],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=pl.LazyFrame(),
             loans=loans,
-            contingents=pl.LazyFrame(schema={
-                "contingent_reference": pl.String,
-                "product_type": pl.String,
-                "book_code": pl.String,
-                "counterparty_reference": pl.String,
-                "value_date": pl.Date,
-                "maturity_date": pl.Date,
-                "currency": pl.String,
-                "nominal_amount": pl.Float64,
-                "lgd": pl.Float64,
-                "beel": pl.Float64,
-                "seniority": pl.String,
-                "risk_type": pl.String,
-                "ccf_modelled": pl.Float64,
-                "is_short_term_trade_lc": pl.Boolean,
-            }),
+            contingents=pl.LazyFrame(
+                schema={
+                    "contingent_reference": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "nominal_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                }
+            ),
             counterparties=counterparties,
             collateral=pl.LazyFrame(),
             guarantees=pl.LazyFrame(),
             provisions=pl.LazyFrame(),
             ratings=None,
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
             org_mappings=None,
-            lending_mappings=pl.LazyFrame(schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }),
+            lending_mappings=pl.LazyFrame(
+                schema={
+                    "parent_counterparty_reference": pl.String,
+                    "child_counterparty_reference": pl.String,
+                }
+            ),
         )
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
@@ -2468,72 +2668,80 @@ class TestNegativeDrawnAmountInHierarchy:
         lending_group_mappings: pl.LazyFrame,
     ) -> None:
         """Lending group totals should floor negative drawn amounts at 0."""
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2"],
-            "counterparty_name": ["Anchor", "Member 1", "Member 2"],
-            "entity_type": ["individual", "individual", "corporate"],
-            "country_code": ["GB", "GB", "GB"],
-            "annual_revenue": [0.0, 0.0, 500000.0],
-            "total_assets": [0.0, 0.0, 1000000.0],
-            "default_status": [False, False, False],
-            "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-            "is_financial_institution": [False, False, False],
-            "is_regulated": [False, False, False],
-            "is_pse": [False, False, False],
-            "is_mdb": [False, False, False],
-            "is_international_org": [False, False, False],
-            "is_central_counterparty": [False, False, False],
-            "is_regional_govt_local_auth": [False, False, False],
-            "is_managed_as_retail": [False, False, False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2"],
+                "counterparty_name": ["Anchor", "Member 1", "Member 2"],
+                "entity_type": ["individual", "individual", "corporate"],
+                "country_code": ["GB", "GB", "GB"],
+                "annual_revenue": [0.0, 0.0, 500000.0],
+                "total_assets": [0.0, 0.0, 1000000.0],
+                "default_status": [False, False, False],
+                "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
+                "is_financial_institution": [False, False, False],
+                "is_regulated": [False, False, False],
+                "is_pse": [False, False, False],
+                "is_mdb": [False, False, False],
+                "is_international_org": [False, False, False],
+                "is_central_counterparty": [False, False, False],
+                "is_regional_govt_local_auth": [False, False, False],
+                "is_managed_as_retail": [False, False, False],
+            }
+        ).lazy()
 
         # Member1 has negative drawn (credit balance on current account)
-        loans = pl.DataFrame({
-            "loan_reference": ["LG_LOAN1", "LG_LOAN2", "LG_LOAN3"],
-            "product_type": ["MORTGAGE", "PERSONAL", "BUSINESS"],
-            "book_code": ["RETAIL", "RETAIL", "RETAIL"],
-            "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2"],
-            "value_date": [date(2023, 1, 1)] * 3,
-            "maturity_date": [date(2028, 1, 1)] * 3,
-            "currency": ["GBP", "GBP", "GBP"],
-            "drawn_amount": [300000.0, -50000.0, 400000.0],
-            "lgd": [0.15, 0.45, 0.45],
-            "beel": [0.01, 0.01, 0.01],
-            "seniority": ["senior", "senior", "senior"],
-            "risk_type": ["FR", "FR", "FR"],
-            "ccf_modelled": [None, None, None],
-            "is_short_term_trade_lc": [None, None, None],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LG_LOAN1", "LG_LOAN2", "LG_LOAN3"],
+                "product_type": ["MORTGAGE", "PERSONAL", "BUSINESS"],
+                "book_code": ["RETAIL", "RETAIL", "RETAIL"],
+                "counterparty_reference": ["LG_ANCHOR", "LG_MEMBER1", "LG_MEMBER2"],
+                "value_date": [date(2023, 1, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP", "GBP", "GBP"],
+                "drawn_amount": [300000.0, -50000.0, 400000.0],
+                "lgd": [0.15, 0.45, 0.45],
+                "beel": [0.01, 0.01, 0.01],
+                "seniority": ["senior", "senior", "senior"],
+                "risk_type": ["FR", "FR", "FR"],
+                "ccf_modelled": [None, None, None],
+                "is_short_term_trade_lc": [None, None, None],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=pl.LazyFrame(),
             loans=loans,
-            contingents=pl.LazyFrame(schema={
-                "contingent_reference": pl.String,
-                "product_type": pl.String,
-                "book_code": pl.String,
-                "counterparty_reference": pl.String,
-                "value_date": pl.Date,
-                "maturity_date": pl.Date,
-                "currency": pl.String,
-                "nominal_amount": pl.Float64,
-                "lgd": pl.Float64,
-                "beel": pl.Float64,
-                "seniority": pl.String,
-                "risk_type": pl.String,
-                "ccf_modelled": pl.Float64,
-                "is_short_term_trade_lc": pl.Boolean,
-            }),
+            contingents=pl.LazyFrame(
+                schema={
+                    "contingent_reference": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "nominal_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                }
+            ),
             counterparties=counterparties,
             collateral=pl.LazyFrame(),
             guarantees=pl.LazyFrame(),
             provisions=pl.LazyFrame(),
             ratings=None,
-            facility_mappings=pl.LazyFrame(schema={
-                "parent_facility_reference": pl.String,
-                "child_reference": pl.String,
-                "child_type": pl.String,
-            }),
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
             org_mappings=None,
             lending_mappings=lending_group_mappings,
         )
@@ -2571,43 +2779,47 @@ class TestDuplicateMappingBugFixes:
         Without the fix: total_drawn=1.2M, undrawn=0, facility silently dropped.
         With the fix: total_drawn=600k, undrawn=400k.
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_DUP"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_DUP"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_DUP"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_DUP"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_DUP"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_DUP"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [600000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_DUP"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_DUP"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [600000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
         # Duplicate mapping row for the same loan → facility link
-        mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_DUP", "FAC_DUP"],
-            "child_reference": ["LOAN_DUP", "LOAN_DUP"],
-            "child_type": ["loan", "loan"],
-        }).lazy()
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_DUP", "FAC_DUP"],
+                "child_reference": ["LOAN_DUP", "LOAN_DUP"],
+                "child_type": ["loan", "loan"],
+            }
+        ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
-        )
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Should produce 1 undrawn row with correct amount
@@ -2632,39 +2844,45 @@ class TestDuplicateMappingBugFixes:
         Without the fix: loan appears twice, total rows = 3.
         With the fix: loan appears once, total rows = 2 (loan + facility_undrawn).
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_EXPDUP"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_EXPDUP"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_EXPDUP"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [600000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_EXPDUP"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [600000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
         # Duplicate mapping: same child_reference appears twice
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_EXPDUP", "FAC_EXPDUP"],
-            "child_reference": ["LOAN_EXPDUP", "LOAN_EXPDUP"],
-            "child_type": ["loan", "loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_EXPDUP", "FAC_EXPDUP"],
+                "child_reference": ["LOAN_EXPDUP", "LOAN_EXPDUP"],
+                "child_type": ["loan", "loan"],
+            }
+        ).lazy()
 
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
             simple_counterparties,
@@ -2699,42 +2917,46 @@ class TestDuplicateMappingBugFixes:
         """facility_mappings with neither child_type nor node_type column
         should still produce correct facility_undrawn rows (Bug 3 fallback).
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_NOTYPE"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_NOTYPE"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_NOTYPE"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_NOTYPE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN_NOTYPE"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP_NOTYPE"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [300000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_NOTYPE"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_NOTYPE"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [300000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
         # No child_type or node_type column at all
-        mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_NOTYPE"],
-            "child_reference": ["LOAN_NOTYPE"],
-        }).lazy()
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_NOTYPE"],
+                "child_reference": ["LOAN_NOTYPE"],
+            }
+        ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, mappings
-        )
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         fac = df.filter(pl.col("exposure_reference") == "FAC_NOTYPE_UNDRAWN")
@@ -2760,76 +2982,92 @@ class TestLargerDatasetFacilityUndrawn:
         - Lending groups
         - Duplicate mapping rows
         """
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CP_PAR", "CP_CH1", "CP_CH2", "CP_CH3"],
-            "counterparty_name": ["Parent Corp", "Child 1", "Child 2", "Child 3"],
-            "entity_type": ["corporate", "corporate", "corporate", "corporate"],
-            "country_code": ["GB", "GB", "GB", "GB"],
-            "annual_revenue": [100e6, 20e6, 30e6, 15e6],
-            "total_assets": [500e6, 100e6, 150e6, 75e6],
-            "default_status": [False, False, False, False],
-            "sector_code": ["MANU", "MANU", "MANU", "MANU"],
-            "is_financial_institution": [False, False, False, False],
-            "is_regulated": [False, False, False, False],
-            "is_pse": [False, False, False, False],
-            "is_mdb": [False, False, False, False],
-            "is_international_org": [False, False, False, False],
-            "is_central_counterparty": [False, False, False, False],
-            "is_regional_govt_local_auth": [False, False, False, False],
-            "is_managed_as_retail": [False, False, False, False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_PAR", "CP_CH1", "CP_CH2", "CP_CH3"],
+                "counterparty_name": ["Parent Corp", "Child 1", "Child 2", "Child 3"],
+                "entity_type": ["corporate", "corporate", "corporate", "corporate"],
+                "country_code": ["GB", "GB", "GB", "GB"],
+                "annual_revenue": [100e6, 20e6, 30e6, 15e6],
+                "total_assets": [500e6, 100e6, 150e6, 75e6],
+                "default_status": [False, False, False, False],
+                "sector_code": ["MANU", "MANU", "MANU", "MANU"],
+                "is_financial_institution": [False, False, False, False],
+                "is_regulated": [False, False, False, False],
+                "is_pse": [False, False, False, False],
+                "is_mdb": [False, False, False, False],
+                "is_international_org": [False, False, False, False],
+                "is_central_counterparty": [False, False, False, False],
+                "is_regional_govt_local_auth": [False, False, False, False],
+                "is_managed_as_retail": [False, False, False, False],
+            }
+        ).lazy()
 
-        org_mappings = pl.DataFrame({
-            "parent_counterparty_reference": ["CP_PAR", "CP_PAR", "CP_PAR"],
-            "child_counterparty_reference": ["CP_CH1", "CP_CH2", "CP_CH3"],
-        }).lazy()
+        org_mappings = pl.DataFrame(
+            {
+                "parent_counterparty_reference": ["CP_PAR", "CP_PAR", "CP_PAR"],
+                "child_counterparty_reference": ["CP_CH1", "CP_CH2", "CP_CH3"],
+            }
+        ).lazy()
 
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_A", "FAC_B", "FAC_C"],
-            "product_type": ["RCF", "RCF", "TERM"],
-            "book_code": ["CORP", "CORP", "CORP"],
-            "counterparty_reference": ["CP_CH1", "CP_CH2", "CP_CH3"],
-            "value_date": [date(2023, 1, 1)] * 3,
-            "maturity_date": [date(2028, 1, 1)] * 3,
-            "currency": ["GBP"] * 3,
-            "limit": [2000000.0, 1500000.0, 800000.0],
-            "lgd": [0.45] * 3,
-            "seniority": ["senior"] * 3,
-            "risk_type": ["MR", "MR", "MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_A", "FAC_B", "FAC_C"],
+                "product_type": ["RCF", "RCF", "TERM"],
+                "book_code": ["CORP", "CORP", "CORP"],
+                "counterparty_reference": ["CP_CH1", "CP_CH2", "CP_CH3"],
+                "value_date": [date(2023, 1, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [2000000.0, 1500000.0, 800000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR", "MR", "MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LN_1", "LN_2", "LN_3", "LN_4"],
-            "product_type": ["TERM_LOAN"] * 4,
-            "book_code": ["CORP"] * 4,
-            "counterparty_reference": ["CP_CH1", "CP_CH1", "CP_CH2", "CP_CH3"],
-            "value_date": [date(2023, 6, 1)] * 4,
-            "maturity_date": [date(2028, 1, 1)] * 4,
-            "currency": ["GBP"] * 4,
-            "drawn_amount": [800000.0, 400000.0, 1000000.0, 300000.0],
-            "lgd": [0.45] * 4,
-            "seniority": ["senior"] * 4,
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LN_1", "LN_2", "LN_3", "LN_4"],
+                "product_type": ["TERM_LOAN"] * 4,
+                "book_code": ["CORP"] * 4,
+                "counterparty_reference": ["CP_CH1", "CP_CH1", "CP_CH2", "CP_CH3"],
+                "value_date": [date(2023, 6, 1)] * 4,
+                "maturity_date": [date(2028, 1, 1)] * 4,
+                "currency": ["GBP"] * 4,
+                "drawn_amount": [800000.0, 400000.0, 1000000.0, 300000.0],
+                "lgd": [0.45] * 4,
+                "seniority": ["senior"] * 4,
+            }
+        ).lazy()
 
         # Duplicate mapping rows for LN_1 (simulating real-world data issue)
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": [
-                "FAC_A", "FAC_A", "FAC_A",  # LN_1 duplicate + LN_2
-                "FAC_B",                      # LN_3
-                "FAC_C",                      # LN_4
-            ],
-            "child_reference": [
-                "LN_1", "LN_1", "LN_2",  # LN_1 appears twice
-                "LN_3",
-                "LN_4",
-            ],
-            "child_type": ["loan", "loan", "loan", "loan", "loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": [
+                    "FAC_A",
+                    "FAC_A",
+                    "FAC_A",  # LN_1 duplicate + LN_2
+                    "FAC_B",  # LN_3
+                    "FAC_C",  # LN_4
+                ],
+                "child_reference": [
+                    "LN_1",
+                    "LN_1",
+                    "LN_2",  # LN_1 appears twice
+                    "LN_3",
+                    "LN_4",
+                ],
+                "child_type": ["loan", "loan", "loan", "loan", "loan"],
+            }
+        ).lazy()
 
-        lending_mappings = pl.DataFrame({
-            "parent_counterparty_reference": ["LG_01", "LG_01"],
-            "child_counterparty_reference": ["CP_CH1", "CP_CH2"],
-        }).lazy()
+        lending_mappings = pl.DataFrame(
+            {
+                "parent_counterparty_reference": ["LG_01", "LG_01"],
+                "child_counterparty_reference": ["CP_CH1", "CP_CH2"],
+            }
+        ).lazy()
 
         bundle = RawDataBundle(
             facilities=facilities,
@@ -2890,11 +3128,13 @@ class TestBuildFacilityRootLookup:
         resolver: HierarchyResolver,
     ) -> None:
         """Sub-facility → parent: root = parent, depth = 1."""
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_PARENT"],
-            "child_reference": ["FAC_CHILD"],
-            "child_type": ["facility"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_PARENT"],
+                "child_reference": ["FAC_CHILD"],
+                "child_type": ["facility"],
+            }
+        ).lazy()
 
         lookup = resolver._build_facility_root_lookup(facility_mappings)
         df = lookup.collect()
@@ -2910,11 +3150,13 @@ class TestBuildFacilityRootLookup:
         resolver: HierarchyResolver,
     ) -> None:
         """sub2 → sub1 → root: root = root, depth = 2."""
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_ROOT", "FAC_SUB1"],
-            "child_reference": ["FAC_SUB1", "FAC_SUB2"],
-            "child_type": ["facility", "facility"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ROOT", "FAC_SUB1"],
+                "child_reference": ["FAC_SUB1", "FAC_SUB2"],
+                "child_type": ["facility", "facility"],
+            }
+        ).lazy()
 
         lookup = resolver._build_facility_root_lookup(facility_mappings)
         df = lookup.collect()
@@ -2935,11 +3177,13 @@ class TestBuildFacilityRootLookup:
         resolver: HierarchyResolver,
     ) -> None:
         """Two sub-facilities under one parent both resolve to same root."""
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_ROOT", "FAC_ROOT"],
-            "child_reference": ["SUB_A", "SUB_B"],
-            "child_type": ["facility", "facility"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ROOT", "FAC_ROOT"],
+                "child_reference": ["SUB_A", "SUB_B"],
+                "child_type": ["facility", "facility"],
+            }
+        ).lazy()
 
         lookup = resolver._build_facility_root_lookup(facility_mappings)
         df = lookup.collect()
@@ -2953,10 +3197,12 @@ class TestBuildFacilityRootLookup:
         resolver: HierarchyResolver,
     ) -> None:
         """No child_type/node_type column → cannot detect sub-facilities, return empty."""
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_ROOT"],
-            "child_reference": ["SUB_A"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ROOT"],
+                "child_reference": ["SUB_A"],
+            }
+        ).lazy()
 
         lookup = resolver._build_facility_root_lookup(facility_mappings)
         df = lookup.collect()
@@ -2968,11 +3214,13 @@ class TestBuildFacilityRootLookup:
         resolver: HierarchyResolver,
     ) -> None:
         """Empty facility mappings → empty lookup."""
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": pl.Series([], dtype=pl.String),
-            "child_reference": pl.Series([], dtype=pl.String),
-            "child_type": pl.Series([], dtype=pl.String),
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": pl.Series([], dtype=pl.String),
+                "child_reference": pl.Series([], dtype=pl.String),
+                "child_type": pl.Series([], dtype=pl.String),
+            }
+        ).lazy()
 
         lookup = resolver._build_facility_root_lookup(facility_mappings)
         df = lookup.collect()
@@ -2995,60 +3243,74 @@ class TestMultiLevelFacilityUndrawn:
 
         Expected: FAC_PARENT_UNDRAWN = 2M - 0.75M = 1.25M
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_PARENT", "SUB001", "SUB002"],
-            "product_type": ["RCF", "RCF", "RCF"],
-            "book_code": ["CORP", "CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 3,
-            "maturity_date": [date(2028, 1, 1)] * 3,
-            "currency": ["GBP"] * 3,
-            "limit": [2000000.0, 1000000.0, 500000.0],
-            "lgd": [0.45] * 3,
-            "seniority": ["senior"] * 3,
-            "risk_type": ["MR"] * 3,
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_PARENT", "SUB001", "SUB002"],
+                "product_type": ["RCF", "RCF", "RCF"],
+                "book_code": ["CORP", "CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [2000000.0, 1000000.0, 500000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR"] * 3,
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01", "LOAN02"],
-            "product_type": ["TERM_LOAN", "TERM_LOAN"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 6, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP"] * 2,
-            "drawn_amount": [500000.0, 250000.0],
-            "lgd": [0.45] * 2,
-            "seniority": ["senior"] * 2,
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01", "LOAN02"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 6, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP"] * 2,
+                "drawn_amount": [500000.0, 250000.0],
+                "lgd": [0.45] * 2,
+                "seniority": ["senior"] * 2,
+            }
+        ).lazy()
 
         # Mappings: sub-facilities under parent, loans under sub-facilities
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": [
-                "FAC_PARENT", "FAC_PARENT",  # sub-facilities under parent
-                "SUB001", "SUB002",           # loans under sub-facilities
-            ],
-            "child_reference": [
-                "SUB001", "SUB002",
-                "LOAN01", "LOAN02",
-            ],
-            "child_type": [
-                "facility", "facility",
-                "loan", "loan",
-            ],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": [
+                    "FAC_PARENT",
+                    "FAC_PARENT",  # sub-facilities under parent
+                    "SUB001",
+                    "SUB002",  # loans under sub-facilities
+                ],
+                "child_reference": [
+                    "SUB001",
+                    "SUB002",
+                    "LOAN01",
+                    "LOAN02",
+                ],
+                "child_type": [
+                    "facility",
+                    "facility",
+                    "loan",
+                    "loan",
+                ],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
         # Only root facility should produce undrawn exposure
-        parent_undrawn = df.filter(
-            pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN"
-        )
+        parent_undrawn = df.filter(pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN")
         assert len(parent_undrawn) == 1
         assert parent_undrawn["undrawn_amount"][0] == pytest.approx(1250000.0)
 
@@ -3057,50 +3319,58 @@ class TestMultiLevelFacilityUndrawn:
         resolver: HierarchyResolver,
     ) -> None:
         """Sub-facilities should NOT produce their own undrawn exposures."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_PARENT", "SUB001"],
-            "product_type": ["RCF", "RCF"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP"] * 2,
-            "limit": [2000000.0, 1000000.0],
-            "lgd": [0.45] * 2,
-            "seniority": ["senior"] * 2,
-            "risk_type": ["MR"] * 2,
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_PARENT", "SUB001"],
+                "product_type": ["RCF", "RCF"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP"] * 2,
+                "limit": [2000000.0, 1000000.0],
+                "lgd": [0.45] * 2,
+                "seniority": ["senior"] * 2,
+                "risk_type": ["MR"] * 2,
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_PARENT", "SUB001"],
-            "child_reference": ["SUB001", "LOAN01"],
-            "child_type": ["facility", "loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_PARENT", "SUB001"],
+                "child_reference": ["SUB001", "LOAN01"],
+                "child_type": ["facility", "loan"],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
         # SUB001 should NOT have its own undrawn exposure
-        sub_undrawn = df.filter(
-            pl.col("exposure_reference") == "SUB001_UNDRAWN"
-        )
+        sub_undrawn = df.filter(pl.col("exposure_reference") == "SUB001_UNDRAWN")
         assert len(sub_undrawn) == 0
 
         # Only FAC_PARENT should have undrawn
@@ -3112,43 +3382,53 @@ class TestMultiLevelFacilityUndrawn:
         resolver: HierarchyResolver,
     ) -> None:
         """No regression: simple facility→loan (no sub-facilities) still works."""
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC001"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC001"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [600000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [600000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC001"],
-            "child_reference": ["LOAN01"],
-            "child_type": ["loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC001"],
+                "child_reference": ["LOAN01"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, None, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
@@ -3168,45 +3448,57 @@ class TestMultiLevelUnifyExposures:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """Loan under sub-facility gets root = parent facility."""
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_ROOT", "SUB001"],
-            "product_type": ["RCF", "RCF"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP"] * 2,
-            "limit": [2000000.0, 1000000.0],
-            "lgd": [0.45] * 2,
-            "seniority": ["senior"] * 2,
-            "risk_type": ["MR"] * 2,
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_ROOT", "SUB001"],
+                "product_type": ["RCF", "RCF"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP"] * 2,
+                "limit": [2000000.0, 1000000.0],
+                "lgd": [0.45] * 2,
+                "seniority": ["senior"] * 2,
+                "risk_type": ["MR"] * 2,
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_ROOT", "SUB001"],
-            "child_reference": ["SUB001", "LOAN01"],
-            "child_type": ["facility", "loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ROOT", "SUB001"],
+                "child_reference": ["SUB001", "LOAN01"],
+                "child_type": ["facility", "loan"],
+            }
+        ).lazy()
 
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            simple_counterparties, simple_org_mappings, simple_ratings,
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
         )
 
         exposures, errors = resolver._unify_exposures(
-            loans, None, facilities, facility_mappings, counterparty_lookup,
+            loans,
+            None,
+            facilities,
+            facility_mappings,
+            counterparty_lookup,
         )
         df = exposures.collect()
 
@@ -3222,45 +3514,57 @@ class TestMultiLevelUnifyExposures:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """Loan under sub-facility → depth=2 for two-level hierarchy."""
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_ROOT", "SUB001"],
-            "product_type": ["RCF", "RCF"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP"] * 2,
-            "limit": [2000000.0, 1000000.0],
-            "lgd": [0.45] * 2,
-            "seniority": ["senior"] * 2,
-            "risk_type": ["MR"] * 2,
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_ROOT", "SUB001"],
+                "product_type": ["RCF", "RCF"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP"] * 2,
+                "limit": [2000000.0, 1000000.0],
+                "lgd": [0.45] * 2,
+                "seniority": ["senior"] * 2,
+                "risk_type": ["MR"] * 2,
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC_ROOT", "SUB001"],
-            "child_reference": ["SUB001", "LOAN01"],
-            "child_type": ["facility", "loan"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ROOT", "SUB001"],
+                "child_reference": ["SUB001", "LOAN01"],
+                "child_type": ["facility", "loan"],
+            }
+        ).lazy()
 
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            simple_counterparties, simple_org_mappings, simple_ratings,
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
         )
 
         exposures, errors = resolver._unify_exposures(
-            loans, None, facilities, facility_mappings, counterparty_lookup,
+            loans,
+            None,
+            facilities,
+            facility_mappings,
+            counterparty_lookup,
         )
         df = exposures.collect()
 
@@ -3276,31 +3580,41 @@ class TestMultiLevelUnifyExposures:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """Loan with no facility parent gets depth=0."""
-        loans = pl.DataFrame({
-            "loan_reference": ["STANDALONE_LOAN"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [100000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["STANDALONE_LOAN"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [100000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": pl.Series([], dtype=pl.String),
-            "child_reference": pl.Series([], dtype=pl.String),
-            "child_type": pl.Series([], dtype=pl.String),
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": pl.Series([], dtype=pl.String),
+                "child_reference": pl.Series([], dtype=pl.String),
+                "child_type": pl.Series([], dtype=pl.String),
+            }
+        ).lazy()
 
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            simple_counterparties, simple_org_mappings, simple_ratings,
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
         )
 
         exposures, errors = resolver._unify_exposures(
-            loans, None, None, facility_mappings, counterparty_lookup,
+            loans,
+            None,
+            None,
+            facility_mappings,
+            counterparty_lookup,
         )
         df = exposures.collect()
 
@@ -3331,61 +3645,73 @@ class TestContingentInFacilityUndrawn:
         FAC001 (limit=1M) → LOAN01 (drawn=0.5M) + CONT01 (OFB, nominal=0.1M)
         Expected undrawn: 1M - 0.5M - 0.1M = 0.4M
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC001"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC001"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01"],
-            "product_type": ["FINANCIAL_GUARANTEE"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2025, 1, 1)],
-            "currency": ["GBP"],
-            "nominal_amount": [100000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-            "ccf_modelled": [None],
-            "is_short_term_trade_lc": [False],
-            "bs_type": ["OFB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01"],
+                "product_type": ["FINANCIAL_GUARANTEE"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2025, 1, 1)],
+                "currency": ["GBP"],
+                "nominal_amount": [100000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [False],
+                "bs_type": ["OFB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC001", "FAC001"],
-            "child_reference": ["LOAN01", "CONT01"],
-            "child_type": ["loan", "contingent"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "child_reference": ["LOAN01", "CONT01"],
+                "child_type": ["loan", "contingent"],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, contingents, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
@@ -3402,61 +3728,73 @@ class TestContingentInFacilityUndrawn:
         FAC001 (limit=1M) → LOAN01 (drawn=0.5M) + CONT01 (ONB, nominal=0.25M)
         Expected undrawn: 1M - 0.5M - 0.25M = 0.25M
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC001"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC001"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01"],
-            "product_type": ["FINANCIAL_GUARANTEE"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2025, 1, 1)],
-            "currency": ["GBP"],
-            "nominal_amount": [250000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-            "ccf_modelled": [None],
-            "is_short_term_trade_lc": [False],
-            "bs_type": ["ONB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01"],
+                "product_type": ["FINANCIAL_GUARANTEE"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2025, 1, 1)],
+                "currency": ["GBP"],
+                "nominal_amount": [250000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [False],
+                "bs_type": ["ONB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC001", "FAC001"],
-            "child_reference": ["LOAN01", "CONT01"],
-            "child_type": ["loan", "contingent"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "child_reference": ["LOAN01", "CONT01"],
+                "child_type": ["loan", "contingent"],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, contingents, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
@@ -3473,49 +3811,61 @@ class TestContingentInFacilityUndrawn:
     ) -> None:
         """ONB contingent in unified exposures should have drawn_amount = nominal, nominal = 0."""
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            simple_counterparties, simple_org_mappings, simple_ratings,
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
         )
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2026, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [100000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2026, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [100000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01"],
-            "product_type": ["FINANCIAL_GUARANTEE"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2025, 1, 1)],
-            "currency": ["GBP"],
-            "nominal_amount": [250000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-            "ccf_modelled": [None],
-            "is_short_term_trade_lc": [False],
-            "bs_type": ["ONB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01"],
+                "product_type": ["FINANCIAL_GUARANTEE"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2025, 1, 1)],
+                "currency": ["GBP"],
+                "nominal_amount": [250000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [False],
+                "bs_type": ["ONB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": pl.Series([], dtype=pl.String),
-            "child_reference": pl.Series([], dtype=pl.String),
-            "child_type": pl.Series([], dtype=pl.String),
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": pl.Series([], dtype=pl.String),
+                "child_reference": pl.Series([], dtype=pl.String),
+                "child_type": pl.Series([], dtype=pl.String),
+            }
+        ).lazy()
 
         exposures, _ = resolver._unify_exposures(
-            loans, contingents, None, facility_mappings, counterparty_lookup,
+            loans,
+            contingents,
+            None,
+            facility_mappings,
+            counterparty_lookup,
         )
         df = exposures.collect()
 
@@ -3533,49 +3883,61 @@ class TestContingentInFacilityUndrawn:
     ) -> None:
         """OFB contingent retains current behaviour: drawn=0, nominal=X, CCF fields preserved."""
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            simple_counterparties, simple_org_mappings, simple_ratings,
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
         )
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2026, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [100000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2026, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [100000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01"],
-            "product_type": ["LETTER_OF_CREDIT"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2025, 1, 1)],
-            "currency": ["GBP"],
-            "nominal_amount": [100000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-            "ccf_modelled": [0.75],
-            "is_short_term_trade_lc": [True],
-            "bs_type": ["OFB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01"],
+                "product_type": ["LETTER_OF_CREDIT"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2025, 1, 1)],
+                "currency": ["GBP"],
+                "nominal_amount": [100000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [0.75],
+                "is_short_term_trade_lc": [True],
+                "bs_type": ["OFB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": pl.Series([], dtype=pl.String),
-            "child_reference": pl.Series([], dtype=pl.String),
-            "child_type": pl.Series([], dtype=pl.String),
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": pl.Series([], dtype=pl.String),
+                "child_reference": pl.Series([], dtype=pl.String),
+                "child_type": pl.Series([], dtype=pl.String),
+            }
+        ).lazy()
 
         exposures, _ = resolver._unify_exposures(
-            loans, contingents, None, facility_mappings, counterparty_lookup,
+            loans,
+            contingents,
+            None,
+            facility_mappings,
+            counterparty_lookup,
         )
         df = exposures.collect()
 
@@ -3596,49 +3958,61 @@ class TestContingentInFacilityUndrawn:
     ) -> None:
         """ONB contingent should have null risk_type, ccf_modelled, is_short_term_trade_lc."""
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            simple_counterparties, simple_org_mappings, simple_ratings,
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
         )
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2026, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [100000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2026, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [100000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01"],
-            "product_type": ["FINANCIAL_GUARANTEE"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2025, 1, 1)],
-            "currency": ["GBP"],
-            "nominal_amount": [250000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-            "ccf_modelled": [0.5],
-            "is_short_term_trade_lc": [True],
-            "bs_type": ["ONB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01"],
+                "product_type": ["FINANCIAL_GUARANTEE"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2025, 1, 1)],
+                "currency": ["GBP"],
+                "nominal_amount": [250000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [0.5],
+                "is_short_term_trade_lc": [True],
+                "bs_type": ["ONB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": pl.Series([], dtype=pl.String),
-            "child_reference": pl.Series([], dtype=pl.String),
-            "child_type": pl.Series([], dtype=pl.String),
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": pl.Series([], dtype=pl.String),
+                "child_reference": pl.Series([], dtype=pl.String),
+                "child_type": pl.Series([], dtype=pl.String),
+            }
+        ).lazy()
 
         exposures, _ = resolver._unify_exposures(
-            loans, contingents, None, facility_mappings, counterparty_lookup,
+            loans,
+            contingents,
+            None,
+            facility_mappings,
+            counterparty_lookup,
         )
         df = exposures.collect()
 
@@ -3656,49 +4030,61 @@ class TestContingentInFacilityUndrawn:
     ) -> None:
         """Contingent without bs_type should behave as OFB (current default behaviour)."""
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            simple_counterparties, simple_org_mappings, simple_ratings,
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
         )
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2026, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [100000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2026, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [100000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
         # No bs_type column at all
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01"],
-            "product_type": ["FINANCIAL_GUARANTEE"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP002"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2025, 1, 1)],
-            "currency": ["GBP"],
-            "nominal_amount": [100000.0],
-            "lgd": [0.45],
-            "beel": [0.01],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-            "ccf_modelled": [None],
-            "is_short_term_trade_lc": [False],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01"],
+                "product_type": ["FINANCIAL_GUARANTEE"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2025, 1, 1)],
+                "currency": ["GBP"],
+                "nominal_amount": [100000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [False],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": pl.Series([], dtype=pl.String),
-            "child_reference": pl.Series([], dtype=pl.String),
-            "child_type": pl.Series([], dtype=pl.String),
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": pl.Series([], dtype=pl.String),
+                "child_reference": pl.Series([], dtype=pl.String),
+                "child_type": pl.Series([], dtype=pl.String),
+            }
+        ).lazy()
 
         exposures, _ = resolver._unify_exposures(
-            loans, contingents, None, facility_mappings, counterparty_lookup,
+            loans,
+            contingents,
+            None,
+            facility_mappings,
+            counterparty_lookup,
         )
         df = exposures.collect()
 
@@ -3720,61 +4106,73 @@ class TestContingentInFacilityUndrawn:
 
         Expected undrawn: 1M - 0.5M - 0.1M - 0.2M = 0.2M
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC001"],
-            "product_type": ["RCF"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "limit": [1000000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-            "risk_type": ["MR"],
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC001"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01", "CONT02"],
-            "product_type": ["FINANCIAL_GUARANTEE", "LETTER_OF_CREDIT"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2025, 1, 1)] * 2,
-            "currency": ["GBP", "GBP"],
-            "nominal_amount": [100000.0, 200000.0],
-            "lgd": [0.45, 0.45],
-            "beel": [0.01, 0.01],
-            "seniority": ["senior", "senior"],
-            "risk_type": ["MR", "MR"],
-            "ccf_modelled": [None, None],
-            "is_short_term_trade_lc": [False, False],
-            "bs_type": ["ONB", "OFB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01", "CONT02"],
+                "product_type": ["FINANCIAL_GUARANTEE", "LETTER_OF_CREDIT"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2025, 1, 1)] * 2,
+                "currency": ["GBP", "GBP"],
+                "nominal_amount": [100000.0, 200000.0],
+                "lgd": [0.45, 0.45],
+                "beel": [0.01, 0.01],
+                "seniority": ["senior", "senior"],
+                "risk_type": ["MR", "MR"],
+                "ccf_modelled": [None, None],
+                "is_short_term_trade_lc": [False, False],
+                "bs_type": ["ONB", "OFB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": ["FAC001", "FAC001", "FAC001"],
-            "child_reference": ["LOAN01", "CONT01", "CONT02"],
-            "child_type": ["loan", "contingent", "contingent"],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC001", "FAC001", "FAC001"],
+                "child_reference": ["LOAN01", "CONT01", "CONT02"],
+                "child_type": ["loan", "contingent", "contingent"],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, contingents, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
@@ -3794,81 +4192,97 @@ class TestContingentInFacilityUndrawn:
 
         Expected: FAC_PARENT undrawn = 2M - 0.5M - 0.25M - 0.25M = 1M
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_PARENT", "SUB001", "SUB002"],
-            "product_type": ["RCF", "RCF", "RCF"],
-            "book_code": ["CORP", "CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 3,
-            "maturity_date": [date(2028, 1, 1)] * 3,
-            "currency": ["GBP"] * 3,
-            "limit": [2000000.0, 1000000.0, 500000.0],
-            "lgd": [0.45] * 3,
-            "seniority": ["senior"] * 3,
-            "risk_type": ["MR"] * 3,
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_PARENT", "SUB001", "SUB002"],
+                "product_type": ["RCF", "RCF", "RCF"],
+                "book_code": ["CORP", "CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [2000000.0, 1000000.0, 500000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR"] * 3,
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CP001"],
-            "value_date": [date(2023, 6, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [500000.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [500000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01", "CONT02"],
-            "product_type": ["LETTER_OF_CREDIT", "FINANCIAL_GUARANTEE"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2025, 1, 1)] * 2,
-            "currency": ["GBP", "GBP"],
-            "nominal_amount": [250000.0, 250000.0],
-            "lgd": [0.45, 0.45],
-            "beel": [0.01, 0.01],
-            "seniority": ["senior", "senior"],
-            "risk_type": ["MR", "MR"],
-            "ccf_modelled": [None, None],
-            "is_short_term_trade_lc": [False, False],
-            "bs_type": ["OFB", "ONB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01", "CONT02"],
+                "product_type": ["LETTER_OF_CREDIT", "FINANCIAL_GUARANTEE"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2025, 1, 1)] * 2,
+                "currency": ["GBP", "GBP"],
+                "nominal_amount": [250000.0, 250000.0],
+                "lgd": [0.45, 0.45],
+                "beel": [0.01, 0.01],
+                "seniority": ["senior", "senior"],
+                "risk_type": ["MR", "MR"],
+                "ccf_modelled": [None, None],
+                "is_short_term_trade_lc": [False, False],
+                "bs_type": ["OFB", "ONB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": [
-                "FAC_PARENT", "FAC_PARENT",
-                "SUB001", "SUB001",
-                "SUB002",
-            ],
-            "child_reference": [
-                "SUB001", "SUB002",
-                "LOAN01", "CONT01",
-                "CONT02",
-            ],
-            "child_type": [
-                "facility", "facility",
-                "loan", "contingent",
-                "contingent",
-            ],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": [
+                    "FAC_PARENT",
+                    "FAC_PARENT",
+                    "SUB001",
+                    "SUB001",
+                    "SUB002",
+                ],
+                "child_reference": [
+                    "SUB001",
+                    "SUB002",
+                    "LOAN01",
+                    "CONT01",
+                    "CONT02",
+                ],
+                "child_type": [
+                    "facility",
+                    "facility",
+                    "loan",
+                    "contingent",
+                    "contingent",
+                ],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, contingents, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
         # Only root facility should produce undrawn
         assert len(df) == 1
-        parent_undrawn = df.filter(
-            pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN"
-        )
+        parent_undrawn = df.filter(pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN")
         assert parent_undrawn["undrawn_amount"][0] == pytest.approx(1000000.0)
 
     def test_full_scenario_from_spec(
@@ -3885,81 +4299,100 @@ class TestContingentInFacilityUndrawn:
         Expected: FAC_PARENT undrawn = 2M - 1.25M = 0.75M
         Sub-facilities should not produce undrawn records.
         """
-        facilities = pl.DataFrame({
-            "facility_reference": ["FAC_PARENT", "SUB001", "SUB002"],
-            "product_type": ["RCF", "RCF", "RCF"],
-            "book_code": ["CORP", "CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 3,
-            "maturity_date": [date(2028, 1, 1)] * 3,
-            "currency": ["GBP"] * 3,
-            "limit": [2000000.0, 1000000.0, 500000.0],
-            "lgd": [0.45] * 3,
-            "seniority": ["senior"] * 3,
-            "risk_type": ["MR"] * 3,
-        }).lazy()
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_PARENT", "SUB001", "SUB002"],
+                "product_type": ["RCF", "RCF", "RCF"],
+                "book_code": ["CORP", "CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [2000000.0, 1000000.0, 500000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR"] * 3,
+            }
+        ).lazy()
 
-        loans = pl.DataFrame({
-            "loan_reference": ["LOAN01", "LOAN02"],
-            "product_type": ["TERM_LOAN", "TERM_LOAN"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 6, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP"] * 2,
-            "drawn_amount": [500000.0, 250000.0],
-            "lgd": [0.45] * 2,
-            "seniority": ["senior"] * 2,
-        }).lazy()
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN01", "LOAN02"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 6, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP"] * 2,
+                "drawn_amount": [500000.0, 250000.0],
+                "lgd": [0.45] * 2,
+                "seniority": ["senior"] * 2,
+            }
+        ).lazy()
 
-        contingents = pl.DataFrame({
-            "contingent_reference": ["CONT01", "CONT02"],
-            "product_type": ["FINANCIAL_GUARANTEE", "LETTER_OF_CREDIT"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2025, 1, 1)] * 2,
-            "currency": ["GBP", "GBP"],
-            "nominal_amount": [250000.0, 250000.0],
-            "lgd": [0.45, 0.45],
-            "beel": [0.01, 0.01],
-            "seniority": ["senior", "senior"],
-            "risk_type": ["MR", "MR"],
-            "ccf_modelled": [None, None],
-            "is_short_term_trade_lc": [False, False],
-            "bs_type": ["ONB", "OFB"],
-        }).lazy()
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT01", "CONT02"],
+                "product_type": ["FINANCIAL_GUARANTEE", "LETTER_OF_CREDIT"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2025, 1, 1)] * 2,
+                "currency": ["GBP", "GBP"],
+                "nominal_amount": [250000.0, 250000.0],
+                "lgd": [0.45, 0.45],
+                "beel": [0.01, 0.01],
+                "seniority": ["senior", "senior"],
+                "risk_type": ["MR", "MR"],
+                "ccf_modelled": [None, None],
+                "is_short_term_trade_lc": [False, False],
+                "bs_type": ["ONB", "OFB"],
+            }
+        ).lazy()
 
-        facility_mappings = pl.DataFrame({
-            "parent_facility_reference": [
-                "FAC_PARENT", "FAC_PARENT",
-                "SUB001", "SUB001",
-                "SUB002", "SUB002",
-            ],
-            "child_reference": [
-                "SUB001", "SUB002",
-                "LOAN01", "CONT01",
-                "LOAN02", "CONT02",
-            ],
-            "child_type": [
-                "facility", "facility",
-                "loan", "contingent",
-                "loan", "contingent",
-            ],
-        }).lazy()
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": [
+                    "FAC_PARENT",
+                    "FAC_PARENT",
+                    "SUB001",
+                    "SUB001",
+                    "SUB002",
+                    "SUB002",
+                ],
+                "child_reference": [
+                    "SUB001",
+                    "SUB002",
+                    "LOAN01",
+                    "CONT01",
+                    "LOAN02",
+                    "CONT02",
+                ],
+                "child_type": [
+                    "facility",
+                    "facility",
+                    "loan",
+                    "contingent",
+                    "loan",
+                    "contingent",
+                ],
+            }
+        ).lazy()
 
         facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
 
         facility_undrawn = resolver._calculate_facility_undrawn(
-            facilities, loans, contingents, facility_mappings, facility_root_lookup,
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
         )
         df = facility_undrawn.collect()
 
         # Only root facility should produce undrawn
         assert len(df) == 1
-        parent_undrawn = df.filter(
-            pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN"
-        )
+        parent_undrawn = df.filter(pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN")
         assert parent_undrawn["undrawn_amount"][0] == pytest.approx(750000.0)
 
         # Sub-facilities should NOT have undrawn records

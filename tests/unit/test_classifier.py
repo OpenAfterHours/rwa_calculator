@@ -26,7 +26,6 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.classifier import (
-    ClassificationError,
     ExposureClassifier,
     create_exposure_classifier,
 )
@@ -64,177 +63,199 @@ def crr_config_with_irb() -> CalculationConfig:
 @pytest.fixture
 def corporate_counterparties() -> pl.LazyFrame:
     """Counterparties with various corporate types."""
-    return pl.DataFrame({
-        "counterparty_reference": [
-            "CORP_LARGE",  # Large corporate
-            "CORP_SME",  # SME corporate
-            "CORP_MICRO",  # Micro SME
-            "CORP_UNRATED",  # Unrated corporate
-        ],
-        "counterparty_name": [
-            "Large Corp Ltd",
-            "SME Corp Ltd",
-            "Micro Corp Ltd",
-            "Unrated Corp Ltd",
-        ],
-        "entity_type": ["corporate", "corporate", "corporate", "corporate"],
-        "country_code": ["GB", "GB", "GB", "GB"],
-        "annual_revenue": [
-            100000000.0,  # GBP 100m - above SME threshold
-            30000000.0,   # GBP 30m - SME
-            1000000.0,    # GBP 1m - Micro SME
-            20000000.0,   # GBP 20m - SME
-        ],
-        "total_assets": [500000000.0, 150000000.0, 5000000.0, 100000000.0],
-        "default_status": [False, False, False, False],
-        "sector_code": ["MANU", "MANU", "SERV", "TECH"],
-        "is_regulated": [True, True, True, True],
-        "is_managed_as_retail": [False, False, False, False],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "counterparty_reference": [
+                "CORP_LARGE",  # Large corporate
+                "CORP_SME",  # SME corporate
+                "CORP_MICRO",  # Micro SME
+                "CORP_UNRATED",  # Unrated corporate
+            ],
+            "counterparty_name": [
+                "Large Corp Ltd",
+                "SME Corp Ltd",
+                "Micro Corp Ltd",
+                "Unrated Corp Ltd",
+            ],
+            "entity_type": ["corporate", "corporate", "corporate", "corporate"],
+            "country_code": ["GB", "GB", "GB", "GB"],
+            "annual_revenue": [
+                100000000.0,  # GBP 100m - above SME threshold
+                30000000.0,  # GBP 30m - SME
+                1000000.0,  # GBP 1m - Micro SME
+                20000000.0,  # GBP 20m - SME
+            ],
+            "total_assets": [500000000.0, 150000000.0, 5000000.0, 100000000.0],
+            "default_status": [False, False, False, False],
+            "sector_code": ["MANU", "MANU", "SERV", "TECH"],
+            "is_regulated": [True, True, True, True],
+            "is_managed_as_retail": [False, False, False, False],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def mixed_counterparties() -> pl.LazyFrame:
     """Counterparties with various entity types."""
-    return pl.DataFrame({
-        "counterparty_reference": [
-            "SOV_UK",      # Sovereign
-            "INST_UK",     # Institution (bank)
-            "CORP_UK",     # Corporate
-            "RETAIL_IND",  # Individual (retail)
-            "PSE_UK",      # PSE (with institution IRB treatment)
-            "MDB_001",     # MDB
-        ],
-        "counterparty_name": [
-            "UK Government",
-            "Barclays Bank",
-            "UK Corp Ltd",
-            "John Smith",
-            "NHS Trust",
-            "World Bank",
-        ],
-        "entity_type": [
-            "sovereign",
-            "bank",
-            "corporate",
-            "individual",
-            "pse_institution",  # PSE with institution IRB treatment
-            "mdb",              # MDB entity type
-        ],
-        "country_code": ["GB", "GB", "GB", "GB", "GB", "INT"],
-        "annual_revenue": [0.0, 5000000000.0, 50000000.0, 0.0, 0.0, 0.0],
-        "total_assets": [0.0, 100000000000.0, 250000000.0, 0.0, 0.0, 0.0],
-        "default_status": [False, False, False, False, False, False],
-        "sector_code": ["GOVT", "BANK", "MANU", "RETAIL", "HEALTH", "MDB"],
-        "is_regulated": [True, True, True, True, True, True],
-        "is_managed_as_retail": [False, False, False, False, False, False],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "counterparty_reference": [
+                "SOV_UK",  # Sovereign
+                "INST_UK",  # Institution (bank)
+                "CORP_UK",  # Corporate
+                "RETAIL_IND",  # Individual (retail)
+                "PSE_UK",  # PSE (with institution IRB treatment)
+                "MDB_001",  # MDB
+            ],
+            "counterparty_name": [
+                "UK Government",
+                "Barclays Bank",
+                "UK Corp Ltd",
+                "John Smith",
+                "NHS Trust",
+                "World Bank",
+            ],
+            "entity_type": [
+                "sovereign",
+                "bank",
+                "corporate",
+                "individual",
+                "pse_institution",  # PSE with institution IRB treatment
+                "mdb",  # MDB entity type
+            ],
+            "country_code": ["GB", "GB", "GB", "GB", "GB", "INT"],
+            "annual_revenue": [0.0, 5000000000.0, 50000000.0, 0.0, 0.0, 0.0],
+            "total_assets": [0.0, 100000000000.0, 250000000.0, 0.0, 0.0, 0.0],
+            "default_status": [False, False, False, False, False, False],
+            "sector_code": ["GOVT", "BANK", "MANU", "RETAIL", "HEALTH", "MDB"],
+            "is_regulated": [True, True, True, True, True, True],
+            "is_managed_as_retail": [False, False, False, False, False, False],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def retail_counterparties() -> pl.LazyFrame:
     """Counterparties for retail classification testing."""
-    return pl.DataFrame({
-        "counterparty_reference": [
-            "RTL_SMALL",   # Small retail exposure
-            "RTL_LARGE",   # Large retail (exceeds threshold)
-            "RTL_MTG",     # Mortgage customer
-        ],
-        "counterparty_name": ["Small Borrower", "Large Borrower", "Mortgage Customer"],
-        "entity_type": ["individual", "individual", "individual"],
-        "country_code": ["GB", "GB", "GB"],
-        "annual_revenue": [0.0, 0.0, 0.0],
-        "total_assets": [0.0, 0.0, 0.0],
-        "default_status": [False, False, False],
-        "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-        "is_regulated": [True, True, True],
-        "is_managed_as_retail": [False, False, False],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "counterparty_reference": [
+                "RTL_SMALL",  # Small retail exposure
+                "RTL_LARGE",  # Large retail (exceeds threshold)
+                "RTL_MTG",  # Mortgage customer
+            ],
+            "counterparty_name": ["Small Borrower", "Large Borrower", "Mortgage Customer"],
+            "entity_type": ["individual", "individual", "individual"],
+            "country_code": ["GB", "GB", "GB"],
+            "annual_revenue": [0.0, 0.0, 0.0],
+            "total_assets": [0.0, 0.0, 0.0],
+            "default_status": [False, False, False],
+            "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
+            "is_regulated": [True, True, True],
+            "is_managed_as_retail": [False, False, False],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def defaulted_counterparties() -> pl.LazyFrame:
     """Counterparties in default status."""
-    return pl.DataFrame({
-        "counterparty_reference": ["DEFAULT_CORP", "PERFORMING_CORP"],
-        "counterparty_name": ["Defaulted Corp", "Performing Corp"],
-        "entity_type": ["corporate", "corporate"],
-        "country_code": ["GB", "GB"],
-        "annual_revenue": [10000000.0, 10000000.0],
-        "total_assets": [50000000.0, 50000000.0],
-        "default_status": [True, False],  # First one is in default
-        "sector_code": ["MANU", "MANU"],
-        "is_regulated": [True, True],
-        "is_managed_as_retail": [False, False],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "counterparty_reference": ["DEFAULT_CORP", "PERFORMING_CORP"],
+            "counterparty_name": ["Defaulted Corp", "Performing Corp"],
+            "entity_type": ["corporate", "corporate"],
+            "country_code": ["GB", "GB"],
+            "annual_revenue": [10000000.0, 10000000.0],
+            "total_assets": [50000000.0, 50000000.0],
+            "default_status": [True, False],  # First one is in default
+            "sector_code": ["MANU", "MANU"],
+            "is_regulated": [True, True],
+            "is_managed_as_retail": [False, False],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def simple_exposures() -> pl.LazyFrame:
     """Simple exposures for testing."""
-    return pl.DataFrame({
-        "exposure_reference": ["EXP001", "EXP002", "EXP003", "EXP004"],
-        "exposure_type": ["loan", "loan", "loan", "contingent"],
-        "product_type": ["TERM_LOAN", "TERM_LOAN", "MORTGAGE", "LC"],
-        "book_code": ["CORP", "SME", "RETAIL", "CORP"],
-        "counterparty_reference": ["CORP_LARGE", "CORP_SME", "RTL_MTG", "CORP_UNRATED"],
-        "value_date": [date(2023, 1, 1)] * 4,
-        "maturity_date": [date(2028, 1, 1)] * 4,
-        "currency": ["GBP", "GBP", "GBP", "GBP"],
-        "drawn_amount": [5000000.0, 1000000.0, 300000.0, 0.0],
-        "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
-        "nominal_amount": [0.0, 0.0, 0.0, 500000.0],
-        "lgd": [0.45, 0.45, 0.15, 0.45],
-        "seniority": ["senior", "senior", "senior", "senior"],
-                "exposure_has_parent": [False, False, False, False],
-        "root_facility_reference": [None, None, None, None],
-        "facility_hierarchy_depth": [1, 1, 1, 1],
-        "counterparty_has_parent": [False, False, False, False],
-        "parent_counterparty_reference": [None, None, None, None],
-        "rating_inherited": [False, False, False, False],
-        "rating_source_counterparty": [None, None, None, None],
-        "rating_inheritance_reason": ["own_rating", "own_rating", "unrated", "unrated"],
-        "ultimate_parent_reference": [None, None, None, None],
-        "counterparty_hierarchy_depth": [1, 1, 1, 1],
-        "lending_group_reference": [None, None, None, None],
-        "lending_group_total_exposure": [0.0, 0.0, 0.0, 0.0],
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002", "EXP003", "EXP004"],
+            "exposure_type": ["loan", "loan", "loan", "contingent"],
+            "product_type": ["TERM_LOAN", "TERM_LOAN", "MORTGAGE", "LC"],
+            "book_code": ["CORP", "SME", "RETAIL", "CORP"],
+            "counterparty_reference": ["CORP_LARGE", "CORP_SME", "RTL_MTG", "CORP_UNRATED"],
+            "value_date": [date(2023, 1, 1)] * 4,
+            "maturity_date": [date(2028, 1, 1)] * 4,
+            "currency": ["GBP", "GBP", "GBP", "GBP"],
+            "drawn_amount": [5000000.0, 1000000.0, 300000.0, 0.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 0.0, 0.0, 500000.0],
+            "lgd": [0.45, 0.45, 0.15, 0.45],
+            "seniority": ["senior", "senior", "senior", "senior"],
+            "exposure_has_parent": [False, False, False, False],
+            "root_facility_reference": [None, None, None, None],
+            "facility_hierarchy_depth": [1, 1, 1, 1],
+            "counterparty_has_parent": [False, False, False, False],
+            "parent_counterparty_reference": [None, None, None, None],
+            "rating_inherited": [False, False, False, False],
+            "rating_source_counterparty": [None, None, None, None],
+            "rating_inheritance_reason": ["own_rating", "own_rating", "unrated", "unrated"],
+            "ultimate_parent_reference": [None, None, None, None],
+            "counterparty_hierarchy_depth": [1, 1, 1, 1],
+            "lending_group_reference": [None, None, None, None],
+            "lending_group_total_exposure": [0.0, 0.0, 0.0, 0.0],
+        }
+    ).lazy()
 
 
 @pytest.fixture
 def mixed_exposures() -> pl.LazyFrame:
     """Exposures for various counterparty types."""
-    return pl.DataFrame({
-        "exposure_reference": [
-            "SOV_EXP", "INST_EXP", "CORP_EXP", "RTL_EXP", "PSE_EXP", "MDB_EXP"
-        ],
-        "exposure_type": ["loan"] * 6,
-        "product_type": ["GOVT_BOND", "INTERBANK", "TERM_LOAN", "PERSONAL", "LOAN", "LOAN"],
-        "book_code": ["GOVT", "FI", "CORP", "RETAIL", "PSE", "MDB"],
-        "counterparty_reference": [
-            "SOV_UK", "INST_UK", "CORP_UK", "RETAIL_IND", "PSE_UK", "MDB_001"
-        ],
-        "value_date": [date(2023, 1, 1)] * 6,
-        "maturity_date": [date(2028, 1, 1)] * 6,
-        "currency": ["GBP"] * 6,
-        "drawn_amount": [10000000.0, 5000000.0, 2000000.0, 50000.0, 1000000.0, 500000.0],
-        "undrawn_amount": [0.0] * 6,
-        "nominal_amount": [0.0] * 6,
-        "lgd": [0.45] * 6,
-        "seniority": ["senior"] * 6,
-                "exposure_has_parent": [False] * 6,
-        "root_facility_reference": [None] * 6,
-        "facility_hierarchy_depth": [1] * 6,
-        "counterparty_has_parent": [False] * 6,
-        "parent_counterparty_reference": [None] * 6,
-        "rating_inherited": [False] * 6,
-        "rating_source_counterparty": [None] * 6,
-        "rating_inheritance_reason": ["own_rating"] * 6,
-        "ultimate_parent_reference": [None] * 6,
-        "counterparty_hierarchy_depth": [1] * 6,
-        "lending_group_reference": [None] * 6,
-        "lending_group_total_exposure": [0.0] * 6,
-    }).lazy()
+    return pl.DataFrame(
+        {
+            "exposure_reference": [
+                "SOV_EXP",
+                "INST_EXP",
+                "CORP_EXP",
+                "RTL_EXP",
+                "PSE_EXP",
+                "MDB_EXP",
+            ],
+            "exposure_type": ["loan"] * 6,
+            "product_type": ["GOVT_BOND", "INTERBANK", "TERM_LOAN", "PERSONAL", "LOAN", "LOAN"],
+            "book_code": ["GOVT", "FI", "CORP", "RETAIL", "PSE", "MDB"],
+            "counterparty_reference": [
+                "SOV_UK",
+                "INST_UK",
+                "CORP_UK",
+                "RETAIL_IND",
+                "PSE_UK",
+                "MDB_001",
+            ],
+            "value_date": [date(2023, 1, 1)] * 6,
+            "maturity_date": [date(2028, 1, 1)] * 6,
+            "currency": ["GBP"] * 6,
+            "drawn_amount": [10000000.0, 5000000.0, 2000000.0, 50000.0, 1000000.0, 500000.0],
+            "undrawn_amount": [0.0] * 6,
+            "nominal_amount": [0.0] * 6,
+            "lgd": [0.45] * 6,
+            "seniority": ["senior"] * 6,
+            "exposure_has_parent": [False] * 6,
+            "root_facility_reference": [None] * 6,
+            "facility_hierarchy_depth": [1] * 6,
+            "counterparty_has_parent": [False] * 6,
+            "parent_counterparty_reference": [None] * 6,
+            "rating_inherited": [False] * 6,
+            "rating_source_counterparty": [None] * 6,
+            "rating_inheritance_reason": ["own_rating"] * 6,
+            "ultimate_parent_reference": [None] * 6,
+            "counterparty_hierarchy_depth": [1] * 6,
+            "lending_group_reference": [None] * 6,
+            "lending_group_total_exposure": [0.0] * 6,
+        }
+    ).lazy()
 
 
 def create_resolved_bundle(
@@ -253,76 +274,99 @@ def create_resolved_bundle(
             (defaults to lending_group_total_exposure if not specified)
     """
     # Add hierarchy columns to counterparties
-    enriched_cp = counterparties.with_columns([
-        pl.lit(False).alias("counterparty_has_parent"),
-        pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
-        pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
-        pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
-        pl.lit(False).alias("rating_inherited"),
-        pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-        pl.lit("own_rating").alias("rating_inheritance_reason"),
-        pl.lit(None).cast(pl.Int8).alias("cqs"),
-        pl.lit(None).cast(pl.String).alias("rating_value"),
-        pl.lit(None).cast(pl.String).alias("rating_agency"),
-    ])
+    enriched_cp = counterparties.with_columns(
+        [
+            pl.lit(False).alias("counterparty_has_parent"),
+            pl.lit(None).cast(pl.String).alias("parent_counterparty_reference"),
+            pl.lit(None).cast(pl.String).alias("ultimate_parent_reference"),
+            pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
+            pl.lit(False).alias("rating_inherited"),
+            pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
+            pl.lit("own_rating").alias("rating_inheritance_reason"),
+            pl.lit(None).cast(pl.Int8).alias("cqs"),
+            pl.lit(None).cast(pl.String).alias("rating_value"),
+            pl.lit(None).cast(pl.String).alias("rating_agency"),
+        ]
+    )
 
     # Add residential property exclusion columns to exposures if not present
     exp_schema = exposures.collect_schema()
     if "residential_collateral_value" not in exp_schema.names():
-        exposures = exposures.with_columns([
-            pl.lit(residential_collateral_value).alias("residential_collateral_value"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.lit(residential_collateral_value).alias("residential_collateral_value"),
+            ]
+        )
     if "exposure_for_retail_threshold" not in exp_schema.names():
-        exposures = exposures.with_columns([
-            (pl.col("drawn_amount") + pl.col("nominal_amount") -
-             pl.col("residential_collateral_value")).alias("exposure_for_retail_threshold"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                (
+                    pl.col("drawn_amount")
+                    + pl.col("nominal_amount")
+                    - pl.col("residential_collateral_value")
+                ).alias("exposure_for_retail_threshold"),
+            ]
+        )
     if "lending_group_adjusted_exposure" not in exp_schema.names():
         # Default to lending_group_total_exposure if adjusted not specified
         if lending_group_adjusted_exposure is not None:
-            exposures = exposures.with_columns([
-                pl.lit(lending_group_adjusted_exposure).alias("lending_group_adjusted_exposure"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(lending_group_adjusted_exposure).alias(
+                        "lending_group_adjusted_exposure"
+                    ),
+                ]
+            )
         else:
-            exposures = exposures.with_columns([
-                pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
-            ])
+            exposures = exposures.with_columns(
+                [
+                    pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
+                ]
+            )
 
     return ResolvedHierarchyBundle(
         exposures=exposures,
         counterparty_lookup=CounterpartyLookup(
             counterparties=enriched_cp,
-            parent_mappings=pl.LazyFrame(schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }),
-            ultimate_parent_mappings=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }),
-            rating_inheritance=pl.LazyFrame(schema={
-                "counterparty_reference": pl.String,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
-            }),
+            parent_mappings=pl.LazyFrame(
+                schema={
+                    "child_counterparty_reference": pl.String,
+                    "parent_counterparty_reference": pl.String,
+                }
+            ),
+            ultimate_parent_mappings=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "ultimate_parent_reference": pl.String,
+                    "hierarchy_depth": pl.Int32,
+                }
+            ),
+            rating_inheritance=pl.LazyFrame(
+                schema={
+                    "counterparty_reference": pl.String,
+                    "cqs": pl.Int8,
+                    "pd": pl.Float64,
+                    "rating_value": pl.String,
+                    "inherited": pl.Boolean,
+                    "source_counterparty": pl.String,
+                    "inheritance_reason": pl.String,
+                }
+            ),
         ),
         collateral=pl.LazyFrame(),
         guarantees=pl.LazyFrame(),
         provisions=pl.LazyFrame(),
-        lending_group_totals=pl.LazyFrame(schema={
-            "lending_group_reference": pl.String,
-            "total_drawn": pl.Float64,
-            "total_nominal": pl.Float64,
-            "total_exposure": pl.Float64,
-            "adjusted_exposure": pl.Float64,
-            "total_residential_coverage": pl.Float64,
-            "exposure_count": pl.UInt32,
-        }),
+        lending_group_totals=pl.LazyFrame(
+            schema={
+                "lending_group_reference": pl.String,
+                "total_drawn": pl.Float64,
+                "total_nominal": pl.Float64,
+                "total_exposure": pl.Float64,
+                "adjusted_exposure": pl.Float64,
+                "total_residential_coverage": pl.Float64,
+                "exposure_count": pl.UInt32,
+            }
+        ),
     )
 
 
@@ -446,46 +490,50 @@ class TestSMEClassification:
         crr_config: CalculationConfig,
     ) -> None:
         """Corporate with revenue > EUR 50m should NOT be SME."""
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["LARGE_CORP"],
-            "counterparty_name": ["Large Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [60000000.0],  # GBP 60m > threshold
-            "total_assets": [300000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["LARGE_CORP"],
+                "counterparty_name": ["Large Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [60000000.0],  # GBP 60m > threshold
+                "total_assets": [300000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "exposure_type": ["loan"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["LARGE_CORP"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [5000000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["own_rating"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["LARGE_CORP"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -500,46 +548,50 @@ class TestSMEClassification:
         crr_config: CalculationConfig,
     ) -> None:
         """Corporate with revenue < EUR 50m (GBP 44m) should be SME."""
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["SME_CORP"],
-            "counterparty_name": ["SME Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [30000000.0],  # GBP 30m < 44m threshold
-            "total_assets": [150000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SME_CORP"],
+                "counterparty_name": ["SME Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [30000000.0],  # GBP 30m < 44m threshold
+                "total_assets": [150000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "exposure_type": ["loan"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["SME"],
-            "counterparty_reference": ["SME_CORP"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [1000000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["own_rating"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["SME"],
+                "counterparty_reference": ["SME_CORP"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [1000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -556,46 +608,50 @@ class TestSMEClassification:
         """Corporate at exactly EUR 50m (GBP 44m) should NOT be SME."""
         threshold_gbp = float(Decimal("50000000") * Decimal("0.88"))  # 44m
 
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["BOUNDARY_CORP"],
-            "counterparty_name": ["Boundary Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [threshold_gbp],  # Exactly at threshold
-            "total_assets": [200000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["BOUNDARY_CORP"],
+                "counterparty_name": ["Boundary Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [threshold_gbp],  # Exactly at threshold
+                "total_assets": [200000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "exposure_type": ["loan"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["BOUNDARY_CORP"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [2000000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["own_rating"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["BOUNDARY_CORP"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [2000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -619,46 +675,50 @@ class TestRetailClassification:
         crr_config: CalculationConfig,
     ) -> None:
         """Mortgage product should be classified as RETAIL_MORTGAGE."""
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["MTG_CUST"],
-            "counterparty_name": ["Mortgage Customer"],
-            "entity_type": ["individual"],
-            "country_code": ["GB"],
-            "annual_revenue": [0.0],
-            "total_assets": [0.0],
-            "default_status": [False],
-            "sector_code": ["RETAIL"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["MTG_CUST"],
+                "counterparty_name": ["Mortgage Customer"],
+                "entity_type": ["individual"],
+                "country_code": ["GB"],
+                "annual_revenue": [0.0],
+                "total_assets": [0.0],
+                "default_status": [False],
+                "sector_code": ["RETAIL"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        exposures = pl.DataFrame({
-            "exposure_reference": ["MTG001"],
-            "exposure_type": ["loan"],
-            "product_type": ["RESIDENTIAL_MORTGAGE"],
-            "book_code": ["RETAIL"],
-            "counterparty_reference": ["MTG_CUST"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2048, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [300000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.15],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["unrated"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["MTG001"],
+                "exposure_type": ["loan"],
+                "product_type": ["RESIDENTIAL_MORTGAGE"],
+                "book_code": ["RETAIL"],
+                "counterparty_reference": ["MTG_CUST"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2048, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [300000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.15],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["unrated"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -673,46 +733,50 @@ class TestRetailClassification:
         crr_config: CalculationConfig,
     ) -> None:
         """Retail exposure within threshold should qualify as retail."""
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["RTL_SMALL"],
-            "counterparty_name": ["Small Borrower"],
-            "entity_type": ["individual"],
-            "country_code": ["GB"],
-            "annual_revenue": [0.0],
-            "total_assets": [0.0],
-            "default_status": [False],
-            "sector_code": ["RETAIL"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["RTL_SMALL"],
+                "counterparty_name": ["Small Borrower"],
+                "entity_type": ["individual"],
+                "country_code": ["GB"],
+                "annual_revenue": [0.0],
+                "total_assets": [0.0],
+                "default_status": [False],
+                "sector_code": ["RETAIL"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        exposures = pl.DataFrame({
-            "exposure_reference": ["RTL001"],
-            "exposure_type": ["loan"],
-            "product_type": ["PERSONAL_LOAN"],
-            "book_code": ["RETAIL"],
-            "counterparty_reference": ["RTL_SMALL"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [50000.0],  # Well below 880k threshold
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["unrated"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL001"],
+                "exposure_type": ["loan"],
+                "product_type": ["PERSONAL_LOAN"],
+                "book_code": ["RETAIL"],
+                "counterparty_reference": ["RTL_SMALL"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [50000.0],  # Well below 880k threshold
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["unrated"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -734,53 +798,57 @@ class TestRetailClassification:
         Adjusted exposure = EUR 2m - EUR 1.2m = EUR 0.8m (< EUR 1m threshold)
         Result: Should qualify as retail
         """
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["SME_RES_PROP"],
-            "counterparty_name": ["SME with Residential Collateral"],
-            "entity_type": ["individual"],
-            "country_code": ["GB"],
-            "annual_revenue": [0.0],
-            "total_assets": [0.0],
-            "default_status": [False],
-            "sector_code": ["RETAIL"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [True],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SME_RES_PROP"],
+                "counterparty_name": ["SME with Residential Collateral"],
+                "entity_type": ["individual"],
+                "country_code": ["GB"],
+                "annual_revenue": [0.0],
+                "total_assets": [0.0],
+                "default_status": [False],
+                "sector_code": ["RETAIL"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [True],
+            }
+        ).lazy()
 
         # Total exposure = 1,760,000 GBP (2m EUR equivalent)
         # Residential collateral = 1,056,000 GBP (1.2m EUR equivalent)
         # Adjusted exposure = 704,000 GBP (< 880k threshold)
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP_RES_PROP"],
-            "exposure_type": ["loan"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["RETAIL"],
-            "counterparty_reference": ["SME_RES_PROP"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [1760000.0],  # 2m EUR equivalent - above threshold raw
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["unrated"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-            # Residential property exclusion columns
-            "residential_collateral_value": [1056000.0],  # 1.2m EUR equivalent
-            "exposure_for_retail_threshold": [704000.0],  # Below 880k threshold
-            "lending_group_adjusted_exposure": [0.0],  # Standalone
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP_RES_PROP"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["RETAIL"],
+                "counterparty_reference": ["SME_RES_PROP"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [1760000.0],  # 2m EUR equivalent - above threshold raw
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["unrated"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                # Residential property exclusion columns
+                "residential_collateral_value": [1056000.0],  # 1.2m EUR equivalent
+                "exposure_for_retail_threshold": [704000.0],  # Below 880k threshold
+                "lending_group_adjusted_exposure": [0.0],  # Standalone
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -801,52 +869,56 @@ class TestRetailClassification:
         Adjusted exposure = EUR 1.5m (> EUR 1m threshold)
         Result: Should be reclassified to CORPORATE_SME (retains firm-size adjustment)
         """
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["SME_OVER_THRESHOLD"],
-            "counterparty_name": ["SME Over Threshold"],
-            "entity_type": ["retail"],  # Small business managed as retail
-            "country_code": ["GB"],
-            "annual_revenue": [20000000.0],  # 20m GBP - qualifies as SME
-            "total_assets": [50000000.0],
-            "default_status": [False],
-            "sector_code": ["RETAIL"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [True],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SME_OVER_THRESHOLD"],
+                "counterparty_name": ["SME Over Threshold"],
+                "entity_type": ["retail"],  # Small business managed as retail
+                "country_code": ["GB"],
+                "annual_revenue": [20000000.0],  # 20m GBP - qualifies as SME
+                "total_assets": [50000000.0],
+                "default_status": [False],
+                "sector_code": ["RETAIL"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [True],
+            }
+        ).lazy()
 
         # Total exposure = 1,320,000 GBP (1.5m EUR equivalent)
         # No residential collateral - exceeds threshold
-        exposures = pl.DataFrame({
-            "exposure_reference": ["SME_OVER"],
-            "exposure_type": ["loan"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["RETAIL"],
-            "counterparty_reference": ["SME_OVER_THRESHOLD"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [1320000.0],  # 1.5m EUR equivalent - above threshold
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["unrated"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-            # No residential property exclusion
-            "residential_collateral_value": [0.0],
-            "exposure_for_retail_threshold": [1320000.0],  # Above 880k threshold
-            "lending_group_adjusted_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SME_OVER"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["RETAIL"],
+                "counterparty_reference": ["SME_OVER_THRESHOLD"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [1320000.0],  # 1.5m EUR equivalent - above threshold
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["unrated"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                # No residential property exclusion
+                "residential_collateral_value": [0.0],
+                "exposure_for_retail_threshold": [1320000.0],  # Above 880k threshold
+                "lending_group_adjusted_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -866,50 +938,54 @@ class TestRetailClassification:
         Per CRR Art. 112(i), residential mortgages are assigned to the residential
         property exposure class and are excluded from the EUR 1m aggregation.
         """
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["MTG_LARGE"],
-            "counterparty_name": ["Large Mortgage Customer"],
-            "entity_type": ["individual"],
-            "country_code": ["GB"],
-            "annual_revenue": [0.0],
-            "total_assets": [0.0],
-            "default_status": [False],
-            "sector_code": ["RETAIL"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["MTG_LARGE"],
+                "counterparty_name": ["Large Mortgage Customer"],
+                "entity_type": ["individual"],
+                "country_code": ["GB"],
+                "annual_revenue": [0.0],
+                "total_assets": [0.0],
+                "default_status": [False],
+                "sector_code": ["RETAIL"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
         # Large mortgage - EUR 1.5m equivalent
-        exposures = pl.DataFrame({
-            "exposure_reference": ["MTG_LARGE_001"],
-            "exposure_type": ["loan"],
-            "product_type": ["RESIDENTIAL_MORTGAGE"],
-            "book_code": ["RETAIL"],
-            "counterparty_reference": ["MTG_LARGE"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2048, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [1320000.0],  # Above EUR 1m threshold
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.15],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["unrated"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-            "residential_collateral_value": [1320000.0],  # Fully secured
-            "exposure_for_retail_threshold": [0.0],  # Excluded from threshold
-            "lending_group_adjusted_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["MTG_LARGE_001"],
+                "exposure_type": ["loan"],
+                "product_type": ["RESIDENTIAL_MORTGAGE"],
+                "book_code": ["RETAIL"],
+                "counterparty_reference": ["MTG_LARGE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2048, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [1320000.0],  # Above EUR 1m threshold
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.15],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["unrated"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                "residential_collateral_value": [1320000.0],  # Fully secured
+                "exposure_for_retail_threshold": [0.0],  # Excluded from threshold
+                "lending_group_adjusted_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -931,54 +1007,58 @@ class TestRetailClassification:
         - Member 2: EUR 1.5m mortgage (fully secured by residential RE)
         Adjusted exposure = EUR 2.5m - EUR 1.5m = EUR 1m (at threshold)
         """
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["LG_MEMBER_1", "LG_MEMBER_2"],
-            "counterparty_name": ["LG Member 1", "LG Member 2"],
-            "entity_type": ["individual", "individual"],
-            "country_code": ["GB", "GB"],
-            "annual_revenue": [0.0, 0.0],
-            "total_assets": [0.0, 0.0],
-            "default_status": [False, False],
-            "sector_code": ["RETAIL", "RETAIL"],
-            "is_regulated": [True, True],
-            "is_managed_as_retail": [True, True],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["LG_MEMBER_1", "LG_MEMBER_2"],
+                "counterparty_name": ["LG Member 1", "LG Member 2"],
+                "entity_type": ["individual", "individual"],
+                "country_code": ["GB", "GB"],
+                "annual_revenue": [0.0, 0.0],
+                "total_assets": [0.0, 0.0],
+                "default_status": [False, False],
+                "sector_code": ["RETAIL", "RETAIL"],
+                "is_regulated": [True, True],
+                "is_managed_as_retail": [True, True],
+            }
+        ).lazy()
 
         # Lending group total = EUR 2.5m in GBP at 0.8732 rate
         # Member 1: EUR 1m = 873,200 GBP (term loan, no residential)
         # Member 2: EUR 1.5m = 1,309,800 GBP (mortgage, fully secured by residential RE)
         # Adjusted = 873,200 GBP (at threshold) after excluding residential
-        exposures = pl.DataFrame({
-            "exposure_reference": ["LG_EXP_1", "LG_EXP_2"],
-            "exposure_type": ["loan", "loan"],
-            "product_type": ["TERM_LOAN", "RESIDENTIAL_MORTGAGE"],
-            "book_code": ["RETAIL", "RETAIL"],
-            "counterparty_reference": ["LG_MEMBER_1", "LG_MEMBER_2"],
-            "value_date": [date(2023, 1, 1), date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1), date(2048, 1, 1)],
-            "currency": ["GBP", "GBP"],
-            "drawn_amount": [873200.0, 1309800.0],  # EUR 1m + EUR 1.5m at 0.8732
-            "undrawn_amount": [0.0, 0.0],
-            "nominal_amount": [0.0, 0.0],
-            "lgd": [0.45, 0.15],
-            "seniority": ["senior", "senior"],
-                        "exposure_has_parent": [False, False],
-            "root_facility_reference": [None, None],
-            "facility_hierarchy_depth": [1, 1],
-            "counterparty_has_parent": [False, False],
-            "parent_counterparty_reference": [None, None],
-            "rating_inherited": [False, False],
-            "rating_source_counterparty": [None, None],
-            "rating_inheritance_reason": ["unrated", "unrated"],
-            "ultimate_parent_reference": [None, None],
-            "counterparty_hierarchy_depth": [1, 1],
-            "lending_group_reference": ["LG_PARENT", "LG_PARENT"],
-            "lending_group_total_exposure": [2183000.0, 2183000.0],  # EUR 2.5m at 0.8732
-            # Residential exclusion: mortgage fully secured
-            "residential_collateral_value": [0.0, 1309800.0],
-            "exposure_for_retail_threshold": [873200.0, 0.0],
-            "lending_group_adjusted_exposure": [873200.0, 873200.0],  # At threshold
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["LG_EXP_1", "LG_EXP_2"],
+                "exposure_type": ["loan", "loan"],
+                "product_type": ["TERM_LOAN", "RESIDENTIAL_MORTGAGE"],
+                "book_code": ["RETAIL", "RETAIL"],
+                "counterparty_reference": ["LG_MEMBER_1", "LG_MEMBER_2"],
+                "value_date": [date(2023, 1, 1), date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1), date(2048, 1, 1)],
+                "currency": ["GBP", "GBP"],
+                "drawn_amount": [873200.0, 1309800.0],  # EUR 1m + EUR 1.5m at 0.8732
+                "undrawn_amount": [0.0, 0.0],
+                "nominal_amount": [0.0, 0.0],
+                "lgd": [0.45, 0.15],
+                "seniority": ["senior", "senior"],
+                "exposure_has_parent": [False, False],
+                "root_facility_reference": [None, None],
+                "facility_hierarchy_depth": [1, 1],
+                "counterparty_has_parent": [False, False],
+                "parent_counterparty_reference": [None, None],
+                "rating_inherited": [False, False],
+                "rating_source_counterparty": [None, None],
+                "rating_inheritance_reason": ["unrated", "unrated"],
+                "ultimate_parent_reference": [None, None],
+                "counterparty_hierarchy_depth": [1, 1],
+                "lending_group_reference": ["LG_PARENT", "LG_PARENT"],
+                "lending_group_total_exposure": [2183000.0, 2183000.0],  # EUR 2.5m at 0.8732
+                # Residential exclusion: mortgage fully secured
+                "residential_collateral_value": [0.0, 1309800.0],
+                "exposure_for_retail_threshold": [873200.0, 0.0],
+                "lending_group_adjusted_exposure": [873200.0, 873200.0],  # At threshold
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -1010,33 +1090,35 @@ class TestDefaultClassification:
         crr_config: CalculationConfig,
     ) -> None:
         """Counterparty in default should flag exposure as defaulted."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["DEF_EXP", "PERF_EXP"],
-            "exposure_type": ["loan", "loan"],
-            "product_type": ["TERM_LOAN", "TERM_LOAN"],
-            "book_code": ["CORP", "CORP"],
-            "counterparty_reference": ["DEFAULT_CORP", "PERFORMING_CORP"],
-            "value_date": [date(2023, 1, 1)] * 2,
-            "maturity_date": [date(2028, 1, 1)] * 2,
-            "currency": ["GBP", "GBP"],
-            "drawn_amount": [1000000.0, 1000000.0],
-            "undrawn_amount": [0.0, 0.0],
-            "nominal_amount": [0.0, 0.0],
-            "lgd": [0.45, 0.45],
-            "seniority": ["senior", "senior"],
-                        "exposure_has_parent": [False, False],
-            "root_facility_reference": [None, None],
-            "facility_hierarchy_depth": [1, 1],
-            "counterparty_has_parent": [False, False],
-            "parent_counterparty_reference": [None, None],
-            "rating_inherited": [False, False],
-            "rating_source_counterparty": [None, None],
-            "rating_inheritance_reason": ["own_rating", "own_rating"],
-            "ultimate_parent_reference": [None, None],
-            "counterparty_hierarchy_depth": [1, 1],
-            "lending_group_reference": [None, None],
-            "lending_group_total_exposure": [0.0, 0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["DEF_EXP", "PERF_EXP"],
+                "exposure_type": ["loan", "loan"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP"],
+                "counterparty_reference": ["DEFAULT_CORP", "PERFORMING_CORP"],
+                "value_date": [date(2023, 1, 1)] * 2,
+                "maturity_date": [date(2028, 1, 1)] * 2,
+                "currency": ["GBP", "GBP"],
+                "drawn_amount": [1000000.0, 1000000.0],
+                "undrawn_amount": [0.0, 0.0],
+                "nominal_amount": [0.0, 0.0],
+                "lgd": [0.45, 0.45],
+                "seniority": ["senior", "senior"],
+                "exposure_has_parent": [False, False],
+                "root_facility_reference": [None, None],
+                "facility_hierarchy_depth": [1, 1],
+                "counterparty_has_parent": [False, False],
+                "parent_counterparty_reference": [None, None],
+                "rating_inherited": [False, False],
+                "rating_source_counterparty": [None, None],
+                "rating_inheritance_reason": ["own_rating", "own_rating"],
+                "ultimate_parent_reference": [None, None],
+                "counterparty_hierarchy_depth": [1, 1],
+                "lending_group_reference": [None, None],
+                "lending_group_total_exposure": [0.0, 0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, defaulted_counterparties)
         result = classifier.classify(bundle, crr_config)
@@ -1083,46 +1165,50 @@ class TestApproachAssignment:
         crr_config_with_irb: CalculationConfig,
     ) -> None:
         """IRB config should assign appropriate IRB approach."""
-        counterparties = pl.DataFrame({
-            "counterparty_reference": ["CORP001"],
-            "counterparty_name": ["Test Corp"],
-            "entity_type": ["corporate"],
-            "country_code": ["GB"],
-            "annual_revenue": [100000000.0],
-            "total_assets": [500000000.0],
-            "default_status": [False],
-            "sector_code": ["MANU"],
-            "is_regulated": [True],
-            "is_managed_as_retail": [False],
-        }).lazy()
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CORP001"],
+                "counterparty_name": ["Test Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [100000000.0],
+                "total_assets": [500000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
 
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "exposure_type": ["loan"],
-            "product_type": ["TERM_LOAN"],
-            "book_code": ["CORP"],
-            "counterparty_reference": ["CORP001"],
-            "value_date": [date(2023, 1, 1)],
-            "maturity_date": [date(2028, 1, 1)],
-            "currency": ["GBP"],
-            "drawn_amount": [5000000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "lgd": [0.45],
-            "seniority": ["senior"],
-                        "exposure_has_parent": [False],
-            "root_facility_reference": [None],
-            "facility_hierarchy_depth": [1],
-            "counterparty_has_parent": [False],
-            "parent_counterparty_reference": [None],
-            "rating_inherited": [False],
-            "rating_source_counterparty": [None],
-            "rating_inheritance_reason": ["own_rating"],
-            "ultimate_parent_reference": [None],
-            "counterparty_hierarchy_depth": [1],
-            "lending_group_reference": [None],
-            "lending_group_total_exposure": [0.0],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CORP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
 
         bundle = create_resolved_bundle(exposures, counterparties)
         result = classifier.classify(bundle, crr_config_with_irb)

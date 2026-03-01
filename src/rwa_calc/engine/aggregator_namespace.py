@@ -79,19 +79,25 @@ class AggregatorLazyFrame:
         frames = []
 
         if sa is not None:
-            sa_prepared = sa.with_columns([
-                pl.lit("SA").alias("approach_applied"),
-            ])
+            sa_prepared = sa.with_columns(
+                [
+                    pl.lit("SA").alias("approach_applied"),
+                ]
+            )
             # Normalize RWA column
             sa_schema = sa_prepared.collect_schema()
             if "rwa_post_factor" in sa_schema.names():
-                sa_prepared = sa_prepared.with_columns([
-                    pl.col("rwa_post_factor").alias("rwa_final"),
-                ])
+                sa_prepared = sa_prepared.with_columns(
+                    [
+                        pl.col("rwa_post_factor").alias("rwa_final"),
+                    ]
+                )
             elif "rwa" in sa_schema.names():
-                sa_prepared = sa_prepared.with_columns([
-                    pl.col("rwa").alias("rwa_final"),
-                ])
+                sa_prepared = sa_prepared.with_columns(
+                    [
+                        pl.col("rwa").alias("rwa_final"),
+                    ]
+                )
             frames.append(sa_prepared)
 
         if irb is not None:
@@ -107,7 +113,9 @@ class AggregatorLazyFrame:
                     base_approach_expr = pl.lit("FIRB")
 
                 # Post-CRM: fully SA-guaranteed IRB exposures report as "standardised"
-                has_guarantee_cols = "guarantor_approach" in irb_cols and "guarantee_ratio" in irb_cols
+                has_guarantee_cols = (
+                    "guarantor_approach" in irb_cols and "guarantee_ratio" in irb_cols
+                )
                 if has_guarantee_cols:
                     approach_expr = (
                         pl.when(
@@ -120,27 +128,33 @@ class AggregatorLazyFrame:
                 else:
                     approach_expr = base_approach_expr
 
-                irb_prepared = irb_prepared.with_columns([
-                    approach_expr.alias("approach_applied"),
-                ])
+                irb_prepared = irb_prepared.with_columns(
+                    [
+                        approach_expr.alias("approach_applied"),
+                    ]
+                )
             # Normalize RWA column
-            if "rwa_final" not in irb_schema.names():
-                if "rwa" in irb_schema.names():
-                    irb_prepared = irb_prepared.with_columns([
+            if "rwa_final" not in irb_schema.names() and "rwa" in irb_schema.names():
+                irb_prepared = irb_prepared.with_columns(
+                    [
                         pl.col("rwa").alias("rwa_final"),
-                    ])
+                    ]
+                )
             frames.append(irb_prepared)
 
         if slotting is not None:
-            slotting_prepared = slotting.with_columns([
-                pl.lit("SLOTTING").alias("approach_applied"),
-            ])
+            slotting_prepared = slotting.with_columns(
+                [
+                    pl.lit("SLOTTING").alias("approach_applied"),
+                ]
+            )
             slotting_schema = slotting_prepared.collect_schema()
-            if "rwa_final" not in slotting_schema.names():
-                if "rwa" in slotting_schema.names():
-                    slotting_prepared = slotting_prepared.with_columns([
+            if "rwa_final" not in slotting_schema.names() and "rwa" in slotting_schema.names():
+                slotting_prepared = slotting_prepared.with_columns(
+                    [
                         pl.col("rwa").alias("rwa_final"),
-                    ])
+                    ]
+                )
             frames.append(slotting_prepared)
 
         if not frames:
@@ -177,9 +191,7 @@ class AggregatorLazyFrame:
             return self._lf
 
         # Get floor percentage
-        floor_pct = float(
-            config.output_floor.get_floor_percentage(config.reporting_date)
-        )
+        floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
 
         schema = self._lf.collect_schema()
         sa_schema = sa_results.collect_schema()
@@ -193,17 +205,21 @@ class AggregatorLazyFrame:
             return self._lf
 
         # Prepare SA results for join
-        sa_rwa = sa_results.select([
-            pl.col("exposure_reference"),
-            pl.col(sa_rwa_col).alias("sa_rwa"),
-        ])
+        sa_rwa = sa_results.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col(sa_rwa_col).alias("sa_rwa"),
+            ]
+        )
 
         # Store pre-floor RWA
         rwa_col = "rwa_final" if "rwa_final" in schema.names() else "rwa"
 
-        result = self._lf.with_columns([
-            pl.col(rwa_col).alias("rwa_pre_floor"),
-        ])
+        result = self._lf.with_columns(
+            [
+                pl.col(rwa_col).alias("rwa_pre_floor"),
+            ]
+        )
 
         # Join with SA for floor comparison
         result = result.join(
@@ -216,32 +232,49 @@ class AggregatorLazyFrame:
         irb_approaches = ["FIRB", "AIRB", "IRB", "foundation_irb", "advanced_irb"]
 
         # Calculate floor RWA and apply
-        result = result.with_columns([
-            (pl.col("sa_rwa").fill_null(0.0) * floor_pct).alias("floor_rwa"),
-            pl.lit(floor_pct).alias("output_floor_pct"),
-        ]).with_columns([
-            # Is floor binding? (only for IRB)
-            pl.when(pl.col("approach_applied").str.to_lowercase().is_in(
-                [a.lower() for a in irb_approaches]
-            ))
-            .then(pl.col("floor_rwa") > pl.col("rwa_pre_floor"))
-            .otherwise(pl.lit(False))
-            .alias("is_floor_binding"),
-        ]).with_columns([
-            # Floor impact
-            pl.when(pl.col("is_floor_binding"))
-            .then(pl.col("floor_rwa") - pl.col("rwa_pre_floor"))
-            .otherwise(pl.lit(0.0))
-            .alias("floor_impact_rwa"),
-        ]).with_columns([
-            # Apply floor to final RWA for IRB
-            pl.when(pl.col("approach_applied").str.to_lowercase().is_in(
-                [a.lower() for a in irb_approaches]
-            ))
-            .then(pl.max_horizontal(pl.col("rwa_pre_floor"), pl.col("floor_rwa")))
-            .otherwise(pl.col("rwa_pre_floor"))
-            .alias("rwa_final"),
-        ])
+        result = (
+            result.with_columns(
+                [
+                    (pl.col("sa_rwa").fill_null(0.0) * floor_pct).alias("floor_rwa"),
+                    pl.lit(floor_pct).alias("output_floor_pct"),
+                ]
+            )
+            .with_columns(
+                [
+                    # Is floor binding? (only for IRB)
+                    pl.when(
+                        pl.col("approach_applied")
+                        .str.to_lowercase()
+                        .is_in([a.lower() for a in irb_approaches])
+                    )
+                    .then(pl.col("floor_rwa") > pl.col("rwa_pre_floor"))
+                    .otherwise(pl.lit(False))
+                    .alias("is_floor_binding"),
+                ]
+            )
+            .with_columns(
+                [
+                    # Floor impact
+                    pl.when(pl.col("is_floor_binding"))
+                    .then(pl.col("floor_rwa") - pl.col("rwa_pre_floor"))
+                    .otherwise(pl.lit(0.0))
+                    .alias("floor_impact_rwa"),
+                ]
+            )
+            .with_columns(
+                [
+                    # Apply floor to final RWA for IRB
+                    pl.when(
+                        pl.col("approach_applied")
+                        .str.to_lowercase()
+                        .is_in([a.lower() for a in irb_approaches])
+                    )
+                    .then(pl.max_horizontal(pl.col("rwa_pre_floor"), pl.col("floor_rwa")))
+                    .otherwise(pl.col("rwa_pre_floor"))
+                    .alias("rwa_final"),
+                ]
+            )
+        )
 
         return result
 
@@ -259,16 +292,17 @@ class AggregatorLazyFrame:
         if "floor_rwa" not in schema.names():
             return self._lf
 
-        return self._lf.with_columns([
-            # Floor impact as percentage of pre-floor RWA
-            pl.when(pl.col("rwa_pre_floor") > 0)
-            .then(pl.col("floor_impact_rwa") / pl.col("rwa_pre_floor") * 100)
-            .otherwise(pl.lit(0.0))
-            .alias("floor_impact_pct"),
-
-            # Binding floor indicator
-            (pl.col("is_floor_binding")).cast(pl.Int8).alias("floor_binding_flag"),
-        ])
+        return self._lf.with_columns(
+            [
+                # Floor impact as percentage of pre-floor RWA
+                pl.when(pl.col("rwa_pre_floor") > 0)
+                .then(pl.col("floor_impact_rwa") / pl.col("rwa_pre_floor") * 100)
+                .otherwise(pl.lit(0.0))
+                .alias("floor_impact_pct"),
+                # Binding floor indicator
+                (pl.col("is_floor_binding")).cast(pl.Int8).alias("floor_binding_flag"),
+            ]
+        )
 
     # =========================================================================
     # SUMMARY GENERATION METHODS
@@ -317,19 +351,23 @@ class AggregatorLazyFrame:
         if "exposure_class" in schema.names():
             summary = self._lf.group_by("exposure_class").agg(agg_exprs)
         else:
-            summary = self._lf.select(agg_exprs).with_columns([
-                pl.lit("ALL").alias("exposure_class"),
-            ])
+            summary = self._lf.select(agg_exprs).with_columns(
+                [
+                    pl.lit("ALL").alias("exposure_class"),
+                ]
+            )
 
         # Calculate average risk weight
         summary_schema = summary.collect_schema()
         if "_weighted_rw" in summary_schema.names() and "total_ead" in summary_schema.names():
-            summary = summary.with_columns([
-                pl.when(pl.col("total_ead") > 0)
-                .then(pl.col("_weighted_rw") / pl.col("total_ead"))
-                .otherwise(pl.lit(0.0))
-                .alias("avg_risk_weight"),
-            ]).drop("_weighted_rw")
+            summary = summary.with_columns(
+                [
+                    pl.when(pl.col("total_ead") > 0)
+                    .then(pl.col("_weighted_rw") / pl.col("total_ead"))
+                    .otherwise(pl.lit(0.0))
+                    .alias("avg_risk_weight"),
+                ]
+            ).drop("_weighted_rw")
 
         return summary
 
@@ -375,9 +413,11 @@ class AggregatorLazyFrame:
         if "approach_applied" in schema.names():
             return self._lf.group_by("approach_applied").agg(agg_exprs)
         else:
-            return self._lf.select(agg_exprs).with_columns([
-                pl.lit("ALL").alias("approach_applied"),
-            ])
+            return self._lf.select(agg_exprs).with_columns(
+                [
+                    pl.lit("ALL").alias("approach_applied"),
+                ]
+            )
 
     def generate_supporting_factor_impact(self) -> pl.LazyFrame:
         """
@@ -391,16 +431,30 @@ class AggregatorLazyFrame:
         if "supporting_factor" not in schema.names() or "rwa_pre_factor" not in schema.names():
             return self._lf
 
-        return self._lf.select([
-            pl.col("exposure_reference"),
-            pl.col("exposure_class") if "exposure_class" in schema.names() else pl.lit(None).alias("exposure_class"),
-            pl.col("is_sme") if "is_sme" in schema.names() else pl.lit(False).alias("is_sme"),
-            pl.col("is_infrastructure") if "is_infrastructure" in schema.names() else pl.lit(False).alias("is_infrastructure"),
-            pl.col("ead_final") if "ead_final" in schema.names() else pl.lit(0.0).alias("ead_final"),
-            pl.col("supporting_factor"),
-            pl.col("rwa_pre_factor"),
-            pl.col("rwa_post_factor") if "rwa_post_factor" in schema.names() else pl.col("rwa_final").alias("rwa_post_factor"),
-            (pl.col("rwa_pre_factor") - pl.col("rwa_post_factor")).alias("supporting_factor_impact") if "rwa_post_factor" in schema.names() else (pl.col("rwa_pre_factor") - pl.col("rwa_final")).alias("supporting_factor_impact"),
-        ]).filter(
-            pl.col("supporting_factor") < 1.0
-        )
+        return self._lf.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col("exposure_class")
+                if "exposure_class" in schema.names()
+                else pl.lit(None).alias("exposure_class"),
+                pl.col("is_sme") if "is_sme" in schema.names() else pl.lit(False).alias("is_sme"),
+                pl.col("is_infrastructure")
+                if "is_infrastructure" in schema.names()
+                else pl.lit(False).alias("is_infrastructure"),
+                pl.col("ead_final")
+                if "ead_final" in schema.names()
+                else pl.lit(0.0).alias("ead_final"),
+                pl.col("supporting_factor"),
+                pl.col("rwa_pre_factor"),
+                pl.col("rwa_post_factor")
+                if "rwa_post_factor" in schema.names()
+                else pl.col("rwa_final").alias("rwa_post_factor"),
+                (pl.col("rwa_pre_factor") - pl.col("rwa_post_factor")).alias(
+                    "supporting_factor_impact"
+                )
+                if "rwa_post_factor" in schema.names()
+                else (pl.col("rwa_pre_factor") - pl.col("rwa_final")).alias(
+                    "supporting_factor_impact"
+                ),
+            ]
+        ).filter(pl.col("supporting_factor") < 1.0)

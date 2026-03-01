@@ -16,7 +16,6 @@ from typing import Literal
 from rwa_calc.api.errors import create_file_not_found_error, create_validation_error
 from rwa_calc.api.models import APIError, ValidationRequest, ValidationResponse
 
-
 # =============================================================================
 # Required Files Configuration
 # =============================================================================
@@ -115,10 +114,12 @@ class DataPathValidator:
         errors: list[APIError] = []
 
         if not path.exists():
-            errors.append(create_validation_error(
-                f"Data path does not exist: {path}",
-                path=str(path),
-            ))
+            errors.append(
+                create_validation_error(
+                    f"Data path does not exist: {path}",
+                    path=str(path),
+                )
+            )
             return ValidationResponse(
                 valid=False,
                 data_path=str(path),
@@ -126,10 +127,12 @@ class DataPathValidator:
             )
 
         if not path.is_dir():
-            errors.append(create_validation_error(
-                f"Data path is not a directory: {path}",
-                path=str(path),
-            ))
+            errors.append(
+                create_validation_error(
+                    f"Data path is not a directory: {path}",
+                    path=str(path),
+                )
+            )
             return ValidationResponse(
                 valid=False,
                 data_path=str(path),
@@ -142,7 +145,7 @@ class DataPathValidator:
         files_missing: list[str] = []
 
         has_any_counterparty = False
-        counterparty_prefix = f"counterparty/"
+        counterparty_prefix = "counterparty/"
 
         for file_path in required.mandatory:
             full_path = path / file_path
@@ -158,17 +161,19 @@ class DataPathValidator:
                     files_missing.append(file_path)
                     errors.append(create_file_not_found_error(file_path))
 
-        counterparty_missing = [
-            f for f in files_missing if f.startswith(counterparty_prefix)
-        ]
+        counterparty_missing = [f for f in files_missing if f.startswith(counterparty_prefix)]
         if counterparty_missing and not has_any_counterparty:
-            errors.append(create_validation_error(
-                "At least one counterparty file is required",
-                path=str(path / "counterparty"),
-            ))
+            errors.append(
+                create_validation_error(
+                    "At least one counterparty file is required",
+                    path=str(path / "counterparty"),
+                )
+            )
 
         files_missing = [
-            f for f in files_missing if not f.startswith(counterparty_prefix) or not has_any_counterparty
+            f
+            for f in files_missing
+            if not f.startswith(counterparty_prefix) or not has_any_counterparty
         ]
 
         for file_path in required.optional:

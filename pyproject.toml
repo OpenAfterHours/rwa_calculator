@@ -116,6 +116,25 @@ exclude_lines = [
     "raise NotImplementedError",
 ]
 
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+ignore_missing_imports = true
+# Polars custom namespaces (register_lazyframe_namespace) return types mypy
+# cannot resolve. Polars type[DataType] vs DataType also causes false positives.
+disable_error_code = [
+    "attr-defined",   # Polars custom namespaces (.rwa_sa, .irb, .slotting, etc.)
+    "union-attr",     # Protocol | None narrowing in pipeline orchestrator
+    "no-any-return",  # Polars namespace methods returning self._lf via pipe()
+    "arg-type",       # Polars type[DataType] vs DataType in loader schemas
+    "dict-item",      # Polars type[DataType] vs DataType in schema dicts
+    "assignment",     # Polars ChainedThen vs Then in when/then chains
+]
+
+[[tool.mypy.overrides]]
+module = "rwa_calc.ui.marimo.*"
+ignore_errors = true
+
 [dependency-groups]
 dev = [
     "mkdocs>=1.6.1",

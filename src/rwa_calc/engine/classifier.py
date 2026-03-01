@@ -172,7 +172,9 @@ class ExposureClassifier:
 
         # Step 4: Corporate → retail reclassification (1 .with_columns)
         classified = self._reclassify_corporate_to_retail(
-            classified, config, schema_names,
+            classified,
+            config,
+            schema_names,
         )
 
         # Step 5: Approach assignment + finalization (1 .with_columns)
@@ -219,7 +221,10 @@ class ExposureClassifier:
         - is_regulated (for FI scalar - unregulated FSE)
         - is_managed_as_retail (for SME retail treatment)
         """
-        cp_cols = counterparties.select([
+        cp_schema = counterparties.collect_schema()
+        cp_col_names = cp_schema.names()
+
+        select_cols = [
             pl.col("counterparty_reference"),
             pl.col("entity_type").alias("cp_entity_type"),
             pl.col("country_code").alias("cp_country_code"),
@@ -228,7 +233,15 @@ class ExposureClassifier:
             pl.col("default_status").alias("cp_default_status"),
             pl.col("is_regulated").alias("cp_is_regulated"),
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
-        ])
+        ]
+
+        # Basel 3.1 fields — propagate if present (optional in input data)
+        if "scra_grade" in cp_col_names:
+            select_cols.append(pl.col("scra_grade").alias("cp_scra_grade"))
+        if "is_investment_grade" in cp_col_names:
+            select_cols.append(pl.col("is_investment_grade").alias("cp_is_investment_grade"))
+
+        cp_cols = counterparties.select(select_cols)
 
         return exposures.join(
             cp_cols,
@@ -266,65 +279,60 @@ class ExposureClassifier:
         # - _irb_class: entity type → IRB class mapping
         # - _pt_upper: product_type uppercased (used 6× in is_mortgage, infrastructure, sl_type)
         # - _cp_ref_upper: counterparty_reference uppercased (used 11× in slotting)
-        exposures = exposures.with_columns([
-            pl.col("cp_entity_type")
-            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value)
-            .alias("_sa_class"),
-            pl.col("cp_entity_type")
-            .replace_strict(ENTITY_TYPE_TO_IRB_CLASS, default=ExposureClass.OTHER.value)
-            .alias("_irb_class"),
-            pl.col("product_type").str.to_uppercase().alias("_pt_upper"),
-            pl.col("counterparty_reference").str.to_uppercase().alias("_cp_ref_upper"),
-        ])
+        exposures = exposures.with_columns(
+            [
+                pl.col("cp_entity_type")
+                .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value)
+                .alias("_sa_class"),
+                pl.col("cp_entity_type")
+                .replace_strict(ENTITY_TYPE_TO_IRB_CLASS, default=ExposureClass.OTHER.value)
+                .alias("_irb_class"),
+                pl.col("product_type").str.to_uppercase().alias("_pt_upper"),
+                pl.col("counterparty_reference").str.to_uppercase().alias("_cp_ref_upper"),
+            ]
+        )
 
         # Batch 2: Derive all flags from pre-computed intermediates.
-        return exposures.with_columns([
-            # --- Exposure class mappings (reuse _sa_class / _irb_class) ---
-            pl.col("_sa_class").alias("exposure_class_sa"),
-            pl.col("_irb_class").alias("exposure_class_irb"),
-            pl.col("_sa_class").alias("exposure_class"),
-
-            # --- Mortgage flag ---
-            self._build_is_mortgage_expr(schema_names),
-
-            # --- Default flags ---
-            (pl.col("cp_default_status") == True)  # noqa: E712
-            .alias("is_defaulted"),
-
-            pl.when(pl.col("cp_default_status") == True)  # noqa: E712
-            .then(pl.lit(ExposureClass.DEFAULTED.value))
-            .otherwise(pl.col("_sa_class"))
-            .alias("exposure_class_for_sa"),
-
-            # --- Infrastructure flag (uses _pt_upper) ---
-            pl.col("_pt_upper").str.contains("INFRASTRUCTURE")
-            .alias("is_infrastructure"),
-
-            # --- Financial sector entity flag ---
-            pl.col("cp_entity_type")
-            .is_in(FINANCIAL_SECTOR_ENTITY_TYPES)
-            .alias("is_financial_sector_entity"),
-
-            # --- Retail threshold check ---
-            pl.when(
-                pl.col("lending_group_adjusted_exposure") > max_retail_exposure
-            ).then(pl.lit(False))
-            .when(
-                (pl.col("lending_group_adjusted_exposure") == 0)
-                & (pl.col("exposure_for_retail_threshold") > max_retail_exposure)
-            ).then(pl.lit(False))
-            .otherwise(pl.lit(True))
-            .alias("qualifies_as_retail"),
-
-            pl.when(pl.col("residential_collateral_value") > 0)
-            .then(pl.lit(True))
-            .otherwise(pl.lit(False))
-            .alias("retail_threshold_exclusion_applied"),
-
-            # --- Slotting metadata (uses _cp_ref_upper, _pt_upper) ---
-            self._build_slotting_category_expr(),
-            self._build_sl_type_expr(schema_names),
-        ]).drop(["_sa_class", "_irb_class", "_pt_upper", "_cp_ref_upper"])
+        return exposures.with_columns(
+            [
+                # --- Exposure class mappings (reuse _sa_class / _irb_class) ---
+                pl.col("_sa_class").alias("exposure_class_sa"),
+                pl.col("_irb_class").alias("exposure_class_irb"),
+                pl.col("_sa_class").alias("exposure_class"),
+                # --- Mortgage flag ---
+                self._build_is_mortgage_expr(schema_names),
+                # --- Default flags ---
+                (pl.col("cp_default_status") == True)  # noqa: E712
+                .alias("is_defaulted"),
+                pl.when(pl.col("cp_default_status") == True)  # noqa: E712
+                .then(pl.lit(ExposureClass.DEFAULTED.value))
+                .otherwise(pl.col("_sa_class"))
+                .alias("exposure_class_for_sa"),
+                # --- Infrastructure flag (uses _pt_upper) ---
+                pl.col("_pt_upper").str.contains("INFRASTRUCTURE").alias("is_infrastructure"),
+                # --- Financial sector entity flag ---
+                pl.col("cp_entity_type")
+                .is_in(FINANCIAL_SECTOR_ENTITY_TYPES)
+                .alias("is_financial_sector_entity"),
+                # --- Retail threshold check ---
+                pl.when(pl.col("lending_group_adjusted_exposure") > max_retail_exposure)
+                .then(pl.lit(False))
+                .when(
+                    (pl.col("lending_group_adjusted_exposure") == 0)
+                    & (pl.col("exposure_for_retail_threshold") > max_retail_exposure)
+                )
+                .then(pl.lit(False))
+                .otherwise(pl.lit(True))
+                .alias("qualifies_as_retail"),
+                pl.when(pl.col("residential_collateral_value") > 0)
+                .then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("retail_threshold_exclusion_applied"),
+                # --- Slotting metadata (uses _cp_ref_upper, _pt_upper) ---
+                self._build_slotting_category_expr(),
+                self._build_sl_type_expr(schema_names),
+            ]
+        ).drop(["_sa_class", "_irb_class", "_pt_upper", "_cp_ref_upper"])
 
     # =========================================================================
     # Phase 3: SME + retail classification (1 .with_columns — 5 expressions)
@@ -367,58 +375,62 @@ class ExposureClassifier:
             & (pl.col("cp_annual_revenue") > 0)
         )
 
-        return exposures.with_columns([
-            # --- exposure_class update (SME + retail combined) ---
-            # Priority order matters: mortgage first, then SME retail, then
-            # non-qualifying retail, then corporate SME, then keep current.
-            pl.when(
-                # Retail mortgage — stays RETAIL_MORTGAGE regardless of threshold
-                (pl.col("is_mortgage") == True)  # noqa: E712
-                & (
-                    (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
-                    | (pl.col("cp_entity_type") == "individual")
+        return exposures.with_columns(
+            [
+                # --- exposure_class update (SME + retail combined) ---
+                # Priority order matters: mortgage first, then SME retail, then
+                # non-qualifying retail, then corporate SME, then keep current.
+                pl.when(
+                    # Retail mortgage — stays RETAIL_MORTGAGE regardless of threshold
+                    (pl.col("is_mortgage") == True)  # noqa: E712
+                    & (
+                        (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+                        | (pl.col("cp_entity_type") == "individual")
+                    )
                 )
-            ).then(pl.lit(ExposureClass.RETAIL_MORTGAGE.value))
-            .when(
-                # SME retail that doesn't qualify → CORPORATE_SME
-                is_retail_sme
-            ).then(pl.lit(ExposureClass.CORPORATE_SME.value))
-            .when(
-                # Other retail that doesn't qualify → CORPORATE
-                (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
-                & (pl.col("qualifies_as_retail") == False)  # noqa: E712
-            ).then(pl.lit(ExposureClass.CORPORATE.value))
-            .when(
-                # Corporate with SME revenue → CORPORATE_SME
-                is_corporate_sme
-            ).then(pl.lit(ExposureClass.CORPORATE_SME.value))
-            .otherwise(pl.col("exposure_class"))
-            .alias("exposure_class"),
-
-            # --- is_sme flag ---
-            # True for: corporate SME OR retail reclassified to CORPORATE_SME
-            (is_corporate_sme | is_retail_sme).alias("is_sme"),
-
-            # --- FI scalar flags (depend on is_financial_sector_entity from Phase 2) ---
-            (
-                (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
-            ).alias("is_large_financial_sector_entity"),
-
-            pl.when(
-                (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
-            ).then(pl.lit(True))
-            .when(
-                (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                & (pl.col("cp_is_regulated") == False)  # noqa: E712
-            ).then(pl.lit(True))
-            .otherwise(pl.lit(False))
-            .alias("requires_fi_scalar"),
-
-            # --- HVCRE flag (depends on sl_type from Phase 2) ---
-            (pl.col("sl_type") == "hvcre").alias("is_hvcre"),
-        ])
+                .then(pl.lit(ExposureClass.RETAIL_MORTGAGE.value))
+                .when(
+                    # SME retail that doesn't qualify → CORPORATE_SME
+                    is_retail_sme
+                )
+                .then(pl.lit(ExposureClass.CORPORATE_SME.value))
+                .when(
+                    # Other retail that doesn't qualify → CORPORATE
+                    (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+                    & (pl.col("qualifies_as_retail") == False)  # noqa: E712
+                )
+                .then(pl.lit(ExposureClass.CORPORATE.value))
+                .when(
+                    # Corporate with SME revenue → CORPORATE_SME
+                    is_corporate_sme
+                )
+                .then(pl.lit(ExposureClass.CORPORATE_SME.value))
+                .otherwise(pl.col("exposure_class"))
+                .alias("exposure_class"),
+                # --- is_sme flag ---
+                # True for: corporate SME OR retail reclassified to CORPORATE_SME
+                (is_corporate_sme | is_retail_sme).alias("is_sme"),
+                # --- FI scalar flags (depend on is_financial_sector_entity from Phase 2) ---
+                (
+                    (pl.col("is_financial_sector_entity") == True)  # noqa: E712
+                    & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
+                ).alias("is_large_financial_sector_entity"),
+                pl.when(
+                    (pl.col("is_financial_sector_entity") == True)  # noqa: E712
+                    & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
+                )
+                .then(pl.lit(True))
+                .when(
+                    (pl.col("is_financial_sector_entity") == True)  # noqa: E712
+                    & (pl.col("cp_is_regulated") == False)  # noqa: E712
+                )
+                .then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("requires_fi_scalar"),
+                # --- HVCRE flag (depends on sl_type from Phase 2) ---
+                (pl.col("sl_type") == "hvcre").alias("is_hvcre"),
+            ]
+        )
 
     # =========================================================================
     # Phase 4: Corporate → retail reclassification (1 .with_columns)
@@ -443,18 +455,22 @@ class ExposureClassifier:
         Only applies when AIRB is permitted for retail but not for corporate.
         """
         airb_for_retail = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_OTHER, ApproachType.AIRB,
+            ExposureClass.RETAIL_OTHER,
+            ApproachType.AIRB,
         )
         airb_for_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.AIRB,
+            ExposureClass.CORPORATE,
+            ApproachType.AIRB,
         )
 
         # Short-circuit: reclassification not relevant
         if airb_for_corporate or not airb_for_retail:
-            return exposures.with_columns([
-                pl.lit(False).alias("reclassified_to_retail"),
-                pl.lit(False).alias("has_property_collateral"),
-            ])
+            return exposures.with_columns(
+                [
+                    pl.lit(False).alias("reclassified_to_retail"),
+                    pl.lit(False).alias("has_property_collateral"),
+                ]
+            )
 
         sme_turnover_threshold = float(
             config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
@@ -462,10 +478,14 @@ class ExposureClassifier:
 
         # Reclassification eligibility expression (inlined — not a column ref)
         reclassification_expr = (
-            (pl.col("exposure_class").is_in([
-                ExposureClass.CORPORATE.value,
-                ExposureClass.CORPORATE_SME.value,
-            ]))
+            (
+                pl.col("exposure_class").is_in(
+                    [
+                        ExposureClass.CORPORATE.value,
+                        ExposureClass.CORPORATE_SME.value,
+                    ]
+                )
+            )
             & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
             & (pl.col("qualifies_as_retail") == True)  # noqa: E712
             & (pl.col("lgd").is_not_null())
@@ -478,16 +498,18 @@ class ExposureClassifier:
 
         # Single .with_columns: reclassified_to_retail, has_property_collateral,
         # exposure_class update — all using inlined expressions (not column refs)
-        return exposures.with_columns([
-            reclassification_expr.alias("reclassified_to_retail"),
-            has_property_expr.alias("has_property_collateral"),
-            pl.when(reclassification_expr & has_property_expr)
-            .then(pl.lit(ExposureClass.RETAIL_MORTGAGE.value))
-            .when(reclassification_expr)
-            .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
-            .otherwise(pl.col("exposure_class"))
-            .alias("exposure_class"),
-        ])
+        return exposures.with_columns(
+            [
+                reclassification_expr.alias("reclassified_to_retail"),
+                has_property_expr.alias("has_property_collateral"),
+                pl.when(reclassification_expr & has_property_expr)
+                .then(pl.lit(ExposureClass.RETAIL_MORTGAGE.value))
+                .when(reclassification_expr)
+                .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
+                .otherwise(pl.col("exposure_class"))
+                .alias("exposure_class"),
+            ]
+        )
 
     # =========================================================================
     # Phase 5: Approach assignment + finalization (1 .with_columns)
@@ -509,38 +531,49 @@ class ExposureClassifier:
         """
         # Pre-compute all permission booleans (Python-side, not Polars)
         airb_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.AIRB,
+            ExposureClass.CORPORATE,
+            ApproachType.AIRB,
         )
         airb_corporate_sme = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE_SME, ApproachType.AIRB,
+            ExposureClass.CORPORATE_SME,
+            ApproachType.AIRB,
         )
         airb_retail_mortgage = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_MORTGAGE, ApproachType.AIRB,
+            ExposureClass.RETAIL_MORTGAGE,
+            ApproachType.AIRB,
         )
         airb_retail_other = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_OTHER, ApproachType.AIRB,
+            ExposureClass.RETAIL_OTHER,
+            ApproachType.AIRB,
         )
         airb_retail_qrre = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_QRRE, ApproachType.AIRB,
+            ExposureClass.RETAIL_QRRE,
+            ApproachType.AIRB,
         )
         airb_institution = config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION, ApproachType.AIRB,
+            ExposureClass.INSTITUTION,
+            ApproachType.AIRB,
         )
         airb_cgcb = config.irb_permissions.is_permitted(
-            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.AIRB,
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK,
+            ApproachType.AIRB,
         )
 
         firb_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.FIRB,
+            ExposureClass.CORPORATE,
+            ApproachType.FIRB,
         )
         firb_corporate_sme = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE_SME, ApproachType.FIRB,
+            ExposureClass.CORPORATE_SME,
+            ApproachType.FIRB,
         )
         firb_institution = config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION, ApproachType.FIRB,
+            ExposureClass.INSTITUTION,
+            ApproachType.FIRB,
         )
         firb_cgcb = config.irb_permissions.is_permitted(
-            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.FIRB,
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK,
+            ApproachType.FIRB,
         )
 
         sl_airb = self._check_sl_airb_permitted(config)
@@ -558,65 +591,70 @@ class ExposureClassifier:
             pl.when(managed_as_retail_without_lgd)
             .then(pl.lit(ApproachType.SA.value))
             # SL A-IRB takes precedence over slotting
-            .when(
-                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
-                & sl_airb
-            ).then(pl.lit(ApproachType.AIRB.value))
+            .when((pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_airb)
+            .then(pl.lit(ApproachType.AIRB.value))
             # SL slotting fallback
             .when(
-                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
-                & sl_slotting
-            ).then(pl.lit(ApproachType.SLOTTING.value))
+                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_slotting
+            )
+            .then(pl.lit(ApproachType.SLOTTING.value))
             # A-IRB for retail
             .when(
                 (pl.col("exposure_class") == ExposureClass.RETAIL_MORTGAGE.value)
                 & pl.lit(airb_retail_mortgage)
-            ).then(pl.lit(ApproachType.AIRB.value))
+            )
+            .then(pl.lit(ApproachType.AIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
                 & pl.lit(airb_retail_other)
-            ).then(pl.lit(ApproachType.AIRB.value))
+            )
+            .then(pl.lit(ApproachType.AIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.RETAIL_QRRE.value)
                 & pl.lit(airb_retail_qrre)
-            ).then(pl.lit(ApproachType.AIRB.value))
+            )
+            .then(pl.lit(ApproachType.AIRB.value))
             # A-IRB for corporate
             .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
-                & pl.lit(airb_corporate)
-            ).then(pl.lit(ApproachType.AIRB.value))
+                (pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(airb_corporate)
+            )
+            .then(pl.lit(ApproachType.AIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
                 & pl.lit(airb_corporate_sme)
-            ).then(pl.lit(ApproachType.AIRB.value))
+            )
+            .then(pl.lit(ApproachType.AIRB.value))
             # A-IRB for institution/CGCB
             .when(
                 (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
                 & pl.lit(airb_institution)
-            ).then(pl.lit(ApproachType.AIRB.value))
+            )
+            .then(pl.lit(ApproachType.AIRB.value))
             .when(
-                (pl.col("exposure_class")
-                 == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
                 & pl.lit(airb_cgcb)
-            ).then(pl.lit(ApproachType.AIRB.value))
+            )
+            .then(pl.lit(ApproachType.AIRB.value))
             # F-IRB for corporate/institution/CGCB
             .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
-                & pl.lit(firb_corporate)
-            ).then(pl.lit(ApproachType.FIRB.value))
+                (pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(firb_corporate)
+            )
+            .then(pl.lit(ApproachType.FIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
                 & pl.lit(firb_corporate_sme)
-            ).then(pl.lit(ApproachType.FIRB.value))
+            )
+            .then(pl.lit(ApproachType.FIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
                 & pl.lit(firb_institution)
-            ).then(pl.lit(ApproachType.FIRB.value))
+            )
+            .then(pl.lit(ApproachType.FIRB.value))
             .when(
-                (pl.col("exposure_class")
-                 == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
                 & pl.lit(firb_cgcb)
-            ).then(pl.lit(ApproachType.FIRB.value))
+            )
+            .then(pl.lit(ApproachType.FIRB.value))
             .otherwise(pl.lit(ApproachType.SA.value))
             .alias("approach")
         )
@@ -641,8 +679,7 @@ class ExposureClassifier:
                 & pl.lit(not airb_institution)
             )
             | (
-                (pl.col("exposure_class")
-                 == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
                 & pl.lit(firb_cgcb)
                 & pl.lit(not airb_cgcb)
             )
@@ -657,10 +694,12 @@ class ExposureClassifier:
             .alias("lgd")
         )
 
-        return exposures.with_columns([
-            approach_expr,
-            lgd_expr,
-        ])
+        return exposures.with_columns(
+            [
+                approach_expr,
+                lgd_expr,
+            ]
+        )
 
     # =========================================================================
     # Expression builders (static helpers returning pl.Expr)
@@ -672,9 +711,8 @@ class ExposureClassifier:
 
         Uses _pt_upper (pre-computed uppercase product_type) when available.
         """
-        base = (
-            pl.col("_pt_upper").str.contains("MORTGAGE")
-            | pl.col("_pt_upper").str.contains("HOME_LOAN")
+        base = pl.col("_pt_upper").str.contains("MORTGAGE") | pl.col("_pt_upper").str.contains(
+            "HOME_LOAN"
         )
         if (
             "property_collateral_value" in schema_names
@@ -686,9 +724,7 @@ class ExposureClassifier:
                 | (pl.col("has_facility_property_collateral") == True)  # noqa: E712
             ).alias("is_mortgage")
         if "property_collateral_value" in schema_names:
-            return (
-                base | (pl.col("property_collateral_value") > 0)
-            ).alias("is_mortgage")
+            return (base | (pl.col("property_collateral_value") > 0)).alias("is_mortgage")
         return base.alias("is_mortgage")
 
     @staticmethod
@@ -771,7 +807,8 @@ class ExposureClassifier:
     def _check_slotting_permitted(self, config: CalculationConfig) -> pl.Expr:
         """Check if slotting is permitted."""
         if config.irb_permissions.is_permitted(
-            ExposureClass.SPECIALISED_LENDING, ApproachType.SLOTTING,
+            ExposureClass.SPECIALISED_LENDING,
+            ApproachType.SLOTTING,
         ):
             return pl.lit(True)
         return pl.lit(False)
@@ -779,7 +816,8 @@ class ExposureClassifier:
     def _check_sl_airb_permitted(self, config: CalculationConfig) -> pl.Expr:
         """Check if A-IRB is permitted specifically for SPECIALISED_LENDING."""
         if config.irb_permissions.is_permitted(
-            ExposureClass.SPECIALISED_LENDING, ApproachType.AIRB,
+            ExposureClass.SPECIALISED_LENDING,
+            ApproachType.AIRB,
         ):
             return pl.lit(True)
         return pl.lit(False)
@@ -815,48 +853,52 @@ class ExposureClassifier:
         Computes classification_reason here (deferred from main pipeline)
         since it's only needed for audit, not by downstream CRM/calculators.
         """
-        return exposures.select([
-            pl.col("exposure_reference"),
-            pl.col("counterparty_reference"),
-            pl.col("cp_entity_type"),
-            pl.col("exposure_class"),
-            pl.col("exposure_class_sa"),
-            pl.col("exposure_class_irb"),
-            pl.col("approach"),
-            pl.col("is_sme"),
-            pl.col("is_mortgage"),
-            pl.col("is_defaulted"),
-            pl.col("is_financial_sector_entity"),
-            pl.col("is_large_financial_sector_entity"),
-            pl.col("requires_fi_scalar"),
-            pl.col("qualifies_as_retail"),
-            pl.col("retail_threshold_exclusion_applied"),
-            pl.col("residential_collateral_value"),
-            pl.col("lending_group_adjusted_exposure"),
-            pl.col("reclassified_to_retail"),
-            pl.concat_str([
-                pl.lit("entity_type="),
-                pl.col("cp_entity_type").fill_null("unknown"),
-                pl.lit("; exp_class_sa="),
-                pl.col("exposure_class_sa").fill_null("unknown"),
-                pl.lit("; exp_class_irb="),
-                pl.col("exposure_class_irb").fill_null("unknown"),
-                pl.lit("; is_sme="),
-                pl.col("is_sme").cast(pl.String),
-                pl.lit("; is_mortgage="),
-                pl.col("is_mortgage").cast(pl.String),
-                pl.lit("; is_defaulted="),
-                pl.col("is_defaulted").cast(pl.String),
-                pl.lit("; is_infrastructure="),
-                pl.col("is_infrastructure").cast(pl.String),
-                pl.lit("; requires_fi_scalar="),
-                pl.col("requires_fi_scalar").cast(pl.String),
-                pl.lit("; qualifies_as_retail="),
-                pl.col("qualifies_as_retail").cast(pl.String),
-                pl.lit("; reclassified_to_retail="),
-                pl.col("reclassified_to_retail").cast(pl.String),
-            ]).alias("classification_reason"),
-        ])
+        return exposures.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col("counterparty_reference"),
+                pl.col("cp_entity_type"),
+                pl.col("exposure_class"),
+                pl.col("exposure_class_sa"),
+                pl.col("exposure_class_irb"),
+                pl.col("approach"),
+                pl.col("is_sme"),
+                pl.col("is_mortgage"),
+                pl.col("is_defaulted"),
+                pl.col("is_financial_sector_entity"),
+                pl.col("is_large_financial_sector_entity"),
+                pl.col("requires_fi_scalar"),
+                pl.col("qualifies_as_retail"),
+                pl.col("retail_threshold_exclusion_applied"),
+                pl.col("residential_collateral_value"),
+                pl.col("lending_group_adjusted_exposure"),
+                pl.col("reclassified_to_retail"),
+                pl.concat_str(
+                    [
+                        pl.lit("entity_type="),
+                        pl.col("cp_entity_type").fill_null("unknown"),
+                        pl.lit("; exp_class_sa="),
+                        pl.col("exposure_class_sa").fill_null("unknown"),
+                        pl.lit("; exp_class_irb="),
+                        pl.col("exposure_class_irb").fill_null("unknown"),
+                        pl.lit("; is_sme="),
+                        pl.col("is_sme").cast(pl.String),
+                        pl.lit("; is_mortgage="),
+                        pl.col("is_mortgage").cast(pl.String),
+                        pl.lit("; is_defaulted="),
+                        pl.col("is_defaulted").cast(pl.String),
+                        pl.lit("; is_infrastructure="),
+                        pl.col("is_infrastructure").cast(pl.String),
+                        pl.lit("; requires_fi_scalar="),
+                        pl.col("requires_fi_scalar").cast(pl.String),
+                        pl.lit("; qualifies_as_retail="),
+                        pl.col("qualifies_as_retail").cast(pl.String),
+                        pl.lit("; reclassified_to_retail="),
+                        pl.col("reclassified_to_retail").cast(pl.String),
+                    ]
+                ).alias("classification_reason"),
+            ]
+        )
 
 
 def create_exposure_classifier() -> ExposureClassifier:

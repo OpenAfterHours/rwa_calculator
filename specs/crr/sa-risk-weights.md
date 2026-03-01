@@ -13,7 +13,7 @@ Standardised Approach risk weights by exposure class and credit quality step.
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-1.1 | SA risk weight calculation for all 9 exposure classes (CRR Art. 112–134) | P0 | Done |
-| FR-1.2 | SA risk weight calculation for Basel 3.1 (CRE20–22), including LTV-based RE weights | P0 | Partial |
+| FR-1.2 | SA risk weight calculation for Basel 3.1 (CRE20–22), including LTV-based RE weights | P0 | Partial (RE done) |
 
 ---
 
@@ -84,9 +84,59 @@ avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 | LTV ≤ 50% and rental income ≥ 1.5x interest costs | 50% |
 | All other CRE | 100% |
 
+## Basel 3.1 Residential Real Estate (CRE20.73)
+
+### General Residential (CRE20.73)
+
+Whole-loan approach (PRA PS9/24):
+
+| LTV Band | Risk Weight |
+|----------|-------------|
+| ≤ 50% | 20% |
+| 50-60% | 25% |
+| 60-70% | 25% |
+| 70-80% | 30% |
+| 80-90% | 40% |
+| 90-100% | 50% |
+| > 100% | 70% |
+
+### Income-Producing Residential (CRE20.82)
+
+| LTV Band | Risk Weight |
+|----------|-------------|
+| ≤ 50% | 30% |
+| 50-60% | 35% |
+| 60-70% | 45% |
+| 70-80% | 50% |
+| 80-90% | 60% |
+| 90-100% | 75% |
+| > 100% | 105% |
+
+### Commercial RE — General (CRE20.85)
+
+| Condition | Risk Weight |
+|-----------|-------------|
+| LTV ≤ 60% | min(60%, counterparty RW) |
+| LTV > 60% | Counterparty RW |
+
+### Commercial RE — Income-Producing (CRE20.86)
+
+| LTV Band | Risk Weight |
+|----------|-------------|
+| ≤ 60% | 70% |
+| 60-80% | 90% |
+| > 80% | 110% |
+
+### ADC Exposures (CRE20.87-88)
+
+| Condition | Risk Weight |
+|-----------|-------------|
+| Default | 150% |
+| Pre-sold/pre-let | 100% |
+
 ## Basel 3.1 Changes
 
-- **LTV-based residential RE weights** (CRE20.71): Risk weights vary by loan-to-value ratio — Not Started
+- **LTV-based residential RE weights** (CRE20.71): Risk weights vary by loan-to-value ratio — Done
 - **Revised corporate/bank risk weights**: Updated CQS mapping — Partial
 - **Removal of SME supporting factor**: No longer applicable
 - **Removal of 1.06 scaling factor**: Scaling factor set to 1.0

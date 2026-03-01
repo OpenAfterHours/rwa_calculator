@@ -13,9 +13,6 @@ from decimal import Decimal
 
 import polars as pl
 
-from rwa_calc.domain.enums import CollateralType, CQS
-
-
 # =============================================================================
 # SUPERVISORY HAIRCUTS (CRR Art. 224)
 # =============================================================================
@@ -25,7 +22,6 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     # Cash and equivalents
     "cash": Decimal("0.00"),
     "gold": Decimal("0.15"),
-
     # Government bonds by CQS and maturity band
     "govt_bond_cqs1_0_1y": Decimal("0.005"),
     "govt_bond_cqs1_1_5y": Decimal("0.02"),
@@ -33,7 +29,6 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
     "govt_bond_cqs2_3_1_5y": Decimal("0.03"),
     "govt_bond_cqs2_3_5y_plus": Decimal("0.06"),
-
     # Corporate bonds by CQS and maturity band
     "corp_bond_cqs1_2_0_1y": Decimal("0.01"),
     "corp_bond_cqs1_2_1_5y": Decimal("0.04"),
@@ -41,11 +36,9 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "corp_bond_cqs3_0_1y": Decimal("0.02"),
     "corp_bond_cqs3_1_5y": Decimal("0.06"),
     "corp_bond_cqs3_5y_plus": Decimal("0.08"),
-
     # Equity
     "equity_main_index": Decimal("0.15"),
     "equity_other": Decimal("0.25"),
-
     # Other
     "receivables": Decimal("0.20"),
     "other_physical": Decimal("0.40"),
@@ -59,72 +52,188 @@ def _create_haircut_df() -> pl.DataFrame:
     """Create haircut lookup DataFrame."""
     rows = [
         # Cash and gold
-        {"collateral_type": "cash", "cqs": None, "maturity_band": None,
-         "haircut": 0.00, "is_main_index": None},
-        {"collateral_type": "gold", "cqs": None, "maturity_band": None,
-         "haircut": 0.15, "is_main_index": None},
-
+        {
+            "collateral_type": "cash",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.00,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "gold",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
         # Government bonds CQS 1
-        {"collateral_type": "govt_bond", "cqs": 1, "maturity_band": "0_1y",
-         "haircut": 0.005, "is_main_index": None},
-        {"collateral_type": "govt_bond", "cqs": 1, "maturity_band": "1_5y",
-         "haircut": 0.02, "is_main_index": None},
-        {"collateral_type": "govt_bond", "cqs": 1, "maturity_band": "5y_plus",
-         "haircut": 0.04, "is_main_index": None},
-
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "0_1y",
+            "haircut": 0.005,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "1_5y",
+            "haircut": 0.02,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "5y_plus",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
         # Government bonds CQS 2-3
-        {"collateral_type": "govt_bond", "cqs": 2, "maturity_band": "0_1y",
-         "haircut": 0.01, "is_main_index": None},
-        {"collateral_type": "govt_bond", "cqs": 2, "maturity_band": "1_5y",
-         "haircut": 0.03, "is_main_index": None},
-        {"collateral_type": "govt_bond", "cqs": 2, "maturity_band": "5y_plus",
-         "haircut": 0.06, "is_main_index": None},
-        {"collateral_type": "govt_bond", "cqs": 3, "maturity_band": "0_1y",
-         "haircut": 0.01, "is_main_index": None},
-        {"collateral_type": "govt_bond", "cqs": 3, "maturity_band": "1_5y",
-         "haircut": 0.03, "is_main_index": None},
-        {"collateral_type": "govt_bond", "cqs": 3, "maturity_band": "5y_plus",
-         "haircut": 0.06, "is_main_index": None},
-
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "1_5y",
+            "haircut": 0.03,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "5y_plus",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "1_5y",
+            "haircut": 0.03,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "5y_plus",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
         # Corporate bonds CQS 1-2
-        {"collateral_type": "corp_bond", "cqs": 1, "maturity_band": "0_1y",
-         "haircut": 0.01, "is_main_index": None},
-        {"collateral_type": "corp_bond", "cqs": 1, "maturity_band": "1_5y",
-         "haircut": 0.04, "is_main_index": None},
-        {"collateral_type": "corp_bond", "cqs": 1, "maturity_band": "5y_plus",
-         "haircut": 0.06, "is_main_index": None},
-        {"collateral_type": "corp_bond", "cqs": 2, "maturity_band": "0_1y",
-         "haircut": 0.01, "is_main_index": None},
-        {"collateral_type": "corp_bond", "cqs": 2, "maturity_band": "1_5y",
-         "haircut": 0.04, "is_main_index": None},
-        {"collateral_type": "corp_bond", "cqs": 2, "maturity_band": "5y_plus",
-         "haircut": 0.06, "is_main_index": None},
-
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "1_5y",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "5y_plus",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "1_5y",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "5y_plus",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
         # Corporate bonds CQS 3
-        {"collateral_type": "corp_bond", "cqs": 3, "maturity_band": "0_1y",
-         "haircut": 0.02, "is_main_index": None},
-        {"collateral_type": "corp_bond", "cqs": 3, "maturity_band": "1_5y",
-         "haircut": 0.06, "is_main_index": None},
-        {"collateral_type": "corp_bond", "cqs": 3, "maturity_band": "5y_plus",
-         "haircut": 0.08, "is_main_index": None},
-
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "0_1y",
+            "haircut": 0.02,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "1_5y",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "5y_plus",
+            "haircut": 0.08,
+            "is_main_index": None,
+        },
         # Equity
-        {"collateral_type": "equity", "cqs": None, "maturity_band": None,
-         "haircut": 0.15, "is_main_index": True},
-        {"collateral_type": "equity", "cqs": None, "maturity_band": None,
-         "haircut": 0.25, "is_main_index": False},
-
+        {
+            "collateral_type": "equity",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.15,
+            "is_main_index": True,
+        },
+        {
+            "collateral_type": "equity",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.25,
+            "is_main_index": False,
+        },
         # Other
-        {"collateral_type": "receivables", "cqs": None, "maturity_band": None,
-         "haircut": 0.20, "is_main_index": None},
-        {"collateral_type": "other_physical", "cqs": None, "maturity_band": None,
-         "haircut": 0.40, "is_main_index": None},
+        {
+            "collateral_type": "receivables",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.20,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "other_physical",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.40,
+            "is_main_index": None,
+        },
     ]
 
-    return pl.DataFrame(rows).with_columns([
-        pl.col("cqs").cast(pl.Int8),
-        pl.col("haircut").cast(pl.Float64),
-    ])
+    return pl.DataFrame(rows).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("haircut").cast(pl.Float64),
+        ]
+    )
 
 
 def get_haircut_table() -> pl.DataFrame:

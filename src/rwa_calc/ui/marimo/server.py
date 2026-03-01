@@ -13,8 +13,9 @@ Or with uvicorn directly:
     uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
 """
 
-import marimo
 from pathlib import Path
+
+import marimo
 
 # Get the directory containing the apps
 apps_dir = Path(__file__).parent
@@ -29,9 +30,11 @@ app = (
     .build()
 )
 
+
 def main():
     """Start the RWA Calculator UI server."""
     import uvicorn
+
     print("Starting RWA Calculator server...")
     print("Apps available at:")
     print("  - http://localhost:8000/           (Calculator)")

@@ -29,7 +29,6 @@ References:
 
 # Import namespace module to register namespaces on module load
 import rwa_calc.engine.irb.namespace  # noqa: F401
-
 from rwa_calc.engine.irb.calculator import IRBCalculator, create_irb_calculator
 from rwa_calc.engine.irb.formulas import (
     apply_irb_formulas,

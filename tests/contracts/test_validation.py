@@ -5,7 +5,6 @@ against expected definitions.
 """
 
 import polars as pl
-import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.validation import (
@@ -29,10 +28,12 @@ class TestValidateSchema:
 
     def test_valid_schema_returns_empty(self):
         """Valid schema should return empty error list."""
-        lf = pl.LazyFrame({
-            "col1": [1, 2, 3],
-            "col2": ["a", "b", "c"],
-        })
+        lf = pl.LazyFrame(
+            {
+                "col1": [1, 2, 3],
+                "col2": ["a", "b", "c"],
+            }
+        )
         expected = {
             "col1": pl.Int64,
             "col2": pl.String,
@@ -88,11 +89,13 @@ class TestValidateSchema:
 
     def test_strict_mode_flags_extra_columns(self):
         """Strict mode should flag unexpected columns."""
-        lf = pl.LazyFrame({
-            "col1": [1, 2, 3],
-            "col2": ["a", "b", "c"],
-            "extra": [True, False, True],
-        })
+        lf = pl.LazyFrame(
+            {
+                "col1": [1, 2, 3],
+                "col2": ["a", "b", "c"],
+                "extra": [True, False, True],
+            }
+        )
         expected = {
             "col1": pl.Int64,
             "col2": pl.String,
@@ -176,10 +179,12 @@ class TestValidateNonNegativeAmounts:
 
     def test_adds_validation_columns(self):
         """Should add _valid_ columns for amount fields."""
-        lf = pl.LazyFrame({
-            "amount1": [100.0, -50.0, 0.0],
-            "amount2": [200.0, 300.0, -100.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount1": [100.0, -50.0, 0.0],
+                "amount2": [200.0, 300.0, -100.0],
+            }
+        )
 
         result = validate_non_negative_amounts(lf, ["amount1", "amount2"])
         df = result.collect()
@@ -276,9 +281,9 @@ class TestValidateRiskType:
 
     def test_valid_risk_type_full_values(self):
         """Valid full values should pass."""
-        lf = pl.LazyFrame({
-            "risk_type": ["full_risk", "medium_risk", "medium_low_risk", "low_risk"]
-        })
+        lf = pl.LazyFrame(
+            {"risk_type": ["full_risk", "medium_risk", "medium_low_risk", "low_risk"]}
+        )
 
         result = validate_risk_type(lf)
         df = result.collect()
@@ -373,9 +378,9 @@ class TestNormalizeRiskType:
 
     def test_preserves_full_values(self):
         """Full values should be preserved (lowercased)."""
-        lf = pl.LazyFrame({
-            "risk_type": ["full_risk", "MEDIUM_RISK", "medium_low_risk", "LOW_RISK"]
-        })
+        lf = pl.LazyFrame(
+            {"risk_type": ["full_risk", "MEDIUM_RISK", "medium_low_risk", "LOW_RISK"]}
+        )
 
         result = normalize_risk_type(lf)
         df = result.collect()
@@ -505,9 +510,15 @@ class TestValidateBundleValues:
         defaults = {
             "facilities": pl.LazyFrame({"facility_reference": pl.Series([], dtype=pl.String)}),
             "loans": pl.LazyFrame({"loan_reference": pl.Series([], dtype=pl.String)}),
-            "counterparties": pl.LazyFrame({"counterparty_reference": pl.Series([], dtype=pl.String)}),
-            "facility_mappings": pl.LazyFrame({"parent_facility_reference": pl.Series([], dtype=pl.String)}),
-            "lending_mappings": pl.LazyFrame({"parent_counterparty_reference": pl.Series([], dtype=pl.String)}),
+            "counterparties": pl.LazyFrame(
+                {"counterparty_reference": pl.Series([], dtype=pl.String)}
+            ),
+            "facility_mappings": pl.LazyFrame(
+                {"parent_facility_reference": pl.Series([], dtype=pl.String)}
+            ),
+            "lending_mappings": pl.LazyFrame(
+                {"parent_counterparty_reference": pl.Series([], dtype=pl.String)}
+            ),
         }
         defaults.update(overrides)
         return RawDataBundle(**defaults)

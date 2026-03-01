@@ -51,7 +51,10 @@ def create_lending_mappings() -> pl.DataFrame:
     ]
 
     return pl.DataFrame(
-        [{"parent_counterparty_reference": r.parent, "child_counterparty_reference": r.child} for r in relationships],
+        [
+            {"parent_counterparty_reference": r.parent, "child_counterparty_reference": r.child}
+            for r in relationships
+        ],
         schema=LENDING_MAPPING_SCHEMA,
     )
 
@@ -171,7 +174,9 @@ def print_summary(output_path: Path) -> None:
     print(df)
 
     print("\nLending group summary:")
-    parent_counts = df.group_by("parent_counterparty_reference").len().sort("parent_counterparty_reference")
+    parent_counts = (
+        df.group_by("parent_counterparty_reference").len().sort("parent_counterparty_reference")
+    )
     for row in parent_counts.iter_rows(named=True):
         print(f"  {row['parent_counterparty_reference']}: {row['len']} connected parties")
 

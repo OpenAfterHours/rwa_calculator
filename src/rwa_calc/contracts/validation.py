@@ -73,8 +73,7 @@ def validate_schema(
     for col_name, expected_type in expected_schema.items():
         if col_name not in actual_schema:
             errors.append(
-                f"{context_prefix}Missing column: '{col_name}' "
-                f"(expected type: {expected_type})"
+                f"{context_prefix}Missing column: '{col_name}' (expected type: {expected_type})"
             )
         else:
             actual_type = actual_schema[col_name]
@@ -89,8 +88,7 @@ def validate_schema(
         extra_columns = set(actual_schema.names()) - set(expected_schema.keys())
         for col_name in extra_columns:
             errors.append(
-                f"{context_prefix}Unexpected column: '{col_name}' "
-                f"(type: {actual_schema[col_name]})"
+                f"{context_prefix}Unexpected column: '{col_name}' (type: {actual_schema[col_name]})"
             )
 
     return errors
@@ -118,10 +116,7 @@ def _types_compatible(actual: pl.DataType, expected: pl.DataType) -> bool:
 
     # Allow Utf8/String compatibility
     string_types = {pl.Utf8, pl.String}
-    if actual in string_types and expected in string_types:
-        return True
-
-    return False
+    return actual in string_types and expected in string_types
 
 
 def validate_required_columns(
@@ -372,9 +367,7 @@ def validate_non_negative_amounts(
     for col in amount_columns:
         if col in schema_names:
             valid_col = f"_valid_{col}"
-            exprs.append(
-                (pl.col(col) >= 0).alias(valid_col)
-            )
+            exprs.append((pl.col(col) >= 0).alias(valid_col))
 
     if exprs:
         return lf.with_columns(exprs)
@@ -401,8 +394,7 @@ def validate_pd_range(
     """
     if pd_column in lf.collect_schema().names():
         return lf.with_columns(
-            ((pl.col(pd_column) >= min_pd) & (pl.col(pd_column) <= max_pd))
-            .alias("_valid_pd")
+            ((pl.col(pd_column) >= min_pd) & (pl.col(pd_column) <= max_pd)).alias("_valid_pd")
         )
     return lf
 
@@ -427,8 +419,7 @@ def validate_lgd_range(
     """
     if lgd_column in lf.collect_schema().names():
         return lf.with_columns(
-            ((pl.col(lgd_column) >= min_lgd) & (pl.col(lgd_column) <= max_lgd))
-            .alias("_valid_lgd")
+            ((pl.col(lgd_column) >= min_lgd) & (pl.col(lgd_column) <= max_lgd)).alias("_valid_lgd")
         )
     return lf
 
@@ -477,10 +468,7 @@ def validate_risk_type(
     all_valid = VALID_RISK_TYPE_CODES | VALID_RISK_TYPES
 
     return lf.with_columns(
-        pl.col(column)
-        .str.to_lowercase()
-        .is_in(all_valid)
-        .alias("_valid_risk_type")
+        pl.col(column).str.to_lowercase().is_in(all_valid).alias("_valid_risk_type")
     )
 
 
@@ -515,9 +503,7 @@ def validate_ccf_modelled(
     return lf.with_columns(
         pl.when(pl.col(column).is_null())
         .then(pl.lit(True))  # Null is valid (optional field)
-        .otherwise(
-            (pl.col(column) >= min_ccf) & (pl.col(column) <= max_ccf)
-        )
+        .otherwise((pl.col(column) >= min_ccf) & (pl.col(column) <= max_ccf))
         .alias("_valid_ccf_modelled")
     )
 
@@ -545,10 +531,7 @@ def normalize_risk_type(
 
     # Normalize to lowercase first, then map codes to full values
     return lf.with_columns(
-        pl.col(column)
-        .str.to_lowercase()
-        .replace(RISK_TYPE_CODE_TO_VALUE)
-        .alias(column)
+        pl.col(column).str.to_lowercase().replace(RISK_TYPE_CODE_TO_VALUE).alias(column)
     )
 
 
@@ -638,6 +621,7 @@ def validate_bundle_values(
     """
     if constraints is None:
         from rwa_calc.data.schemas import COLUMN_VALUE_CONSTRAINTS
+
         constraints = COLUMN_VALUE_CONSTRAINTS
 
     frame_mapping: dict[str, pl.LazyFrame | None] = {

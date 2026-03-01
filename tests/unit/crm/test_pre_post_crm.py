@@ -9,7 +9,6 @@ Tests the implementation of Tasks 1.1-1.4 from the pre-post-crm-counterparty-pla
 """
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -43,26 +42,30 @@ class TestPreCRMAttributePreservation:
         crr_config: CalculationConfig,
     ) -> None:
         """Pre-CRM counterparty should be original borrower."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["SA"],
-            "ead_pre_crm": [1_000_000.0],
-            "lgd": [0.45],
-            "cqs": [3],
-            "product_type": ["LOAN"],
-            # CCF-required columns
-            "drawn_amount": [1_000_000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "risk_type": [None],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["SA"],
+                "ead_pre_crm": [1_000_000.0],
+                "lgd": [0.45],
+                "cqs": [3],
+                "product_type": ["LOAN"],
+                # CCF-required columns
+                "drawn_amount": [1_000_000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "risk_type": [None],
+            }
+        )
 
-        counterparties = pl.LazyFrame({
-            "counterparty_reference": ["CP001"],
-            "entity_type": ["corporate"],
-        })
+        counterparties = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+            }
+        )
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
@@ -70,20 +73,26 @@ class TestPreCRMAttributePreservation:
             irb_exposures=pl.LazyFrame(),
             counterparty_lookup=CounterpartyLookup(
                 counterparties=counterparties,
-                parent_mappings=pl.LazyFrame(schema={
-                    "child_counterparty_reference": pl.String,
-                    "parent_counterparty_reference": pl.String,
-                }),
-                ultimate_parent_mappings=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "ultimate_parent_reference": pl.String,
-                    "hierarchy_depth": pl.Int32,
-                }),
-                rating_inheritance=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "cqs": pl.Int8,
-                    "pd": pl.Float64,
-                }),
+                parent_mappings=pl.LazyFrame(
+                    schema={
+                        "child_counterparty_reference": pl.String,
+                        "parent_counterparty_reference": pl.String,
+                    }
+                ),
+                ultimate_parent_mappings=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "ultimate_parent_reference": pl.String,
+                        "hierarchy_depth": pl.Int32,
+                    }
+                ),
+                rating_inheritance=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "cqs": pl.Int8,
+                        "pd": pl.Float64,
+                    }
+                ),
             ),
         )
 
@@ -99,26 +108,30 @@ class TestPreCRMAttributePreservation:
         crr_config: CalculationConfig,
     ) -> None:
         """Pre-CRM exposure class should be original classification."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["SA"],
-            "ead_pre_crm": [1_000_000.0],
-            "lgd": [0.45],
-            "cqs": [3],
-            "product_type": ["LOAN"],
-            # CCF-required columns
-            "drawn_amount": [1_000_000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "risk_type": [None],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["SA"],
+                "ead_pre_crm": [1_000_000.0],
+                "lgd": [0.45],
+                "cqs": [3],
+                "product_type": ["LOAN"],
+                # CCF-required columns
+                "drawn_amount": [1_000_000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "risk_type": [None],
+            }
+        )
 
-        counterparties = pl.LazyFrame({
-            "counterparty_reference": ["CP001"],
-            "entity_type": ["corporate"],
-        })
+        counterparties = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+            }
+        )
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
@@ -126,20 +139,26 @@ class TestPreCRMAttributePreservation:
             irb_exposures=pl.LazyFrame(),
             counterparty_lookup=CounterpartyLookup(
                 counterparties=counterparties,
-                parent_mappings=pl.LazyFrame(schema={
-                    "child_counterparty_reference": pl.String,
-                    "parent_counterparty_reference": pl.String,
-                }),
-                ultimate_parent_mappings=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "ultimate_parent_reference": pl.String,
-                    "hierarchy_depth": pl.Int32,
-                }),
-                rating_inheritance=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "cqs": pl.Int8,
-                    "pd": pl.Float64,
-                }),
+                parent_mappings=pl.LazyFrame(
+                    schema={
+                        "child_counterparty_reference": pl.String,
+                        "parent_counterparty_reference": pl.String,
+                    }
+                ),
+                ultimate_parent_mappings=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "ultimate_parent_reference": pl.String,
+                        "hierarchy_depth": pl.Int32,
+                    }
+                ),
+                rating_inheritance=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "cqs": pl.Int8,
+                        "pd": pl.Float64,
+                    }
+                ),
             ),
         )
 
@@ -159,39 +178,47 @@ class TestGuarantorExposureClassDerivation:
         crr_config: CalculationConfig,
     ) -> None:
         """Sovereign guarantor should map to SOVEREIGN exposure class."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["SA"],
-            "ead_pre_crm": [1_000_000.0],
-            "lgd": [0.45],
-            "cqs": [3],
-            "product_type": ["LOAN"],
-            # CCF-required columns
-            "drawn_amount": [1_000_000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "risk_type": [None],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["SA"],
+                "ead_pre_crm": [1_000_000.0],
+                "lgd": [0.45],
+                "cqs": [3],
+                "product_type": ["LOAN"],
+                # CCF-required columns
+                "drawn_amount": [1_000_000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "risk_type": [None],
+            }
+        )
 
-        counterparties = pl.LazyFrame({
-            "counterparty_reference": ["CP001", "GUAR001"],
-            "entity_type": ["corporate", "sovereign"],
-        })
+        counterparties = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "GUAR001"],
+                "entity_type": ["corporate", "sovereign"],
+            }
+        )
 
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],
-            "amount_covered": [600_000.0],
-            "percentage_covered": [None],
-            "guarantor": ["GUAR001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],
+                "amount_covered": [600_000.0],
+                "percentage_covered": [None],
+                "guarantor": ["GUAR001"],
+            }
+        )
 
-        rating_inheritance = pl.LazyFrame({
-            "counterparty_reference": ["CP001", "GUAR001"],
-            "cqs": [3, 1],
-            "pd": [0.01, 0.0001],
-        })
+        rating_inheritance = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "GUAR001"],
+                "cqs": [3, 1],
+                "pd": [0.01, 0.0001],
+            }
+        )
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
@@ -200,15 +227,19 @@ class TestGuarantorExposureClassDerivation:
             guarantees=guarantees,
             counterparty_lookup=CounterpartyLookup(
                 counterparties=counterparties,
-                parent_mappings=pl.LazyFrame(schema={
-                    "child_counterparty_reference": pl.String,
-                    "parent_counterparty_reference": pl.String,
-                }),
-                ultimate_parent_mappings=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "ultimate_parent_reference": pl.String,
-                    "hierarchy_depth": pl.Int32,
-                }),
+                parent_mappings=pl.LazyFrame(
+                    schema={
+                        "child_counterparty_reference": pl.String,
+                        "parent_counterparty_reference": pl.String,
+                    }
+                ),
+                ultimate_parent_mappings=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "ultimate_parent_reference": pl.String,
+                        "hierarchy_depth": pl.Int32,
+                    }
+                ),
                 rating_inheritance=rating_inheritance,
             ),
         )
@@ -226,39 +257,47 @@ class TestGuarantorExposureClassDerivation:
         crr_config: CalculationConfig,
     ) -> None:
         """Institution guarantor should map to INSTITUTION exposure class."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["SA"],
-            "ead_pre_crm": [1_000_000.0],
-            "lgd": [0.45],
-            "cqs": [3],
-            "product_type": ["LOAN"],
-            # CCF-required columns
-            "drawn_amount": [1_000_000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "risk_type": [None],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["SA"],
+                "ead_pre_crm": [1_000_000.0],
+                "lgd": [0.45],
+                "cqs": [3],
+                "product_type": ["LOAN"],
+                # CCF-required columns
+                "drawn_amount": [1_000_000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "risk_type": [None],
+            }
+        )
 
-        counterparties = pl.LazyFrame({
-            "counterparty_reference": ["CP001", "BANK001"],
-            "entity_type": ["corporate", "institution"],
-        })
+        counterparties = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "BANK001"],
+                "entity_type": ["corporate", "institution"],
+            }
+        )
 
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],
-            "amount_covered": [600_000.0],
-            "percentage_covered": [None],
-            "guarantor": ["BANK001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],
+                "amount_covered": [600_000.0],
+                "percentage_covered": [None],
+                "guarantor": ["BANK001"],
+            }
+        )
 
-        rating_inheritance = pl.LazyFrame({
-            "counterparty_reference": ["CP001", "BANK001"],
-            "cqs": [3, 2],
-            "pd": [0.01, 0.001],
-        })
+        rating_inheritance = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "BANK001"],
+                "cqs": [3, 2],
+                "pd": [0.01, 0.001],
+            }
+        )
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
@@ -267,15 +306,19 @@ class TestGuarantorExposureClassDerivation:
             guarantees=guarantees,
             counterparty_lookup=CounterpartyLookup(
                 counterparties=counterparties,
-                parent_mappings=pl.LazyFrame(schema={
-                    "child_counterparty_reference": pl.String,
-                    "parent_counterparty_reference": pl.String,
-                }),
-                ultimate_parent_mappings=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "ultimate_parent_reference": pl.String,
-                    "hierarchy_depth": pl.Int32,
-                }),
+                parent_mappings=pl.LazyFrame(
+                    schema={
+                        "child_counterparty_reference": pl.String,
+                        "parent_counterparty_reference": pl.String,
+                    }
+                ),
+                ultimate_parent_mappings=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "ultimate_parent_reference": pl.String,
+                        "hierarchy_depth": pl.Int32,
+                    }
+                ),
                 rating_inheritance=rating_inheritance,
             ),
         )
@@ -296,39 +339,47 @@ class TestPostCRMCompositeAttributes:
         crr_config: CalculationConfig,
     ) -> None:
         """is_guaranteed flag should be True for guaranteed exposures."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": ["CP001", "CP002"],
-            "exposure_class": ["CORPORATE", "CORPORATE"],
-            "approach": ["SA", "SA"],
-            "ead_pre_crm": [1_000_000.0, 500_000.0],
-            "lgd": [0.45, 0.45],
-            "cqs": [3, 3],
-            "product_type": ["LOAN", "LOAN"],
-            # CCF-required columns
-            "drawn_amount": [1_000_000.0, 500_000.0],
-            "undrawn_amount": [0.0, 0.0],
-            "nominal_amount": [0.0, 0.0],
-            "risk_type": [None, None],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": ["CP001", "CP002"],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "approach": ["SA", "SA"],
+                "ead_pre_crm": [1_000_000.0, 500_000.0],
+                "lgd": [0.45, 0.45],
+                "cqs": [3, 3],
+                "product_type": ["LOAN", "LOAN"],
+                # CCF-required columns
+                "drawn_amount": [1_000_000.0, 500_000.0],
+                "undrawn_amount": [0.0, 0.0],
+                "nominal_amount": [0.0, 0.0],
+                "risk_type": [None, None],
+            }
+        )
 
-        counterparties = pl.LazyFrame({
-            "counterparty_reference": ["CP001", "CP002", "GUAR001"],
-            "entity_type": ["corporate", "corporate", "sovereign"],
-        })
+        counterparties = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "CP002", "GUAR001"],
+                "entity_type": ["corporate", "corporate", "sovereign"],
+            }
+        )
 
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],  # Only EXP001 is guaranteed
-            "amount_covered": [600_000.0],
-            "percentage_covered": [None],
-            "guarantor": ["GUAR001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],  # Only EXP001 is guaranteed
+                "amount_covered": [600_000.0],
+                "percentage_covered": [None],
+                "guarantor": ["GUAR001"],
+            }
+        )
 
-        rating_inheritance = pl.LazyFrame({
-            "counterparty_reference": ["CP001", "CP002", "GUAR001"],
-            "cqs": [3, 3, 1],
-            "pd": [0.01, 0.01, 0.0001],
-        })
+        rating_inheritance = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "CP002", "GUAR001"],
+                "cqs": [3, 3, 1],
+                "pd": [0.01, 0.01, 0.0001],
+            }
+        )
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
@@ -337,15 +388,19 @@ class TestPostCRMCompositeAttributes:
             guarantees=guarantees,
             counterparty_lookup=CounterpartyLookup(
                 counterparties=counterparties,
-                parent_mappings=pl.LazyFrame(schema={
-                    "child_counterparty_reference": pl.String,
-                    "parent_counterparty_reference": pl.String,
-                }),
-                ultimate_parent_mappings=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "ultimate_parent_reference": pl.String,
-                    "hierarchy_depth": pl.Int32,
-                }),
+                parent_mappings=pl.LazyFrame(
+                    schema={
+                        "child_counterparty_reference": pl.String,
+                        "parent_counterparty_reference": pl.String,
+                    }
+                ),
+                ultimate_parent_mappings=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "ultimate_parent_reference": pl.String,
+                        "hierarchy_depth": pl.Int32,
+                    }
+                ),
                 rating_inheritance=rating_inheritance,
             ),
         )
@@ -363,26 +418,30 @@ class TestPostCRMCompositeAttributes:
         crr_config: CalculationConfig,
     ) -> None:
         """Non-guaranteed exposures have identical pre/post CRM attributes."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["SA"],
-            "ead_pre_crm": [1_000_000.0],
-            "lgd": [0.45],
-            "cqs": [3],
-            "product_type": ["LOAN"],
-            # CCF-required columns
-            "drawn_amount": [1_000_000.0],
-            "undrawn_amount": [0.0],
-            "nominal_amount": [0.0],
-            "risk_type": [None],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["SA"],
+                "ead_pre_crm": [1_000_000.0],
+                "lgd": [0.45],
+                "cqs": [3],
+                "product_type": ["LOAN"],
+                # CCF-required columns
+                "drawn_amount": [1_000_000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "risk_type": [None],
+            }
+        )
 
-        counterparties = pl.LazyFrame({
-            "counterparty_reference": ["CP001"],
-            "entity_type": ["corporate"],
-        })
+        counterparties = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+            }
+        )
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
@@ -390,20 +449,26 @@ class TestPostCRMCompositeAttributes:
             irb_exposures=pl.LazyFrame(),
             counterparty_lookup=CounterpartyLookup(
                 counterparties=counterparties,
-                parent_mappings=pl.LazyFrame(schema={
-                    "child_counterparty_reference": pl.String,
-                    "parent_counterparty_reference": pl.String,
-                }),
-                ultimate_parent_mappings=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "ultimate_parent_reference": pl.String,
-                    "hierarchy_depth": pl.Int32,
-                }),
-                rating_inheritance=pl.LazyFrame(schema={
-                    "counterparty_reference": pl.String,
-                    "cqs": pl.Int8,
-                    "pd": pl.Float64,
-                }),
+                parent_mappings=pl.LazyFrame(
+                    schema={
+                        "child_counterparty_reference": pl.String,
+                        "parent_counterparty_reference": pl.String,
+                    }
+                ),
+                ultimate_parent_mappings=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "ultimate_parent_reference": pl.String,
+                        "hierarchy_depth": pl.Int32,
+                    }
+                ),
+                rating_inheritance=pl.LazyFrame(
+                    schema={
+                        "counterparty_reference": pl.String,
+                        "cqs": pl.Int8,
+                        "pd": pl.Float64,
+                    }
+                ),
             ),
         )
 

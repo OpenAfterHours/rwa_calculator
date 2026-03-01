@@ -66,13 +66,15 @@ Regulatory reference documentation for RWA calculations under CRR and Basel 3.1.
 
 @app.cell
 def _(mo):
-    framework_tabs = mo.ui.tabs({
-        "Overview": "overview",
-        "CRR (Basel 3.0)": "crr",
-        "Basel 3.1": "basel31",
-        "Risk Weights": "rw",
-        "IRB Parameters": "irb",
-    })
+    framework_tabs = mo.ui.tabs(
+        {
+            "Overview": "overview",
+            "CRR (Basel 3.0)": "crr",
+            "Basel 3.1": "basel31",
+            "Risk Weights": "rw",
+            "IRB Parameters": "irb",
+        }
+    )
 
     mo.output.replace(framework_tabs)
     return (framework_tabs,)
@@ -81,7 +83,8 @@ def _(mo):
 @app.cell
 def _(framework_tabs, mo, pl):
     if framework_tabs.value == "overview":
-        mo.output.replace(mo.md("""
+        mo.output.replace(
+            mo.md("""
 ## Framework Overview
 
 ### Timeline
@@ -107,10 +110,12 @@ def _(framework_tabs, mo, pl):
 - **UK CRR**: [legislation.gov.uk](https://www.legislation.gov.uk/eur/2013/575/contents)
 - **PRA PS9/24**: [Bank of England](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
 - **BCBS Framework**: [bis.org](https://www.bis.org/basel_framework/)
-        """))
+        """)
+        )
 
     elif framework_tabs.value == "crr":
-        mo.output.replace(mo.md("""
+        mo.output.replace(
+            mo.md("""
 ## CRR (Basel 3.0) Framework
 
 ### Supporting Factors
@@ -159,10 +164,12 @@ Exposures to SMEs qualify for a reduction in capital requirements:
 | CIUs | Collective investment undertakings |
 | Equity | Equity holdings |
 | Other Items | Residual exposures |
-        """))
+        """)
+        )
 
     elif framework_tabs.value == "basel31":
-        mo.output.replace(mo.md("""
+        mo.output.replace(
+            mo.md("""
 ## Basel 3.1 Framework (PRA PS9/24)
 
 ### Key Changes from CRR
@@ -220,58 +227,100 @@ Exposures to SMEs qualify for a reduction in capital requirements:
 | Direct credit substitutes | 100% |
 | Trade-related contingencies | 20% |
 | Transaction-related contingencies | 50% |
-        """))
+        """)
+        )
 
     elif framework_tabs.value == "rw":
         # Risk weight tables
-        sa_rw_table = pl.DataFrame({
-            "Exposure Class": [
-                "Central Governments (AAA-AA)",
-                "Central Governments (A)",
-                "Central Governments (BBB)",
-                "Central Governments (BB)",
-                "Central Governments (B)",
-                "Central Governments (Below B)",
-                "Institutions (AAA-AA)",
-                "Institutions (A)",
-                "Institutions (BBB)",
-                "Institutions (BB)",
-                "Institutions (Below BB)",
-                "Corporates (AAA-AA)",
-                "Corporates (A)",
-                "Corporates (BBB)",
-                "Corporates (BB)",
-                "Corporates (Below BB)",
-                "Corporates (Unrated)",
-                "Retail",
-                "Residential Mortgage (LTV ≤ 80%)",
-                "Commercial Real Estate",
-                "Defaulted",
-            ],
-            "CRR RW": [
-                "0%", "20%", "50%", "100%", "100%", "150%",
-                "20%", "50%", "50%", "100%", "150%",
-                "20%", "50%", "100%", "100%", "150%", "100%",
-                "75%", "35%", "100%", "150%",
-            ],
-            "Basel 3.1 RW": [
-                "0%", "20%", "50%", "100%", "100%", "150%",
-                "20%", "30%", "50%", "100%", "150%",
-                "20%", "50%", "75%", "100%", "150%", "100%",
-                "75%", "45%*", "70-110%*", "100-150%",
-            ],
-        })
+        sa_rw_table = pl.DataFrame(
+            {
+                "Exposure Class": [
+                    "Central Governments (AAA-AA)",
+                    "Central Governments (A)",
+                    "Central Governments (BBB)",
+                    "Central Governments (BB)",
+                    "Central Governments (B)",
+                    "Central Governments (Below B)",
+                    "Institutions (AAA-AA)",
+                    "Institutions (A)",
+                    "Institutions (BBB)",
+                    "Institutions (BB)",
+                    "Institutions (Below BB)",
+                    "Corporates (AAA-AA)",
+                    "Corporates (A)",
+                    "Corporates (BBB)",
+                    "Corporates (BB)",
+                    "Corporates (Below BB)",
+                    "Corporates (Unrated)",
+                    "Retail",
+                    "Residential Mortgage (LTV ≤ 80%)",
+                    "Commercial Real Estate",
+                    "Defaulted",
+                ],
+                "CRR RW": [
+                    "0%",
+                    "20%",
+                    "50%",
+                    "100%",
+                    "100%",
+                    "150%",
+                    "20%",
+                    "50%",
+                    "50%",
+                    "100%",
+                    "150%",
+                    "20%",
+                    "50%",
+                    "100%",
+                    "100%",
+                    "150%",
+                    "100%",
+                    "75%",
+                    "35%",
+                    "100%",
+                    "150%",
+                ],
+                "Basel 3.1 RW": [
+                    "0%",
+                    "20%",
+                    "50%",
+                    "100%",
+                    "100%",
+                    "150%",
+                    "20%",
+                    "30%",
+                    "50%",
+                    "100%",
+                    "150%",
+                    "20%",
+                    "50%",
+                    "75%",
+                    "100%",
+                    "150%",
+                    "100%",
+                    "75%",
+                    "45%*",
+                    "70-110%*",
+                    "100-150%",
+                ],
+            }
+        )
 
         mo.output.replace(
-            mo.vstack([
-                mo.md("## Standardised Approach Risk Weights"),
-                mo.md("*Note: Basel 3.1 values marked with * are dependent on LTV or other conditions*"),
-                mo.ui.table(sa_rw_table, selection=None),
-            ])
+            mo.vstack(
+                [
+                    mo.md("## Standardised Approach Risk Weights"),
+                    mo.md(
+                        "*Note: Basel 3.1 values marked with * are dependent on LTV or other conditions*"
+                    ),
+                    mo.ui.table(sa_rw_table, selection=None),
+                ]
+            )
         )
 
     elif framework_tabs.value == "irb":
-        mo.output.replace(mo.md("""
+        mo.output.replace(
+            mo.md("""
 ## IRB Parameters
 
 ### PD Floors
@@ -334,7 +383,8 @@ Where:
 - R = Asset correlation
 - PD = Probability of default
 - LGD = Loss given default
-        """))
+        """)
+        )
     return
 
 

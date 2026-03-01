@@ -15,7 +15,6 @@ import pytest
 
 from rwa_calc.engine import HierarchyLazyFrame  # noqa: F401
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -24,58 +23,70 @@ from rwa_calc.engine import HierarchyLazyFrame  # noqa: F401
 @pytest.fixture
 def counterparties() -> pl.LazyFrame:
     """Return basic counterparty data."""
-    return pl.LazyFrame({
-        "counterparty_reference": ["CP001", "CP002", "CP003", "CP004"],
-    })
+    return pl.LazyFrame(
+        {
+            "counterparty_reference": ["CP001", "CP002", "CP003", "CP004"],
+        }
+    )
 
 
 @pytest.fixture
 def org_mappings() -> pl.LazyFrame:
     """Return organization hierarchy mappings."""
-    return pl.LazyFrame({
-        "child_counterparty_reference": ["CP002", "CP003", "CP004"],
-        "parent_counterparty_reference": ["CP001", "CP001", "CP002"],
-    })
+    return pl.LazyFrame(
+        {
+            "child_counterparty_reference": ["CP002", "CP003", "CP004"],
+            "parent_counterparty_reference": ["CP001", "CP001", "CP002"],
+        }
+    )
 
 
 @pytest.fixture
 def ratings() -> pl.LazyFrame:
     """Return rating data."""
-    return pl.LazyFrame({
-        "counterparty_reference": ["CP001", "CP003"],
-        "cqs": [1, 3],
-        "pd": [0.001, 0.01],
-        "rating_value": ["AAA", "BBB"],
-    })
+    return pl.LazyFrame(
+        {
+            "counterparty_reference": ["CP001", "CP003"],
+            "cqs": [1, 3],
+            "pd": [0.001, 0.01],
+            "rating_value": ["AAA", "BBB"],
+        }
+    )
 
 
 @pytest.fixture
 def exposures() -> pl.LazyFrame:
     """Return exposure data."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001", "EXP002"],
-        "counterparty_reference": ["CP001", "CP002"],
-        "drawn_amount": [1_000_000.0, 500_000.0],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002"],
+            "counterparty_reference": ["CP001", "CP002"],
+            "drawn_amount": [1_000_000.0, 500_000.0],
+        }
+    )
 
 
 @pytest.fixture
 def lending_mappings() -> pl.LazyFrame:
     """Return lending group mappings."""
-    return pl.LazyFrame({
-        "parent_counterparty_reference": ["CP001"],
-        "child_counterparty_reference": ["CP002"],
-    })
+    return pl.LazyFrame(
+        {
+            "parent_counterparty_reference": ["CP001"],
+            "child_counterparty_reference": ["CP002"],
+        }
+    )
 
 
 @pytest.fixture
 def collateral() -> pl.LazyFrame:
     """Return collateral with LTV."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL001", "COLL002"],
-        "beneficiary_reference": ["EXP001", "EXP002"],
-        "property_ltv": [0.65, 0.85],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL001", "COLL002"],
+            "beneficiary_reference": ["EXP001", "EXP002"],
+            "property_ltv": [0.65, 0.85],
+        }
+    )
 
 
 # =============================================================================
@@ -202,10 +213,12 @@ class TestInheritRatings:
         """Unrated entity should inherit from ultimate parent."""
         # First resolve parents
         with_parents = counterparties.hierarchy.resolve_ultimate_parent(org_mappings)
-        ultimate_parents = with_parents.select([
-            pl.col("counterparty_reference"),
-            pl.col("ultimate_parent_reference"),
-        ])
+        ultimate_parents = with_parents.select(
+            [
+                pl.col("counterparty_reference"),
+                pl.col("ultimate_parent_reference"),
+            ]
+        )
 
         result = counterparties.hierarchy.inherit_ratings(
             ratings,
@@ -260,10 +273,12 @@ class TestAddCollateralLTV:
         collateral: pl.LazyFrame,
     ) -> None:
         """Should add LTV from collateral."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": ["CP001", "CP002"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": ["CP001", "CP002"],
+            }
+        )
 
         result = exposures.hierarchy.add_collateral_ltv(collateral).collect()
 
@@ -274,9 +289,11 @@ class TestAddCollateralLTV:
         collateral: pl.LazyFrame,
     ) -> None:
         """LTV values should match collateral."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+            }
+        )
 
         result = exposures.hierarchy.add_collateral_ltv(collateral).collect()
 

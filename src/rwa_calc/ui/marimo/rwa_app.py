@@ -25,12 +25,13 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    import marimo as mo
-    import polars as pl
     import sys
-    from pathlib import Path
     from datetime import date
     from decimal import Decimal
+    from pathlib import Path
+
+    import marimo as mo
+    import polars as pl
 
     project_root = Path(__file__).parent.parent.parent.parent.parent
     if str(project_root) not in sys.path:
@@ -90,10 +91,12 @@ def _(mo, project_root):
     )
 
     mo.output.replace(
-        mo.vstack([
-            mo.md("### Data Configuration"),
-            data_path_input,
-        ])
+        mo.vstack(
+            [
+                mo.md("### Data Configuration"),
+                data_path_input,
+            ]
+        )
     )
     return (data_path_input,)
 
@@ -125,11 +128,15 @@ def _(mo):
     )
 
     mo.output.replace(
-        mo.hstack([
-            framework_dropdown,
-            format_dropdown,
-            irb_approach_dropdown,
-        ], justify="start", gap=2)
+        mo.hstack(
+            [
+                framework_dropdown,
+                format_dropdown,
+                irb_approach_dropdown,
+            ],
+            justify="start",
+            gap=2,
+        )
     )
     return (format_dropdown, framework_dropdown, irb_approach_dropdown)
 
@@ -176,7 +183,11 @@ def _(Path, data_path_input, format_dropdown, mo):
         )
     elif validation_result:
         missing = ", ".join(validation_result.files_missing[:3])
-        more = f" (+{len(validation_result.files_missing) - 3} more)" if len(validation_result.files_missing) > 3 else ""
+        more = (
+            f" (+{len(validation_result.files_missing) - 3} more)"
+            if len(validation_result.files_missing) > 3
+            else ""
+        )
         validation_status = mo.callout(
             f"Missing files: {missing}{more}",
             kind="danger",
@@ -215,8 +226,9 @@ def _(
     reporting_date_input,
     run_button,
 ):
-    from rwa_calc.api import RWAService, CalculationRequest
     from datetime import date as date_type
+
+    from rwa_calc.api import CalculationRequest, RWAService
 
     calculation_response = None
     calculation_error = None
@@ -246,11 +258,15 @@ def _(
         mo.output.replace(mo.callout(f"Calculation failed: {calculation_error}", kind="danger"))
     elif run_button.value and calculation_response and not calculation_response.success:
         error_msgs = [e.message for e in calculation_response.errors[:3]]
-        mo.output.replace(mo.callout(f"Calculation completed with errors: {'; '.join(error_msgs)}", kind="warn"))
+        mo.output.replace(
+            mo.callout(f"Calculation completed with errors: {'; '.join(error_msgs)}", kind="warn")
+        )
     elif run_button.value and calculation_response and calculation_response.success:
         mo.output.replace(
             mo.callout(
-                mo.md(f"Calculation completed successfully! [Open Results Explorer](/results) to analyze."),
+                mo.md(
+                    "Calculation completed successfully! [Open Results Explorer](/results) to analyze."
+                ),
                 kind="success",
             )
         )
@@ -268,7 +284,8 @@ def _(Decimal, calculation_response, mo):
         def fmt_pct(val: Decimal | float) -> str:
             return f"{float(val) * 100:.2f}%"
 
-        mo.output.replace(mo.md(f"""
+        mo.output.replace(
+            mo.md(f"""
 ## Summary Statistics
 
 | Metric | Value |
@@ -285,9 +302,12 @@ def _(Decimal, calculation_response, mo):
 | **Slotting RWA** | {fmt_num(summary.total_rwa_slotting)} |
 | **Floor Applied** | {"Yes" if summary.floor_applied else "No"} |
 | **Floor Impact** | {fmt_num(summary.floor_impact)} |
-        """))
+        """)
+        )
     elif calculation_response:
-        mo.output.replace(mo.md("## Summary Statistics\n\n*Calculation did not complete successfully.*"))
+        mo.output.replace(
+            mo.md("## Summary Statistics\n\n*Calculation did not complete successfully.*")
+        )
     return
 
 
@@ -295,23 +315,30 @@ def _(Decimal, calculation_response, mo):
 def _(calculation_response, mo):
     if calculation_response and calculation_response.performance:
         perf = calculation_response.performance
-        mo.output.replace(mo.md(f"""
+        mo.output.replace(
+            mo.md(f"""
 ### Performance
 
 - **Duration**: {perf.duration_seconds:.2f} seconds
 - **Throughput**: {perf.exposures_per_second:,.0f} exposures/second
-        """))
+        """)
+        )
     return
 
 
 @app.cell
 def _(calculation_response, mo):
-    if calculation_response and calculation_response.success and calculation_response.summary.exposure_count > 0:
+    if (
+        calculation_response
+        and calculation_response.success
+        and calculation_response.summary.exposure_count > 0
+    ):
         results_lf = calculation_response.scan_results()
         all_cols = results_lf.collect_schema().names()
 
         display_cols = [
-            col for col in [
+            col
+            for col in [
                 "exposure_reference",
                 "exposure_class",
                 "post_crm_exposure_class_guaranteed",
@@ -320,17 +347,20 @@ def _(calculation_response, mo):
                 "ead_final",
                 "risk_weight",
                 "rwa_final",
-            ] if col in all_cols
+            ]
+            if col in all_cols
         ]
 
         if display_cols:
             display_df = results_lf.select(display_cols).head(100).collect()
             mo.output.replace(
-                mo.vstack([
-                    mo.md("## Results Preview (first 100 rows)"),
-                    mo.md("*For full analysis, use the [Results Explorer](/results)*"),
-                    mo.ui.table(display_df, selection=None),
-                ])
+                mo.vstack(
+                    [
+                        mo.md("## Results Preview (first 100 rows)"),
+                        mo.md("*For full analysis, use the [Results Explorer](/results)*"),
+                        mo.ui.table(display_df, selection=None),
+                    ]
+                )
             )
     elif calculation_response:
         mo.output.replace(mo.md("## Detailed Results\n\n*No results to display.*"))
@@ -348,28 +378,30 @@ def _(calculation_response, mo):
         output_parts = []
 
         if error_list:
-            error_items = "\n".join([
-                f"- **[{e.code}]** {e.message}"
-                for e in error_list[:10]
-            ])
-            more_errors = f"\n\n*({len(error_list) - 10} more errors)*" if len(error_list) > 10 else ""
-            output_parts.append(mo.md(f"""
+            error_items = "\n".join([f"- **[{e.code}]** {e.message}" for e in error_list[:10]])
+            more_errors = (
+                f"\n\n*({len(error_list) - 10} more errors)*" if len(error_list) > 10 else ""
+            )
+            output_parts.append(
+                mo.md(f"""
 ### Errors ({len(error_list)})
 
 {error_items}{more_errors}
-            """))
+            """)
+            )
 
         if warnings:
-            warning_items = "\n".join([
-                f"- **[{e.code}]** {e.message}"
-                for e in warnings[:10]
-            ])
-            more_warnings = f"\n\n*({len(warnings) - 10} more warnings)*" if len(warnings) > 10 else ""
-            output_parts.append(mo.md(f"""
+            warning_items = "\n".join([f"- **[{e.code}]** {e.message}" for e in warnings[:10]])
+            more_warnings = (
+                f"\n\n*({len(warnings) - 10} more warnings)*" if len(warnings) > 10 else ""
+            )
+            output_parts.append(
+                mo.md(f"""
 ### Warnings ({len(warnings)})
 
 {warning_items}{more_warnings}
-            """))
+            """)
+            )
 
         if output_parts:
             mo.output.replace(mo.vstack(output_parts))
@@ -378,19 +410,26 @@ def _(calculation_response, mo):
 
 @app.cell
 def _(calculation_response, mo):
-    if calculation_response and calculation_response.success and calculation_response.summary.exposure_count > 0:
+    if (
+        calculation_response
+        and calculation_response.success
+        and calculation_response.summary.exposure_count > 0
+    ):
+
         def _make_csv() -> bytes:
             return calculation_response.scan_results().collect().write_csv().encode("utf-8")
 
         mo.output.replace(
-            mo.vstack([
-                mo.md("### Export Results"),
-                mo.download(
-                    data=_make_csv,
-                    filename="rwa_results.csv",
-                    label="Download CSV",
-                ),
-            ])
+            mo.vstack(
+                [
+                    mo.md("### Export Results"),
+                    mo.download(
+                        data=_make_csv,
+                        filename="rwa_results.csv",
+                        label="Download CSV",
+                    ),
+                ]
+            )
         )
     return
 

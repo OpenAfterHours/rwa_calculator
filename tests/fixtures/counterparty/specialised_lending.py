@@ -33,8 +33,9 @@ Scenarios (fixtures use 5yr maturity, i.e. >=2.5yr):
     E4: HVCRE Strong - £5m = £4.75m RWA (95% RW)
 """
 
-import polars as pl
 from pathlib import Path
+
+import polars as pl
 
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 

@@ -109,10 +109,7 @@ class LazyFrameResult:
     @property
     def has_errors(self) -> bool:
         """Check if any errors (not warnings) occurred."""
-        return any(
-            e.severity in (ErrorSeverity.ERROR, ErrorSeverity.CRITICAL)
-            for e in self.errors
-        )
+        return any(e.severity in (ErrorSeverity.ERROR, ErrorSeverity.CRITICAL) for e in self.errors)
 
     @property
     def has_critical_errors(self) -> bool:
@@ -135,9 +132,7 @@ class LazyFrameResult:
 
     def errors_by_exposure(self, exposure_reference: str) -> list[CalculationError]:
         """Get all errors for a specific exposure."""
-        return [
-            e for e in self.errors if e.exposure_reference == exposure_reference
-        ]
+        return [e for e in self.errors if e.exposure_reference == exposure_reference]
 
     def add_error(self, error: CalculationError) -> None:
         """Add an error to the result."""

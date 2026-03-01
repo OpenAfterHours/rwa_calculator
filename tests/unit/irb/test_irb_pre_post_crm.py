@@ -9,13 +9,12 @@ Tests the implementation of Tasks 4.2-4.6 from the pre-post-crm-counterparty-pla
 """
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig
 import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
+from rwa_calc.contracts.config import CalculationConfig
 
 
 @pytest.fixture
@@ -29,20 +28,22 @@ class TestIRBPreCRMTracking:
 
     def test_firb_guarantee_preserves_irb_original_rwa(self, crr_config: CalculationConfig) -> None:
         """F-IRB should preserve rwa_irb_original before guarantee substitution."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [500_000.0],  # Original IRB RWA
-            "risk_weight": [0.50],  # Original IRB RW
-            "guaranteed_portion": [1_000_000.0],
-            "unguaranteed_portion": [0.0],
-            "guarantor_entity_type": ["sovereign"],
-            "guarantor_cqs": [1],  # 0% RW
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],  # Original IRB RWA
+                "risk_weight": [0.50],  # Original IRB RW
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],  # 0% RW
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
@@ -55,20 +56,22 @@ class TestIRBPreCRMTracking:
 
     def test_firb_guarantee_uses_sa_rw_for_guarantor(self, crr_config: CalculationConfig) -> None:
         """F-IRB guaranteed portion should use guarantor's SA risk weight."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [500_000.0],  # Original 50% RW
-            "risk_weight": [0.50],
-            "guaranteed_portion": [1_000_000.0],  # Fully guaranteed
-            "unguaranteed_portion": [0.0],
-            "guarantor_entity_type": ["sovereign"],
-            "guarantor_cqs": [1],  # CQS 1 sovereign = 0%
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],  # Original 50% RW
+                "risk_weight": [0.50],
+                "guaranteed_portion": [1_000_000.0],  # Fully guaranteed
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],  # CQS 1 sovereign = 0%
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
@@ -84,20 +87,22 @@ class TestIRBGuaranteeBeneficialCheck:
 
     def test_non_beneficial_guarantee_not_applied(self, crr_config: CalculationConfig) -> None:
         """Guarantee should not be applied if guarantor RW >= borrower RW."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.001],  # Very low PD
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [100_000.0],  # IRB RWA = 10% RW
-            "risk_weight": [0.10],  # Low IRB RW due to good credit
-            "guaranteed_portion": [1_000_000.0],
-            "unguaranteed_portion": [0.0],
-            "guarantor_entity_type": ["institution"],
-            "guarantor_cqs": [2],  # UK: 30% RW, higher than borrower's 10%
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.001],  # Very low PD
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [100_000.0],  # IRB RWA = 10% RW
+                "risk_weight": [0.10],  # Low IRB RW due to good credit
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["institution"],
+                "guarantor_cqs": [2],  # UK: 30% RW, higher than borrower's 10%
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
@@ -110,20 +115,22 @@ class TestIRBGuaranteeBeneficialCheck:
 
     def test_non_beneficial_guarantee_status_tracked(self, crr_config: CalculationConfig) -> None:
         """guarantee_status should be GUARANTEE_NOT_APPLIED_NON_BENEFICIAL when skipped."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.001],
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [50_000.0],  # IRB RWA = 5% RW
-            "risk_weight": [0.05],  # Very low IRB RW
-            "guaranteed_portion": [1_000_000.0],
-            "unguaranteed_portion": [0.0],
-            "guarantor_entity_type": ["corporate"],
-            "guarantor_cqs": [3],  # 100% RW, much higher than borrower's 5%
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.001],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [50_000.0],  # IRB RWA = 5% RW
+                "risk_weight": [0.05],  # Very low IRB RW
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["corporate"],
+                "guarantor_cqs": [3],  # 100% RW, much higher than borrower's 5%
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
@@ -134,20 +141,22 @@ class TestIRBGuaranteeBeneficialCheck:
 
     def test_beneficial_guarantee_applied(self, crr_config: CalculationConfig) -> None:
         """Guarantee should be applied when guarantor RW < borrower RW."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.05],  # High PD
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [800_000.0],  # IRB RWA = 80% RW
-            "risk_weight": [0.80],  # High IRB RW
-            "guaranteed_portion": [1_000_000.0],
-            "unguaranteed_portion": [0.0],
-            "guarantor_entity_type": ["institution"],
-            "guarantor_cqs": [1],  # 20% RW, lower than borrower's 80%
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.05],  # High PD
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [800_000.0],  # IRB RWA = 80% RW
+                "risk_weight": [0.80],  # High IRB RW
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["institution"],
+                "guarantor_cqs": [1],  # 20% RW, lower than borrower's 80%
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
@@ -163,42 +172,48 @@ class TestIRBGuaranteeMethodTracking:
 
     def test_irb_guarantee_method_tracked(self, crr_config: CalculationConfig) -> None:
         """guarantee_method_used column should indicate which method was applied."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [500_000.0],
-            "risk_weight": [0.50],
-            "guaranteed_portion": [1_000_000.0],
-            "unguaranteed_portion": [0.0],
-            "guarantor_entity_type": ["sovereign"],
-            "guarantor_cqs": [1],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],
+                "risk_weight": [0.50],
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
         assert "guarantee_method_used" in result.columns
         assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"
 
-    def test_no_guarantee_method_tracked_as_no_substitution(self, crr_config: CalculationConfig) -> None:
+    def test_no_guarantee_method_tracked_as_no_substitution(
+        self, crr_config: CalculationConfig
+    ) -> None:
         """No guarantee should result in NO_SUBSTITUTION method."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [500_000.0],
-            "risk_weight": [0.50],
-            "guaranteed_portion": [0.0],  # No guarantee
-            "unguaranteed_portion": [1_000_000.0],
-            "guarantor_entity_type": [None],
-            "guarantor_cqs": [None],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],
+                "risk_weight": [0.50],
+                "guaranteed_portion": [0.0],  # No guarantee
+                "unguaranteed_portion": [1_000_000.0],
+                "guarantor_entity_type": [None],
+                "guarantor_cqs": [None],
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
@@ -211,20 +226,22 @@ class TestIRBPartialGuarantee:
 
     def test_partial_guarantee_blends_rwa(self, crr_config: CalculationConfig) -> None:
         """Partial guarantee should blend IRB RWA with SA RWA proportionally."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [500_000.0],  # 50% IRB RW
-            "risk_weight": [0.50],
-            "guaranteed_portion": [600_000.0],  # 60% guaranteed
-            "unguaranteed_portion": [400_000.0],  # 40% unguaranteed
-            "guarantor_entity_type": ["sovereign"],
-            "guarantor_cqs": [1],  # 0% RW for guarantor
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],  # 50% IRB RW
+                "risk_weight": [0.50],
+                "guaranteed_portion": [600_000.0],  # 60% guaranteed
+                "unguaranteed_portion": [400_000.0],  # 40% unguaranteed
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],  # 0% RW for guarantor
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
@@ -239,20 +256,22 @@ class TestIRBPartialGuarantee:
 
     def test_partial_guarantee_rw_benefit_calculated(self, crr_config: CalculationConfig) -> None:
         """Guarantee benefit should be calculated for partial guarantees."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "pd": [0.01],
-            "lgd": [0.45],
-            "ead_final": [1_000_000.0],
-            "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
-            "rwa": [500_000.0],
-            "risk_weight": [0.50],
-            "guaranteed_portion": [1_000_000.0],
-            "unguaranteed_portion": [0.0],
-            "guarantor_entity_type": ["sovereign"],
-            "guarantor_cqs": [1],  # 0% RW
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],
+                "risk_weight": [0.50],
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],  # 0% RW
+            }
+        )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 

@@ -30,14 +30,11 @@ import pytest
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.contracts.errors import LazyFrameResult
-from rwa_calc.engine.equity import EquityCalculator, create_equity_calculator
 from rwa_calc.data.tables.crr_equity_rw import (
-    SA_EQUITY_RISK_WEIGHTS,
-    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
-    lookup_equity_rw,
     get_equity_rw_table,
+    lookup_equity_rw,
 )
-
+from rwa_calc.engine.equity import EquityCalculator, create_equity_calculator
 
 # =============================================================================
 # FIXTURES
@@ -461,13 +458,15 @@ class TestEquityBundleProcessing:
         sa_config: CalculationConfig,
     ):
         """Calculate method returns LazyFrameResult."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "listed",
-                "fair_value": 1_000_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "listed",
+                    "fair_value": 1_000_000.0,
+                },
+            ]
+        )
         result = equity_calculator.calculate(bundle, sa_config)
         assert isinstance(result, LazyFrameResult)
         assert result.frame is not None
@@ -478,18 +477,20 @@ class TestEquityBundleProcessing:
         sa_config: CalculationConfig,
     ):
         """Multiple equity exposures are processed correctly."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "listed",
-                "fair_value": 1_000_000.0,
-            },
-            {
-                "exposure_reference": "EQ002",
-                "equity_type": "unlisted",
-                "fair_value": 500_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "listed",
+                    "fair_value": 1_000_000.0,
+                },
+                {
+                    "exposure_reference": "EQ002",
+                    "equity_type": "unlisted",
+                    "fair_value": 500_000.0,
+                },
+            ]
+        )
         result = equity_calculator.calculate(bundle, sa_config)
         df = result.frame.collect()
         assert len(df) == 2
@@ -526,13 +527,15 @@ class TestEquityBundleProcessing:
         sa_config: CalculationConfig,
     ):
         """get_equity_result_bundle returns EquityResultBundle."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "listed",
-                "fair_value": 1_000_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "listed",
+                    "fair_value": 1_000_000.0,
+                },
+            ]
+        )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         assert isinstance(result, EquityResultBundle)
         assert result.results is not None
@@ -653,9 +656,13 @@ class TestEquityRiskWeightTables:
     def test_lookup_equity_rw_diversified(self):
         """lookup_equity_rw handles is_diversified flag."""
         # Diversified private equity gets 190% under IRB Simple
-        assert lookup_equity_rw("private_equity", "irb_simple", is_diversified=True) == Decimal("1.90")
+        assert lookup_equity_rw("private_equity", "irb_simple", is_diversified=True) == Decimal(
+            "1.90"
+        )
         # Non-diversified private equity gets 370%
-        assert lookup_equity_rw("private_equity", "irb_simple", is_diversified=False) == Decimal("3.70")
+        assert lookup_equity_rw("private_equity", "irb_simple", is_diversified=False) == Decimal(
+            "3.70"
+        )
 
     def test_get_equity_rw_table_sa(self):
         """get_equity_rw_table returns correct SA DataFrame."""
@@ -686,13 +693,15 @@ class TestEquityEdgeCases:
         sa_config: CalculationConfig,
     ):
         """Equity type matching is case-insensitive."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "LISTED",
-                "fair_value": 1_000_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "LISTED",
+                    "fair_value": 1_000_000.0,
+                },
+            ]
+        )
         result = equity_calculator.calculate(bundle, sa_config)
         df = result.frame.collect()
         assert df["risk_weight"][0] == pytest.approx(1.00)
@@ -703,13 +712,15 @@ class TestEquityEdgeCases:
         sa_config: CalculationConfig,
     ):
         """Unknown equity type defaults to 'other' (250% SA)."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "unknown_type",
-                "fair_value": 1_000_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "unknown_type",
+                    "fair_value": 1_000_000.0,
+                },
+            ]
+        )
         result = equity_calculator.calculate(bundle, sa_config)
         df = result.frame.collect()
         assert df["risk_weight"][0] == pytest.approx(2.50)
@@ -733,14 +744,16 @@ class TestEquityEdgeCases:
         sa_config: CalculationConfig,
     ):
         """Calculator uses fair_value column for EAD."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "listed",
-                "fair_value": 1_000_000.0,
-                "carrying_value": 900_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "listed",
+                    "fair_value": 1_000_000.0,
+                    "carrying_value": 900_000.0,
+                },
+            ]
+        )
         result = equity_calculator.calculate(bundle, sa_config)
         df = result.frame.collect()
         # Should use fair_value (1m), not carrying_value (0.9m)
@@ -753,13 +766,15 @@ class TestEquityEdgeCases:
         sa_config: CalculationConfig,
     ):
         """Calculator falls back to carrying_value when fair_value is missing."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "listed",
-                "carrying_value": 900_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "listed",
+                    "carrying_value": 900_000.0,
+                },
+            ]
+        )
         result = equity_calculator.calculate(bundle, sa_config)
         df = result.frame.collect()
         assert df["ead_final"][0] == pytest.approx(900_000)
@@ -779,13 +794,15 @@ class TestEquityAuditTrail:
         sa_config: CalculationConfig,
     ):
         """Audit trail contains calculation details."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "listed",
-                "fair_value": 1_000_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "listed",
+                    "fair_value": 1_000_000.0,
+                },
+            ]
+        )
         result_bundle = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         audit_df = result_bundle.calculation_audit.collect()
 
@@ -801,13 +818,15 @@ class TestEquityAuditTrail:
         irb_config: CalculationConfig,
     ):
         """Audit trail shows IRB Simple approach when applicable."""
-        bundle = create_equity_bundle([
-            {
-                "exposure_reference": "EQ001",
-                "equity_type": "exchange_traded",
-                "fair_value": 1_000_000.0,
-            },
-        ])
+        bundle = create_equity_bundle(
+            [
+                {
+                    "exposure_reference": "EQ001",
+                    "equity_type": "exchange_traded",
+                    "fair_value": 1_000_000.0,
+                },
+            ]
+        )
         result_bundle = equity_calculator.get_equity_result_bundle(bundle, irb_config)
         audit_df = result_bundle.calculation_audit.collect()
 

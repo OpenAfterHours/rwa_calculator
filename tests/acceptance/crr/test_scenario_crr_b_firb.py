@@ -34,15 +34,14 @@ Regulatory References:
 
 from __future__ import annotations
 
-import pytest
-import polars as pl
 from typing import Any
 
+import polars as pl
+import pytest
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     get_result_for_exposure,
 )
-
 
 # Mapping of scenario IDs to exposure references in fixtures
 SCENARIO_EXPOSURE_MAP = {
@@ -238,9 +237,7 @@ class TestCRRGroupB_FoundationIRB:
         )
         # Verify SME supporting factor is applied (< 1.0)
         sf = result.get("supporting_factor", 1.0)
-        assert sf < 1.0, (
-            f"CRR-B5: SME supporting factor should be < 1.0, got {sf}"
-        )
+        assert sf < 1.0, f"CRR-B5: SME supporting factor should be < 1.0, got {sf}"
 
     def test_crr_b6_pd_floor_binding(
         self,
@@ -342,9 +339,7 @@ class TestCRRGroupB_ParameterizedValidation:
         valid_lgds = {0.45, 0.75, 0.225, 0.0, 0.35, 0.40}
         for scenario in crr_b_scenarios:
             lgd = scenario["lgd"]
-            assert lgd is not None, (
-                f"Scenario {scenario['scenario_id']} missing LGD"
-            )
+            assert lgd is not None, f"Scenario {scenario['scenario_id']} missing LGD"
             assert lgd in valid_lgds, (
                 f"Scenario {scenario['scenario_id']}: LGD {lgd:.4f} is not a "
                 f"valid F-IRB supervisory LGD"
@@ -378,8 +373,7 @@ class TestCRRGroupB_ParameterizedValidation:
         """Verify B5 (SME) has supporting factor < 1.0."""
         b5 = expected_outputs_dict["CRR-B5"]
         assert b5["supporting_factor"] < 1.0, (
-            f"CRR-B5 should have SME supporting factor < 1.0, "
-            f"got {b5['supporting_factor']}"
+            f"CRR-B5 should have SME supporting factor < 1.0, got {b5['supporting_factor']}"
         )
         assert b5["rwa_after_sf"] < b5["rwa_before_sf"], (
             "CRR-B5: RWA after SF should be less than before SF"

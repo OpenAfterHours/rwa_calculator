@@ -15,7 +15,6 @@ from rwa_calc.contracts.config import (
     LGDFloors,
     OutputFloorConfig,
     PDFloors,
-    RetailThresholds,
     SupportingFactors,
 )
 from rwa_calc.domain.enums import (
@@ -57,8 +56,12 @@ class TestPDFloors:
 
         assert floors.get_floor(ExposureClass.CORPORATE) == Decimal("0.0005")
         assert floors.get_floor(ExposureClass.RETAIL_MORTGAGE) == Decimal("0.0005")
-        assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=True) == Decimal("0.0003")
-        assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=False) == Decimal("0.0010")
+        assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=True) == Decimal(
+            "0.0003"
+        )
+        assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=False) == Decimal(
+            "0.0010"
+        )
 
     def test_pd_floors_immutable(self):
         """PDFloors should be immutable (frozen dataclass)."""

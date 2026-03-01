@@ -17,7 +17,8 @@
       "WebFetch(domain:eur-lex.europa.eu)",
       "Bash(find:*)",
       "mcp__polars-mcp__polars_get_docstring",
-      "mcp__polars-mcp__polars_search_api"
+      "mcp__polars-mcp__polars_search_api",
+      "Edit(/tmp/**)"
     ]
   },
   "enableAllProjectMcpServers": true,
@@ -26,6 +27,7 @@
   ],
   "sandbox": {
     "enabled": true,
-    "autoAllowBashIfSandboxed": true
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false
   }
 }

@@ -224,59 +224,57 @@ class SlottingLazyFrame:
         is_hvcre = pl.col("is_hvcre")
         is_short = pl.col("is_short_maturity")
 
-        return self._lf.with_columns([
-            # Non-HVCRE, >= 2.5yr
-            pl.when(~is_hvcre & ~is_short & (cat == "strong"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS["strong"]))
-            .when(~is_hvcre & ~is_short & (cat == "good"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS["good"]))
-            .when(~is_hvcre & ~is_short & (cat == "satisfactory"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
-            .when(~is_hvcre & ~is_short & (cat == "weak"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS["weak"]))
-            .when(~is_hvcre & ~is_short & (cat == "default"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS["default"]))
-
-            # Non-HVCRE, < 2.5yr
-            .when(~is_hvcre & is_short & (cat == "strong"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["strong"]))
-            .when(~is_hvcre & is_short & (cat == "good"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["good"]))
-            .when(~is_hvcre & is_short & (cat == "satisfactory"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["satisfactory"]))
-            .when(~is_hvcre & is_short & (cat == "weak"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["weak"]))
-            .when(~is_hvcre & is_short & (cat == "default"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["default"]))
-
-            # HVCRE, >= 2.5yr
-            .when(is_hvcre & ~is_short & (cat == "strong"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["strong"]))
-            .when(is_hvcre & ~is_short & (cat == "good"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["good"]))
-            .when(is_hvcre & ~is_short & (cat == "satisfactory"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
-            .when(is_hvcre & ~is_short & (cat == "weak"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["weak"]))
-            .when(is_hvcre & ~is_short & (cat == "default"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["default"]))
-
-            # HVCRE, < 2.5yr
-            .when(is_hvcre & is_short & (cat == "strong"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["strong"]))
-            .when(is_hvcre & is_short & (cat == "good"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["good"]))
-            .when(is_hvcre & is_short & (cat == "satisfactory"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["satisfactory"]))
-            .when(is_hvcre & is_short & (cat == "weak"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["weak"]))
-            .when(is_hvcre & is_short & (cat == "default"))
-            .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["default"]))
-
-            # Default to non-HVCRE >=2.5yr satisfactory
-            .otherwise(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
-            .alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                # Non-HVCRE, >= 2.5yr
+                pl.when(~is_hvcre & ~is_short & (cat == "strong"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS["strong"]))
+                .when(~is_hvcre & ~is_short & (cat == "good"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS["good"]))
+                .when(~is_hvcre & ~is_short & (cat == "satisfactory"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
+                .when(~is_hvcre & ~is_short & (cat == "weak"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS["weak"]))
+                .when(~is_hvcre & ~is_short & (cat == "default"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS["default"]))
+                # Non-HVCRE, < 2.5yr
+                .when(~is_hvcre & is_short & (cat == "strong"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["strong"]))
+                .when(~is_hvcre & is_short & (cat == "good"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["good"]))
+                .when(~is_hvcre & is_short & (cat == "satisfactory"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["satisfactory"]))
+                .when(~is_hvcre & is_short & (cat == "weak"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["weak"]))
+                .when(~is_hvcre & is_short & (cat == "default"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_SHORT["default"]))
+                # HVCRE, >= 2.5yr
+                .when(is_hvcre & ~is_short & (cat == "strong"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["strong"]))
+                .when(is_hvcre & ~is_short & (cat == "good"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["good"]))
+                .when(is_hvcre & ~is_short & (cat == "satisfactory"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
+                .when(is_hvcre & ~is_short & (cat == "weak"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["weak"]))
+                .when(is_hvcre & ~is_short & (cat == "default"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE["default"]))
+                # HVCRE, < 2.5yr
+                .when(is_hvcre & is_short & (cat == "strong"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["strong"]))
+                .when(is_hvcre & is_short & (cat == "good"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["good"]))
+                .when(is_hvcre & is_short & (cat == "satisfactory"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["satisfactory"]))
+                .when(is_hvcre & is_short & (cat == "weak"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["weak"]))
+                .when(is_hvcre & is_short & (cat == "default"))
+                .then(pl.lit(CRR_SLOTTING_WEIGHTS_HVCRE_SHORT["default"]))
+                # Default to non-HVCRE >=2.5yr satisfactory
+                .otherwise(pl.lit(CRR_SLOTTING_WEIGHTS["satisfactory"]))
+                .alias("risk_weight"),
+            ]
+        )
 
     def _apply_basel31_weights(self) -> pl.LazyFrame:
         """
@@ -291,47 +289,46 @@ class SlottingLazyFrame:
         is_hvcre = pl.col("is_hvcre")
         is_preop = pl.col("is_pre_operational")
 
-        return self._lf.with_columns([
-            # HVCRE weights
-            pl.when(is_hvcre & (cat == "strong"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["strong"]))
-            .when(is_hvcre & (cat == "good"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["good"]))
-            .when(is_hvcre & (cat == "satisfactory"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
-            .when(is_hvcre & (cat == "weak"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["weak"]))
-            .when(is_hvcre & (cat == "default"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["default"]))
-
-            # PF pre-operational weights
-            .when(~is_hvcre & is_preop & (cat == "strong"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["strong"]))
-            .when(~is_hvcre & is_preop & (cat == "good"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["good"]))
-            .when(~is_hvcre & is_preop & (cat == "satisfactory"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["satisfactory"]))
-            .when(~is_hvcre & is_preop & (cat == "weak"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["weak"]))
-            .when(~is_hvcre & is_preop & (cat == "default"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["default"]))
-
-            # Non-HVCRE operational weights (default)
-            .when(~is_hvcre & ~is_preop & (cat == "strong"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["strong"]))
-            .when(~is_hvcre & ~is_preop & (cat == "good"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["good"]))
-            .when(~is_hvcre & ~is_preop & (cat == "satisfactory"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
-            .when(~is_hvcre & ~is_preop & (cat == "weak"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["weak"]))
-            .when(~is_hvcre & ~is_preop & (cat == "default"))
-            .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["default"]))
-
-            # Default to non-HVCRE operational satisfactory
-            .otherwise(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
-            .alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                # HVCRE weights
+                pl.when(is_hvcre & (cat == "strong"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["strong"]))
+                .when(is_hvcre & (cat == "good"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["good"]))
+                .when(is_hvcre & (cat == "satisfactory"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["satisfactory"]))
+                .when(is_hvcre & (cat == "weak"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["weak"]))
+                .when(is_hvcre & (cat == "default"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_HVCRE["default"]))
+                # PF pre-operational weights
+                .when(~is_hvcre & is_preop & (cat == "strong"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["strong"]))
+                .when(~is_hvcre & is_preop & (cat == "good"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["good"]))
+                .when(~is_hvcre & is_preop & (cat == "satisfactory"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["satisfactory"]))
+                .when(~is_hvcre & is_preop & (cat == "weak"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["weak"]))
+                .when(~is_hvcre & is_preop & (cat == "default"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS_PF_PREOP["default"]))
+                # Non-HVCRE operational weights (default)
+                .when(~is_hvcre & ~is_preop & (cat == "strong"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["strong"]))
+                .when(~is_hvcre & ~is_preop & (cat == "good"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["good"]))
+                .when(~is_hvcre & ~is_preop & (cat == "satisfactory"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
+                .when(~is_hvcre & ~is_preop & (cat == "weak"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["weak"]))
+                .when(~is_hvcre & ~is_preop & (cat == "default"))
+                .then(pl.lit(BASEL31_SLOTTING_WEIGHTS["default"]))
+                # Default to non-HVCRE operational satisfactory
+                .otherwise(pl.lit(BASEL31_SLOTTING_WEIGHTS["satisfactory"]))
+                .alias("risk_weight"),
+            ]
+        )
 
     # =========================================================================
     # RWA CALCULATION
@@ -344,10 +341,12 @@ class SlottingLazyFrame:
         Returns:
             LazyFrame with rwa and rwa_final columns
         """
-        return self._lf.with_columns([
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
-        ])
+        return self._lf.with_columns(
+            [
+                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"),
+                (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_final"),
+            ]
+        )
 
     # =========================================================================
     # CONVENIENCE / PIPELINE METHODS
@@ -368,8 +367,8 @@ class SlottingLazyFrame:
         Returns:
             LazyFrame with all slotting calculations
         """
-        return (self._lf
-            .slotting.prepare_columns(config)
+        return (
+            self._lf.slotting.prepare_columns(config)
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
         )
@@ -404,19 +403,23 @@ class SlottingLazyFrame:
 
         # Add calculation string
         if "rwa" in available_cols:
-            audit = audit.with_columns([
-                pl.concat_str([
-                    pl.lit("Slotting: Category="),
-                    pl.col("slotting_category"),
-                    pl.when(pl.col("is_hvcre"))
-                    .then(pl.lit(" (HVCRE)"))
-                    .otherwise(pl.lit("")),
-                    pl.lit(", RW="),
-                    (pl.col("risk_weight") * 100).round(0).cast(pl.String),
-                    pl.lit("%, RWA="),
-                    pl.col("rwa").round(0).cast(pl.String),
-                ]).alias("slotting_calculation"),
-            ])
+            audit = audit.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("Slotting: Category="),
+                            pl.col("slotting_category"),
+                            pl.when(pl.col("is_hvcre"))
+                            .then(pl.lit(" (HVCRE)"))
+                            .otherwise(pl.lit("")),
+                            pl.lit(", RW="),
+                            (pl.col("risk_weight") * 100).round(0).cast(pl.String),
+                            pl.lit("%, RWA="),
+                            pl.col("rwa").round(0).cast(pl.String),
+                        ]
+                    ).alias("slotting_calculation"),
+                ]
+            )
 
         return audit
 

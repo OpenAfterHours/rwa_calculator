@@ -11,19 +11,17 @@ Tests cover:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.contracts.bundles import (
-    ResolvedHierarchyBundle,
     CounterpartyLookup,
+    ResolvedHierarchyBundle,
 )
+from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.classifier import ExposureClassifier
-
 
 # =============================================================================
 # Fixtures
@@ -72,32 +70,40 @@ def create_test_bundle(
     counterparties = pl.DataFrame(counterparties_data).lazy()
 
     # Create empty lending group totals
-    lending_group_totals = pl.DataFrame({
-        "lending_group": pl.Series([], dtype=pl.String),
-        "total_exposure": pl.Series([], dtype=pl.Float64),
-    }).lazy()
+    lending_group_totals = pl.DataFrame(
+        {
+            "lending_group": pl.Series([], dtype=pl.String),
+            "total_exposure": pl.Series([], dtype=pl.Float64),
+        }
+    ).lazy()
 
     # Create CounterpartyLookup with all required fields
     counterparty_lookup = CounterpartyLookup(
         counterparties=counterparties,
-        parent_mappings=pl.LazyFrame(schema={
-            "child_counterparty_reference": pl.String,
-            "parent_counterparty_reference": pl.String,
-        }),
-        ultimate_parent_mappings=pl.LazyFrame(schema={
-            "counterparty_reference": pl.String,
-            "ultimate_parent_reference": pl.String,
-            "hierarchy_depth": pl.Int32,
-        }),
-        rating_inheritance=pl.LazyFrame(schema={
-            "counterparty_reference": pl.String,
-            "cqs": pl.Int8,
-            "pd": pl.Float64,
-            "rating_value": pl.String,
-            "inherited": pl.Boolean,
-            "source_counterparty": pl.String,
-            "inheritance_reason": pl.String,
-        }),
+        parent_mappings=pl.LazyFrame(
+            schema={
+                "child_counterparty_reference": pl.String,
+                "parent_counterparty_reference": pl.String,
+            }
+        ),
+        ultimate_parent_mappings=pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }
+        ),
+        rating_inheritance=pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "cqs": pl.Int8,
+                "pd": pl.Float64,
+                "rating_value": pl.String,
+                "inherited": pl.Boolean,
+                "source_counterparty": pl.String,
+                "inheritance_reason": pl.String,
+            }
+        ),
     )
 
     return ResolvedHierarchyBundle(
@@ -688,18 +694,25 @@ class TestMixedPortfolioReclassification:
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": [
-                    "CORP_RETAIL_PROP",   # Should become RETAIL_MORTGAGE (residential)
-                    "CORP_RETAIL_COMM",   # Should become RETAIL_MORTGAGE (commercial)
+                    "CORP_RETAIL_PROP",  # Should become RETAIL_MORTGAGE (residential)
+                    "CORP_RETAIL_COMM",  # Should become RETAIL_MORTGAGE (commercial)
                     "CORP_RETAIL_OTHER",  # Should become RETAIL_OTHER
-                    "CORP_NO_LGD",        # Should stay CORPORATE (no LGD)
-                    "CORP_LARGE",         # Should stay CORPORATE (> threshold)
-                    "CORP_NOT_MANAGED",   # Should stay CORPORATE (not managed as retail)
+                    "CORP_NO_LGD",  # Should stay CORPORATE (no LGD)
+                    "CORP_LARGE",  # Should stay CORPORATE (> threshold)
+                    "CORP_NOT_MANAGED",  # Should stay CORPORATE (not managed as retail)
                 ],
                 "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005", "CP006"],
                 "drawn_amount": [300000.0, 350000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
                 "nominal_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 "lgd": [0.35, 0.40, 0.45, None, 0.40, 0.45],
-                "product_type": ["MORTGAGE", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN", "TERM_LOAN"],
+                "product_type": [
+                    "MORTGAGE",
+                    "TERM_LOAN",
+                    "TERM_LOAN",
+                    "TERM_LOAN",
+                    "TERM_LOAN",
+                    "TERM_LOAN",
+                ],
                 "value_date": [date(2024, 1, 1)] * 6,
                 "maturity_date": [date(2029, 1, 1)] * 6,
                 "currency": ["GBP"] * 6,
@@ -707,9 +720,30 @@ class TestMixedPortfolioReclassification:
                 "residential_collateral_value": [250000.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 # property_collateral_value for both residential AND commercial (mortgage classification)
                 "property_collateral_value": [250000.0, 300000.0, 0.0, 0.0, 0.0, 0.0],
-                "lending_group_adjusted_exposure": [50000.0, 350000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
-                "exposure_for_retail_threshold": [50000.0, 350000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
-                "collateral_type": ["residential", "commercial", "financial", "financial", "financial", "financial"],
+                "lending_group_adjusted_exposure": [
+                    50000.0,
+                    350000.0,
+                    400000.0,
+                    500000.0,
+                    1500000.0,
+                    600000.0,
+                ],
+                "exposure_for_retail_threshold": [
+                    50000.0,
+                    350000.0,
+                    400000.0,
+                    500000.0,
+                    1500000.0,
+                    600000.0,
+                ],
+                "collateral_type": [
+                    "residential",
+                    "commercial",
+                    "financial",
+                    "financial",
+                    "financial",
+                    "financial",
+                ],
             },
             counterparties_data={
                 "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005", "CP006"],

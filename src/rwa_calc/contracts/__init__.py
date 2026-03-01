@@ -17,6 +17,23 @@ Submodules:
 """
 
 # Configuration contracts
+# Data bundle contracts
+from rwa_calc.contracts.bundles import (
+    AggregatedResultBundle,
+    ClassifiedExposuresBundle,
+    CounterpartyLookup,
+    CRMAdjustedBundle,
+    IRBResultBundle,
+    RawDataBundle,
+    ResolvedHierarchyBundle,
+    SAResultBundle,
+    SlottingResultBundle,
+    create_empty_classified_bundle,
+    create_empty_counterparty_lookup,
+    create_empty_crm_adjusted_bundle,
+    create_empty_raw_data_bundle,
+    create_empty_resolved_hierarchy_bundle,
+)
 from rwa_calc.contracts.config import (
     CalculationConfig,
     IRBPermissions,
@@ -38,6 +55,7 @@ from rwa_calc.contracts.errors import (
     ERROR_INELIGIBLE_COLLATERAL,
     ERROR_INVALID_CONFIG,
     ERROR_INVALID_CQS,
+    ERROR_INVALID_GUARANTEE,
     ERROR_INVALID_LTV,
     ERROR_INVALID_VALUE,
     ERROR_LGD_OUT_OF_RANGE,
@@ -54,7 +72,6 @@ from rwa_calc.contracts.errors import (
     ERROR_PD_OUT_OF_RANGE,
     ERROR_TYPE_MISMATCH,
     ERROR_UNKNOWN_EXPOSURE_CLASS,
-    ERROR_INVALID_GUARANTEE,
     CalculationError,
     LazyFrameResult,
     business_rule_error,
@@ -62,24 +79,6 @@ from rwa_calc.contracts.errors import (
     hierarchy_error,
     invalid_value_error,
     missing_field_error,
-)
-
-# Data bundle contracts
-from rwa_calc.contracts.bundles import (
-    AggregatedResultBundle,
-    ClassifiedExposuresBundle,
-    CounterpartyLookup,
-    CRMAdjustedBundle,
-    IRBResultBundle,
-    RawDataBundle,
-    ResolvedHierarchyBundle,
-    SAResultBundle,
-    SlottingResultBundle,
-    create_empty_classified_bundle,
-    create_empty_counterparty_lookup,
-    create_empty_crm_adjusted_bundle,
-    create_empty_raw_data_bundle,
-    create_empty_resolved_hierarchy_bundle,
 )
 
 # Protocol definitions

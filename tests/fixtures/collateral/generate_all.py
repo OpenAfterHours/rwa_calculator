@@ -5,9 +5,9 @@ Usage:
     uv run python tests/fixtures/collateral/generate_all.py
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import polars as pl
 
@@ -108,10 +108,14 @@ def print_crm_scenario_analysis(output_dir: Path) -> None:
     print("\nFinancial Collateral (SA eligible):")
     fin_coll = collateral.filter(pl.col("is_eligible_financial_collateral"))
     if fin_coll.height > 0:
-        by_type = fin_coll.group_by("collateral_type").agg(
-            pl.col("market_value").sum().alias("total_value"),
-            pl.len().alias("count"),
-        ).sort("collateral_type")
+        by_type = (
+            fin_coll.group_by("collateral_type")
+            .agg(
+                pl.col("market_value").sum().alias("total_value"),
+                pl.len().alias("count"),
+            )
+            .sort("collateral_type")
+        )
         for row in by_type.iter_rows(named=True):
             print(f"  {row['collateral_type']}: {row['count']} items, £{row['total_value']:,.0f}")
 

@@ -16,12 +16,11 @@ import polars as pl
 import pytest
 
 from rwa_calc.api.formatters import ResultFormatter
-from rwa_calc.api.models import CalculationResponse, SummaryStatistics
+from rwa_calc.api.models import CalculationResponse
 from rwa_calc.api.results_cache import ResultsCache
 from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
-
 
 # =============================================================================
 # Fixtures
@@ -37,30 +36,38 @@ def cache(tmp_path: Path) -> ResultsCache:
 @pytest.fixture
 def sample_result_bundle() -> AggregatedResultBundle:
     """Create a sample AggregatedResultBundle for testing."""
-    results = pl.LazyFrame({
-        "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-        "approach_applied": ["SA", "SA", "foundation_irb"],
-        "exposure_class": ["corporate", "retail", "corporate"],
-        "ead_final": [1000000.0, 500000.0, 750000.0],
-        "risk_weight": [1.0, 0.75, 0.5],
-        "rwa_final": [1000000.0, 375000.0, 375000.0],
-    })
+    results = pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+            "approach_applied": ["SA", "SA", "foundation_irb"],
+            "exposure_class": ["corporate", "retail", "corporate"],
+            "ead_final": [1000000.0, 500000.0, 750000.0],
+            "risk_weight": [1.0, 0.75, 0.5],
+            "rwa_final": [1000000.0, 375000.0, 375000.0],
+        }
+    )
 
-    sa_results = pl.LazyFrame({
-        "exposure_reference": ["EXP001", "EXP002"],
-        "rwa": [1000000.0, 375000.0],
-    })
+    sa_results = pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001", "EXP002"],
+            "rwa": [1000000.0, 375000.0],
+        }
+    )
 
-    irb_results = pl.LazyFrame({
-        "exposure_reference": ["EXP003"],
-        "rwa": [375000.0],
-    })
+    irb_results = pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP003"],
+            "rwa": [375000.0],
+        }
+    )
 
-    summary_by_class = pl.LazyFrame({
-        "exposure_class": ["corporate", "retail"],
-        "total_ead": [1750000.0, 500000.0],
-        "total_rwa": [1375000.0, 375000.0],
-    })
+    summary_by_class = pl.LazyFrame(
+        {
+            "exposure_class": ["corporate", "retail"],
+            "total_ead": [1750000.0, 500000.0],
+            "total_rwa": [1375000.0, 375000.0],
+        }
+    )
 
     return AggregatedResultBundle(
         results=results,
@@ -77,11 +84,13 @@ def sample_result_bundle() -> AggregatedResultBundle:
 def empty_result_bundle() -> AggregatedResultBundle:
     """Create an empty AggregatedResultBundle."""
     return AggregatedResultBundle(
-        results=pl.LazyFrame({
-            "exposure_reference": pl.Series([], dtype=pl.String),
-            "ead_final": pl.Series([], dtype=pl.Float64),
-            "rwa_final": pl.Series([], dtype=pl.Float64),
-        }),
+        results=pl.LazyFrame(
+            {
+                "exposure_reference": pl.Series([], dtype=pl.String),
+                "ead_final": pl.Series([], dtype=pl.Float64),
+                "rwa_final": pl.Series([], dtype=pl.Float64),
+            }
+        ),
         errors=[],
     )
 
@@ -90,11 +99,13 @@ def empty_result_bundle() -> AggregatedResultBundle:
 def error_result_bundle() -> AggregatedResultBundle:
     """Create a bundle with errors."""
     return AggregatedResultBundle(
-        results=pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1000000.0],
-            "rwa_final": [500000.0],
-        }),
+        results=pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1000000.0],
+                "rwa_final": [500000.0],
+            }
+        ),
         errors=[
             CalculationError(
                 code="TEST001",
@@ -338,15 +349,19 @@ class TestResultFormatterComputeSummaryLazy:
 class TestComputeSummaryLazyApproachStats:
     """Tests for approach stats computed via lazy aggregation."""
 
-    def _make_bundle(self, approach_applied: list[str], ead: list[float], rwa: list[float]) -> AggregatedResultBundle:
+    def _make_bundle(
+        self, approach_applied: list[str], ead: list[float], rwa: list[float]
+    ) -> AggregatedResultBundle:
         """Helper to create a bundle with given approach data."""
         return AggregatedResultBundle(
-            results=pl.LazyFrame({
-                "exposure_reference": [f"EXP{i}" for i in range(len(approach_applied))],
-                "approach_applied": approach_applied,
-                "ead_final": ead,
-                "rwa_final": rwa,
-            }),
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": [f"EXP{i}" for i in range(len(approach_applied))],
+                    "approach_applied": approach_applied,
+                    "ead_final": ead,
+                    "rwa_final": rwa,
+                }
+            ),
             errors=[],
         )
 
@@ -355,8 +370,11 @@ class TestComputeSummaryLazyApproachStats:
         bundle = self._make_bundle(["foundation_irb"], [1_000_000.0], [500_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
-            bundle=bundle, cache=cache, framework="CRR",
-            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
         )
 
         assert response.summary.total_ead_irb == Decimal("1000000")
@@ -368,8 +386,11 @@ class TestComputeSummaryLazyApproachStats:
         bundle = self._make_bundle(["advanced_irb"], [2_000_000.0], [800_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
-            bundle=bundle, cache=cache, framework="CRR",
-            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
         )
 
         assert response.summary.total_ead_irb == Decimal("2000000")
@@ -380,8 +401,11 @@ class TestComputeSummaryLazyApproachStats:
         bundle = self._make_bundle(["SA"], [500_000.0], [250_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
-            bundle=bundle, cache=cache, framework="CRR",
-            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
         )
 
         assert response.summary.total_ead_sa == Decimal("500000")
@@ -397,8 +421,11 @@ class TestComputeSummaryLazyApproachStats:
         )
         formatter = ResultFormatter()
         response = formatter.format_response(
-            bundle=bundle, cache=cache, framework="CRR",
-            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
         )
 
         assert response.summary.total_ead_slotting == Decimal("500000")
@@ -413,8 +440,11 @@ class TestComputeSummaryLazyApproachStats:
         )
         formatter = ResultFormatter()
         response = formatter.format_response(
-            bundle=bundle, cache=cache, framework="CRR",
-            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
         )
 
         assert response.summary.total_ead_sa == Decimal("1500000")
@@ -429,8 +459,11 @@ class TestComputeSummaryLazyApproachStats:
         bundle = self._make_bundle(["FIRB"], [400_000.0], [200_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
-            bundle=bundle, cache=cache, framework="CRR",
-            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
         )
 
         assert response.summary.total_ead_irb == Decimal("400000")
@@ -439,17 +472,22 @@ class TestComputeSummaryLazyApproachStats:
     def test_no_approach_column(self, cache: ResultsCache) -> None:
         """Should return zeros when approach_applied column is missing."""
         bundle = AggregatedResultBundle(
-            results=pl.LazyFrame({
-                "exposure_reference": ["EXP001"],
-                "ead_final": [100_000.0],
-                "rwa_final": [50_000.0],
-            }),
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "ead_final": [100_000.0],
+                    "rwa_final": [50_000.0],
+                }
+            ),
             errors=[],
         )
         formatter = ResultFormatter()
         response = formatter.format_response(
-            bundle=bundle, cache=cache, framework="CRR",
-            reporting_date=date(2024, 12, 31), started_at=datetime.now(),
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
         )
 
         assert response.summary.total_ead_sa == Decimal("0")

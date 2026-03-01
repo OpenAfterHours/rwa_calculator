@@ -26,12 +26,11 @@ References:
 
 # Import namespace module to register namespaces on module load
 import rwa_calc.engine.slotting.namespace  # noqa: F401
-
 from rwa_calc.engine.slotting.calculator import (
     SlottingCalculator,
     create_slotting_calculator,
 )
-from rwa_calc.engine.slotting.namespace import SlottingLazyFrame, SlottingExpr
+from rwa_calc.engine.slotting.namespace import SlottingExpr, SlottingLazyFrame
 
 __all__ = [
     "SlottingCalculator",

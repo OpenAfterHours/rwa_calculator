@@ -32,7 +32,6 @@ from rwa_calc.engine.sa.supporting_factors import (
     create_supporting_factor_calculator,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -330,16 +329,18 @@ class TestCommercialRERiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CRE LTV <= 50% with income cover should get 50% RW."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["CRE001"],
-            "ead_final": [600000.0],
-            "exposure_class": ["COMMERCIAL_RE"],
-            "cqs": [None],
-            "ltv": [0.40],
-            "is_sme": [False],
-            "is_infrastructure": [False],
-            "has_income_cover": [True],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [600000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.40],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [True],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -358,16 +359,18 @@ class TestCommercialRERiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CRE LTV <= 50% without income cover should get 100% RW."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["CRE001"],
-            "ead_final": [600000.0],
-            "exposure_class": ["COMMERCIAL_RE"],
-            "cqs": [None],
-            "ltv": [0.40],
-            "is_sme": [False],
-            "is_infrastructure": [False],
-            "has_income_cover": [False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [600000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.40],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -539,15 +542,17 @@ class TestSMESupportingFactorCounterpartyAggregation:
         # Two exposures of £1.5m each to same counterparty = £3m total
         # Threshold is ~£2.183m (EUR 2.5m * 0.8732)
         # Factor should be blended, not pure Tier 1 (0.7619)
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": ["CP001", "CP001"],  # Same counterparty
-            "ead_final": [1500000.0, 1500000.0],  # £1.5m each
-            "exposure_class": ["CORPORATE", "CORPORATE"],
-            "cqs": [None, None],
-            "is_sme": [True, True],
-            "is_infrastructure": [False, False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": ["CP001", "CP001"],  # Same counterparty
+                "ead_final": [1500000.0, 1500000.0],  # £1.5m each
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "cqs": [None, None],
+                "is_sme": [True, True],
+                "is_infrastructure": [False, False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -580,15 +585,17 @@ class TestSMESupportingFactorCounterpartyAggregation:
         """Exposures to different counterparties should use their own totals."""
         # CP001: £1m (small, gets pure 0.7619)
         # CP002: £5m (larger, gets blended factor closer to 0.85)
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": ["CP001", "CP002"],  # Different counterparties
-            "ead_final": [1000000.0, 5000000.0],
-            "exposure_class": ["CORPORATE", "CORPORATE"],
-            "cqs": [None, None],
-            "is_sme": [True, True],
-            "is_infrastructure": [False, False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": ["CP001", "CP002"],  # Different counterparties
+                "ead_final": [1000000.0, 5000000.0],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "cqs": [None, None],
+                "is_sme": [True, True],
+                "is_infrastructure": [False, False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -614,15 +621,17 @@ class TestSMESupportingFactorCounterpartyAggregation:
         crr_config: CalculationConfig,
     ) -> None:
         """Exposures with null counterparty should use individual EAD."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": [None, None],  # No counterparty reference
-            "ead_final": [1000000.0, 5000000.0],
-            "exposure_class": ["CORPORATE", "CORPORATE"],
-            "cqs": [None, None],
-            "is_sme": [True, True],
-            "is_infrastructure": [False, False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": [None, None],  # No counterparty reference
+                "ead_final": [1000000.0, 5000000.0],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "cqs": [None, None],
+                "is_sme": [True, True],
+                "is_infrastructure": [False, False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -658,14 +667,16 @@ class TestSACalculatorBundleProcessing:
         crr_config: CalculationConfig,
     ) -> None:
         """calculate() should return LazyFrameResult."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1000000.0],
-            "exposure_class": ["CORPORATE"],
-            "cqs": [None],
-            "is_sme": [False],
-            "is_infrastructure": [False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -684,14 +695,16 @@ class TestSACalculatorBundleProcessing:
         crr_config: CalculationConfig,
     ) -> None:
         """get_sa_result_bundle() should return SAResultBundle."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_final": [1000000.0],
-            "exposure_class": ["CORPORATE"],
-            "cqs": [None],
-            "is_sme": [False],
-            "is_infrastructure": [False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -711,14 +724,16 @@ class TestSACalculatorBundleProcessing:
         crr_config: CalculationConfig,
     ) -> None:
         """Multiple exposures should all be processed."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-            "ead_final": [1000000.0, 500000.0, 100000.0],
-            "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK", "INSTITUTION", "RETAIL"],
-            "cqs": [1, 2, None],
-            "is_sme": [False, False, False],
-            "is_infrastructure": [False, False, False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "ead_final": [1000000.0, 500000.0, 100000.0],
+                "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK", "INSTITUTION", "RETAIL"],
+                "cqs": [1, 2, None],
+                "is_sme": [False, False, False],
+                "is_infrastructure": [False, False, False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,
@@ -731,11 +746,17 @@ class TestSACalculatorBundleProcessing:
 
         assert len(df) == 3
         # Sovereign CQS1: 0%
-        assert df.filter(pl.col("exposure_reference") == "EXP001")["risk_weight"][0] == pytest.approx(0.0)
+        assert df.filter(pl.col("exposure_reference") == "EXP001")["risk_weight"][
+            0
+        ] == pytest.approx(0.0)
         # Institution CQS2: 30% (UK deviation)
-        assert df.filter(pl.col("exposure_reference") == "EXP002")["risk_weight"][0] == pytest.approx(0.30)
+        assert df.filter(pl.col("exposure_reference") == "EXP002")["risk_weight"][
+            0
+        ] == pytest.approx(0.30)
         # Retail: 75%
-        assert df.filter(pl.col("exposure_reference") == "EXP003")["risk_weight"][0] == pytest.approx(0.75)
+        assert df.filter(pl.col("exposure_reference") == "EXP003")["risk_weight"][
+            0
+        ] == pytest.approx(0.75)
 
 
 # =============================================================================
@@ -771,15 +792,17 @@ class TestSAAuditTrail:
         crr_config: CalculationConfig,
     ) -> None:
         """Audit should contain calculation breakdown."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "ead_final": [1000000.0],
-            "exposure_class": ["CORPORATE"],
-            "cqs": [2],
-            "is_sme": [True],
-            "is_infrastructure": [False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [2],
+                "is_sme": [True],
+                "is_infrastructure": [False],
+            }
+        ).lazy()
 
         bundle = CRMAdjustedBundle(
             exposures=exposures,

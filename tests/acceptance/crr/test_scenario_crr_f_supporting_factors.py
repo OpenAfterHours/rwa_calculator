@@ -17,17 +17,16 @@ Regulatory References:
 - CRR Art. 501a: Infrastructure supporting factor
 """
 
-import pytest
-import polars as pl
 from decimal import Decimal
 from typing import Any
 
+import polars as pl
+import pytest
 from tests.acceptance.crr.conftest import (
     assert_rwa_within_tolerance,
     assert_supporting_factor_match,
     get_result_for_exposure,
 )
-
 
 # Mapping of scenario IDs to exposure references
 SCENARIO_EXPOSURE_MAP = {
@@ -169,7 +168,6 @@ class TestCRRGroupF_TieredSMEFactor:
 
         Note: Infrastructure factor is not tiered like SME factor
         """
-        expected = expected_outputs_dict["CRR-F5"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F5"]
 
         result = get_result_for_exposure(pipeline_results_df, exposure_ref)
@@ -192,7 +190,6 @@ class TestCRRGroupF_TieredSMEFactor:
         Input: Large exposure, high turnover
         Expected: No SME factor (turnover exceeds eligibility threshold)
         """
-        expected = expected_outputs_dict["CRR-F6"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F6"]
 
         result = get_result_for_exposure(pipeline_results_df, exposure_ref)
@@ -299,9 +296,7 @@ class TestCRRGroupF_ParameterizedValidation:
         scenario = expected_outputs_dict["CRR-F3"]
         sf = scenario["supporting_factor"]
         # Large exposure factor should be closer to 0.85
-        assert sf > 0.80, (
-            f"CRR-F3 should have Tier 2 dominant factor > 0.80, got {sf}"
-        )
+        assert sf > 0.80, f"CRR-F3 should have Tier 2 dominant factor > 0.80, got {sf}"
 
     def test_crr_f5_has_infrastructure_factor(
         self,
@@ -340,10 +335,10 @@ class TestCRRGroupF_ParameterizedValidation:
         threshold = CRR_SME_EXPOSURE_THRESHOLD_GBP
         test_cases = [
             # (exposure_gbp, expected_factor)
-            (Decimal("1000000"), Decimal("0.7619")),      # Small - Tier 1 only
-            (threshold, Decimal("0.7619")),               # At threshold
-            (Decimal("4000000"), None),                    # Blended (calculate)
-            (Decimal("10000000"), None),                   # Tier 2 dominant
+            (Decimal("1000000"), Decimal("0.7619")),  # Small - Tier 1 only
+            (threshold, Decimal("0.7619")),  # At threshold
+            (Decimal("4000000"), None),  # Blended (calculate)
+            (Decimal("10000000"), None),  # Tier 2 dominant
         ]
 
         for exposure, expected in test_cases:

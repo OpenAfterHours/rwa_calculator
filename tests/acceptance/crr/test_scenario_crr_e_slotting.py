@@ -9,16 +9,15 @@ Regulatory References:
 - CRR Art. 147(8): Specialised lending sub-classes
 """
 
-import pytest
-import polars as pl
 from typing import Any
 
+import polars as pl
+import pytest
 from tests.acceptance.crr.conftest import (
-    assert_rwa_within_tolerance,
     assert_risk_weight_match,
+    assert_rwa_within_tolerance,
     get_result_for_exposure,
 )
-
 
 # Mapping of scenario IDs to exposure references
 SCENARIO_EXPOSURE_MAP = {

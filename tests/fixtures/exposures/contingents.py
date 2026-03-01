@@ -53,8 +53,12 @@ class Contingent:
     beel: float
     seniority: str
     risk_type: str = "MR"  # Default to MR (medium risk)
-    ccf_modelled: float | None = None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
-    is_short_term_trade_lc: bool | None = None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
+    ccf_modelled: float | None = (
+        None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
+    )
+    is_short_term_trade_lc: bool | None = (
+        None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
+    )
 
     def to_dict(self) -> dict:
         return {

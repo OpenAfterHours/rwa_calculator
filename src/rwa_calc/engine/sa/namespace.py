@@ -34,12 +34,11 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.data.tables.crr_risk_weights import (
-    get_combined_cqs_risk_weights,
-    RESIDENTIAL_MORTGAGE_PARAMS,
     COMMERCIAL_RE_PARAMS,
+    RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
+    get_combined_cqs_risk_weights,
 )
-from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -160,25 +159,28 @@ class SALazyFrame:
         rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
         # Prepare exposures for join
-        lf = self._lf.with_columns([
-            # Map detailed classes to lookup classes
-            pl.when(pl.col("exposure_class").str.contains("(?i)central_govt"))
-            .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
-            .when(pl.col("exposure_class").str.contains("(?i)institution"))
-            .then(pl.lit("INSTITUTION"))
-            .when(pl.col("exposure_class").str.contains("(?i)corporate"))
-            .then(pl.lit("CORPORATE"))
-            .otherwise(pl.col("exposure_class").str.to_uppercase())
-            .alias("_lookup_class"),
-
-            # Use -1 as sentinel for null CQS (for join matching)
-            pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("_lookup_cqs"),
-        ])
+        lf = self._lf.with_columns(
+            [
+                # Map detailed classes to lookup classes
+                pl.when(pl.col("exposure_class").str.contains("(?i)central_govt"))
+                .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
+                .when(pl.col("exposure_class").str.contains("(?i)institution"))
+                .then(pl.lit("INSTITUTION"))
+                .when(pl.col("exposure_class").str.contains("(?i)corporate"))
+                .then(pl.lit("CORPORATE"))
+                .otherwise(pl.col("exposure_class").str.to_uppercase())
+                .alias("_lookup_class"),
+                # Use -1 as sentinel for null CQS (for join matching)
+                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("_lookup_cqs"),
+            ]
+        )
 
         # Prepare risk weight table with same sentinel for null CQS
-        rw_table = rw_table.with_columns([
-            pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
-        ])
+        rw_table = rw_table.with_columns(
+            [
+                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
+            ]
+        )
 
         # Join risk weight table
         lf = lf.join(
@@ -198,56 +200,57 @@ class SALazyFrame:
         cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
         cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
 
-        lf = lf.with_columns([
-            # Order matters: check specific classes before generic ones
-            # 1. Residential mortgage: LTV-based
-            pl.when(pl.col("exposure_class").str.contains("(?i)mortgage|residential"))
-            .then(
-                pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
-                .then(pl.lit(resi_rw_low))
-                .otherwise(
-                    (resi_rw_low * resi_threshold / pl.col("ltv").fill_null(1.0) +
-                     resi_rw_high * (pl.col("ltv").fill_null(1.0) - resi_threshold) /
-                     pl.col("ltv").fill_null(1.0))
+        lf = lf.with_columns(
+            [
+                # Order matters: check specific classes before generic ones
+                # 1. Residential mortgage: LTV-based
+                pl.when(pl.col("exposure_class").str.contains("(?i)mortgage|residential"))
+                .then(
+                    pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
+                    .then(pl.lit(resi_rw_low))
+                    .otherwise(
+                        resi_rw_low * resi_threshold / pl.col("ltv").fill_null(1.0)
+                        + resi_rw_high
+                        * (pl.col("ltv").fill_null(1.0) - resi_threshold)
+                        / pl.col("ltv").fill_null(1.0)
+                    )
                 )
-            )
-
-            # 2. Commercial RE: LTV + income cover based
-            .when(pl.col("exposure_class").str.contains("(?i)commercial.*re|cre"))
-            .then(
-                pl.when(
-                    (pl.col("ltv").fill_null(1.0) <= cre_threshold) &
-                    pl.col("has_income_cover").fill_null(False)
+                # 2. Commercial RE: LTV + income cover based
+                .when(pl.col("exposure_class").str.contains("(?i)commercial.*re|cre"))
+                .then(
+                    pl.when(
+                        (pl.col("ltv").fill_null(1.0) <= cre_threshold)
+                        & pl.col("has_income_cover").fill_null(False)
+                    )
+                    .then(pl.lit(cre_rw_low))
+                    .otherwise(pl.lit(cre_rw_standard))
                 )
-                .then(pl.lit(cre_rw_low))
-                .otherwise(pl.lit(cre_rw_standard))
-            )
-
-            # 3. SME managed as retail: 75% RW (CRR Art. 123)
-            .when(
-                (pl.col("exposure_class").str.contains("(?i)sme")) &
-                (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
-            )
-            .then(pl.lit(retail_rw))
-
-            # 4. Corporate SME: 100% RW
-            .when(pl.col("exposure_class").str.contains("(?i)corporate.*sme|sme.*corporate"))
-            .then(pl.lit(1.0))
-
-            # 5. Retail (non-mortgage): 75% flat
-            .when(pl.col("exposure_class").str.contains("(?i)retail"))
-            .then(pl.lit(retail_rw))
-
-            # 6. Default: use joined CQS-based risk weight, or 100%
-            .otherwise(pl.col("risk_weight").fill_null(1.0))
-            .alias("risk_weight"),
-        ])
+                # 3. SME managed as retail: 75% RW (CRR Art. 123)
+                .when(
+                    (pl.col("exposure_class").str.contains("(?i)sme"))
+                    & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                )
+                .then(pl.lit(retail_rw))
+                # 4. Corporate SME: 100% RW
+                .when(pl.col("exposure_class").str.contains("(?i)corporate.*sme|sme.*corporate"))
+                .then(pl.lit(1.0))
+                # 5. Retail (non-mortgage): 75% flat
+                .when(pl.col("exposure_class").str.contains("(?i)retail"))
+                .then(pl.lit(retail_rw))
+                # 6. Default: use joined CQS-based risk weight, or 100%
+                .otherwise(pl.col("risk_weight").fill_null(1.0))
+                .alias("risk_weight"),
+            ]
+        )
 
         # Clean up temporary columns
-        lf = lf.drop([
-            col for col in ["_lookup_class", "_lookup_cqs", "risk_weight_rw"]
-            if col in lf.collect_schema().names()
-        ])
+        lf = lf.drop(
+            [
+                col
+                for col in ["_lookup_class", "_lookup_cqs", "risk_weight_rw"]
+                if col in lf.collect_schema().names()
+            ]
+        )
 
         return lf
 
@@ -269,16 +272,19 @@ class SALazyFrame:
         rw_low = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"])
         rw_high = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"])
 
-        return self._lf.with_columns([
-            pl.when(pl.col("ltv").fill_null(0.0) <= threshold)
-            .then(pl.lit(rw_low))
-            .otherwise(
-                (rw_low * threshold / pl.col("ltv").fill_null(1.0) +
-                 rw_high * (pl.col("ltv").fill_null(1.0) - threshold) /
-                 pl.col("ltv").fill_null(1.0))
-            )
-            .alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.when(pl.col("ltv").fill_null(0.0) <= threshold)
+                .then(pl.lit(rw_low))
+                .otherwise(
+                    rw_low * threshold / pl.col("ltv").fill_null(1.0)
+                    + rw_high
+                    * (pl.col("ltv").fill_null(1.0) - threshold)
+                    / pl.col("ltv").fill_null(1.0)
+                )
+                .alias("risk_weight"),
+            ]
+        )
 
     def apply_commercial_re_rw(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -297,15 +303,17 @@ class SALazyFrame:
         rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
         rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
 
-        return self._lf.with_columns([
-            pl.when(
-                (pl.col("ltv").fill_null(1.0) <= threshold) &
-                pl.col("has_income_cover").fill_null(False)
-            )
-            .then(pl.lit(rw_low))
-            .otherwise(pl.lit(rw_standard))
-            .alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.when(
+                    (pl.col("ltv").fill_null(1.0) <= threshold)
+                    & pl.col("has_income_cover").fill_null(False)
+                )
+                .then(pl.lit(rw_low))
+                .otherwise(pl.lit(rw_standard))
+                .alias("risk_weight"),
+            ]
+        )
 
     def apply_cqs_based_rw(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -321,13 +329,17 @@ class SALazyFrame:
         rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
         # Prepare for join
-        lf = self._lf.with_columns([
-            pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("_lookup_cqs"),
-        ])
+        lf = self._lf.with_columns(
+            [
+                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("_lookup_cqs"),
+            ]
+        )
 
-        rw_table = rw_table.with_columns([
-            pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
-        ])
+        rw_table = rw_table.with_columns(
+            [
+                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
+            ]
+        )
 
         # Join
         lf = lf.join(
@@ -339,9 +351,11 @@ class SALazyFrame:
         )
 
         # Apply looked-up weight
-        lf = lf.with_columns([
-            pl.coalesce(pl.col("risk_weight_lookup"), pl.lit(1.0)).alias("risk_weight"),
-        ])
+        lf = lf.with_columns(
+            [
+                pl.coalesce(pl.col("risk_weight_lookup"), pl.lit(1.0)).alias("risk_weight"),
+            ]
+        )
 
         # Clean up
         return lf.drop(["_lookup_cqs", "risk_weight_lookup"])
@@ -376,41 +390,57 @@ class SALazyFrame:
         use_uk_deviation = config.base_currency == "GBP"
 
         # Calculate guarantor's risk weight based on entity type and CQS
-        lf = self._lf.with_columns([
-            pl.when(pl.col("guaranteed_portion") <= 0)
-            .then(pl.lit(None).cast(pl.Float64))
-            # Sovereign guarantors
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)sovereign"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.0))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
-                .otherwise(pl.lit(1.0))
-            )
-            # Institution guarantors (UK deviation: CQS 2 = 30%)
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)institution"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
-                .when(pl.col("guarantor_cqs") == 3).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6).then(pl.lit(1.50))
-                .otherwise(pl.lit(0.40))
-            )
-            # Corporate guarantors
-            .when(pl.col("guarantor_entity_type").str.contains("(?i)corporate"))
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1).then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 2).then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([3, 4])).then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs").is_in([5, 6])).then(pl.lit(1.50))
-                .otherwise(pl.lit(1.0))
-            )
-            .otherwise(pl.lit(None).cast(pl.Float64))
-            .alias("guarantor_rw"),
-        ])
+        lf = self._lf.with_columns(
+            [
+                pl.when(pl.col("guaranteed_portion") <= 0)
+                .then(pl.lit(None).cast(pl.Float64))
+                # Sovereign guarantors
+                .when(pl.col("guarantor_entity_type").str.contains("(?i)sovereign"))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.0))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(1.0))
+                )
+                # Institution guarantors (UK deviation: CQS 2 = 30%)
+                .when(pl.col("guarantor_entity_type").str.contains("(?i)institution"))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(0.40))
+                )
+                # Corporate guarantors
+                .when(pl.col("guarantor_entity_type").str.contains("(?i)corporate"))
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([3, 4]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs").is_in([5, 6]))
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(1.0))
+                )
+                .otherwise(pl.lit(None).cast(pl.Float64))
+                .alias("guarantor_rw"),
+            ]
+        )
 
         return lf
 
@@ -431,19 +461,20 @@ class SALazyFrame:
 
         ead_col = "ead_final" if "ead_final" in cols else "ead"
 
-        return self._lf.with_columns([
-            pl.when(
-                (pl.col("guaranteed_portion") > 0) &
-                (pl.col("guarantor_rw").is_not_null())
-            ).then(
-                (
-                    pl.col("unguaranteed_portion") * pl.col("risk_weight") +
-                    pl.col("guaranteed_portion") * pl.col("guarantor_rw")
-                ) / pl.col(ead_col)
-            )
-            .otherwise(pl.col("risk_weight"))
-            .alias("risk_weight"),
-        ])
+        return self._lf.with_columns(
+            [
+                pl.when((pl.col("guaranteed_portion") > 0) & (pl.col("guarantor_rw").is_not_null()))
+                .then(
+                    (
+                        pl.col("unguaranteed_portion") * pl.col("risk_weight")
+                        + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
+                    )
+                    / pl.col(ead_col)
+                )
+                .otherwise(pl.col("risk_weight"))
+                .alias("risk_weight"),
+            ]
+        )
 
     # =========================================================================
     # RWA CALCULATION METHODS
@@ -459,9 +490,11 @@ class SALazyFrame:
         schema = self._lf.collect_schema()
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
 
-        return self._lf.with_columns([
-            (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
-        ])
+        return self._lf.with_columns(
+            [
+                (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
+            ]
+        )
 
     # =========================================================================
     # SUPPORTING FACTORS METHODS
@@ -504,8 +537,8 @@ class SALazyFrame:
         Returns:
             LazyFrame with all SA calculations
         """
-        return (self._lf
-            .sa.prepare_columns(config)
+        return (
+            self._lf.sa.prepare_columns(config)
             .sa.apply_risk_weights(config)
             .sa.calculate_rwa()
             .sa.apply_supporting_factors(config)
@@ -543,29 +576,37 @@ class SALazyFrame:
 
         # Add calculation string
         if "rwa_post_factor" in available_cols:
-            audit = audit.with_columns([
-                pl.concat_str([
-                    pl.lit("SA: EAD="),
-                    pl.col("ead_final").round(0).cast(pl.String),
-                    pl.lit(" x RW="),
-                    (pl.col("risk_weight") * 100).round(1).cast(pl.String),
-                    pl.lit("% x SF="),
-                    (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
-                    pl.lit("% -> RWA="),
-                    pl.col("rwa_post_factor").round(0).cast(pl.String),
-                ]).alias("sa_calculation"),
-            ])
+            audit = audit.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("SA: EAD="),
+                            pl.col("ead_final").round(0).cast(pl.String),
+                            pl.lit(" x RW="),
+                            (pl.col("risk_weight") * 100).round(1).cast(pl.String),
+                            pl.lit("% x SF="),
+                            (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
+                            pl.lit("% -> RWA="),
+                            pl.col("rwa_post_factor").round(0).cast(pl.String),
+                        ]
+                    ).alias("sa_calculation"),
+                ]
+            )
         elif "rwa_pre_factor" in available_cols:
-            audit = audit.with_columns([
-                pl.concat_str([
-                    pl.lit("SA: EAD="),
-                    pl.col("ead_final").round(0).cast(pl.String),
-                    pl.lit(" x RW="),
-                    (pl.col("risk_weight") * 100).round(1).cast(pl.String),
-                    pl.lit("% -> RWA="),
-                    pl.col("rwa_pre_factor").round(0).cast(pl.String),
-                ]).alias("sa_calculation"),
-            ])
+            audit = audit.with_columns(
+                [
+                    pl.concat_str(
+                        [
+                            pl.lit("SA: EAD="),
+                            pl.col("ead_final").round(0).cast(pl.String),
+                            pl.lit(" x RW="),
+                            (pl.col("risk_weight") * 100).round(1).cast(pl.String),
+                            pl.lit("% -> RWA="),
+                            pl.col("rwa_pre_factor").round(0).cast(pl.String),
+                        ]
+                    ).alias("sa_calculation"),
+                ]
+            )
 
         return audit
 
@@ -635,36 +676,45 @@ class SAExpr:
         Returns:
             Expression with risk weight based on CQS
         """
-        rw_table = get_combined_cqs_risk_weights(use_uk_deviation)
-
-        # Filter to relevant class
-        class_rw = rw_table.filter(pl.col("exposure_class") == exposure_class)
-
         # Build lookup
         if exposure_class == "CENTRAL_GOVT_CENTRAL_BANK":
             return (
-                pl.when(self._expr == 1).then(pl.lit(0.0))
-                .when(self._expr == 2).then(pl.lit(0.20))
-                .when(self._expr == 3).then(pl.lit(0.50))
-                .when(self._expr.is_in([4, 5])).then(pl.lit(1.0))
-                .when(self._expr == 6).then(pl.lit(1.50))
+                pl.when(self._expr == 1)
+                .then(pl.lit(0.0))
+                .when(self._expr == 2)
+                .then(pl.lit(0.20))
+                .when(self._expr == 3)
+                .then(pl.lit(0.50))
+                .when(self._expr.is_in([4, 5]))
+                .then(pl.lit(1.0))
+                .when(self._expr == 6)
+                .then(pl.lit(1.50))
                 .otherwise(pl.lit(1.0))
             )
         elif exposure_class == "INSTITUTION":
             cqs2_rw = 0.30 if use_uk_deviation else 0.50
             return (
-                pl.when(self._expr == 1).then(pl.lit(0.20))
-                .when(self._expr == 2).then(pl.lit(cqs2_rw))
-                .when(self._expr == 3).then(pl.lit(0.50))
-                .when(self._expr.is_in([4, 5])).then(pl.lit(1.0))
-                .when(self._expr == 6).then(pl.lit(1.50))
+                pl.when(self._expr == 1)
+                .then(pl.lit(0.20))
+                .when(self._expr == 2)
+                .then(pl.lit(cqs2_rw))
+                .when(self._expr == 3)
+                .then(pl.lit(0.50))
+                .when(self._expr.is_in([4, 5]))
+                .then(pl.lit(1.0))
+                .when(self._expr == 6)
+                .then(pl.lit(1.50))
                 .otherwise(pl.lit(0.40))
             )
         else:  # CORPORATE
             return (
-                pl.when(self._expr == 1).then(pl.lit(0.20))
-                .when(self._expr == 2).then(pl.lit(0.50))
-                .when(self._expr.is_in([3, 4])).then(pl.lit(1.0))
-                .when(self._expr.is_in([5, 6])).then(pl.lit(1.50))
+                pl.when(self._expr == 1)
+                .then(pl.lit(0.20))
+                .when(self._expr == 2)
+                .then(pl.lit(0.50))
+                .when(self._expr.is_in([3, 4]))
+                .then(pl.lit(1.0))
+                .when(self._expr.is_in([5, 6]))
+                .then(pl.lit(1.50))
                 .otherwise(pl.lit(1.0))
             )

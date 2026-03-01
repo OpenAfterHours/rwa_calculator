@@ -1031,7 +1031,7 @@ class CRMProcessor:
                     (pl.col("_wlgd_fin_a") + pl.col("_wlgd_nf_final"))
                     / (pl.col("_eff_fin_a") + pl.col("_eff_nf_final"))
                 )
-                .otherwise(pl.lit(0.45))
+                .otherwise(pl.lit(lgd_unsecured))
                 .alias("lgd_secured"),
             ]
         )
@@ -1063,7 +1063,7 @@ class CRMProcessor:
                 .alias("ead_after_collateral"),
                 pl.when(pl.col("seniority").str.to_lowercase().is_in(["subordinated", "junior"]))
                 .then(pl.lit(0.75))
-                .otherwise(pl.lit(0.45))
+                .otherwise(pl.lit(lgd_unsecured))
                 .alias("lgd_unsecured"),
             ]
         )
@@ -1334,7 +1334,7 @@ class CRMProcessor:
                 [
                     pl.when(pl.col("total_collateral_for_lgd") > 0)
                     .then(pl.col("total_weighted_lgd_sum") / pl.col("total_collateral_for_lgd"))
-                    .otherwise(pl.lit(0.45))
+                    .otherwise(pl.lit(lgd_unsecured))
                     .alias("lgd_secured"),
                 ]
             )
@@ -1358,7 +1358,7 @@ class CRMProcessor:
             [
                 pl.when(pl.col("seniority").str.to_lowercase().is_in(["subordinated", "junior"]))
                 .then(pl.lit(0.75))
-                .otherwise(pl.lit(0.45))  # Senior unsecured
+                .otherwise(pl.lit(lgd_unsecured))
                 .alias("lgd_unsecured"),
             ]
         )

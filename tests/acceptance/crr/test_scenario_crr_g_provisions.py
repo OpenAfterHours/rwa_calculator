@@ -119,6 +119,91 @@ class TestCRRGroupG_Provisions:
         )
 
 
+class TestCRRGroupG_ELShortfallExcess:
+    """
+    CRR EL shortfall/excess column validation.
+
+    Verifies that the production pipeline computes per-exposure
+    el_shortfall and el_excess columns correctly.
+
+    References:
+    - CRR Art. 158: EL = PD x LGD x EAD
+    - CRR Art. 159: EL shortfall reduces CET1/T2
+    - CRR Art. 62(d): EL excess may be added to T2 (capped at 0.6% IRB RWA)
+    """
+
+    def test_crr_g2_el_shortfall_column(
+        self,
+        irb_pipeline_results_df: pl.DataFrame,
+    ) -> None:
+        """
+        CRR-G2: el_shortfall = max(0, EL - provisions) = 45k - 30k = 15k.
+
+        EL = PD(2%) x LGD(45%) x EAD(5M) = 45,000
+        Provisions = 30,000
+        Shortfall = 15,000 (50% deducted from CET1, 50% from T2)
+        """
+        result = get_result_for_exposure(irb_pipeline_results_df, "LOAN_PROV_G2")
+        if result is None:
+            pytest.skip("LOAN_PROV_G2 not in IRB pipeline results")
+
+        assert "el_shortfall" in result, "el_shortfall column missing from IRB results"
+        assert result["el_shortfall"] == pytest.approx(15_000.0, rel=0.01), (
+            f"CRR-G2: el_shortfall should be 15,000 (EL 45k - prov 30k), "
+            f"got {result['el_shortfall']}"
+        )
+
+    def test_crr_g2_el_excess_is_zero(
+        self,
+        irb_pipeline_results_df: pl.DataFrame,
+    ) -> None:
+        """CRR-G2: el_excess should be zero when EL > provisions."""
+        result = get_result_for_exposure(irb_pipeline_results_df, "LOAN_PROV_G2")
+        if result is None:
+            pytest.skip("LOAN_PROV_G2 not in IRB pipeline results")
+
+        assert "el_excess" in result, "el_excess column missing from IRB results"
+        assert result["el_excess"] == pytest.approx(0.0, abs=0.01), (
+            f"CRR-G2: el_excess should be 0 (EL > provisions), got {result['el_excess']}"
+        )
+
+    def test_crr_g3_el_excess_column(
+        self,
+        irb_pipeline_results_df: pl.DataFrame,
+    ) -> None:
+        """
+        CRR-G3: el_excess = max(0, provisions - EL) = 50k - 11.25k = 38.75k.
+
+        EL = PD(0.5%) x LGD(45%) x EAD(5M) = 11,250
+        Provisions = 50,000
+        Excess = 38,750 (T2 credit capped at 0.6% of IRB RWA)
+        """
+        result = get_result_for_exposure(irb_pipeline_results_df, "LOAN_PROV_G3")
+        if result is None:
+            pytest.skip("LOAN_PROV_G3 not in IRB pipeline results")
+
+        assert "el_excess" in result, "el_excess column missing from IRB results"
+        assert result["el_excess"] == pytest.approx(38_750.0, rel=0.01), (
+            f"CRR-G3: el_excess should be 38,750 (prov 50k - EL 11.25k), "
+            f"got {result['el_excess']}"
+        )
+
+    def test_crr_g3_el_shortfall_is_zero(
+        self,
+        irb_pipeline_results_df: pl.DataFrame,
+    ) -> None:
+        """CRR-G3: el_shortfall should be zero when provisions > EL."""
+        result = get_result_for_exposure(irb_pipeline_results_df, "LOAN_PROV_G3")
+        if result is None:
+            pytest.skip("LOAN_PROV_G3 not in IRB pipeline results")
+
+        assert "el_shortfall" in result, "el_shortfall column missing from IRB results"
+        assert result["el_shortfall"] == pytest.approx(0.0, abs=0.01), (
+            f"CRR-G3: el_shortfall should be 0 (provisions > EL), "
+            f"got {result['el_shortfall']}"
+        )
+
+
 class TestCRRGroupG_ParameterizedValidation:
     """
     Parametrized tests to validate expected outputs structure.

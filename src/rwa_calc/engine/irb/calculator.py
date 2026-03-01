@@ -146,6 +146,7 @@ class IRBCalculator:
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
+            .irb.compute_el_shortfall_excess()
             .irb.apply_guarantee_substitution(config)
         )
 
@@ -192,6 +193,7 @@ class IRBCalculator:
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
+            .irb.compute_el_shortfall_excess()
             .irb.apply_guarantee_substitution(config)
         )
 
@@ -224,6 +226,7 @@ class IRBCalculator:
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
+            .irb.compute_el_shortfall_excess()
             .irb.apply_guarantee_substitution(config)
         )
 

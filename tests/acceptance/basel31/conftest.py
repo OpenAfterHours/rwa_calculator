@@ -84,9 +84,45 @@ def b31_a_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
+def b31_b_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-B (Foundation IRB Revised) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-B")
+
+
+@pytest.fixture(scope="session")
+def b31_c_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-C (Advanced IRB Revised) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-C")
+
+
+@pytest.fixture(scope="session")
+def b31_d_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-D (Credit Risk Mitigation Revised) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-D")
+
+
+@pytest.fixture(scope="session")
+def b31_e_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-E (Specialised Lending Slotting) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-E")
+
+
+@pytest.fixture(scope="session")
 def b31_f_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
     """Get B31-F (Output Floor) scenarios."""
     return get_scenarios_by_group(expected_outputs_df, "B31-F")
+
+
+@pytest.fixture(scope="session")
+def b31_g_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-G (Provisions & Impairments) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-G")
+
+
+@pytest.fixture(scope="session")
+def b31_h_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
+    """Get B31-H (Complex/Combined) scenarios."""
+    return get_scenarios_by_group(expected_outputs_df, "B31-H")
 
 
 # =============================================================================
@@ -123,6 +159,57 @@ def b31_irb_calculation_config():
     return CalculationConfig.basel_3_1(
         reporting_date=date(2032, 6, 30),
         irb_permissions=IRBPermissions.full_irb(),
+    )
+
+
+@pytest.fixture(scope="session")
+def b31_firb_calculation_config():
+    """
+    Create Basel 3.1 CalculationConfig with F-IRB only permissions.
+
+    Used for B31-B F-IRB acceptance tests. Reporting date 2027-06-30 gives
+    meaningful maturities (1-5y) while being post Basel 3.1 effective date.
+
+    Key differences from CRR F-IRB config:
+    - Senior unsecured LGD: 40% (was 45%)
+    - PD floor: 0.05% corporate (was 0.03%)
+    - Scaling factor: 1.0 (was 1.06)
+    - Supporting factor: disabled
+    """
+    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+
+    return CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 6, 30),
+        irb_permissions=IRBPermissions.firb_only(),
+    )
+
+
+@pytest.fixture(scope="session")
+def b31_slotting_calculation_config():
+    """
+    Create Basel 3.1 CalculationConfig with Slotting permissions.
+
+    Permits Slotting (but not A-IRB) for SPECIALISED_LENDING.
+    This ensures SL exposures route to slotting, not A-IRB.
+
+    Key Basel 3.1 slotting differences from CRR:
+    - Uses operational/pre-operational split (not maturity split)
+    - PF pre-operational: higher weights (80/100/120/350 vs 70/90/115/250)
+    - HVCRE weights unchanged
+    """
+    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.domain.enums import ApproachType, ExposureClass
+
+    return CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 6, 30),
+        irb_permissions=IRBPermissions(
+            permissions={
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                },
+            }
+        ),
     )
 
 
@@ -337,6 +424,27 @@ def irb_only_results_df(irb_pipeline_results) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
+def firb_pipeline_results(raw_data_bundle, b31_firb_calculation_config):
+    """
+    Run all fixtures through the Basel 3.1 pipeline with F-IRB only permissions.
+
+    Used for B31-B F-IRB acceptance tests. Session-scoped.
+    """
+    from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+    pipeline = PipelineOrchestrator()
+    return pipeline.run_with_data(raw_data_bundle, b31_firb_calculation_config)
+
+
+@pytest.fixture(scope="session")
+def firb_results_df(firb_pipeline_results) -> pl.DataFrame:
+    """Get F-IRB results from the Basel 3.1 pipeline."""
+    if firb_pipeline_results.irb_results is None:
+        return pl.DataFrame()
+    return firb_pipeline_results.irb_results.collect()
+
+
+@pytest.fixture(scope="session")
 def transitional_pipeline_results(raw_data_bundle, b31_irb_transitional_config):
     """
     Run all fixtures through the Basel 3.1 pipeline with 2027 transitional floor.
@@ -353,6 +461,39 @@ def transitional_pipeline_results(raw_data_bundle, b31_irb_transitional_config):
 def transitional_results_df(transitional_pipeline_results) -> pl.DataFrame:
     """Get transitional pipeline results as a collected DataFrame."""
     return transitional_pipeline_results.results.collect()
+
+
+@pytest.fixture(scope="session")
+def airb_results_df(transitional_pipeline_results) -> pl.DataFrame:
+    """Get A-IRB results from the Basel 3.1 pipeline.
+
+    Reuses transitional pipeline (2027-06-30, full_irb) which provides
+    meaningful maturities for A-IRB exposures. Session-scoped.
+    """
+    if transitional_pipeline_results.irb_results is None:
+        return pl.DataFrame()
+    return transitional_pipeline_results.irb_results.collect()
+
+
+@pytest.fixture(scope="session")
+def slotting_pipeline_results(raw_data_bundle, b31_slotting_calculation_config):
+    """
+    Run all fixtures through the Basel 3.1 pipeline with Slotting permissions.
+
+    Used for B31-E slotting acceptance tests. Session-scoped.
+    """
+    from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+    pipeline = PipelineOrchestrator()
+    return pipeline.run_with_data(raw_data_bundle, b31_slotting_calculation_config)
+
+
+@pytest.fixture(scope="session")
+def slotting_results_df(slotting_pipeline_results) -> pl.DataFrame:
+    """Get slotting results from the Basel 3.1 pipeline."""
+    if slotting_pipeline_results.slotting_results is None:
+        return pl.DataFrame()
+    return slotting_pipeline_results.slotting_results.collect()
 
 
 def get_result_for_exposure(

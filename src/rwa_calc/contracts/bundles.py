@@ -311,6 +311,41 @@ class AggregatedResultBundle:
 # =============================================================================
 
 
+@dataclass(frozen=True)
+class ComparisonBundle:
+    """
+    Output from dual-framework comparison (M3.1).
+
+    Holds CRR and Basel 3.1 pipeline results side by side, plus
+    pre-computed delta LazyFrames for impact analysis.
+
+    Why: During the Basel 3.1 transition period, firms must run both
+    frameworks in parallel to understand capital impact. This bundle
+    provides the joined results needed for M3.2 capital impact analysis
+    and M3.3 transitional floor schedule modelling.
+
+    Attributes:
+        crr_results: Full CRR pipeline output
+        b31_results: Full Basel 3.1 pipeline output
+        exposure_deltas: Per-exposure comparison (CRR vs B31 RWA, risk weights, EAD)
+        summary_by_class: Delta RWA aggregated by exposure class
+        summary_by_approach: Delta RWA aggregated by calculation approach
+        errors: Combined errors from both pipeline runs
+    """
+
+    crr_results: AggregatedResultBundle
+    b31_results: AggregatedResultBundle
+    exposure_deltas: pl.LazyFrame
+    summary_by_class: pl.LazyFrame
+    summary_by_approach: pl.LazyFrame
+    errors: list = field(default_factory=list)
+
+
+# =============================================================================
+# HELPER FUNCTIONS FOR BUNDLE CREATION
+# =============================================================================
+
+
 def create_empty_raw_data_bundle() -> RawDataBundle:
     """
     Create an empty RawDataBundle for testing.

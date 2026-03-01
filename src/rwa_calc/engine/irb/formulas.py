@@ -248,9 +248,7 @@ def apply_irb_formulas(
             )
         else:
             lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
-        is_airb = (
-            pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
-        )
+        is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
         floored_lgd = pl.max_horizontal(pl.col("lgd"), lgd_floor_expr)
         exposures = exposures.with_columns(
             pl.when(is_airb).then(floored_lgd).otherwise(pl.col("lgd")).alias("lgd_floored")

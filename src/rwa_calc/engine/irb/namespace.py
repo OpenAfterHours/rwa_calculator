@@ -359,9 +359,7 @@ class IRBLazyFrame:
 
             # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
             is_airb = (
-                pl.col("is_airb").fill_null(False)
-                if "is_airb" in schema_names
-                else pl.lit(False)
+                pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
             )
             floored_lgd = pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr)
             return self._lf.with_columns(
@@ -857,16 +855,11 @@ class IRBLazyFrame:
             else:
                 lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
             is_airb = (
-                pl.col("is_airb").fill_null(False)
-                if "is_airb" in schema_names
-                else pl.lit(False)
+                pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
             )
             floored_lgd = pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr)
             batch1.append(
-                pl.when(is_airb)
-                .then(floored_lgd)
-                .otherwise(pl.col(lgd_col))
-                .alias("lgd_floored")
+                pl.when(is_airb).then(floored_lgd).otherwise(pl.col(lgd_col)).alias("lgd_floored")
             )
         else:
             batch1.append(pl.col(lgd_col).alias("lgd_floored"))

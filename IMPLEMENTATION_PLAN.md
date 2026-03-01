@@ -31,11 +31,19 @@ Remaining (needs specification work before implementation):
 - [ ] **Unfunded credit protection eligibility restrictions** (CRE22.70-85) — Revised eligibility criteria for guarantees and credit derivatives under Basel 3.1. Needs specification work.
 - [x] **A-IRB LGD floor enforcement** (CRE30.41) — Done. LGD floors now gated on `is_airb` column: only A-IRB own-estimate LGDs are floored; F-IRB supervisory LGDs pass through unchanged. Subordinated unsecured detection (50% floor vs 25% senior) added via `has_seniority` parameter. 24 unit tests (was 16). Fixed in `formulas.py` (apply_irb_formulas), `namespace.py` (apply_lgd_floor, apply_all_formulas).
 
-### 2d. Testing and validation
+### 2d. Testing and validation — COMPLETE
 
 - [x] **Output floor phase-in validation tests** (M2.6) — Done. 11 tests covering all 6 transitional years plus edge cases.
-- [~] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 33 scenarios (10 SA, 7 F-IRB, 3 A-IRB, 6 CRM, 4 slotting, 3 output floor). Workbook structure at `workbooks/basel31_expected_outputs/` defines 39 scenarios across 8 groups (A-H). **Remaining:** Verify workbook calculations for groups G, H against regulatory formulas; extend JSON with verified values.
-- [~] **Basel 3.1 acceptance tests** (M2.5) — 77 tests across 6 test files: `test_scenario_b31_a_sa.py` (14), `test_scenario_b31_b_firb.py` (16), `test_scenario_b31_c_airb.py` (13), `test_scenario_b31_d_crm.py` (15), `test_scenario_b31_e_slotting.py` (13), and `test_scenario_b31_f_output_floor.py` (6). All 77 pass. **Remaining:** Groups G (provisions) and H (complex/combined) need test files.
+- [x] **Basel 3.1 expected outputs** (M2.1) — Expected outputs JSON at `tests/expected_outputs/basel31/expected_rwa_b31.json` with 38 scenarios across 8 groups (10 SA, 7 F-IRB, 3 A-IRB, 6 CRM, 4 slotting, 3 output floor, 3 provisions, 2 complex/combined).
+- [x] **Basel 3.1 acceptance tests** (M2.5) — **102 tests across 8 test files**, all passing:
+  - `test_scenario_b31_a_sa.py` (14): SA risk weight revisions
+  - `test_scenario_b31_b_firb.py` (16): F-IRB revised LGD/PD floors
+  - `test_scenario_b31_c_airb.py` (13): A-IRB LGD floor enforcement
+  - `test_scenario_b31_d_crm.py` (15): CRM revised haircuts
+  - `test_scenario_b31_e_slotting.py` (13): Slotting operational/HVCRE tables
+  - `test_scenario_b31_f_output_floor.py` (6): Output floor phase-in
+  - `test_scenario_b31_g_provisions.py` (15): Provision EAD deduction, EL shortfall/excess with B31 LGD
+  - `test_scenario_b31_h_complex.py` (10): Facility aggregation, SME SF removal impact
 
 ### 2e. Output floor engine — COMPLETE
 
@@ -67,10 +75,10 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 | Unit | 1,302 | 1 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 87 | 0 |
-| Acceptance (Basel 3.1) | 77 | 0 |
+| Acceptance (Basel 3.1) | 102 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,598** | **22** |
+| **Total** | **1,623** | **22** |
 
 ## Learnings
 
@@ -92,3 +100,8 @@ No code exists for any M3.x milestone. The infrastructure supports dual executio
 - Workbook `regulatory_params.py` PD floor discrepancy: uses `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) while production config correctly uses `0.0005` (Basel 3.1 0.05% per CRE30.20). Workbook needs updating.
 - **B31-D CRM test pattern:** D-scenario loans use `sa_results_df` with `rwa_post_factor` column (matching B31-A pattern). CRM adjustments are reflected in EAD before SA calculator runs. The `pipeline_results_df` has `rwa_final` (aggregated). Only D3 (equity haircut 25% vs CRR 15%) produces different RWA; D1/D2/D4/D5/D6 are unchanged because their specific haircut values happen to be the same across frameworks.
 - **Orphaned collateral/guarantee fixtures:** `LOAN_COLL_TEST_CORP_*`, `LOAN_GUAR_TEST_*`, `LOAN_PROV_TEST_*` beneficiary references in fixtures point to non-existent loans. These are "dedicated test loans" that were never created. Safe to ignore; does not affect test outcomes.
+- **B31-G provision tests use same fixtures as CRR-G:** The provision fixture data (`LOAN_PROV_G1/G2/G3`) is shared across frameworks. The pipeline config (`CalculationConfig.basel_3_1()`) drives different IRB results (LGD 40% vs 45%, no 1.06 scaling). SA provision deduction (G1) is identical across frameworks.
+- **B31-G2/G3 maturity differs from CRR:** With F-IRB reporting_date=2027-06-30 and loan maturity_date=2028-06-30, effective maturity = 1.0027y (vs CRR 2.5y). At M≈1.0, the maturity adjustment MA = 1.0 (numerator equals denominator). This dramatically reduces IRB RWA: G2 RWA drops from £6.1M (CRR) to £4.3M (B31) — 30% reduction.
+- **B31-H3 SME impact quantified:** Basel 3.1 SME corporates get 85% RW (vs CRR 100%) but lose the 0.7619 supporting factor. Net effect: effective RW rises from 76.19% to 85%, a 12% RWA increase. This is material for banks with large SME portfolios.
+- **EL shortfall/excess columns not yet computed:** `el_shortfall` and `el_excess` are defined in `schemas.py` but not computed anywhere in the engine. The IRB calculator produces `expected_loss` and `provision_allocated`, but the comparison (max(0, EL - provision) / max(0, provision - EL)) is not yet implemented. Tests verify RWA and EL values but not shortfall/excess columns directly.
+- **Pre-existing formatting issues:** `formulas.py` and `namespace.py` in `engine/irb/` had ruff format violations. Fixed as part of this increment.

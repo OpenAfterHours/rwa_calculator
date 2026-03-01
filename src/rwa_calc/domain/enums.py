@@ -334,14 +334,14 @@ class RiskType(StrEnum):
     FR = "full_risk"
     """
     Full Risk - 100% CCF under SA and F-IRB
-    
+
     -- Direct credit substitutes, guarantees, acceptances
     """
 
     MR = "medium_risk"
     """
     Medium Risk - 50% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
-    
+
     -- NIFs, RUFs, standby LCs, committed undrawn facilities
     """
 
@@ -372,7 +372,7 @@ class IRBApproachOption(StrEnum):
     FIRB = "firb"
     """
     Foundation IRB permitted (where regulatory allowed).
-    
+
     - Retail classes fall back to SA (FIRB not permitted for retail)
     - Specialised lending can use FIRB or slotting
     """
@@ -380,21 +380,21 @@ class IRBApproachOption(StrEnum):
     AIRB = "airb"
     """
     Advanced IRB permitted (where regulatory allowed).
-    
+
     - Specialised lending uses slotting (AIRB not permitted)
     """
 
     FULL_IRB = "full_irb"
     """
     Full IRB permissions (FIRB and AIRB).
-    
+
     - AIRB takes precedence when both are permitted
     """
 
     RETAIL_AIRB_CORPORATE_FIRB = "retail_airb_corporate_firb"
     """
     Hybrid approach: AIRB for retail and FIRB for corporate.
-    
+
     Corporates can be reclassified to retail if:
     - Managed as part of retail pool (is_managed_as_retail=True)
     - Aggregated exposure < EUR 1m

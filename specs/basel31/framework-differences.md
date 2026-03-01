@@ -113,9 +113,15 @@ Basel 3.1 (BCBS CRE33) introduces three distinct slotting weight tables:
 
 Compare with CRR slotting weights in the [Slotting Approach](../crr/slotting-approach.md) specification.
 
-## Large Corporate Correlation Multiplier (CRE31.5)
+## Financial Institution Correlation Multiplier (CRE31.5)
 
-Large corporates (consolidated revenue > £500m) receive a **1.25x** multiplier on their asset correlation under F-IRB.
+The 1.25x correlation multiplier applies to exposures to **financial institutions** only (not non-financial corporates):
+- Regulated financial institutions with total assets >= USD 100bn (CRR Art. 153(2): EUR 70bn threshold)
+- Unregulated financial institutions regardless of size
+
+This multiplier is already implemented via the `requires_fi_scalar` flag in the classifier and `_polars_correlation_expr()` in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.
+
+Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS9/24.
 
 ## A-IRB CCF Floor (CRE32.27)
 

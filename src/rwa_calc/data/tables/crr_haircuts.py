@@ -1,23 +1,32 @@
 """
-CRR CRM supervisory haircuts (CRR Art. 224).
+CRM supervisory haircuts (CRR Art. 224 / CRE22.52-53).
 
 Provides collateral haircut lookup tables as Polars DataFrames for efficient
-joins in the RWA calculation pipeline.
+joins in the RWA calculation pipeline. Supports both CRR and Basel 3.1 frameworks.
+
+Key differences under Basel 3.1 (CRE22.52-53):
+- 5 maturity bands (0-1y, 1-3y, 3-5y, 5-10y, 10y+) instead of CRR's 3 (0-1y, 1-5y, 5y+)
+- Higher haircuts for long-dated corporate bonds (CQS 1-2: 10%/12%, CQS 3: 15%)
+- Higher equity haircuts (main index: 25%, other: 35%)
+- Sovereign CQS 2-3 10y+ increased to 12%
 
 Reference:
     CRR Art. 224: Supervisory haircuts under the Financial Collateral
     Comprehensive Method
+    CRE22.52-53: Basel 3.1 supervisory haircuts
 """
+
+from __future__ import annotations
 
 from decimal import Decimal
 
 import polars as pl
 
 # =============================================================================
-# SUPERVISORY HAIRCUTS (CRR Art. 224)
+# CRR SUPERVISORY HAIRCUTS (CRR Art. 224)
 # =============================================================================
+# CRR uses 3 maturity bands: 0-1y, 1-5y, 5y+
 
-# Haircut values by collateral type
 COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     # Cash and equivalents
     "cash": Decimal("0.00"),
@@ -44,12 +53,60 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "other_physical": Decimal("0.40"),
 }
 
-# Currency mismatch haircut (CRR Art. 224)
+# =============================================================================
+# BASEL 3.1 SUPERVISORY HAIRCUTS (CRE22.52-53)
+# =============================================================================
+# Basel 3.1 uses 5 maturity bands: 0-1y, 1-3y, 3-5y, 5-10y, 10y+
+
+BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
+    # Cash and equivalents (unchanged)
+    "cash": Decimal("0.00"),
+    "gold": Decimal("0.15"),
+    # Government bonds CQS 1 — same as CRR for short/medium, split long-dated
+    "govt_bond_cqs1_0_1y": Decimal("0.005"),
+    "govt_bond_cqs1_1_3y": Decimal("0.02"),
+    "govt_bond_cqs1_3_5y": Decimal("0.02"),
+    "govt_bond_cqs1_5_10y": Decimal("0.04"),
+    "govt_bond_cqs1_10y_plus": Decimal("0.04"),
+    # Government bonds CQS 2-3 — 10y+ increases from 6% to 12%
+    "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
+    "govt_bond_cqs2_3_1_3y": Decimal("0.03"),
+    "govt_bond_cqs2_3_3_5y": Decimal("0.04"),
+    "govt_bond_cqs2_3_5_10y": Decimal("0.06"),
+    "govt_bond_cqs2_3_10y_plus": Decimal("0.12"),
+    # Corporate bonds CQS 1-2 — significant increases for long-dated
+    "corp_bond_cqs1_2_0_1y": Decimal("0.01"),
+    "corp_bond_cqs1_2_1_3y": Decimal("0.04"),
+    "corp_bond_cqs1_2_3_5y": Decimal("0.06"),
+    "corp_bond_cqs1_2_5_10y": Decimal("0.10"),
+    "corp_bond_cqs1_2_10y_plus": Decimal("0.12"),
+    # Corporate bonds CQS 3 — significant increases for long-dated
+    "corp_bond_cqs3_0_1y": Decimal("0.02"),
+    "corp_bond_cqs3_1_3y": Decimal("0.06"),
+    "corp_bond_cqs3_3_5y": Decimal("0.08"),
+    "corp_bond_cqs3_5_10y": Decimal("0.15"),
+    "corp_bond_cqs3_10y_plus": Decimal("0.15"),
+    # Equity — increased under Basel 3.1
+    "equity_main_index": Decimal("0.25"),  # CRR: 15%
+    "equity_other": Decimal("0.35"),  # CRR: 25%
+    # Other (unchanged)
+    "receivables": Decimal("0.20"),
+    "other_physical": Decimal("0.40"),
+}
+
+# Currency mismatch haircut (CRR Art. 224 / CRE22.54) — same under both frameworks
 FX_HAIRCUT: Decimal = Decimal("0.08")
 
 
-def _create_haircut_df() -> pl.DataFrame:
-    """Create haircut lookup DataFrame."""
+def _create_haircut_df(is_basel_3_1: bool = False) -> pl.DataFrame:
+    """Create haircut lookup DataFrame for the specified framework."""
+    if is_basel_3_1:
+        return _create_basel31_haircut_df()
+    return _create_crr_haircut_df()
+
+
+def _create_crr_haircut_df() -> pl.DataFrame:
+    """Create CRR haircut lookup DataFrame (3 maturity bands)."""
     rows = [
         # Cash and gold
         {
@@ -236,32 +293,323 @@ def _create_haircut_df() -> pl.DataFrame:
     )
 
 
-def get_haircut_table() -> pl.DataFrame:
+def _create_basel31_haircut_df() -> pl.DataFrame:
+    """Create Basel 3.1 haircut lookup DataFrame (5 maturity bands per CRE22.52-53)."""
+    rows = [
+        # Cash and gold (unchanged)
+        {
+            "collateral_type": "cash",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.00,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "gold",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        # Government bonds CQS 1
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "0_1y",
+            "haircut": 0.005,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "1_3y",
+            "haircut": 0.02,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "3_5y",
+            "haircut": 0.02,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "5_10y",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 1,
+            "maturity_band": "10y_plus",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        # Government bonds CQS 2-3
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "1_3y",
+            "haircut": 0.03,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "3_5y",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "5_10y",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 2,
+            "maturity_band": "10y_plus",
+            "haircut": 0.12,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "1_3y",
+            "haircut": 0.03,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "3_5y",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "5_10y",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 3,
+            "maturity_band": "10y_plus",
+            "haircut": 0.12,
+            "is_main_index": None,
+        },
+        # Corporate bonds CQS 1-2
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "1_3y",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "3_5y",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "5_10y",
+            "haircut": 0.10,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 1,
+            "maturity_band": "10y_plus",
+            "haircut": 0.12,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "0_1y",
+            "haircut": 0.01,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "1_3y",
+            "haircut": 0.04,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "3_5y",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "5_10y",
+            "haircut": 0.10,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
+            "maturity_band": "10y_plus",
+            "haircut": 0.12,
+            "is_main_index": None,
+        },
+        # Corporate bonds CQS 3
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "0_1y",
+            "haircut": 0.02,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "1_3y",
+            "haircut": 0.06,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "3_5y",
+            "haircut": 0.08,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "5_10y",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 3,
+            "maturity_band": "10y_plus",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        # Equity — higher under Basel 3.1
+        {
+            "collateral_type": "equity",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.25,
+            "is_main_index": True,
+        },
+        {
+            "collateral_type": "equity",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.35,
+            "is_main_index": False,
+        },
+        # Other (unchanged)
+        {
+            "collateral_type": "receivables",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.20,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "other_physical",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.40,
+            "is_main_index": None,
+        },
+    ]
+
+    return pl.DataFrame(rows).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("haircut").cast(pl.Float64),
+        ]
+    )
+
+
+def get_haircut_table(is_basel_3_1: bool = False) -> pl.DataFrame:
     """
-    Get collateral haircut lookup table.
+    Get collateral haircut lookup table for the given framework.
+
+    Args:
+        is_basel_3_1: True for Basel 3.1 haircuts (CRE22.52-53), False for CRR (Art. 224)
 
     Returns:
         DataFrame with columns: collateral_type, cqs, maturity_band, haircut, is_main_index
     """
-    return _create_haircut_df()
+    return _create_haircut_df(is_basel_3_1=is_basel_3_1)
 
 
-def get_maturity_band(residual_maturity_years: float) -> str:
+def get_maturity_band(residual_maturity_years: float, is_basel_3_1: bool = False) -> str:
     """
     Determine maturity band from residual maturity.
 
+    CRR uses 3 bands: 0-1y, 1-5y, 5y+
+    Basel 3.1 uses 5 bands: 0-1y, 1-3y, 3-5y, 5-10y, 10y+
+
     Args:
         residual_maturity_years: Residual maturity in years
+        is_basel_3_1: True for Basel 3.1 maturity bands
 
     Returns:
-        Maturity band string: "0_1y", "1_5y", or "5y_plus"
+        Maturity band string
     """
-    if residual_maturity_years <= 1.0:
-        return "0_1y"
-    elif residual_maturity_years <= 5.0:
-        return "1_5y"
+    if is_basel_3_1:
+        if residual_maturity_years <= 1.0:
+            return "0_1y"
+        elif residual_maturity_years <= 3.0:
+            return "1_3y"
+        elif residual_maturity_years <= 5.0:
+            return "3_5y"
+        elif residual_maturity_years <= 10.0:
+            return "5_10y"
+        else:
+            return "10y_plus"
     else:
-        return "5y_plus"
+        if residual_maturity_years <= 1.0:
+            return "0_1y"
+        elif residual_maturity_years <= 5.0:
+            return "1_5y"
+        else:
+            return "5y_plus"
 
 
 def lookup_collateral_haircut(
@@ -269,6 +617,7 @@ def lookup_collateral_haircut(
     cqs: int | None = None,
     residual_maturity_years: float | None = None,
     is_main_index: bool = False,
+    is_basel_3_1: bool = False,
 ) -> Decimal:
     """
     Look up supervisory haircut for collateral.
@@ -281,24 +630,26 @@ def lookup_collateral_haircut(
         cqs: Credit quality step of issuer (for debt securities)
         residual_maturity_years: Remaining maturity in years
         is_main_index: For equity, whether it's on a main index
+        is_basel_3_1: Whether to use Basel 3.1 haircuts (CRE22.52-53)
 
     Returns:
         Haircut as Decimal
     """
+    table = BASEL31_COLLATERAL_HAIRCUTS if is_basel_3_1 else COLLATERAL_HAIRCUTS
     coll_lower = collateral_type.lower()
 
     # Cash - 0%
     if coll_lower in ("cash", "deposit"):
-        return COLLATERAL_HAIRCUTS["cash"]
+        return table["cash"]
 
     # Gold - 15%
     if coll_lower == "gold":
-        return COLLATERAL_HAIRCUTS["gold"]
+        return table["gold"]
 
     # Government bonds
     if coll_lower in ("govt_bond", "sovereign_bond", "government_bond", "gilt"):
         maturity = residual_maturity_years or 5.0
-        maturity_band = get_maturity_band(maturity)
+        maturity_band = get_maturity_band(maturity, is_basel_3_1=is_basel_3_1)
 
         if cqs == 1:
             key = f"govt_bond_cqs1_{maturity_band}"
@@ -308,12 +659,12 @@ def lookup_collateral_haircut(
             # CQS 4+ or unrated - use higher haircut
             return Decimal("0.15")
 
-        return COLLATERAL_HAIRCUTS.get(key, Decimal("0.15"))
+        return table.get(key, Decimal("0.15"))
 
     # Corporate bonds
     if coll_lower in ("corp_bond", "corporate_bond"):
         maturity = residual_maturity_years or 5.0
-        maturity_band = get_maturity_band(maturity)
+        maturity_band = get_maturity_band(maturity, is_basel_3_1=is_basel_3_1)
 
         if cqs in (1, 2):
             key = f"corp_bond_cqs1_2_{maturity_band}"
@@ -323,24 +674,24 @@ def lookup_collateral_haircut(
             # Lower rated - not eligible or high haircut
             return Decimal("0.20")
 
-        return COLLATERAL_HAIRCUTS.get(key, Decimal("0.20"))
+        return table.get(key, Decimal("0.20"))
 
     # Equity
     if coll_lower in ("equity", "shares", "stock"):
         if is_main_index:
-            return COLLATERAL_HAIRCUTS["equity_main_index"]
-        return COLLATERAL_HAIRCUTS["equity_other"]
+            return table["equity_main_index"]
+        return table["equity_other"]
 
     # Receivables
     if coll_lower in ("receivables", "trade_receivables"):
-        return COLLATERAL_HAIRCUTS["receivables"]
+        return table["receivables"]
 
     # Real estate (not typically haircut-based in CRM)
     if coll_lower in ("real_estate", "property", "rre", "cre"):
         return Decimal("0.00")
 
     # Other physical collateral
-    return COLLATERAL_HAIRCUTS["other_physical"]
+    return table["other_physical"]
 
 
 def lookup_fx_haircut(

@@ -330,7 +330,8 @@ class IRBLazyFrame:
 
         CRR: No LGD floor (A-IRB models LGD freely)
         Basel 3.1 (CRE30.41): Differentiated floors by collateral type:
-            - Unsecured: 25%, Financial: 0%, Receivables: 10%
+            - Unsecured senior: 25%, Subordinated: 50%
+            - Financial: 0%, Receivables: 10%
             - RRE: 5%, CRE: 10%, Other physical: 15%
 
         LGD floors only apply to A-IRB own-estimate LGDs. F-IRB supervisory
@@ -343,16 +344,28 @@ class IRBLazyFrame:
             LazyFrame with lgd_floored column
         """
         schema = self._lf.collect_schema()
-        lgd_col = "lgd_input" if "lgd_input" in schema.names() else "lgd"
+        schema_names = schema.names()
+        lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
 
         if config.is_basel_3_1:
-            has_collateral_type = "collateral_type" in schema.names()
+            has_collateral_type = "collateral_type" in schema_names
+            has_seniority = "seniority" in schema_names
             if has_collateral_type:
-                lgd_floor_expr = _lgd_floor_expression_with_collateral(config)
+                lgd_floor_expr = _lgd_floor_expression_with_collateral(
+                    config, has_seniority=has_seniority
+                )
             else:
-                lgd_floor_expr = _lgd_floor_expression(config)
+                lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+
+            # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
+            is_airb = (
+                pl.col("is_airb").fill_null(False)
+                if "is_airb" in schema_names
+                else pl.lit(False)
+            )
+            floored_lgd = pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr)
             return self._lf.with_columns(
-                pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr).alias("lgd_floored")
+                pl.when(is_airb).then(floored_lgd).otherwise(pl.col(lgd_col)).alias("lgd_floored")
             )
         return self._lf.with_columns(pl.col(lgd_col).alias("lgd_floored"))
 
@@ -831,15 +844,30 @@ class IRBLazyFrame:
         pd_floor_expr = _pd_floor_expression(config)
         batch1.append(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
-        # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB)
+        # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB only)
+        # F-IRB supervisory LGDs are regulatory values — don't floor them (CRE30.41)
         lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
         if config.is_basel_3_1:
             has_collateral_type = "collateral_type" in schema_names
+            has_seniority = "seniority" in schema_names
             if has_collateral_type:
-                lgd_floor_expr = _lgd_floor_expression_with_collateral(config)
+                lgd_floor_expr = _lgd_floor_expression_with_collateral(
+                    config, has_seniority=has_seniority
+                )
             else:
-                lgd_floor_expr = _lgd_floor_expression(config)
-            batch1.append(pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr).alias("lgd_floored"))
+                lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+            is_airb = (
+                pl.col("is_airb").fill_null(False)
+                if "is_airb" in schema_names
+                else pl.lit(False)
+            )
+            floored_lgd = pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr)
+            batch1.append(
+                pl.when(is_airb)
+                .then(floored_lgd)
+                .otherwise(pl.col(lgd_col))
+                .alias("lgd_floored")
+            )
         else:
             batch1.append(pl.col(lgd_col).alias("lgd_floored"))
 

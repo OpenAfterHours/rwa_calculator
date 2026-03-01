@@ -548,28 +548,51 @@ class TestLGDFloors:
         # CRR: lgd_floored == lgd (no floor)
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
-    def test_apply_irb_formulas_lgd_floor_basel31_unsecured(
+    def test_apply_irb_formulas_lgd_floor_basel31_airb_unsecured(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """apply_irb_formulas() under Basel 3.1 floors LGD at 25%."""
+        """apply_irb_formulas() under Basel 3.1 floors A-IRB LGD at 25%."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["CORPORATE"],
                 "pd": [0.01],
                 "lgd": [0.10],
                 "ead_final": [1_000_000.0],
+                "is_airb": [True],
             }
         )
         result = apply_irb_formulas(lf, basel31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.25)
 
-    def test_apply_irb_formulas_lgd_floor_basel31_with_collateral(
+    def test_apply_irb_formulas_lgd_floor_basel31_firb_no_floor(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """apply_irb_formulas() under Basel 3.1 does NOT floor F-IRB LGD.
+
+        F-IRB uses supervisory LGD values which are regulatory and don't
+        need flooring. Only A-IRB own-estimate LGDs are floored (CRE30.41).
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["CORPORATE"],
+                "pd": [0.01],
+                "lgd": [0.10],
+                "ead_final": [1_000_000.0],
+                "is_airb": [False],
+            }
+        )
+        result = apply_irb_formulas(lf, basel31_config).collect()
+        # F-IRB: lgd_floored == lgd (no floor applied)
+        assert result["lgd_floored"][0] == pytest.approx(0.10)
+
+    def test_apply_irb_formulas_lgd_floor_basel31_airb_with_collateral(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
         """apply_irb_formulas() with collateral_type column uses
-        per-collateral floors."""
+        per-collateral floors for A-IRB rows."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["CORPORATE", "CORPORATE"],
@@ -577,6 +600,7 @@ class TestLGDFloors:
                 "lgd": [0.01, 0.01],
                 "ead_final": [1_000_000.0, 1_000_000.0],
                 "collateral_type": ["financial", "residential_re"],
+                "is_airb": [True, True],
             }
         )
         result = apply_irb_formulas(lf, basel31_config).collect()
@@ -584,6 +608,31 @@ class TestLGDFloors:
         assert result["lgd_floored"][0] == pytest.approx(0.01)
         # Residential RE: floor 5%, so lgd stays at 0.05
         assert result["lgd_floored"][1] == pytest.approx(0.05)
+
+    def test_apply_irb_formulas_lgd_floor_basel31_mixed_approaches(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 LGD floor applies to A-IRB but NOT F-IRB rows in same frame.
+
+        This tests the core regulatory requirement: LGD floors per CRE30.41
+        only apply to A-IRB own-estimate LGDs. F-IRB supervisory LGDs are
+        regulatory values that don't need flooring.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "pd": [0.01, 0.01],
+                "lgd": [0.10, 0.10],
+                "ead_final": [1_000_000.0, 1_000_000.0],
+                "is_airb": [True, False],
+            }
+        )
+        result = apply_irb_formulas(lf, basel31_config).collect()
+        # A-IRB row: LGD floored to 25% (unsecured)
+        assert result["lgd_floored"][0] == pytest.approx(0.25)
+        # F-IRB row: LGD unchanged at 10% (no floor)
+        assert result["lgd_floored"][1] == pytest.approx(0.10)
 
     def test_namespace_apply_lgd_floor_crr(
         self,
@@ -600,20 +649,38 @@ class TestLGDFloors:
         result = lf.irb.apply_lgd_floor(crr_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
-    def test_namespace_apply_lgd_floor_basel31(
+    def test_namespace_apply_lgd_floor_basel31_airb(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Namespace apply_lgd_floor under Basel 3.1 floors at 25%."""
+        """Namespace apply_lgd_floor under Basel 3.1 floors A-IRB at 25%."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["CORPORATE"],
                 "pd": [0.01],
                 "lgd": [0.10],
+                "is_airb": [True],
             }
         )
         result = lf.irb.apply_lgd_floor(basel31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.25)
+
+    def test_namespace_apply_lgd_floor_basel31_firb_no_floor(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Namespace apply_lgd_floor under Basel 3.1 does NOT floor F-IRB."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["CORPORATE"],
+                "pd": [0.01],
+                "lgd": [0.10],
+                "is_airb": [False],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        # F-IRB: no floor applied
+        assert result["lgd_floored"][0] == pytest.approx(0.10)
 
     def test_multiple_collateral_types_floors(
         self,
@@ -658,6 +725,102 @@ class TestLGDFloors:
             _lgd_floor_expression_with_collateral(basel31_config).alias("lgd_floor")
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.25)
+
+    def test_subordinated_unsecured_floor_50pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 (CRE30.41): Subordinated unsecured LGD floor is 50%.
+
+        When seniority column is available and indicates subordinated debt,
+        the unsecured LGD floor increases from 25% to 50%.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "collateral_type": ["unsecured", "unsecured"],
+                "seniority": ["subordinated", "senior"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_seniority=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Subordinated unsecured: 50% floor
+        assert result["lgd_floor"][0] == pytest.approx(0.50)
+        # Senior unsecured: 25% floor
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_subordinated_unsecured_floor_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1: Subordinated floor 50% via _lgd_floor_expression (no collateral col)."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "seniority": ["subordinated", "senior"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(
+                basel31_config, has_seniority=True
+            ).alias("lgd_floor")
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.50)
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_subordinated_with_collateral_uses_collateral_floor(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1: Subordinated with physical collateral uses collateral floor, not 50%.
+
+        The 50% subordinated floor only applies to unsecured exposures.
+        When collateral is present, the collateral-specific floor applies.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.01, 0.01],
+                "collateral_type": ["residential_re", "other_physical"],
+                "seniority": ["subordinated", "subordinated"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_seniority=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Collateral floor takes precedence: RRE 5%, other physical 15%
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        assert result["lgd_floor"][1] == pytest.approx(0.15)
+
+    def test_apply_all_formulas_lgd_floor_airb_only(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """apply_all_formulas() gates LGD floor on A-IRB only.
+
+        Verifies that the full namespace pipeline correctly applies LGD
+        floors only to A-IRB rows and leaves F-IRB rows unaffected.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "pd": [0.01, 0.01],
+                "lgd": [0.10, 0.10],
+                "lgd_input": [0.10, 0.10],
+                "ead_final": [1_000_000.0, 1_000_000.0],
+                "is_airb": [True, False],
+                "approach": [ApproachType.AIRB.value, ApproachType.FIRB.value],
+            }
+        )
+        result = lf.irb.apply_all_formulas(basel31_config).collect()
+        # A-IRB: LGD floored to 25%
+        assert result["lgd_floored"][0] == pytest.approx(0.25)
+        # F-IRB: LGD unchanged at 10%
+        assert result["lgd_floored"][1] == pytest.approx(0.10)
 
 
 # =============================================================================

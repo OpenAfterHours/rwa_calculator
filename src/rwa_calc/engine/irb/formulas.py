@@ -95,20 +95,25 @@ def _pd_floor_expression(config: CalculationConfig) -> pl.Expr:
     )
 
 
-def _lgd_floor_expression(config: CalculationConfig) -> pl.Expr:
+def _lgd_floor_expression(
+    config: CalculationConfig,
+    *,
+    has_seniority: bool = False,
+) -> pl.Expr:
     """
-    Build Polars expression for per-collateral-type LGD floor.
+    Build Polars expression for LGD floor (no collateral_type column).
 
     Under CRR: No LGD floors (returns 0.0).
     Under Basel 3.1 (CRE30.41): Differentiated floors for A-IRB:
         - Unsecured (senior): 25%
+        - Unsecured (subordinated): 50%
         - Financial collateral: 0%
         - Receivables: 10%
         - CRE: 10%, RRE: 5%
         - Other physical: 15%
 
-    Uses collateral_type column if available, defaults to unsecured (25%)
-    which is the most conservative floor.
+    Without a collateral_type column, defaults to unsecured floor (25%/50%).
+    When has_seniority=True, checks seniority column for subordinated (50%).
 
     Returns a Polars expression evaluating to the per-row LGD floor value.
     """
@@ -116,23 +121,54 @@ def _lgd_floor_expression(config: CalculationConfig) -> pl.Expr:
         return pl.lit(0.0)
 
     floors = config.lgd_floors
-    # Default to unsecured floor (25%) — most conservative
+
+    if has_seniority:
+        is_subordinated = (
+            pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
+        )
+        return (
+            pl.when(is_subordinated)
+            .then(pl.lit(float(floors.subordinated_unsecured)))
+            .otherwise(pl.lit(float(floors.unsecured)))
+        )
+
+    # Default to unsecured floor (25%) — most conservative for senior
     return pl.lit(float(floors.unsecured))
 
 
-def _lgd_floor_expression_with_collateral(config: CalculationConfig) -> pl.Expr:
+def _lgd_floor_expression_with_collateral(
+    config: CalculationConfig,
+    *,
+    has_seniority: bool = False,
+) -> pl.Expr:
     """
     Build Polars expression for per-collateral-type LGD floor when collateral_type
     column is available.
 
     This is used when the dataframe has a collateral_type column, allowing
     precise per-row LGD floors based on the primary collateral type.
+
+    When has_seniority=True, subordinated unsecured exposures get the higher
+    50% floor instead of 25% (CRE30.41).
     """
     if config.is_crr:
         return pl.lit(0.0)
 
     floors = config.lgd_floors
     coll = pl.col("collateral_type").fill_null("unsecured").str.to_lowercase()
+
+    # Determine unsecured floor: 50% for subordinated, 25% for senior (CRE30.41)
+    if has_seniority:
+        is_subordinated = (
+            pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
+        )
+        unsecured_floor = (
+            pl.when(is_subordinated)
+            .then(pl.lit(float(floors.subordinated_unsecured)))
+            .otherwise(pl.lit(float(floors.unsecured)))
+        )
+    else:
+        unsecured_floor = pl.lit(float(floors.unsecured))
 
     return (
         pl.when(coll.is_in(["financial_collateral", "cash", "deposit", "gold", "financial"]))
@@ -147,7 +183,7 @@ def _lgd_floor_expression_with_collateral(config: CalculationConfig) -> pl.Expr:
         .then(pl.lit(float(floors.commercial_real_estate)))
         .when(coll.is_in(["other_physical", "equipment", "inventory"]))
         .then(pl.lit(float(floors.other_physical)))
-        .otherwise(pl.lit(float(floors.unsecured)))
+        .otherwise(unsecured_floor)
     )
 
 
@@ -201,14 +237,23 @@ def apply_irb_formulas(
     )
 
     # Step 2: Apply LGD floor (Basel 3.1 A-IRB only, CRR has no LGD floors)
+    # LGD floors only apply to A-IRB own-estimate LGDs (CRE30.41).
+    # F-IRB supervisory LGDs are regulatory values and don't need flooring.
     if config.is_basel_3_1:
         has_collateral_type = "collateral_type" in schema_names
+        has_seniority = "seniority" in schema_names
         if has_collateral_type:
-            lgd_floor_expr = _lgd_floor_expression_with_collateral(config)
+            lgd_floor_expr = _lgd_floor_expression_with_collateral(
+                config, has_seniority=has_seniority
+            )
         else:
-            lgd_floor_expr = _lgd_floor_expression(config)
+            lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+        is_airb = (
+            pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
+        )
+        floored_lgd = pl.max_horizontal(pl.col("lgd"), lgd_floor_expr)
         exposures = exposures.with_columns(
-            pl.max_horizontal(pl.col("lgd"), lgd_floor_expr).alias("lgd_floored")
+            pl.when(is_airb).then(floored_lgd).otherwise(pl.col("lgd")).alias("lgd_floored")
         )
     else:
         exposures = exposures.with_columns(pl.col("lgd").alias("lgd_floored"))

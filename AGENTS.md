@@ -15,6 +15,12 @@ Run these after implementing to get immediate feedback:
 - Single test file: `uv run pytest tests/unit/test_<name>.py -x`
 - Acceptance tests: `uv run pytest tests/acceptance/ --benchmark-skip`
 
+## Fixtures
+
+- Generate parquet fixtures before running acceptance tests: `uv run python tests/fixtures/generate_all.py`
+- Fixtures are NOT checked into git; they must be regenerated after cloning
+- If uv cache is read-only, use: `UV_CACHE_DIR=/tmp/claude-1000/uv-cache uv run ...`
+
 ## Operational Notes
 
 - Python 3.13+ required

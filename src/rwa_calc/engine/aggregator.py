@@ -426,24 +426,6 @@ class OutputAggregator:
         # Get floor percentage
         floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
 
-        # Determine SA RWA column
-        sa_schema = sa_results.collect_schema()
-        if "rwa_post_factor" in sa_schema.names():
-            sa_rwa_col = "rwa_post_factor"
-        elif "rwa" in sa_schema.names():
-            sa_rwa_col = "rwa"
-        else:
-            # No RWA column found - return unchanged
-            return combined, self._create_empty_floor_impact_frame()
-
-        # Prepare SA results for comparison
-        sa_rwa = sa_results.select(
-            [
-                pl.col("exposure_reference"),
-                pl.col(sa_rwa_col).alias("sa_rwa"),
-            ]
-        )
-
         # Ensure combined has rwa_final column
         combined_schema = combined.collect_schema()
         if "rwa_final" not in combined_schema.names():
@@ -461,13 +443,33 @@ class OutputAggregator:
             ]
         )
 
-        # Join with SA for floor comparison (only for IRB exposures)
-        result = combined.join(
-            sa_rwa,
-            on="exposure_reference",
-            how="left",
-            suffix="_sa",
-        )
+        # Get SA RWA for each exposure. If calculate_unified already stored
+        # sa_rwa inline (single-pass path), use it directly. Otherwise join
+        # from the separate SA results frame (aggregate_with_audit path).
+        combined_schema = combined.collect_schema()
+        if "sa_rwa" in combined_schema.names():
+            result = combined
+        else:
+            sa_schema = sa_results.collect_schema()
+            if "rwa_post_factor" in sa_schema.names():
+                sa_rwa_col = "rwa_post_factor"
+            elif "rwa" in sa_schema.names():
+                sa_rwa_col = "rwa"
+            else:
+                return combined, self._create_empty_floor_impact_frame()
+
+            sa_rwa = sa_results.select(
+                [
+                    pl.col("exposure_reference"),
+                    pl.col(sa_rwa_col).alias("sa_rwa"),
+                ]
+            )
+            result = combined.join(
+                sa_rwa,
+                on="exposure_reference",
+                how="left",
+                suffix="_sa",
+            )
 
         # IRB approaches: "foundation_irb"/"advanced_irb" from ApproachType enum,
         # "FIRB" from aggregator fallback when 'approach' column is missing

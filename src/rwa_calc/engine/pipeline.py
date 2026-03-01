@@ -215,8 +215,8 @@ class PipelineOrchestrator:
         # Reset errors for new run
         self._errors = []
 
-        # Ensure components are initialized
-        self._ensure_components_initialized()
+        # Ensure components are initialized (config needed for framework-specific CRM)
+        self._ensure_components_initialized(config)
 
         # Validate input data values
         self._validate_input_data(data)
@@ -263,8 +263,12 @@ class PipelineOrchestrator:
     # Private Methods - Component Initialization
     # =========================================================================
 
-    def _ensure_components_initialized(self) -> None:
-        """Ensure all required components are initialized."""
+    def _ensure_components_initialized(self, config: CalculationConfig | None = None) -> None:
+        """Ensure all required components are initialized.
+
+        Args:
+            config: Calculation config, used to create framework-specific CRM processor
+        """
         from rwa_calc.engine.aggregator import OutputAggregator
         from rwa_calc.engine.classifier import ExposureClassifier
         from rwa_calc.engine.crm.processor import CRMProcessor
@@ -279,7 +283,8 @@ class PipelineOrchestrator:
         if self._classifier is None:
             self._classifier = ExposureClassifier()
         if self._crm_processor is None:
-            self._crm_processor = CRMProcessor()
+            is_b31 = config.is_basel_3_1 if config else False
+            self._crm_processor = CRMProcessor(is_basel_3_1=is_b31)
         if self._sa_calculator is None:
             self._sa_calculator = SACalculator()
         if self._irb_calculator is None:

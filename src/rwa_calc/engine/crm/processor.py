@@ -300,10 +300,15 @@ class CRMProcessor:
     GUARANTEE_REQUIRED_COLUMNS = {"beneficiary_reference", "amount_covered", "guarantor"}
     PROVISION_REQUIRED_COLUMNS = {"beneficiary_reference", "amount"}
 
-    def __init__(self) -> None:
-        """Initialize CRM processor with sub-calculators."""
+    def __init__(self, is_basel_3_1: bool = False) -> None:
+        """Initialize CRM processor with sub-calculators.
+
+        Args:
+            is_basel_3_1: True for Basel 3.1 framework (affects haircuts and supervisory LGD)
+        """
         self._ccf_calculator = CCFCalculator()
-        self._haircut_calculator = HaircutCalculator()
+        self._haircut_calculator = HaircutCalculator(is_basel_3_1=is_basel_3_1)
+        self._is_basel_3_1 = is_basel_3_1
 
     def apply_crm(
         self,
@@ -810,17 +815,25 @@ class CRMProcessor:
 
         coll_type_lower = pl.col("collateral_type").str.to_lowercase()
 
+        # F-IRB supervisory LGD values differ by framework:
+        # CRR Art. 161: receivables/RE 35%, other 40%, unsecured 45%
+        # Basel 3.1 CRE32.9-12: receivables/RE 20%, other 25%, unsecured 40%
+        lgd_receivables = 0.20 if self._is_basel_3_1 else 0.35
+        lgd_real_estate = 0.20 if self._is_basel_3_1 else 0.35
+        lgd_other_physical = 0.25 if self._is_basel_3_1 else 0.40
+        lgd_unsecured = 0.40 if self._is_basel_3_1 else 0.45
+
         annotated = adjusted_collateral.with_columns(
             [
                 pl.when(coll_type_lower.is_in(_financial_types))
                 .then(pl.lit(0.0))
                 .when(coll_type_lower.is_in(_receivable_types))
-                .then(pl.lit(0.35))
+                .then(pl.lit(lgd_receivables))
                 .when(coll_type_lower.is_in(_real_estate_types))
-                .then(pl.lit(0.35))
+                .then(pl.lit(lgd_real_estate))
                 .when(coll_type_lower.is_in(_other_physical_types))
-                .then(pl.lit(0.40))
-                .otherwise(pl.lit(0.45))
+                .then(pl.lit(lgd_other_physical))
+                .otherwise(pl.lit(lgd_unsecured))
                 .alias("collateral_lgd"),
                 pl.when(coll_type_lower.is_in(_financial_types))
                 .then(pl.lit(1.0))
@@ -1166,19 +1179,27 @@ class CRMProcessor:
 
         coll_type_lower = pl.col("collateral_type").str.to_lowercase()
 
+        # F-IRB supervisory LGD values differ by framework:
+        # CRR Art. 161: receivables/RE 35%, other 40%, unsecured 45%
+        # Basel 3.1 CRE32.9-12: receivables/RE 20%, other 25%, unsecured 40%
+        lgd_receivables = 0.20 if self._is_basel_3_1 else 0.35
+        lgd_real_estate = 0.20 if self._is_basel_3_1 else 0.35
+        lgd_other_physical = 0.25 if self._is_basel_3_1 else 0.40
+        lgd_unsecured = 0.40 if self._is_basel_3_1 else 0.45
+
         collateral_with_lgd = collateral.with_columns(
             [
                 pl.when(coll_type_lower.is_in(_financial_types))
                 .then(pl.lit(0.0))
                 .when(coll_type_lower.is_in(_receivable_types))
-                .then(pl.lit(0.35))
+                .then(pl.lit(lgd_receivables))
                 .when(coll_type_lower.is_in(_real_estate_types))
-                .then(pl.lit(0.35))
+                .then(pl.lit(lgd_real_estate))
                 .when(coll_type_lower.is_in(_other_physical_types))
-                .then(pl.lit(0.40))
-                .otherwise(pl.lit(0.45))
+                .then(pl.lit(lgd_other_physical))
+                .otherwise(pl.lit(lgd_unsecured))
                 .alias("collateral_lgd"),
-                # Overcollateralisation ratio (CRR Art. 230 / CRE32.9-12)
+                # Overcollateralisation ratio (CRR Art. 230 / CRE32.9-12) — same both frameworks
                 pl.when(coll_type_lower.is_in(_financial_types))
                 .then(pl.lit(1.0))
                 .when(coll_type_lower.is_in(_receivable_types))
@@ -1189,7 +1210,7 @@ class CRMProcessor:
                 .then(pl.lit(1.40))
                 .otherwise(pl.lit(1.0))
                 .alias("overcollateralisation_ratio"),
-                # Minimum collateralisation threshold
+                # Minimum collateralisation threshold — same both frameworks
                 pl.when(coll_type_lower.is_in(_financial_types))
                 .then(pl.lit(0.0))
                 .when(coll_type_lower.is_in(_receivable_types))
@@ -1407,8 +1428,8 @@ class CRMProcessor:
         Apply F-IRB supervisory LGD when no collateral is available.
 
         For F-IRB exposures without collateral, uses supervisory LGD values:
-        - Senior unsecured: 45%
-        - Subordinated: 75%
+        - CRR Art. 161: Senior unsecured 45%, Subordinated 75%
+        - Basel 3.1 CRE32.9-12: Senior unsecured 40%, Subordinated 75%
 
         A-IRB exposures keep their modelled LGD.
 
@@ -1418,6 +1439,9 @@ class CRMProcessor:
         Returns:
             Exposures with lgd_post_crm set for F-IRB
         """
+        # F-IRB senior unsecured LGD differs by framework
+        lgd_senior = 0.40 if self._is_basel_3_1 else 0.45
+
         # Add collateral-related columns with zero values for consistency
         exposures = exposures.with_columns(
             [
@@ -1441,19 +1465,19 @@ class CRMProcessor:
                             .is_in(["subordinated", "junior"])
                         )
                     )
-                    .then(pl.lit(0.75))  # Subordinated
+                    .then(pl.lit(0.75))  # Subordinated (same both frameworks)
                     .when(pl.col("approach") == ApproachType.FIRB.value)
-                    .then(pl.lit(0.45))  # Senior unsecured
+                    .then(pl.lit(lgd_senior))  # Senior unsecured
                     .otherwise(pl.col("lgd_pre_crm"))  # A-IRB or SA: keep existing
                     .alias("lgd_post_crm"),
                 ]
             )
         else:
-            # No seniority column: use 45% for all F-IRB (senior unsecured default)
+            # No seniority column: use senior unsecured default for all F-IRB
             exposures = exposures.with_columns(
                 [
                     pl.when(pl.col("approach") == ApproachType.FIRB.value)
-                    .then(pl.lit(0.45))  # Senior unsecured
+                    .then(pl.lit(lgd_senior))  # Senior unsecured
                     .otherwise(pl.col("lgd_pre_crm"))  # A-IRB or SA: keep existing
                     .alias("lgd_post_crm"),
                 ]
@@ -2559,11 +2583,14 @@ class CRMProcessor:
         )
 
 
-def create_crm_processor() -> CRMProcessor:
+def create_crm_processor(is_basel_3_1: bool = False) -> CRMProcessor:
     """
     Create a CRM processor instance.
+
+    Args:
+        is_basel_3_1: True for Basel 3.1 framework (affects haircuts and supervisory LGD)
 
     Returns:
         CRMProcessor ready for use
     """
-    return CRMProcessor()
+    return CRMProcessor(is_basel_3_1=is_basel_3_1)

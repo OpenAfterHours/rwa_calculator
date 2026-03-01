@@ -208,9 +208,16 @@ class SACalculator:
         # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
         exposures = self._apply_guarantee_substitution(exposures, config)
 
-        # Step 4: Calculate pre-factor RWA (SA rows only)
+        # Step 3b: Store SA-equivalent RWA for ALL rows before IRB calculator
+        # overwrites risk_weight. The output floor needs: floor_rwa = floor_pct × sa_rwa.
         schema = exposures.collect_schema()
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        if config.output_floor.enabled:
+            exposures = exposures.with_columns(
+                (pl.col(ead_col) * pl.col("risk_weight")).alias("sa_rwa"),
+            )
+
+        # Step 4: Calculate pre-factor RWA (SA rows only)
         exposures = exposures.with_columns(
             [
                 pl.when(is_sa)

@@ -774,7 +774,7 @@ class CRMLazyFrame:
         """
         from rwa_calc.engine.crm.processor import CRMProcessor
 
-        processor = CRMProcessor()
+        processor = CRMProcessor(is_basel_3_1=config.is_basel_3_1)
         return processor.resolve_provisions(self._lf, provisions, config)
 
     # =========================================================================

@@ -120,6 +120,7 @@ nav:
     - Pipeline Architecture: architecture/pipeline.md
     - Data Flow: architecture/data-flow.md
     - Component Overview: architecture/components.md
+    - Pipeline Collect Barriers: architecture/pipeline-collect-barriers.md
   - Features:
     - features/index.md
     - Classification: features/classification.md

@@ -187,8 +187,6 @@ class SlottingCalculator:
         Returns:
             SlottingResultBundle with results and audit trail
         """
-        errors: list[SlottingCalculationError] = []
-
         # Get slotting exposures (may be None)
         exposures = data.slotting_exposures
 

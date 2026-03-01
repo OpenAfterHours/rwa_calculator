@@ -46,16 +46,15 @@ class TestB31GroupF_OutputFloor:
         """
         B31-F1: Output floor should bind for low-PD corporate.
 
-        Input: £25,000,000 corporate loan, PD=0.10%, LGD=45%, maturity=4.25y
+        Input: £1,000,000 corporate loan (LOAN_CORP_UK_003), CQS 2, PD=0.15%
         Expected: Floor binds because SA RWA × 72.5% > IRB RWA
-        Rationale: Low-PD corporates have very low IRB risk weights (~40%).
-            Under SA, unrated corporates get 100% RW. The 72.5% floor
-            (72.5% × 100% = 72.5% effective) significantly exceeds the
-            IRB risk weight, making the floor binding.
+        Rationale: CQS 2 corporates get 50% SA RW. The 72.5% floor
+            (72.5% × 50% = 36.25% effective) exceeds the IRB risk weight
+            (~24.8% for PD=0.15%), making the floor binding.
         """
-        result = get_result_for_exposure(irb_pipeline_results_df, "LOAN_CORP_UK_001")
+        result = get_result_for_exposure(irb_pipeline_results_df, "LOAN_CORP_UK_003")
 
-        assert result is not None, "Exposure LOAN_CORP_UK_001 not found in B31 IRB results"
+        assert result is not None, "Exposure LOAN_CORP_UK_003 not found in B31 IRB results"
 
         # Verify this exposure was processed as IRB
         approach = str(result.get("approach", "")).upper()
@@ -64,21 +63,20 @@ class TestB31GroupF_OutputFloor:
         )
 
         # The output floor should be binding for this low-PD exposure
-        # Check structural properties rather than exact values
-        rwa_final = result.get("rwa_post_factor", result.get("rwa", 0))
-        assert rwa_final > 0, "B31-F1: RWA should be positive"
+        rwa_final = result.get("rwa_final", result.get("rwa", 0))
+        assert rwa_final is not None and rwa_final > 0, "B31-F1: RWA should be positive"
 
-        # If output floor columns are present, verify floor binding
+        # Verify floor binding
         if "is_floor_binding" in result:
             assert result["is_floor_binding"] is True, (
                 "B31-F1: Output floor should bind for low-PD corporate "
-                f"(PD=0.10%, SA RW=100%). is_floor_binding={result['is_floor_binding']}"
+                f"(PD=0.15%, SA RW=50%). is_floor_binding={result['is_floor_binding']}"
             )
 
         if "sa_rwa" in result and "floor_rwa" in result:
             sa_rwa = result["sa_rwa"]
             floor_rwa = result["floor_rwa"]
-            assert sa_rwa > 0, "B31-F1: SA RWA should be positive (unrated corporate)"
+            assert sa_rwa > 0, "B31-F1: SA RWA should be positive (CQS 2 corporate)"
             assert floor_rwa > 0, "B31-F1: Floor RWA should be positive"
             # Floor RWA should be approximately 72.5% of SA RWA
             assert floor_rwa == pytest.approx(sa_rwa * 0.725, rel=0.01), (
@@ -93,10 +91,10 @@ class TestB31GroupF_OutputFloor:
         """
         B31-F2: Output floor should NOT bind for high-PD corporate.
 
-        Input: £5,000,000 corporate loan, PD=5.00%, LGD=45%, maturity=3.0y
+        Input: £5,000,000 corporate loan (LOAN_CORP_UK_005), CQS 5, PD=5.00%
         Expected: Floor does not bind because IRB RWA > SA RWA × 72.5%
-        Rationale: High-PD corporates have very high IRB risk weights (>150%).
-            Under SA, unrated corporates get 100% RW. The 72.5% floor
+        Rationale: High-PD corporates have very high IRB risk weights (>130%).
+            CQS 5 corporates get 100% SA RW under Basel 3.1. The 72.5% floor
             (72.5% × 100% = 72.5% effective) is well below the IRB risk
             weight, so the floor is not binding.
         """
@@ -109,10 +107,10 @@ class TestB31GroupF_OutputFloor:
             f"B31-F2: Expected IRB approach, got {approach}"
         )
 
-        rwa_final = result.get("rwa_post_factor", result.get("rwa", 0))
-        assert rwa_final > 0, "B31-F2: RWA should be positive"
+        rwa_final = result.get("rwa_final", result.get("rwa", 0))
+        assert rwa_final is not None and rwa_final > 0, "B31-F2: RWA should be positive"
 
-        # If output floor columns are present, verify floor is not binding
+        # Verify floor is not binding
         if "is_floor_binding" in result:
             assert result["is_floor_binding"] is False, (
                 "B31-F2: Output floor should NOT bind for high-PD corporate "
@@ -135,24 +133,24 @@ class TestB31GroupF_OutputFloor:
         """
         B31-F3: Transitional floor in 2027 should be 50% (vs 72.5% fully-phased).
 
-        Input: Same low-PD corporate as B31-F1 but with 2027 reporting date
+        Input: Same low-PD corporate as B31-F1 (LOAN_CORP_UK_003) with 2027 date
         Expected: Floor at 50% produces lower floored RWA than 72.5%
         Rationale: The transitional schedule phases in the floor gradually
             (50% in 2027 → 72.5% in 2032+), reducing the capital impact
             of the floor in the early years.
         """
         result_transitional = get_result_for_exposure(
-            transitional_results_df, "LOAN_CORP_UK_001"
+            transitional_results_df, "LOAN_CORP_UK_003"
         )
         result_full = get_result_for_exposure(
-            irb_pipeline_results_df, "LOAN_CORP_UK_001"
+            irb_pipeline_results_df, "LOAN_CORP_UK_003"
         )
 
         assert result_transitional is not None, (
-            "Exposure LOAN_CORP_UK_001 not found in transitional results"
+            "Exposure LOAN_CORP_UK_003 not found in transitional results"
         )
         assert result_full is not None, (
-            "Exposure LOAN_CORP_UK_001 not found in full-phase results"
+            "Exposure LOAN_CORP_UK_003 not found in full-phase results"
         )
 
         # Both should be IRB
@@ -162,7 +160,7 @@ class TestB31GroupF_OutputFloor:
                 f"B31-F3 ({label}): Expected IRB approach, got {approach}"
             )
 
-        # If floor columns are present, verify transitional floor is lower
+        # Verify transitional floor is lower
         if "floor_rwa" in result_transitional and "floor_rwa" in result_full:
             transitional_floor_rwa = result_transitional["floor_rwa"]
             full_floor_rwa = result_full["floor_rwa"]
@@ -183,9 +181,9 @@ class TestB31GroupF_OutputFloor:
 
         # RWA under transitional should be lower or equal to full-phase RWA
         rwa_transitional = result_transitional.get(
-            "rwa_post_factor", result_transitional.get("rwa", 0)
+            "rwa_final", result_transitional.get("rwa", 0)
         )
-        rwa_full = result_full.get("rwa_post_factor", result_full.get("rwa", 0))
+        rwa_full = result_full.get("rwa_final", result_full.get("rwa", 0))
         assert rwa_transitional <= rwa_full + 1, (
             f"B31-F3: Transitional RWA ({rwa_transitional:,.0f}) should not exceed "
             f"fully-phased RWA ({rwa_full:,.0f})"

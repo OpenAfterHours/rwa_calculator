@@ -12,6 +12,7 @@ Why these tests matter:
     and the output floor.
 """
 
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -38,13 +39,28 @@ def expected_outputs_path() -> Path:
 
 @pytest.fixture(scope="session")
 def expected_outputs_df(expected_outputs_path: Path) -> pl.DataFrame:
-    """Load all Basel 3.1 expected outputs as a Polars DataFrame."""
+    """Load all Basel 3.1 expected outputs as a Polars DataFrame.
+
+    Supports parquet (fastest), CSV, and JSON (source of truth) formats.
+    The JSON file contains a nested structure with metadata and a 'scenarios' array.
+    """
     parquet_path = expected_outputs_path / "expected_rwa_b31.parquet"
     if parquet_path.exists():
         return pl.read_parquet(parquet_path)
-    # Fall back to CSV if parquet doesn't exist
+
     csv_path = expected_outputs_path / "expected_rwa_b31.csv"
-    return pl.read_csv(csv_path, null_values=[""])
+    if csv_path.exists():
+        return pl.read_csv(csv_path, null_values=[""])
+
+    json_path = expected_outputs_path / "expected_rwa_b31.json"
+    if json_path.exists():
+        with open(json_path) as f:
+            data = json.load(f)
+        scenarios = data.get("scenarios", data)
+        return pl.DataFrame(scenarios)
+
+    msg = f"No expected outputs file found in {expected_outputs_path}"
+    raise FileNotFoundError(msg)
 
 
 @pytest.fixture(scope="session")

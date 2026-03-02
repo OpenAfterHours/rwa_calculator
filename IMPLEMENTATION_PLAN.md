@@ -3,6 +3,10 @@
 Full audit of `docs/` vs `src/rwa_calc/` completed 2026-03-02. This plan covers all
 discrepancies, outdated content, and missing documentation.
 
+> **2026-03-02 update:** Priorities 1.1, 1.2, 1.3, and 1.6 completed. All bundle definitions,
+> error handling, protocols, and domain enums in `docs/api/contracts.md` and `docs/api/domain.md`
+> have been rewritten to match source code.
+
 ---
 
 ## Priority 1 — Critical: API Reference Out of Sync with Source
@@ -40,10 +44,10 @@ structures that no longer match the source code. Users following these docs will
 - `create_empty_crm_adjusted_bundle()`
 
 **Steps:**
-- [ ] Read current `contracts/bundles.py` and update every bundle definition to match source
-- [ ] Add documentation for all 5 missing bundles
-- [ ] Add documentation for `create_empty_*()` helper functions
-- [ ] Verify all type annotations match source (`pl.LazyFrame | None`, `list[CalculationError]`, etc.)
+- [x] Read current `contracts/bundles.py` and update every bundle definition to match source
+- [x] Add documentation for all 5 missing bundles
+- [x] Add documentation for `create_empty_*()` helper functions
+- [x] Verify all type annotations match source (`pl.LazyFrame | None`, `list[CalculationError]`, etc.)
 
 ### 1.2 Update `docs/api/contracts.md` — Error handling outdated
 
@@ -57,11 +61,11 @@ Current docs show a simplistic `CalculationError` with 4 fields (`exposure_id`, 
 - Factory functions: `missing_field_error()`, `invalid_value_error()`, `business_rule_error()`, `hierarchy_error()`, `crm_warning()`
 
 **Steps:**
-- [ ] Rewrite `CalculationError` section with all 10+ fields
-- [ ] Add `LazyFrameResult` documentation with properties and methods
-- [ ] Document all error code constants organised by domain
-- [ ] Document factory functions
-- [ ] Remove `CalculationWarning` (does not exist in source — severity is a field on `CalculationError`)
+- [x] Rewrite `CalculationError` section with all 10+ fields
+- [x] Add `LazyFrameResult` documentation with properties and methods
+- [x] Document all error code constants organised by domain
+- [x] Document factory functions
+- [x] Remove `CalculationWarning` (does not exist in source — severity is a field on `CalculationError`)
 
 ### 1.3 Update `docs/api/contracts.md` — Protocols outdated
 
@@ -85,9 +89,9 @@ Current docs show simplified protocol signatures. Source has many more methods p
 - `ResultExporterProtocol`
 
 **Steps:**
-- [ ] Update all existing protocol signatures to match source
-- [ ] Add all missing protocols
-- [ ] Fix `CRMProcessorProtocol.process()` → `apply_crm()` / `get_crm_adjusted_bundle()`
+- [x] Update all existing protocol signatures to match source
+- [x] Add all missing protocols
+- [x] Fix `CRMProcessorProtocol.process()` → `apply_crm()` / `get_crm_adjusted_bundle()`
 
 ### 1.4 Update `docs/api/engine.md` — Method signatures outdated
 
@@ -156,8 +160,8 @@ Documented: `RegulatoryFramework`, `ExposureClass`, `ApproachType`, `CQS`, `Erro
 - `SCRAGrade` — `A`, `B`, `C`
 
 **Steps:**
-- [ ] Add all 7 missing enums with members and descriptions
-- [ ] Verify existing enum members are complete
+- [x] Add all 7 missing enums with members and descriptions
+- [x] Verify existing enum members are complete (corrected to StrEnum, fixed member values, removed non-existent enums: GuarantorType, ProvisionType, FacilityType, CounterpartyType)
 
 ---
 

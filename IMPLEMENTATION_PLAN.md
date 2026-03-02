@@ -359,9 +359,18 @@ Verify entity type mappings, risk weights, and classification criteria match `cl
 
 ### 5.1 Audit Specifications section against source
 
-24 specification files exist. These were written as design specs and may not reflect the final implementation:
+**Status: PARTIALLY COMPLETED** (2026-03-02)
 
-**CRR specs (8 files):**
+`docs/specifications/` was found to be a stale copy of `specs/` (the canonical source).
+11 of 20 files had diverged, some with factual errors. All 11 files synced from `specs/`:
+
+- [x] Synced all 11 stale `docs/specifications/` files to match `specs/` (canonical)
+  - Fixed wrong CRR slotting weights, wrong Basel 3.1 correlation multiplier naming
+  - Updated milestones, test counts, and implementation statuses throughout
+
+**Remaining work** — verify `specs/` files themselves against source code (not urgent since
+`specs/` was already maintained, but minor internal inconsistencies were noted):
+
 - [ ] `specifications/crr/sa-risk-weights.md` — verify against `data/tables/crr_risk_weights.py`
 - [ ] `specifications/crr/supporting-factors.md` — verify against `engine/sa/supporting_factors.py`
 - [ ] `specifications/crr/firb-calculation.md` — verify against `engine/irb/formulas.py`
@@ -370,16 +379,13 @@ Verify entity type mappings, risk weights, and classification criteria match `cl
 - [ ] `specifications/crr/credit-risk-mitigation.md` — verify against `engine/crm/`
 - [ ] `specifications/crr/slotting-approach.md` — verify against `engine/slotting/`
 - [ ] `specifications/crr/provisions.md` — verify against provision logic in CRM
-
-**Basel 3.1 specs (1 file):**
 - [ ] `specifications/basel31/framework-differences.md` — verify against implementation
-
-**Common specs (1 file):**
 - [ ] `specifications/common/hierarchy-classification.md` — verify against `engine/hierarchy.py` and `engine/classifier.py`
+- [ ] Review remaining project specs for accuracy against current code
 
-**Project specs (14 files):**
-- [ ] Review `overview.md`, `architecture.md`, `configuration.md`, `interfaces.md`, `nfr.md`, `milestones.md`, `regulatory-compliance.md`, `glossary.md`, `output-reporting.md` for staleness
-- [ ] Mark any superseded specs with a deprecation notice pointing to the relevant docs section
+**Internal inconsistencies noted in `specs/`:**
+- Acceptance test group numbering: `index.md` lists groups A-H but compliance matrix has A, C-I (missing B, adding I)
+- Provisions test count: `crr/provisions.md` lists CRR-G=17 but compliance matrix lists CRR-G=7
 
 ### 5.2 Update `mkdocs.yml` navigation
 

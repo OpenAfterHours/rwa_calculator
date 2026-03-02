@@ -126,12 +126,12 @@ HVCRE_MULTIPLIER: float = 1.25  # 25% higher than standard slotting
 # IRB PARAMETERS
 # =============================================================================
 
-# PD floors by exposure class (Basel 3.1 - CRE31.6)
+# PD floors by exposure class (Basel 3.1 - CRE30.55, PRA PS9/24 Ch.5)
 PD_FLOORS: dict[str, float] = {
-    "CORPORATE": 0.0003,           # 0.03% = 3 basis points
-    "CORPORATE_SME": 0.0003,       # 0.03%
-    "CENTRAL_GOVT_CENTRAL_BANK": 0.0003,  # 0.03%
-    "INSTITUTION": 0.0003,         # 0.03%
+    "CORPORATE": 0.0005,           # 0.05% = 5 basis points
+    "CORPORATE_SME": 0.0005,       # 0.05%
+    "CENTRAL_GOVT_CENTRAL_BANK": 0.0005,  # 0.05%
+    "INSTITUTION": 0.0005,         # 0.05%
     "RETAIL": 0.0005,              # 0.05%
     "RETAIL_MORTGAGE": 0.0005,     # 0.05%
     "RETAIL_QRRE": 0.0010,         # 0.10%
@@ -365,12 +365,12 @@ MATURITY_CAP: float = 5.0    # 5 year maximum (for corporate)
 # Output floor percentage (CRE99)
 OUTPUT_FLOOR_PERCENTAGE: float = 0.725  # 72.5% of SA equivalent at full implementation
 
-# Transitional floor schedule
+# Transitional floor schedule (PRA PS9/24 — UK starts 2027, not BCBS 2025)
 OUTPUT_FLOOR_TRANSITIONAL: dict[int, float] = {
-    2025: 0.50,   # 50% from 1 Jan 2025
-    2026: 0.55,   # 55% from 1 Jan 2026
-    2027: 0.60,   # 60% from 1 Jan 2027
-    2028: 0.65,   # 65% from 1 Jan 2028
-    2029: 0.70,   # 70% from 1 Jan 2029
-    2030: 0.725,  # 72.5% from 1 Jan 2030 (full implementation)
+    2027: 0.50,   # 50% from 1 Jan 2027
+    2028: 0.55,   # 55% from 1 Jan 2028
+    2029: 0.60,   # 60% from 1 Jan 2029
+    2030: 0.65,   # 65% from 1 Jan 2030
+    2031: 0.70,   # 70% from 1 Jan 2031
+    2032: 0.725,  # 72.5% from 1 Jan 2032 (full implementation)
 }

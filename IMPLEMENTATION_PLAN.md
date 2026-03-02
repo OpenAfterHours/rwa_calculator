@@ -116,9 +116,9 @@ Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass
 
 ### Known discrepancies
 
-- Workbook `regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027). Engine is correct for UK firms.
-- Workbook PD floor: `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) vs production config `0.0005` (Basel 3.1 0.05% per CRE30.20). Workbook needs updating.
-- ~~**Spec inconsistencies:** `specs/regulatory-compliance.md`, `specs/nfr.md`, `specs/milestones.md` had stale test counts and status flags.~~ Fixed 2026-03-01: all spec files updated. Latest fixes: `sa-risk-weights.md` FR-1.2 "Partial" → "Done" (implementation was complete, spec was stale), `output-reporting.md` "phase-in tests pending" → "Done", `sa-risk-weights.md` enriched with Basel 3.1 corporate/institution risk weight tables (CQS mapping, SCRA, investment-grade, SME, subordinated debt).
+- ~~Workbook `regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027).~~ Fixed: workbook transitional schedule corrected to PRA PS9/24 (2027-2032). Cascading references in `group_f_output_floor.py` and `irb_formulas.py` also updated.
+- ~~Workbook PD floor: `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) vs production config `0.0005` (Basel 3.1 0.05% per CRE30.20).~~ Fixed: CORPORATE, CORPORATE_SME, CENTRAL_GOVT_CENTRAL_BANK, INSTITUTION all corrected from 0.0003 to 0.0005 in `regulatory_params.py`. Docstring and fallback in `irb_formulas.py` also corrected.
+- ~~**Spec inconsistencies**~~ All spec files updated to reflect actual implementation.
 
 ### SA RWA back-calculation
 

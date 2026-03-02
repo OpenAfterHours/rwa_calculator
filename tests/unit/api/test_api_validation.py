@@ -17,10 +17,10 @@ import pytest
 from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.validation import (
     DataPathValidator,
-    RequiredFiles,
     get_required_files,
     validate_data_path,
 )
+from rwa_calc.config.data_sources import DataSourceRegistry, RequirementLevel
 
 # =============================================================================
 # Fixtures
@@ -88,58 +88,64 @@ def temp_partial_dir(tmp_path: Path) -> Path:
 # =============================================================================
 
 
-class TestRequiredFiles:
-    """Tests for RequiredFiles configuration."""
+class TestDataSourceRegistry:
+    """Tests for DataSourceRegistry configuration."""
 
     def test_parquet_format(self) -> None:
         """Should return parquet file paths."""
-        required = RequiredFiles.for_format("parquet")
-        assert all(f.endswith(".parquet") for f in required.mandatory)
-        assert all(f.endswith(".parquet") for f in required.optional)
+        registry = DataSourceRegistry()
+        mandatory = registry.get_mandatory("parquet")
+        optional = registry.get_optional("parquet")
+        assert all(str(f).endswith(".parquet") for f in mandatory)
+        assert all(str(f).endswith(".parquet") for f in optional)
 
     def test_csv_format(self) -> None:
         """Should return csv file paths."""
-        required = RequiredFiles.for_format("csv")
-        assert all(f.endswith(".csv") for f in required.mandatory)
-        assert all(f.endswith(".csv") for f in required.optional)
+        registry = DataSourceRegistry()
+        mandatory = registry.get_mandatory("csv")
+        optional = registry.get_optional("csv")
+        assert all(str(f).endswith(".csv") for f in mandatory)
+        assert all(str(f).endswith(".csv") for f in optional)
 
     def test_mandatory_files_include_core(self) -> None:
         """Mandatory files should include all core files."""
-        required = RequiredFiles.for_format("parquet")
-        mandatory = set(required.mandatory)
+        registry = DataSourceRegistry()
+        mandatory = set(registry.get_mandatory("parquet"))
 
         # Check core exposure files
-        assert "exposures/facilities.parquet" in mandatory
-        assert "exposures/loans.parquet" in mandatory
-        assert "exposures/facility_mapping.parquet" in mandatory
+        assert Path("exposures/facilities.parquet") in mandatory
+        assert Path("exposures/loans.parquet") in mandatory
+        assert Path("exposures/facility_mapping.parquet") in mandatory
 
         # Check mapping files
-        assert "mapping/lending_mapping.parquet" in mandatory
+        assert Path("mapping/lending_mapping.parquet") in mandatory
 
     def test_optional_files_include_crm(self) -> None:
         """Optional files should include CRM and other optional files."""
-        required = RequiredFiles.for_format("parquet")
-        optional = set(required.optional)
+        registry = DataSourceRegistry()
+        optional = set(registry.get_optional("parquet"))
 
         # Check optional CRM files
-        assert "exposures/contingents.parquet" in optional
-        assert "collateral/collateral.parquet" in optional
-        assert "guarantee/guarantee.parquet" in optional
-        assert "provision/provision.parquet" in optional
-        assert "ratings/ratings.parquet" in optional
+        assert Path("exposures/contingents.parquet") in optional
+        assert Path("collateral/collateral.parquet") in optional
+        assert Path("guarantee/guarantee.parquet") in optional
+        assert Path("provision/provision.parquet") in optional
+        assert Path("ratings/ratings.parquet") in optional
 
         # Check optional mapping files
-        assert "mapping/org_mapping.parquet" in optional
+        assert Path("mapping/org_mapping.parquet") in optional
 
-    def test_counterparty_files_included(self) -> None:
-        """Counterparty files should be in mandatory list."""
-        required = RequiredFiles.for_format("parquet")
-        mandatory = set(required.mandatory)
+    def test_counterparty_files_grouped(self) -> None:
+        """Counterparty files should be in the counterparty group."""
+        registry = DataSourceRegistry()
+        groups = registry.get_groups()
+        assert "counterparty" in groups
+        cp_ids = {s.id for s in groups["counterparty"]}
 
-        assert "counterparty/sovereign.parquet" in mandatory
-        assert "counterparty/institution.parquet" in mandatory
-        assert "counterparty/corporate.parquet" in mandatory
-        assert "counterparty/retail.parquet" in mandatory
+        assert "sovereign" in cp_ids
+        assert "institution" in cp_ids
+        assert "corporate" in cp_ids
+        assert "retail" in cp_ids
 
 
 # =============================================================================
@@ -182,7 +188,7 @@ class TestDataPathValidator:
         response = validator.validate(ValidationRequest(data_path=temp_partial_dir))
         assert response.valid is False
         assert response.missing_count > 0
-        assert "exposures/loans.parquet" in response.files_missing
+        assert Path("exposures/loans.parquet") in response.files_missing
 
     def test_validate_csv_format(self, tmp_path: Path) -> None:
         """Should validate CSV format files."""
@@ -257,28 +263,6 @@ class TestDataPathValidator:
         assert response.valid is True
 
 
-class TestDataPathValidatorCheckFile:
-    """Tests for DataPathValidator.check_file_exists method."""
-
-    def test_check_existing_file(self, temp_valid_dir: Path) -> None:
-        """Should return True for existing file."""
-        validator = DataPathValidator()
-        exists, path = validator.check_file_exists(
-            temp_valid_dir,
-            "exposures/facilities.parquet",
-        )
-        assert exists is True
-        assert path is not None
-
-    def test_check_missing_file(self, temp_valid_dir: Path) -> None:
-        """Should return False for missing file."""
-        validator = DataPathValidator()
-        exists, path = validator.check_file_exists(
-            temp_valid_dir,
-            "nonexistent/file.parquet",
-        )
-        assert exists is False
-        assert path is None
 
 
 # =============================================================================
@@ -313,10 +297,10 @@ class TestGetRequiredFiles:
         """Should return parquet files."""
         files = get_required_files("parquet")
         assert len(files) > 0
-        assert all(".parquet" in f for f in files)
+        assert all(".parquet" in str(f) for f in files)
 
     def test_csv_format(self) -> None:
         """Should return csv files."""
         files = get_required_files("csv")
         assert len(files) > 0
-        assert all(".csv" in f for f in files)
+        assert all(".csv" in str(f) for f in files)

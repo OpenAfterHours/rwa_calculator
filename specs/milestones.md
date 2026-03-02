@@ -36,7 +36,7 @@
 
 | Milestone | Description | Status |
 |-----------|-------------|--------|
-| M4.1 | COREP template generation | Not Started |
+| M4.1 | COREP template generation | Done |
 | M4.2 | Batch processing with Parquet I/O | Done (export API: Parquet, CSV, Excel) |
 | M4.3 | Stress testing integration | Not Started |
 | M4.4 | Portfolio-level concentration metrics | Not Started |

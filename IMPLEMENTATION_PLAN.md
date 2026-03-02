@@ -61,7 +61,7 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 ## Priority 4 — Output & Export
 
 - [x] **Excel / Parquet export** (FR-4.7) — Done. `ResultExporter` in `api/export.py` with `export_to_parquet()`, `export_to_csv()`, `export_to_excel()`. `CalculationResponse` has convenience methods `to_parquet()`, `to_csv()`, `to_excel()`. Protocol: `ResultExporterProtocol`. Excel requires `xlsxwriter` (added to deps). 19 unit tests.
-- [ ] **COREP template generation** (FR-4.6) — Not Started. Deferred to v2.0.
+- [x] **COREP template generation** (FR-4.6) — Done. `COREPGenerator` in `reporting/corep/generator.py` generates C 07.00 (SA credit risk), C 08.01 (IRB totals), C 08.02 (IRB PD grade breakdown), plus C 07.00 risk weight band breakdown. `COREPTemplateBundle` frozen dataclass holds all template DataFrames. Template structure definitions in `reporting/corep/templates.py` with EBA DPM row/column references. Integrated via `ResultExporter.export_to_corep()` and `CalculationResponse.to_corep()`. Multi-sheet Excel export with xlsxwriter. Handles column naming variants (`ead_final`/`final_ead`), optional CRM/provisions columns, exposure-weighted averages for IRB PD/LGD/maturity. 48 unit tests + 4 conditional (xlsxwriter).
 
 ## Infrastructure & Cleanup
 
@@ -76,16 +76,16 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | ~1,428 | 5 |
+| Unit | ~1,476 | 9 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 97 | 0 |
 | Acceptance (Basel 3.1) | 116 | 0 |
 | Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,837** | **26** |
+| **Total** | **1,885** | **30** |
 
-Last verified: 2026-03-02 (Python 3.13.12, pytest 9.0.2, 1837 passed / 26 skipped). All quality gates pass: ruff clean, mypy clean, ruff format clean.
+Last verified: 2026-03-02 (Python 3.13.12, pytest 9.0.2, 1885 passed / 30 skipped). All quality gates pass: ruff clean, mypy clean, ruff format clean.
 
 ## Learnings
 
@@ -122,6 +122,14 @@ Last verified: 2026-03-02 (Python 3.13.12, pytest 9.0.2, 1837 passed / 26 skippe
 - For LGD floors, `collateral_type` column may not be available at IRB stage. Default unsecured floor (25%) is applied when absent.
 - Orphaned collateral/guarantee fixtures (`LOAN_COLL_TEST_CORP_*`, `LOAN_GUAR_TEST_*`, `LOAN_PROV_TEST_*`) are safe to ignore — beneficiary references point to non-existent dedicated test loans.
 - CRM processor's `apply_guarantees()` calls `_apply_cross_approach_ccf()` which requires `ccf`, `nominal_amount`, `drawn_amount`, and `ead_from_ccf` columns. Synthetic test data must include these even for drawn-only exposures (use `ccf=1.0`, `nominal_amount=0.0`, `drawn_amount=ead`, `ead_from_ccf=0.0`).
+
+### COREP reporting
+
+- COREP templates use EBA DPM row/column references (e.g., row "0070" = Corporates, column "0010" = Original Exposure). Template definitions in `reporting/corep/templates.py` map `ExposureClass` enum values to DPM row refs.
+- C 08.01 IRB totals require exposure-weighted averages: `weighted_pd = sum(pd × ead) / sum(ead)`. Polars `group_by().agg()` expressions must include `.sum()` for aggregation context — row-level expressions without `.sum()` produce `InvalidOperationError`.
+- Output column names can be `ead_final`/`rwa_final` (aggregator naming) or `final_ead`/`final_rwa` (schema naming). The `_pick()` helper selects the first available from a list of candidates, ensuring both forms work.
+- C 07.00 risk weight breakdown pivots SA exposures into standard bands (0%, 2%, 4%, 10%, 20%, 35%, 50%, 75%, 100%, 150%, 250%, 1250%). PD bands for C 08.02 follow standard regulatory groupings (0-0.15%, 0.15-0.25%, ..., Default 100%).
+- Benchmark data generators must stay in sync with schema changes. When adding columns to `FACILITY_SCHEMA` or similar, always update `tests/benchmarks/data_generators.py` to include them.
 
 ### Known discrepancies
 

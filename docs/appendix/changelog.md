@@ -7,8 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### COREP Template Generation (FR-4.6 / M4.1)
+Regulatory reporting templates for CRR firms following EBA/PRA COREP structure (Regulation (EU) 2021/451):
+
+- **C 07.00** — SA credit risk: original exposure, SA EAD, RWA by exposure class, plus risk weight band breakdown
+- **C 08.01** — IRB totals: original exposure, IRB EAD, RWA, expected loss, weighted-average PD/LGD/maturity by exposure class
+- **C 08.02** — IRB PD grade breakdown: obligor-grade-level detail with standard PD bands and exposure-weighted averages
+
+**New modules:**
+- `src/rwa_calc/reporting/corep/generator.py` — `COREPGenerator` class with `generate()` and `export_to_excel()` methods
+- `src/rwa_calc/reporting/corep/templates.py` — Template structure definitions with EBA DPM row/column references
+- `src/rwa_calc/reporting/__init__.py` — Public API: `COREPGenerator`, `COREPTemplateBundle`
+
+**Integration:**
+- `ResultExporter.export_to_corep()` for multi-sheet Excel export
+- `CalculationResponse.to_corep()` convenience method
+- 48 unit tests + 4 conditional (xlsxwriter)
+
 ### Fixed
-- Benchmark data generators now include all schema columns (`is_buy_to_let` for loans/facilities, `interest` for loans, `bs_type` for contingents, `pledge_percentage` for collateral)
+- Benchmark data generators now include all schema columns (`is_buy_to_let` for loans/facilities, `interest` for loans, `bs_type` for contingents, `pledge_percentage` for collateral, `is_qrre_transactor` for facilities)
 - Benchmark tests updated for current API: `_unify_exposures` signature (added `facilities` arg), `CRMProcessor.get_crm_adjusted_bundle` (replaces removed `process` method)
 - Protocol test stubs updated to include `calculate_branch` method for SA and IRB calculators
 

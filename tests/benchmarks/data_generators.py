@@ -394,6 +394,7 @@ def generate_facilities(
                 "lgd": np.full(n_facilities, 0.45),
                 "beel": np.zeros(n_facilities),
                 "is_revolving": is_revolving,
+                "is_qrre_transactor": np.full(n_facilities, False),
                 "seniority": seniority,
                 "risk_type": risk_types,
                 "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks

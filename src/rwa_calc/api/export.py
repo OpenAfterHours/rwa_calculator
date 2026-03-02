@@ -2,12 +2,13 @@
 Result export utilities for RWA Calculator.
 
 Pipeline position:
-    CalculationResponse -> ResultExporter -> Parquet / CSV / Excel files
+    CalculationResponse -> ResultExporter -> Parquet / CSV / Excel / COREP files
 
 Key responsibilities:
 - Export calculation results to Parquet files (one per dataset)
 - Export calculation results to CSV files (one per dataset)
 - Export calculation results to multi-sheet Excel workbooks
+- Generate COREP regulatory reporting templates (C 07.00, C 08.01, C 08.02)
 - Provide a unified export interface regardless of output format
 
 The exporter reads from cached parquet files via CalculationResponse's
@@ -243,3 +244,35 @@ class ResultExporter:
             files=[output_path],
             row_count=total_rows,
         )
+
+    def export_to_corep(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """
+        Export results as COREP regulatory reporting templates.
+
+        Generates C 07.00 (SA credit risk), C 08.01 (IRB totals),
+        and C 08.02 (IRB PD grade breakdown) in a multi-sheet Excel
+        workbook following EBA/PRA COREP template structure.
+
+        Why: CRR firms must submit quarterly COREP returns to the PRA.
+        This reshapes the calculator's exposure-level results into the
+        fixed-format regulatory templates (Regulation (EU) 2021/451).
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed
+        """
+        from rwa_calc.reporting.corep.generator import COREPGenerator
+
+        generator = COREPGenerator()
+        bundle = generator.generate(response)
+        return generator.export_to_excel(bundle, output_path)

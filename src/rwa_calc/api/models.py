@@ -302,6 +302,29 @@ class CalculationResponse:
 
         return ResultExporter().export_to_excel(self, output_path)
 
+    def to_corep(self, output_path: Path) -> ExportResult:
+        """
+        Export results as COREP regulatory reporting templates.
+
+        Generates C 07.00 (SA), C 08.01 (IRB totals), C 08.02
+        (IRB PD grades) in a multi-sheet Excel workbook following
+        the EBA/PRA COREP template structure.
+
+        Requires xlsxwriter to be installed.
+
+        Args:
+            output_path: Path for the COREP .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_corep(self, output_path)
+
     @property
     def has_warnings(self) -> bool:
         """Check if there are any warnings."""

@@ -44,21 +44,14 @@ graph TD
 ## Quick Example
 
 ```python
-from datetime import date
-from rwa_calc.engine.pipeline import create_pipeline
-from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.api import quick_calculate
 
-# Create configuration for CRR framework
-config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-
-# Create and run the pipeline
-pipeline = create_pipeline()
-result = pipeline.run(config)
-
-# Access results
-print(f"Total RWA: {result.total_rwa:,.2f}")
-print(f"By approach: {result.by_approach}")
+# Run a complete RWA calculation in one call
+response = quick_calculate("/path/to/data")
+print(f"Total RWA: {response.summary.total_rwa:,.0f}")
 ```
+
+Need more control? Use `RWAService` for framework selection, IRB approach, and export options — see the [Quick Start](quickstart.md).
 
 ## Next Steps
 

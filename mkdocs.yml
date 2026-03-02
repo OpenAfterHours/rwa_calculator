@@ -133,6 +133,7 @@ nav:
     - Regulatory Tables: data-model/regulatory-tables.md
   - API Reference:
     - api/index.md
+    - Service API: api/service.md
     - Pipeline: api/pipeline.md
     - Configuration: api/configuration.md
     - Engine Components: api/engine.md

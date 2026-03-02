@@ -49,103 +49,114 @@ For detailed UI documentation, see the [Interactive UI Guide](../user-guide/inte
 
 ## Using the Python API
 
-### Step 1: Import the Required Modules
+### Quickest Start
+
+Run a complete RWA calculation in one call:
+
+```python
+from rwa_calc.api import quick_calculate
+
+response = quick_calculate("/path/to/data")
+print(f"Total RWA: {response.summary.total_rwa:,.0f}")
+```
+
+That's it. `quick_calculate` loads your data, runs the full pipeline, and returns a
+`CalculationResponse` with summary statistics and detailed results.
+
+### More Control with RWAService
+
+For more control over framework, IRB approach, and reporting date, use `RWAService`:
 
 ```python
 from datetime import date
-from rwa_calc.engine.pipeline import create_pipeline
-from rwa_calc.contracts.config import CalculationConfig
-```
+from pathlib import Path
+from rwa_calc.api import RWAService, CalculationRequest, create_service
 
-### Step 2: Create a Configuration
-
-Choose the regulatory framework for your calculation:
-
-=== "CRR (Current)"
-
-    ```python
-    # For calculations under current CRR rules (until Dec 2026)
-    config = CalculationConfig.crr(
-        reporting_date=date(2026, 12, 31)
+service = create_service()
+response = service.calculate(
+    CalculationRequest(
+        data_path="/path/to/data",
+        framework="CRR",
+        reporting_date=date(2026, 12, 31),
+        irb_approach="full_irb",
     )
-    ```
+)
 
-=== "Basel 3.1 (Future)"
-
-    ```python
-    # For calculations under Basel 3.1 (from Jan 2027)
-    config = CalculationConfig.basel_3_1(
-        reporting_date=date(2027, 1, 1)
-    )
-    ```
-
-### Step 3: Create and Run the Pipeline
-
-```python
-# Create the pipeline
-pipeline = create_pipeline()
-
-# Run the calculation
-result = pipeline.run(config)
+if response.success:
+    print(f"Total RWA: {response.summary.total_rwa:,.0f}")
+    print(f"SA RWA:    {response.summary.total_rwa_sa:,.0f}")
+    print(f"IRB RWA:   {response.summary.total_rwa_irb:,.0f}")
 ```
 
-### Step 4: Access Results
+### Complete Example
 
-```python
-# Total RWA
-print(f"Total RWA: {result.total_rwa:,.2f}")
-
-# RWA by approach
-print(f"SA RWA: {result.sa_rwa:,.2f}")
-print(f"IRB RWA: {result.irb_rwa:,.2f}")
-print(f"Slotting RWA: {result.slotting_rwa:,.2f}")
-
-# Get detailed breakdown
-df = result.to_dataframe()
-print(df.head())
-```
-
-## Complete Example
-
-Here's a complete working example:
+Here's a full script with validation, error handling, and export:
 
 ```python
 from datetime import date
 from pathlib import Path
 
-from rwa_calc.engine.pipeline import create_pipeline
-from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.api import (
+    RWAService,
+    CalculationRequest,
+    create_service,
+)
+
 
 def calculate_rwa():
-    """Calculate RWA for credit exposures."""
+    """Calculate RWA for credit exposures using the Service API."""
 
-    # Configure for CRR framework
-    config = CalculationConfig.crr(
+    # Create the service (cache_dir defaults to a temp directory)
+    service = create_service()
+
+    # Build request
+    request = CalculationRequest(
+        data_path="/path/to/data",
+        framework="CRR",
         reporting_date=date(2026, 12, 31),
-        apply_sme_supporting_factor=True,
-        apply_infrastructure_factor=True
+        irb_approach="full_irb",
     )
 
-    # Create the pipeline
-    pipeline = create_pipeline()
+    # Run calculation
+    response = service.calculate(request)
 
-    # Run the calculation
-    result = pipeline.run(config)
+    # Check for errors
+    if not response.success:
+        for error in response.errors:
+            print(f"[{error.code}] {error.severity}: {error.message}")
+        return
 
     # Print summary
+    summary = response.summary
     print("=" * 50)
     print("RWA Calculation Results")
     print("=" * 50)
-    print(f"Reporting Date: {config.reporting_date}")
-    print(f"Framework: {config.framework.value}")
+    print(f"Framework:      {response.framework}")
+    print(f"Reporting Date: {response.reporting_date}")
+    print(f"Exposures:      {summary.exposure_count}")
     print("-" * 50)
-    print(f"Total RWA: GBP {result.total_rwa:,.2f}")
-    print(f"  - SA RWA: GBP {result.sa_rwa:,.2f}")
-    print(f"  - IRB RWA: GBP {result.irb_rwa:,.2f}")
-    print(f"  - Slotting RWA: GBP {result.slotting_rwa:,.2f}")
+    print(f"Total RWA:      GBP {summary.total_rwa:,.0f}")
+    print(f"  SA RWA:       GBP {summary.total_rwa_sa:,.0f}")
+    print(f"  IRB RWA:      GBP {summary.total_rwa_irb:,.0f}")
+    print(f"  Slotting RWA: GBP {summary.total_rwa_slotting:,.0f}")
+    print(f"Avg Risk Weight: {summary.average_risk_weight:.1%}")
     print("=" * 50)
 
-    return result
+    # Print warnings if any
+    if response.has_warnings:
+        print(f"\n{response.warning_count} warnings:")
+        for error in response.errors:
+            if error.severity == "warning":
+                print(f"  [{error.code}] {error.message}")
+
+    # Export results
+    export = response.to_parquet(Path("output/"))
+    print(f"\nExported {export.row_count} rows to {export.files}")
+
+    # Work with detailed results as a Polars DataFrame
+    df = response.collect_results()
+    print(f"\nDetailed results: {df.shape}")
+
 
 if __name__ == "__main__":
     calculate_rwa()
@@ -153,28 +164,30 @@ if __name__ == "__main__":
 
 ## Working with Custom Data
 
-### Loading from Parquet Files
+### Specifying Data Format
+
+By default, the service reads Parquet files. To use CSV:
 
 ```python
-from pathlib import Path
-from rwa_calc.engine.loader import ParquetLoader
+from rwa_calc.api import quick_calculate
 
-# Specify your data directory
-data_path = Path("./your_data")
+response = quick_calculate("/path/to/csv-data", data_format="csv")
+```
 
-# Create a loader
-loader = ParquetLoader(data_path)
+Or with `CalculationRequest`:
 
-# Load data
-raw_data = loader.load()
-
-# Run pipeline with your data
-result = pipeline.run_with_data(raw_data, config)
+```python
+request = CalculationRequest(
+    data_path="/path/to/csv-data",
+    data_format="csv",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+)
 ```
 
 ### Required Data Files
 
-The calculator expects the following Parquet files:
+The calculator expects the following files in your data directory:
 
 | File | Description | Required |
 |------|-------------|----------|
@@ -189,80 +202,123 @@ The calculator expects the following Parquet files:
 | `org_mapping.parquet` | Organization hierarchy | No |
 | `lending_mapping.parquet` | Retail lending groups | No |
 
+### Validating Data Before Calculation
+
+```python
+from rwa_calc.api import create_service, ValidationRequest
+
+service = create_service()
+validation = service.validate_data_path(
+    ValidationRequest(data_path="/path/to/data")
+)
+
+if validation.valid:
+    print(f"Ready: {validation.found_count} files found")
+else:
+    print(f"Missing files: {validation.files_missing}")
+```
+
 ## Configuration Options
 
-### CRR Configuration
+### CRR Framework
 
 ```python
-config = CalculationConfig.crr(
+from rwa_calc.api import quick_calculate
+
+# CRR with default settings
+response = quick_calculate("/path/to/data", framework="CRR")
+
+# CRR with specific IRB approach
+response = quick_calculate(
+    "/path/to/data",
+    framework="CRR",
     reporting_date=date(2026, 12, 31),
-
-    # Supporting factors (CRR-specific)
-    apply_sme_supporting_factor=True,    # Article 501 SME factor
-    apply_infrastructure_factor=True,     # Infrastructure factor
-
-    # FX conversion
-    eur_gbp_rate=Decimal("0.88"),         # EUR to GBP rate
+    irb_approach="full_irb",
 )
 ```
 
-### Basel 3.1 Configuration
+### Basel 3.1 Framework
 
 ```python
-config = CalculationConfig.basel_3_1(
-    reporting_date=date(2027, 1, 1),
+from rwa_calc.api import quick_calculate
 
-    # Output floor (Basel 3.1-specific)
-    output_floor_percentage=0.725,        # 72.5% floor
-    transitional_floor_year=2027,         # Phase-in year
+response = quick_calculate(
+    "/path/to/data",
+    framework="BASEL_3_1",
+    reporting_date=date(2027, 1, 1),
 )
 ```
+
+### IRB Approach Options
+
+| Value | Description |
+|-------|-------------|
+| `"sa_only"` | Standardised Approach only (default) |
+| `"firb"` | Foundation IRB where permitted |
+| `"airb"` | Advanced IRB where permitted |
+| `"full_irb"` | Both FIRB and AIRB (AIRB preferred) |
+| `"retail_airb_corporate_firb"` | A-IRB for retail, F-IRB for corporate |
 
 ## Understanding Results
 
-The result object provides several views of the calculated RWA:
+The `CalculationResponse` provides several ways to access results:
 
 ### Summary Statistics
 
 ```python
-# Total figures
-result.total_rwa          # Total risk-weighted assets
-result.total_ead          # Total exposure at default
-result.total_expected_loss # Total expected loss (IRB only)
+response = quick_calculate("/path/to/data")
+
+summary = response.summary
+summary.total_rwa           # Total risk-weighted assets
+summary.total_ead           # Total exposure at default
+summary.exposure_count      # Number of exposures processed
+summary.average_risk_weight # Average risk weight (RWA / EAD)
 
 # By approach
-result.sa_rwa             # Standardised Approach RWA
-result.irb_rwa            # IRB RWA (before scaling/floor)
-result.slotting_rwa       # Slotting RWA
+summary.total_rwa_sa        # Standardised Approach RWA
+summary.total_rwa_irb       # IRB RWA
+summary.total_rwa_slotting  # Slotting RWA
+
+# Output floor (Basel 3.1)
+summary.floor_applied       # Whether output floor was binding
+summary.floor_impact        # Additional RWA from output floor
 ```
 
 ### Detailed Breakdown
 
 ```python
-# Get as Polars DataFrame
-df = result.to_dataframe()
+import polars as pl
 
-# Filter by exposure class
-corporate = df.filter(pl.col("exposure_class") == "CORPORATE")
+# Get as Polars DataFrame
+df = response.collect_results()
+
+# Or use lazy scanning for large result sets
+lf = response.scan_results()
+corporate = lf.filter(pl.col("exposure_class") == "CORPORATE").collect()
 
 # Aggregate by any dimension
 by_approach = df.group_by("approach").agg(
     pl.col("rwa").sum().alias("total_rwa"),
-    pl.col("ead").sum().alias("total_ead")
+    pl.col("ead").sum().alias("total_ead"),
 )
 ```
 
 ### Export Results
 
 ```python
+from pathlib import Path
+
 # To Parquet
-result.to_parquet("results.parquet")
+response.to_parquet(Path("output/"))
 
 # To CSV
-result.to_csv("results.csv")
+response.to_csv(Path("output/"))
 
-# To JSON
-result.to_json("results.json")
+# To Excel (requires xlsxwriter)
+response.to_excel(Path("output/results.xlsx"))
+
+# To COREP regulatory templates (requires xlsxwriter)
+response.to_corep(Path("output/corep.xlsx"))
 ```
 
 ## Error Handling
@@ -270,23 +326,53 @@ result.to_json("results.json")
 The calculator accumulates errors rather than failing fast:
 
 ```python
-result = pipeline.run(config)
+response = quick_calculate("/path/to/data")
+
+# Check overall success
+if not response.success:
+    print("Calculation failed")
 
 # Check for errors
-if result.has_errors:
-    for error in result.errors:
-        print(f"Error: {error.message}")
-        print(f"  Exposure: {error.exposure_id}")
-        print(f"  Stage: {error.stage}")
+if response.has_errors:
+    for error in response.errors:
+        if error.severity in ("error", "critical"):
+            print(f"[{error.code}] {error.message}")
 
 # Check for warnings
-if result.has_warnings:
-    for warning in result.warnings:
-        print(f"Warning: {warning.message}")
+if response.has_warnings:
+    for error in response.errors:
+        if error.severity == "warning":
+            print(f"Warning [{error.code}]: {error.message}")
 ```
+
+## Advanced: Pipeline API
+
+For users who need to customise individual pipeline components, the low-level pipeline API
+provides direct access to the orchestrator:
+
+```python
+from datetime import date
+from rwa_calc.engine.pipeline import create_pipeline
+from rwa_calc.contracts.config import CalculationConfig
+
+# Create configuration
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+
+# Create and run the pipeline
+pipeline = create_pipeline()
+result = pipeline.run(config)
+
+# Access the aggregated result bundle directly
+print(f"Total RWA: {result.total_rwa:,.2f}")
+```
+
+This gives you access to the full `PipelineOrchestrator` and `AggregatedResultBundle`,
+which is useful for custom loaders, alternative data sources, or when integrating into
+an existing data pipeline. See the [Pipeline API Reference](../api/pipeline.md) for details.
 
 ## Next Steps
 
 - [Concepts](concepts.md) - Understand key terminology
+- [Service API Reference](../api/service.md) - Full service API documentation
 - [Configuration Guide](../user-guide/configuration.md) - Advanced configuration options
 - [Calculation Methodology](../user-guide/methodology/index.md) - How calculations work

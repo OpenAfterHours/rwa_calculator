@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Service API Documentation
+Restructured user-facing documentation to promote the high-level Service API (`quick_calculate`, `RWAService`) as the primary entry point:
+
+- **Quick Start** rewritten with 3-tier progression: `quick_calculate` one-liner, `RWAService` with more control, full example with validation/export. Pipeline API moved to "Advanced" section.
+- **Getting Started index** now shows `quick_calculate` as the quick example instead of `create_pipeline`
+- **API Reference index** features Service API as first module, with `quick_calculate` as the main entry point
+- **New page: `docs/api/service.md`** — complete Service API reference covering `quick_calculate`, `RWAService`, `CalculationRequest`/`CalculationResponse`, `SummaryStatistics`, `APIError`, `PerformanceMetrics`, `ResultExporter`, and usage examples
+- **mkdocs nav** updated with Service API as first item under API Reference
+
 #### COREP Template Generation (FR-4.6 / M4.1)
 Regulatory reporting templates for CRR firms following EBA/PRA COREP structure (Regulation (EU) 2021/451):
 

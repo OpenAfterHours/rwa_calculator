@@ -6,7 +6,8 @@ This section provides complete API documentation for the RWA calculator modules.
 
 | Module | Purpose |
 |--------|---------|
-| [**Pipeline**](pipeline.md) | Main orchestration and entry points |
+| [**Service API**](service.md) | High-level facade: `quick_calculate`, `RWAService`, request/response models |
+| [**Pipeline**](pipeline.md) | Low-level orchestration and custom pipeline construction |
 | [**Configuration**](configuration.md) | Configuration classes and factories |
 | [**Engine**](engine.md) | Calculation components |
 | [**Contracts**](contracts.md) | Interfaces and data contracts |
@@ -17,12 +18,45 @@ This section provides complete API documentation for the RWA calculator modules.
 ### Main Entry Point
 
 ```python
+from rwa_calc.api import quick_calculate
+
+# One-liner calculation
+response = quick_calculate("/path/to/data")
+print(f"Total RWA: {response.summary.total_rwa:,.0f}")
+```
+
+### Service API (More Control)
+
+```python
+from datetime import date
+from rwa_calc.api import RWAService, CalculationRequest, create_service
+
+service = create_service()
+response = service.calculate(
+    CalculationRequest(
+        data_path="/path/to/data",
+        framework="CRR",
+        reporting_date=date(2026, 12, 31),
+        irb_approach="full_irb",
+    )
+)
+
+if response.success:
+    print(f"Total RWA: {response.summary.total_rwa:,.0f}")
+    df = response.collect_results()
+```
+
+### Pipeline API (Advanced)
+
+For custom loaders or direct pipeline access:
+
+```python
+from datetime import date
 from rwa_calc.engine.pipeline import create_pipeline
 from rwa_calc.contracts.config import CalculationConfig
 
-# Create and run pipeline
 pipeline = create_pipeline()
-config = CalculationConfig.crr(date(2026, 12, 31))
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 result = pipeline.run(config)
 ```
 
@@ -73,6 +107,7 @@ from rwa_calc.contracts.bundles import (
 
 ## API Sections
 
+- [**Service API**](service.md) - High-level facade (`quick_calculate`, `RWAService`)
 - [**Pipeline API**](pipeline.md) - Pipeline creation and execution
 - [**Configuration API**](configuration.md) - Configuration classes
 - [**Engine API**](engine.md) - Calculation components

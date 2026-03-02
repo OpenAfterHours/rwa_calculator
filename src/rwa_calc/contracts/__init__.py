@@ -25,6 +25,7 @@ from rwa_calc.contracts.bundles import (
     ComparisonBundle,
     CounterpartyLookup,
     CRMAdjustedBundle,
+    ELPortfolioSummary,
     IRBResultBundle,
     RawDataBundle,
     ResolvedHierarchyBundle,
@@ -167,6 +168,7 @@ __all__ = [
     "ERROR_UNKNOWN_EXPOSURE_CLASS",
     # Bundles
     "AggregatedResultBundle",
+    "ELPortfolioSummary",
     "CapitalImpactBundle",
     "ComparisonBundle",
     "TransitionalScheduleBundle",

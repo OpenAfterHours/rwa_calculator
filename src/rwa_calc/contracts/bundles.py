@@ -268,6 +268,48 @@ class EquityResultBundle:
 
 
 @dataclass(frozen=True)
+class ELPortfolioSummary:
+    """
+    Portfolio-level expected loss summary with T2 credit cap.
+
+    Aggregates per-exposure EL shortfall/excess into portfolio totals
+    and applies the T2 credit cap per CRR Art. 62(d).
+
+    Key responsibilities:
+    - Sum per-exposure EL, provisions, shortfall, and excess
+    - Compute T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d))
+    - Compute T2 credit (min of total excess and cap)
+    - Compute CET1/T2 deduction split (50/50 per CRR Art. 159)
+
+    References:
+    - CRR Art. 62(d): T2 credit cap for EL excess
+    - CRR Art. 158: EL shortfall deduction
+    - CRR Art. 159: 50/50 CET1/T2 deduction split
+
+    Attributes:
+        total_expected_loss: Sum of expected loss across all IRB exposures
+        total_provisions_allocated: Sum of provisions allocated to IRB exposures
+        total_el_shortfall: Sum of max(0, EL - provisions) per exposure
+        total_el_excess: Sum of max(0, provisions - EL) per exposure
+        total_irb_rwa: Total IRB RWA (denominator for T2 cap)
+        t2_credit_cap: 0.6% of total IRB RWA
+        t2_credit: min(total_el_excess, t2_credit_cap) — addable to T2 capital
+        cet1_deduction: 50% of total_el_shortfall — deducted from CET1
+        t2_deduction: 50% of total_el_shortfall — deducted from T2
+    """
+
+    total_expected_loss: float
+    total_provisions_allocated: float
+    total_el_shortfall: float
+    total_el_excess: float
+    total_irb_rwa: float
+    t2_credit_cap: float
+    t2_credit: float
+    cet1_deduction: float
+    t2_deduction: float
+
+
+@dataclass(frozen=True)
 class AggregatedResultBundle:
     """
     Final aggregated output from the output aggregator.
@@ -288,6 +330,7 @@ class AggregatedResultBundle:
         pre_crm_summary: Pre-CRM summary (gross view by original class)
         post_crm_detailed: Post-CRM detailed view (split rows for guarantees)
         post_crm_summary: Post-CRM summary (net view by effective class)
+        el_summary: Portfolio-level EL summary with T2 credit cap (IRB only)
         errors: All errors accumulated throughout pipeline
     """
 
@@ -303,6 +346,7 @@ class AggregatedResultBundle:
     pre_crm_summary: pl.LazyFrame | None = None
     post_crm_detailed: pl.LazyFrame | None = None
     post_crm_summary: pl.LazyFrame | None = None
+    el_summary: ELPortfolioSummary | None = None
     errors: list = field(default_factory=list)
 
 

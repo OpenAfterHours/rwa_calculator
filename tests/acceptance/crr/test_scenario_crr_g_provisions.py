@@ -204,6 +204,75 @@ class TestCRRGroupG_ELShortfallExcess:
         )
 
 
+class TestCRRGroupG_PortfolioELSummary:
+    """
+    CRR-G Portfolio-level EL summary acceptance tests.
+
+    Validates that the aggregator correctly computes the T2 credit cap
+    per CRR Art. 62(d) and the 50/50 CET1/T2 deduction split per CRR Art. 159
+    across all IRB exposures in the fixture portfolio.
+    """
+
+    def test_el_summary_populated(self, irb_pipeline_results) -> None:
+        """The aggregated bundle should contain a portfolio-level EL summary."""
+        assert irb_pipeline_results.el_summary is not None, (
+            "el_summary should be populated when IRB results have EL columns"
+        )
+
+    def test_el_shortfall_positive(self, irb_pipeline_results) -> None:
+        """Portfolio should have positive EL shortfall (G2 has shortfall)."""
+        el = irb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        assert el.total_el_shortfall > 0, (
+            "Portfolio should have positive el_shortfall from G2 exposure"
+        )
+
+    def test_el_excess_positive(self, irb_pipeline_results) -> None:
+        """Portfolio should have positive EL excess (G3 has excess)."""
+        el = irb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        assert el.total_el_excess > 0, (
+            "Portfolio should have positive el_excess from G3 exposure"
+        )
+
+    def test_t2_credit_cap_is_point_six_pct(self, irb_pipeline_results) -> None:
+        """T2 credit cap should be 0.6% of total IRB RWA per CRR Art. 62(d)."""
+        el = irb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        expected_cap = el.total_irb_rwa * 0.006
+        assert el.t2_credit_cap == pytest.approx(expected_cap, rel=1e-6), (
+            f"T2 credit cap should be 0.6% of IRB RWA ({el.total_irb_rwa:.0f}), "
+            f"expected {expected_cap:.2f}, got {el.t2_credit_cap:.2f}"
+        )
+
+    def test_t2_credit_capped_correctly(self, irb_pipeline_results) -> None:
+        """T2 credit should be min(total_el_excess, t2_credit_cap)."""
+        el = irb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        expected_t2 = min(el.total_el_excess, el.t2_credit_cap)
+        assert el.t2_credit == pytest.approx(expected_t2, rel=1e-6), (
+            f"T2 credit should be min(excess={el.total_el_excess:.2f}, "
+            f"cap={el.t2_credit_cap:.2f}) = {expected_t2:.2f}, "
+            f"got {el.t2_credit:.2f}"
+        )
+
+    def test_deduction_split_fifty_fifty(self, irb_pipeline_results) -> None:
+        """EL shortfall should be split 50% CET1 / 50% T2 per CRR Art. 159."""
+        el = irb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        assert el.cet1_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6), (
+            f"CET1 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
+        )
+        assert el.t2_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6), (
+            f"T2 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
+        )
+
+
 class TestCRRGroupG_ParameterizedValidation:
     """
     Parametrized tests to validate expected outputs structure.

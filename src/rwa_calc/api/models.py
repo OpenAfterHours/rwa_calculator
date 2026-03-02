@@ -113,6 +113,9 @@ class SummaryStatistics:
         total_rwa_slotting: Total RWA from Slotting approach
         floor_applied: Whether output floor was binding
         floor_impact: Additional RWA from output floor
+        total_el_shortfall: Total EL shortfall (EL > provisions) for IRB exposures
+        total_el_excess: Total EL excess (provisions > EL) for IRB exposures
+        t2_credit: EL excess addable to T2 capital (capped at 0.6% of IRB RWA)
     """
 
     total_ead: Decimal
@@ -127,6 +130,9 @@ class SummaryStatistics:
     total_rwa_slotting: Decimal = field(default_factory=lambda: Decimal("0"))
     floor_applied: bool = False
     floor_impact: Decimal = field(default_factory=lambda: Decimal("0"))
+    total_el_shortfall: Decimal = field(default_factory=lambda: Decimal("0"))
+    total_el_excess: Decimal = field(default_factory=lambda: Decimal("0"))
+    t2_credit: Decimal = field(default_factory=lambda: Decimal("0"))
 
 
 # =============================================================================

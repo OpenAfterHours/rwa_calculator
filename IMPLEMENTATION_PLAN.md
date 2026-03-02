@@ -32,9 +32,9 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 
 `sa_rwa` column stored for all rows when output floor is enabled. Floor binding/non-binding detection works correctly.
 
-### 2f. EL shortfall/excess computation — COMPLETE
+### 2f. EL shortfall/excess & T2 credit cap — COMPLETE
 
-`compute_el_shortfall_excess()` in IRB namespace. Per-exposure `el_shortfall` / `el_excess` computed in all 3 IRB calculator paths. Aggregator sums `total_el_shortfall` / `total_el_excess`. 14 unit tests, 9 acceptance tests.
+`compute_el_shortfall_excess()` in IRB namespace. Per-exposure `el_shortfall` / `el_excess` computed in all 3 IRB calculator paths. Aggregator sums `total_el_shortfall` / `total_el_excess`. **Portfolio-level T2 credit cap** (CRR Art. 62(d)): `ELPortfolioSummary` frozen dataclass computes T2 credit cap = 0.6% of IRB RWA, T2 credit = min(el_excess, cap), CET1/T2 deductions = 50/50 split of el_shortfall per CRR Art. 159. Wired through both pipeline aggregation paths (`aggregate_with_audit` and `_aggregate_single_pass`). 24 unit tests, 19 acceptance tests.
 
 ## Priority 3 — Dual-Framework Comparison (v1.2)
 
@@ -68,16 +68,16 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | ~1,415 | 5 |
+| Unit | ~1,425 | 5 |
 | Contracts | 123 | 0 |
-| Acceptance (CRR) | 91 | 0 |
-| Acceptance (Basel 3.1) | 112 | 0 |
+| Acceptance (CRR) | 97 | 0 |
+| Acceptance (Basel 3.1) | 116 | 0 |
 | Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,814** | **26** |
+| **Total** | **1,834** | **26** |
 
-Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass: ruff clean, mypy clean, ruff format clean.
+Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2, 1834 passed / 26 skipped). All quality gates pass: ruff clean, mypy clean, ruff format clean.
 
 ## Learnings
 
@@ -88,6 +88,7 @@ Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass
 - `PDFloors.get_floor()` and `LGDFloors.get_floor()` exist in config but are never called by the engine — the engine uses vectorized `_pd_floor_expression()` / `_lgd_floor_expression()` helpers instead.
 - `approach_applied` column uses enum string values: `"standardised"`, `"foundation_irb"`, `"advanced_irb"`, `"slotting"` — not the enum names `"SA"`, `"FIRB"`, etc. Tests must filter on the `.value` form.
 - `ResultExporter` reads from `CalculationResponse`'s cached parquet files via lazy scan, so export doesn't require re-running the pipeline. `CalculationResponse.to_parquet()` / `to_csv()` / `to_excel()` are convenience wrappers.
+- **Pipeline has two aggregation paths**: `aggregate_with_audit()` (on `OutputAggregator`) and `_aggregate_single_pass()` (on `PipelineOrchestrator`). The main `run_with_data()` pipeline uses `_aggregate_single_pass()`. Any new fields added to `AggregatedResultBundle` must be wired through both paths, plus the error-path bundle recreation in `run_with_data()` (which re-creates the bundle to append pipeline errors).
 - Excel export requires `xlsxwriter` (Polars uses it for `DataFrame.write_excel()`). `fastexcel` is for reading only.
 - `_parametric_irb_risk_weight_expr()` in `engine/irb/formulas.py` computes IRB risk weight from an arbitrary PD expression and fixed LGD. Used by parameter substitution to compute guarantor's equivalent IRB RW inline without collecting/re-querying. Returns `K × 12.5 × scaling_factor × MA`.
 
@@ -101,7 +102,7 @@ Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass
 - **B31 SME impact:** Basel 3.1 SME corporates get 85% RW (vs CRR 100%) but lose the 0.7619 supporting factor. Net effect: effective RW rises from 76.19% to 85%, a 12% RWA increase.
 - **Maturity effect in transitional schedule:** Total post-floor RWA is NOT monotonically non-decreasing across years because effective maturity shortens as reporting date advances (e.g., a 2033 loan has 6y maturity from 2027 but only 5y from 2028). The maturity adjustment decrease can outweigh the floor increase. The correct monotonicity invariant is that `floor_impact_rwa` is non-decreasing, not total RWA.
 - **Capital impact waterfall ordering:** The 4-driver waterfall is sequential and additive: (1) scaling factor removal = CRR_rwa × (1/1.06 - 1), (2) supporting factor removal = (CRR_rpf - CRR_rf) / 1.06 for IRB or CRR_rpf - CRR_rf for SA, (3) output floor = floor_impact_rwa from aggregator, (4) methodology = residual. The sum equals delta_rwa exactly by construction.
-- EL shortfall/excess: T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) is not yet computed at portfolio level — only per-exposure shortfall/excess is tracked.
+- EL shortfall/excess: T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) caps the amount of EL excess addable to Tier 2 capital. EL shortfall is deducted 50/50 from CET1 and T2 per CRR Art. 159. Computed at portfolio level via `ELPortfolioSummary` in aggregator.
 - **Parameter substitution (CRE22.70-85):** Under Basel 3.1, IRB guarantors use PD parameter substitution (guarantor's PD + F-IRB supervisory LGD through IRB formula) instead of SA RW substitution. Under CRR, all guarantors use SA RW substitution. The guarantor's approach is determined per-row: IRB if the firm has IRB permission for the guarantor's exposure class AND the guarantor has an internal rating; SA otherwise.
 - **IRB maturity effect on parameter substitution:** At 5-year maturity, the IRB formula with PD=0.2% and LGD=40% gives ~60% RW, exceeding the SA corporate CQS 2 RW of 50%. Parameter substitution only provides a RW benefit over SA when maturity adjustment is moderate (e.g., ~39% at M=2.5y). This is expected behavior: long maturities inflate IRB RWs via the maturity adjustment factor.
 - **CRE56 SFT minimum haircut floors:** PRA has explicitly deferred CRE56 from UK implementation across CP16/22, PS17/23, PS9/24, and PS1/26. Not required for UK Basel 3.1 compliance.

@@ -16,6 +16,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
+    ELPortfolioSummary,
     IRBResultBundle,
     SAResultBundle,
     SlottingResultBundle,
@@ -1269,3 +1270,219 @@ class TestPostCRMDetailedReportingApproach:
         # Guaranteed portion with SA guarantor → "standardised"
         guar = df.filter(pl.col("crm_portion_type") == "guaranteed")
         assert guar["reporting_approach"][0] == "standardised"
+
+
+# =============================================================================
+# EL Portfolio Summary with T2 Credit Cap Tests
+# =============================================================================
+
+
+class TestELPortfolioSummary:
+    """Tests for _compute_el_portfolio_summary (CRR Art. 62(d), Art. 158-159)."""
+
+    def test_returns_none_when_no_irb_results(self, aggregator: OutputAggregator) -> None:
+        """Should return None when no IRB results are provided."""
+        result = aggregator._compute_el_portfolio_summary(None)
+        assert result is None
+
+    def test_returns_none_when_no_el_columns(self, aggregator: OutputAggregator) -> None:
+        """Should return None when IRB results lack el_shortfall/el_excess columns."""
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "rwa_post_factor": [1000000.0],
+            }
+        )
+        result = aggregator._compute_el_portfolio_summary(irb)
+        assert result is None
+
+    def test_basic_shortfall_computation(self, aggregator: OutputAggregator) -> None:
+        """Should compute shortfall totals and 50/50 CET1/T2 deduction split."""
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "rwa_post_factor": [5000000.0, 3000000.0],
+                "expected_loss": [50000.0, 30000.0],
+                "provision_allocated": [30000.0, 10000.0],
+                "el_shortfall": [20000.0, 20000.0],  # EL > provisions
+                "el_excess": [0.0, 0.0],
+            }
+        )
+
+        result = aggregator._compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        assert result.total_el_shortfall == pytest.approx(40000.0)
+        assert result.total_el_excess == pytest.approx(0.0)
+        # 50/50 deduction split per CRR Art. 159
+        assert result.cet1_deduction == pytest.approx(20000.0)
+        assert result.t2_deduction == pytest.approx(20000.0)
+
+    def test_basic_excess_computation(self, aggregator: OutputAggregator) -> None:
+        """Should compute excess totals and T2 credit cap."""
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "rwa_post_factor": [5000000.0, 3000000.0],
+                "expected_loss": [20000.0, 10000.0],
+                "provision_allocated": [50000.0, 30000.0],
+                "el_shortfall": [0.0, 0.0],
+                "el_excess": [30000.0, 20000.0],  # provisions > EL
+            }
+        )
+
+        result = aggregator._compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        assert result.total_el_excess == pytest.approx(50000.0)
+        assert result.total_irb_rwa == pytest.approx(8000000.0)
+        # T2 credit cap = 0.6% × 8M = 48,000
+        assert result.t2_credit_cap == pytest.approx(48000.0)
+        # T2 credit = min(50,000, 48,000) = 48,000 (capped)
+        assert result.t2_credit == pytest.approx(48000.0)
+
+    def test_t2_credit_uncapped(self, aggregator: OutputAggregator) -> None:
+        """Should not cap T2 credit when excess is below cap."""
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "rwa_post_factor": [10000000.0],
+                "expected_loss": [10000.0],
+                "provision_allocated": [30000.0],
+                "el_shortfall": [0.0],
+                "el_excess": [20000.0],
+            }
+        )
+
+        result = aggregator._compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        # T2 credit cap = 0.6% × 10M = 60,000
+        assert result.t2_credit_cap == pytest.approx(60000.0)
+        # T2 credit = min(20,000, 60,000) = 20,000 (not capped)
+        assert result.t2_credit == pytest.approx(20000.0)
+
+    def test_t2_credit_cap_rate(self, aggregator: OutputAggregator) -> None:
+        """T2 credit cap should be exactly 0.6% of total IRB RWA per CRR Art. 62(d)."""
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "rwa_post_factor": [100000000.0],  # 100M IRB RWA
+                "el_shortfall": [0.0],
+                "el_excess": [1000000.0],  # 1M excess
+            }
+        )
+
+        result = aggregator._compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        # T2 cap = 0.6% × 100M = 600,000
+        assert result.t2_credit_cap == pytest.approx(600000.0)
+        # T2 credit = min(1M, 600K) = 600K (capped)
+        assert result.t2_credit == pytest.approx(600000.0)
+
+    def test_mixed_shortfall_and_excess(self, aggregator: OutputAggregator) -> None:
+        """Should handle portfolio with both shortfall and excess exposures."""
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "rwa_post_factor": [4000000.0, 3000000.0, 3000000.0],
+                "expected_loss": [50000.0, 10000.0, 20000.0],
+                "provision_allocated": [30000.0, 40000.0, 50000.0],
+                "el_shortfall": [20000.0, 0.0, 0.0],
+                "el_excess": [0.0, 30000.0, 30000.0],
+            }
+        )
+
+        result = aggregator._compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        assert result.total_expected_loss == pytest.approx(80000.0)
+        assert result.total_provisions_allocated == pytest.approx(120000.0)
+        assert result.total_el_shortfall == pytest.approx(20000.0)
+        assert result.total_el_excess == pytest.approx(60000.0)
+        assert result.total_irb_rwa == pytest.approx(10000000.0)
+        # T2 cap = 0.6% × 10M = 60,000
+        assert result.t2_credit_cap == pytest.approx(60000.0)
+        # T2 credit = min(60K, 60K) = 60K (exactly at cap)
+        assert result.t2_credit == pytest.approx(60000.0)
+        # Shortfall deductions
+        assert result.cet1_deduction == pytest.approx(10000.0)
+        assert result.t2_deduction == pytest.approx(10000.0)
+
+    def test_el_summary_in_aggregated_bundle(
+        self,
+        aggregator: OutputAggregator,
+        sa_bundle: SAResultBundle,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Should include el_summary in AggregatedResultBundle when IRB data has EL columns."""
+        irb_with_el = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP004"],
+                "counterparty_reference": ["CP004"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["FIRB"],
+                "approach_applied": ["foundation_irb"],
+                "ead_final": [5000000.0],
+                "pd_floored": [0.01],
+                "lgd_floored": [0.45],
+                "risk_weight": [0.88],
+                "rwa": [4400000.0],
+                "rwa_post_factor": [4400000.0],
+                "expected_loss": [225000.0],
+                "provision_allocated": [200000.0],
+                "el_shortfall": [25000.0],
+                "el_excess": [0.0],
+            }
+        )
+        irb_bundle = IRBResultBundle(
+            results=irb_with_el,
+            expected_loss=None,
+            calculation_audit=None,
+            errors=[],
+        )
+
+        result = aggregator.aggregate_with_audit(
+            sa_bundle=sa_bundle,
+            irb_bundle=irb_bundle,
+            slotting_bundle=None,
+            config=crr_config,
+        )
+
+        assert result.el_summary is not None
+        assert result.el_summary.total_el_shortfall == pytest.approx(25000.0)
+        assert result.el_summary.t2_credit_cap == pytest.approx(4400000.0 * 0.006)
+
+    def test_el_summary_none_when_no_irb(
+        self,
+        aggregator: OutputAggregator,
+        sa_bundle: SAResultBundle,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Should set el_summary=None when no IRB results."""
+        result = aggregator.aggregate_with_audit(
+            sa_bundle=sa_bundle,
+            irb_bundle=None,
+            slotting_bundle=None,
+            config=crr_config,
+        )
+
+        assert result.el_summary is None
+
+    def test_uses_rwa_final_fallback(self, aggregator: OutputAggregator) -> None:
+        """Should fall back to rwa_final when rwa_post_factor is not available."""
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "rwa_final": [2000000.0],
+                "el_shortfall": [0.0],
+                "el_excess": [10000.0],
+            }
+        )
+
+        result = aggregator._compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        assert result.total_irb_rwa == pytest.approx(2000000.0)
+        assert result.t2_credit_cap == pytest.approx(12000.0)  # 0.6% × 2M

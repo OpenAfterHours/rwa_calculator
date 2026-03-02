@@ -1,48 +1,49 @@
 # Testing Guide
 
-This guide covers the testing approach, test organization, and how to write effective tests. The test suite currently contains **~1,285 tests** across unit, acceptance, and benchmark categories (1,253 non-benchmark + 32 benchmark).
+This guide covers the testing approach, test organisation, and how to write effective tests. The test suite currently contains **~1,915 tests** across unit, acceptance, contract, integration, and benchmark categories.
 
-## Test Organization
+| Category | Tests | Description |
+|----------|------:|-------------|
+| Unit | 1,485 | Component tests in isolation |
+| Acceptance | 275 | End-to-end regulatory scenarios (CRR + Basel 3.1 + comparison) |
+| Contract | 123 | Protocol/interface compliance |
+| Benchmark | 27–34 | Performance at various scales (7 slow tests deselected by default) |
+| Integration | 5 | Cross-component integration |
+| **Total** | **~1,915** | |
+
+## Test Organisation
 
 ```
 tests/
-├── acceptance/           # End-to-end scenario tests (74 tests)
-│   ├── crr/             # CRR framework scenarios
-│   │   ├── test_scenario_crr_a_sa.py        # Standardised Approach (14 tests)
-│   │   ├── test_scenario_crr_c_airb.py      # Advanced IRB (7 tests)
-│   │   ├── test_scenario_crr_d_crm.py       # Credit Risk Mitigation (9 tests)
-│   │   ├── test_scenario_crr_e_slotting.py  # Slotting (9 tests)
-│   │   ├── test_scenario_crr_f_supporting_factors.py  # Supporting Factors (15 tests)
-│   │   ├── test_scenario_crr_g_provisions.py  # Provisions (7 tests)
-│   │   ├── test_scenario_crr_h_complex.py   # Complex/Combined (4 tests)
-│   │   └── test_scenario_crr_i_defaulted.py # Defaulted Exposures (9 tests)
-│   └── basel31/         # Basel 3.1 scenarios
-├── benchmarks/          # Performance and scale tests (162 tests)
-├── contracts/           # Interface compliance tests
-├── unit/                # Component unit tests (1,050 tests)
-│   ├── crr/             # CRR-specific tests
-│   ├── crm/             # CRM-specific tests
-│   │   ├── test_provisions.py        # Provision resolution (14 tests)
-│   │   ├── test_cross_approach_ccf.py # Cross-approach CCF (12 tests)
-│   │   └── test_multi_level_sa_collateral.py # Multi-level SA collateral
-│   ├── basel31/         # Basel 3.1-specific tests
-│   ├── test_fx_converter.py  # FX conversion tests
-│   ├── crr/test_irb_defaulted.py # IRB defaulted exposure tests
-│   └── api/test_results_cache.py # Results caching tests
-└── fixtures/            # Test data generators
-    ├── counterparty/    # Counterparty fixtures
-    ├── exposures/       # Facility, loan, contingent fixtures
-    ├── collateral/      # Collateral fixtures
-    ├── guarantee/       # Guarantee fixtures
-    ├── provision/       # Provision fixtures
-    ├── ratings/         # Rating fixtures
-    ├── mapping/         # Hierarchy mapping fixtures
-    └── fx_rates/        # FX rates fixtures
-
-docs/specifications/      # Regulatory specifications (plain markdown)
-├── crr/                 # CRR framework specifications
-├── basel31/             # Basel 3.1 specifications
-└── common/              # Framework-agnostic specifications
+├── unit/                    # Component unit tests (1,485 tests)
+│   ├── crr/                 # CRR-specific tests
+│   ├── crm/                 # Credit risk mitigation tests
+│   ├── irb/                 # IRB-specific tests
+│   ├── basel31/             # Basel 3.1-specific tests
+│   └── api/                 # API tests
+├── acceptance/              # End-to-end scenario tests (275 tests)
+│   ├── crr/                 # CRR framework scenarios (97 tests)
+│   ├── basel31/             # Basel 3.1 framework scenarios (116 tests)
+│   └── comparison/          # Cross-framework comparison tests (62 tests)
+├── contracts/               # Interface compliance tests (123 tests)
+├── integration/             # Cross-component integration tests (5 tests)
+├── benchmarks/              # Performance tests (27–34 tests)
+│   ├── data_generators.py   # Dataset generation for various scales
+│   └── data/                # Cached benchmark datasets (parquet)
+├── bdd/                     # BDD-style tests (step definitions)
+├── fixtures/                # Test data generators (parquet fixtures)
+│   ├── counterparty/        # Counterparty fixtures (5 types)
+│   ├── exposures/           # Facility, loan, contingent, mapping fixtures
+│   ├── collateral/          # Collateral fixtures
+│   ├── guarantee/           # Guarantee fixtures
+│   ├── provision/           # Provision fixtures
+│   ├── ratings/             # Rating fixtures
+│   ├── mapping/             # Hierarchy mapping fixtures
+│   ├── fx_rates/            # FX rates fixtures
+│   └── generate_all.py      # Master fixture generation script
+└── expected_outputs/        # Golden files for acceptance tests
+    ├── crr/                 # CRR expected RWA outputs
+    └── basel31/             # Basel 3.1 expected RWA outputs
 ```
 
 ## Running Tests
@@ -50,7 +51,7 @@ docs/specifications/      # Regulatory specifications (plain markdown)
 ### All Tests
 
 ```bash
-# Run entire test suite
+# Run entire test suite (benchmarks and slow tests excluded by default)
 uv run pytest
 
 # With verbose output
@@ -58,6 +59,28 @@ uv run pytest -v
 
 # With coverage
 uv run pytest --cov=src/rwa_calc --cov-report=html
+```
+
+### By Category
+
+```bash
+# Unit tests only
+uv run pytest tests/unit
+
+# Acceptance tests
+uv run pytest tests/acceptance
+uv run pytest tests/acceptance/crr
+uv run pytest tests/acceptance/basel31
+uv run pytest tests/acceptance/comparison
+
+# Contract tests
+uv run pytest tests/contracts
+
+# Benchmarks (requires --benchmark-only or --benchmark-enable)
+uv run pytest tests/benchmarks --benchmark-only
+
+# Include slow tests (10M+ scale)
+uv run pytest -m slow
 ```
 
 ### Specific Tests
@@ -69,17 +92,9 @@ uv run pytest tests/unit/test_pipeline.py
 # Run specific test
 uv run pytest tests/unit/test_pipeline.py::test_crr_basic_calculation
 
-# Run by marker
-uv run pytest -m "crr"
-uv run pytest -m "not slow"
-
 # Run by pattern
 uv run pytest -k "test_sa_"
-```
 
-### Test Options
-
-```bash
 # Stop on first failure
 uv run pytest -x
 
@@ -88,9 +103,6 @@ uv run pytest -l
 
 # Run last failed tests
 uv run pytest --lf
-
-# Parallel execution
-uv run pytest -n auto
 ```
 
 ## Test Categories
@@ -159,69 +171,187 @@ class TestSACalculatorProtocol:
 
 ### Acceptance Tests
 
-Test complete scenarios:
+End-to-end tests that run fixture data through the full production pipeline and compare results against pre-calculated expected outputs (golden files). There are three suites:
+
+**CRR scenarios** (97 tests across 9 files):
+
+| File | Tests | Covers |
+|------|------:|--------|
+| `test_scenario_crr_a_sa.py` | 14 | Standardised Approach risk weights |
+| `test_scenario_crr_b_firb.py` | 13 | Foundation IRB |
+| `test_scenario_crr_c_airb.py` | 7 | Advanced IRB |
+| `test_scenario_crr_d_crm.py` | 9 | Credit Risk Mitigation |
+| `test_scenario_crr_e_slotting.py` | 9 | Specialised Lending Slotting |
+| `test_scenario_crr_f_supporting_factors.py` | 15 | SME/Infrastructure factors |
+| `test_scenario_crr_g_provisions.py` | 17 | Provision resolution |
+| `test_scenario_crr_h_complex.py` | 4 | Complex/combined scenarios |
+| `test_scenario_crr_i_defaulted.py` | 9 | Defaulted exposures |
+
+**Basel 3.1 scenarios** (116 tests across 9 files):
+
+| File | Tests | Covers |
+|------|------:|--------|
+| `test_scenario_b31_a_sa.py` | 14 | SA risk weights (PRA PS9/24) |
+| `test_scenario_b31_b_firb.py` | 16 | Foundation IRB |
+| `test_scenario_b31_c_airb.py` | 13 | Advanced IRB |
+| `test_scenario_b31_d_crm.py` | 15 | Credit Risk Mitigation |
+| `test_scenario_b31_d7_parameter_substitution.py` | 5 | IRB parameter substitution |
+| `test_scenario_b31_e_slotting.py` | 13 | Specialised Lending Slotting |
+| `test_scenario_b31_f_output_floor.py` | 6 | Output floor (72.5%) |
+| `test_scenario_b31_g_provisions.py` | 24 | Provision resolution |
+| `test_scenario_b31_h_complex.py` | 10 | Complex/combined scenarios |
+
+**Comparison tests** (62 tests) validate that CRR and Basel 3.1 results relate to each other correctly (e.g. output floor binds when SA RWA exceeds IRB).
+
+Each acceptance test looks up a specific exposure in the pipeline results and asserts against the expected output:
 
 ```python
 # tests/acceptance/crr/test_scenario_crr_a_sa.py
 
-import pytest
-from datetime import date
-from rwa_calc.engine.pipeline import create_pipeline
-from rwa_calc.contracts.config import CalculationConfig
+class TestCRRGroupA_StandardisedApproach:
 
-class TestCRRStandardisedApproach:
-    """CRR Standardised Approach acceptance tests."""
-
-    @pytest.fixture
-    def pipeline(self):
-        return create_pipeline()
-
-    @pytest.fixture
-    def crr_config(self):
-        return CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-
-    def test_crr_a01_sovereign_cqs1_zero_risk_weight(
-        self, pipeline, crr_config, sovereign_cqs1_exposure
-    ):
+    def test_crr_a1_uk_sovereign_zero_rw(
+        self,
+        sa_results_df: pl.DataFrame,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
         """
-        CRR-A01: Sovereign CQS1 exposure receives 0% risk weight.
+        CRR-A1: UK Sovereign with CQS 1 should have 0% risk weight.
 
-        Given: Exposure to UK Government (CQS1)
-        When: Calculating RWA under CRR SA
-        Then: Risk weight is 0%, RWA is 0
+        Input: £1,000,000 loan to UK Government (CQS 1)
+        Expected: RWA = £0 (0% RW per CRR Art. 114)
         """
-        result = pipeline.run_with_data(sovereign_cqs1_exposure, crr_config)
+        expected = expected_outputs_dict["CRR-A1"]
+        result = get_sa_result_for_exposure(sa_results_df, "LOAN_SOV_UK_001")
 
-        assert result.total_rwa == 0
-        df = result.to_dataframe()
-        assert df.filter(pl.col("exposure_class") == "CENTRAL_GOVT_CENTRAL_BANK")["risk_weight"][0] == 0.0
-
-    def test_crr_a02_corporate_unrated_100_percent(
-        self, pipeline, crr_config, corporate_unrated_exposure
-    ):
-        """
-        CRR-A02: Unrated corporate receives 100% risk weight.
-
-        Given: Unrated corporate exposure of GBP 1m
-        When: Calculating RWA under CRR SA
-        Then: RWA is GBP 1m (100% risk weight)
-        """
-        result = pipeline.run_with_data(corporate_unrated_exposure, crr_config)
-
-        assert result.total_rwa == pytest.approx(1_000_000, rel=0.01)
+        assert result is not None, "Exposure LOAN_SOV_UK_001 not found in SA results"
+        assert_risk_weight_match(
+            result["risk_weight"], expected["risk_weight"], scenario_id="CRR-A1"
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A1"
+        )
 ```
+
+The session-scoped fixtures (`sa_results_df`, `expected_outputs_dict`, `pipeline_results`, etc.) are defined in each suite's `conftest.py`. The pipeline runs once per session and results are shared across all tests.
+
+### Benchmark Tests
+
+Performance tests at various scales. See [Benchmark Tests](benchmarks.md) for full details.
+
+```bash
+# Run benchmarks (uses cached datasets)
+uv run pytest tests/benchmarks --benchmark-only
+
+# Force regenerate all benchmark datasets
+uv run pytest tests/benchmarks --benchmark-only --benchmark-regenerate
+
+# Force regenerate a specific scale
+uv run pytest tests/benchmarks --benchmark-only --benchmark-regenerate-scale=100k
+```
+
+Scales: 10K (quick, ~1s), 100K (standard, ~5s), 1M (large, ~60s), 10M (production, slow marker).
+
+## Acceptance Test Datasets
+
+Acceptance tests depend on two things: **input fixture data** (parquet files in `tests/fixtures/`) and **expected outputs** (golden files in `tests/expected_outputs/`). Understanding how to generate and maintain these is essential for working with acceptance tests.
+
+### Data flow
+
+```
+tests/fixtures/               tests/expected_outputs/
+    ├── counterparty/*.py             ├── crr/expected_rwa_crr.json
+    ├── exposures/*.py                └── basel31/expected_rwa_b31.json
+    ├── collateral/*.py
+    ├── ...                                     │
+    │                                           │
+    ▼  generate_all.py                          │
+    │                                           │
+tests/fixtures/                                 │
+    ├── counterparty/*.parquet                  │
+    ├── exposures/*.parquet                     │
+    ├── ...                                     │
+    │                                           │
+    ▼  conftest.py: load_fixtures()             │
+    │                                           │
+    RawDataBundle (LazyFrames)                  │
+    │                                           │
+    ▼  conftest.py: PipelineOrchestrator.run()  │
+    │                                           │
+    AggregatedResultBundle                      │
+    │                                           │
+    ▼  test assertions ◄────────────────────────┘
+```
+
+### Generating fixture data
+
+Each subdirectory in `tests/fixtures/` contains Python modules with `create_*()` and `save_*()` functions that produce parquet files. The master script generates everything in the correct order:
+
+```bash
+# Generate all fixture parquet files
+uv run python tests/fixtures/generate_all.py
+```
+
+This produces parquet files across 8 fixture groups:
+
+| Group | Directory | Files | Description |
+|-------|-----------|-------|-------------|
+| Counterparties | `counterparty/` | sovereign, institution, corporate, retail, specialised_lending | All counterparty types with various CQS bands |
+| Mappings | `mapping/` | org_mapping, lending_mapping | Organisational and lending group hierarchies |
+| Ratings | `ratings/` | ratings | External and internal ratings |
+| Exposures | `exposures/` | facilities, loans, contingents, facility_mapping | All exposure types with facility-to-loan mappings |
+| Collateral | `collateral/` | collateral | Financial and non-financial collateral |
+| Guarantees | `guarantee/` | guarantee | Guarantee and credit protection |
+| Provisions | `provision/` | provision | Specific and general provisions |
+| FX Rates | `fx_rates/` | fx_rates | Currency conversion rates |
+
+The script also runs data integrity checks (referential integrity between counterparties, exposures, collateral, etc.).
+
+**When to regenerate**: after modifying any `create_*()` function in `tests/fixtures/`, or when adding new test scenarios that require new input data.
+
+### Expected outputs (golden files)
+
+Expected outputs live in `tests/expected_outputs/` and define the correct RWA results for each test scenario. Three formats are supported (checked in priority order):
+
+1. **Parquet** (fastest) — `expected_rwa_crr.parquet` / `expected_rwa_b31.parquet`
+2. **CSV** (fallback) — `expected_rwa_crr.csv` / `expected_rwa_b31.csv`
+3. **JSON** (source of truth) — `expected_rwa_crr.json` / `expected_rwa_b31.json`
+
+Each record has at minimum:
+
+- `scenario_id` — unique test identifier (e.g. `"CRR-A1"`, `"B31-B03"`)
+- `scenario_group` — grouping for fixture filtering (e.g. `"CRR-A"`, `"B31-D"`)
+- `risk_weight`, `rwa_after_sf`, `ead` — expected calculation outputs
+
+The JSON file is the canonical source of truth. Parquet/CSV are derived for faster loading. When updating expected values, edit the JSON and regenerate the other formats.
+
+### How conftest.py wires it together
+
+Each acceptance suite's `conftest.py` (e.g. `tests/acceptance/crr/conftest.py`) provides session-scoped fixtures:
+
+1. **`load_test_fixtures`** — calls `load_fixtures()` from `workbooks/shared/fixture_loader.py`, which reads all parquet files into a `FixtureData` container of LazyFrames
+2. **`raw_data_bundle`** — assembles the `FixtureData` into a `RawDataBundle` (the pipeline's input type)
+3. **`pipeline_results`** — runs `PipelineOrchestrator().run_with_data(bundle, config)` once per session
+4. **`sa_results_df` / `irb_results_df` / `slotting_results_df`** — collected DataFrames for each approach
+5. **`expected_outputs_df` / `expected_outputs_dict`** — loaded golden file data for assertions
+
+Different configs are used for different scenario groups (SA-only, full IRB, slotting permissions, etc.).
+
+### Adding a new acceptance test scenario
+
+1. Add input data in the appropriate `tests/fixtures/` module (e.g. a new counterparty in `corporate.py`, a new loan in `loans.py`)
+2. Regenerate fixtures: `uv run python tests/fixtures/generate_all.py`
+3. Add expected outputs to the relevant JSON golden file in `tests/expected_outputs/`
+4. Write the test in the appropriate `test_scenario_*.py` file, using conftest fixtures
+5. Run and verify: `uv run pytest tests/acceptance/crr/test_scenario_crr_a_sa.py -v`
 
 ## Test Fixtures
 
-### Creating Fixtures
+### Unit test fixtures
+
+Unit tests use inline Polars DataFrames or `@pytest.fixture` functions:
 
 ```python
-# tests/fixtures/exposures.py
-
-import pytest
-import polars as pl
-from datetime import date
-
 @pytest.fixture
 def sample_counterparty():
     """Single corporate counterparty."""
@@ -232,36 +362,9 @@ def sample_counterparty():
         "country_code": ["GB"],
         "annual_turnover": [30_000_000.0],
     }).lazy()
-
-@pytest.fixture
-def sample_facility(sample_counterparty):
-    """Single term loan facility."""
-    return pl.DataFrame({
-        "facility_id": ["F001"],
-        "counterparty_id": ["C001"],
-        "facility_type": ["TERM"],
-        "committed_amount": [1_000_000.0],
-        "drawn_amount": [1_000_000.0],
-        "currency": ["GBP"],
-        "start_date": [date(2024, 1, 1)],
-        "maturity_date": [date(2029, 1, 1)],
-        "is_unconditionally_cancellable": [False],
-        "is_committed": [True],
-    }).lazy()
-
-@pytest.fixture
-def sample_raw_data(sample_counterparty, sample_facility):
-    """Complete raw data bundle."""
-    from rwa_calc.contracts.bundles import RawDataBundle
-
-    return RawDataBundle(
-        counterparties=sample_counterparty,
-        facilities=sample_facility,
-        loans=pl.DataFrame().lazy(),
-    )
 ```
 
-### Parametrized Fixtures
+### Parametrized fixtures
 
 ```python
 @pytest.fixture(params=[
@@ -277,11 +380,9 @@ def corporate_risk_weight_case(request):
     return {"cqs": cqs, "expected_risk_weight": expected_rw}
 ```
 
-### Configuration Fixtures
+### Configuration fixtures
 
 ```python
-# tests/conftest.py
-
 import pytest
 from datetime import date
 from rwa_calc.contracts.config import CalculationConfig
@@ -308,10 +409,7 @@ def both_frameworks(request, crr_config, basel31_config):
 
 ### Test Naming
 
-Use descriptive names that explain:
-- What is being tested
-- Under what conditions
-- Expected outcome
+Use descriptive names that explain what is being tested, under what conditions, and the expected outcome:
 
 ```python
 # Good
@@ -376,22 +474,20 @@ def test_calculation_accumulates_errors():
 
 ## Test Markers
 
-```python
-# tests/conftest.py
+Markers are configured in `pyproject.toml`:
 
-def pytest_configure(config):
-    config.addinivalue_line("markers", "crr: CRR framework tests")
-    config.addinivalue_line("markers", "basel31: Basel 3.1 framework tests")
-    config.addinivalue_line("markers", "slow: slow-running tests")
-    config.addinivalue_line("markers", "integration: integration tests")
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short --benchmark-disable -m 'not slow'"
+markers = [
+    "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
+    "slow: mark test as slow (10M+ scale, may take several minutes)",
+]
 ```
 
 Usage:
 ```python
-@pytest.mark.crr
-def test_crr_specific_feature():
-    ...
-
 @pytest.mark.slow
 def test_large_portfolio_calculation():
     ...
@@ -399,8 +495,8 @@ def test_large_portfolio_calculation():
 
 Run by marker:
 ```bash
-uv run pytest -m crr
-uv run pytest -m "not slow"
+uv run pytest -m "not slow"    # Default — excludes slow tests
+uv run pytest -m slow           # Only slow tests
 ```
 
 ## Coverage

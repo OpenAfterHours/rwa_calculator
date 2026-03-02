@@ -7,6 +7,14 @@ discrepancies, outdated content, and missing documentation.
 > match source code: bundles, errors, protocols, domain enums, engine modules (calculators, CCF,
 > CRM, comparison, FX, utils), configuration (CalculationConfig, PDFloors, LGDFloors,
 > SupportingFactors, OutputFloorConfig, RetailThresholds, IRBPermissions, PolarsEngine).
+>
+> **2026-03-02 update (continued):** All Priority 2 items completed (2.1-2.5). All data model
+> docs now match source code: intermediate schemas (hierarchy, classification, CRM columns),
+> output schemas (SA/IRB/Slotting/Equity result schemas, CALCULATION_OUTPUT_SCHEMA, framework
+> additions), input schemas (fixed Contingent, Counterparty, Facility, Loan, Equity schemas),
+> validation functions (all 17 functions documented), regulatory tables (fixed CRR corporate
+> CQS 3, HVCRE weights, slotting maturity differentiation; added Basel 3.1 SCRA, LTV bands,
+> equity tables, haircut 5-band maturity, F-IRB LGD comparison).
 
 ---
 
@@ -150,63 +158,65 @@ Documented: `RegulatoryFramework`, `ExposureClass`, `ApproachType`, `CQS`, `Erro
 
 ## Priority 2 — High: Data Model Schemas Use Wrong Column Names
 
-### 2.1 Fix `docs/data-model/intermediate-schemas.md` — Column names don't match source
+**Status: COMPLETED** (2026-03-02)
 
-The intermediate schema docs use `exposure_id`, `counterparty_id`, `facility_id`, `loan_id`.
-Source code consistently uses `exposure_reference`, `counterparty_reference`, `facility_reference`, `loan_reference`.
+All data model documentation rewritten to match source code:
 
-Also uses `ultimate_parent_id` vs source `ultimate_parent_reference`, `parent_chain` (doesn't exist), `hierarchy_level` vs `hierarchy_depth`, `inherited_rating` (doesn't exist as column), `group_total_exposure` vs different naming, `lending_group_id` (wrong).
+### 2.1 Fix `docs/data-model/intermediate-schemas.md`
 
-**Steps:**
-- [ ] Cross-reference every column name against actual pipeline output columns
-- [ ] Update Resolved Hierarchy Schema with correct column names from `hierarchy.py`
-- [ ] Update Classified Exposure Schema with correct columns from `classifier.py`
-- [ ] Add CRM intermediate schema (columns added by `crm/processor.py`)
-- [ ] Document the classification output columns (24 columns added per source)
+- [x] Rewrote entire file — all `_id` suffixes replaced with `_reference`
+- [x] Added Raw Exposure Schema section (exposure unification from loans/contingents/facilities)
+- [x] Resolved Hierarchy Schema: added all 14+ hierarchy columns (counterparty hierarchy, facility hierarchy, rating inheritance, lending group)
+- [x] Classified Exposure Schema: corrected to show `approach_applied`/`approach_permitted` (not `approach_type`), added `exposure_class_reason`, `approach_selection_reason`, `rating_agency`, `rating_value`, `is_retail_eligible`
+- [x] CRM Adjusted Schema: rewritten with full EAD waterfall columns (CCF, collateral, guarantee, LGD), plus Pre/Post CRM reporting columns
+- [x] Specialised Lending Schema: corrected `sl_type` (not `lending_type`), added `remaining_maturity_years`
+- [x] Updated all transformation examples with correct column names
 
-### 2.2 Fix `docs/data-model/output-schemas.md` — Column names don't match source
+### 2.2 Fix `docs/data-model/output-schemas.md`
 
-Same `_id` vs `_reference` issue. Also:
-- SA schema likely missing columns (e.g., `sa_risk_weight` prefix convention)
-- IRB schema may have wrong column names for formulas output
-- Slotting and Equity schemas need verification
-- Aggregated output schema needs to match `AggregatedResultBundle`
+- [x] Rewrote entire file — all `_id` suffixes replaced with `_reference`
+- [x] SA Result Schema: rewritten with `sa_cqs`, `sa_base_risk_weight`, `sa_rw_adjustment`, `sa_final_risk_weight`, `sa_rw_regulatory_ref`, `sa_rwa`
+- [x] IRB Result Schema: rewritten with full formula breakdown (`irb_pd_*`, `irb_lgd_*`, `irb_correlation_r`, `irb_capital_k`, `irb_maturity_adj_b`, `irb_scaling_factor`, `irb_risk_weight`, `irb_rwa`, `irb_expected_loss`)
+- [x] Slotting Result Schema: corrected columns (`sl_base_risk_weight`, `sl_maturity_adjusted_rw`, `sl_final_risk_weight`, `sl_rwa`)
+- [x] Added full Calculation Output Schema (~100 columns) with all sections
+- [x] Added CRR and Basel 3.1 framework-specific output additions
+- [x] Rewrote AggregatedResultBundle documentation (15 fields including all summaries and EL)
+- [x] Added ELPortfolioSummary documentation with T2 credit cap
+- [x] Added ComparisonBundle, TransitionalScheduleBundle, CapitalImpactBundle
 
-**Steps:**
-- [ ] Cross-reference SA output columns against `engine/sa/namespace.py` and `engine/sa/calculator.py`
-- [ ] Cross-reference IRB output columns against `engine/irb/namespace.py` and `engine/irb/calculator.py`
-- [ ] Cross-reference Slotting output columns against `engine/slotting/namespace.py`
-- [ ] Cross-reference Equity output columns against `engine/equity/namespace.py`
-- [ ] Add aggregated output schema matching `AggregatedResultBundle`
-- [ ] Document EL summary output columns
+### 2.3 Verify `docs/data-model/input-schemas.md`
 
-### 2.3 Verify `docs/data-model/input-schemas.md` against `data/schemas.py`
-
-Input schemas doc is substantial (807 lines) but needs column-by-column verification against `FACILITY_SCHEMA`, `LOAN_SCHEMA`, `CONTINGENTS_SCHEMA`, `COUNTERPARTY_SCHEMA`, `COLLATERAL_SCHEMA`, etc. in source.
-
-**Steps:**
-- [ ] Verify each schema table column-by-column against source `data/schemas.py`
-- [ ] Verify `COLUMN_VALUE_CONSTRAINTS` are documented (valid values per categorical column)
-- [ ] Check `SPECIALISED_LENDING_SCHEMA` and `EQUITY_EXPOSURE_SCHEMA` are documented
-- [ ] Ensure `FX_RATES_SCHEMA` is documented
-- [ ] Verify entity type list matches `VALID_ENTITY_TYPES` in source
+- [x] Added missing `scra_grade` and `is_investment_grade` to Counterparty Schema (Basel 3.1)
+- [x] Added missing `is_qrre_transactor` to Facility Schema
+- [x] Removed non-existent `contract_type` and `ccf_category` from Contingent Schema
+- [x] Added missing `bs_type` column to Contingent Schema
+- [x] Fixed Loan example (removed `risk_type`/`ccf_modelled` which don't apply to loans, added `interest`/`is_buy_to_let`)
+- [x] Added 5 missing equity types (`central_bank`, `exchange_traded`, `government_supported`, `private_equity_diversified`, `other`)
+- [x] Added missing `hvcre` to valid `sl_type` values
 
 ### 2.4 Update `docs/data-model/data-validation.md`
 
-Docs reference `validate_schema()` — need to verify all validation functions are documented:
+- [x] Added 4 missing bundle validators: `validate_resolved_hierarchy_bundle()`, `validate_classified_bundle()`, `validate_crm_adjusted_bundle()` with signatures and examples
+- [x] Added `validate_risk_type()` with valid codes documentation
+- [x] Added `validate_ccf_modelled()` with range [0, 1.5] and null handling
+- [x] Added `normalize_risk_type()` with code-to-value mapping table
+- [x] Added `validate_column_values()` with materialisation note
+- [x] Added `validate_bundle_values()` with `COLUMN_VALUE_CONSTRAINTS` table (11 tables, all constrained columns)
 
-**Source functions to check against docs:**
-- `validate_schema()`, `validate_required_columns()`, `validate_schema_to_errors()`
-- `validate_raw_data_bundle()`, `validate_resolved_hierarchy_bundle()`, `validate_classified_bundle()`, `validate_crm_adjusted_bundle()`
-- `validate_non_negative_amounts()`, `validate_pd_range()`, `validate_lgd_range()`
-- `validate_risk_type()`, `validate_ccf_modelled()`
-- `normalize_risk_type()`, `validate_column_values()`, `validate_bundle_values()`
-- `COLUMN_VALUE_CONSTRAINTS` dict
+### 2.5 Update `docs/data-model/regulatory-tables.md`
 
-**Steps:**
-- [ ] Verify all validation functions from `contracts/validation.py` are documented
-- [ ] Document `validate_bundle_values()` and `COLUMN_VALUE_CONSTRAINTS`
-- [ ] Document `normalize_risk_type()` and related constants (`VALID_RISK_TYPE_CODES`, `RISK_TYPE_CODE_TO_VALUE`)
+- [x] **Fixed CRR corporate CQS 3**: was 75% (wrong), corrected to 100% per CRR Art. 122
+- [x] **Fixed CRR slotting**: Strong/Good are NOT both 70% — Strong=70%, Good=90% at ≥2.5yr; added maturity differentiation tables
+- [x] **Fixed HVCRE**: CRR HVCRE has its own higher weight table (95/120/140 at ≥2.5yr), NOT same as standard SL
+- [x] Added Basel 3.1 SCRA weights (A=40%, B=75%, C=150%)
+- [x] Added Basel 3.1 corporate additions (investment grade 65%, SME 85%, subordinated 150%)
+- [x] Added Basel 3.1 supervisory LGD table with changes from CRR
+- [x] Added Basel 3.1 collateral haircuts with 5 maturity bands (vs CRR's 3)
+- [x] Added equity risk weight tables (SA Art. 133 and IRB Simple Art. 155)
+- [x] Added CRR residential mortgage split treatment and commercial RE details
+- [x] Added Basel 3.1 commercial RE (general + income-producing + ADC)
+- [x] Added overcollateralisation requirements table
+- [x] Added API function examples with correct signatures
 
 ### 2.5 Update `docs/data-model/regulatory-tables.md`
 

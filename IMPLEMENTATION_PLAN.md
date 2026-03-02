@@ -1,142 +1,433 @@
-# Implementation Plan
+# Documentation Update Implementation Plan
 
-Status legend: `[ ]` = not started, `[~]` = partial, `[x]` = done
+Full audit of `docs/` vs `src/rwa_calc/` completed 2026-03-02. This plan covers all
+discrepancies, outdated content, and missing documentation.
 
-## Priority 1 — CRR Completion (v1.0) — COMPLETE
+---
 
-All Priority 1 items are done. **91/91 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed. All 3 quality gates pass: ruff clean, mypy clean, all tests pass.
+## Priority 1 — Critical: API Reference Out of Sync with Source
 
-## Priority 2 — Basel 3.1 Core (v1.1)
+These docs contain **wrong** information — field names, method signatures, and class
+structures that no longer match the source code. Users following these docs will hit errors.
 
-### 2a. Engine gaps — COMPLETE
+### 1.1 Update `docs/api/contracts.md` — Bundles are heavily outdated
 
-Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB supervisory LGD, A-IRB CCF floor, CCF for unconditionally cancellable commitments, Equity calculator Basel 3.1 routing, A-IRB LGD floor enforcement (gated on `is_airb`, subordinated unsecured 50%).
+**Source**: `src/rwa_calc/contracts/bundles.py`
 
-### 2b. SA risk weight revisions — COMPLETE
+| Bundle | Doc Fields | Source Fields | Gap |
+|--------|-----------|--------------|-----|
+| `RawDataBundle` | 10 fields (`org_mapping`, `lending_mapping`) | 14+ fields (`facility_mappings`, `org_mappings`, `lending_mappings`, `fx_rates`, `equity_exposures`, `specialised_lending`) | Field names wrong, 4+ fields missing |
+| `ResolvedHierarchyBundle` | 4 fields (`counterparties`, `facilities`, `loans`, `exposures`) | `exposures`, `counterparty_lookup`, `lending_group_totals`, `collateral`, `guarantees`, `provisions`, `errors` | Completely different structure |
+| `ClassifiedExposuresBundle` | 4 fields | 11 fields (adds `equity_exposures`, `collateral`, `guarantees`, `provisions`, `counterparty_lookup`, `classification_audit`, `classification_errors`) | 7 fields missing |
+| `CRMAdjustedBundle` | 3 fields | 8 fields (adds `exposures`, `equity_exposures`, `crm_audit`, `collateral_allocation`, `crm_errors`) | 5 fields missing |
+| `SAResultBundle` | `data` field | `results`, `calculation_audit`, `errors` | Wrong field names |
+| `IRBResultBundle` | `data` field | `results`, `expected_loss`, `calculation_audit`, `errors` | Wrong field names, missing `expected_loss` |
+| `SlottingResultBundle` | `data` field | `results`, `calculation_audit`, `errors` | Wrong field names |
+| `AggregatedResultBundle` | 3 fields (`data`, `errors`, `warnings`) | 15+ fields (`results`, `sa_results`, `irb_results`, `slotting_results`, `equity_results`, `floor_impact`, `supporting_factor_impact`, `summary_by_class`, `summary_by_approach`, `pre_crm_summary`, `post_crm_detailed`, `post_crm_summary`, `el_summary`, `errors`) | Almost entirely wrong |
 
-- [x] **LTV-based residential RE risk weights** (FR-1.2 / CRE20.71-88) — Done.
-- [x] **Revised SA risk weight tables** (FR-1.2 / CRE20.7-26) — Done.
+**Missing bundles not documented at all:**
+- `CounterpartyLookup` — 4 fields: `counterparties`, `parent_mappings`, `ultimate_parent_mappings`, `rating_inheritance`
+- `ComparisonBundle` — dual-framework comparison results
+- `TransitionalScheduleBundle` — output floor transitional schedule
+- `CapitalImpactBundle` — RWA delta decomposition
+- `ELPortfolioSummary` — expected loss T2 credit cap
 
-### 2c. CRM Basel 3.1 adjustments — COMPLETE
+**Missing helper functions:**
+- `create_empty_raw_data_bundle()`
+- `create_empty_counterparty_lookup()`
+- `create_empty_resolved_hierarchy_bundle()`
+- `create_empty_classified_bundle()`
+- `create_empty_crm_adjusted_bundle()`
 
-Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB supervisory LGD framework dispatch (CRE32.9-12), framework-conditional HaircutCalculator/CRMProcessor, A-IRB LGD floor enforcement (CRE30.41, `is_airb` gating), **Basel 3.1 parameter substitution for IRB guarantors** (CRE22.70-85).
+**Steps:**
+- [ ] Read current `contracts/bundles.py` and update every bundle definition to match source
+- [ ] Add documentation for all 5 missing bundles
+- [ ] Add documentation for `create_empty_*()` helper functions
+- [ ] Verify all type annotations match source (`pl.LazyFrame | None`, `list[CalculationError]`, etc.)
 
-- [x] **Parameter substitution for IRB guarantors** (CRE22.70-85 / PRA PS9/24 Ch4) — Done. When a Basel 3.1 F-IRB exposure is guaranteed by a counterparty under IRB, the guaranteed portion uses the guarantor's PD and F-IRB supervisory LGD (40%) through the full IRB formula instead of SA risk weight substitution. CRM processor propagates guarantor PD from rating_inheritance; IRB namespace dispatches per-row between SA RW substitution (SA guarantors) and PD parameter substitution (IRB guarantors). Non-beneficial guarantees (guarantor RW >= borrower RW) are not applied. EL adjusted: IRB guarantor EL = guarantor_pd × firb_lgd × guaranteed_portion. 14 unit tests + 5 acceptance tests.
-- [N/A] **SFT minimum haircut floors** (CRE56) — PRA has NOT implemented CRE56 in the UK capital framework. Explicitly deferred in CP16/22, PS17/23, PS9/24, and PS1/26. Not required for UK Basel 3.1 compliance.
+### 1.2 Update `docs/api/contracts.md` — Error handling outdated
 
-### 2d. Testing and validation — COMPLETE
+**Source**: `src/rwa_calc/contracts/errors.py`
 
-112 Basel 3.1 acceptance tests across 9 files (SA 14, F-IRB 16, A-IRB 13, CRM 15, parameter sub 5, slotting 13, output floor 6, provisions 20, complex 10). Expected outputs at `tests/expected_outputs/basel31/expected_rwa_b31.json`.
+Current docs show a simplistic `CalculationError` with 4 fields (`exposure_id`, `stage`, `message`, `details`). Source has:
 
-### 2e. Output floor engine — COMPLETE
+- `CalculationError` (frozen dataclass): `code`, `message`, `severity`, `category`, `exposure_reference`, `counterparty_reference`, `regulatory_reference`, `field_name`, `expected_value`, `actual_value`
+- `LazyFrameResult` class — combines LazyFrame with accumulated errors (properties: `has_errors`, `has_critical_errors`, `warnings`, `critical_errors`; methods: `errors_by_category()`, `errors_by_exposure()`, `add_error()`, `merge()`)
+- Error code constants: `DQ001`-`DQ006`, `HIE001`-`HIE003`, `CLS001`-`CLS003`, `CRM001`-`CRM005`, `IRB001`-`IRB005`, `SA001`-`SA003`, `CFG001`-`CFG002`
+- Factory functions: `missing_field_error()`, `invalid_value_error()`, `business_rule_error()`, `hierarchy_error()`, `crm_warning()`
 
-`sa_rwa` column stored for all rows when output floor is enabled. Floor binding/non-binding detection works correctly.
+**Steps:**
+- [ ] Rewrite `CalculationError` section with all 10+ fields
+- [ ] Add `LazyFrameResult` documentation with properties and methods
+- [ ] Document all error code constants organised by domain
+- [ ] Document factory functions
+- [ ] Remove `CalculationWarning` (does not exist in source — severity is a field on `CalculationError`)
 
-### 2f. EL shortfall/excess & T2 credit cap — COMPLETE
+### 1.3 Update `docs/api/contracts.md` — Protocols outdated
 
-`compute_el_shortfall_excess()` in IRB namespace. Per-exposure `el_shortfall` / `el_excess` computed in all 3 IRB calculator paths. Aggregator sums `total_el_shortfall` / `total_el_excess`. **Portfolio-level T2 credit cap** (CRR Art. 62(d)): `ELPortfolioSummary` frozen dataclass computes T2 credit cap = 0.6% of IRB RWA, T2 credit = min(el_excess, cap), CET1/T2 deductions = 50/50 split of el_shortfall per CRR Art. 159. Wired through both pipeline aggregation paths (`aggregate_with_audit` and `_aggregate_single_pass`). 24 unit tests, 19 acceptance tests.
+**Source**: `src/rwa_calc/contracts/protocols.py`
 
-## Priority 3 — Dual-Framework Comparison (v1.2)
+Current docs show simplified protocol signatures. Source has many more methods per protocol and additional protocols:
 
-### 3a. Side-by-side comparison — COMPLETE
+**Missing methods on existing protocols:**
+- `SACalculatorProtocol`: missing `get_sa_result_bundle()`, `calculate_unified()`, `calculate_branch()`
+- `IRBCalculatorProtocol`: missing `get_irb_result_bundle()`, `calculate_unified()`, `calculate_branch()`, `calculate_expected_loss()`
+- `SlottingCalculatorProtocol`: missing `get_slotting_result_bundle()`, `calculate_unified()`, `calculate_branch()`
+- `OutputAggregatorProtocol`: missing `aggregate_with_audit()`, `apply_output_floor()`
+- `CRMProcessorProtocol`: shows `process()` but source has `apply_crm()` and `get_crm_adjusted_bundle()`
 
-- [x] **Side-by-side CRR vs Basel 3.1 comparison output** (M3.1) — Done. `DualFrameworkRunner` in `engine/comparison.py` orchestrates two separate `PipelineOrchestrator` instances (one per framework) on the same `RawDataBundle`. Produces `ComparisonBundle` with per-exposure deltas (delta_rwa, delta_risk_weight, delta_ead, delta_rwa_pct) and summary views by exposure class and approach. 22 unit tests + 19 acceptance tests (SA and F-IRB comparison scenarios).
+**Missing protocols entirely:**
+- `ComparisonRunnerProtocol` — `compare()` method
+- `CapitalImpactAnalyzerProtocol` — `analyze()` method
+- `PipelineProtocol` — `run()`, `run_with_data()` methods
+- `SchemaValidatorProtocol`
+- `DataQualityCheckerProtocol`
+- `ResultExporterProtocol`
 
-### 3b. Capital impact & transitional modelling — COMPLETE (M3.2, M3.3)
+**Steps:**
+- [ ] Update all existing protocol signatures to match source
+- [ ] Add all missing protocols
+- [ ] Fix `CRMProcessorProtocol.process()` → `apply_crm()` / `get_crm_adjusted_bundle()`
 
-- [x] **Capital impact analysis** (M3.2) — Done. `CapitalImpactAnalyzer` in `engine/comparison.py`. 26 unit tests + 24 acceptance tests.
-- [x] **Transitional floor schedule modelling** (M3.3) — Done. `TransitionalScheduleRunner` in `engine/comparison.py`. 19 unit tests + 19 acceptance tests.
+### 1.4 Update `docs/api/engine.md` — Method signatures outdated
 
-### 3c. Enhanced Marimo workbooks for impact analysis — COMPLETE (M3.4)
+**Source**: `src/rwa_calc/engine/`
 
-- [x] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Done. `comparison_app.py` in `ui/marimo/` provides interactive dual-framework impact analysis. Features: data path/IRB approach/reporting date configuration, dual-framework comparison runner (DualFrameworkRunner), executive summary with headline deltas (CRR vs B31 total RWA, EAD, avg risk weight), capital impact waterfall (4-driver decomposition table), summary by exposure class and approach, capital impact attribution by exposure class, transitional floor schedule timeline (2027-2032) with interactive year slider for drill-down, exposure-level delta drill-down with filters (class, approach, sort), exposure-level driver attribution, CSV export for all views. Registered at `/comparison` in multi-app server. Sidebar nav updated across all 4 apps. Also fixed: `CapitalImpactAnalyzer` now exported from `engine/__init__.py`.
+| Component | Doc Signature | Source Signature | Issue |
+|-----------|--------------|-----------------|-------|
+| `CCFCalculator` | `get_ccf(item_type, is_unconditionally_cancellable, ...)` | `sa_ccf_expression()`, `CCFCalculator` class, `drawn_for_ead()`, `on_balance_ead()` | Completely different API |
+| `CRMProcessor` | `process(classified, config) → CRMAdjustedBundle` | `apply_crm(data, config) → LazyFrameResult`, `get_crm_adjusted_bundle(data, config) → CRMAdjustedBundle` | Wrong method name and signature |
+| `SACalculator` | `calculate(exposures: LazyFrame, config)` | `calculate(data: CRMAdjustedBundle, config)`, plus `get_sa_result_bundle()`, `calculate_unified()`, `calculate_branch()` | Wrong input type, missing methods |
+| `IRBCalculator` | (need to verify) | `calculate(data: CRMAdjustedBundle, config)`, `get_irb_result_bundle()`, `calculate_unified()`, `calculate_branch()`, `calculate_expected_loss()` | Likely same issues |
+| `SlottingCalculator` | (need to verify) | Similar pattern to SA/IRB | Likely same issues |
+| `EquityCalculator` | (need to verify) | `calculate(data, config)`, `get_equity_result_bundle()` | Likely same issues |
+| `OutputAggregator` | (need to verify) | `aggregate()`, `aggregate_with_audit()`, `apply_output_floor()` | Likely same issues |
 
-### 2g. QRRE transactor/revolver PD floor distinction — COMPLETE
+**Missing engine modules not documented:**
+- `engine/comparison.py` — `DualFrameworkRunner`, `CapitalImpactAnalyzer`, `TransitionalScheduleRunner`
+- `engine/fx_converter.py` — `FXConverter` class with `convert_exposures()`, `convert_collateral()`, etc.
+- `engine/utils.py` — `has_rows()`, `has_required_columns()`
 
-- [x] **QRRE classification in classifier** (CRR Art. 147(5), CRE30.55) — Done. Phase 3 of `_classify_sme_and_retail()` now assigns `RETAIL_QRRE` exposure class when: retail-qualified, `is_revolving=True`, and `facility_limit <= qrre_max_limit` (GBP 100k). New `is_qrre_transactor` column in FACILITY_SCHEMA propagated through hierarchy resolver to all exposure types.
-- [x] **Transactor/revolver PD floor conditional** (CRE30.20, PRA PS9/24) — Done. `_pd_floor_expression()` in `engine/irb/formulas.py` now distinguishes transactor (0.03%) vs revolver (0.10%) PD floors for QRRE exposures based on `is_qrre_transactor` column. Null/missing defaults to conservative revolver floor. Backward compatible: old data without the column uses revolver floor via `has_transactor_col` parameter.
-- [x] **Hierarchy propagation** — Done. `is_revolving`, `is_qrre_transactor`, and `facility_limit` propagated from facilities to loans/contingents via facility join in hierarchy resolver. Facility undrawn exposures carry these fields directly.
-- [x] **Fixture data** — Done. 2 QRRE facility fixtures (transactor + revolver), corresponding loan and mapping fixtures. 3 new unit tests (transactor floor, null-defaults-to-revolver, non-QRRE unaffected).
+**Steps:**
+- [ ] Update CCF section with actual API (`sa_ccf_expression()`, `CCFCalculator`, helper functions)
+- [ ] Update CRM processor signatures (`apply_crm`, `get_crm_adjusted_bundle`)
+- [ ] Update SA/IRB/Slotting/Equity calculator signatures with all methods
+- [ ] Update Aggregator with `aggregate_with_audit()` and `apply_output_floor()`
+- [ ] Add `comparison.py` section (DualFrameworkRunner, CapitalImpactAnalyzer, TransitionalScheduleRunner)
+- [ ] Add `fx_converter.py` section
+- [ ] Add `utils.py` section
 
-## Priority 4 — Output & Export
+### 1.5 Update `docs/api/configuration.md` — Missing config fields and classes
 
-- [x] **Excel / Parquet export** (FR-4.7) — Done. `ResultExporter` in `api/export.py` with `export_to_parquet()`, `export_to_csv()`, `export_to_excel()`. `CalculationResponse` has convenience methods `to_parquet()`, `to_csv()`, `to_excel()`. Protocol: `ResultExporterProtocol`. Excel requires `xlsxwriter` (added to deps). 19 unit tests.
-- [x] **COREP template generation** (FR-4.6) — Done. `COREPGenerator` in `reporting/corep/generator.py` generates C 07.00 (SA credit risk), C 08.01 (IRB totals), C 08.02 (IRB PD grade breakdown), plus C 07.00 risk weight band breakdown. `COREPTemplateBundle` frozen dataclass holds all template DataFrames. Template structure definitions in `reporting/corep/templates.py` with EBA DPM row/column references. Integrated via `ResultExporter.export_to_corep()` and `CalculationResponse.to_corep()`. Multi-sheet Excel export with xlsxwriter. Handles column naming variants (`ead_final`/`final_ead`), optional CRM/provisions columns, exposure-weighted averages for IRB PD/LGD/maturity. 48 unit tests + 4 conditional (xlsxwriter).
+**Source**: `src/rwa_calc/contracts/config.py`
 
-## Infrastructure & Cleanup
+**Missing `CalculationConfig` fields:**
+- `base_currency` — reporting currency
+- `apply_fx_conversion` — FX conversion toggle
+- `retail_thresholds` — `RetailThresholds` object
+- `irb_permissions` — `IRBPermissions` object
+- `collect_engine` — Polars engine selection (`PolarsEngine` type)
 
-- [x] **Remove .pyc files from git** — 39 `.pyc` files were committed before `.gitignore` was in place. Removed from tracking 2026-03-01.
-- [x] **Spec documentation refresh** — 8 spec files updated to reflect actual implementation status. Most recent: `sa-risk-weights.md` FR-1.2 status corrected from "Partial" to "Done", `output-reporting.md` stale "phase-in tests pending" note corrected.
-- [x] **Slotting spec fix** — `specs/crr/slotting-approach.md` had a stale Basel 3.1 slotting table with incorrect risk weights and missing Project Finance Pre-Operational category. Replaced with 3 correct tables matching `specs/basel31/framework-differences.md` (BCBS CRE33).
-- [x] **Runtime skip pattern audit** — Audited all runtime skips. Removed stale `@pytest.mark.skip` from `test_create_test_pipeline` (fixtures exist, test passes). Remaining skips are legitimate: 21 benchmark skips (`--benchmark-skip`), 5 xlsxwriter conditional skips (optional dep), 0 acceptance test runtime skips trigger.
-- [x] **Ruff format cleanup** — 3 source files had pre-existing formatting drift (`api/export.py`, `engine/irb/namespace.py`, `ui/marimo/comparison_app.py`). Auto-formatted.
-- [ ] **BDD test scaffold** — Empty scaffold, no actual BDD tests. Low priority.
+**Missing configuration classes:**
+- `RetailThresholds` — `.crr()` (EUR 1m) / `.basel_3_1()` (GBP 880k) factory methods
+- `IRBPermissions` — `is_permitted()`, `get_permitted_approaches()`, `.sa_only()`, `.full_irb()`, `.firb_only()`, `.airb_only()`, `.retail_airb_corporate_firb()`
+- `PolarsEngine` type alias — `Literal["cpu", "gpu", "streaming"]`
 
-## Test Counts
+**Steps:**
+- [ ] Add all missing `CalculationConfig` fields
+- [ ] Add `RetailThresholds` class with factory methods
+- [ ] Add `IRBPermissions` class with all factory methods
+- [ ] Add `PolarsEngine` type alias documentation
+- [ ] Verify `PDFloors`, `LGDFloors`, `SupportingFactors`, `OutputFloorConfig` are complete and accurate
 
-| Suite | Passed | Skipped |
-|---|---|---|
-| Unit | ~1,476 | 9 |
-| Contracts | 123 | 0 |
-| Acceptance (CRR) | 97 | 0 |
-| Acceptance (Basel 3.1) | 116 | 0 |
-| Acceptance (Comparison) | 62 | 0 |
-| Integration | 5 | 0 |
-| Benchmarks | 4 | 21 |
-| **Total** | **1,885** | **30** |
+### 1.6 Update `docs/api/domain.md` — Missing enums
 
-Last verified: 2026-03-02 (Python 3.13.12, pytest 9.0.2, 1885 passed / 30 skipped). All quality gates pass: ruff clean, mypy clean, ruff format clean.
+**Source**: `src/rwa_calc/domain/enums.py`
 
-## Learnings
+Documented: `RegulatoryFramework`, `ExposureClass`, `ApproachType`, `CQS`, `ErrorSeverity`, `ErrorCategory`
 
-### Architecture & design
+**Missing enums:**
+- `CollateralType` — `FINANCIAL`, `IMMOVABLE`, `RECEIVABLES`, `OTHER_PHYSICAL`, `OTHER`
+- `IFRSStage` (IntEnum) — `STAGE_1`, `STAGE_2`, `STAGE_3`
+- `SlottingCategory` — `STRONG`, `GOOD`, `SATISFACTORY`, `WEAK`, `DEFAULT`
+- `SpecialisedLendingType` — `PROJECT_FINANCE`, `OBJECT_FINANCE`, `COMMODITIES_FINANCE`, `IPRE`, `HVCRE`
+- `PropertyType` — `RESIDENTIAL`, `COMMERCIAL`, `ADC`
+- `Seniority` — `SENIOR`, `SUBORDINATED`
+- `SCRAGrade` — `A`, `B`, `C`
 
-- `CRMProcessor(is_basel_3_1=True)` controls both haircut table selection AND F-IRB supervisory LGD values. Pipeline auto-creates processor with `config.is_basel_3_1`.
-- `_ensure_components_initialized()` caches the `CRMProcessor` with the first config's `is_basel_3_1` flag and never recreates it. This is why `DualFrameworkRunner` and `TransitionalScheduleRunner` each create separate `PipelineOrchestrator` instances.
-- `PDFloors.get_floor()` and `LGDFloors.get_floor()` exist in config but are never called by the engine — the engine uses vectorized `_pd_floor_expression()` / `_lgd_floor_expression()` helpers instead.
-- `approach_applied` column uses enum string values: `"standardised"`, `"foundation_irb"`, `"advanced_irb"`, `"slotting"` — not the enum names `"SA"`, `"FIRB"`, etc. Tests must filter on the `.value` form.
-- `ResultExporter` reads from `CalculationResponse`'s cached parquet files via lazy scan, so export doesn't require re-running the pipeline. `CalculationResponse.to_parquet()` / `to_csv()` / `to_excel()` are convenience wrappers.
-- **Pipeline has two aggregation paths**: `aggregate_with_audit()` (on `OutputAggregator`) and `_aggregate_single_pass()` (on `PipelineOrchestrator`). The main `run_with_data()` pipeline uses `_aggregate_single_pass()`. Any new fields added to `AggregatedResultBundle` must be wired through both paths, plus the error-path bundle recreation in `run_with_data()` (which re-creates the bundle to append pipeline errors).
-- Excel export requires `xlsxwriter` (Polars uses it for `DataFrame.write_excel()`). `fastexcel` is for reading only.
-- `_parametric_irb_risk_weight_expr()` in `engine/irb/formulas.py` computes IRB risk weight from an arbitrary PD expression and fixed LGD. Used by parameter substitution to compute guarantor's equivalent IRB RW inline without collecting/re-querying. Returns `K × 12.5 × scaling_factor × MA`.
+**Steps:**
+- [ ] Add all 7 missing enums with members and descriptions
+- [ ] Verify existing enum members are complete
 
-### Regulatory rules
+---
 
-- CRM haircut table: CRR uses 3 maturity bands (0-1y, 1-5y, 5y+), Basel 3.1 uses 5 (0-1y, 1-3y, 3-5y, 5-10y, 10y+). Equity haircuts increase from 15%/25% (CRR) to 25%/35% (Basel 3.1).
-- CRR Art. 126 CRE treatment: Commercial RE is not a separate exposure class — it's a corporate exposure with commercial property collateral.
-- Investment-grade corporate 65% only applies to unrated corporates. SCRA grading only applies to unrated institutions.
-- Subordinated debt 150% is checked first in Basel 3.1 override chain because it overrides ALL other treatments.
-- A-IRB LGD floors apply only to A-IRB own-estimate LGDs (`is_airb` gating); F-IRB supervisory LGDs are regulatory values and don't need flooring (CRE30.41).
-- **B31 SME impact:** Basel 3.1 SME corporates get 85% RW (vs CRR 100%) but lose the 0.7619 supporting factor. Net effect: effective RW rises from 76.19% to 85%, a 12% RWA increase.
-- **Maturity effect in transitional schedule:** Total post-floor RWA is NOT monotonically non-decreasing across years because effective maturity shortens as reporting date advances (e.g., a 2033 loan has 6y maturity from 2027 but only 5y from 2028). The maturity adjustment decrease can outweigh the floor increase. The correct monotonicity invariant is that `floor_impact_rwa` is non-decreasing, not total RWA.
-- **Capital impact waterfall ordering:** The 4-driver waterfall is sequential and additive: (1) scaling factor removal = CRR_rwa × (1/1.06 - 1), (2) supporting factor removal = (CRR_rpf - CRR_rf) / 1.06 for IRB or CRR_rpf - CRR_rf for SA, (3) output floor = floor_impact_rwa from aggregator, (4) methodology = residual. The sum equals delta_rwa exactly by construction.
-- EL shortfall/excess: T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) caps the amount of EL excess addable to Tier 2 capital. EL shortfall is deducted 50/50 from CET1 and T2 per CRR Art. 159. Computed at portfolio level via `ELPortfolioSummary` in aggregator.
-- **Parameter substitution (CRE22.70-85):** Under Basel 3.1, IRB guarantors use PD parameter substitution (guarantor's PD + F-IRB supervisory LGD through IRB formula) instead of SA RW substitution. Under CRR, all guarantors use SA RW substitution. The guarantor's approach is determined per-row: IRB if the firm has IRB permission for the guarantor's exposure class AND the guarantor has an internal rating; SA otherwise.
-- **IRB maturity effect on parameter substitution:** At 5-year maturity, the IRB formula with PD=0.2% and LGD=40% gives ~60% RW, exceeding the SA corporate CQS 2 RW of 50%. Parameter substitution only provides a RW benefit over SA when maturity adjustment is moderate (e.g., ~39% at M=2.5y). This is expected behavior: long maturities inflate IRB RWs via the maturity adjustment factor.
-- **CRE56 SFT minimum haircut floors:** PRA has explicitly deferred CRE56 from UK implementation across CP16/22, PS17/23, PS9/24, and PS1/26. Not required for UK Basel 3.1 compliance.
+## Priority 2 — High: Data Model Schemas Use Wrong Column Names
 
-### Testing patterns
+### 2.1 Fix `docs/data-model/intermediate-schemas.md` — Column names don't match source
 
-- F-IRB acceptance tests require `IRBPermissions.firb_only()` (not `full_irb()`) and reporting date 2027-06-30 to get meaningful maturities from fixture loans (maturity dates 2028-2033).
-- For QRRE PD floors, `is_qrre_transactor` column is propagated from facilities through hierarchy resolver. When the column is absent (legacy data), `_pd_floor_expression(has_transactor_col=False)` defaults to the conservative revolver floor (0.10%). Null values also default to revolver.
-- For LGD floors, `collateral_type` column may not be available at IRB stage. Default unsecured floor (25%) is applied when absent.
-- Orphaned collateral/guarantee fixtures (`LOAN_COLL_TEST_CORP_*`, `LOAN_GUAR_TEST_*`, `LOAN_PROV_TEST_*`) are safe to ignore — beneficiary references point to non-existent dedicated test loans.
-- CRM processor's `apply_guarantees()` calls `_apply_cross_approach_ccf()` which requires `ccf`, `nominal_amount`, `drawn_amount`, and `ead_from_ccf` columns. Synthetic test data must include these even for drawn-only exposures (use `ccf=1.0`, `nominal_amount=0.0`, `drawn_amount=ead`, `ead_from_ccf=0.0`).
+The intermediate schema docs use `exposure_id`, `counterparty_id`, `facility_id`, `loan_id`.
+Source code consistently uses `exposure_reference`, `counterparty_reference`, `facility_reference`, `loan_reference`.
 
-### COREP reporting
+Also uses `ultimate_parent_id` vs source `ultimate_parent_reference`, `parent_chain` (doesn't exist), `hierarchy_level` vs `hierarchy_depth`, `inherited_rating` (doesn't exist as column), `group_total_exposure` vs different naming, `lending_group_id` (wrong).
 
-- COREP templates use EBA DPM row/column references (e.g., row "0070" = Corporates, column "0010" = Original Exposure). Template definitions in `reporting/corep/templates.py` map `ExposureClass` enum values to DPM row refs.
-- C 08.01 IRB totals require exposure-weighted averages: `weighted_pd = sum(pd × ead) / sum(ead)`. Polars `group_by().agg()` expressions must include `.sum()` for aggregation context — row-level expressions without `.sum()` produce `InvalidOperationError`.
-- Output column names can be `ead_final`/`rwa_final` (aggregator naming) or `final_ead`/`final_rwa` (schema naming). The `_pick()` helper selects the first available from a list of candidates, ensuring both forms work.
-- C 07.00 risk weight breakdown pivots SA exposures into standard bands (0%, 2%, 4%, 10%, 20%, 35%, 50%, 75%, 100%, 150%, 250%, 1250%). PD bands for C 08.02 follow standard regulatory groupings (0-0.15%, 0.15-0.25%, ..., Default 100%).
-- Benchmark data generators must stay in sync with schema changes. When adding columns to `FACILITY_SCHEMA` or similar, always update `tests/benchmarks/data_generators.py` to include them.
+**Steps:**
+- [ ] Cross-reference every column name against actual pipeline output columns
+- [ ] Update Resolved Hierarchy Schema with correct column names from `hierarchy.py`
+- [ ] Update Classified Exposure Schema with correct columns from `classifier.py`
+- [ ] Add CRM intermediate schema (columns added by `crm/processor.py`)
+- [ ] Document the classification output columns (24 columns added per source)
 
-### Known discrepancies
+### 2.2 Fix `docs/data-model/output-schemas.md` — Column names don't match source
 
-- ~~Workbook `regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027).~~ Fixed: workbook transitional schedule corrected to PRA PS9/24 (2027-2032). Cascading references in `group_f_output_floor.py` and `irb_formulas.py` also updated.
-- ~~Workbook PD floor: `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) vs production config `0.0005` (Basel 3.1 0.05% per CRE30.20).~~ Fixed: CORPORATE, CORPORATE_SME, CENTRAL_GOVT_CENTRAL_BANK, INSTITUTION all corrected from 0.0003 to 0.0005 in `regulatory_params.py`. Docstring and fallback in `irb_formulas.py` also corrected.
-- ~~**Spec inconsistencies**~~ All spec files updated to reflect actual implementation.
+Same `_id` vs `_reference` issue. Also:
+- SA schema likely missing columns (e.g., `sa_risk_weight` prefix convention)
+- IRB schema may have wrong column names for formulas output
+- Slotting and Equity schemas need verification
+- Aggregated output schema needs to match `AggregatedResultBundle`
 
-### SA RWA back-calculation
+**Steps:**
+- [ ] Cross-reference SA output columns against `engine/sa/namespace.py` and `engine/sa/calculator.py`
+- [ ] Cross-reference IRB output columns against `engine/irb/namespace.py` and `engine/irb/calculator.py`
+- [ ] Cross-reference Slotting output columns against `engine/slotting/namespace.py`
+- [ ] Cross-reference Equity output columns against `engine/equity/namespace.py`
+- [ ] Add aggregated output schema matching `AggregatedResultBundle`
+- [ ] Document EL summary output columns
 
-`_extract_floor_metrics()` back-calculates SA RWA from `floor_rwa / floor_pct` since `floor_rwa = floor_pct x SA_RWA`. This avoids requiring SA RWA to be separately tracked in the aggregated result.
+### 2.3 Verify `docs/data-model/input-schemas.md` against `data/schemas.py`
+
+Input schemas doc is substantial (807 lines) but needs column-by-column verification against `FACILITY_SCHEMA`, `LOAN_SCHEMA`, `CONTINGENTS_SCHEMA`, `COUNTERPARTY_SCHEMA`, `COLLATERAL_SCHEMA`, etc. in source.
+
+**Steps:**
+- [ ] Verify each schema table column-by-column against source `data/schemas.py`
+- [ ] Verify `COLUMN_VALUE_CONSTRAINTS` are documented (valid values per categorical column)
+- [ ] Check `SPECIALISED_LENDING_SCHEMA` and `EQUITY_EXPOSURE_SCHEMA` are documented
+- [ ] Ensure `FX_RATES_SCHEMA` is documented
+- [ ] Verify entity type list matches `VALID_ENTITY_TYPES` in source
+
+### 2.4 Update `docs/data-model/data-validation.md`
+
+Docs reference `validate_schema()` — need to verify all validation functions are documented:
+
+**Source functions to check against docs:**
+- `validate_schema()`, `validate_required_columns()`, `validate_schema_to_errors()`
+- `validate_raw_data_bundle()`, `validate_resolved_hierarchy_bundle()`, `validate_classified_bundle()`, `validate_crm_adjusted_bundle()`
+- `validate_non_negative_amounts()`, `validate_pd_range()`, `validate_lgd_range()`
+- `validate_risk_type()`, `validate_ccf_modelled()`
+- `normalize_risk_type()`, `validate_column_values()`, `validate_bundle_values()`
+- `COLUMN_VALUE_CONSTRAINTS` dict
+
+**Steps:**
+- [ ] Verify all validation functions from `contracts/validation.py` are documented
+- [ ] Document `validate_bundle_values()` and `COLUMN_VALUE_CONSTRAINTS`
+- [ ] Document `normalize_risk_type()` and related constants (`VALID_RISK_TYPE_CODES`, `RISK_TYPE_CODE_TO_VALUE`)
+
+### 2.5 Update `docs/data-model/regulatory-tables.md`
+
+Verify against source reference tables in `data/tables/`:
+- `crr_risk_weights.py` — CRR SA risk weights, LTV bands
+- `b31_risk_weights.py` — Basel 3.1 SA risk weights, SCRA weights, revised LTV bands
+- `crr_firb_lgd.py` — F-IRB supervisory LGD
+- `crr_haircuts.py` — Collateral haircut tables (CRR and Basel 3.1)
+- `crr_slotting.py` — Slotting RW by category/type/maturity
+- `crr_equity_rw.py` — Equity RW by type
+
+**Steps:**
+- [ ] Verify sovereign/institution/corporate risk weight tables match source for both frameworks
+- [ ] Verify residential/commercial/ADC LTV band tables match source
+- [ ] Add Basel 3.1 specific tables: SCRA weights, investment grade, SME corporate, subordinated debt
+- [ ] Add F-IRB supervisory LGD table
+- [ ] Add collateral haircut tables (both frameworks, verify maturity bands match)
+- [ ] Add equity risk weight tables (SA Art. 133 and IRB Simple Art. 155)
+- [ ] Add slotting RW tables (by category, HVCRE/non-HVCRE, maturity)
+
+---
+
+## Priority 3 — Medium: Missing Feature Documentation
+
+### 3.1 Add COREP Reporting documentation
+
+**Source**: `src/rwa_calc/reporting/corep/generator.py` and `templates.py`
+
+The COREP reporting module is entirely undocumented. It generates:
+- **C 07.00** — SA credit risk template
+- **C 08.01** — IRB totals template
+- **C 08.02** — IRB PD grade bands template
+
+**Steps:**
+- [ ] Create `docs/features/corep-reporting.md` — user-facing guide
+  - Overview of COREP credit risk templates
+  - Template structure (rows = exposure classes, columns = risk parameters)
+  - How to generate templates from calculation results
+  - Export to Excel
+  - Regulatory references (EU 2021/451, CRR Art. 112, Art. 147)
+- [ ] Add COREP section to `docs/api/engine.md` or create `docs/api/reporting.md`
+  - `COREPGenerator` class and methods
+  - `COREPTemplateBundle` output structure
+  - `COREPRow` template definitions
+- [ ] Update `mkdocs.yml` nav to include new pages
+- [ ] Update `docs/features/index.md` feature matrix to include COREP reporting
+
+### 3.2 Add Comparison & Impact Analysis documentation
+
+**Source**: `src/rwa_calc/engine/comparison.py`
+
+Three classes for dual-framework analysis are undocumented:
+
+- **`DualFrameworkRunner`** (M3.1): Runs CRR and Basel 3.1 side-by-side, joins on exposure_reference
+- **`CapitalImpactAnalyzer`** (M3.2): Decomposes RWA deltas into drivers (scaling, supporting factors, floor, methodology)
+- **`TransitionalScheduleRunner`** (M3.3): Models year-by-year output floor from 2027-2032
+
+**Steps:**
+- [ ] Create `docs/features/comparison.md` — user-facing guide
+  - When and why to use dual-framework comparison
+  - How to run comparisons
+  - Understanding impact analysis output
+  - Transitional schedule modelling
+- [ ] Add comparison module to `docs/api/engine.md`
+  - `DualFrameworkRunner.compare()` API
+  - `CapitalImpactAnalyzer.analyze()` API
+  - `TransitionalScheduleRunner.run()` API
+  - Output bundles: `ComparisonBundle`, `CapitalImpactBundle`, `TransitionalScheduleBundle`
+- [ ] Update `docs/features/index.md` to list comparison capabilities
+
+### 3.3 Add FX Conversion documentation
+
+**Source**: `src/rwa_calc/engine/fx_converter.py`
+
+The FX converter is mentioned in methodology docs but has no dedicated API documentation.
+
+**Steps:**
+- [ ] Add `FXConverter` section to `docs/api/engine.md`
+  - `convert_exposures()`, `convert_collateral()`, `convert_guarantees()`, `convert_provisions()`, `convert_equity_exposures()`
+  - Audit trail columns (`original_currency`, `original_amount`, `fx_rate_applied`)
+- [ ] Verify `docs/user-guide/methodology/fx-conversion.md` references correct API
+
+### 3.4 Document `api/` subpackage modules
+
+**Source**: `src/rwa_calc/api/`
+
+Several API modules lack documentation:
+- `api/export.py` — Result exporters (Parquet/CSV/Excel)
+- `api/results_cache.py` — `ResultsCache` for Parquet caching
+- `api/formatters.py` — `ResultFormatter` for response formatting
+- `api/validation.py` — `DataPathValidator`
+- `api/errors.py` — API-level error handling
+
+**Steps:**
+- [ ] Add export section to `docs/api/service.md` (or create separate page)
+- [ ] Document `ResultsCache` — caching behaviour, cache directory, invalidation
+- [ ] Document `DataPathValidator` and data directory structure expectations
+- [ ] Document `ResultFormatter` for custom formatting
+
+---
+
+## Priority 4 — Low: User Guide & Architecture Accuracy Check
+
+### 4.1 Review User Guide Methodology pages against source
+
+These pages are substantial but may reference outdated APIs or have minor inaccuracies:
+
+- [ ] `docs/user-guide/methodology/standardised-approach.md` (394 lines) — verify risk weight tables, formulas, and code examples match `engine/sa/`
+- [ ] `docs/user-guide/methodology/irb-approach.md` (497 lines) — verify IRB formula, stats backend, PD/LGD floors match `engine/irb/`
+- [ ] `docs/user-guide/methodology/crm.md` (599 lines) — verify CRM pipeline order, provision logic, overcollateralisation match `engine/crm/`
+- [ ] `docs/user-guide/methodology/specialised-lending.md` (293 lines) — verify slotting categories and RWs match `engine/slotting/`
+- [ ] `docs/user-guide/methodology/equity.md` (80 lines) — verify equity RWs match `engine/equity/`
+- [ ] `docs/user-guide/methodology/supporting-factors.md` (331 lines) — verify factors match `engine/sa/supporting_factors.py`
+- [ ] `docs/user-guide/methodology/fx-conversion.md` (95 lines) — verify FX conversion details
+
+### 4.2 Review Architecture pages for accuracy
+
+- [ ] `docs/architecture/components.md` (748 lines) — verify component descriptions, namespace table, method signatures
+- [ ] `docs/architecture/pipeline.md` (503 lines) — verify pipeline stages and code snippets
+- [ ] `docs/architecture/data-flow.md` (471 lines) — verify data transformation descriptions
+- [ ] `docs/architecture/pipeline-collect-barriers.md` (121 lines) — verify collect barrier strategy matches current implementation (single CRM collect, `pl.collect_all` for branches)
+
+### 4.3 Review User Guide Exposure Classes
+
+- [ ] `docs/user-guide/exposure-classes/central-govt-central-bank.md` (220 lines)
+- [ ] `docs/user-guide/exposure-classes/institution.md` (232 lines)
+- [ ] `docs/user-guide/exposure-classes/corporate.md` (284 lines)
+- [ ] `docs/user-guide/exposure-classes/retail.md` (393 lines)
+- [ ] `docs/user-guide/exposure-classes/other.md` (358 lines)
+
+Verify entity type mappings, risk weights, and classification criteria match `classifier.py` and `data/schemas.py`.
+
+### 4.4 Review User Guide Regulatory Framework pages
+
+- [ ] `docs/user-guide/regulatory/crr.md` (285 lines) — verify against CRR config
+- [ ] `docs/user-guide/regulatory/basel31.md` (336 lines) — verify against Basel 3.1 config
+- [ ] `docs/user-guide/regulatory/comparison.md` (407 lines) — verify comparison details
+
+### 4.5 Review Development pages
+
+- [ ] `docs/development/testing.md` (536 lines) — verify test counts, fixture paths, markers
+- [ ] `docs/development/extending.md` (585 lines) — verify extension patterns match current architecture
+- [ ] `docs/development/workbooks.md` (275 lines) — verify Marimo app references match `ui/marimo/`
+- [ ] `docs/development/benchmarks.md` (390 lines) — verify benchmark configuration
+- [ ] `docs/development/code-style.md` (436 lines) — verify against `pyproject.toml` ruff config
+
+---
+
+## Priority 5 — Housekeeping: Specifications & Navigation
+
+### 5.1 Audit Specifications section against source
+
+24 specification files exist. These were written as design specs and may not reflect the final implementation:
+
+**CRR specs (8 files):**
+- [ ] `specifications/crr/sa-risk-weights.md` — verify against `data/tables/crr_risk_weights.py`
+- [ ] `specifications/crr/supporting-factors.md` — verify against `engine/sa/supporting_factors.py`
+- [ ] `specifications/crr/firb-calculation.md` — verify against `engine/irb/formulas.py`
+- [ ] `specifications/crr/airb-calculation.md` — verify against `engine/irb/calculator.py`
+- [ ] `specifications/crr/credit-conversion-factors.md` — verify against `engine/ccf.py`
+- [ ] `specifications/crr/credit-risk-mitigation.md` — verify against `engine/crm/`
+- [ ] `specifications/crr/slotting-approach.md` — verify against `engine/slotting/`
+- [ ] `specifications/crr/provisions.md` — verify against provision logic in CRM
+
+**Basel 3.1 specs (1 file):**
+- [ ] `specifications/basel31/framework-differences.md` — verify against implementation
+
+**Common specs (1 file):**
+- [ ] `specifications/common/hierarchy-classification.md` — verify against `engine/hierarchy.py` and `engine/classifier.py`
+
+**Project specs (14 files):**
+- [ ] Review `overview.md`, `architecture.md`, `configuration.md`, `interfaces.md`, `nfr.md`, `milestones.md`, `regulatory-compliance.md`, `glossary.md`, `output-reporting.md` for staleness
+- [ ] Mark any superseded specs with a deprecation notice pointing to the relevant docs section
+
+### 5.2 Update `mkdocs.yml` navigation
+
+- [ ] Add COREP reporting page to Features section
+- [ ] Add Comparison & Impact Analysis page to Features section
+- [ ] Add Reporting API page if created separately
+- [ ] Verify all existing nav entries still point to valid files
+
+### 5.3 Update `docs/index.md` homepage
+
+- [ ] Verify feature matrix matches current implementation
+- [ ] Add COREP reporting to feature list
+- [ ] Add comparison/impact analysis to feature list
+- [ ] Verify technology stack list is current
+
+### 5.4 Update `docs/appendix/changelog.md`
+
+- [ ] Add entry for documentation overhaul
+- [ ] Verify recent changelog entries are accurate
+
+---
+
+## Execution Order
+
+1. **Priority 1** (API Reference): Fix first — these cause immediate user confusion
+   - Start with contracts (1.1-1.3) as they define types used everywhere
+   - Then engine (1.4), configuration (1.5), domain (1.6)
+2. **Priority 2** (Data Model): Fix column names and schema accuracy
+3. **Priority 3** (Missing Features): Add COREP, comparison, FX converter docs
+4. **Priority 4** (User Guide): Review and fix methodology/architecture accuracy
+5. **Priority 5** (Housekeeping): Audit specs, update nav, homepage, changelog
+
+## Estimated Scope
+
+- ~15 files need significant rewrites (Priority 1-2)
+- ~5 new files need creation (Priority 3)
+- ~25 files need review and minor corrections (Priority 4-5)
+- Total: ~45 documentation files affected

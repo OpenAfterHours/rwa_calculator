@@ -13,7 +13,7 @@ Standardised Approach risk weights by exposure class and credit quality step.
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-1.1 | SA risk weight calculation for all 9 exposure classes (CRR Art. 112–134) | P0 | Done |
-| FR-1.2 | SA risk weight calculation for Basel 3.1 (CRE20–22), including LTV-based RE weights | P0 | Partial (RE done) |
+| FR-1.2 | SA risk weight calculation for Basel 3.1 (CRE20–22), including LTV-based RE weights | P0 | Done |
 
 ---
 
@@ -134,12 +134,48 @@ Whole-loan approach (PRA PS9/24):
 | Default | 150% |
 | Pre-sold/pre-let | 100% |
 
-## Basel 3.1 Changes
+## Basel 3.1 Corporate Exposures (CRE20.42-49)
+
+| CQS | Rating Equivalent | CRR Risk Weight | Basel 3.1 Risk Weight |
+|-----|-------------------|-----------------|----------------------|
+| 1 | AAA to AA- | 20% | 20% |
+| 2 | A+ to A- | 50% | 50% |
+| 3 | BBB+ to BBB- | **100%** | **75%** |
+| 4 | BB+ to BB- | 100% | 100% |
+| 5 | B+ to B- | **150%** | **100%** |
+| 6 | CCC+ and below | 150% | 150% |
+| Unrated | — | 100% | 100% |
+
+### Additional Basel 3.1 Corporate Treatments
+
+| Treatment | Risk Weight | Condition |
+|-----------|-------------|-----------|
+| Investment-grade corporate (CRE20.44) | 65% | Unrated, investment-grade designation |
+| SME corporate (CRE20.47) | 85% | SME qualifying corporate (replaces CRR 100% + 0.7619 SF) |
+| Subordinated debt (CRE20.49) | 150% | Overrides all other treatments |
+
+## Basel 3.1 Institution Exposures (CRE20.16-21)
+
+Rated institutions use ECRA (same CQS table as CRR, including UK CQS 2 = 30% deviation). Unrated institutions use SCRA:
+
+| SCRA Grade | Risk Weight | Criteria |
+|------------|-------------|----------|
+| A | 40% | CET1 > 14%, Leverage > 5% |
+| B | 75% | CET1 > 5.5%, Leverage > 3% |
+| C | 150% | Below minimum requirements |
+
+ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR.
+
+## Basel 3.1 Changes Summary
 
 - **LTV-based residential RE weights** (CRE20.71): Risk weights vary by loan-to-value ratio — Done
-- **Revised corporate/bank risk weights**: Updated CQS mapping — Partial
-- **Removal of SME supporting factor**: No longer applicable
-- **Removal of 1.06 scaling factor**: Scaling factor set to 1.0
+- **Revised corporate CQS mapping** (CRE20.42): CQS 3 from 100% to 75%, CQS 5 from 150% to 100% — Done
+- **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
+- **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done
+- **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
+- **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
+- **Removal of SME supporting factor**: No longer applicable under Basel 3.1
+- **Removal of 1.06 scaling factor**: Scaling factor set to 1.0 under Basel 3.1
 
 ## Key Scenarios
 
@@ -151,9 +187,13 @@ Whole-loan approach (PRA PS9/24):
 | CRR-A | Retail exposure | 75% |
 | CRR-A | Residential mortgage LTV 60% | 35% |
 | CRR-A | CRE with income cover, LTV 45% | 50% |
+| B31-A2 | Corporate CQS 2 (Basel 3.1) | 50% |
+| B31-A3 | UK Institution CQS 2 (Basel 3.1 ECRA) | 30% |
+| B31-A8 | SME corporate (Basel 3.1) | 85% |
 
 ## Acceptance Tests
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
 | CRR-A: Standardised Approach | A1–A12 | 14 | 100% (14/14) |
+| B31-A: Basel 3.1 SA | A1–A10 | 14 | 100% (14/14) |

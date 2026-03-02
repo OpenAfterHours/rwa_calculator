@@ -59,24 +59,25 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 ## Infrastructure & Cleanup
 
 - [x] **Remove .pyc files from git** — 39 `.pyc` files were committed before `.gitignore` was in place. Removed from tracking 2026-03-01.
-- [x] **Spec documentation refresh** — 7 spec files updated to reflect actual implementation status (2026-03-01).
+- [x] **Spec documentation refresh** — 8 spec files updated to reflect actual implementation status. Most recent: `sa-risk-weights.md` FR-1.2 status corrected from "Partial" to "Done", `output-reporting.md` stale "phase-in tests pending" note corrected.
+- [x] **Runtime skip pattern audit** — Audited all runtime skips. Removed stale `@pytest.mark.skip` from `test_create_test_pipeline` (fixtures exist, test passes). Remaining skips are legitimate: 21 benchmark skips (`--benchmark-skip`), 5 xlsxwriter conditional skips (optional dep), 0 acceptance test runtime skips trigger.
+- [x] **Ruff format cleanup** — 3 source files had pre-existing formatting drift (`api/export.py`, `engine/irb/namespace.py`, `ui/marimo/comparison_app.py`). Auto-formatted.
 - [ ] **BDD test scaffold** — Empty scaffold, no actual BDD tests. Low priority.
-- [ ] **Runtime skip pattern inconsistency** — Audit remaining runtime skips.
 
 ## Test Counts
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | ~1,414 | 6 |
+| Unit | ~1,415 | 5 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 91 | 0 |
 | Acceptance (Basel 3.1) | 112 | 0 |
 | Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
-| Benchmarks | 4 | 23 |
-| **Total** | **1,813** | **27** |
+| Benchmarks | 4 | 21 |
+| **Total** | **1,814** | **26** |
 
-Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass: ruff clean, mypy clean.
+Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass: ruff clean, mypy clean, ruff format clean.
 
 ## Learnings
 
@@ -117,7 +118,7 @@ Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2). All quality gates pass
 
 - Workbook `regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027). Engine is correct for UK firms.
 - Workbook PD floor: `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) vs production config `0.0005` (Basel 3.1 0.05% per CRE30.20). Workbook needs updating.
-- ~~**Spec inconsistencies:** `specs/regulatory-compliance.md`, `specs/nfr.md`, `specs/milestones.md` had stale test counts and status flags.~~ Fixed 2026-03-01: all 7 spec files updated (milestones, nfr, regulatory-compliance, airb-calculation, sa-risk-weights, configuration, slotting-approach).
+- ~~**Spec inconsistencies:** `specs/regulatory-compliance.md`, `specs/nfr.md`, `specs/milestones.md` had stale test counts and status flags.~~ Fixed 2026-03-01: all spec files updated. Latest fixes: `sa-risk-weights.md` FR-1.2 "Partial" → "Done" (implementation was complete, spec was stale), `output-reporting.md` "phase-in tests pending" → "Done", `sa-risk-weights.md` enriched with Basel 3.1 corporate/institution risk weight tables (CQS mapping, SCRA, investment-grade, SME, subordinated debt).
 
 ### SA RWA back-calculation
 

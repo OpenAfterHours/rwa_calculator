@@ -772,9 +772,7 @@ class IRBLazyFrame:
 
             # Floor the guarantor's PD using same floor rules as borrower
             pd_floor_expr = _pd_floor_expression(config)
-            guarantor_pd_floored = pl.max_horizontal(
-                pl.col("guarantor_pd"), pd_floor_expr
-            )
+            guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
             scaling_factor = 1.06 if config.is_crr else 1.0
             eur_gbp_rate = float(config.eur_gbp_rate)
@@ -789,10 +787,9 @@ class IRBLazyFrame:
 
             # Select method: IRB guarantor under Basel 3.1 → parameter substitution,
             # SA guarantor → SA RW substitution
-            is_irb_guarantor = (
-                (pl.col("guarantor_approach").fill_null("") == "irb")
-                & pl.col("guarantor_pd").is_not_null()
-            )
+            is_irb_guarantor = (pl.col("guarantor_approach").fill_null("") == "irb") & pl.col(
+                "guarantor_pd"
+            ).is_not_null()
 
             lf = lf.with_columns(
                 [
@@ -801,9 +798,7 @@ class IRBLazyFrame:
                     .otherwise(pl.col("guarantor_rw_sa"))
                     .alias("guarantor_rw"),
                     # Track which method is being used per-row
-                    pl.when(
-                        (pl.col("guaranteed_portion").fill_null(0) > 0) & is_irb_guarantor
-                    )
+                    pl.when((pl.col("guaranteed_portion").fill_null(0) > 0) & is_irb_guarantor)
                     .then(pl.lit(True))
                     .otherwise(pl.lit(False))
                     .alias("_is_pd_substitution"),
@@ -874,9 +869,7 @@ class IRBLazyFrame:
                 firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
 
                 pd_floor_expr = _pd_floor_expression(config)
-                guarantor_pd_floored = pl.max_horizontal(
-                    pl.col("guarantor_pd"), pd_floor_expr
-                )
+                guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
                 lf = lf.with_columns(
                     [
@@ -891,9 +884,7 @@ class IRBLazyFrame:
                                 # IRB guarantor: blend IRB EL for unguaranteed +
                                 # substituted EL for guaranteed
                                 pl.col("expected_loss_irb_original")
-                                * (
-                                    pl.col("unguaranteed_portion") / pl.col(ead_col)
-                                ).fill_null(1.0)
+                                * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
                                 + guarantor_pd_floored
                                 * firb_lgd_senior
                                 * pl.col("guaranteed_portion")
@@ -901,9 +892,7 @@ class IRBLazyFrame:
                             .otherwise(
                                 # SA guarantor: SA has no EL — only unguaranteed retains EL
                                 pl.col("expected_loss_irb_original")
-                                * (
-                                    pl.col("unguaranteed_portion") / pl.col(ead_col)
-                                ).fill_null(1.0)
+                                * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
                             )
                         )
                         .otherwise(pl.col("expected_loss_irb_original"))
@@ -922,9 +911,7 @@ class IRBLazyFrame:
                         )
                         .then(
                             pl.col("expected_loss_irb_original")
-                            * (
-                                pl.col("unguaranteed_portion") / pl.col(ead_col)
-                            ).fill_null(1.0)
+                            * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
                         )
                         .otherwise(pl.col("expected_loss_irb_original"))
                         .alias("expected_loss"),
@@ -932,9 +919,8 @@ class IRBLazyFrame:
                 )
 
         # Track guarantee status and method for reporting
-        is_beneficial_guaranteed = (
-            (pl.col("guaranteed_portion").fill_null(0) > 0)
-            & (pl.col("is_guarantee_beneficial"))
+        is_beneficial_guaranteed = (pl.col("guaranteed_portion").fill_null(0) > 0) & (
+            pl.col("is_guarantee_beneficial")
         )
 
         lf = lf.with_columns(

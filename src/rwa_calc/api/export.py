@@ -188,10 +188,7 @@ class ResultExporter:
         try:
             import xlsxwriter  # noqa: F401
         except ModuleNotFoundError:
-            msg = (
-                "Excel export requires 'xlsxwriter'. "
-                "Install it with: uv add xlsxwriter"
-            )
+            msg = "Excel export requires 'xlsxwriter'. Install it with: uv add xlsxwriter"
             raise ModuleNotFoundError(msg) from None
 
         output_path.parent.mkdir(parents=True, exist_ok=True)

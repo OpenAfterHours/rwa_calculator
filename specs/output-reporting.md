@@ -27,8 +27,8 @@ IRB RWA must be at least X% of what SA-equivalent RWA would produce. Transitiona
 | 2032+ | 72.5% |
 
 ### Status
-- Engine implemented
-- Phase-in schedule validation tests pending
+- Engine implemented — Done
+- Phase-in schedule validation tests — Done (6 acceptance tests in `test_scenario_b31_f_output_floor.py`)
 
 ## COREP Templates
 

@@ -319,9 +319,7 @@ def _(
     if run_button.value and run_error:
         mo.output.replace(mo.callout(f"Comparison failed: {run_error}", kind="danger"))
     elif run_button.value and comparison_bundle:
-        mo.output.replace(
-            mo.callout("Comparison completed successfully!", kind="success")
-        )
+        mo.output.replace(mo.callout("Comparison completed successfully!", kind="success"))
 
     return comparison_bundle, impact_bundle, run_error, schedule_bundle
 
@@ -431,7 +429,9 @@ def _(impact_bundle, mo, pl):
             waterfall_display = pl.DataFrame(rows)
 
             # Calculate the total delta for the summary bar
-            total_impact = sum(float(waterfall_df["impact_rwa"][i]) for i in range(waterfall_df.height))
+            total_impact = sum(
+                float(waterfall_df["impact_rwa"][i]) for i in range(waterfall_df.height)
+            )
 
             mo.output.replace(
                 mo.vstack(
@@ -561,9 +561,7 @@ def _(impact_bundle, mo, pl):
             ]
 
             if display_cols:
-                sorted_df = class_attr_df.select(display_cols).sort(
-                    "delta_rwa", descending=True
-                )
+                sorted_df = class_attr_df.select(display_cols).sort("delta_rwa", descending=True)
                 mo.output.replace(
                     mo.vstack(
                         [
@@ -649,9 +647,7 @@ def _(mo, schedule_bundle):
             mo.vstack(
                 [
                     mo.md("### Drill Down by Transitional Year"),
-                    mo.md(
-                        "Use the slider to explore floor impact detail for a specific year."
-                    ),
+                    mo.md("Use the slider to explore floor impact detail for a specific year."),
                     year_slider,
                 ]
             )
@@ -699,24 +695,12 @@ def _(comparison_bundle, mo, pl):
         # Get unique classes for filter
         exposure_classes = ["All"]
         if "exposure_class" in schema:
-            classes = (
-                deltas_lf.select("exposure_class")
-                .unique()
-                .collect()
-                .to_series()
-                .to_list()
-            )
+            classes = deltas_lf.select("exposure_class").unique().collect().to_series().to_list()
             exposure_classes += sorted(c for c in classes if c is not None)
 
         approaches = ["All"]
         if "approach_applied" in schema:
-            apps = (
-                deltas_lf.select("approach_applied")
-                .unique()
-                .collect()
-                .to_series()
-                .to_list()
-            )
+            apps = deltas_lf.select("approach_applied").unique().collect().to_series().to_list()
             approaches += sorted(a for a in apps if a is not None)
 
         drill_class_filter = mo.ui.dropdown(
@@ -767,10 +751,7 @@ def _(comparison_bundle, mo, pl):
 
 @app.cell
 def _(comparison_bundle, drill_approach_filter, drill_class_filter, drill_sort, mo, pl):
-    if (
-        comparison_bundle is not None
-        and drill_class_filter is not None
-    ):
+    if comparison_bundle is not None and drill_class_filter is not None:
         deltas_lf = comparison_bundle.exposure_deltas
         schema = deltas_lf.collect_schema().names()
 

@@ -758,7 +758,6 @@ class TestPipelineFactoryFunctions:
         pipeline = create_pipeline()
         assert isinstance(pipeline, PipelineOrchestrator)
 
-    @pytest.mark.skip(reason="Requires test fixtures directory")
     def test_create_test_pipeline(self):
         """Test create_test_pipeline creates configured pipeline."""
         pipeline = create_test_pipeline()

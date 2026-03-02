@@ -9,76 +9,12 @@ Checks that required files exist and reports missing files clearly.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
 from rwa_calc.api.errors import create_file_not_found_error, create_validation_error
 from rwa_calc.api.models import APIError, ValidationRequest, ValidationResponse
-
-# =============================================================================
-# Required Files Configuration
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class RequiredFiles:
-    """
-    Configuration of required files for RWA calculation.
-
-    Defines mandatory and optional files for each data format.
-    """
-
-    mandatory: list[str] = field(default_factory=list)
-    optional: list[str] = field(default_factory=list)
-
-    @classmethod
-    def for_format(cls, data_format: Literal["parquet", "csv"]) -> RequiredFiles:
-        """
-        Get required files configuration for a data format.
-
-        Args:
-            data_format: Either "parquet" or "csv"
-
-        Returns:
-            RequiredFiles with appropriate file extensions
-        """
-        ext = data_format
-
-        mandatory = [
-            f"exposures/facilities.{ext}",
-            f"exposures/loans.{ext}",
-            f"exposures/facility_mapping.{ext}",
-            f"mapping/lending_mapping.{ext}",
-        ]
-
-        counterparty_files = [
-            f"counterparty/sovereign.{ext}",
-            f"counterparty/institution.{ext}",
-            f"counterparty/corporate.{ext}",
-            f"counterparty/retail.{ext}",
-        ]
-
-        optional = [
-            f"exposures/contingents.{ext}",
-            f"collateral/collateral.{ext}",
-            f"guarantee/guarantee.{ext}",
-            f"provision/provision.{ext}",
-            f"ratings/ratings.{ext}",
-            f"counterparty/specialised_lending.{ext}",
-            f"equity/equity_exposures.{ext}",
-            f"mapping/org_mapping.{ext}",
-        ]
-
-        return cls(
-            mandatory=mandatory + counterparty_files,
-            optional=optional,
-        )
-
-
-# =============================================================================
-# Data Path Validator
-# =============================================================================
+from rwa_calc.config.data_sources import DataSourceRegistry
 
 
 class DataPathValidator:
@@ -100,6 +36,15 @@ class DataPathValidator:
             # Handle missing files
     """
 
+    def __init__(self, registry: DataSourceRegistry | None = None) -> None:
+        """
+        Initialize validator with a data source registry.
+
+        Args:
+            registry: Registry defining expected files (defaults to global registry)
+        """
+        self.registry = registry or DataSourceRegistry()
+
     def validate(self, request: ValidationRequest) -> ValidationResponse:
         """
         Validate a data path for calculation readiness.
@@ -107,109 +52,95 @@ class DataPathValidator:
         Args:
             request: ValidationRequest with path and format
 
-        Returns:
+          Returns:
             ValidationResponse with validation results
         """
         path = request.path
         errors: list[APIError] = []
 
+        # 1. Base directory validation
         if not path.exists():
-            errors.append(
-                create_validation_error(
-                    f"Data path does not exist: {path}",
-                    path=str(path),
-                )
-            )
-            return ValidationResponse(
-                valid=False,
-                data_path=str(path),
-                errors=errors,
-            )
+            return self._fail(path, f"Data path does not exist: {path}")
 
         if not path.is_dir():
-            errors.append(
-                create_validation_error(
-                    f"Data path is not a directory: {path}",
-                    path=str(path),
-                )
-            )
-            return ValidationResponse(
-                valid=False,
-                data_path=str(path),
-                errors=errors,
-            )
+            return self._fail(path, f"Data path is not a directory: {path}")
 
-        required = RequiredFiles.for_format(request.data_format)
+        # 2. File content validation
+        files_found: list[Path] = []
+        files_missing: list[Path] = []
 
-        files_found: list[str] = []
-        files_missing: list[str] = []
-
-        has_any_counterparty = False
-        counterparty_prefix = "counterparty/"
-
-        for file_path in required.mandatory:
-            full_path = path / file_path
-
-            if full_path.exists():
-                files_found.append(file_path)
-                if file_path.startswith(counterparty_prefix):
-                    has_any_counterparty = True
-            else:
-                if file_path.startswith(counterparty_prefix):
-                    files_missing.append(file_path)
-                else:
-                    files_missing.append(file_path)
-                    errors.append(create_file_not_found_error(file_path))
-
-        counterparty_missing = [f for f in files_missing if f.startswith(counterparty_prefix)]
-        if counterparty_missing and not has_any_counterparty:
-            errors.append(
-                create_validation_error(
-                    "At least one counterparty file is required",
-                    path=str(path / "counterparty"),
-                )
-            )
-
-        files_missing = [
-            f
-            for f in files_missing
-            if not f.startswith(counterparty_prefix) or not has_any_counterparty
-        ]
-
-        for file_path in required.optional:
-            full_path = path / file_path
-            if full_path.exists():
-                files_found.append(file_path)
-
-        valid = len(errors) == 0
+        self._check_mandatory(path, request.data_format, files_found, files_missing, errors)
+        self._check_groups(path, request.data_format, files_found, files_missing, errors)
+        self._check_optional(path, request.data_format, files_found)
 
         return ValidationResponse(
-            valid=valid,
-            data_path=str(path),
+            valid=len(errors) == 0,
+            data_path=path,
             files_found=sorted(files_found),
             files_missing=sorted(files_missing),
             errors=errors,
         )
 
-    def check_file_exists(
+    def _fail(self, path: Path, message: str) -> ValidationResponse:
+        """Create a failure response for top-level path errors."""
+        return ValidationResponse(
+            valid=False,
+            data_path=path,
+            errors=[create_validation_error(message, path=path)],
+        )
+
+    def _check_mandatory(
         self,
         base_path: Path,
-        relative_path: str,
-    ) -> tuple[bool, str | None]:
-        """
-        Check if a specific file exists.
+        fmt: str,
+        found: list[Path],
+        missing: list[Path],
+        errors: list[APIError],
+    ) -> None:
+        """Check all strictly mandatory files."""
+        for file_path in self.registry.get_mandatory(fmt):
+            if (base_path / file_path).exists():
+                found.append(file_path)
+            else:
+                missing.append(file_path)
+                errors.append(create_file_not_found_error(file_path))
 
-        Args:
-            base_path: Base directory path
-            relative_path: Relative path to file
+    def _check_groups(
+        self,
+        base_path: Path,
+        fmt: str,
+        found: list[Path],
+        missing: list[Path],
+        errors: list[APIError],
+    ) -> None:
+        """Check group-based mandatory files (e.g. at least one counterparty)."""
+        for group_name, group_files in self.registry.get_groups().items():
+            group_found = []
+            group_missing = []
 
-        Returns:
-            Tuple of (exists, full_path_if_exists)
-        """
-        full_path = base_path / relative_path
-        if full_path.exists():
-            return True, str(full_path)
-        return False, None
+            for source in group_files:
+                file_path = source.get_path(fmt)
+                if (base_path / file_path).exists():
+                    group_found.append(file_path)
+                else:
+                    group_missing.append(file_path)
+
+            if not group_found:
+                errors.append(
+                    create_validation_error(
+                        f"At least one {group_name} file is required",
+                        path=base_path / group_name,
+                    )
+                )
+                missing.extend(group_missing)
+            else:
+                found.extend(group_found)
+
+    def _check_optional(self, base_path: Path, fmt: str, found: list[Path]) -> None:
+        """Check optional files and record if they exist."""
+        for file_path in self.registry.get_optional(fmt):
+            if (base_path / file_path).exists():
+                found.append(file_path)
 
 
 # =============================================================================
@@ -233,14 +164,6 @@ def validate_data_path(
 
     Returns:
         ValidationResponse with validation results
-
-    Example:
-        response = validate_data_path("/path/to/data")
-        if response.valid:
-            print("Ready for calculation")
-        else:
-            for file in response.files_missing:
-                print(f"Missing: {file}")
     """
     validator = DataPathValidator()
     request = ValidationRequest(data_path=data_path, data_format=data_format)
@@ -249,15 +172,15 @@ def validate_data_path(
 
 def get_required_files(
     data_format: Literal["parquet", "csv"] = "parquet",
-) -> list[str]:
+) -> list[Path]:
     """
-    Get list of required files for a given format.
+    Get list of all expected files for a given format.
 
     Args:
         data_format: Format of data files
 
     Returns:
-        List of required file paths
+        Sorted list of expected file paths
     """
-    required = RequiredFiles.for_format(data_format)
-    return required.mandatory + required.optional
+    registry = DataSourceRegistry()
+    return sorted(registry.get_all_paths(data_format))

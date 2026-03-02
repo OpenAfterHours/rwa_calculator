@@ -10,6 +10,7 @@ Provides user-friendly error messages and categorization for UI display.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rwa_calc.api.models import APIError
@@ -115,7 +116,7 @@ def create_api_error(
     message: str,
     severity: str = "error",
     category: str = "Calculation",
-    **details: str | None,
+    **details: str | Path | None,
 ) -> APIError:
     """
     Factory function to create APIError with optional details.
@@ -190,13 +191,13 @@ def _build_error_details(error: CalculationError) -> dict:
     return details
 
 
-def create_validation_error(message: str, path: str | None = None) -> APIError:
+def create_validation_error(message: str, path: Path | str | None = None) -> APIError:
     """
     Create an error for data validation failures.
 
     Args:
         message: Error message
-        path: Optional file path
+        path: Optional file path (str or Path)
 
     Returns:
         APIError for validation failure
@@ -211,12 +212,12 @@ def create_validation_error(message: str, path: str | None = None) -> APIError:
     )
 
 
-def create_file_not_found_error(file_path: str) -> APIError:
+def create_file_not_found_error(file_path: Path | str) -> APIError:
     """
     Create an error for missing required file.
 
     Args:
-        file_path: Path to missing file
+        file_path: Path to missing file (str or Path)
 
     Returns:
         APIError for missing file
@@ -230,13 +231,13 @@ def create_file_not_found_error(file_path: str) -> APIError:
     )
 
 
-def create_load_error(message: str, source: str | None = None) -> APIError:
+def create_load_error(message: str, source: Path | str | None = None) -> APIError:
     """
     Create an error for data loading failures.
 
     Args:
         message: Error message
-        source: Optional source file/table
+        source: Optional source file/table (str or Path)
 
     Returns:
         APIError for load failure

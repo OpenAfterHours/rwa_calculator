@@ -23,13 +23,26 @@ import polars as pl
 if TYPE_CHECKING:
     from rwa_calc.api.export import ExportResult
 
+
 # =============================================================================
 # Request Models
 # =============================================================================
 
 
 @dataclass(frozen=True)
-class CalculationRequest:
+class BaseRequest:
+    """Base class for API requests involving file paths."""
+
+    data_path: str | Path
+
+    @property
+    def path(self) -> Path:
+        """Get data_path as Path object."""
+        return Path(self.data_path)
+
+
+@dataclass(frozen=True)
+class CalculationRequest(BaseRequest):
     """
     Request model for RWA calculation.
 
@@ -50,7 +63,6 @@ class CalculationRequest:
         eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
     """
 
-    data_path: str | Path
     framework: Literal["CRR", "BASEL_3_1"]
     reporting_date: date
     base_currency: str = "GBP"
@@ -60,14 +72,9 @@ class CalculationRequest:
     data_format: Literal["parquet", "csv"] = "parquet"
     eur_gbp_rate: Decimal = field(default_factory=lambda: Decimal("0.8732"))
 
-    @property
-    def path(self) -> Path:
-        """Get data_path as Path object."""
-        return Path(self.data_path)
-
 
 @dataclass(frozen=True)
-class ValidationRequest:
+class ValidationRequest(BaseRequest):
     """
     Request model for data path validation.
 
@@ -79,13 +86,7 @@ class ValidationRequest:
         data_format: Expected format of files ("parquet" or "csv")
     """
 
-    data_path: str | Path
     data_format: Literal["parquet", "csv"] = "parquet"
-
-    @property
-    def path(self) -> Path:
-        """Get data_path as Path object."""
-        return Path(self.data_path)
 
 
 # =============================================================================
@@ -360,13 +361,15 @@ class ValidationResponse:
         files_found: List of required files that were found
         files_missing: List of required files that are missing
         errors: List of validation errors
+        cached_path: Path to cached/processed Parquet files (if any)
     """
 
     valid: bool
-    data_path: str
-    files_found: list[str] = field(default_factory=list)
-    files_missing: list[str] = field(default_factory=list)
+    data_path: Path | str
+    files_found: list[Path] = field(default_factory=list)
+    files_missing: list[Path] = field(default_factory=list)
     errors: list[APIError] = field(default_factory=list)
+    cached_path: Path | str | None = None
 
     @property
     def missing_count(self) -> int:

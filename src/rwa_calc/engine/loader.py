@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.config.data_sources import DataSourceRegistry, RequirementLevel
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.schemas import (
     COLLATERAL_SCHEMA,
@@ -135,39 +136,73 @@ class DataSourceConfig:
         fx_rates_file: Optional path to FX rates data for currency conversion
     """
 
-    counterparty_files: list[str] = field(
-        default_factory=lambda: [
-            "counterparty/sovereign.parquet",
-            "counterparty/institution.parquet",
-            "counterparty/corporate.parquet",
-            "counterparty/retail.parquet",
-        ]
-    )
-    facilities_file: str = "exposures/facilities.parquet"
-    loans_file: str = "exposures/loans.parquet"
-    contingents_file: str = "exposures/contingents.parquet"
-    collateral_file: str = "collateral/collateral.parquet"
-    guarantees_file: str = "guarantee/guarantee.parquet"
-    provisions_file: str = "provision/provision.parquet"
-    ratings_file: str = "ratings/ratings.parquet"
-    facility_mappings_file: str = "exposures/facility_mapping.parquet"
-    org_mappings_file: str = "mapping/org_mapping.parquet"
-    lending_mappings_file: str = "mapping/lending_mapping.parquet"
-    specialised_lending_file: str | None = "counterparty/specialised_lending.parquet"
-    equity_exposures_file: str | None = None
-    fx_rates_file: str | None = "fx_rates/fx_rates.parquet"
+    counterparty_files: list[Path] = field(default_factory=list)
+    facilities_file: Path | None = None
+    loans_file: Path | None = None
+    contingents_file: Path | None = None
+    collateral_file: Path | None = None
+    guarantees_file: Path | None = None
+    provisions_file: Path | None = None
+    ratings_file: Path | None = None
+    facility_mappings_file: Path | None = None
+    org_mappings_file: Path | None = None
+    lending_mappings_file: Path | None = None
+    specialised_lending_file: Path | None = None
+    equity_exposures_file: Path | None = None
+    fx_rates_file: Path | None = None
+
+    @classmethod
+    def from_registry(
+        cls, extension: str = "parquet", registry: DataSourceRegistry | None = None
+    ) -> DataSourceConfig:
+        """
+        Create a DataSourceConfig from the central registry.
+
+        Args:
+            extension: File extension to use (default parquet)
+            registry: Optional custom registry instance
+
+        Returns:
+            Populated DataSourceConfig
+        """
+        reg = registry or DataSourceRegistry()
+
+        def get_p(id_str: str) -> str | None:
+            source = reg.get_by_id(id_str)
+            return source.get_path(extension) if source else None
+
+        # Counterparty group
+        cp_group = reg.get_groups().get("counterparty", [])
+        cp_files = [s.get_path(extension) for s in cp_group]
+
+        return cls(
+            counterparty_files=cp_files,
+            facilities_file=get_p("facilities"),
+            loans_file=get_p("loans"),
+            contingents_file=get_p("contingents"),
+            collateral_file=get_p("collateral"),
+            guarantees_file=get_p("guarantee"),
+            provisions_file=get_p("provision"),
+            ratings_file=get_p("ratings"),
+            facility_mappings_file=get_p("facility_mapping"),
+            org_mappings_file=get_p("org_mapping"),
+            lending_mappings_file=get_p("lending_mapping"),
+            specialised_lending_file=get_p("specialised_lending"),
+            equity_exposures_file=get_p("equity"),
+            fx_rates_file=get_p("fx_rates"),
+        )
 
 
 class DataLoadError(Exception):
     """Exception raised when data cannot be loaded."""
 
-    def __init__(self, message: str, source: str | None = None) -> None:
+    def __init__(self, message: str, source: Path | str | None = None) -> None:
         """
         Initialize DataLoadError.
 
         Args:
             message: Error message
-            source: Source file/table that caused the error
+            source: Source file/table that caused the error (str or Path)
         """
         self.source = source
         super().__init__(f"{message}" + (f" (source: {source})" if source else ""))
@@ -223,7 +258,7 @@ class ParquetLoader:
                            Set to False to load raw types from files.
         """
         self.base_path = Path(base_path)
-        self.config = config or DataSourceConfig()
+        self.config = config or DataSourceConfig.from_registry(extension="parquet")
         self.enforce_schemas = enforce_schemas
 
         if not self.base_path.exists():
@@ -231,7 +266,7 @@ class ParquetLoader:
 
     def _load_parquet(
         self,
-        relative_path: str,
+        relative_path: str | Path,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame:
         """
@@ -264,7 +299,7 @@ class ParquetLoader:
 
     def _load_parquet_optional(
         self,
-        relative_path: str | None,
+        relative_path: str | Path | None,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame | None:
         """
@@ -425,31 +460,11 @@ class CSVLoader:
     @staticmethod
     def _get_csv_config() -> DataSourceConfig:
         """Get config with CSV file extensions."""
-        return DataSourceConfig(
-            counterparty_files=[
-                "counterparty/sovereign.csv",
-                "counterparty/institution.csv",
-                "counterparty/corporate.csv",
-                "counterparty/retail.csv",
-            ],
-            facilities_file="exposures/facilities.csv",
-            loans_file="exposures/loans.csv",
-            contingents_file="exposures/contingents.csv",
-            collateral_file="collateral/collateral.csv",
-            guarantees_file="guarantee/guarantee.csv",
-            provisions_file="provision/provision.csv",
-            ratings_file="ratings/ratings.csv",
-            facility_mappings_file="exposures/facility_mapping.csv",
-            org_mappings_file="mapping/org_mapping.csv",
-            lending_mappings_file="mapping/lending_mapping.csv",
-            specialised_lending_file="counterparty/specialised_lending.csv",
-            equity_exposures_file=None,
-            fx_rates_file="fx_rates/fx_rates.csv",
-        )
+        return DataSourceConfig.from_registry(extension="csv")
 
     def _load_csv(
         self,
-        relative_path: str,
+        relative_path: str | Path,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame:
         """
@@ -482,7 +497,7 @@ class CSVLoader:
 
     def _load_csv_optional(
         self,
-        relative_path: str | None,
+        relative_path: str | Path | None,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame | None:
         """

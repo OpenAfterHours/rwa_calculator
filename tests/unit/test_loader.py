@@ -340,51 +340,52 @@ class TestDataSourceConfig:
 
     def test_default_counterparty_files(self) -> None:
         """Default counterparty files should include all standard types."""
-        config = DataSourceConfig()
+        config = DataSourceConfig.from_registry()
         assert len(config.counterparty_files) == 4
-        assert "counterparty/sovereign.parquet" in config.counterparty_files
-        assert "counterparty/institution.parquet" in config.counterparty_files
-        assert "counterparty/corporate.parquet" in config.counterparty_files
-        assert "counterparty/retail.parquet" in config.counterparty_files
+        assert Path("counterparty/sovereign.parquet") in config.counterparty_files
+        assert Path("counterparty/institution.parquet") in config.counterparty_files
+        assert Path("counterparty/corporate.parquet") in config.counterparty_files
+        assert Path("counterparty/retail.parquet") in config.counterparty_files
 
     def test_default_exposure_files(self) -> None:
         """Default exposure file paths should be set correctly."""
-        config = DataSourceConfig()
-        assert config.facilities_file == "exposures/facilities.parquet"
-        assert config.loans_file == "exposures/loans.parquet"
-        assert config.contingents_file == "exposures/contingents.parquet"
+        config = DataSourceConfig.from_registry()
+        assert config.facilities_file == Path("exposures/facilities.parquet")
+        assert config.loans_file == Path("exposures/loans.parquet")
+        assert config.contingents_file == Path("exposures/contingents.parquet")
 
     def test_default_crm_files(self) -> None:
         """Default CRM file paths should be set correctly."""
-        config = DataSourceConfig()
-        assert config.collateral_file == "collateral/collateral.parquet"
-        assert config.guarantees_file == "guarantee/guarantee.parquet"
+        config = DataSourceConfig.from_registry()
+        assert config.collateral_file == Path("collateral/collateral.parquet")
+        assert config.guarantees_file == Path("guarantee/guarantee.parquet")
 
     def test_default_mapping_files(self) -> None:
         """Default mapping file paths should be set correctly."""
-        config = DataSourceConfig()
-        assert config.facility_mappings_file == "exposures/facility_mapping.parquet"
-        assert config.org_mappings_file == "mapping/org_mapping.parquet"
-        assert config.lending_mappings_file == "mapping/lending_mapping.parquet"
+        config = DataSourceConfig.from_registry()
+        assert config.facility_mappings_file == Path("exposures/facility_mapping.parquet")
+        assert config.org_mappings_file == Path("mapping/org_mapping.parquet")
+        assert config.lending_mappings_file == Path("mapping/lending_mapping.parquet")
 
     def test_default_optional_files(self) -> None:
         """Default optional file paths should be set correctly."""
-        config = DataSourceConfig()
-        assert config.specialised_lending_file == "counterparty/specialised_lending.parquet"
-        assert config.equity_exposures_file is None
+        config = DataSourceConfig.from_registry()
+        assert config.specialised_lending_file == Path("counterparty/specialised_lending.parquet")
+        assert config.equity_exposures_file == Path("equity/equity_exposures.parquet")
 
     def test_custom_configuration(self) -> None:
         """Custom configuration should override defaults."""
         config = DataSourceConfig(
-            counterparty_files=["custom/counterparties.parquet"],
-            facilities_file="custom/facilities.parquet",
+            counterparty_files=[Path("custom/counterparties.parquet")],
+            facilities_file=Path("custom/facilities.parquet"),
             specialised_lending_file=None,
+            loans_file=Path("exposures/loans.parquet"),
         )
-        assert config.counterparty_files == ["custom/counterparties.parquet"]
-        assert config.facilities_file == "custom/facilities.parquet"
+        assert config.counterparty_files == [Path("custom/counterparties.parquet")]
+        assert config.facilities_file == Path("custom/facilities.parquet")
         assert config.specialised_lending_file is None
         # Other defaults should remain
-        assert config.loans_file == "exposures/loans.parquet"
+        assert config.loans_file == Path("exposures/loans.parquet")
 
 
 # =============================================================================
@@ -434,7 +435,7 @@ class TestParquetLoaderInit:
 
     def test_init_with_custom_config(self, temp_parquet_dir: Path) -> None:
         """Loader should accept custom configuration."""
-        custom_config = DataSourceConfig(counterparty_files=["counterparty/sovereign.parquet"])
+        custom_config = DataSourceConfig(counterparty_files=[Path("counterparty/sovereign.parquet")])
         loader = ParquetLoader(temp_parquet_dir, config=custom_config)
         assert loader.config == custom_config
 
@@ -570,8 +571,8 @@ class TestCSVLoaderInit:
     def test_init_uses_csv_default_config(self, temp_csv_dir: Path) -> None:
         """Loader should use CSV file extensions in default config."""
         loader = CSVLoader(temp_csv_dir)
-        assert loader.config.facilities_file == "exposures/facilities.csv"
-        assert "counterparty/sovereign.csv" in loader.config.counterparty_files
+        assert loader.config.facilities_file == Path("exposures/facilities.csv")
+        assert Path("counterparty/sovereign.csv") in loader.config.counterparty_files
 
     def test_init_with_invalid_path_raises_error(self) -> None:
         """Loader should raise DataLoadError for non-existent path."""

@@ -715,7 +715,7 @@ class TestExcelExport:
         gen.export_to_excel(bundle, output)
 
         # Read back and check sheet names
-        sheets = pl.read_excel(output, sheet_name=None)
+        sheets = pl.read_excel(output, sheet_id=0)
         sheet_names = list(sheets.keys()) if isinstance(sheets, dict) else []
 
         assert "C 07.00" in sheet_names

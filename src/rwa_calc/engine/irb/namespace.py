@@ -317,7 +317,8 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with pd_floored column
         """
-        pd_floor_expr = _pd_floor_expression(config)
+        has_transactor = "is_qrre_transactor" in self._lf.collect_schema().names()
+        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
         return self._lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         )
@@ -771,7 +772,8 @@ class IRBLazyFrame:
                 lf = lf.with_columns(ensure_cols)
 
             # Floor the guarantor's PD using same floor rules as borrower
-            pd_floor_expr = _pd_floor_expression(config)
+            has_transactor = "is_qrre_transactor" in lf.collect_schema().names()
+            pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
             guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
             scaling_factor = 1.06 if config.is_crr else 1.0
@@ -868,7 +870,8 @@ class IRBLazyFrame:
                 firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=True)
                 firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
 
-                pd_floor_expr = _pd_floor_expression(config)
+                has_transactor2 = "is_qrre_transactor" in lf.collect_schema().names()
+                pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor2)
                 guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
                 lf = lf.with_columns(
@@ -987,7 +990,8 @@ class IRBLazyFrame:
             batch1.append(pl.lit(False).alias("requires_fi_scalar"))
 
         # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
-        pd_floor_expr = _pd_floor_expression(config)
+        has_transactor = "is_qrre_transactor" in schema_names
+        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
         batch1.append(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
         # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB only)

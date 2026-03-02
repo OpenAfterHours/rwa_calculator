@@ -175,7 +175,9 @@ class TestPDFloors:
                 "pd": [0.001],
             }
         )
-        result = lf.with_columns(_pd_floor_expression(basel31_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0005)
 
     def test_basel31_corporate_sme_floor(
@@ -189,7 +191,9 @@ class TestPDFloors:
                 "pd": [0.001],
             }
         )
-        result = lf.with_columns(_pd_floor_expression(basel31_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0005)
 
     def test_basel31_qrre_revolver_floor(
@@ -203,7 +207,9 @@ class TestPDFloors:
                 "pd": [0.001],
             }
         )
-        result = lf.with_columns(_pd_floor_expression(basel31_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0010)
 
     def test_basel31_retail_mortgage_floor(
@@ -217,7 +223,9 @@ class TestPDFloors:
                 "pd": [0.001],
             }
         )
-        result = lf.with_columns(_pd_floor_expression(basel31_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0005)
 
     def test_basel31_retail_other_floor(
@@ -231,7 +239,9 @@ class TestPDFloors:
                 "pd": [0.001],
             }
         )
-        result = lf.with_columns(_pd_floor_expression(basel31_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0005)
 
     def test_pd_below_floor_is_floored(
@@ -245,7 +255,7 @@ class TestPDFloors:
                 "pd": [0.0001],  # 0.01%, below 0.05% floor
             }
         )
-        pd_floor_expr = _pd_floor_expression(basel31_config)
+        pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=False)
         result = lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         ).collect()
@@ -262,7 +272,7 @@ class TestPDFloors:
                 "pd": [0.05],  # 5%, well above 0.05% floor
             }
         )
-        pd_floor_expr = _pd_floor_expression(basel31_config)
+        pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=False)
         result = lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         ).collect()
@@ -361,13 +371,75 @@ class TestPDFloors:
                 "pd": [0.0001, 0.0001, 0.0001],
             }
         )
-        pd_floor_expr = _pd_floor_expression(basel31_config)
+        pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=False)
         result = lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         ).collect()
         assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate
         assert result["pd_floored"][1] == pytest.approx(0.0010)  # QRRE
         assert result["pd_floored"][2] == pytest.approx(0.0005)  # Mortgage
+
+    def test_qrre_transactor_floor_with_column(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1: QRRE transactor gets 0.03% floor when is_qrre_transactor=True."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["RETAIL_QRRE", "RETAIL_QRRE"],
+                "pd": [0.0001, 0.0001],
+                "is_qrre_transactor": [True, False],
+            }
+        )
+        pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=True)
+        result = lf.with_columns(
+            pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
+        ).collect()
+        assert result["pd_floored"][0] == pytest.approx(0.0003)  # Transactor: 0.03%
+        assert result["pd_floored"][1] == pytest.approx(0.0010)  # Revolver: 0.10%
+
+    def test_qrre_transactor_null_defaults_to_revolver(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1: QRRE with null is_qrre_transactor defaults to revolver floor."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["RETAIL_QRRE"],
+                "pd": [0.0001],
+                "is_qrre_transactor": [None],
+            },
+            schema={
+                "exposure_class": pl.String,
+                "pd": pl.Float64,
+                "is_qrre_transactor": pl.Boolean,
+            },
+        )
+        pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=True)
+        result = lf.with_columns(
+            pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
+        ).collect()
+        assert result["pd_floored"][0] == pytest.approx(0.0010)  # Conservative default
+
+    def test_transactor_col_ignored_for_non_qrre(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """is_qrre_transactor only affects QRRE exposures, not other classes."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["CORPORATE", "RETAIL_OTHER", "RETAIL_QRRE"],
+                "pd": [0.0001, 0.0001, 0.0001],
+                "is_qrre_transactor": [True, True, True],
+            }
+        )
+        pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=True)
+        result = lf.with_columns(
+            pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
+        ).collect()
+        assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate: 0.05%
+        assert result["pd_floored"][1] == pytest.approx(0.0005)  # Retail other: 0.05%
+        assert result["pd_floored"][2] == pytest.approx(0.0003)  # QRRE transactor: 0.03%
 
 
 # =============================================================================
@@ -743,9 +815,9 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression_with_collateral(
-                basel31_config, has_seniority=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression_with_collateral(basel31_config, has_seniority=True).alias(
+                "lgd_floor"
+            )
         ).collect()
         # Subordinated unsecured: 50% floor
         assert result["lgd_floor"][0] == pytest.approx(0.50)
@@ -764,9 +836,7 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression(
-                basel31_config, has_seniority=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression(basel31_config, has_seniority=True).alias("lgd_floor")
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.50)
         assert result["lgd_floor"][1] == pytest.approx(0.25)
@@ -788,9 +858,9 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression_with_collateral(
-                basel31_config, has_seniority=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression_with_collateral(basel31_config, has_seniority=True).alias(
+                "lgd_floor"
+            )
         ).collect()
         # Collateral floor takes precedence: RRE 5%, other physical 15%
         assert result["lgd_floor"][0] == pytest.approx(0.05)

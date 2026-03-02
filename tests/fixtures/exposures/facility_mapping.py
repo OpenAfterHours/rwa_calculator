@@ -92,6 +92,8 @@ def _retail_facility_mappings() -> list[FacilityMapping]:
         FacilityMapping("FAC_RTL_SME_001", "LOAN_RTL_SME_001", "loan"),
         # FAC_RTL_QRRE_001 -> LOAN_RTL_QRRE_001
         FacilityMapping("FAC_RTL_QRRE_001", "LOAN_RTL_QRRE_001", "loan"),
+        # FAC_RTL_QRRE_002 -> LOAN_RTL_QRRE_002
+        FacilityMapping("FAC_RTL_QRRE_002", "LOAN_RTL_QRRE_002", "loan"),
     ]
 
 

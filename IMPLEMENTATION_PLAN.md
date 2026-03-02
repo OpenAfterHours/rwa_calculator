@@ -51,6 +51,13 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 
 - [x] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Done. `comparison_app.py` in `ui/marimo/` provides interactive dual-framework impact analysis. Features: data path/IRB approach/reporting date configuration, dual-framework comparison runner (DualFrameworkRunner), executive summary with headline deltas (CRR vs B31 total RWA, EAD, avg risk weight), capital impact waterfall (4-driver decomposition table), summary by exposure class and approach, capital impact attribution by exposure class, transitional floor schedule timeline (2027-2032) with interactive year slider for drill-down, exposure-level delta drill-down with filters (class, approach, sort), exposure-level driver attribution, CSV export for all views. Registered at `/comparison` in multi-app server. Sidebar nav updated across all 4 apps. Also fixed: `CapitalImpactAnalyzer` now exported from `engine/__init__.py`.
 
+### 2g. QRRE transactor/revolver PD floor distinction — COMPLETE
+
+- [x] **QRRE classification in classifier** (CRR Art. 147(5), CRE30.55) — Done. Phase 3 of `_classify_sme_and_retail()` now assigns `RETAIL_QRRE` exposure class when: retail-qualified, `is_revolving=True`, and `facility_limit <= qrre_max_limit` (GBP 100k). New `is_qrre_transactor` column in FACILITY_SCHEMA propagated through hierarchy resolver to all exposure types.
+- [x] **Transactor/revolver PD floor conditional** (CRE30.20, PRA PS9/24) — Done. `_pd_floor_expression()` in `engine/irb/formulas.py` now distinguishes transactor (0.03%) vs revolver (0.10%) PD floors for QRRE exposures based on `is_qrre_transactor` column. Null/missing defaults to conservative revolver floor. Backward compatible: old data without the column uses revolver floor via `has_transactor_col` parameter.
+- [x] **Hierarchy propagation** — Done. `is_revolving`, `is_qrre_transactor`, and `facility_limit` propagated from facilities to loans/contingents via facility join in hierarchy resolver. Facility undrawn exposures carry these fields directly.
+- [x] **Fixture data** — Done. 2 QRRE facility fixtures (transactor + revolver), corresponding loan and mapping fixtures. 3 new unit tests (transactor floor, null-defaults-to-revolver, non-QRRE unaffected).
+
 ## Priority 4 — Output & Export
 
 - [x] **Excel / Parquet export** (FR-4.7) — Done. `ResultExporter` in `api/export.py` with `export_to_parquet()`, `export_to_csv()`, `export_to_excel()`. `CalculationResponse` has convenience methods `to_parquet()`, `to_csv()`, `to_excel()`. Protocol: `ResultExporterProtocol`. Excel requires `xlsxwriter` (added to deps). 19 unit tests.
@@ -60,6 +67,7 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 
 - [x] **Remove .pyc files from git** — 39 `.pyc` files were committed before `.gitignore` was in place. Removed from tracking 2026-03-01.
 - [x] **Spec documentation refresh** — 8 spec files updated to reflect actual implementation status. Most recent: `sa-risk-weights.md` FR-1.2 status corrected from "Partial" to "Done", `output-reporting.md` stale "phase-in tests pending" note corrected.
+- [x] **Slotting spec fix** — `specs/crr/slotting-approach.md` had a stale Basel 3.1 slotting table with incorrect risk weights and missing Project Finance Pre-Operational category. Replaced with 3 correct tables matching `specs/basel31/framework-differences.md` (BCBS CRE33).
 - [x] **Runtime skip pattern audit** — Audited all runtime skips. Removed stale `@pytest.mark.skip` from `test_create_test_pipeline` (fixtures exist, test passes). Remaining skips are legitimate: 21 benchmark skips (`--benchmark-skip`), 5 xlsxwriter conditional skips (optional dep), 0 acceptance test runtime skips trigger.
 - [x] **Ruff format cleanup** — 3 source files had pre-existing formatting drift (`api/export.py`, `engine/irb/namespace.py`, `ui/marimo/comparison_app.py`). Auto-formatted.
 - [ ] **BDD test scaffold** — Empty scaffold, no actual BDD tests. Low priority.
@@ -68,16 +76,16 @@ Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB 
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | ~1,425 | 5 |
+| Unit | ~1,428 | 5 |
 | Contracts | 123 | 0 |
 | Acceptance (CRR) | 97 | 0 |
 | Acceptance (Basel 3.1) | 116 | 0 |
 | Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
 | Benchmarks | 4 | 21 |
-| **Total** | **1,834** | **26** |
+| **Total** | **1,837** | **26** |
 
-Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2, 1834 passed / 26 skipped). All quality gates pass: ruff clean, mypy clean, ruff format clean.
+Last verified: 2026-03-02 (Python 3.13.12, pytest 9.0.2, 1837 passed / 26 skipped). All quality gates pass: ruff clean, mypy clean, ruff format clean.
 
 ## Learnings
 
@@ -110,7 +118,7 @@ Last verified: 2026-03-01 (Python 3.13.12, pytest 9.0.2, 1834 passed / 26 skippe
 ### Testing patterns
 
 - F-IRB acceptance tests require `IRBPermissions.firb_only()` (not `full_irb()`) and reporting date 2027-06-30 to get meaningful maturities from fixture loans (maturity dates 2028-2033).
-- For QRRE PD floors, `is_qrre_transactor` column does not exist yet. Defaults to revolver floor (0.10%) which is conservative.
+- For QRRE PD floors, `is_qrre_transactor` column is propagated from facilities through hierarchy resolver. When the column is absent (legacy data), `_pd_floor_expression(has_transactor_col=False)` defaults to the conservative revolver floor (0.10%). Null values also default to revolver.
 - For LGD floors, `collateral_type` column may not be available at IRB stage. Default unsecured floor (25%) is applied when absent.
 - Orphaned collateral/guarantee fixtures (`LOAN_COLL_TEST_CORP_*`, `LOAN_GUAR_TEST_*`, `LOAN_PROV_TEST_*`) are safe to ignore — beneficiary references point to non-existent dedicated test loans.
 - CRM processor's `apply_guarantees()` calls `_apply_cross_approach_ccf()` which requires `ccf`, `nominal_amount`, `drawn_amount`, and `ead_from_ccf` columns. Synthetic test data must include these even for drawn-only exposures (use `ccf=1.0`, `nominal_amount=0.0`, `drawn_amount=ead`, `ead_from_ccf=0.0`).

@@ -48,7 +48,11 @@ G_999 = 3.0902323061678132
 # =============================================================================
 
 
-def _pd_floor_expression(config: CalculationConfig) -> pl.Expr:
+def _pd_floor_expression(
+    config: CalculationConfig,
+    *,
+    has_transactor_col: bool = True,
+) -> pl.Expr:
     """
     Build Polars expression for per-exposure-class PD floor.
 
@@ -58,6 +62,12 @@ def _pd_floor_expression(config: CalculationConfig) -> pl.Expr:
         - Retail mortgage: 0.05%
         - QRRE transactors: 0.03%, revolvers: 0.10%
         - Retail other: 0.05%
+
+    Args:
+        config: Calculation configuration
+        has_transactor_col: Whether the LazyFrame has an is_qrre_transactor column.
+            When True (pipeline path), uses per-row transactor/revolver distinction.
+            When False (isolated expressions), defaults to conservative revolver floor.
 
     Returns a Polars expression evaluating to the per-row PD floor value.
     """
@@ -78,9 +88,18 @@ def _pd_floor_expression(config: CalculationConfig) -> pl.Expr:
     # Basel 3.1: differentiated floors by exposure class
     exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
 
-    # For QRRE, distinguish transactor vs revolver if column exists
-    # Default to revolver (conservative) if is_qrre_transactor column not present
-    qrre_floor = pl.lit(float(floors.retail_qrre_revolver))
+    # QRRE transactor/revolver distinction (CRE30.55):
+    # Transactors (repay in full each period) get 0.03% floor;
+    # revolvers (carry balance) get 0.10% floor.
+    if has_transactor_col:
+        qrre_floor = (
+            pl.when(pl.col("is_qrre_transactor").fill_null(False))
+            .then(pl.lit(float(floors.retail_qrre_transactor)))
+            .otherwise(pl.lit(float(floors.retail_qrre_revolver)))
+        )
+    else:
+        # Conservative default: revolver floor (0.10% under Basel 3.1)
+        qrre_floor = pl.lit(float(floors.retail_qrre_revolver))
 
     return (
         pl.when(exp_class.str.contains("QRRE"))
@@ -231,7 +250,8 @@ def apply_irb_formulas(
         exposures = exposures.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
     # Step 1: Apply per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
-    pd_floor_expr = _pd_floor_expression(config)
+    has_transactor = "is_qrre_transactor" in schema_names
+    pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
     exposures = exposures.with_columns(
         pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
     )

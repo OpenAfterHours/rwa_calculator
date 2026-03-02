@@ -57,15 +57,40 @@ Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remai
 
 ## Basel 3.1 Slotting Risk Weights
 
-Under Basel 3.1, HVCRE receives elevated risk weights:
+Under Basel 3.1 (BCBS CRE33), slotting risk weights are split into three distinct tables
+differentiating Non-HVCRE operational, Project Finance pre-operational, and HVCRE exposures.
 
-| Category | Non-HVCRE | HVCRE |
-|----------|-----------|-------|
-| Strong | 50% | 100% |
-| Good | 70% | 70% |
-| Satisfactory | 100% | 150% |
-| Weak | 150% | 150% |
-| Default | 350% | 350% |
+### Non-HVCRE Operational (OF, CF, IPRE, PF Operational)
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 70% |
+| Good | 90% |
+| Satisfactory | 115% |
+| Weak | 250% |
+| Default | 0% (EL) |
+
+### Project Finance Pre-Operational
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 80% |
+| Good | 100% |
+| Satisfactory | 120% |
+| Weak | 350% |
+| Default | 0% (EL) |
+
+### HVCRE
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 95% |
+| Good | 120% |
+| Satisfactory | 140% |
+| Weak | 250% |
+| Default | 0% (EL) |
+
+See [Framework Differences](../basel31/framework-differences.md) for full Basel 3.1 detail.
 
 ## Equity
 

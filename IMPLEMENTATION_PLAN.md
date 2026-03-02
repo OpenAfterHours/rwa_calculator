@@ -4,7 +4,7 @@ Status legend: `[ ]` = not started, `[~]` = partial, `[x]` = done
 
 ## Priority 1 — CRR Completion (v1.0) — COMPLETE
 
-All Priority 1 items are done. **87/87 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed. All 3 quality gates pass: ruff clean, mypy clean, all tests pass.
+All Priority 1 items are done. **91/91 CRR acceptance tests pass (100%)**. CI/CD pipeline deployed. All 3 quality gates pass: ruff clean, mypy clean, all tests pass.
 
 ## Priority 2 — Basel 3.1 Core (v1.1)
 
@@ -17,26 +17,24 @@ Completed: PD floor per exposure class, LGD floor per collateral type, F-IRB sup
 - [x] **LTV-based residential RE risk weights** (FR-1.2 / CRE20.71-88) — Done.
 - [x] **Revised SA risk weight tables** (FR-1.2 / CRE20.7-26) — Done.
 
-### 2c. CRM Basel 3.1 adjustments — PARTIAL
+### 2c. CRM Basel 3.1 adjustments — COMPLETE
 
-Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB supervisory LGD framework dispatch (CRE32.9-12), framework-conditional HaircutCalculator/CRMProcessor, A-IRB LGD floor enforcement (CRE30.41, `is_airb` gating).
+Done: Revised supervisory haircut tables (CRE22.52-53, 5 maturity bands), F-IRB supervisory LGD framework dispatch (CRE32.9-12), framework-conditional HaircutCalculator/CRMProcessor, A-IRB LGD floor enforcement (CRE30.41, `is_airb` gating), **Basel 3.1 parameter substitution for IRB guarantors** (CRE22.70-85).
 
-Remaining (needs specification work):
-
-- [ ] **SFT minimum haircut floors** (CRE56) — New Basel 3.1 requirement for securities financing transactions.
-- [ ] **Unfunded credit protection eligibility restrictions** (CRE22.70-85) — Revised eligibility criteria for guarantees and credit derivatives.
+- [x] **Parameter substitution for IRB guarantors** (CRE22.70-85 / PRA PS9/24 Ch4) — Done. When a Basel 3.1 F-IRB exposure is guaranteed by a counterparty under IRB, the guaranteed portion uses the guarantor's PD and F-IRB supervisory LGD (40%) through the full IRB formula instead of SA risk weight substitution. CRM processor propagates guarantor PD from rating_inheritance; IRB namespace dispatches per-row between SA RW substitution (SA guarantors) and PD parameter substitution (IRB guarantors). Non-beneficial guarantees (guarantor RW >= borrower RW) are not applied. EL adjusted: IRB guarantor EL = guarantor_pd × firb_lgd × guaranteed_portion. 14 unit tests + 5 acceptance tests.
+- [N/A] **SFT minimum haircut floors** (CRE56) — PRA has NOT implemented CRE56 in the UK capital framework. Explicitly deferred in CP16/22, PS17/23, PS9/24, and PS1/26. Not required for UK Basel 3.1 compliance.
 
 ### 2d. Testing and validation — COMPLETE
 
-111 Basel 3.1 acceptance tests across 8 files (SA 14, F-IRB 16, A-IRB 13, CRM 15, slotting 13, output floor 6, provisions 20, complex 10). Expected outputs at `tests/expected_outputs/basel31/expected_rwa_b31.json`.
+112 Basel 3.1 acceptance tests across 9 files (SA 14, F-IRB 16, A-IRB 13, CRM 15, parameter sub 5, slotting 13, output floor 6, provisions 20, complex 10). Expected outputs at `tests/expected_outputs/basel31/expected_rwa_b31.json`.
 
 ### 2e. Output floor engine — COMPLETE
 
 `sa_rwa` column stored for all rows when output floor is enabled. Floor binding/non-binding detection works correctly.
 
-### 2f. EL shortfall/excess computation — COMPLETE
+### 2f. EL shortfall/excess & T2 credit cap — COMPLETE
 
-`compute_el_shortfall_excess()` in IRB namespace. Per-exposure `el_shortfall` / `el_excess` computed in all 3 IRB calculator paths. Aggregator sums `total_el_shortfall` / `total_el_excess`. 14 unit tests, 9 acceptance tests.
+`compute_el_shortfall_excess()` in IRB namespace. Per-exposure `el_shortfall` / `el_excess` computed in all 3 IRB calculator paths. Aggregator sums `total_el_shortfall` / `total_el_excess`. **Portfolio-level T2 credit cap** (CRR Art. 62(d)): `ELPortfolioSummary` frozen dataclass computes T2 credit cap = 0.6% of IRB RWA, T2 credit = min(el_excess, cap), CET1/T2 deductions = 50/50 split of el_shortfall per CRR Art. 159. Wired through both pipeline aggregation paths (`aggregate_with_audit` and `_aggregate_single_pass`). 24 unit tests, 19 acceptance tests.
 
 ## Priority 3 — Dual-Framework Comparison (v1.2)
 
@@ -44,39 +42,50 @@ Remaining (needs specification work):
 
 - [x] **Side-by-side CRR vs Basel 3.1 comparison output** (M3.1) — Done. `DualFrameworkRunner` in `engine/comparison.py` orchestrates two separate `PipelineOrchestrator` instances (one per framework) on the same `RawDataBundle`. Produces `ComparisonBundle` with per-exposure deltas (delta_rwa, delta_risk_weight, delta_ead, delta_rwa_pct) and summary views by exposure class and approach. 22 unit tests + 19 acceptance tests (SA and F-IRB comparison scenarios).
 
-### 3b. Transitional floor schedule modelling — PARTIAL
+### 3b. Capital impact & transitional modelling — COMPLETE (M3.2, M3.3)
 
-Done:
+- [x] **Capital impact analysis** (M3.2) — Done. `CapitalImpactAnalyzer` in `engine/comparison.py`. 26 unit tests + 24 acceptance tests.
+- [x] **Transitional floor schedule modelling** (M3.3) — Done. `TransitionalScheduleRunner` in `engine/comparison.py`. 19 unit tests + 19 acceptance tests.
 
-- [x] **Transitional floor schedule modelling** (M3.3) — Done. `TransitionalScheduleRunner` in `engine/comparison.py` runs 6 separate `PipelineOrchestrator` instances (one per transitional year 2027-2032) with freshly created `CalculationConfig.basel_3_1()` configs. Produces `TransitionalScheduleBundle` (frozen dataclass in `contracts/bundles.py`) with a `timeline` LazyFrame (reporting_date, floor_pct, total_rwa, total_ead, irb_rwa_pre_floor, sa_rwa, floor_impact_rwa, floor_binding_count, floor_non_binding_count) and collected errors. `_extract_floor_metrics()` back-calculates SA RWA from `floor_rwa / floor_pct` since `floor_rwa = floor_pct x SA_RWA`. 19 unit tests + 19 acceptance tests.
+### 3c. Enhanced Marimo workbooks for impact analysis — COMPLETE (M3.4)
 
-Remaining:
+- [x] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Done. `comparison_app.py` in `ui/marimo/` provides interactive dual-framework impact analysis. Features: data path/IRB approach/reporting date configuration, dual-framework comparison runner (DualFrameworkRunner), executive summary with headline deltas (CRR vs B31 total RWA, EAD, avg risk weight), capital impact waterfall (4-driver decomposition table), summary by exposure class and approach, capital impact attribution by exposure class, transitional floor schedule timeline (2027-2032) with interactive year slider for drill-down, exposure-level delta drill-down with filters (class, approach, sort), exposure-level driver attribution, CSV export for all views. Registered at `/comparison` in multi-app server. Sidebar nav updated across all 4 apps. Also fixed: `CapitalImpactAnalyzer` now exported from `engine/__init__.py`.
 
-- [ ] **Capital impact analysis** (M3.2) — Not Started. Would add delta attribution by driver (PD floor changes, LGD floor changes, scaling factor removal, supporting factor removal, output floor binding).
-- [ ] **Enhanced Marimo workbooks for impact analysis** (M3.4) — Not Started. Would add comparison visualization, floor schedule slider, drill-down from portfolio delta to exposure-level drivers.
+### 2g. QRRE transactor/revolver PD floor distinction — COMPLETE
+
+- [x] **QRRE classification in classifier** (CRR Art. 147(5), CRE30.55) — Done. Phase 3 of `_classify_sme_and_retail()` now assigns `RETAIL_QRRE` exposure class when: retail-qualified, `is_revolving=True`, and `facility_limit <= qrre_max_limit` (GBP 100k). New `is_qrre_transactor` column in FACILITY_SCHEMA propagated through hierarchy resolver to all exposure types.
+- [x] **Transactor/revolver PD floor conditional** (CRE30.20, PRA PS9/24) — Done. `_pd_floor_expression()` in `engine/irb/formulas.py` now distinguishes transactor (0.03%) vs revolver (0.10%) PD floors for QRRE exposures based on `is_qrre_transactor` column. Null/missing defaults to conservative revolver floor. Backward compatible: old data without the column uses revolver floor via `has_transactor_col` parameter.
+- [x] **Hierarchy propagation** — Done. `is_revolving`, `is_qrre_transactor`, and `facility_limit` propagated from facilities to loans/contingents via facility join in hierarchy resolver. Facility undrawn exposures carry these fields directly.
+- [x] **Fixture data** — Done. 2 QRRE facility fixtures (transactor + revolver), corresponding loan and mapping fixtures. 3 new unit tests (transactor floor, null-defaults-to-revolver, non-QRRE unaffected).
 
 ## Priority 4 — Output & Export
 
-- [~] **Excel / Parquet export** (FR-4.7) — Partial. No programmatic export API yet.
-- [ ] **COREP template generation** (FR-4.6) — Not Started. Deferred to v2.0.
+- [x] **Excel / Parquet export** (FR-4.7) — Done. `ResultExporter` in `api/export.py` with `export_to_parquet()`, `export_to_csv()`, `export_to_excel()`. `CalculationResponse` has convenience methods `to_parquet()`, `to_csv()`, `to_excel()`. Protocol: `ResultExporterProtocol`. Excel requires `xlsxwriter` (added to deps). 19 unit tests.
+- [x] **COREP template generation** (FR-4.6) — Done. `COREPGenerator` in `reporting/corep/generator.py` generates C 07.00 (SA credit risk), C 08.01 (IRB totals), C 08.02 (IRB PD grade breakdown), plus C 07.00 risk weight band breakdown. `COREPTemplateBundle` frozen dataclass holds all template DataFrames. Template structure definitions in `reporting/corep/templates.py` with EBA DPM row/column references. Integrated via `ResultExporter.export_to_corep()` and `CalculationResponse.to_corep()`. Multi-sheet Excel export with xlsxwriter. Handles column naming variants (`ead_final`/`final_ead`), optional CRM/provisions columns, exposure-weighted averages for IRB PD/LGD/maturity. 48 unit tests + 4 conditional (xlsxwriter).
 
 ## Infrastructure & Cleanup
 
+- [x] **Remove .pyc files from git** — 39 `.pyc` files were committed before `.gitignore` was in place. Removed from tracking 2026-03-01.
+- [x] **Spec documentation refresh** — 8 spec files updated to reflect actual implementation status. Most recent: `sa-risk-weights.md` FR-1.2 status corrected from "Partial" to "Done", `output-reporting.md` stale "phase-in tests pending" note corrected.
+- [x] **Slotting spec fix** — `specs/crr/slotting-approach.md` had a stale Basel 3.1 slotting table with incorrect risk weights and missing Project Finance Pre-Operational category. Replaced with 3 correct tables matching `specs/basel31/framework-differences.md` (BCBS CRE33).
+- [x] **Runtime skip pattern audit** — Audited all runtime skips. Removed stale `@pytest.mark.skip` from `test_create_test_pipeline` (fixtures exist, test passes). Remaining skips are legitimate: 21 benchmark skips (`--benchmark-skip`), 5 xlsxwriter conditional skips (optional dep), 0 acceptance test runtime skips trigger.
+- [x] **Ruff format cleanup** — 3 source files had pre-existing formatting drift (`api/export.py`, `engine/irb/namespace.py`, `ui/marimo/comparison_app.py`). Auto-formatted.
 - [ ] **BDD test scaffold** — Empty scaffold, no actual BDD tests. Low priority.
-- [ ] **Runtime skip pattern inconsistency** — Audit remaining runtime skips.
 
 ## Test Counts
 
 | Suite | Passed | Skipped |
 |---|---|---|
-| Unit | 1,357 | 0 |
+| Unit | ~1,476 | 9 |
 | Contracts | 123 | 0 |
-| Acceptance (CRR) | 91 | 0 |
-| Acceptance (Basel 3.1) | 111 | 0 |
-| Acceptance (Comparison) | 38 | 0 |
+| Acceptance (CRR) | 97 | 0 |
+| Acceptance (Basel 3.1) | 116 | 0 |
+| Acceptance (Comparison) | 62 | 0 |
 | Integration | 5 | 0 |
-| Benchmarks | 4 | 22 |
-| **Total** | **1,725** | **22** |
+| Benchmarks | 4 | 21 |
+| **Total** | **1,885** | **30** |
+
+Last verified: 2026-03-02 (Python 3.13.12, pytest 9.0.2, 1885 passed / 30 skipped). All quality gates pass: ruff clean, mypy clean, ruff format clean.
 
 ## Learnings
 
@@ -86,6 +95,10 @@ Remaining:
 - `_ensure_components_initialized()` caches the `CRMProcessor` with the first config's `is_basel_3_1` flag and never recreates it. This is why `DualFrameworkRunner` and `TransitionalScheduleRunner` each create separate `PipelineOrchestrator` instances.
 - `PDFloors.get_floor()` and `LGDFloors.get_floor()` exist in config but are never called by the engine — the engine uses vectorized `_pd_floor_expression()` / `_lgd_floor_expression()` helpers instead.
 - `approach_applied` column uses enum string values: `"standardised"`, `"foundation_irb"`, `"advanced_irb"`, `"slotting"` — not the enum names `"SA"`, `"FIRB"`, etc. Tests must filter on the `.value` form.
+- `ResultExporter` reads from `CalculationResponse`'s cached parquet files via lazy scan, so export doesn't require re-running the pipeline. `CalculationResponse.to_parquet()` / `to_csv()` / `to_excel()` are convenience wrappers.
+- **Pipeline has two aggregation paths**: `aggregate_with_audit()` (on `OutputAggregator`) and `_aggregate_single_pass()` (on `PipelineOrchestrator`). The main `run_with_data()` pipeline uses `_aggregate_single_pass()`. Any new fields added to `AggregatedResultBundle` must be wired through both paths, plus the error-path bundle recreation in `run_with_data()` (which re-creates the bundle to append pipeline errors).
+- Excel export requires `xlsxwriter` (Polars uses it for `DataFrame.write_excel()`). `fastexcel` is for reading only.
+- `_parametric_irb_risk_weight_expr()` in `engine/irb/formulas.py` computes IRB risk weight from an arbitrary PD expression and fixed LGD. Used by parameter substitution to compute guarantor's equivalent IRB RW inline without collecting/re-querying. Returns `K × 12.5 × scaling_factor × MA`.
 
 ### Regulatory rules
 
@@ -96,20 +109,33 @@ Remaining:
 - A-IRB LGD floors apply only to A-IRB own-estimate LGDs (`is_airb` gating); F-IRB supervisory LGDs are regulatory values and don't need flooring (CRE30.41).
 - **B31 SME impact:** Basel 3.1 SME corporates get 85% RW (vs CRR 100%) but lose the 0.7619 supporting factor. Net effect: effective RW rises from 76.19% to 85%, a 12% RWA increase.
 - **Maturity effect in transitional schedule:** Total post-floor RWA is NOT monotonically non-decreasing across years because effective maturity shortens as reporting date advances (e.g., a 2033 loan has 6y maturity from 2027 but only 5y from 2028). The maturity adjustment decrease can outweigh the floor increase. The correct monotonicity invariant is that `floor_impact_rwa` is non-decreasing, not total RWA.
-- EL shortfall/excess: T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) is not yet computed at portfolio level — only per-exposure shortfall/excess is tracked.
+- **Capital impact waterfall ordering:** The 4-driver waterfall is sequential and additive: (1) scaling factor removal = CRR_rwa × (1/1.06 - 1), (2) supporting factor removal = (CRR_rpf - CRR_rf) / 1.06 for IRB or CRR_rpf - CRR_rf for SA, (3) output floor = floor_impact_rwa from aggregator, (4) methodology = residual. The sum equals delta_rwa exactly by construction.
+- EL shortfall/excess: T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d)) caps the amount of EL excess addable to Tier 2 capital. EL shortfall is deducted 50/50 from CET1 and T2 per CRR Art. 159. Computed at portfolio level via `ELPortfolioSummary` in aggregator.
+- **Parameter substitution (CRE22.70-85):** Under Basel 3.1, IRB guarantors use PD parameter substitution (guarantor's PD + F-IRB supervisory LGD through IRB formula) instead of SA RW substitution. Under CRR, all guarantors use SA RW substitution. The guarantor's approach is determined per-row: IRB if the firm has IRB permission for the guarantor's exposure class AND the guarantor has an internal rating; SA otherwise.
+- **IRB maturity effect on parameter substitution:** At 5-year maturity, the IRB formula with PD=0.2% and LGD=40% gives ~60% RW, exceeding the SA corporate CQS 2 RW of 50%. Parameter substitution only provides a RW benefit over SA when maturity adjustment is moderate (e.g., ~39% at M=2.5y). This is expected behavior: long maturities inflate IRB RWs via the maturity adjustment factor.
+- **CRE56 SFT minimum haircut floors:** PRA has explicitly deferred CRE56 from UK implementation across CP16/22, PS17/23, PS9/24, and PS1/26. Not required for UK Basel 3.1 compliance.
 
 ### Testing patterns
 
 - F-IRB acceptance tests require `IRBPermissions.firb_only()` (not `full_irb()`) and reporting date 2027-06-30 to get meaningful maturities from fixture loans (maturity dates 2028-2033).
-- For QRRE PD floors, `is_qrre_transactor` column does not exist yet. Defaults to revolver floor (0.10%) which is conservative.
+- For QRRE PD floors, `is_qrre_transactor` column is propagated from facilities through hierarchy resolver. When the column is absent (legacy data), `_pd_floor_expression(has_transactor_col=False)` defaults to the conservative revolver floor (0.10%). Null values also default to revolver.
 - For LGD floors, `collateral_type` column may not be available at IRB stage. Default unsecured floor (25%) is applied when absent.
 - Orphaned collateral/guarantee fixtures (`LOAN_COLL_TEST_CORP_*`, `LOAN_GUAR_TEST_*`, `LOAN_PROV_TEST_*`) are safe to ignore — beneficiary references point to non-existent dedicated test loans.
+- CRM processor's `apply_guarantees()` calls `_apply_cross_approach_ccf()` which requires `ccf`, `nominal_amount`, `drawn_amount`, and `ead_from_ccf` columns. Synthetic test data must include these even for drawn-only exposures (use `ccf=1.0`, `nominal_amount=0.0`, `drawn_amount=ead`, `ead_from_ccf=0.0`).
+
+### COREP reporting
+
+- COREP templates use EBA DPM row/column references (e.g., row "0070" = Corporates, column "0010" = Original Exposure). Template definitions in `reporting/corep/templates.py` map `ExposureClass` enum values to DPM row refs.
+- C 08.01 IRB totals require exposure-weighted averages: `weighted_pd = sum(pd × ead) / sum(ead)`. Polars `group_by().agg()` expressions must include `.sum()` for aggregation context — row-level expressions without `.sum()` produce `InvalidOperationError`.
+- Output column names can be `ead_final`/`rwa_final` (aggregator naming) or `final_ead`/`final_rwa` (schema naming). The `_pick()` helper selects the first available from a list of candidates, ensuring both forms work.
+- C 07.00 risk weight breakdown pivots SA exposures into standard bands (0%, 2%, 4%, 10%, 20%, 35%, 50%, 75%, 100%, 150%, 250%, 1250%). PD bands for C 08.02 follow standard regulatory groupings (0-0.15%, 0.15-0.25%, ..., Default 100%).
+- Benchmark data generators must stay in sync with schema changes. When adding columns to `FACILITY_SCHEMA` or similar, always update `tests/benchmarks/data_generators.py` to include them.
 
 ### Known discrepancies
 
-- Workbook `regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027). Engine is correct for UK firms.
-- Workbook PD floor: `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) vs production config `0.0005` (Basel 3.1 0.05% per CRE30.20). Workbook needs updating.
-- **Spec inconsistencies:** `specs/regulatory-compliance.md`, `specs/nfr.md`, `specs/milestones.md` have stale test counts and status flags.
+- ~~Workbook `regulatory_params.py` uses BCBS schedule (starts 2025) while engine uses PRA PS9/24 UK schedule (starts 2027).~~ Fixed: workbook transitional schedule corrected to PRA PS9/24 (2027-2032). Cascading references in `group_f_output_floor.py` and `irb_formulas.py` also updated.
+- ~~Workbook PD floor: `PD_FLOORS["CORPORATE"] = 0.0003` (CRR 0.03%) vs production config `0.0005` (Basel 3.1 0.05% per CRE30.20).~~ Fixed: CORPORATE, CORPORATE_SME, CENTRAL_GOVT_CENTRAL_BANK, INSTITUTION all corrected from 0.0003 to 0.0005 in `regulatory_params.py`. Docstring and fallback in `irb_formulas.py` also corrected.
+- ~~**Spec inconsistencies**~~ All spec files updated to reflect actual implementation.
 
 ### SA RWA back-calculation
 

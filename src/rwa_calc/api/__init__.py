@@ -28,6 +28,10 @@ Usage:
         results_df = response.collect_results()
 """
 
+from rwa_calc.api.export import (
+    ExportResult,
+    ResultExporter,
+)
 from rwa_calc.api.models import (
     APIError,
     CalculationRequest,
@@ -66,6 +70,9 @@ __all__ = [
     "SummaryStatistics",
     "APIError",
     "PerformanceMetrics",
+    # Export
+    "ResultExporter",
+    "ExportResult",
     # Cache
     "ResultsCache",
     "CachedResults",

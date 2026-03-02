@@ -33,27 +33,64 @@ The slotting approach assigns risk weights based on qualitative category assessm
 
 ## CRR Slotting Risk Weights
 
-Under CRR, the same risk weights apply regardless of HVCRE status:
+Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remaining maturity.
 
-| Category | Risk Weight | Description |
-|----------|-------------|-------------|
-| Strong | 70% | Highly favourable financial and risk characteristics |
-| Good | 70% | Favourable characteristics |
-| Satisfactory | 115% | Acceptable characteristics |
-| Weak | 250% | Weakened characteristics |
-| Default | 0% | Fully provisioned |
+### Non-HVCRE (Table 1)
+
+| Category | Remaining Maturity >= 2.5yr | Remaining Maturity < 2.5yr |
+|----------|----------------------------|---------------------------|
+| Strong | 70% | 50% |
+| Good | 90% | 70% |
+| Satisfactory | 115% | 115% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
+
+### HVCRE (Table 2)
+
+| Category | Remaining Maturity >= 2.5yr | Remaining Maturity < 2.5yr |
+|----------|----------------------------|---------------------------|
+| Strong | 95% | 70% |
+| Good | 120% | 95% |
+| Satisfactory | 140% | 140% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
 
 ## Basel 3.1 Slotting Risk Weights
 
-Under Basel 3.1, HVCRE receives elevated risk weights:
+Under Basel 3.1 (BCBS CRE33), slotting risk weights are split into three distinct tables
+differentiating Non-HVCRE operational, Project Finance pre-operational, and HVCRE exposures.
 
-| Category | Non-HVCRE | HVCRE |
-|----------|-----------|-------|
-| Strong | 50% | 100% |
-| Good | 70% | 70% |
-| Satisfactory | 100% | 150% |
-| Weak | 150% | 150% |
-| Default | 350% | 350% |
+### Non-HVCRE Operational (OF, CF, IPRE, PF Operational)
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 70% |
+| Good | 90% |
+| Satisfactory | 115% |
+| Weak | 250% |
+| Default | 0% (EL) |
+
+### Project Finance Pre-Operational
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 80% |
+| Good | 100% |
+| Satisfactory | 120% |
+| Weak | 350% |
+| Default | 0% (EL) |
+
+### HVCRE
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 95% |
+| Good | 120% |
+| Satisfactory | 140% |
+| Weak | 250% |
+| Default | 0% (EL) |
+
+See [Framework Differences](../basel31/framework-differences.md) for full Basel 3.1 detail.
 
 ## Equity
 

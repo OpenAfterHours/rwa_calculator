@@ -541,7 +541,7 @@ def _retail_loans() -> list[Loan]:
             beel=0.0,
             seniority="senior",
         ),
-        # QRRE - credit card balance
+        # QRRE transactor - credit card balance
         Loan(
             loan_reference="LOAN_RTL_QRRE_001",
             product_type="CREDIT_CARD",
@@ -551,6 +551,21 @@ def _retail_loans() -> list[Loan]:
             maturity_date=date(2027, 1, 1),
             currency="GBP",
             drawn_amount=5_000.0,
+            interest=0.0,
+            lgd=0.85,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # QRRE revolver - overdraft balance
+        Loan(
+            loan_reference="LOAN_RTL_QRRE_002",
+            product_type="OVERDRAFT",
+            book_code="RETAIL_CARDS",
+            counterparty_reference="RTL_QRRE_002",
+            value_date=VALUE_DATE,
+            maturity_date=date(2027, 6, 30),
+            currency="GBP",
+            drawn_amount=3_000.0,
             interest=0.0,
             lgd=0.85,
             beel=0.0,

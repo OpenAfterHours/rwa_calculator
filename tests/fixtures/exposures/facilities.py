@@ -56,6 +56,9 @@ class Facility:
     is_short_term_trade_lc: bool | None = (
         None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
     )
+    is_qrre_transactor: bool | None = (
+        None  # CRR Art. 147(5), CRE30.55: True if borrower repays in full each period
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -71,6 +74,7 @@ class Facility:
             "lgd": self.lgd,
             "beel": self.beel,
             "is_revolving": self.is_revolving,
+            "is_qrre_transactor": self.is_qrre_transactor,
             "seniority": self.seniority,
             "risk_type": self.risk_type,
             "ccf_modelled": self.ccf_modelled,
@@ -302,7 +306,7 @@ def _retail_facilities() -> list[Facility]:
             seniority="senior",
             risk_type="MR",  # Medium risk - committed undrawn
         ),
-        # Credit card facility (QRRE)
+        # Credit card facility (QRRE transactor)
         Facility(
             facility_reference="FAC_RTL_QRRE_001",
             product_type="CREDIT_CARD",
@@ -318,6 +322,25 @@ def _retail_facilities() -> list[Facility]:
             is_revolving=True,
             seniority="senior",
             risk_type="LR",  # Low risk - unconditionally cancellable (0% CCF)
+            is_qrre_transactor=True,
+        ),
+        # Overdraft facility (QRRE revolver)
+        Facility(
+            facility_reference="FAC_RTL_QRRE_002",
+            product_type="OVERDRAFT",
+            book_code="RETAIL_CARDS",
+            counterparty_reference="RTL_QRRE_002",
+            value_date=VALUE_DATE,
+            maturity_date=date(2027, 6, 30),
+            currency="GBP",
+            limit=5_000.0,
+            committed=True,
+            lgd=0.85,
+            beel=0.0,
+            is_revolving=True,
+            seniority="senior",
+            risk_type="LR",  # Low risk - unconditionally cancellable (0% CCF)
+            is_qrre_transactor=False,
         ),
     ]
 

@@ -3,6 +3,7 @@
 Available applications:
     - rwa_app.py: Main calculator for running RWA calculations
     - results_explorer.py: Interactive results analysis and filtering
+    - comparison_app.py: CRR vs Basel 3.1 impact analysis (M3.4)
     - framework_reference.py: Regulatory framework documentation
 
 Usage (Multi-App Server - Recommended):
@@ -13,6 +14,7 @@ Usage (Multi-App Server - Recommended):
     #   http://localhost:8000/           (Calculator)
     #   http://localhost:8000/calculator (Calculator)
     #   http://localhost:8000/results    (Results Explorer)
+    #   http://localhost:8000/comparison (Impact Analysis)
     #   http://localhost:8000/reference  (Framework Reference)
 
 Usage (Single App):

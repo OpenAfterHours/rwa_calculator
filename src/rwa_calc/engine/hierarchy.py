@@ -622,6 +622,9 @@ class HierarchyResolver:
                     "ccf_modelled": pl.Float64,
                     "is_short_term_trade_lc": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
+                    "is_revolving": pl.Boolean,
+                    "is_qrre_transactor": pl.Boolean,
+                    "facility_limit": pl.Float64,
                     "source_facility_reference": pl.String,
                 }
             )
@@ -895,6 +898,22 @@ class HierarchyResolver:
                 if "is_buy_to_let" in facility_cols
                 else pl.lit(False).alias("is_buy_to_let")
             ),
+            # QRRE classification fields (CRR Art. 147(5), CRE30.55)
+            (
+                pl.col("is_revolving").fill_null(False)
+                if "is_revolving" in facility_cols
+                else pl.lit(False).alias("is_revolving")
+            ),
+            (
+                pl.col("is_qrre_transactor").fill_null(False)
+                if "is_qrre_transactor" in facility_cols
+                else pl.lit(False).alias("is_qrre_transactor")
+            ),
+            (
+                pl.col("limit").alias("facility_limit")
+                if "limit" in facility_cols
+                else pl.lit(None).cast(pl.Float64).alias("facility_limit")
+            ),
             # Propagate facility reference for collateral allocation
             # This allows facility-level collateral to be linked to undrawn exposures
             pl.col("facility_reference").alias("source_facility_reference"),
@@ -1136,6 +1155,81 @@ class HierarchyResolver:
             )
             .drop(["_frl_root", "_frl_depth"])
         )
+
+        # Propagate QRRE-relevant fields from parent facility to all exposures.
+        # facility_undrawn exposures already carry is_revolving, is_qrre_transactor,
+        # facility_limit from _build_facility_undrawn_exposures(); loans/contingents
+        # have NULLs from diagonal_relaxed concat. This join fills them in.
+        fac_cols = set(facilities.collect_schema().names()) if facilities is not None else set()
+        has_fac_ref = "facility_reference" in fac_cols
+
+        if has_fac_ref:
+            fac_select = [pl.col("facility_reference").alias("_fac_ref")]
+            if "is_revolving" in fac_cols:
+                fac_select.append(pl.col("is_revolving").fill_null(False).alias("_fac_revolving"))
+            if "is_qrre_transactor" in fac_cols:
+                fac_select.append(
+                    pl.col("is_qrre_transactor").fill_null(False).alias("_fac_transactor")
+                )
+            if "limit" in fac_cols:
+                fac_select.append(pl.col("limit").alias("_fac_limit"))
+
+            fac_lookup = facilities.select(fac_select)
+            exposures = exposures.join(
+                fac_lookup,
+                left_on="parent_facility_reference",
+                right_on="_fac_ref",
+                how="left",
+            )
+            coalesce_cols = []
+            exp_schema = set(exposures.collect_schema().names())
+            if "_fac_revolving" in exp_schema:
+                coalesce_cols.append(
+                    pl.coalesce(pl.col("is_revolving"), pl.col("_fac_revolving"))
+                    .fill_null(False)
+                    .alias("is_revolving")
+                    if "is_revolving" in exp_schema
+                    else pl.col("_fac_revolving").fill_null(False).alias("is_revolving")
+                )
+            if "_fac_transactor" in exp_schema:
+                coalesce_cols.append(
+                    pl.coalesce(pl.col("is_qrre_transactor"), pl.col("_fac_transactor"))
+                    .fill_null(False)
+                    .alias("is_qrre_transactor")
+                    if "is_qrre_transactor" in exp_schema
+                    else pl.col("_fac_transactor").fill_null(False).alias("is_qrre_transactor")
+                )
+            if "_fac_limit" in exp_schema:
+                coalesce_cols.append(
+                    pl.coalesce(pl.col("facility_limit"), pl.col("_fac_limit")).alias(
+                        "facility_limit"
+                    )
+                    if "facility_limit" in exp_schema
+                    else pl.col("_fac_limit").alias("facility_limit")
+                )
+
+            if coalesce_cols:
+                exposures = exposures.with_columns(coalesce_cols)
+            # Drop temporary join columns
+            temp_cols = [
+                c
+                for c in ["_fac_revolving", "_fac_transactor", "_fac_limit"]
+                if c in exposures.collect_schema().names()
+            ]
+            if temp_cols:
+                exposures = exposures.drop(temp_cols)
+
+        # Ensure QRRE columns always exist with safe defaults
+        exp_schema = set(exposures.collect_schema().names())
+        default_cols = []
+        if "is_revolving" not in exp_schema:
+            default_cols.append(pl.lit(False).alias("is_revolving"))
+        if "is_qrre_transactor" not in exp_schema:
+            default_cols.append(pl.lit(False).alias("is_qrre_transactor"))
+        if "facility_limit" not in exp_schema:
+            default_cols.append(pl.lit(None).cast(pl.Float64).alias("facility_limit"))
+        if default_cols:
+            exposures = exposures.with_columns(default_cols)
 
         # Add counterparty rating fields needed by downstream calculators.
         # Only cqs and pd are used by SA/IRB calculators; other hierarchy

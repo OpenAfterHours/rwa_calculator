@@ -2042,7 +2042,7 @@ class CRMProcessor:
             how="left",
         )
 
-        # Look up guarantor's CQS and rating type from ratings
+        # Look up guarantor's CQS, rating type, and PD from ratings
         if rating_inheritance is not None:
             ri_schema = rating_inheritance.collect_schema()
             ri_cols = [
@@ -2051,6 +2051,9 @@ class CRMProcessor:
             ]
             if "rating_type" in ri_schema.names():
                 ri_cols.append(pl.col("rating_type").alias("guarantor_rating_type"))
+            # Guarantor PD needed for Basel 3.1 parameter substitution (CRE22.70-85)
+            if "pd" in ri_schema.names():
+                ri_cols.append(pl.col("pd").alias("guarantor_pd"))
 
             exposures = exposures.join(
                 rating_inheritance.select(ri_cols),
@@ -2065,11 +2068,18 @@ class CRMProcessor:
                         pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
                     ]
                 )
+            if "pd" not in ri_schema.names():
+                exposures = exposures.with_columns(
+                    [
+                        pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
+                    ]
+                )
         else:
             exposures = exposures.with_columns(
                 [
                     pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
                     pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                    pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
                 ]
             )
 

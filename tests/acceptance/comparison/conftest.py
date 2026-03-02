@@ -171,6 +171,71 @@ def firb_comparison_deltas_df(firb_comparison) -> pl.DataFrame:
 
 
 # =============================================================================
+# Capital Impact Analysis Fixtures (M3.2)
+# =============================================================================
+
+
+@pytest.fixture(scope="session")
+def sa_capital_impact(sa_comparison):
+    """Capital impact analysis for SA-only comparison.
+
+    Session-scoped: decomposes the SA comparison deltas into
+    driver attribution (supporting factor removal, methodology changes).
+    """
+    from rwa_calc.engine.comparison import CapitalImpactAnalyzer
+
+    return CapitalImpactAnalyzer().analyze(sa_comparison)
+
+
+@pytest.fixture(scope="session")
+def sa_impact_attribution_df(sa_capital_impact) -> pl.DataFrame:
+    """Collected per-exposure attribution for SA comparison."""
+    return sa_capital_impact.exposure_attribution.collect()
+
+
+@pytest.fixture(scope="session")
+def sa_impact_waterfall_df(sa_capital_impact) -> pl.DataFrame:
+    """Collected portfolio waterfall for SA comparison."""
+    return sa_capital_impact.portfolio_waterfall.collect()
+
+
+@pytest.fixture(scope="session")
+def sa_impact_class_summary_df(sa_capital_impact) -> pl.DataFrame:
+    """Collected attribution summary by class for SA comparison."""
+    return sa_capital_impact.summary_by_class.collect()
+
+
+@pytest.fixture(scope="session")
+def firb_capital_impact(firb_comparison):
+    """Capital impact analysis for F-IRB comparison.
+
+    Session-scoped: decomposes the F-IRB comparison deltas into
+    driver attribution (scaling factor, supporting factor, methodology, floor).
+    """
+    from rwa_calc.engine.comparison import CapitalImpactAnalyzer
+
+    return CapitalImpactAnalyzer().analyze(firb_comparison)
+
+
+@pytest.fixture(scope="session")
+def firb_impact_attribution_df(firb_capital_impact) -> pl.DataFrame:
+    """Collected per-exposure attribution for F-IRB comparison."""
+    return firb_capital_impact.exposure_attribution.collect()
+
+
+@pytest.fixture(scope="session")
+def firb_impact_waterfall_df(firb_capital_impact) -> pl.DataFrame:
+    """Collected portfolio waterfall for F-IRB comparison."""
+    return firb_capital_impact.portfolio_waterfall.collect()
+
+
+@pytest.fixture(scope="session")
+def firb_impact_class_summary_df(firb_capital_impact) -> pl.DataFrame:
+    """Collected attribution summary by class for F-IRB comparison."""
+    return firb_capital_impact.summary_by_class.collect()
+
+
+# =============================================================================
 # Assertion Helpers
 # =============================================================================
 

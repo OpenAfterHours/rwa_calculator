@@ -378,6 +378,46 @@ class TestB31GroupG_ELShortfallExcess:
         )
 
 
+class TestB31GroupG_PortfolioELSummary:
+    """
+    Basel 3.1 portfolio-level EL summary acceptance tests.
+
+    Validates T2 credit cap (CRR Art. 62(d)) and deduction split (CRR Art. 159)
+    using the Basel 3.1 F-IRB pipeline results with LGD=40%.
+    """
+
+    def test_el_summary_populated(self, firb_pipeline_results) -> None:
+        """The aggregated bundle should contain a portfolio-level EL summary."""
+        assert firb_pipeline_results.el_summary is not None, (
+            "el_summary should be populated when IRB results have EL columns"
+        )
+
+    def test_t2_credit_cap_is_point_six_pct(self, firb_pipeline_results) -> None:
+        """T2 credit cap should be 0.6% of total IRB RWA per CRR Art. 62(d)."""
+        el = firb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        expected_cap = el.total_irb_rwa * 0.006
+        assert el.t2_credit_cap == pytest.approx(expected_cap, rel=1e-6)
+
+    def test_t2_credit_does_not_exceed_cap(self, firb_pipeline_results) -> None:
+        """T2 credit must never exceed the cap."""
+        el = firb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        assert el.t2_credit <= el.t2_credit_cap + 0.01, (
+            f"T2 credit ({el.t2_credit:.2f}) exceeds cap ({el.t2_credit_cap:.2f})"
+        )
+
+    def test_deduction_split_fifty_fifty(self, firb_pipeline_results) -> None:
+        """EL shortfall should be split 50% CET1 / 50% T2 per CRR Art. 159."""
+        el = firb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        assert el.cet1_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6)
+        assert el.t2_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6)
+
+
 class TestB31GroupG_ParameterizedValidation:
     """
     Parametrized tests to validate expected outputs structure.

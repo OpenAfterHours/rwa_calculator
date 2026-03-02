@@ -344,10 +344,11 @@ class ExposureClassifier:
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Merge SME and retail classification into a single .with_columns().
+        Merge SME, retail, and QRRE classification into a single .with_columns().
 
         Works because they operate on non-overlapping initial exposure_class values:
-        SME only touches "corporate", retail only touches "retail_other".
+        SME only touches "corporate", retail only touches "retail_other",
+        QRRE specialises qualifying revolving retail.
 
         Also derives FI scalar flags which depend on is_financial_sector_entity
         (set in Phase 2) but not on exposure_class mutations.
@@ -361,6 +362,7 @@ class ExposureClassifier:
         lfse_threshold_gbp = float(
             CRR_REGULATORY_THRESHOLDS_EUR["lfse_total_assets"] * config.eur_gbp_rate
         )
+        qrre_max_limit = float(config.retail_thresholds.qrre_max_limit)
 
         # Conditions reused across expressions (reading Phase 2 columns)
         is_corporate_sme = (
@@ -375,11 +377,25 @@ class ExposureClassifier:
             & (pl.col("cp_annual_revenue") > 0)
         )
 
+        # QRRE qualification: revolving, retail, under QRRE limit (CRR Art. 147(5))
+        schema_names = set(exposures.collect_schema().names())
+        has_revolving = "is_revolving" in schema_names
+        has_facility_limit = "facility_limit" in schema_names
+
+        is_qrre = pl.lit(False)
+        if has_revolving and has_facility_limit:
+            is_qrre = (
+                (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+                & (pl.col("qualifies_as_retail") == True)  # noqa: E712
+                & (pl.col("is_revolving") == True)  # noqa: E712
+                & (pl.col("facility_limit").fill_null(float("inf")) <= qrre_max_limit)
+            )
+
         return exposures.with_columns(
             [
-                # --- exposure_class update (SME + retail combined) ---
-                # Priority order matters: mortgage first, then SME retail, then
-                # non-qualifying retail, then corporate SME, then keep current.
+                # --- exposure_class update (SME + retail + QRRE combined) ---
+                # Priority order: mortgage, QRRE, SME retail, non-qualifying retail,
+                # corporate SME, keep current.
                 pl.when(
                     # Retail mortgage — stays RETAIL_MORTGAGE regardless of threshold
                     (pl.col("is_mortgage") == True)  # noqa: E712
@@ -389,6 +405,11 @@ class ExposureClassifier:
                     )
                 )
                 .then(pl.lit(ExposureClass.RETAIL_MORTGAGE.value))
+                .when(
+                    # QRRE: qualifying revolving retail under QRRE limit (Art. 147(5))
+                    is_qrre
+                )
+                .then(pl.lit(ExposureClass.RETAIL_QRRE.value))
                 .when(
                     # SME retail that doesn't qualify → CORPORATE_SME
                     is_retail_sme

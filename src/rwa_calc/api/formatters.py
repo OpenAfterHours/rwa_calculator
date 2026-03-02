@@ -25,7 +25,7 @@ from rwa_calc.api.models import (
 from rwa_calc.api.results_cache import ResultsCache
 
 if TYPE_CHECKING:
-    from rwa_calc.contracts.bundles import AggregatedResultBundle
+    from rwa_calc.contracts.bundles import AggregatedResultBundle, ELPortfolioSummary
 
 
 # =============================================================================
@@ -105,6 +105,7 @@ class ResultFormatter:
         summary, exposure_count = self._compute_summary_from_df(
             results_df=results_df,
             floor_impact=bundle.floor_impact,
+            el_summary=bundle.el_summary,
         )
 
         has_critical = any(e.severity == "critical" for e in errors)
@@ -213,6 +214,7 @@ class ResultFormatter:
         self,
         results_df: pl.DataFrame,
         floor_impact: pl.LazyFrame | None,
+        el_summary: ELPortfolioSummary | None = None,
     ) -> tuple[SummaryStatistics, int]:
         """
         Compute summary statistics from an already-collected DataFrame.
@@ -220,6 +222,7 @@ class ResultFormatter:
         Args:
             results_df: Collected results DataFrame
             floor_impact: Optional floor impact LazyFrame
+            el_summary: Optional portfolio-level EL summary with T2 credit cap
 
         Returns:
             Tuple of (SummaryStatistics, exposure_count)
@@ -266,6 +269,15 @@ class ResultFormatter:
             except Exception:
                 pass
 
+        # EL summary fields
+        el_shortfall = Decimal("0")
+        el_excess = Decimal("0")
+        t2_credit = Decimal("0")
+        if el_summary is not None:
+            el_shortfall = Decimal(str(el_summary.total_el_shortfall))
+            el_excess = Decimal(str(el_summary.total_el_excess))
+            t2_credit = Decimal(str(el_summary.t2_credit))
+
         summary = SummaryStatistics(
             total_ead=total_ead,
             total_rwa=total_rwa,
@@ -279,6 +291,9 @@ class ResultFormatter:
             total_rwa_slotting=_approach_sum(rwa_col, slotting_approaches),
             floor_applied=floor_applied,
             floor_impact=floor_impact_value,
+            total_el_shortfall=el_shortfall,
+            total_el_excess=el_excess,
+            t2_credit=t2_credit,
         )
 
         return summary, exposure_count

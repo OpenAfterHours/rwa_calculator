@@ -254,6 +254,10 @@ class PipelineOrchestrator:
                 supporting_factor_impact=result.supporting_factor_impact,
                 summary_by_class=result.summary_by_class,
                 summary_by_approach=result.summary_by_approach,
+                pre_crm_summary=result.pre_crm_summary,
+                post_crm_detailed=result.post_crm_detailed,
+                post_crm_summary=result.post_crm_summary,
+                el_summary=result.el_summary,
                 errors=all_errors,
             )
 
@@ -763,6 +767,9 @@ class PipelineOrchestrator:
                     combined
                 )
 
+            # EL portfolio summary (T2 credit cap, CET1/T2 deductions)
+            el_summary = self._aggregator._compute_el_portfolio_summary(irb_results)
+
             return AggregatedResultBundle(
                 results=combined,
                 sa_results=sa_results,
@@ -776,6 +783,7 @@ class PipelineOrchestrator:
                 pre_crm_summary=pre_crm_summary,
                 post_crm_detailed=post_crm_detailed,
                 post_crm_summary=post_crm_summary,
+                el_summary=el_summary,
                 errors=[],
             )
         except Exception as e:

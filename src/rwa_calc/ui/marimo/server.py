@@ -26,6 +26,7 @@ app = (
     .with_app(path="", root=str(apps_dir / "rwa_app.py"))
     .with_app(path="/calculator", root=str(apps_dir / "rwa_app.py"))
     .with_app(path="/results", root=str(apps_dir / "results_explorer.py"))
+    .with_app(path="/comparison", root=str(apps_dir / "comparison_app.py"))
     .with_app(path="/reference", root=str(apps_dir / "framework_reference.py"))
     .build()
 )
@@ -40,6 +41,7 @@ def main():
     print("  - http://localhost:8000/           (Calculator)")
     print("  - http://localhost:8000/calculator (Calculator)")
     print("  - http://localhost:8000/results    (Results Explorer)")
+    print("  - http://localhost:8000/comparison (Impact Analysis)")
     print("  - http://localhost:8000/reference  (Framework Reference)")
     uvicorn.run(app, host="0.0.0.0", port=8000)
 

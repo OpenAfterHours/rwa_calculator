@@ -25,12 +25,12 @@
 
 | BCBS Standard | Topic | Status |
 |---------------|-------|--------|
-| CRE20.7–26 | SA risk weights (revised) | Partial |
-| CRE20.71 | LTV-based residential RE risk weights | Not Started |
-| CRE30–36 | IRB approach revisions | Partial |
+| CRE20.7–26 | SA risk weights (revised: SCRA, investment-grade, subordinated) | Done |
+| CRE20.71 | LTV-based residential RE risk weights | Done |
+| CRE30–36 | IRB approach revisions | Done |
 | CRE32.9–12 | Overcollateralisation (carried forward) | Done |
-| CRE32 | A-IRB LGD floors | Not Started |
-| — | Differentiated PD floors | Not Started |
+| CRE32 | A-IRB LGD floors | Done |
+| — | Differentiated PD floors | Done |
 | — | Output floor (50%–72.5% phase-in) | Done |
 | — | Removal of 1.06 scaling factor | Done |
 | — | Removal of SME supporting factor | Done |
@@ -38,26 +38,37 @@
 
 ## Acceptance Test Summary
 
-### CRR Scenarios (74 tests)
+### CRR Scenarios (91 tests)
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-A: Standardised Approach | A1–A12 | 14 | 86% (12/14, 2 skip) |
-| CRR-C: Advanced IRB | C1–C3 | 7 | 86% (6/7, 1 skip) |
+| CRR-A: Standardised Approach | A1–A12 | 14 | 100% |
+| CRR-C: Advanced IRB | C1–C3 | 7 | 100% |
 | CRR-D: Credit Risk Mitigation | D1–D6 | 9 | 100% |
 | CRR-E: Specialised Lending | E1–E4 | 9 | 100% |
 | CRR-F: Supporting Factors | F1–F7 | 15 | 100% |
 | CRR-G: Provisions | G1–G3 | 7 | 100% |
 | CRR-H: Complex/Combined | H1–H4 | 4 | 100% |
 | CRR-I: Defaulted Exposures | I1–I3 | 9 | 100% |
-| **Total** | | **74** | **96%** |
+| Additional CRR scenarios | | 17 | 100% |
+| **Total** | | **91** | **100%** |
 
-### Basel 3.1 Scenarios (Planned)
+### Basel 3.1 Scenarios (112 tests)
 
-| Group | Scenarios | Status |
-|-------|-----------|--------|
-| B31-A: SA (Revised) | A1–A10 | Not Started |
-| B31-F: Output Floor | F1–F3 | Not Started |
+| Group | Scenarios | Tests | Pass Rate |
+|-------|-----------|-------|-----------|
+| B31-A: SA (Revised) | A1–A10+ | 112 | 100% |
+| B31-F: Output Floor | F1–F3 | 6 | 100% |
+| **Total** | | **112** | **100%** |
+
+### Comparison Scenarios (62 tests)
+
+| Group | Scenarios | Tests | Pass Rate |
+|-------|-----------|-------|-----------|
+| Dual-framework comparison (M3.1) | CRR vs Basel 3.1 | 62 | 100% |
+| Capital impact analysis (M3.2) | Driver attribution | included | 100% |
+| Transitional floor modelling (M3.3) | Phase-in schedule | included | 100% |
+| **Total** | | **62** | **100%** |
 
 ## Regulatory References
 

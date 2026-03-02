@@ -31,6 +31,7 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
+    ELPortfolioSummary,
     EquityResultBundle,
     IRBResultBundle,
     SAResultBundle,
@@ -173,6 +174,9 @@ class OutputAggregator:
         summary_by_class = self._generate_summary_by_class(post_crm_detailed)
         summary_by_approach = self._generate_summary_by_approach(post_crm_detailed)
 
+        # Compute portfolio-level EL summary with T2 credit cap (IRB only)
+        el_summary = self._compute_el_portfolio_summary(irb_results)
+
         # Collect all errors
         all_errors = list(errors)
         if sa_bundle:
@@ -197,6 +201,7 @@ class OutputAggregator:
             pre_crm_summary=pre_crm_summary,
             post_crm_detailed=post_crm_detailed,
             post_crm_summary=post_crm_summary,
+            el_summary=el_summary,
             errors=all_errors,
         )
 
@@ -784,6 +789,85 @@ class OutputAggregator:
             )
 
         return summary
+
+    # =========================================================================
+    # Private Methods - EL Portfolio Summary
+    # =========================================================================
+
+    # T2 credit cap rate per CRR Art. 62(d): 0.6% of IRB credit-risk RWA.
+    _T2_CREDIT_CAP_RATE = 0.006
+
+    def _compute_el_portfolio_summary(
+        self,
+        irb_results: pl.LazyFrame | None,
+    ) -> ELPortfolioSummary | None:
+        """
+        Compute portfolio-level EL summary with T2 credit cap.
+
+        Aggregates per-exposure EL shortfall/excess across all IRB exposures
+        and applies the T2 credit cap per CRR Art. 62(d).
+
+        Args:
+            irb_results: IRB results LazyFrame with el_shortfall/el_excess columns
+
+        Returns:
+            ELPortfolioSummary if IRB results have EL columns, None otherwise
+        """
+        if irb_results is None:
+            return None
+
+        cols = irb_results.collect_schema().names()
+        if "el_shortfall" not in cols or "el_excess" not in cols:
+            return None
+
+        # Determine available column names
+        rwa_col = "rwa_post_factor" if "rwa_post_factor" in cols else "rwa_final"
+        has_el = "expected_loss" in cols
+        has_provisions = "provision_allocated" in cols
+
+        # Build aggregation expressions
+        agg_exprs = [
+            pl.col("el_shortfall").sum().alias("total_el_shortfall"),
+            pl.col("el_excess").sum().alias("total_el_excess"),
+            pl.col(rwa_col).sum().alias("total_irb_rwa"),
+        ]
+        if has_el:
+            agg_exprs.append(pl.col("expected_loss").sum().alias("total_expected_loss"))
+        if has_provisions:
+            agg_exprs.append(
+                pl.col("provision_allocated").sum().alias("total_provisions_allocated")
+            )
+
+        # Single collect for all aggregations
+        agg_df = irb_results.select(agg_exprs).collect()
+
+        total_el_shortfall = float(agg_df["total_el_shortfall"][0] or 0.0)
+        total_el_excess = float(agg_df["total_el_excess"][0] or 0.0)
+        total_irb_rwa = float(agg_df["total_irb_rwa"][0] or 0.0)
+        total_expected_loss = float(agg_df["total_expected_loss"][0] or 0.0) if has_el else 0.0
+        total_provisions = (
+            float(agg_df["total_provisions_allocated"][0] or 0.0) if has_provisions else 0.0
+        )
+
+        # T2 credit cap: 0.6% of total IRB RWA (CRR Art. 62(d))
+        t2_credit_cap = total_irb_rwa * self._T2_CREDIT_CAP_RATE
+        t2_credit = min(total_el_excess, t2_credit_cap)
+
+        # EL shortfall deduction: 50% CET1 + 50% T2 (CRR Art. 159)
+        cet1_deduction = total_el_shortfall * 0.5
+        t2_deduction = total_el_shortfall * 0.5
+
+        return ELPortfolioSummary(
+            total_expected_loss=total_expected_loss,
+            total_provisions_allocated=total_provisions,
+            total_el_shortfall=total_el_shortfall,
+            total_el_excess=total_el_excess,
+            total_irb_rwa=total_irb_rwa,
+            t2_credit_cap=t2_credit_cap,
+            t2_credit=t2_credit,
+            cet1_deduction=cet1_deduction,
+            t2_deduction=t2_deduction,
+        )
 
     # =========================================================================
     # Private Methods - Pre/Post CRM Reporting

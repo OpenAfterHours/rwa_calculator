@@ -16,9 +16,12 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from rwa_calc.api.export import ExportResult
 
 # =============================================================================
 # Request Models
@@ -110,6 +113,9 @@ class SummaryStatistics:
         total_rwa_slotting: Total RWA from Slotting approach
         floor_applied: Whether output floor was binding
         floor_impact: Additional RWA from output floor
+        total_el_shortfall: Total EL shortfall (EL > provisions) for IRB exposures
+        total_el_excess: Total EL excess (provisions > EL) for IRB exposures
+        t2_credit: EL excess addable to T2 capital (capped at 0.6% of IRB RWA)
     """
 
     total_ead: Decimal
@@ -124,6 +130,9 @@ class SummaryStatistics:
     total_rwa_slotting: Decimal = field(default_factory=lambda: Decimal("0"))
     floor_applied: bool = False
     floor_impact: Decimal = field(default_factory=lambda: Decimal("0"))
+    total_el_shortfall: Decimal = field(default_factory=lambda: Decimal("0"))
+    total_el_excess: Decimal = field(default_factory=lambda: Decimal("0"))
+    t2_credit: Decimal = field(default_factory=lambda: Decimal("0"))
 
 
 # =============================================================================
@@ -245,6 +254,76 @@ class CalculationResponse:
         if self.summary_by_approach_path and self.summary_by_approach_path.exists():
             return pl.scan_parquet(self.summary_by_approach_path)
         return None
+
+    def to_parquet(self, output_dir: Path) -> ExportResult:
+        """
+        Export results to Parquet files.
+
+        Args:
+            output_dir: Directory to write parquet files into
+
+        Returns:
+            ExportResult with list of written files and row count
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_parquet(self, output_dir)
+
+    def to_csv(self, output_dir: Path) -> ExportResult:
+        """
+        Export results to CSV files.
+
+        Args:
+            output_dir: Directory to write CSV files into
+
+        Returns:
+            ExportResult with list of written files and row count
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_csv(self, output_dir)
+
+    def to_excel(self, output_path: Path) -> ExportResult:
+        """
+        Export results to a multi-sheet Excel workbook.
+
+        Requires xlsxwriter to be installed.
+
+        Args:
+            output_path: Path for the .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_excel(self, output_path)
+
+    def to_corep(self, output_path: Path) -> ExportResult:
+        """
+        Export results as COREP regulatory reporting templates.
+
+        Generates C 07.00 (SA), C 08.01 (IRB totals), C 08.02
+        (IRB PD grades) in a multi-sheet Excel workbook following
+        the EBA/PRA COREP template structure.
+
+        Requires xlsxwriter to be installed.
+
+        Args:
+            output_path: Path for the COREP .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_corep(self, output_path)
 
     @property
     def has_warnings(self) -> bool:

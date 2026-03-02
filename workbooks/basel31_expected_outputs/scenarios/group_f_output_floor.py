@@ -67,12 +67,12 @@ def _(mo, OUTPUT_FLOOR_PERCENTAGE, OUTPUT_FLOOR_TRANSITIONAL):
     **Transitional schedule:**
     | Year | Floor |
     |------|-------|
-    | 2025 | {OUTPUT_FLOOR_TRANSITIONAL[2025]*100:.0f}% |
-    | 2026 | {OUTPUT_FLOOR_TRANSITIONAL[2026]*100:.0f}% |
     | 2027 | {OUTPUT_FLOOR_TRANSITIONAL[2027]*100:.0f}% |
     | 2028 | {OUTPUT_FLOOR_TRANSITIONAL[2028]*100:.0f}% |
     | 2029 | {OUTPUT_FLOOR_TRANSITIONAL[2029]*100:.0f}% |
-    | 2030+ | {OUTPUT_FLOOR_TRANSITIONAL[2030]*100:.1f}% |
+    | 2030 | {OUTPUT_FLOOR_TRANSITIONAL[2030]*100:.0f}% |
+    | 2031 | {OUTPUT_FLOOR_TRANSITIONAL[2031]*100:.0f}% |
+    | 2032+ | {OUTPUT_FLOOR_TRANSITIONAL[2032]*100:.1f}% |
     """)
     return
 
@@ -206,7 +206,7 @@ def _(OUTPUT_FLOOR_TRANSITIONAL, ScenarioResult):
     rwa_sa_f3 = 100_000_000.0
     year_f3 = 2027
 
-    floor_pct_f3 = OUTPUT_FLOOR_TRANSITIONAL[year_f3]  # 60%
+    floor_pct_f3 = OUTPUT_FLOOR_TRANSITIONAL[year_f3]  # 50% (first year under PRA PS9/24)
     floor_f3 = floor_pct_f3 * rwa_sa_f3
     rwa_final_f3 = max(rwa_irb_f3, floor_f3)
     floor_binding_f3 = floor_f3 > rwa_irb_f3

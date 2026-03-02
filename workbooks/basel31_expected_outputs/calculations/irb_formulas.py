@@ -46,12 +46,12 @@ def apply_pd_floor(pd: float, exposure_class: str) -> float:
     Returns:
         Floored PD
 
-    Basel 3.1 PD Floors (CRE31.6):
-        - Corporate/Sovereign/Institution: 0.03%
+    Basel 3.1 PD Floors (CRE30.55, PRA PS9/24):
+        - Corporate/Sovereign/Institution: 0.05%
         - Retail (non-QRRE): 0.05%
         - QRRE: 0.10%
     """
-    floor = PD_FLOORS.get(exposure_class, PD_FLOORS.get("CORPORATE", 0.0003))
+    floor = PD_FLOORS.get(exposure_class, PD_FLOORS.get("CORPORATE", 0.0005))
     return _base_apply_pd_floor(pd, floor)
 
 
@@ -156,7 +156,7 @@ def calculate_irb_rwa(
     Reference: CRE31.4, CRE31.7
     """
     # Get Basel 3.1 PD floor for this exposure class
-    pd_floor = PD_FLOORS.get(exposure_class, PD_FLOORS.get("CORPORATE", 0.0003))
+    pd_floor = PD_FLOORS.get(exposure_class, PD_FLOORS.get("CORPORATE", 0.0005))
 
     is_retail = "RETAIL" in exposure_class
 

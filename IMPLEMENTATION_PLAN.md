@@ -3,11 +3,10 @@
 Full audit of `docs/` vs `src/rwa_calc/` completed 2026-03-02. This plan covers all
 discrepancies, outdated content, and missing documentation.
 
-> **2026-03-02 update:** Priorities 1.1, 1.2, 1.3, 1.4, and 1.6 completed. All bundle definitions,
-> error handling, protocols, and domain enums in `docs/api/contracts.md` and `docs/api/domain.md`
-> have been rewritten to match source code. Engine API docs (`docs/api/engine.md`) fully rewritten:
-> all calculator signatures, CCF, CRM, comparison module, FX converter, loader, and utilities
-> now match source.
+> **2026-03-02 update:** All Priority 1 items completed (1.1-1.6). All API reference docs now
+> match source code: bundles, errors, protocols, domain enums, engine modules (calculators, CCF,
+> CRM, comparison, FX, utils), configuration (CalculationConfig, PDFloors, LGDFloors,
+> SupportingFactors, OutputFloorConfig, RetailThresholds, IRBPermissions, PolarsEngine).
 
 ---
 
@@ -114,26 +113,19 @@ All engine module documentation rewritten to match source code:
 
 ### 1.5 Update `docs/api/configuration.md` — Missing config fields and classes
 
-**Source**: `src/rwa_calc/contracts/config.py`
+**Status: COMPLETED** (2026-03-02)
 
-**Missing `CalculationConfig` fields:**
-- `base_currency` — reporting currency
-- `apply_fx_conversion` — FX conversion toggle
-- `retail_thresholds` — `RetailThresholds` object
-- `irb_permissions` — `IRBPermissions` object
-- `collect_engine` — Polars engine selection (`PolarsEngine` type)
-
-**Missing configuration classes:**
-- `RetailThresholds` — `.crr()` (EUR 1m) / `.basel_3_1()` (GBP 880k) factory methods
-- `IRBPermissions` — `is_permitted()`, `get_permitted_approaches()`, `.sa_only()`, `.full_irb()`, `.firb_only()`, `.airb_only()`, `.retail_airb_corporate_firb()`
-- `PolarsEngine` type alias — `Literal["cpu", "gpu", "streaming"]`
-
-**Steps:**
-- [ ] Add all missing `CalculationConfig` fields
-- [ ] Add `RetailThresholds` class with factory methods
-- [ ] Add `IRBPermissions` class with all factory methods
-- [ ] Add `PolarsEngine` type alias documentation
-- [ ] Verify `PDFloors`, `LGDFloors`, `SupportingFactors`, `OutputFloorConfig` are complete and accurate
+All configuration documentation rewritten to match source code:
+- [x] `CalculationConfig`: added all 13 fields (was 8), updated factory methods (`.crr()` now takes `irb_permissions`, `.basel_3_1()` auto-configures output floor)
+- [x] `PDFloors`: fixed to show `corporate_sme` field, corrected `get_floor()` signature with `is_qrre_transactor` param
+- [x] `LGDFloors`: fixed field names (`unsecured` not `unsecured_senior`, `commercial_real_estate` not `cre`, etc.) and corrected PRA values
+- [x] `SupportingFactors`: fixed field names (`sme_factor_under_threshold`, `enabled`, etc.), added `basel_3_1()` factory
+- [x] `OutputFloorConfig`: rewritten with `enabled`, `transitional_start_date`, `transitional_floor_schedule`, `get_floor_percentage(calculation_date)` method, `.crr()` / `.basel_3_1()` factories
+- [x] Added `RetailThresholds` class with `.crr()` / `.basel_3_1()` factory methods
+- [x] Added `IRBPermissions` class with all 5 factory methods and regulatory constraints documentation
+- [x] Added `PolarsEngine` type alias
+- [x] Added `is_crr`, `is_basel_3_1` properties and `get_output_floor_percentage()` method
+- [x] Updated usage examples for new API signatures
 
 ### 1.6 Update `docs/api/domain.md` — Missing enums
 

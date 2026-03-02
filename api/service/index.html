@@ -13,10 +13,10 @@
       
       
       
-        <link rel="prev" href="../service/">
+        <link rel="prev" href="../">
       
       
-        <link rel="next" href="../configuration/">
+        <link rel="next" href="../pipeline/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Pipeline - UK Credit Risk RWA Calculator</title>
+        <title>Service API - UK Credit Risk RWA Calculator</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pipeline-api" class="md-skip">
+        <a href="#service-api" class="md-skip">
           Skip to content
         </a>
       
@@ -113,7 +113,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Pipeline
+              Service API
             
           </span>
         </div>
@@ -2167,34 +2167,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../service/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Service API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -2214,7 +2186,7 @@
   <span class="md-ellipsis">
     
   
-    Pipeline
+    Service API
   
 
     
@@ -2232,7 +2204,7 @@
   <span class="md-ellipsis">
     
   
-    Pipeline
+    Service API
   
 
     
@@ -2258,22 +2230,44 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#module-rwa_calcenginepipeline" class="md-nav__link">
+  <a href="#quick_calculate" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Module: rwa_calc.engine.pipeline
+        quick_calculate
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Module: rwa_calc.engine.pipeline">
+    <nav class="md-nav" aria-label="quick_calculate">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#create_pipeline" class="md-nav__link">
+  <a href="#signature" class="md-nav__link">
     <span class="md-ellipsis">
       
-        create_pipeline
+        Signature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
       
     </span>
   </a>
@@ -2286,55 +2280,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline" class="md-nav__link">
+  <a href="#create_service" class="md-nav__link">
     <span class="md-ellipsis">
       
-        create_pipeline
+        create_service
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline--with-data-path-uses-parquetloader" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        With data path (uses ParquetLoader)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline--with-custom-loader" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        With custom loader
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline--without-loader-use-run_with_data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Without loader (use run_with_data)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Without loader (use run_with_data)">
+    <nav class="md-nav" aria-label="create_service">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#pipelineorchestrator" class="md-nav__link">
+  <a href="#signature_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        PipelineOrchestrator
+        Signature
       
     </span>
   </a>
@@ -2347,22 +2308,34 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.PipelineOrchestrator" class="md-nav__link">
+  <a href="#rwaservice" class="md-nav__link">
     <span class="md-ellipsis">
       
-        PipelineOrchestrator
+        RWAService
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="PipelineOrchestrator">
+    <nav class="md-nav" aria-label="RWAService">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.PipelineOrchestrator.run" class="md-nav__link">
+  <a href="#methods" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calculate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        calculate
       
     </span>
   </a>
@@ -2370,10 +2343,215 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.PipelineOrchestrator.run_with_data" class="md-nav__link">
+  <a href="#validate_data_path" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run_with_data
+        validate_data_path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_supported_frameworks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_supported_frameworks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_default_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_default_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Request Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calculationrequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CalculationRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validationrequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ValidationRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Response Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calculationresponse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CalculationResponse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CalculationResponse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summarystatistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SummaryStatistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validationresponse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ValidationResponse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apierror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        APIError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performancemetrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PerformanceMetrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Export">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resultexporter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResultExporter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exportresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExportResult
       
     </span>
   </a>
@@ -2398,10 +2576,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
+  <a href="#basic-calculation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Basic Usage
+        Basic Calculation
       
     </span>
   </a>
@@ -2409,10 +2587,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#with-custom-data-path" class="md-nav__link">
+  <a href="#validation-before-calculation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        With Custom Data Path
+        Validation Before Calculation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-to-multiple-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export to Multiple Formats
       
     </span>
   </a>
@@ -2430,30 +2619,8 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#error-handling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Error Handling
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related
-      
-    </span>
-  </a>
   
 </li>
       
@@ -2461,6 +2628,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -4080,22 +4275,44 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#module-rwa_calcenginepipeline" class="md-nav__link">
+  <a href="#quick_calculate" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Module: rwa_calc.engine.pipeline
+        quick_calculate
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Module: rwa_calc.engine.pipeline">
+    <nav class="md-nav" aria-label="quick_calculate">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#create_pipeline" class="md-nav__link">
+  <a href="#signature" class="md-nav__link">
     <span class="md-ellipsis">
       
-        create_pipeline
+        Signature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
       
     </span>
   </a>
@@ -4108,55 +4325,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline" class="md-nav__link">
+  <a href="#create_service" class="md-nav__link">
     <span class="md-ellipsis">
       
-        create_pipeline
+        create_service
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline--with-data-path-uses-parquetloader" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        With data path (uses ParquetLoader)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline--with-custom-loader" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        With custom loader
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.create_pipeline--without-loader-use-run_with_data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Without loader (use run_with_data)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Without loader (use run_with_data)">
+    <nav class="md-nav" aria-label="create_service">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#pipelineorchestrator" class="md-nav__link">
+  <a href="#signature_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        PipelineOrchestrator
+        Signature
       
     </span>
   </a>
@@ -4169,22 +4353,34 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.PipelineOrchestrator" class="md-nav__link">
+  <a href="#rwaservice" class="md-nav__link">
     <span class="md-ellipsis">
       
-        PipelineOrchestrator
+        RWAService
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="PipelineOrchestrator">
+    <nav class="md-nav" aria-label="RWAService">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.PipelineOrchestrator.run" class="md-nav__link">
+  <a href="#methods" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calculate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        calculate
       
     </span>
   </a>
@@ -4192,10 +4388,215 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#rwa_calc.engine.pipeline.PipelineOrchestrator.run_with_data" class="md-nav__link">
+  <a href="#validate_data_path" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run_with_data
+        validate_data_path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_supported_frameworks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_supported_frameworks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_default_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_default_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Request Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calculationrequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CalculationRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validationrequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ValidationRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Response Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calculationresponse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CalculationResponse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CalculationResponse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summarystatistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SummaryStatistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validationresponse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ValidationResponse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apierror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        APIError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performancemetrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PerformanceMetrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Export">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resultexporter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResultExporter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exportresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExportResult
       
     </span>
   </a>
@@ -4220,10 +4621,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
+  <a href="#basic-calculation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Basic Usage
+        Basic Calculation
       
     </span>
   </a>
@@ -4231,10 +4632,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#with-custom-data-path" class="md-nav__link">
+  <a href="#validation-before-calculation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        With Custom Data Path
+        Validation Before Calculation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-to-multiple-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export to Multiple Formats
       
     </span>
   </a>
@@ -4252,30 +4664,8 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#error-handling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Error Handling
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related
-      
-    </span>
-  </a>
   
 </li>
       
@@ -4347,538 +4737,820 @@
   
 
 
-<h1 id="pipeline-api">Pipeline API<a class="headerlink" href="#pipeline-api" title="Permanent link">&para;</a></h1>
-<p>The pipeline module provides the main entry points for RWA calculation. See <a href="https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/pipeline.py"><code>pipeline.py</code></a> for the full implementation.</p>
-<h2 id="module-rwa_calcenginepipeline">Module: <code>rwa_calc.engine.pipeline</code><a class="headerlink" href="#module-rwa_calcenginepipeline" title="Permanent link">&para;</a></h2>
-<h3 id="create_pipeline"><code>create_pipeline</code><a class="headerlink" href="#create_pipeline" title="Permanent link">&para;</a></h3>
-<p>Factory function to create a pipeline with default components:</p>
-
-
-<div class="doc doc-object doc-function">
-
-
-
-<a id="rwa_calc.engine.pipeline.create_pipeline"></a>
-    <div class="doc doc-contents first">
-
-        <p>Create a pipeline orchestrator with default components.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>data_path</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Path to data directory (creates ParquetLoader)</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>loader</code>
-            </td>
-            <td>
-                  <code><span title="rwa_calc.contracts.protocols.LoaderProtocol">LoaderProtocol</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Pre-configured loader (overrides data_path)</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="rwa_calc.engine.pipeline.PipelineOrchestrator" href="#rwa_calc.engine.pipeline.PipelineOrchestrator">PipelineOrchestrator</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>PipelineOrchestrator ready for use</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<details class="usage" open>
-  <summary>Usage</summary>
-  <h2 id="rwa_calc.engine.pipeline.create_pipeline--with-data-path-uses-parquetloader">With data path (uses ParquetLoader)<a class="headerlink" href="#rwa_calc.engine.pipeline.create_pipeline--with-data-path-uses-parquetloader" title="Permanent link">&para;</a></h2>
-<p>pipeline = create_pipeline(data_path="/path/to/data")</p>
-<h2 id="rwa_calc.engine.pipeline.create_pipeline--with-custom-loader">With custom loader<a class="headerlink" href="#rwa_calc.engine.pipeline.create_pipeline--with-custom-loader" title="Permanent link">&para;</a></h2>
-<p>pipeline = create_pipeline(loader=CSVLoader("/path/to/data"))</p>
-<h2 id="rwa_calc.engine.pipeline.create_pipeline--without-loader-use-run_with_data">Without loader (use run_with_data)<a class="headerlink" href="#rwa_calc.engine.pipeline.create_pipeline--without-loader-use-run_with_data" title="Permanent link">&para;</a></h2>
-<p>pipeline = create_pipeline()</p>
-</details>
-
-    </div>
-
-</div><h3 id="pipelineorchestrator"><code>PipelineOrchestrator</code><a class="headerlink" href="#pipelineorchestrator" title="Permanent link">&para;</a></h3>
-<p>The main pipeline class (note: the class is <code>PipelineOrchestrator</code>, not <code>RWAPipeline</code>):</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="rwa_calc.engine.pipeline.PipelineOrchestrator" class="doc doc-heading">
-            <code>rwa_calc.engine.pipeline.PipelineOrchestrator</code>
-
-
-<a href="#rwa_calc.engine.pipeline.PipelineOrchestrator" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents first">
-
-
-
-        <p>Orchestrate the complete RWA calculation pipeline.</p>
-<p>Implements PipelineProtocol for:
-- Full pipeline execution from data loading to final aggregation
-- Pre-loaded data execution (bypassing loader)
-- Component dependency management
-- Error accumulation across stages</p>
-<p>Pipeline stages:
-1. Loader: Load raw data from files/databases
-2. HierarchyResolver: Resolve counterparty and facility hierarchies
-3. Classifier: Classify exposures and assign approaches
-4. CRMProcessor: Apply credit risk mitigation
-5. SACalculator: Calculate SA RWA
-6. IRBCalculator: Calculate IRB RWA
-7. SlottingCalculator: Calculate Slotting RWA
-8. OutputAggregator: Combine results, apply floor, generate summaries</p>
-
-
-<details class="usage" open>
-  <summary>Usage</summary>
-  <p>orchestrator = PipelineOrchestrator(
-    loader=ParquetLoader(base_path),
-    hierarchy_resolver=HierarchyResolver(),
-    classifier=ExposureClassifier(),
-    crm_processor=CRMProcessor(),
-    sa_calculator=SACalculator(),
-    irb_calculator=IRBCalculator(),
-    slotting_calculator=SlottingCalculator(),
-    aggregator=OutputAggregator(),
-)
-result = orchestrator.run(config)</p>
-</details>
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="rwa_calc.engine.pipeline.PipelineOrchestrator.run" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">run</span><span class="p">(</span><span class="n">config</span><span class="p">)</span></code>
-
-<a href="#rwa_calc.engine.pipeline.PipelineOrchestrator.run" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Execute the complete RWA calculation pipeline.</p>
-<p>Requires a loader to be configured.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>config</code>
-            </td>
-            <td>
-                  <code><span title="rwa_calc.contracts.config.CalculationConfig">CalculationConfig</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Calculation configuration</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="rwa_calc.contracts.bundles.AggregatedResultBundle">AggregatedResultBundle</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>AggregatedResultBundle with all results and audit trail</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="ValueError">ValueError</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If no loader is configured</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="rwa_calc.engine.pipeline.PipelineOrchestrator.run_with_data" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">run_with_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span></code>
-
-<a href="#rwa_calc.engine.pipeline.PipelineOrchestrator.run_with_data" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Execute pipeline with pre-loaded data.</p>
-<p>Uses single-pass architecture: all approach-specific calculators
-run sequentially on one unified LazyFrame, avoiding plan tree
-duplication and mid-pipeline materialisation.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>data</code>
-            </td>
-            <td>
-                  <code><span title="rwa_calc.contracts.bundles.RawDataBundle">RawDataBundle</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Pre-loaded raw data bundle</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>config</code>
-            </td>
-            <td>
-                  <code><span title="rwa_calc.contracts.config.CalculationConfig">CalculationConfig</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Calculation configuration</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="rwa_calc.contracts.bundles.AggregatedResultBundle">AggregatedResultBundle</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>AggregatedResultBundle with all results and audit trail</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><details class="example">
-<summary>Pipeline Implementation (pipeline.py)</summary>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">PipelineOrchestrator</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="sd">    Orchestrate the complete RWA calculation pipeline.</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="sd">    Implements PipelineProtocol for:</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="sd">    - Full pipeline execution from data loading to final aggregation</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="sd">    - Pre-loaded data execution (bypassing loader)</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="sd">    - Component dependency management</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="sd">    - Error accumulation across stages</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="sd">    Pipeline stages:</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="sd">    1. Loader: Load raw data from files/databases</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="sd">    2. HierarchyResolver: Resolve counterparty and facility hierarchies</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="sd">    3. Classifier: Classify exposures and assign approaches</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="sd">    4. CRMProcessor: Apply credit risk mitigation</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="sd">    5. SACalculator: Calculate SA RWA</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="sd">    6. IRBCalculator: Calculate IRB RWA</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="sd">    7. SlottingCalculator: Calculate Slotting RWA</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="sd">    8. OutputAggregator: Combine results, apply floor, generate summaries</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="sd">    Usage:</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="sd">        orchestrator = PipelineOrchestrator(</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="sd">            loader=ParquetLoader(base_path),</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="sd">            hierarchy_resolver=HierarchyResolver(),</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="sd">            classifier=ExposureClassifier(),</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="sd">            crm_processor=CRMProcessor(),</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="sd">            sa_calculator=SACalculator(),</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="sd">            irb_calculator=IRBCalculator(),</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="sd">            slotting_calculator=SlottingCalculator(),</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="sd">            aggregator=OutputAggregator(),</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="sd">        )</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="sd">        result = orchestrator.run(config)</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>        <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>        <span class="n">loader</span><span class="p">:</span> <span class="n">LoaderProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>        <span class="n">hierarchy_resolver</span><span class="p">:</span> <span class="n">HierarchyResolverProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>        <span class="n">classifier</span><span class="p">:</span> <span class="n">ClassifierProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>        <span class="n">crm_processor</span><span class="p">:</span> <span class="n">CRMProcessorProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a>        <span class="n">sa_calculator</span><span class="p">:</span> <span class="n">SACalculatorProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a>        <span class="n">irb_calculator</span><span class="p">:</span> <span class="n">IRBCalculatorProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a>        <span class="n">slotting_calculator</span><span class="p">:</span> <span class="n">SlottingCalculatorProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a>        <span class="n">equity_calculator</span><span class="p">:</span> <span class="n">EquityCalculatorProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a>        <span class="n">aggregator</span><span class="p">:</span> <span class="n">OutputAggregatorProtocol</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="sd">        Initialize pipeline with components.</span>
-</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a>
-</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="sd">        Components can be injected for testing or customization.</span>
-</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="sd">        If not provided, defaults will be created on first use.</span>
-</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a>
-</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="sd">        Args:</span>
-</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="sd">            loader: Data loader (optional - required for run())</span>
-</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="sd">            hierarchy_resolver: Hierarchy resolver</span>
-</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="sd">            classifier: Exposure classifier</span>
-</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a><span class="sd">            crm_processor: CRM processor</span>
-</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="sd">            sa_calculator: SA calculator</span>
-</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="sd">            irb_calculator: IRB calculator</span>
-</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="sd">            slotting_calculator: Slotting calculator</span>
-</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="sd">            equity_calculator: Equity calculator</span>
-</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a><span class="sd">            aggregator: Output aggregator</span>
-</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a><span class="sd">        &quot;&quot;&quot;</span>
-</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64" href="#__codelineno-0-64"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_loader</span> <span class="o">=</span> <span class="n">loader</span>
-</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65" href="#__codelineno-0-65"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_hierarchy_resolver</span> <span class="o">=</span> <span class="n">hierarchy_resolver</span>
-</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66" href="#__codelineno-0-66"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_classifier</span> <span class="o">=</span> <span class="n">classifier</span>
-</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67" href="#__codelineno-0-67"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_crm_processor</span> <span class="o">=</span> <span class="n">crm_processor</span>
-</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68" href="#__codelineno-0-68"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_sa_calculator</span> <span class="o">=</span> <span class="n">sa_calculator</span>
-</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69" href="#__codelineno-0-69"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_irb_calculator</span> <span class="o">=</span> <span class="n">irb_calculator</span>
-</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70" href="#__codelineno-0-70"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_slotting_calculator</span> <span class="o">=</span> <span class="n">slotting_calculator</span>
-</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71" href="#__codelineno-0-71"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_equity_calculator</span> <span class="o">=</span> <span class="n">equity_calculator</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72" href="#__codelineno-0-72"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_aggregator</span> <span class="o">=</span> <span class="n">aggregator</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73" href="#__codelineno-0-73"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">PipelineError</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74" href="#__codelineno-0-74"></a>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75" href="#__codelineno-0-75"></a>    <span class="c1"># =========================================================================</span>
-</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76" href="#__codelineno-0-76"></a>    <span class="c1"># Public API</span>
-</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77" href="#__codelineno-0-77"></a>    <span class="c1"># =========================================================================</span>
-</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78" href="#__codelineno-0-78"></a>
-</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79" href="#__codelineno-0-79"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">CalculationConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AggregatedResultBundle</span><span class="p">:</span>
-</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80" href="#__codelineno-0-80"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81" href="#__codelineno-0-81"></a><span class="sd">        Execute the complete RWA calculation pipeline.</span>
-</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82" href="#__codelineno-0-82"></a>
-</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83" href="#__codelineno-0-83"></a><span class="sd">        Requires a loader to be configured.</span>
-</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84" href="#__codelineno-0-84"></a>
-</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85" href="#__codelineno-0-85"></a><span class="sd">        Args:</span>
-</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86" href="#__codelineno-0-86"></a><span class="sd">            config: Calculation configuration</span>
-</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87" href="#__codelineno-0-87"></a>
-</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88" href="#__codelineno-0-88"></a><span class="sd">        Returns:</span>
-</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89" href="#__codelineno-0-89"></a><span class="sd">            AggregatedResultBundle with all results and audit trail</span>
-</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90" href="#__codelineno-0-90"></a>
-</span><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91" href="#__codelineno-0-91"></a><span class="sd">        Raises:</span>
-</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92" href="#__codelineno-0-92"></a><span class="sd">            ValueError: If no loader is configured</span>
-</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93" href="#__codelineno-0-93"></a><span class="sd">        &quot;&quot;&quot;</span>
-</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94" href="#__codelineno-0-94"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loader</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95" href="#__codelineno-0-95"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;No loader configured. Use run_with_data() or provide a loader.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96" href="#__codelineno-0-96"></a>
-</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97" href="#__codelineno-0-97"></a>        <span class="c1"># Reset errors for new run</span>
-</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98" href="#__codelineno-0-98"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_errors</span> <span class="o">=</span> <span class="p">[]</span>
+<h1 id="service-api">Service API<a class="headerlink" href="#service-api" title="Permanent link">&para;</a></h1>
+<p>The Service API is the recommended entry point for RWA calculations. It wraps the
+low-level pipeline with a clean facade that handles configuration, data loading,
+validation, caching, and result formatting.</p>
+<p><strong>Import path:</strong> <code>from rwa_calc.api import ...</code></p>
+<h2 id="quick_calculate">quick_calculate<a class="headerlink" href="#quick_calculate" title="Permanent link">&para;</a></h2>
+<p>One-liner convenience function for simple use cases.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">quick_calculate</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">response</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span><span class="s2">&quot;/path/to/data&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-</details>
-<h2 id="usage-examples">Usage Examples<a class="headerlink" href="#usage-examples" title="Permanent link">&para;</a></h2>
-<h3 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_pipeline</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationConfig</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Create pipeline</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">create_pipeline</span><span class="p">()</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Configure for CRR</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">),</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">apply_sme_supporting_factor</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">)</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Run calculation</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># Access results</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total RWA: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">total_rwa</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SA RWA: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">sa_rwa</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;IRB RWA: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">irb_rwa</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<h3 id="signature">Signature<a class="headerlink" href="#signature" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">quick_calculate</span><span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">data_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">framework</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;CRR&quot;</span><span class="p">,</span> <span class="s2">&quot;BASEL_3_1&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;CRR&quot;</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">reporting_date</span><span class="p">:</span> <span class="n">date</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">irb_approach</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="s2">&quot;sa_only&quot;</span><span class="p">,</span> <span class="s2">&quot;firb&quot;</span><span class="p">,</span> <span class="s2">&quot;airb&quot;</span><span class="p">,</span> <span class="s2">&quot;full_irb&quot;</span><span class="p">,</span> <span class="s2">&quot;retail_airb_corporate_firb&quot;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">data_format</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;parquet&quot;</span><span class="p">,</span> <span class="s2">&quot;csv&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;parquet&quot;</span><span class="p">,</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">cache_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CalculationResponse</span>
 </span></code></pre></div>
-<h3 id="with-custom-data-path">With Custom Data Path<a class="headerlink" href="#with-custom-data-path" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine.loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParquetLoader</span>
+<h3 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data_path</code></td>
+<td><code>str \| Path</code></td>
+<td><em>required</em></td>
+<td>Path to directory containing input data files</td>
+</tr>
+<tr>
+<td><code>framework</code></td>
+<td><code>"CRR" \| "BASEL_3_1"</code></td>
+<td><code>"CRR"</code></td>
+<td>Regulatory framework</td>
+</tr>
+<tr>
+<td><code>reporting_date</code></td>
+<td><code>date \| None</code></td>
+<td>today</td>
+<td>As-of date for the calculation</td>
+</tr>
+<tr>
+<td><code>irb_approach</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code> (SA only)</td>
+<td>IRB approach selection</td>
+</tr>
+<tr>
+<td><code>data_format</code></td>
+<td><code>"parquet" \| "csv"</code></td>
+<td><code>"parquet"</code></td>
+<td>Format of input files</td>
+</tr>
+<tr>
+<td><code>cache_dir</code></td>
+<td><code>Path \| None</code></td>
+<td>temp dir</td>
+<td>Directory for caching result parquet files</td>
+</tr>
+</tbody>
+</table>
+<h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">quick_calculate</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Load data from custom path</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">loader</span> <span class="o">=</span> <span class="n">ParquetLoader</span><span class="p">()</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">raw_data</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/path/to/data&quot;</span><span class="p">))</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Run with pre-loaded data</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run_with_data</span><span class="p">(</span><span class="n">raw_data</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Simplest usage — CRR framework, today&#39;s date, SA only</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">response</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span><span class="s2">&quot;/data/exposures&quot;</span><span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Basel 3.1 with IRB</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">response</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="s2">&quot;/data/exposures&quot;</span><span class="p">,</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">framework</span><span class="o">=</span><span class="s2">&quot;BASEL_3_1&quot;</span><span class="p">,</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2027</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">irb_approach</span><span class="o">=</span><span class="s2">&quot;full_irb&quot;</span><span class="p">,</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># CSV input</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="n">response</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span><span class="s2">&quot;/data/csv-exports&quot;</span><span class="p">,</span> <span class="n">data_format</span><span class="o">=</span><span class="s2">&quot;csv&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="create_service">create_service<a class="headerlink" href="#create_service" title="Permanent link">&para;</a></h2>
+<p>Factory function to create an <code>RWAService</code> instance.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_service</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">service</span> <span class="o">=</span> <span class="n">create_service</span><span class="p">()</span>
+</span></code></pre></div>
+<h3 id="signature_1">Signature<a class="headerlink" href="#signature_1" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_service</span><span class="p">(</span><span class="n">cache_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RWAService</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cache_dir</code></td>
+<td><code>Path \| None</code></td>
+<td>temp dir</td>
+<td>Directory for caching result parquet files</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="rwaservice">RWAService<a class="headerlink" href="#rwaservice" title="Permanent link">&para;</a></h2>
+<p>High-level service for RWA calculations. Wraps the <code>PipelineOrchestrator</code> with a
+clean API suitable for UI integration, automation, and scripting.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">RWAService</span><span class="p">,</span> <span class="n">create_service</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">service</span> <span class="o">=</span> <span class="n">create_service</span><span class="p">()</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># or: service = RWAService(cache_dir=Path(&quot;.cache&quot;))</span>
+</span></code></pre></div>
+<h3 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h3>
+<h4 id="calculate">calculate<a class="headerlink" href="#calculate" title="Permanent link">&para;</a></h4>
+<p>Run an RWA calculation with the specified parameters.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">response</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request</code></td>
+<td><code>CalculationRequest</code></td>
+<td>Request with all calculation parameters</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>CalculationResponse</code></p>
+<h4 id="validate_data_path">validate_data_path<a class="headerlink" href="#validate_data_path" title="Permanent link">&para;</a></h4>
+<p>Validate a data directory for calculation readiness.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationRequest</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">validation</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">validate_data_path</span><span class="p">(</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">ValidationRequest</span><span class="p">(</span><span class="n">data_path</span><span class="o">=</span><span class="s2">&quot;/path/to/data&quot;</span><span class="p">)</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="p">)</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request</code></td>
+<td><code>ValidationRequest</code></td>
+<td>Request with path and format</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>ValidationResponse</code></p>
+<h4 id="get_supported_frameworks">get_supported_frameworks<a class="headerlink" href="#get_supported_frameworks" title="Permanent link">&para;</a></h4>
+<p>List available regulatory frameworks.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">frameworks</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">get_supported_frameworks</span><span class="p">()</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># [{&quot;id&quot;: &quot;CRR&quot;, &quot;name&quot;: &quot;CRR (Basel 3.0)&quot;, ...}, ...]</span>
+</span></code></pre></div>
+<p><strong>Returns:</strong> <code>list[dict[str, str]]</code></p>
+<h4 id="get_default_config">get_default_config<a class="headerlink" href="#get_default_config" title="Permanent link">&para;</a></h4>
+<p>Get default configuration values for a framework.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">defaults</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">(</span><span class="s2">&quot;CRR&quot;</span><span class="p">,</span> <span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>framework</code></td>
+<td><code>"CRR" \| "BASEL_3_1"</code></td>
+<td>Regulatory framework</td>
+</tr>
+<tr>
+<td><code>reporting_date</code></td>
+<td><code>date</code></td>
+<td>As-of date</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>dict</code> with keys like <code>framework</code>, <code>reporting_date</code>, <code>pd_floors</code>, etc.</p>
+<hr />
+<h2 id="request-models">Request Models<a class="headerlink" href="#request-models" title="Permanent link">&para;</a></h2>
+<h3 id="calculationrequest">CalculationRequest<a class="headerlink" href="#calculationrequest" title="Permanent link">&para;</a></h3>
+<p>Frozen dataclass encapsulating all parameters for a calculation.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationRequest</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">request</span> <span class="o">=</span> <span class="n">CalculationRequest</span><span class="p">(</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">data_path</span><span class="o">=</span><span class="s2">&quot;/path/to/data&quot;</span><span class="p">,</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">framework</span><span class="o">=</span><span class="s2">&quot;CRR&quot;</span><span class="p">,</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">),</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">irb_approach</span><span class="o">=</span><span class="s2">&quot;full_irb&quot;</span><span class="p">,</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="p">)</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data_path</code></td>
+<td><code>str \| Path</code></td>
+<td><em>required</em></td>
+<td>Path to data directory</td>
+</tr>
+<tr>
+<td><code>framework</code></td>
+<td><code>"CRR" \| "BASEL_3_1"</code></td>
+<td><em>required</em></td>
+<td>Regulatory framework</td>
+</tr>
+<tr>
+<td><code>reporting_date</code></td>
+<td><code>date</code></td>
+<td><em>required</em></td>
+<td>As-of date for calculation</td>
+</tr>
+<tr>
+<td><code>base_currency</code></td>
+<td><code>str</code></td>
+<td><code>"GBP"</code></td>
+<td>Reporting currency</td>
+</tr>
+<tr>
+<td><code>irb_approach</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>IRB approach (see table below)</td>
+</tr>
+<tr>
+<td><code>data_format</code></td>
+<td><code>"parquet" \| "csv"</code></td>
+<td><code>"parquet"</code></td>
+<td>Input file format</td>
+</tr>
+<tr>
+<td><code>eur_gbp_rate</code></td>
+<td><code>Decimal</code></td>
+<td><code>0.8732</code></td>
+<td>EUR/GBP exchange rate</td>
+</tr>
+</tbody>
+</table>
+<p><strong>IRB approach options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>None</code> / <code>"sa_only"</code></td>
+<td>Standardised Approach only</td>
+</tr>
+<tr>
+<td><code>"firb"</code></td>
+<td>Foundation IRB where permitted</td>
+</tr>
+<tr>
+<td><code>"airb"</code></td>
+<td>Advanced IRB where permitted</td>
+</tr>
+<tr>
+<td><code>"full_irb"</code></td>
+<td>Both FIRB and AIRB (AIRB preferred)</td>
+</tr>
+<tr>
+<td><code>"retail_airb_corporate_firb"</code></td>
+<td>A-IRB for retail, F-IRB for corporate</td>
+</tr>
+</tbody>
+</table>
+<h3 id="validationrequest">ValidationRequest<a class="headerlink" href="#validationrequest" title="Permanent link">&para;</a></h3>
+<p>Request for data path validation.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationRequest</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">request</span> <span class="o">=</span> <span class="n">ValidationRequest</span><span class="p">(</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="n">data_path</span><span class="o">=</span><span class="s2">&quot;/path/to/data&quot;</span><span class="p">,</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">data_format</span><span class="o">=</span><span class="s2">&quot;parquet&quot;</span><span class="p">,</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="p">)</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data_path</code></td>
+<td><code>str \| Path</code></td>
+<td><em>required</em></td>
+<td>Directory to validate</td>
+</tr>
+<tr>
+<td><code>data_format</code></td>
+<td><code>"parquet" \| "csv"</code></td>
+<td><code>"parquet"</code></td>
+<td>Expected file format</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="response-models">Response Models<a class="headerlink" href="#response-models" title="Permanent link">&para;</a></h2>
+<h3 id="calculationresponse">CalculationResponse<a class="headerlink" href="#calculationresponse" title="Permanent link">&para;</a></h3>
+<p>Main response from <code>RWAService.calculate()</code> or <code>quick_calculate()</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>success</code></td>
+<td><code>bool</code></td>
+<td>Whether calculation completed without critical errors</td>
+</tr>
+<tr>
+<td><code>framework</code></td>
+<td><code>str</code></td>
+<td>Framework used</td>
+</tr>
+<tr>
+<td><code>reporting_date</code></td>
+<td><code>date</code></td>
+<td>As-of date</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td><code>SummaryStatistics</code></td>
+<td>Aggregated summary metrics</td>
+</tr>
+<tr>
+<td><code>results_path</code></td>
+<td><code>Path</code></td>
+<td>Path to cached results parquet</td>
+</tr>
+<tr>
+<td><code>errors</code></td>
+<td><code>list[APIError]</code></td>
+<td>Errors and warnings</td>
+</tr>
+<tr>
+<td><code>performance</code></td>
+<td><code>PerformanceMetrics \| None</code></td>
+<td>Timing metrics</td>
+</tr>
+</tbody>
+</table>
+<h4 id="methods_1">Methods<a class="headerlink" href="#methods_1" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scan_results()</code></td>
+<td><code>pl.LazyFrame</code></td>
+<td>Lazy-scan the results parquet</td>
+</tr>
+<tr>
+<td><code>collect_results()</code></td>
+<td><code>pl.DataFrame</code></td>
+<td>Collect full results into memory</td>
+</tr>
+<tr>
+<td><code>scan_summary_by_class()</code></td>
+<td><code>pl.LazyFrame \| None</code></td>
+<td>Lazy-scan class summary</td>
+</tr>
+<tr>
+<td><code>scan_summary_by_approach()</code></td>
+<td><code>pl.LazyFrame \| None</code></td>
+<td>Lazy-scan approach summary</td>
+</tr>
+<tr>
+<td><code>to_parquet(output_dir)</code></td>
+<td><code>ExportResult</code></td>
+<td>Export to Parquet files</td>
+</tr>
+<tr>
+<td><code>to_csv(output_dir)</code></td>
+<td><code>ExportResult</code></td>
+<td>Export to CSV files</td>
+</tr>
+<tr>
+<td><code>to_excel(output_path)</code></td>
+<td><code>ExportResult</code></td>
+<td>Export to Excel workbook</td>
+</tr>
+<tr>
+<td><code>to_corep(output_path)</code></td>
+<td><code>ExportResult</code></td>
+<td>Export COREP regulatory templates</td>
+</tr>
+</tbody>
+</table>
+<h4 id="properties">Properties<a class="headerlink" href="#properties" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>has_warnings</code></td>
+<td><code>bool</code></td>
+<td>True if any warnings present</td>
+</tr>
+<tr>
+<td><code>has_errors</code></td>
+<td><code>bool</code></td>
+<td>True if any errors (not warnings) present</td>
+</tr>
+<tr>
+<td><code>warning_count</code></td>
+<td><code>int</code></td>
+<td>Number of warnings</td>
+</tr>
+<tr>
+<td><code>error_count</code></td>
+<td><code>int</code></td>
+<td>Number of errors</td>
+</tr>
+</tbody>
+</table>
+<h3 id="summarystatistics">SummaryStatistics<a class="headerlink" href="#summarystatistics" title="Permanent link">&para;</a></h3>
+<p>Aggregated summary metrics from the calculation.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>total_ead</code></td>
+<td><code>Decimal</code></td>
+<td>Total Exposure at Default</td>
+</tr>
+<tr>
+<td><code>total_rwa</code></td>
+<td><code>Decimal</code></td>
+<td>Total Risk-Weighted Assets</td>
+</tr>
+<tr>
+<td><code>exposure_count</code></td>
+<td><code>int</code></td>
+<td>Number of exposures processed</td>
+</tr>
+<tr>
+<td><code>average_risk_weight</code></td>
+<td><code>Decimal</code></td>
+<td>Average risk weight (RWA / EAD)</td>
+</tr>
+<tr>
+<td><code>total_ead_sa</code></td>
+<td><code>Decimal</code></td>
+<td>EAD from Standardised Approach</td>
+</tr>
+<tr>
+<td><code>total_ead_irb</code></td>
+<td><code>Decimal</code></td>
+<td>EAD from IRB approaches</td>
+</tr>
+<tr>
+<td><code>total_ead_slotting</code></td>
+<td><code>Decimal</code></td>
+<td>EAD from Slotting approach</td>
+</tr>
+<tr>
+<td><code>total_rwa_sa</code></td>
+<td><code>Decimal</code></td>
+<td>RWA from Standardised Approach</td>
+</tr>
+<tr>
+<td><code>total_rwa_irb</code></td>
+<td><code>Decimal</code></td>
+<td>RWA from IRB approaches</td>
+</tr>
+<tr>
+<td><code>total_rwa_slotting</code></td>
+<td><code>Decimal</code></td>
+<td>RWA from Slotting approach</td>
+</tr>
+<tr>
+<td><code>floor_applied</code></td>
+<td><code>bool</code></td>
+<td>Whether output floor was binding</td>
+</tr>
+<tr>
+<td><code>floor_impact</code></td>
+<td><code>Decimal</code></td>
+<td>Additional RWA from output floor</td>
+</tr>
+<tr>
+<td><code>total_el_shortfall</code></td>
+<td><code>Decimal</code></td>
+<td>EL shortfall for IRB exposures</td>
+</tr>
+<tr>
+<td><code>total_el_excess</code></td>
+<td><code>Decimal</code></td>
+<td>EL excess for IRB exposures</td>
+</tr>
+<tr>
+<td><code>t2_credit</code></td>
+<td><code>Decimal</code></td>
+<td>EL excess addable to T2 capital</td>
+</tr>
+</tbody>
+</table>
+<h3 id="validationresponse">ValidationResponse<a class="headerlink" href="#validationresponse" title="Permanent link">&para;</a></h3>
+<p>Response from <code>validate_data_path()</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>valid</code></td>
+<td><code>bool</code></td>
+<td>Whether data path is ready for calculation</td>
+</tr>
+<tr>
+<td><code>data_path</code></td>
+<td><code>str</code></td>
+<td>The validated path</td>
+</tr>
+<tr>
+<td><code>files_found</code></td>
+<td><code>list[str]</code></td>
+<td>Required files that were found</td>
+</tr>
+<tr>
+<td><code>files_missing</code></td>
+<td><code>list[str]</code></td>
+<td>Required files that are missing</td>
+</tr>
+<tr>
+<td><code>errors</code></td>
+<td><code>list[APIError]</code></td>
+<td>Validation errors</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>missing_count</code></td>
+<td><code>int</code></td>
+<td>Number of missing files</td>
+</tr>
+<tr>
+<td><code>found_count</code></td>
+<td><code>int</code></td>
+<td>Number of found files</td>
+</tr>
+</tbody>
+</table>
+<h3 id="apierror">APIError<a class="headerlink" href="#apierror" title="Permanent link">&para;</a></h3>
+<p>User-friendly error representation.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>code</code></td>
+<td><code>str</code></td>
+<td>Error code (e.g., <code>"DQ006"</code>, <code>"CRM001"</code>)</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>str</code></td>
+<td>Human-readable error message</td>
+</tr>
+<tr>
+<td><code>severity</code></td>
+<td><code>"warning" \| "error" \| "critical"</code></td>
+<td>Error severity</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td><code>str</code></td>
+<td>Category for grouping</td>
+</tr>
+<tr>
+<td><code>details</code></td>
+<td><code>dict</code></td>
+<td>Additional context</td>
+</tr>
+</tbody>
+</table>
+<h3 id="performancemetrics">PerformanceMetrics<a class="headerlink" href="#performancemetrics" title="Permanent link">&para;</a></h3>
+<p>Timing and throughput metrics.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>started_at</code></td>
+<td><code>datetime</code></td>
+<td>Calculation start time</td>
+</tr>
+<tr>
+<td><code>completed_at</code></td>
+<td><code>datetime</code></td>
+<td>Calculation end time</td>
+</tr>
+<tr>
+<td><code>duration_seconds</code></td>
+<td><code>float</code></td>
+<td>Total time in seconds</td>
+</tr>
+<tr>
+<td><code>exposure_count</code></td>
+<td><code>int</code></td>
+<td>Number of exposures</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>exposures_per_second</code></td>
+<td><code>float</code></td>
+<td>Processing throughput</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="export">Export<a class="headerlink" href="#export" title="Permanent link">&para;</a></h2>
+<h3 id="resultexporter">ResultExporter<a class="headerlink" href="#resultexporter" title="Permanent link">&para;</a></h3>
+<p>Exports calculation results to various formats.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">ResultExporter</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">exporter</span> <span class="o">=</span> <span class="n">ResultExporter</span><span class="p">()</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">exporter</span><span class="o">.</span><span class="n">export_to_parquet</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span><span class="p">))</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">exporter</span><span class="o">.</span><span class="n">export_to_csv</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span><span class="p">))</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">result</span> <span class="o">=</span> <span class="n">exporter</span><span class="o">.</span><span class="n">export_to_excel</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/results.xlsx&quot;</span><span class="p">))</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">result</span> <span class="o">=</span> <span class="n">exporter</span><span class="o">.</span><span class="n">export_to_corep</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/corep.xlsx&quot;</span><span class="p">))</span>
+</span></code></pre></div>
+<h3 id="exportresult">ExportResult<a class="headerlink" href="#exportresult" title="Permanent link">&para;</a></h3>
+<p>Result of an export operation.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>format</code></td>
+<td><code>str</code></td>
+<td>Export format (<code>"parquet"</code>, <code>"csv"</code>, <code>"excel"</code>)</td>
+</tr>
+<tr>
+<td><code>files</code></td>
+<td><code>list[Path]</code></td>
+<td>Files written</td>
+</tr>
+<tr>
+<td><code>row_count</code></td>
+<td><code>int</code></td>
+<td>Total rows exported</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="usage-examples">Usage Examples<a class="headerlink" href="#usage-examples" title="Permanent link">&para;</a></h2>
+<h3 id="basic-calculation">Basic Calculation<a class="headerlink" href="#basic-calculation" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">quick_calculate</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">response</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span><span class="s2">&quot;/data/exposures&quot;</span><span class="p">)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total RWA: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">summary</span><span class="o">.</span><span class="n">total_rwa</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="validation-before-calculation">Validation Before Calculation<a class="headerlink" href="#validation-before-calculation" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_service</span><span class="p">,</span> <span class="n">ValidationRequest</span><span class="p">,</span> <span class="n">CalculationRequest</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">service</span> <span class="o">=</span> <span class="n">create_service</span><span class="p">()</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Validate first</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">validation</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">validate_data_path</span><span class="p">(</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>    <span class="n">ValidationRequest</span><span class="p">(</span><span class="n">data_path</span><span class="o">=</span><span class="s2">&quot;/data/exposures&quot;</span><span class="p">)</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="p">)</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">validation</span><span class="o">.</span><span class="n">valid</span><span class="p">:</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Missing: </span><span class="si">{</span><span class="n">validation</span><span class="o">.</span><span class="n">files_missing</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>    <span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="c1"># Then calculate</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="n">response</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>    <span class="n">CalculationRequest</span><span class="p">(</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>        <span class="n">data_path</span><span class="o">=</span><span class="s2">&quot;/data/exposures&quot;</span><span class="p">,</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>        <span class="n">framework</span><span class="o">=</span><span class="s2">&quot;CRR&quot;</span><span class="p">,</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>        <span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">),</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>    <span class="p">)</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="export-to-multiple-formats">Export to Multiple Formats<a class="headerlink" href="#export-to-multiple-formats" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">quick_calculate</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">response</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span><span class="s2">&quot;/data/exposures&quot;</span><span class="p">,</span> <span class="n">irb_approach</span><span class="o">=</span><span class="s2">&quot;full_irb&quot;</span><span class="p">)</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>    <span class="n">response</span><span class="o">.</span><span class="n">to_parquet</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/parquet/&quot;</span><span class="p">))</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>    <span class="n">response</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/csv/&quot;</span><span class="p">))</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>    <span class="n">response</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/results.xlsx&quot;</span><span class="p">))</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>    <span class="n">response</span><span class="o">.</span><span class="n">to_corep</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;output/corep.xlsx&quot;</span><span class="p">))</span>
 </span></code></pre></div>
 <h3 id="framework-comparison">Framework Comparison<a class="headerlink" href="#framework-comparison" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Run under both frameworks</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">config_crr</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">config_b31</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">basel_3_1</span><span class="p">(</span><span class="n">date</span><span class="p">(</span><span class="mi">2027</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">result_crr</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">config_crr</span><span class="p">)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">result_b31</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">config_b31</span><span class="p">)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Compare</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">impact</span> <span class="o">=</span> <span class="p">(</span><span class="n">result_b31</span><span class="o">.</span><span class="n">total_rwa</span> <span class="o">/</span> <span class="n">result_crr</span><span class="o">.</span><span class="n">total_rwa</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Basel 3.1 impact: </span><span class="si">{</span><span class="n">impact</span><span class="si">:</span><span class="s2">+.1f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">quick_calculate</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">crr</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="s2">&quot;/data/exposures&quot;</span><span class="p">,</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="n">framework</span><span class="o">=</span><span class="s2">&quot;CRR&quot;</span><span class="p">,</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">),</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">irb_approach</span><span class="o">=</span><span class="s2">&quot;full_irb&quot;</span><span class="p">,</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="p">)</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="n">b31</span> <span class="o">=</span> <span class="n">quick_calculate</span><span class="p">(</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>    <span class="s2">&quot;/data/exposures&quot;</span><span class="p">,</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>    <span class="n">framework</span><span class="o">=</span><span class="s2">&quot;BASEL_3_1&quot;</span><span class="p">,</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>    <span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2027</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>    <span class="n">irb_approach</span><span class="o">=</span><span class="s2">&quot;full_irb&quot;</span><span class="p">,</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="p">)</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="k">if</span> <span class="n">crr</span><span class="o">.</span><span class="n">success</span> <span class="ow">and</span> <span class="n">b31</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>    <span class="n">delta</span> <span class="o">=</span> <span class="n">b31</span><span class="o">.</span><span class="n">summary</span><span class="o">.</span><span class="n">total_rwa</span> <span class="o">-</span> <span class="n">crr</span><span class="o">.</span><span class="n">summary</span><span class="o">.</span><span class="n">total_rwa</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CRR RWA:       </span><span class="si">{</span><span class="n">crr</span><span class="o">.</span><span class="n">summary</span><span class="o">.</span><span class="n">total_rwa</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Basel 3.1 RWA: </span><span class="si">{</span><span class="n">b31</span><span class="o">.</span><span class="n">summary</span><span class="o">.</span><span class="n">total_rwa</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Impact:        </span><span class="si">{</span><span class="n">delta</span><span class="si">:</span><span class="s2">+,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Check for errors</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">has_errors</span><span class="p">:</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Calculation completed with errors:&quot;</span><span class="p">)</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">exposure_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># Check for warnings</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">has_warnings</span><span class="p">:</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warnings:&quot;</span><span class="p">)</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="k">for</span> <span class="n">warning</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">warnings</span><span class="p">:</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">warning</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span></code></pre></div>
-<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../configuration/">Configuration API</a></li>
-<li><a href="../contracts/">Contracts API</a></li>
-<li><a href="../../architecture/pipeline/">Architecture - Pipeline</a></li>
-</ul>
 
 
 

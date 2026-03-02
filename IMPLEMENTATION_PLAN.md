@@ -3,9 +3,11 @@
 Full audit of `docs/` vs `src/rwa_calc/` completed 2026-03-02. This plan covers all
 discrepancies, outdated content, and missing documentation.
 
-> **2026-03-02 update:** Priorities 1.1, 1.2, 1.3, and 1.6 completed. All bundle definitions,
+> **2026-03-02 update:** Priorities 1.1, 1.2, 1.3, 1.4, and 1.6 completed. All bundle definitions,
 > error handling, protocols, and domain enums in `docs/api/contracts.md` and `docs/api/domain.md`
-> have been rewritten to match source code.
+> have been rewritten to match source code. Engine API docs (`docs/api/engine.md`) fully rewritten:
+> all calculator signatures, CCF, CRM, comparison module, FX converter, loader, and utilities
+> now match source.
 
 ---
 
@@ -95,31 +97,20 @@ Current docs show simplified protocol signatures. Source has many more methods p
 
 ### 1.4 Update `docs/api/engine.md` — Method signatures outdated
 
-**Source**: `src/rwa_calc/engine/`
+**Status: COMPLETED** (2026-03-02)
 
-| Component | Doc Signature | Source Signature | Issue |
-|-----------|--------------|-----------------|-------|
-| `CCFCalculator` | `get_ccf(item_type, is_unconditionally_cancellable, ...)` | `sa_ccf_expression()`, `CCFCalculator` class, `drawn_for_ead()`, `on_balance_ead()` | Completely different API |
-| `CRMProcessor` | `process(classified, config) → CRMAdjustedBundle` | `apply_crm(data, config) → LazyFrameResult`, `get_crm_adjusted_bundle(data, config) → CRMAdjustedBundle` | Wrong method name and signature |
-| `SACalculator` | `calculate(exposures: LazyFrame, config)` | `calculate(data: CRMAdjustedBundle, config)`, plus `get_sa_result_bundle()`, `calculate_unified()`, `calculate_branch()` | Wrong input type, missing methods |
-| `IRBCalculator` | (need to verify) | `calculate(data: CRMAdjustedBundle, config)`, `get_irb_result_bundle()`, `calculate_unified()`, `calculate_branch()`, `calculate_expected_loss()` | Likely same issues |
-| `SlottingCalculator` | (need to verify) | Similar pattern to SA/IRB | Likely same issues |
-| `EquityCalculator` | (need to verify) | `calculate(data, config)`, `get_equity_result_bundle()` | Likely same issues |
-| `OutputAggregator` | (need to verify) | `aggregate()`, `aggregate_with_audit()`, `apply_output_floor()` | Likely same issues |
-
-**Missing engine modules not documented:**
-- `engine/comparison.py` — `DualFrameworkRunner`, `CapitalImpactAnalyzer`, `TransitionalScheduleRunner`
-- `engine/fx_converter.py` — `FXConverter` class with `convert_exposures()`, `convert_collateral()`, etc.
-- `engine/utils.py` — `has_rows()`, `has_required_columns()`
-
-**Steps:**
-- [ ] Update CCF section with actual API (`sa_ccf_expression()`, `CCFCalculator`, helper functions)
-- [ ] Update CRM processor signatures (`apply_crm`, `get_crm_adjusted_bundle`)
-- [ ] Update SA/IRB/Slotting/Equity calculator signatures with all methods
-- [ ] Update Aggregator with `aggregate_with_audit()` and `apply_output_floor()`
-- [ ] Add `comparison.py` section (DualFrameworkRunner, CapitalImpactAnalyzer, TransitionalScheduleRunner)
-- [ ] Add `fx_converter.py` section
-- [ ] Add `utils.py` section
+All engine module documentation rewritten to match source code:
+- [x] CCF section rewritten: `CCFCalculator.apply_ccf()`, `sa_ccf_expression()`, `drawn_for_ead()`, `on_balance_ead()`, `create_ccf_calculator()`
+- [x] CRM processor: `apply_crm()`, `get_crm_adjusted_bundle()`, `get_crm_unified_bundle()`, `apply_collateral()`, `apply_guarantees()`, `resolve_provisions()`
+- [x] SA calculator: `calculate(data: CRMAdjustedBundle)`, `get_sa_result_bundle()`, `calculate_unified()`, `calculate_branch()`, `calculate_single_exposure()`
+- [x] IRB calculator: all methods including `calculate_expected_loss()` and `calculate_single_exposure()`
+- [x] Slotting calculator: all methods including maturity-band differentiation in weight table
+- [x] Equity calculator: verified and updated
+- [x] Aggregator: `aggregate()`, `aggregate_with_audit()`, `apply_output_floor()` with T2 credit cap
+- [x] Loader: updated to show `ParquetLoader.__init__(base_path, config, enforce_schemas)`, `CSVLoader`, `DataSourceConfig`, helper functions
+- [x] Added comparison module section: `DualFrameworkRunner`, `CapitalImpactAnalyzer`, `TransitionalScheduleRunner`
+- [x] Updated FX converter: signatures corrected to use `config: CalculationConfig`, added `convert_equity_exposures()`
+- [x] Added engine utilities section: `has_rows()`, `has_required_columns()`
 
 ### 1.5 Update `docs/api/configuration.md` — Missing config fields and classes
 

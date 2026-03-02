@@ -13,6 +13,7 @@ Provision treatment, expected loss calculation, and EL vs provisions comparison.
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-2.7 | Provision resolution: drawn-first deduction for SA, EL shortfall/excess for IRB | P0 | Done |
+| FR-2.8 | Portfolio-level EL summary with T2 credit cap (CRR Art. 62(d), Art. 159) | P1 | Done |
 
 ---
 
@@ -87,10 +88,21 @@ EL = PD × LGD × EAD
 
 ### EL vs Provisions Comparison
 
-- **EL > Provisions (shortfall):** The difference reduces CET1 capital
-- **EL < Provisions (excess):** The surplus may be added to Tier 2 capital (subject to caps)
+- **EL > Provisions (shortfall):** The difference is deducted 50/50 from CET1 and T2 capital (CRR Art. 159)
+- **EL < Provisions (excess):** The surplus may be added to Tier 2 capital, capped at 0.6% of IRB RWA (CRR Art. 62(d))
 
-The calculator tracks both values to support this regulatory comparison.
+### Portfolio-Level Summary (ELPortfolioSummary)
+
+The aggregator computes a portfolio-level `ELPortfolioSummary` with:
+
+| Field | Formula | Regulatory Reference |
+|-------|---------|---------------------|
+| `total_el_shortfall` | `sum(el_shortfall)` across all IRB exposures | CRR Art. 159 |
+| `total_el_excess` | `sum(el_excess)` across all IRB exposures | CRR Art. 62(d) |
+| `t2_credit_cap` | `total_irb_rwa × 0.006` | CRR Art. 62(d) |
+| `t2_credit` | `min(total_el_excess, t2_credit_cap)` | CRR Art. 62(d) |
+| `cet1_deduction` | `total_el_shortfall × 0.5` | CRR Art. 159 |
+| `t2_deduction` | `total_el_shortfall × 0.5` | CRR Art. 159 |
 
 ## Slotting Approach
 
@@ -111,4 +123,5 @@ Same as IRB: provisions are tracked but not deducted from EAD.
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-G: Provisions | G1–G3 | 7 | 100% |
+| CRR-G: Provisions | G1–G3 | 17 | 100% |
+| B31-G: Provisions | G1–G3 | 24 | 100% |

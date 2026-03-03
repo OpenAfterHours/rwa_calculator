@@ -38,13 +38,15 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
     "govt_bond_cqs2_3_1_5y": Decimal("0.03"),
     "govt_bond_cqs2_3_5y_plus": Decimal("0.06"),
-    # Corporate bonds by CQS and maturity band
-    "corp_bond_cqs1_2_0_1y": Decimal("0.01"),
-    "corp_bond_cqs1_2_1_5y": Decimal("0.04"),
-    "corp_bond_cqs1_2_5y_plus": Decimal("0.06"),
-    "corp_bond_cqs3_0_1y": Decimal("0.02"),
-    "corp_bond_cqs3_1_5y": Decimal("0.06"),
-    "corp_bond_cqs3_5y_plus": Decimal("0.08"),
+    # Corporate bonds by CQS and maturity band (CRR Art. 224 Table 1)
+    # CQS 1 (AAA to AA-) — lower haircuts
+    "corp_bond_cqs1_0_1y": Decimal("0.01"),
+    "corp_bond_cqs1_1_5y": Decimal("0.04"),
+    "corp_bond_cqs1_5y_plus": Decimal("0.08"),
+    # CQS 2-3 (A+ to BBB-) — higher haircuts
+    "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
+    "corp_bond_cqs2_3_1_5y": Decimal("0.06"),
+    "corp_bond_cqs2_3_5y_plus": Decimal("0.12"),
     # Equity
     "equity_main_index": Decimal("0.15"),
     "equity_other": Decimal("0.25"),
@@ -74,18 +76,18 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs2_3_3_5y": Decimal("0.04"),
     "govt_bond_cqs2_3_5_10y": Decimal("0.06"),
     "govt_bond_cqs2_3_10y_plus": Decimal("0.12"),
-    # Corporate bonds CQS 1-2 — significant increases for long-dated
-    "corp_bond_cqs1_2_0_1y": Decimal("0.01"),
-    "corp_bond_cqs1_2_1_3y": Decimal("0.04"),
-    "corp_bond_cqs1_2_3_5y": Decimal("0.06"),
-    "corp_bond_cqs1_2_5_10y": Decimal("0.10"),
-    "corp_bond_cqs1_2_10y_plus": Decimal("0.12"),
-    # Corporate bonds CQS 3 — significant increases for long-dated
-    "corp_bond_cqs3_0_1y": Decimal("0.02"),
-    "corp_bond_cqs3_1_3y": Decimal("0.06"),
-    "corp_bond_cqs3_3_5y": Decimal("0.08"),
-    "corp_bond_cqs3_5_10y": Decimal("0.15"),
-    "corp_bond_cqs3_10y_plus": Decimal("0.15"),
+    # Corporate bonds CQS 1 (AAA to AA-) — significant increases for long-dated
+    "corp_bond_cqs1_0_1y": Decimal("0.01"),
+    "corp_bond_cqs1_1_3y": Decimal("0.04"),
+    "corp_bond_cqs1_3_5y": Decimal("0.06"),
+    "corp_bond_cqs1_5_10y": Decimal("0.10"),
+    "corp_bond_cqs1_10y_plus": Decimal("0.12"),
+    # Corporate bonds CQS 2-3 (A+ to BBB-) — significant increases for long-dated
+    "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
+    "corp_bond_cqs2_3_1_3y": Decimal("0.06"),
+    "corp_bond_cqs2_3_3_5y": Decimal("0.08"),
+    "corp_bond_cqs2_3_5_10y": Decimal("0.15"),
+    "corp_bond_cqs2_3_10y_plus": Decimal("0.15"),
     # Equity — increased under Basel 3.1
     "equity_main_index": Decimal("0.25"),  # CRR: 15%
     "equity_other": Decimal("0.35"),  # CRR: 25%
@@ -188,7 +190,7 @@ def _create_crr_haircut_df() -> pl.DataFrame:
             "haircut": 0.06,
             "is_main_index": None,
         },
-        # Corporate bonds CQS 1-2
+        # Corporate bonds CQS 1 (AAA to AA-)
         {
             "collateral_type": "corp_bond",
             "cqs": 1,
@@ -207,31 +209,31 @@ def _create_crr_haircut_df() -> pl.DataFrame:
             "collateral_type": "corp_bond",
             "cqs": 1,
             "maturity_band": "5y_plus",
-            "haircut": 0.06,
+            "haircut": 0.08,
             "is_main_index": None,
         },
+        # Corporate bonds CQS 2-3 (A+ to BBB-)
         {
             "collateral_type": "corp_bond",
             "cqs": 2,
             "maturity_band": "0_1y",
-            "haircut": 0.01,
+            "haircut": 0.02,
             "is_main_index": None,
         },
         {
             "collateral_type": "corp_bond",
             "cqs": 2,
             "maturity_band": "1_5y",
-            "haircut": 0.04,
+            "haircut": 0.06,
             "is_main_index": None,
         },
         {
             "collateral_type": "corp_bond",
             "cqs": 2,
             "maturity_band": "5y_plus",
-            "haircut": 0.06,
+            "haircut": 0.12,
             "is_main_index": None,
         },
-        # Corporate bonds CQS 3
         {
             "collateral_type": "corp_bond",
             "cqs": 3,
@@ -250,7 +252,7 @@ def _create_crr_haircut_df() -> pl.DataFrame:
             "collateral_type": "corp_bond",
             "cqs": 3,
             "maturity_band": "5y_plus",
-            "haircut": 0.08,
+            "haircut": 0.12,
             "is_main_index": None,
         },
         # Equity
@@ -418,7 +420,7 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "haircut": 0.12,
             "is_main_index": None,
         },
-        # Corporate bonds CQS 1-2
+        # Corporate bonds CQS 1 (AAA to AA-)
         {
             "collateral_type": "corp_bond",
             "cqs": 1,
@@ -454,42 +456,42 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "haircut": 0.12,
             "is_main_index": None,
         },
+        # Corporate bonds CQS 2-3 (A+ to BBB-)
         {
             "collateral_type": "corp_bond",
             "cqs": 2,
             "maturity_band": "0_1y",
-            "haircut": 0.01,
+            "haircut": 0.02,
             "is_main_index": None,
         },
         {
             "collateral_type": "corp_bond",
             "cqs": 2,
             "maturity_band": "1_3y",
-            "haircut": 0.04,
-            "is_main_index": None,
-        },
-        {
-            "collateral_type": "corp_bond",
-            "cqs": 2,
-            "maturity_band": "3_5y",
             "haircut": 0.06,
             "is_main_index": None,
         },
         {
             "collateral_type": "corp_bond",
             "cqs": 2,
+            "maturity_band": "3_5y",
+            "haircut": 0.08,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "corp_bond",
+            "cqs": 2,
             "maturity_band": "5_10y",
-            "haircut": 0.10,
+            "haircut": 0.15,
             "is_main_index": None,
         },
         {
             "collateral_type": "corp_bond",
             "cqs": 2,
             "maturity_band": "10y_plus",
-            "haircut": 0.12,
+            "haircut": 0.15,
             "is_main_index": None,
         },
-        # Corporate bonds CQS 3
         {
             "collateral_type": "corp_bond",
             "cqs": 3,
@@ -661,15 +663,15 @@ def lookup_collateral_haircut(
 
         return table.get(key, Decimal("0.15"))
 
-    # Corporate bonds
+    # Corporate bonds (CRR Art. 224: CQS 1 alone, CQS 2-3 grouped)
     if coll_lower in ("corp_bond", "corporate_bond"):
         maturity = residual_maturity_years or 5.0
         maturity_band = get_maturity_band(maturity, is_basel_3_1=is_basel_3_1)
 
-        if cqs in (1, 2):
-            key = f"corp_bond_cqs1_2_{maturity_band}"
-        elif cqs == 3:
-            key = f"corp_bond_cqs3_{maturity_band}"
+        if cqs == 1:
+            key = f"corp_bond_cqs1_{maturity_band}"
+        elif cqs in (2, 3):
+            key = f"corp_bond_cqs2_3_{maturity_band}"
         else:
             # Lower rated - not eligible or high haircut
             return Decimal("0.20")

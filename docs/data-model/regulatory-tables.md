@@ -74,7 +74,7 @@ The UK CRR deviates from the standard EU CRR at CQS 2 (30% vs 50%).
 | Exposure Type | CRR | Basel 3.1 |
 |---------------|-----|-----------|
 | Retail Mortgage (LTV ≤ 80%) | 35% | LTV-based (see below) |
-| Retail QRRE | 75% | 45–75% |
+| Retail QRRE | 75% | 75% |
 | Retail Other | 75% | 75% |
 
 **Source**: `RETAIL_RISK_WEIGHT` in `data/tables/crr_risk_weights.py`

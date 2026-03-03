@@ -219,13 +219,13 @@ CRR_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs2_3_1_5y": Decimal("0.03"),
     "govt_bond_cqs2_3_5y_plus": Decimal("0.06"),
 
-    # Corporate bonds
-    "corp_bond_cqs1_2_0_1y": Decimal("0.01"),
-    "corp_bond_cqs1_2_1_5y": Decimal("0.04"),
-    "corp_bond_cqs1_2_5y_plus": Decimal("0.06"),
-    "corp_bond_cqs3_0_1y": Decimal("0.02"),
-    "corp_bond_cqs3_1_5y": Decimal("0.06"),
-    "corp_bond_cqs3_5y_plus": Decimal("0.08"),
+    # Corporate bonds (CRR Art. 224: CQS 1 alone, CQS 2-3 grouped)
+    "corp_bond_cqs1_0_1y": Decimal("0.01"),
+    "corp_bond_cqs1_1_5y": Decimal("0.04"),
+    "corp_bond_cqs1_5y_plus": Decimal("0.08"),
+    "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
+    "corp_bond_cqs2_3_1_5y": Decimal("0.06"),
+    "corp_bond_cqs2_3_5y_plus": Decimal("0.12"),
 
     # Equity
     "equity_main_index": Decimal("0.15"),   # Main index (e.g., FTSE 100)

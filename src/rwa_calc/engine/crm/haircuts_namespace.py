@@ -182,12 +182,12 @@ class HaircutsLazyFrame:
                 .then(pl.lit(0.03))
                 .when(is_sovereign_bond & pl.col("issuer_cqs").is_in([2, 3]))
                 .then(pl.lit(0.06))
-                # Corporate bonds CQS 1-2
+                # Corporate bonds CQS 1 (AAA to AA-) — CRR Art. 224
                 .when(
                     pl.col("collateral_type")
                     .str.to_lowercase()
                     .is_in(["corp_bond", "corporate_bond"])
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                     & (pl.col("maturity_band") == "0_1y")
                 )
                 .then(pl.lit(0.01))
@@ -195,7 +195,7 @@ class HaircutsLazyFrame:
                     pl.col("collateral_type")
                     .str.to_lowercase()
                     .is_in(["corp_bond", "corporate_bond"])
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                     & (pl.col("maturity_band") == "1_5y")
                 )
                 .then(pl.lit(0.04))
@@ -203,15 +203,15 @@ class HaircutsLazyFrame:
                     pl.col("collateral_type")
                     .str.to_lowercase()
                     .is_in(["corp_bond", "corporate_bond"])
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                 )
-                .then(pl.lit(0.06))
-                # Corporate bonds CQS 3
+                .then(pl.lit(0.08))
+                # Corporate bonds CQS 2-3 (A+ to BBB-) — CRR Art. 224
                 .when(
                     pl.col("collateral_type")
                     .str.to_lowercase()
                     .is_in(["corp_bond", "corporate_bond"])
-                    & (pl.col("issuer_cqs") == 3)
+                    & pl.col("issuer_cqs").is_in([2, 3])
                     & (pl.col("maturity_band") == "0_1y")
                 )
                 .then(pl.lit(0.02))
@@ -219,7 +219,7 @@ class HaircutsLazyFrame:
                     pl.col("collateral_type")
                     .str.to_lowercase()
                     .is_in(["corp_bond", "corporate_bond"])
-                    & (pl.col("issuer_cqs") == 3)
+                    & pl.col("issuer_cqs").is_in([2, 3])
                     & (pl.col("maturity_band") == "1_5y")
                 )
                 .then(pl.lit(0.06))
@@ -227,9 +227,9 @@ class HaircutsLazyFrame:
                     pl.col("collateral_type")
                     .str.to_lowercase()
                     .is_in(["corp_bond", "corporate_bond"])
-                    & (pl.col("issuer_cqs") == 3)
+                    & pl.col("issuer_cqs").is_in([2, 3])
                 )
-                .then(pl.lit(0.08))
+                .then(pl.lit(0.12))
                 # Equity - main index 15%, other 25%
                 .when(
                     pl.col("collateral_type")

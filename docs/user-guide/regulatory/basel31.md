@@ -159,16 +159,12 @@ Acquisition, Development and Construction exposures receive a **150%** risk weig
 
 | Type | CRR | Basel 3.1 |
 |------|-----|-----------|
-| QRRE (Transactors) | 75% | **45%** |
-| QRRE (Revolvers) | 75% | 75% |
+| QRRE | 75% | 75% |
 | Retail Other | 75% | 75% |
 
-#### Defaulted Exposures (CRE20.87-90)
+#### Defaulted Exposures
 
-| Provision Coverage | Unsecured | RE-Secured |
-|-------------------|-----------|------------|
-| < 20% provisions | 150% | 100% |
-| ≥ 20% provisions | 100% | 50% |
+Defaulted exposures receive 100% SA risk weight. Provision-coverage-based differentiation (CRE20.87-90) is not currently implemented in the SA calculator — defaulted treatment with provision coverage is handled through IRB.
 
 ### 8. Input Floors for IRB
 

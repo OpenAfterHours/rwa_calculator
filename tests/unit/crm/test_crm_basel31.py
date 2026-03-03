@@ -181,32 +181,38 @@ class TestBasel31BondHaircuts:
         assert crr == Decimal("0.06")
         assert b31 == Decimal("0.12")
 
-    def test_corp_bond_cqs1_2_long_dated_increases(self) -> None:
-        """Corporate CQS 1-2 long-dated: 3-5y 6%, 5-10y 10%, 10y+ 12%."""
+    def test_corp_bond_cqs1_long_dated_increases(self) -> None:
+        """Corporate CQS 1 long-dated: CRR 8% >5yr, B31 3-5y 6%, 5-10y 10%, 10y+ 12%."""
         # 3-5y: CRR uses 1-5y band (4%), B31 uses 3-5y band (6%)
         crr = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=False)
         b31 = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=True)
         assert crr == Decimal("0.04")
         assert b31 == Decimal("0.06")
 
-        # 5-10y: CRR uses 5y+ band (6%), B31 uses 5-10y band (10%)
-        crr = lookup_collateral_haircut("corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=True)
-        assert crr == Decimal("0.06")
+        # 5-10y: CRR uses 5y+ band (8%), B31 uses 5-10y band (10%)
+        crr = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=False)
+        b31 = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=True)
+        assert crr == Decimal("0.08")
         assert b31 == Decimal("0.10")
 
-        # 10y+: CRR uses 5y+ band (6%), B31 uses 10y+ band (12%)
+        # 10y+: CRR uses 5y+ band (8%), B31 uses 10y+ band (12%)
         crr = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=False)
         b31 = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=True)
-        assert crr == Decimal("0.06")
+        assert crr == Decimal("0.08")
         assert b31 == Decimal("0.12")
 
-    def test_corp_bond_cqs3_long_dated_increases(self) -> None:
-        """Corporate CQS 3 long-dated: 5-10y and 10y+ both 15%."""
-        # 5-10y: CRR uses 5y+ band (8%), B31 uses 5-10y band (15%)
+    def test_corp_bond_cqs2_3_long_dated_increases(self) -> None:
+        """Corporate CQS 2-3 long-dated: CRR 12% >5yr, B31 5-10y/10y+ both 15%."""
+        # CQS 2, 5-10y: CRR uses 5y+ band (12%), B31 uses 5-10y band (15%)
+        crr = lookup_collateral_haircut("corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=False)
+        b31 = lookup_collateral_haircut("corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=True)
+        assert crr == Decimal("0.12")
+        assert b31 == Decimal("0.15")
+
+        # CQS 3, 5-10y: CRR uses 5y+ band (12%), B31 uses 5-10y band (15%)
         crr = lookup_collateral_haircut("corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=False)
         b31 = lookup_collateral_haircut("corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=True)
-        assert crr == Decimal("0.08")
+        assert crr == Decimal("0.12")
         assert b31 == Decimal("0.15")
 
     def test_cash_and_gold_unchanged(self) -> None:
@@ -312,8 +318,8 @@ class TestHaircutCalculatorFrameworkBranching:
             cqs=2,
             residual_maturity_years=7.0,
         )
-        # 5-10y band: 10% under Basel 3.1 (vs 6% CRR 5y+ band)
-        assert result.collateral_haircut == Decimal("0.10")
+        # CQS 2 is in CQS 2-3 group: 5-10y band = 15% under Basel 3.1
+        assert result.collateral_haircut == Decimal("0.15")
 
     def test_apply_haircuts_uses_config_framework(self, crr_config: CalculationConfig, b31_config: CalculationConfig) -> None:
         """apply_haircuts produces different maturity bands based on config."""

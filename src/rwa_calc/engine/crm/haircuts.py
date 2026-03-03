@@ -363,85 +363,101 @@ class HaircutCalculator:
 
         if is_basel_3_1:
             return (
-                # CQS 1-2
+                # CQS 1 (AAA to AA-) — CRE22.52
                 pl.when(
                     corp_types
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                     & (pl.col("maturity_band") == "0_1y")
                 )
                 .then(pl.lit(0.01))
                 .when(
                     corp_types
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                     & (pl.col("maturity_band") == "1_3y")
                 )
                 .then(pl.lit(0.04))
                 .when(
                     corp_types
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                     & (pl.col("maturity_band") == "3_5y")
                 )
                 .then(pl.lit(0.06))
                 .when(
                     corp_types
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                     & (pl.col("maturity_band") == "5_10y")
                 )
                 .then(pl.lit(0.10))
                 .when(
                     corp_types
-                    & pl.col("issuer_cqs").is_in([1, 2])
+                    & (pl.col("issuer_cqs") == 1)
                     & (pl.col("maturity_band") == "10y_plus")
                 )
                 .then(pl.lit(0.12))
-                # CQS 3
+                # CQS 2-3 (A+ to BBB-) — CRE22.52
                 .when(
-                    corp_types & (pl.col("issuer_cqs") == 3) & (pl.col("maturity_band") == "0_1y")
+                    corp_types
+                    & pl.col("issuer_cqs").is_in([2, 3])
+                    & (pl.col("maturity_band") == "0_1y")
                 )
                 .then(pl.lit(0.02))
                 .when(
-                    corp_types & (pl.col("issuer_cqs") == 3) & (pl.col("maturity_band") == "1_3y")
+                    corp_types
+                    & pl.col("issuer_cqs").is_in([2, 3])
+                    & (pl.col("maturity_band") == "1_3y")
                 )
                 .then(pl.lit(0.06))
                 .when(
-                    corp_types & (pl.col("issuer_cqs") == 3) & (pl.col("maturity_band") == "3_5y")
+                    corp_types
+                    & pl.col("issuer_cqs").is_in([2, 3])
+                    & (pl.col("maturity_band") == "3_5y")
                 )
                 .then(pl.lit(0.08))
                 .when(
-                    corp_types & (pl.col("issuer_cqs") == 3) & (pl.col("maturity_band") == "5_10y")
+                    corp_types
+                    & pl.col("issuer_cqs").is_in([2, 3])
+                    & (pl.col("maturity_band") == "5_10y")
                 )
                 .then(pl.lit(0.15))
                 .when(
                     corp_types
-                    & (pl.col("issuer_cqs") == 3)
+                    & pl.col("issuer_cqs").is_in([2, 3])
                     & (pl.col("maturity_band") == "10y_plus")
                 )
                 .then(pl.lit(0.15))
                 .otherwise(base_expr)
             )
         return (
-            # CQS 1-2
+            # CQS 1 (AAA to AA-) — CRR Art. 224 Table 1
             pl.when(
                 corp_types
-                & pl.col("issuer_cqs").is_in([1, 2])
+                & (pl.col("issuer_cqs") == 1)
                 & (pl.col("maturity_band") == "0_1y")
             )
             .then(pl.lit(0.01))
             .when(
                 corp_types
-                & pl.col("issuer_cqs").is_in([1, 2])
+                & (pl.col("issuer_cqs") == 1)
                 & (pl.col("maturity_band") == "1_5y")
             )
             .then(pl.lit(0.04))
-            .when(corp_types & pl.col("issuer_cqs").is_in([1, 2]))
-            .then(pl.lit(0.06))
-            # CQS 3
-            .when(corp_types & (pl.col("issuer_cqs") == 3) & (pl.col("maturity_band") == "0_1y"))
-            .then(pl.lit(0.02))
-            .when(corp_types & (pl.col("issuer_cqs") == 3) & (pl.col("maturity_band") == "1_5y"))
-            .then(pl.lit(0.06))
-            .when(corp_types & (pl.col("issuer_cqs") == 3))
+            .when(corp_types & (pl.col("issuer_cqs") == 1))
             .then(pl.lit(0.08))
+            # CQS 2-3 (A+ to BBB-) — CRR Art. 224 Table 1
+            .when(
+                corp_types
+                & pl.col("issuer_cqs").is_in([2, 3])
+                & (pl.col("maturity_band") == "0_1y")
+            )
+            .then(pl.lit(0.02))
+            .when(
+                corp_types
+                & pl.col("issuer_cqs").is_in([2, 3])
+                & (pl.col("maturity_band") == "1_5y")
+            )
+            .then(pl.lit(0.06))
+            .when(corp_types & pl.col("issuer_cqs").is_in([2, 3]))
+            .then(pl.lit(0.12))
             .otherwise(base_expr)
         )
 

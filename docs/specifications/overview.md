@@ -48,11 +48,12 @@ UK credit institutions face a major regulatory transition: migrating from CRR (E
 | **Output Floor** | Basel 3.1 output floor with transitional phase-in (50%–72.5%, 2027–2032) |
 | **Multi-Currency** | FX conversion with haircut adjustments |
 | **Hierarchies** | Multi-level counterparty (10 levels, rating inheritance) and facility hierarchies |
+| **COREP Reporting** | C 07.00 (SA), C 08.01 (IRB totals), C 08.02 (IRB PD grade) templates |
 | **Interfaces** | Python API, Marimo web UI, CLI |
 
 ### Out of Scope
 
-Market Risk (FRTB), Operational Risk, CVA Risk, Securitisation, Large Exposures, Leverage Ratio, COREP (stub only), Database integration, Authentication/Multi-tenancy.
+Market Risk (FRTB), Operational Risk, CVA Risk, Securitisation, Large Exposures, Leverage Ratio, Database integration, Authentication/Multi-tenancy.
 
 ## Technology Stack
 

@@ -48,7 +48,7 @@
 | CRR-D: Credit Risk Mitigation | D1–D9 | 9 | 100% |
 | CRR-E: Specialised Lending | E1–E9 | 9 | 100% |
 | CRR-F: Supporting Factors | F1–F15 | 15 | 100% |
-| CRR-G: Provisions | G1–G17 | 17 | 100% |
+| CRR-G: Provisions | G1–G3 | 17 | 100% |
 | CRR-H: Complex/Combined | H1–H4 | 4 | 100% |
 | CRR-I: Defaulted Exposures | I1–I9 | 9 | 100% |
 | **Total** | | **97** | **100%** |

@@ -9,7 +9,7 @@ The schemas can be used to support the structure of the outputs of this module.
 Retail Risk Weights (SA) per CRE20.66-70:
     Standard Retail: 75%
     Retail Mortgage (varies by LTV): 20% - 70%
-    QRRE (Qualifying Revolving Retail Exposures): 45%
+    QRRE (Qualifying Revolving Retail Exposures): 75%
 
 Retail Classification Requirements:
     - Individual persons OR small businesses

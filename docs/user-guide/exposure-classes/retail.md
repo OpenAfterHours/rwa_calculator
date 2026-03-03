@@ -120,14 +120,7 @@ Examples:
 | Framework | Risk Weight |
 |-----------|-------------|
 | CRR | **75%** |
-| Basel 3.1 | **45-75%** (depends on transactor/revolver status) |
-
-**Basel 3.1 Transactor/Revolver:**
-
-| Type | Definition | Risk Weight |
-|------|------------|-------------|
-| Transactor | Pays full balance monthly | 45% |
-| Revolver | Carries balance | 75% |
+| Basel 3.1 | **75%** |
 
 ### IRB Treatment
 

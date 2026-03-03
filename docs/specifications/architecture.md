@@ -37,6 +37,7 @@ Input Data (Parquet/CSV/DataFrames)
                       │
            ┌──────────┼──────────┐
            ▼          ▼          ▼
+  Stage 5: Calculators (branch by approach)
 ┌────────────┐ ┌───────────┐ ┌──────────┐
 │ SA Calc    │ │ IRB Calc  │ │ Slotting │
 │            │ │ (F/A-IRB) │ │ Calc     │

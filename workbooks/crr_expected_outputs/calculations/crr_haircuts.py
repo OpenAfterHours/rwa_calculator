@@ -70,20 +70,20 @@ def get_collateral_haircut(
     # Corporate bonds
     if collateral_lower in ("corp_bond", "corporate_bond"):
         maturity = residual_maturity_years or 5.0
-        if cqs in (1, 2):
+        if cqs == 1:
             if maturity <= 1:
-                return CRR_HAIRCUTS["corp_bond_cqs1_2_0_1y"]
+                return CRR_HAIRCUTS["corp_bond_cqs1_0_1y"]
             elif maturity <= 5:
-                return CRR_HAIRCUTS["corp_bond_cqs1_2_1_5y"]
+                return CRR_HAIRCUTS["corp_bond_cqs1_1_5y"]
             else:
-                return CRR_HAIRCUTS["corp_bond_cqs1_2_5y_plus"]
-        elif cqs == 3:
+                return CRR_HAIRCUTS["corp_bond_cqs1_5y_plus"]
+        elif cqs in (2, 3):
             if maturity <= 1:
-                return CRR_HAIRCUTS["corp_bond_cqs3_0_1y"]
+                return CRR_HAIRCUTS["corp_bond_cqs2_3_0_1y"]
             elif maturity <= 5:
-                return CRR_HAIRCUTS["corp_bond_cqs3_1_5y"]
+                return CRR_HAIRCUTS["corp_bond_cqs2_3_1_5y"]
             else:
-                return CRR_HAIRCUTS["corp_bond_cqs3_5y_plus"]
+                return CRR_HAIRCUTS["corp_bond_cqs2_3_5y_plus"]
         # Lower rated - not eligible or high haircut
         return Decimal("0.20")
 

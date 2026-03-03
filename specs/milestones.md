@@ -4,7 +4,7 @@
 
 | Milestone | Description | Status |
 |-----------|-------------|--------|
-| M1.1 | All CRR acceptance tests passing (91/91) | Done |
+| M1.1 | All CRR acceptance tests passing (97/97) | Done |
 | M1.2 | Performance benchmarks documented | Done |
 | M1.3 | Full MkDocs documentation site | Done |
 | M1.4 | PyPI package published | Done (v0.1.28) |
@@ -20,7 +20,7 @@
 | M2.2 | LTV-based residential RE risk weights (CRE20.71) | Done |
 | M2.3 | Differentiated PD floors by exposure class | Done |
 | M2.4 | A-IRB LGD floors (CRE32) | Done |
-| M2.5 | Basel 3.1 acceptance tests (112 tests) | Done |
+| M2.5 | Basel 3.1 acceptance tests (116 tests) | Done |
 | M2.6 | Output floor phase-in validation (6 tests) | Done |
 
 ## v1.2 — Dual-Framework Comparison (Target: Q3 2026)

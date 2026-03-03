@@ -46,6 +46,8 @@ This page documents the authoritative schemas for all input data files required 
 | `sector_code` | `String` | No | Industry sector code (SIC-based) |
 | `is_regulated` | `Boolean` | No | Prudentially regulated (affects FI scalar - CRR Art. 153(2)) |
 | `is_managed_as_retail` | `Boolean` | No | SME managed on pooled retail basis (75% RW per CRR Art. 123) |
+| `scra_grade` | `String` | No | SCRA grade for unrated institutions: `"A"`, `"B"`, `"C"` (Basel 3.1 CRE20.16-21) |
+| `is_investment_grade` | `Boolean` | No | Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47) |
 
 ### Entity Type: The Single Source of Truth
 
@@ -165,6 +167,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `is_revolving` | `Boolean` | Yes | Revolving vs term facility |
+| `is_qrre_transactor` | `Boolean` | No | QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period |
 | `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
 | `risk_type` | `String` | Yes | Off-balance sheet risk category (see below) |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
@@ -276,11 +279,11 @@ loans = pl.DataFrame({
     "maturity_date": [date(2029, 1, 15), date(2029, 1, 15), date(2028, 6, 1)],
     "currency": ["GBP", "GBP", "GBP"],
     "drawn_amount": [2_000_000.0, 1_500_000.0, 5_000_000.0],
+    "interest": [10_000.0, 7_500.0, 25_000.0],  # Accrued interest
     "lgd": [None, None, None],
     "beel": [None, None, None],
     "seniority": ["senior", "senior", "senior"],
-    "risk_type": ["FR", "FR", "FR"],  # Full risk for drawn loans
-    "ccf_modelled": [None, None, None],  # N/A for drawn amounts
+    "is_buy_to_let": [False, False, False],
 })
 ```
 
@@ -295,7 +298,6 @@ loans = pl.DataFrame({
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `contingent_reference` | `String` | Yes | Unique identifier |
-| `contract_type` | `String` | Yes | Type of contingent contract |
 | `product_type` | `String` | Yes | Product classification |
 | `book_code` | `String` | Yes | Portfolio/book classification |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
@@ -305,22 +307,11 @@ loans = pl.DataFrame({
 | `nominal_amount` | `Float64` | Yes | Notional/nominal amount |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `beel` | `Float64` | No | Best estimate expected loss |
-| `ccf_category` | `String` | Yes | Category for CCF lookup (legacy, see `risk_type`) |
 | `seniority` | `String` | Yes | `senior` or `subordinated` |
 | `risk_type` | `String` | Yes | Off-balance sheet risk category (see Facility schema) |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
-
-**Valid `ccf_category` values (legacy):**
-
-| Category | SA CCF | Description |
-|----------|--------|-------------|
-| `full_risk` | 100% | Direct credit substitutes |
-| `medium_risk` | 50% | Transaction-related contingencies |
-| `medium_low_risk` | 20% | Short-term self-liquidating trade |
-| `low_risk` | 0%/10% | Unconditionally cancellable |
-
-**Note:** The `risk_type` column is the primary source for CCF determination. The `ccf_category` column is retained for backwards compatibility but `risk_type` takes precedence when both are present.
+| `bs_type` | `String` | No | `"ONB"` (on-balance-sheet / drawn) or `"OFB"` (off-balance-sheet / undrawn). Default: `"OFB"` |
 
 **Example:**
 
@@ -330,7 +321,6 @@ import polars as pl
 
 contingents = pl.DataFrame({
     "contingent_reference": ["CONT_001", "CONT_002", "CONT_003"],
-    "contract_type": ["standby_lc", "performance_guarantee", "documentary_lc"],
     "product_type": ["trade_finance", "guarantee", "import_lc"],
     "book_code": ["TRADE", "GUARANTEE", "TRADE"],
     "counterparty_reference": ["CORP_001", "CORP_002", "CORP_003"],
@@ -340,11 +330,11 @@ contingents = pl.DataFrame({
     "nominal_amount": [500_000.0, 1_000_000.0, 250_000.0],
     "lgd": [None, None, None],
     "beel": [None, None, None],
-    "ccf_category": ["full_risk", "medium_risk", "medium_low_risk"],
     "seniority": ["senior", "senior", "senior"],
     "risk_type": ["FR", "MR", "MLR"],  # FR=100%, MR=50%/75%, MLR=20%/75%
     "ccf_modelled": [None, None, None],  # No modelled CCF
     "is_short_term_trade_lc": [False, False, True],  # Third is Art. 166(9) exception
+    "bs_type": ["OFB", "OFB", "OFB"],  # Off-balance sheet (default)
 })
 ```
 
@@ -673,6 +663,7 @@ fx_rates = pl.DataFrame({
 | `object_finance` | Object finance (OF) |
 | `commodities_finance` | Commodities finance (CF) |
 | `ipre` | Income-producing real estate |
+| `hvcre` | High-volatility commercial real estate |
 
 **Valid `slotting_category` values:**
 
@@ -707,11 +698,16 @@ fx_rates = pl.DataFrame({
 
 | Value | Risk Weight | Description |
 |-------|-------------|-------------|
+| `central_bank` | 100% | Central bank equity holdings |
 | `listed` | 100% | Exchange-traded equities |
+| `exchange_traded` | 100% | Listed on recognised exchange |
+| `government_supported` | 100% | Government-supported programme |
 | `unlisted` | 250% | Unlisted equities |
 | `private_equity` | 250% | Private equity investments |
+| `private_equity_diversified` | 190% | Diversified private equity portfolio |
 | `speculative` | 400% | Speculative unlisted |
 | `ciu` | Look-through | Collective investment undertakings |
+| `other` | 250% | Other equity exposures |
 
 ---
 

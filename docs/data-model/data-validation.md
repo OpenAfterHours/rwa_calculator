@@ -1,72 +1,81 @@
 # Data Validation Guide
 
-This guide explains how data validation works in the RWA calculator, common validation errors, and how to troubleshoot data issues.
+This guide explains how data validation works in the RWA calculator, the complete set of
+validation functions, and how to troubleshoot data issues.
+
+> **Source of truth**: All validation utilities are in `src/rwa_calc/contracts/validation.py`.
+> Valid value constraints are defined in `COLUMN_VALUE_CONSTRAINTS` in `src/rwa_calc/data/schemas.py`.
 
 ## Overview
 
 The RWA calculator validates input data at multiple stages:
 
-1. **Load-time validation** - Schema checks when data is loaded
-2. **Pipeline boundary validation** - Checks at each processing stage
-3. **Business rule validation** - Domain-specific constraints (PD/LGD ranges, etc.)
+1. **Load-time validation** — Schema checks when data is loaded
+2. **Pipeline boundary validation** — Checks at each processing stage
+3. **Business rule validation** — Domain-specific constraints (PD/LGD ranges, risk type codes)
+4. **Column value validation** — Categorical values against allowed sets
 
-Validation is performed **without materialising data** where possible, using Polars LazyFrame schema inspection for efficiency.
+Validation is performed **without materialising data** where possible, using Polars LazyFrame
+schema inspection for efficiency. Only column value validation requires `.collect()`.
 
 ---
 
-## Validation Functions
+## Schema Validation Functions
 
-The validation utilities are in `src/rwa_calc/contracts/validation.py`.
+### `validate_schema()`
 
-### Schema Validation
-
-Validates that a LazyFrame has the expected columns and types:
+Validates a LazyFrame's schema against an expected schema dictionary without materialising data.
 
 ```python
 from rwa_calc.contracts.validation import validate_schema
 from rwa_calc.data.schemas import FACILITY_SCHEMA
 import polars as pl
 
-# Load your data
 facilities = pl.scan_parquet("data/exposures/facilities.parquet")
 
-# Validate against expected schema
 errors = validate_schema(
     lf=facilities,
     expected_schema=FACILITY_SCHEMA,
     context="facilities",
-    strict=False  # Set True to flag unexpected columns
+    strict=False  # Set True to flag unexpected extra columns
 )
 
 if errors:
-    print("Validation errors found:")
     for error in errors:
         print(f"  - {error}")
-else:
-    print("Schema validation passed")
 ```
 
-### Required Columns Check
+**Parameters:**
 
-Validates that specific columns are present (without type checking):
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `lf` | `pl.LazyFrame` | LazyFrame to validate |
+| `expected_schema` | `dict[str, pl.DataType]` | Expected column names and types |
+| `context` | `str` | Label for error messages (e.g., `"facilities"`) |
+| `strict` | `bool` | If `True`, flags unexpected extra columns |
+
+**Returns:** `list[str]` — plain string error messages (empty if valid).
+
+### `validate_required_columns()`
+
+Checks that specific columns are present (without type checking).
 
 ```python
 from rwa_calc.contracts.validation import validate_required_columns
 
-required = ["counterparty_reference", "entity_type", "country_code"]
 missing = validate_required_columns(
     lf=counterparties,
-    required_columns=required,
+    required_columns=["counterparty_reference", "entity_type", "country_code"],
     context="counterparties"
 )
-
-if missing:
-    print("Missing columns:", missing)
 ```
 
-### Structured Error Objects
+**Returns:** `list[str]` — missing-column error messages.
 
-For integration with the pipeline, use error objects:
+### `validate_schema_to_errors()`
+
+Same logic as `validate_schema()` but returns structured `CalculationError` objects for
+integration with the pipeline error accumulation pattern.
 
 ```python
 from rwa_calc.contracts.validation import validate_schema_to_errors
@@ -79,289 +88,266 @@ errors = validate_schema_to_errors(
 )
 
 for error in errors:
-    print(f"Code: {error.code}")
-    print(f"Message: {error.message}")
-    print(f"Field: {error.field_name}")
-    print(f"Expected: {error.expected_value}")
-    print(f"Actual: {error.actual_value}")
+    print(f"Code: {error.code}, Field: {error.field_name}")
+    print(f"Expected: {error.expected_value}, Actual: {error.actual_value}")
 ```
+
+**Returns:** `list[CalculationError]` — with category `SCHEMA_VALIDATION`, severity `ERROR`.
 
 ---
 
-## Error Types
+## Bundle Validation Functions
 
-### Schema Errors
+These functions validate entire pipeline bundles at stage boundaries, checking that
+expected columns exist after each transformation.
 
-| Error Code | Description | Example |
-|------------|-------------|---------|
-| `MISSING_FIELD` | Required column not present | `Missing column 'counterparty_reference'` |
-| `TYPE_MISMATCH` | Column has wrong data type | `Type mismatch for 'limit': expected Float64, got String` |
+### `validate_raw_data_bundle()`
 
-### Business Rule Errors
-
-| Error Code | Description | Example |
-|------------|-------------|---------|
-| `INVALID_VALUE` | Value outside valid range | `PD value 1.5 exceeds maximum 1.0` |
-| `INVALID_REFERENCE` | Foreign key not found | `counterparty_reference 'CORP_999' not found` |
-| `DUPLICATE_KEY` | Duplicate primary key | `Duplicate facility_reference: 'FAC_001'` |
-
----
-
-## Common Validation Issues
-
-### 1. Missing Column
-
-**Error:**
-```
-[facilities] Missing column: 'risk_type' (expected type: String)
-```
-
-**Cause:** The input file is missing a required column.
-
-**Fix:** Add the missing column to your data:
+Validates all LazyFrames in a `RawDataBundle` against expected schemas.
 
 ```python
-import polars as pl
+from rwa_calc.contracts.validation import validate_raw_data_bundle
 
-# Add missing column with default value
-facilities = facilities.with_columns(
-    pl.lit("MR").alias("risk_type")  # MR = medium risk (50% SA, 75% F-IRB)
-)
+errors = validate_raw_data_bundle(bundle, schemas)
 ```
 
----
+Validates up to 11 named frames: `facilities`, `loans`, `contingents`, `counterparties`,
+`collateral`, `guarantees`, `provisions`, `ratings`, `facility_mappings`, `org_mappings`,
+`lending_mappings`.
 
-### 2. Type Mismatch
+**Returns:** `list[CalculationError]`
 
-**Error:**
-```
-[loans] Type mismatch for 'drawn_amount': expected Float64, got String
-```
+### `validate_resolved_hierarchy_bundle()`
 
-**Cause:** The column contains string values instead of numbers (common with CSV imports).
-
-**Fix:** Cast the column to the correct type:
+Validates that hierarchy columns exist in a `ResolvedHierarchyBundle.exposures` LazyFrame.
 
 ```python
-import polars as pl
+from rwa_calc.contracts.validation import validate_resolved_hierarchy_bundle
 
-loans = loans.with_columns(
-    pl.col("drawn_amount").cast(pl.Float64)
-)
+hierarchy_columns = [
+    "counterparty_has_parent", "parent_counterparty_reference",
+    "ultimate_parent_reference", "counterparty_hierarchy_depth",
+    "rating_inherited", "rating_source_counterparty",
+]
+
+errors = validate_resolved_hierarchy_bundle(bundle, hierarchy_columns)
 ```
 
----
+**Parameters:**
 
-### 3. Column Name Case Mismatch
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `bundle` | `ResolvedHierarchyBundle` | Bundle to validate |
+| `expected_columns` | `list[str]` | Hierarchy columns to check for |
 
-**Error:**
-```
-[counterparties] Missing column: 'counterparty_reference' (expected type: String)
-```
+**Returns:** `list[CalculationError]`
 
-**Cause:** Column names are case-sensitive. `Counterparty_Reference` is not the same as `counterparty_reference`.
+### `validate_classified_bundle()`
 
-**Fix:** Rename columns to match expected names:
+Validates classification columns across `all_exposures`, `sa_exposures`, and
+`irb_exposures` in a `ClassifiedExposuresBundle`.
 
 ```python
-import polars as pl
+from rwa_calc.contracts.validation import validate_classified_bundle
 
-counterparties = counterparties.rename({
-    "Counterparty_Reference": "counterparty_reference",
-    "Country_Code": "country_code",
-})
+classification_columns = [
+    "exposure_class", "approach_applied", "cqs", "pd", "is_sme",
+]
+
+errors = validate_classified_bundle(bundle, classification_columns)
 ```
 
----
+**Returns:** `list[CalculationError]`
 
-### 4. Date Format Issues
+### `validate_crm_adjusted_bundle()`
 
-**Error:**
-```
-[facilities] Type mismatch for 'maturity_date': expected Date, got String
-```
-
-**Cause:** Dates are stored as strings instead of proper date types.
-
-**Fix:** Parse dates from strings:
+Validates CRM-related columns across `exposures`, `sa_exposures`, and `irb_exposures`
+in a `CRMAdjustedBundle`.
 
 ```python
-import polars as pl
+from rwa_calc.contracts.validation import validate_crm_adjusted_bundle
 
-facilities = facilities.with_columns(
-    pl.col("maturity_date").str.strptime(pl.Date, "%Y-%m-%d")
-)
+crm_columns = [
+    "ccf_applied", "gross_ead", "final_ead",
+    "collateral_adjusted_value", "ead_after_collateral",
+]
 
-# For different formats:
-# "%d/%m/%Y" for 31/12/2024
-# "%m/%d/%Y" for 12/31/2024
+errors = validate_crm_adjusted_bundle(bundle, crm_columns)
 ```
 
----
-
-### 5. Invalid PD/LGD Values
-
-**Error:**
-```
-PD value -0.01 is below minimum 0.0
-LGD value 1.5 exceeds maximum 1.25
-```
-
-**Cause:** Risk parameters are outside valid ranges.
-
-**Fix:** Clip or filter invalid values:
-
-```python
-import polars as pl
-
-# Clip PD to valid range [0, 1]
-data = data.with_columns(
-    pl.col("pd").clip(0.0, 1.0)
-)
-
-# Or filter out invalid rows
-valid_data = data.filter(
-    (pl.col("pd") >= 0.0) & (pl.col("pd") <= 1.0)
-)
-```
-
----
-
-### 6. Missing Reference (Foreign Key)
-
-**Error:**
-```
-counterparty_reference 'CORP_999' in loans not found in counterparties
-```
-
-**Cause:** A loan references a counterparty that doesn't exist.
-
-**Fix:** Either add the missing counterparty or filter orphan records:
-
-```python
-import polars as pl
-
-# Get valid counterparty references
-valid_refs = counterparties.select("counterparty_reference").collect()
-
-# Filter loans to only valid references
-loans = loans.filter(
-    pl.col("counterparty_reference").is_in(valid_refs["counterparty_reference"])
-)
-```
-
----
-
-### 7. Negative Amounts
-
-**Error:**
-```
-Invalid value: drawn_amount cannot be negative
-```
-
-**Cause:** Amount columns contain negative values.
-
-**Fix:** Take absolute value or filter:
-
-```python
-import polars as pl
-
-# Take absolute value
-loans = loans.with_columns(
-    pl.col("drawn_amount").abs()
-)
-
-# Or filter
-loans = loans.filter(pl.col("drawn_amount") >= 0)
-```
+**Returns:** `list[CalculationError]`
 
 ---
 
 ## Business Rule Validators
 
-The calculator includes validators for domain-specific rules:
+These functions add boolean validation flag columns to LazyFrames without materialising data.
+The flag columns follow the naming convention `_valid_{column_name}`.
 
-### Non-Negative Amounts
+### `validate_non_negative_amounts()`
+
+Adds validation flag columns for non-negative amount checks.
 
 ```python
 from rwa_calc.contracts.validation import validate_non_negative_amounts
 
-# Returns LazyFrame with validation flag columns
 validated = validate_non_negative_amounts(
     lf=loans,
     amount_columns=["drawn_amount", "limit"],
     context="loans"
 )
-
-# Check validation results
-result = validated.select([
-    "_valid_drawn_amount",
-    "_valid_limit"
-]).collect()
+# Adds _valid_drawn_amount and _valid_limit boolean columns
 ```
 
-### PD Range Validation
+**Returns:** `pl.LazyFrame` — with added `_valid_{col}` flag columns.
+
+### `validate_pd_range()`
+
+Validates that PD values are in [0, 1].
 
 ```python
 from rwa_calc.contracts.validation import validate_pd_range
 
-validated = validate_pd_range(
-    lf=ratings,
-    pd_column="pd",
-    min_pd=0.0,
-    max_pd=1.0
-)
-
-# Filter to only valid PDs
+validated = validate_pd_range(lf=ratings, pd_column="pd", min_pd=0.0, max_pd=1.0)
 valid_ratings = validated.filter(pl.col("_valid_pd"))
 ```
 
-### LGD Range Validation
+**Returns:** `pl.LazyFrame` — with `_valid_pd` column.
+
+### `validate_lgd_range()`
+
+Validates that LGD values are in [0, 1.25]. The upper bound exceeds 1.0 because LGD
+can legitimately exceed 100% in certain Basel scenarios.
 
 ```python
 from rwa_calc.contracts.validation import validate_lgd_range
 
-validated = validate_lgd_range(
-    lf=exposures,
-    lgd_column="lgd",
-    min_lgd=0.0,
-    max_lgd=1.25  # Can exceed 1.0 in some cases
-)
+validated = validate_lgd_range(lf=exposures, lgd_column="lgd", min_lgd=0.0, max_lgd=1.25)
 ```
+
+**Returns:** `pl.LazyFrame` — with `_valid_lgd` column.
+
+### `validate_risk_type()`
+
+Validates that risk type values are one of the recognised codes (`FR`, `MR`, `MLR`, `LR`)
+or full values (`full_risk`, `medium_risk`, `medium_low_risk`, `low_risk`).
+Comparison is case-insensitive.
+
+```python
+from rwa_calc.contracts.validation import validate_risk_type
+
+validated = validate_risk_type(lf=facilities, column="risk_type")
+# Adds _valid_risk_type boolean column
+```
+
+**Returns:** `pl.LazyFrame` — with `_valid_risk_type` column.
+
+### `validate_ccf_modelled()`
+
+Validates that modelled CCF values are in [0.0, 1.5]. Null values are treated as valid
+since the field is optional. The 150% cap accommodates Retail IRB CCFs that can exceed
+100% due to additional drawdown behaviour during stress.
+
+```python
+from rwa_calc.contracts.validation import validate_ccf_modelled
+
+validated = validate_ccf_modelled(lf=facilities, column="ccf_modelled")
+# Adds _valid_ccf_modelled boolean column
+```
+
+**Returns:** `pl.LazyFrame` — with `_valid_ccf_modelled` column.
+
+### `normalize_risk_type()`
+
+Normalises risk type short codes to canonical full values. First lowercases the column,
+then maps: `FR` → `full_risk`, `MR` → `medium_risk`, `MLR` → `medium_low_risk`,
+`LR` → `low_risk`. Values already in full form pass through unchanged.
+
+```python
+from rwa_calc.contracts.validation import normalize_risk_type
+
+normalized = normalize_risk_type(lf=facilities, column="risk_type")
+```
+
+**Constants used:**
+
+| Short Code | Full Value |
+|-----------|------------|
+| `fr` | `full_risk` |
+| `mr` | `medium_risk` |
+| `mlr` | `medium_low_risk` |
+| `lr` | `low_risk` |
+
+**Returns:** `pl.LazyFrame` — with normalised `risk_type` column.
 
 ---
 
-## Pre-Flight Validation
+## Column Value Validation
 
-Before running the full pipeline, validate your entire data bundle:
+These functions check actual data values against allowed sets. They are the only
+validation functions that materialise data (call `.collect()`).
+
+### `validate_column_values()`
+
+Validates that all non-null values in a column belong to a set of allowed values.
+Performs case-insensitive comparison. Groups invalid values by distinct value with counts.
 
 ```python
-from rwa_calc.contracts.validation import validate_raw_data_bundle
-from rwa_calc.data.schemas import (
-    FACILITY_SCHEMA,
-    LOAN_SCHEMA,
-    COUNTERPARTY_SCHEMA,
-    COLLATERAL_SCHEMA,
+from rwa_calc.contracts.validation import validate_column_values
+from rwa_calc.data.schemas import VALID_ENTITY_TYPES
+
+errors = validate_column_values(
+    lf=counterparties,
+    column="entity_type",
+    valid_values=VALID_ENTITY_TYPES,
+    context="counterparties"
 )
 
-# Define schemas to validate
-schemas = {
-    "facilities": FACILITY_SCHEMA,
-    "loans": LOAN_SCHEMA,
-    "counterparties": COUNTERPARTY_SCHEMA,
-    "collateral": COLLATERAL_SCHEMA,
-}
-
-# Validate entire bundle
-errors = validate_raw_data_bundle(bundle, schemas)
-
-if errors:
-    print(f"Found {len(errors)} validation errors:")
-    for error in errors:
-        print(f"  [{error.category}] {error.message}")
-else:
-    print("All data validated successfully")
+for error in errors:
+    print(f"Invalid value '{error.actual_value}' found {error.message}")
 ```
+
+**Returns:** `list[CalculationError]` — with code `ERROR_INVALID_COLUMN_VALUE`,
+severity `WARNING`, category `DATA_QUALITY`.
+
+### `validate_bundle_values()`
+
+Validates all categorical column values across an entire `RawDataBundle` in one call.
+Uses the `COLUMN_VALUE_CONSTRAINTS` registry from `data/schemas.py` by default.
+
+```python
+from rwa_calc.contracts.validation import validate_bundle_values
+
+# Using default constraints from COLUMN_VALUE_CONSTRAINTS
+errors = validate_bundle_values(bundle)
+
+# Or with custom constraints
+custom_constraints = {
+    "counterparties": {"entity_type": {"corporate", "institution"}},
+}
+errors = validate_bundle_values(bundle, constraints=custom_constraints)
+```
+
+The function validates these tables (when present in the bundle):
+
+| Table | Validated Columns |
+|-------|-------------------|
+| `facilities` | `seniority` |
+| `loans` | `seniority` |
+| `contingents` | `seniority`, `bs_type` |
+| `counterparties` | `entity_type` |
+| `collateral` | `collateral_type`, `property_type`, `issuer_type`, `valuation_type`, `beneficiary_type` |
+| `provisions` | `provision_type`, `beneficiary_type` |
+| `ratings` | `rating_type` |
+| `specialised_lending` | `sl_type`, `slotting_category` |
+| `equity_exposures` | `equity_type` |
+| `guarantees` | `beneficiary_type` |
+| `facility_mappings` | `child_type` |
+
+**Performance:** Internally uses `_validate_table_columns_batched()` which checks
+multiple columns per table in a single `.collect()` call.
+
+**Returns:** `list[CalculationError]`
 
 ---
 
@@ -384,121 +370,136 @@ This means if your file has `Int32` but the schema expects `Int64`, validation w
 The pipeline validates data at stage boundaries:
 
 ```
-Load → [Validate Raw] → Hierarchy → [Validate Resolved] → Classify → ...
+Load → [validate_raw_data_bundle] → Hierarchy → [validate_resolved_hierarchy_bundle]
+     → Classify → [validate_classified_bundle] → CRM → [validate_crm_adjusted_bundle] → ...
 ```
 
 If validation fails, the pipeline:
 
-1. **Accumulates errors** - Does not fail immediately
-2. **Continues where possible** - Processes valid records
-3. **Reports all issues** - Returns complete error list
+1. **Accumulates errors** — Does not fail immediately
+2. **Continues where possible** — Processes valid records
+3. **Reports all issues** — Returns complete error list in the result bundle
 
-Access validation results:
+---
+
+## Common Validation Issues
+
+### 1. Missing Column
+
+```
+[facilities] Missing column: 'risk_type' (expected type: String)
+```
+
+**Fix:** Add the missing column with a default value:
 
 ```python
-result = pipeline.run(config)
+facilities = facilities.with_columns(
+    pl.lit("MR").alias("risk_type")
+)
+```
 
-if result.has_errors:
-    for error in result.errors:
-        if error.category == "SCHEMA_VALIDATION":
-            print(f"Schema error: {error.message}")
-        elif error.category == "BUSINESS_RULE":
-            print(f"Business rule violation: {error.message}")
+### 2. Type Mismatch
+
+```
+[loans] Type mismatch for 'drawn_amount': expected Float64, got String
+```
+
+**Fix:** Cast the column to the correct type:
+
+```python
+loans = loans.with_columns(
+    pl.col("drawn_amount").cast(pl.Float64)
+)
+```
+
+### 3. Invalid Categorical Values
+
+```
+[counterparties] Invalid value 'CORP' for entity_type (expected one of: corporate, ...)
+```
+
+**Fix:** Map invalid values to valid ones:
+
+```python
+counterparties = counterparties.with_columns(
+    pl.col("entity_type").str.to_lowercase().replace({"corp": "corporate"})
+)
+```
+
+### 4. Date Format Issues
+
+```
+[facilities] Type mismatch for 'maturity_date': expected Date, got String
+```
+
+**Fix:** Parse dates from strings:
+
+```python
+facilities = facilities.with_columns(
+    pl.col("maturity_date").str.strptime(pl.Date, "%Y-%m-%d")
+)
+```
+
+### 5. Invalid PD/LGD Values
+
+```
+PD value -0.01 is below minimum 0.0
+LGD value 1.5 exceeds maximum 1.25
+```
+
+**Fix:** Clip values to valid ranges:
+
+```python
+data = data.with_columns(
+    pl.col("pd").clip(0.0, 1.0),
+    pl.col("lgd").clip(0.0, 1.25),
+)
 ```
 
 ---
 
 ## Debugging Tips
 
-### 1. Inspect Schema Before Validation
+### Inspect Schema Before Validation
 
 ```python
 import polars as pl
 
 lf = pl.scan_parquet("data/facilities.parquet")
 
-# View actual schema
 print("Actual schema:")
 for name, dtype in lf.collect_schema().items():
     print(f"  {name}: {dtype}")
 ```
 
-### 2. Compare Expected vs Actual
+### Compare Expected vs Actual
 
 ```python
 from rwa_calc.data.schemas import FACILITY_SCHEMA
 
-print("\nExpected schema:")
-for name, dtype in FACILITY_SCHEMA.items():
-    print(f"  {name}: {dtype}")
-
-print("\nActual schema:")
-for name, dtype in lf.collect_schema().items():
-    print(f"  {name}: {dtype}")
-
-# Find differences
 expected_cols = set(FACILITY_SCHEMA.keys())
 actual_cols = set(lf.collect_schema().names())
 
-print(f"\nMissing columns: {expected_cols - actual_cols}")
+print(f"Missing columns: {expected_cols - actual_cols}")
 print(f"Extra columns: {actual_cols - expected_cols}")
 ```
 
-### 3. Sample Invalid Rows
+### Check Value Distributions
 
 ```python
-import polars as pl
-
-# Find rows with negative amounts
-invalid = loans.filter(pl.col("drawn_amount") < 0).collect()
-print(f"Found {len(invalid)} rows with negative drawn_amount")
-print(invalid.head())
-
-# Find rows with null required fields
-null_refs = loans.filter(pl.col("counterparty_reference").is_null()).collect()
-print(f"Found {len(null_refs)} rows with null counterparty_reference")
-```
-
-### 4. Check Value Distributions
-
-```python
-import polars as pl
-
-# Check PD distribution
 pd_stats = ratings.select([
-    pl.col("pd").min().alias("min_pd"),
-    pl.col("pd").max().alias("max_pd"),
-    pl.col("pd").mean().alias("mean_pd"),
-    pl.col("pd").null_count().alias("null_count"),
+    pl.col("pd").min().alias("min"),
+    pl.col("pd").max().alias("max"),
+    pl.col("pd").mean().alias("mean"),
+    pl.col("pd").null_count().alias("nulls"),
 ]).collect()
-
 print(pd_stats)
 ```
 
 ---
 
-## Strict Mode
-
-For production use, enable strict validation to catch unexpected columns:
-
-```python
-errors = validate_schema(
-    lf=facilities,
-    expected_schema=FACILITY_SCHEMA,
-    context="facilities",
-    strict=True  # Flag unexpected columns
-)
-```
-
-Unexpected columns might indicate:
-- Data from a different version
-- Leftover columns from transformations
-- Incorrectly named columns
-
----
-
 ## Next Steps
 
-- [Input Schemas](input-schemas.md) - Complete schema definitions
-- [Data Flow](../architecture/data-flow.md) - How data moves through pipeline
-- [Error Handling](../api/contracts.md#error-handling) - Error types and handling
+- [Input Schemas](input-schemas.md) — Complete schema definitions
+- [Data Flow](../architecture/data-flow.md) — How data moves through pipeline
+- [Error Handling](../api/contracts.md#error-handling) — Error types and handling

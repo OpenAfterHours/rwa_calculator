@@ -76,7 +76,7 @@ Exposures to banks and investment firms:
 *UK deviation from standard 50% Basel weight
 
 **Unrated Institutions:**
-- CRR: Apply due diligence assessment
+- CRR: 40% risk weight (with due diligence assessment)
 - Basel 3.1: Use Standardised Credit Risk Assessment (SCRA)
 
 ### Corporate Exposures
@@ -87,7 +87,7 @@ Exposures to non-financial corporates:
 |-----|-----|-----------|
 | CQS 1 | 20% | 20% |
 | CQS 2 | 50% | 50% |
-| CQS 3 | 75% | 75% |
+| CQS 3 | 100% | 75% |
 | CQS 4 | 100% | 100% |
 | CQS 5 | 150% | 100% |
 | CQS 6 | 150% | 150% |
@@ -104,26 +104,26 @@ Exposures to non-financial corporates:
 | Criterion | Risk Weight |
 |-----------|-------------|
 | LTV ≤ 80%, performing | 35% |
-| LTV > 80% or other | 75% |
+| LTV > 80% | Split treatment: 35% on portion up to 80% LTV, 75% on excess |
 
 **Residential Mortgages (Basel 3.1):**
 
-| LTV | Whole Loan | Income-Producing |
-|-----|------------|------------------|
+| LTV | General (Whole Loan) | Income-Producing |
+|-----|----------------------|------------------|
 | ≤ 50% | 20% | 30% |
 | 50-60% | 25% | 35% |
-| 60-70% | 30% | 45% |
-| 70-80% | 40% | 60% |
-| 80-90% | 50% | 75% |
-| 90-100% | 70% | 105% |
-| > 100% | Cpty RW | Cpty RW |
+| 60-70% | 25% | 45% |
+| 70-80% | 30% | 50% |
+| 80-90% | 40% | 60% |
+| 90-100% | 50% | 75% |
+| > 100% | 70% | 105% |
 
 **QRRE (Qualifying Revolving Retail Exposures):**
 
 | Framework | Risk Weight |
 |-----------|-------------|
 | CRR | 75% |
-| Basel 3.1 | 45-75% (depends on transactor status) |
+| Basel 3.1 | 75% |
 
 **Other Retail:**
 
@@ -134,29 +134,27 @@ Exposures to non-financial corporates:
 
 ### Defaulted Exposures
 
-Exposures where the counterparty is in default:
-
-| Provision Coverage | CRR | Basel 3.1 |
-|--------------------|-----|-----------|
-| < 20% | 150% | 150% |
-| 20-50% | 100% | 100% |
-| ≥ 50% | 100% | 50-100% |
+Exposures where the counterparty is in default receive 100% risk weight under SA. Defaulted treatment with provision-coverage differentiation is handled through the IRB approach (see [IRB Approach](irb-approach.md)).
 
 ### Equity Exposures
 
-| Type | CRR | Basel 3.1 |
-|------|-----|-----------|
-| Exchange-traded | 100% | 100% |
-| Other equity | 150% | 250% |
-| Private equity | 150% | 400% |
+| Type | SA Risk Weight |
+|------|---------------|
+| Central bank | 0% |
+| Listed / Exchange-traded / Government-supported | 100% |
+| Unlisted / Private equity / CIU / Other | 250% |
+| Speculative | 400% |
 
 ### Commercial Real Estate
 
 | Scenario | CRR | Basel 3.1 |
 |----------|-----|-----------|
 | Standard | 100% | 100% |
-| Income-Producing (LTV ≤ 60%) | 100% | 70% |
-| Income-Producing (LTV > 60%) | 100% | 110% |
+| CRR preferential (LTV ≤ 50%, income cover) | 50% | N/A |
+| Income-Producing (LTV ≤ 60%) | N/A | 70% |
+| Income-Producing (60-80%) | N/A | 90% |
+| Income-Producing (LTV > 80%) | N/A | 110% |
+| General (LTV ≤ 60%) | N/A | min(60%, Cpty RW) |
 
 ## EAD Calculation
 
@@ -265,7 +263,7 @@ Reduces RWA for SME exposures (CRR Art. 501):
 ```python
 # Check eligibility
 if turnover <= EUR_50m and is_sme:
-    threshold = EUR_2.5m  # GBP 2.2m
+    threshold = EUR_2.5m  # ~GBP 2.18m (converted via eur_gbp_rate)
 
     if exposure <= threshold:
         factor = 0.7619
@@ -310,13 +308,13 @@ Base_RWA = £10,000,000 × 50% = £5,000,000
 
 # Step 4: SME Factor (CRR only)
 # Exposure > threshold, so tiered
-threshold = £2,200,000
-factor = (2,200,000 × 0.7619 + 7,800,000 × 0.85) / 10,000,000
-factor = (1,676,180 + 6,630,000) / 10,000,000
+threshold = EUR 2,500,000 × 0.8732 = £2,183,000
+factor = (2,183,000 × 0.7619 + 7,817,000 × 0.85) / 10,000,000
+factor = (1,663,427 + 6,644,450) / 10,000,000
 factor = 0.831
 
 # Step 5: Final RWA (CRR)
-Final_RWA = £5,000,000 × 0.831 = £4,153,090
+Final_RWA = £5,000,000 × 0.831 = £4,153,939
 
 # Basel 3.1 (no SME factor)
 Final_RWA_B31 = £5,000,000
@@ -360,12 +358,15 @@ print(f"Supporting Factor: {result['supporting_factor_applied']}")
 
 ### Risk Weight Lookup
 
-Risk weights are defined in [`data/tables/crr_risk_weights.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/crr_risk_weights.py).
+Risk weights are defined in:
+
+- **CRR**: `data/tables/crr_risk_weights.py` — `get_combined_cqs_risk_weights(use_uk_deviation=True)`
+- **Basel 3.1**: `data/tables/b31_risk_weights.py` — `get_b31_combined_cqs_risk_weights()`
 
 ```python
 from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
 
-# Get risk weight lookup table
+# Get CRR risk weight lookup table
 rw_table = get_combined_cqs_risk_weights(use_uk_deviation=True)
 
 # Table includes: exposure_class, cqs, risk_weight
@@ -373,9 +374,8 @@ rw_table = get_combined_cqs_risk_weights(use_uk_deviation=True)
 ```
 
 ??? example "Actual Risk Weight Application (calculator.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/calculator.py:153:292"
-    ```
+    See the `_apply_risk_weights` method in `src/rwa_calc/engine/sa/calculator.py` for the
+    full implementation of risk weight lookups by exposure class and CQS.
 
 ## Regulatory References
 

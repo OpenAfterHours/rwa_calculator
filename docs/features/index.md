@@ -35,6 +35,15 @@ This section provides an overview of all implemented features in the RWA calcula
 | **Input Validation** | Categorical value validation with DQ006 error codes | [Data Model](../data-model/data-validation.md) |
 | **Audit Trail** | Full calculation transparency with formatted audit strings for every approach | [API](../api/engine.md#audit-namespace) |
 
+## Reporting & Analysis Features
+
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **COREP Reporting** | C 07.00 (SA), C 07.00 RW breakdown, C 08.01 (IRB totals), C 08.02 (IRB by PD grade) | [Feature Guide](corep-reporting.md), [API](../api/reporting.md) |
+| **Dual-Framework Comparison** | Side-by-side CRR vs Basel 3.1 analysis with per-exposure delta joins | [Feature Guide](comparison.md), [API](../api/engine.md#comparison-module) |
+| **Capital Impact Analysis** | 4-driver waterfall attribution (scaling, supporting, methodology, floor) | [Feature Guide](comparison.md#capital-impact-analysis-m32), [API](../api/engine.md#comparison-module) |
+| **Transitional Floor Schedule** | Year-by-year output floor modelling from 50% (2027) to 72.5% (2032) | [Feature Guide](comparison.md#transitional-floor-schedule-m33), [API](../api/engine.md#comparison-module) |
+
 ## Dual-Framework Support
 
 The calculator supports both CRR and Basel 3.1 via a single configuration toggle:

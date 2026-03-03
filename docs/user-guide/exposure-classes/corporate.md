@@ -39,7 +39,7 @@ def is_sme(counterparty):
 |-----|-----------|---------|-----|-----------|
 | CQS 1 | AAA to AA- | Aaa to Aa3 | **20%** | 20% |
 | CQS 2 | A+ to A- | A1 to A3 | **50%** | 50% |
-| CQS 3 | BBB+ to BBB- | Baa1 to Baa3 | **75%** | 75% |
+| CQS 3 | BBB+ to BBB- | Baa1 to Baa3 | **100%** | 75% |
 | CQS 4 | BB+ to BB- | Ba1 to Ba3 | **100%** | 100% |
 | CQS 5 | B+ to B- | B1 to B3 | **150%** | **100%** |
 | CQS 6 | CCC+ and below | Caa1 and below | **150%** | 150% |

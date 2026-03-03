@@ -13,7 +13,7 @@ The SME Supporting Factor (Article 501 CRR) provides capital relief for exposure
 
 | Criterion | Requirement |
 |-----------|-------------|
-| **Counterparty** | SME (turnover ≤ EUR 50m / GBP 44m) |
+| **Counterparty** | SME (turnover ≤ EUR 50m / ~GBP 43.7m) |
 | **Exposure class** | Corporate, Retail, or Secured by Real Estate |
 | **Approach** | SA or IRB |
 | **Exposure type** | Not in default |
@@ -24,7 +24,7 @@ The SME Supporting Factor (Article 501 CRR) provides capital relief for exposure
 The factor is **tiered** based on total exposure to the counterparty:
 
 ```python
-threshold = EUR 2,500,000  # GBP 2,200,000
+threshold = EUR 2,500,000  # ~GBP 2,183,000
 
 if total_exposure <= threshold:
     factor = 0.7619  # 23.81% reduction
@@ -36,7 +36,7 @@ else:
 
 | Total Exposure | Factor | RWA Reduction |
 |----------------|--------|---------------|
-| ≤ GBP 2.2m | 0.7619 | 23.81% |
+| ≤ ~GBP 2.18m | 0.7619 | 23.81% |
 | GBP 3m | 0.789 | 21.1% |
 | GBP 5m | 0.811 | 18.9% |
 | GBP 10m | 0.831 | 16.9% |
@@ -57,7 +57,7 @@ Factor
      |    ....
 0.76 |....
      |___________________________________
-     0      2.2m   5m    10m   25m   50m  Exposure
+     0     2.18m   5m    10m   25m   50m  Exposure
 ```
 
 ### Calculation Example
@@ -69,14 +69,14 @@ Factor
 
 **SME Factor Calculation:**
 ```python
-threshold = 2,200,000
+threshold = 2,183,000  # EUR 2.5m × 0.8732
 
 # Tiered calculation
-portion_1 = 2,200,000 × 0.7619 = 1,676,180
-portion_2 = (8,000,000 - 2,200,000) × 0.85 = 4,930,000
+portion_1 = 2,183,000 × 0.7619 = 1,663,238
+portion_2 = (8,000,000 - 2,183,000) × 0.85 = 4,944,450
 
-total_weighted = 1,676,180 + 4,930,000 = 6,606,180
-factor = 6,606,180 / 8,000,000 = 0.826
+total_weighted = 1,663,238 + 4,944,450 = 6,607,688
+factor = 6,607,688 / 8,000,000 = 0.826
 
 # Apply to RWA
 Adjusted_RWA = 6,400,000 × 0.826 = £5,286,400
@@ -87,8 +87,8 @@ Adjusted_RWA = 6,400,000 × 0.826 = £5,286,400
 ### SME Definition
 
 An entity qualifies as an SME if:
-- Annual turnover ≤ EUR 50m (GBP 44m), OR
-- Total assets ≤ EUR 43m (GBP 37.84m)
+- Annual turnover ≤ EUR 50m (~GBP 43.7m), OR
+- Total assets ≤ EUR 43m (~GBP 37.6m)
 
 **Turnover Source:**
 1. Audited financial statements (preferred)
@@ -245,23 +245,22 @@ config = CalculationConfig.basel_3_1(
 
 ```python
 from rwa_calc.engine.sa.supporting_factors import (
-    calculate_sme_factor,
-    is_qualifying_infrastructure
+    SupportingFactorCalculator,
+    create_supporting_factor_calculator,
 )
+from rwa_calc.contracts.config import CalculationConfig
+from decimal import Decimal
+from datetime import date
 
-# SME factor
-sme_factor = calculate_sme_factor(
-    total_exposure=8_000_000,
-    counterparty_turnover=30_000_000,
-    eur_gbp_rate=0.8732
-)
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+calculator = create_supporting_factor_calculator()
 
-# Infrastructure check
-infra_eligible = is_qualifying_infrastructure(
-    exposure_type="PROJECT_FINANCE",
-    revenue_stability="HIGH",
-    contractual_framework="COMPREHENSIVE"
+# SME factor — uses config for EUR/GBP rate and thresholds
+sme_factor = calculator.calculate_sme_factor(
+    total_exposure=Decimal("8000000"),
+    config=config,
 )
+# Returns ~0.826 for £8m exposure (tiered calculation)
 ```
 
 ## EUR/GBP Conversion

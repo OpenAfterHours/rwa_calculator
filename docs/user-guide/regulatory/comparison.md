@@ -214,8 +214,7 @@ Under Basel 3.1, A-IRB own-estimate CCFs must be at least **50% of the SA CCF** 
 
 | Type | CRR | Basel 3.1 |
 |------|-----|-----------|
-| Retail - QRRE (Transactors) | 75% | **45%** |
-| Retail - QRRE (Revolvers) | 75% | 75% |
+| Retail - QRRE | 75% | 75% |
 | Retail - Other | 75% | 75% |
 
 ### Subordinated Debt
@@ -225,14 +224,9 @@ Under Basel 3.1, A-IRB own-estimate CCFs must be at least **50% of the SA CCF** 
 | Subordinated Debt | 100-150% | **150%** |
 | Equity-like | 150% | **250%** |
 
-### Defaulted Exposures (CRE20.87-90)
+### Defaulted Exposures
 
-| Provision Coverage | CRR | Basel 3.1 |
-|-------------------|-----|-----------|
-| < 20% provisions | 150% | 150% |
-| ≥ 20% provisions | 100% | 100% |
-| RE-secured (< 20%) | 150% | **100%** |
-| RE-secured (≥ 20%) | 100% | **50%** |
+Defaulted exposures receive 100% SA risk weight under both frameworks. Provision-coverage-based differentiation (CRE20.87-90) is not currently implemented in the SA calculator — defaulted treatment with provision coverage is handled through IRB.
 
 ## Credit Conversion Factors
 

@@ -31,7 +31,7 @@ flowchart LR
     E --> I
     F --> I
     G --> I
-    H --> J[Expected Loss]
+    H --> J[RW = 0%]
 ```
 
 ## Slotting Categories
@@ -72,41 +72,48 @@ Each exposure is assessed against supervisory criteria:
 
 ### CRR Risk Weights
 
-Under CRR, all specialised lending types (including HVCRE) use the same risk weights, with Strong and Good both at 70%:
+Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remaining maturity:
 
-| Category | Strong | Good | Satisfactory | Weak | Default |
-|----------|--------|------|--------------|------|---------|
-| All types (incl. HVCRE) | 70% | 70% | 115% | 250% | 0%* |
+**Non-HVCRE (PF, OF, CF, IPRE):**
 
-*Default exposures: 0% RW with 50% EL deduction
+| Category | Maturity >= 2.5yr | Maturity < 2.5yr |
+|----------|-------------------|------------------|
+| Strong | 70% | 50% |
+| Good | 90% | 70% |
+| Satisfactory | 115% | 115% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
+
+**HVCRE:**
+
+| Category | Maturity >= 2.5yr | Maturity < 2.5yr |
+|----------|-------------------|------------------|
+| Strong | 95% | 70% |
+| Good | 120% | 95% |
+| Satisfactory | 140% | 140% |
+| Weak | 250% | 250% |
+| Default | 0% | 0% |
 
 ### Basel 3.1 Risk Weights
 
-Basel 3.1 introduces differentiated weights for HVCRE and pre-operational project finance:
+Basel 3.1 replaces the maturity-based split with three distinct tables:
 
-| Category | Strong | Good | Satisfactory | Weak | Default |
-|----------|--------|------|--------------|------|---------|
-| PF (Pre-Operational) | **80%** | **100%** | **120%** | **350%** | 0%* |
-| Standard (PF Operational, OF, CF, IPRE) | 70% | 70% | 115% | 250% | 0%* |
-| HVCRE | 95% | 120% | 140% | 250% | 0%* |
+| Category | Standard (Operational) | PF Pre-Operational | HVCRE |
+|----------|----------------------|-------------------|-------|
+| Strong | 70% | **80%** | 95% |
+| Good | 90% | **100%** | 120% |
+| Satisfactory | 115% | **120%** | 140% |
+| Weak | 250% | **350%** | 250% |
+| Default | 0% | 0% | 0% |
 
 !!! note "Basel 3.1 Project Finance Changes"
-    Pre-operational project finance receives higher risk weights under Basel 3.1:
-    - Strong: 70% → 80%
-    - Good: 70% → 100%
-    - Satisfactory: 115% → 120%
-    - Weak: 250% → 350%
+    Pre-operational project finance receives higher risk weights under Basel 3.1,
+    reflecting the construction risk premium. Other non-HVCRE types use the same
+    standard weights as CRR (at the >= 2.5yr maturity level).
 
-## Expected Loss for Default
+## Defaulted Exposures
 
-For defaulted exposures (50% EL assumption):
-
-```python
-# Instead of RWA
-EL_deduction = EAD × 50%
-
-# This is deducted from capital directly
-```
+Defaulted specialised lending exposures receive a 0% risk weight (RWA = 0). Expected loss treatment is handled separately via the provisions and EL comparison framework (see [Provisions](../../specifications/crr/provisions.md)).
 
 ## Calculation Example
 
@@ -117,10 +124,11 @@ EL_deduction = EAD × 50%
 - Prime location
 - Strong tenant
 - Category assessment: **Good**
+- Non-HVCRE, maturity >= 2.5 years
 
 **CRR Calculation:**
 ```python
-# Category: Good
+# Category: Good, Non-HVCRE, >= 2.5yr
 Risk_Weight = 90%
 
 # RWA
@@ -131,21 +139,14 @@ RWA = £18,000,000
 
 **Basel 3.1 Calculation:**
 ```python
-# Same category and weight
+# Standard (Operational) Good = 90% (same as CRR >= 2.5yr)
+RWA = £20,000,000 × 90%
 RWA = £18,000,000
-
-# Check output floor
-SA_equivalent_RW = 70%  # IPRE LTV 60-75%
-SA_RWA = £20,000,000 × 70% = £14,000,000
-Floor = £14,000,000 × 72.5% = £10,150,000
-
-# Slotting RWA > Floor, so no adjustment
-Final_RWA = £18,000,000
 ```
 
 ## SA Alternative
 
-Specialised lending can also be treated under SA:
+Specialised lending can also be treated under SA when the slotting approach is not used:
 
 | Type | SA Treatment |
 |------|--------------|
@@ -171,30 +172,46 @@ Specialised lending can also be treated under SA:
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
 from rwa_calc.contracts.config import CalculationConfig
 
-# Create calculator
 calculator = SlottingCalculator()
 
-# Calculate
+# calculate() takes a CRMAdjustedBundle and returns LazyFrameResult
 result = calculator.calculate(
-    exposures=specialised_lending_exposures,
+    data=crm_adjusted_bundle,
     config=CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 )
 
-print(f"Slotting RWA: {result.total_rwa:,.2f}")
+# result.frame is a LazyFrame, result.errors is list[CalculationError]
+rwa_df = result.frame.collect()
 ```
 
-### Category Mapping
+For single-exposure calculations:
 
 ```python
-from rwa_calc.data.tables.crr_slotting import get_slotting_risk_weight
-from rwa_calc.domain.enums import SlottingCategory, SpecialisedLendingType
-
-# Lookup risk weight
-rw = get_slotting_risk_weight(
-    lending_type=SpecialisedLendingType.IPRE,
-    category=SlottingCategory.GOOD
+rwa = calculator.calculate_single_exposure(
+    ead=20_000_000,
+    slotting_category="good",
+    config=CalculationConfig.crr(reporting_date=date(2026, 12, 31)),
 )
-# Returns: 0.90 (90%)
+# Returns: 18_000_000.0
+```
+
+### Risk Weight Lookup
+
+```python
+from rwa_calc.data.tables.crr_slotting import lookup_slotting_rw
+from rwa_calc.domain.enums import SlottingCategory
+
+# Non-HVCRE, standard maturity (>= 2.5yr)
+rw = lookup_slotting_rw(category=SlottingCategory.GOOD)
+# Returns: Decimal('0.90')
+
+# HVCRE
+rw = lookup_slotting_rw(category=SlottingCategory.GOOD, is_hvcre=True)
+# Returns: Decimal('1.20')
+
+# Short maturity (< 2.5yr)
+rw = lookup_slotting_rw(category=SlottingCategory.STRONG, is_short_maturity=True)
+# Returns: Decimal('0.50')
 ```
 
 ## Project Finance Detail
@@ -216,18 +233,13 @@ Project is generating cash flows:
 ### Phase Transition
 
 ```python
-if project.construction_complete and project.generating_cashflows:
-    phase = "operational"
-else:
-    phase = "pre_operational"
-
-# Basel 3.1 applies different weights
+# Basel 3.1 applies different weights for PF pre-operational
 if framework == "BASEL_3_1" and lending_type == "PROJECT_FINANCE":
     if phase == "pre_operational":
         # Use higher pre-op weights
         weights = {"strong": 0.80, "good": 1.00, "satisfactory": 1.20, "weak": 3.50}
     else:
-        # Use standard weights
+        # Use standard operational weights
         weights = {"strong": 0.70, "good": 0.90, "satisfactory": 1.15, "weak": 2.50}
 ```
 
@@ -243,35 +255,20 @@ if framework == "BASEL_3_1" and lending_type == "PROJECT_FINANCE":
 - Repayment from future sale or refinancing
 - Uncertain outcome
 
-**Risk Weights:**
+**Risk Weight Comparison:**
 
-| Category | CRR (all types) | Basel 3.1 HVCRE |
-|----------|-----------------|-----------------|
-| Strong | 70% | 95% |
-| Good | 70% | 120% |
-| Satisfactory | 115% | 140% |
-| Weak | 250% | 250% |
+| Category | CRR Non-HVCRE (>=2.5yr) | CRR HVCRE (>=2.5yr) | Basel 3.1 HVCRE |
+|----------|------------------------|---------------------|-----------------|
+| Strong | 70% | 95% | 95% |
+| Good | 90% | 120% | 120% |
+| Satisfactory | 115% | 140% | 140% |
+| Weak | 250% | 250% | 250% |
 
 ## Supporting Factors
 
-### Infrastructure Factor (CRR Only)
+Infrastructure project finance may qualify for the **0.75 infrastructure supporting factor** under CRR (Art. 501a). This factor is applied by the `SupportingFactorCalculator` after slotting risk weights are determined, not within the slotting engine itself.
 
-Qualifying infrastructure project finance receives 0.75 factor:
-
-```python
-# Eligibility
-if (lending_type == "PROJECT_FINANCE" and
-    is_qualifying_infrastructure and
-    framework == "CRR"):
-
-    RWA = RWA × 0.75
-```
-
-**Qualifying criteria:**
-- Infrastructure project entity
-- Revenue in EUR/GBP or hedged
-- Contractual arrangements limit risk
-- Stable cash flow structure
+See [Supporting Factors](supporting-factors.md) for eligibility criteria and application details.
 
 !!! warning "Basel 3.1"
     Infrastructure factor is **removed** under Basel 3.1.
@@ -290,4 +287,3 @@ if (lending_type == "PROJECT_FINANCE" and
 
 - [Credit Risk Mitigation](crm.md) - CRM for specialised lending
 - [Supporting Factors](supporting-factors.md) - Infrastructure factor details
-- [Configuration](../configuration.md) - Slotting configuration

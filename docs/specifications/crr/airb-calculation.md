@@ -13,9 +13,9 @@ Advanced IRB calculation with internal LGD and CCF estimates.
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-1.4 | A-IRB capital requirement: own-estimate PD, LGD, EAD with PD floors | P0 | Done |
-| FR-1.5 | A-IRB LGD floors per Basel 3.1 (CRE32) | P1 | Not Started |
+| FR-1.5 | A-IRB LGD floors per Basel 3.1 (CRE32) | P1 | Done |
 | FR-1.8 | Defaulted exposure A-IRB: K=max(0, LGD−BEEL) | P0 | Done |
-| FR-1.9 | Differentiated PD floors per Basel 3.1 | P1 | Not Started |
+| FR-1.9 | Differentiated PD floors per Basel 3.1 | P1 | Done |
 
 ---
 
@@ -38,7 +38,8 @@ Under CRR, A-IRB has **no LGD floors**. Under Basel 3.1, the following floors ap
 
 | Collateral Type | LGD Floor |
 |----------------|-----------|
-| Unsecured | 25% |
+| Unsecured (Senior) | 25% |
+| Unsecured (Subordinated) | 50% |
 | Financial collateral | 0% |
 | Receivables | 10% |
 | Commercial real estate | 10% |
@@ -66,6 +67,4 @@ The capital requirement formula, correlation functions, maturity adjustment, and
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-C: Advanced IRB | C1–C3 | 7 | 86% (6/7, 1 skip) |
-
-Skipped: C3 (SL A-IRB)
+| CRR-C: Advanced IRB | C1–C3 | 7 | 100% (7/7) |

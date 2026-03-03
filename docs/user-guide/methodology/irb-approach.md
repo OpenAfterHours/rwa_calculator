@@ -40,31 +40,16 @@ RWA = K × 12.5 × EAD × Scaling Factor
 
 ### Stats Backend
 
-The IRB formulas require statistical functions (normal CDF and inverse CDF). The calculator uses a **backend abstraction** that automatically selects the best available implementation:
+The IRB formulas require statistical functions (normal CDF and inverse CDF). The calculator uses `polars-normal-stats` for native Polars CDF/PPF expressions.
 
-| Backend | Package | Performance | Notes |
-|---------|---------|-------------|-------|
-| **polars-normal-stats** | `rwa-calc[fast-stats]` | Fastest | Native Polars, streaming-compatible |
-| **scipy** | Core dependency | Good | Universal fallback via `map_batches` |
-
-To check which backend is active:
-
-```python
-from rwa_calc.engine.irb import get_backend
-print(f"Active backend: {get_backend()}")  # "polars-normal-stats" or "scipy"
-```
-
-!!! tip "Performance Recommendation"
-    For production environments, install with the `fast-stats` extra:
+!!! tip "Installation"
     ```bash
-    pip install rwa-calc[fast-stats]
+    uv add polars-normal-stats
     ```
-    This enables the native Polars backend which is faster and supports true streaming for large datasets.
 
 ??? example "Capital K Formula Implementation (formulas.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:233:262"
-    ```
+    See the `_polars_capital_k_expr()` function in `src/rwa_calc/engine/irb/formulas.py`
+    for the full Polars expression implementation.
 
 ## Risk Parameters
 
@@ -94,26 +79,26 @@ LGD is the percentage of exposure lost after recoveries.
 
 **F-IRB Supervisory LGD:**
 
-| Exposure Type | LGD |
-|---------------|-----|
-| Senior Unsecured | 45% |
-| Subordinated | 75% |
-| Secured by Financial Collateral | 0% |
-| Secured by Receivables | 35% |
-| Secured by CRE/RRE | 35% |
-| Secured by Other Collateral | 40% |
+| Exposure Type | CRR | Basel 3.1 |
+|---------------|-----|-----------|
+| Senior Unsecured | 45% | 40% |
+| Subordinated | 75% | 75% |
+| Secured by Financial Collateral | 0% | 0% |
+| Secured by Receivables | 35% | 20% |
+| Secured by CRE/RRE | 35% | 20% |
+| Secured by Other Collateral | 40% | 25% |
 
-**A-IRB LGD Floors (Basel 3.1 only):**
+**A-IRB LGD Floors (Basel 3.1 only, PRA PS9/24):**
 
 | Collateral Type | LGD Floor |
 |-----------------|-----------|
 | Unsecured Senior | 25% |
 | Unsecured Subordinated | 50% |
 | Financial Collateral | 0% |
-| Receivables | 15% |
-| Commercial Real Estate | 15% |
-| Residential Real Estate | 10% |
-| Other Physical | 20% |
+| Receivables | 10% |
+| Commercial Real Estate | 10% |
+| Residential Real Estate | 5% |
+| Other Physical | 15% |
 
 ### Exposure at Default (EAD)
 
@@ -167,12 +152,14 @@ This produces:
 
 ### SME Size Adjustment
 
-For SME corporates (turnover £5m-£50m):
+For SME corporates (turnover €5m-€50m). The `turnover_m` column is provided in GBP millions; the calculator converts to EUR using `config.eur_gbp_rate`:
 
 ```python
-# Size adjustment factor
-S = min(50, max(5, turnover_millions))
+# Convert GBP turnover to EUR
+S_eur = turnover_gbp / eur_gbp_rate  # e.g. £25m / 0.8732 = €28.6m
 
+# Clamp to range and apply adjustment
+S = min(50, max(5, S_eur))
 R_adjusted = R - 0.04 × (1 - (S - 5) / 45)
 ```
 
@@ -193,9 +180,8 @@ R = 0.03 × (1 - exp(-35 × PD)) / (1 - exp(-35)) +
 ```
 
 ??? example "Actual Correlation Implementation (formulas.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:156:234"
-    ```
+    See `_polars_correlation_expr()` in `src/rwa_calc/engine/irb/formulas.py`
+    for the full Polars expression implementation including SME adjustment.
 
 ## Maturity Adjustment
 
@@ -212,9 +198,8 @@ MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
 Where M is effective maturity in years.
 
 ??? example "Actual Maturity Adjustment (formulas.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:268:288"
-    ```
+    See `_polars_maturity_adjustment_expr()` in `src/rwa_calc/engine/irb/formulas.py`
+    for the full Polars expression implementation.
 
 **Example values:**
 
@@ -273,10 +258,11 @@ R_base = 0.12 × (1 - exp(-50 × 0.005)) / (1 - exp(-50)) +
          0.24 × (1 - (1 - exp(-50 × 0.005)) / (1 - exp(-50)))
 R_base = 0.12 × 0.221 + 0.24 × 0.779 = 0.214
 
-# SME adjustment (turnover £25m)
-S = 25
-adjustment = 0.04 × (1 - (25 - 5) / 45) = 0.04 × 0.556 = 0.022
-R = 0.214 - 0.022 = 0.192
+# SME adjustment (turnover £25m, converted to EUR)
+S_eur = 25 / 0.8732 = 28.63  # GBP → EUR conversion
+S = min(50, max(5, 28.63)) = 28.63
+adjustment = 0.04 × (1 - (28.63 - 5) / 45) = 0.04 × 0.475 = 0.019
+R = 0.214 - 0.019 = 0.195
 ```
 
 **Step 3: Calculate Capital Requirement (K)**
@@ -285,13 +271,13 @@ R = 0.214 - 0.022 = 0.192
 G_PD = norm.ppf(0.005) = -2.576
 G_999 = norm.ppf(0.999) = 3.090
 
-term1 = (1 - R)^(-0.5) × G_PD = 1.113 × (-2.576) = -2.867
-term2 = (R / (1-R))^0.5 × G_999 = 0.487 × 3.090 = 1.505
+term1 = (1 - R)^(-0.5) × G_PD = 1.115 × (-2.576) = -2.871
+term2 = (R / (1-R))^0.5 × G_999 = 0.492 × 3.090 = 1.521
 
 K_pre = LGD × N(term1 + term2) - LGD × PD
-K_pre = 0.45 × N(-1.362) - 0.45 × 0.005
-K_pre = 0.45 × 0.0867 - 0.00225
-K_pre = 0.0390 - 0.00225 = 0.0367
+K_pre = 0.45 × N(-1.350) - 0.45 × 0.005
+K_pre = 0.45 × 0.0885 - 0.00225
+K_pre = 0.0398 - 0.00225 = 0.0376
 ```
 
 **Step 4: Calculate Maturity Adjustment**
@@ -305,16 +291,16 @@ MA = 1.0835 / 0.7495 = 1.446
 ```python
 # CRR
 RWA_CRR = K × 12.5 × EAD × MA × 1.06
-RWA_CRR = 0.0367 × 12.5 × 50,000,000 × 1.446 × 1.06
-RWA_CRR = £35,142,968
+RWA_CRR = 0.0376 × 12.5 × 50,000,000 × 1.446 × 1.06
+RWA_CRR = £36,019,860
 
-RW_CRR = RWA / EAD = 70.3%
+RW_CRR = RWA / EAD = 72.0%
 
 # Basel 3.1 (no scaling)
-RWA_B31 = 0.0367 × 12.5 × 50,000,000 × 1.446 × 1.00
-RWA_B31 = £33,154,688
+RWA_B31 = 0.0376 × 12.5 × 50,000,000 × 1.446 × 1.00
+RWA_B31 = £33,981,000
 
-RW_B31 = 66.3%
+RW_B31 = 68.0%
 ```
 
 **Step 6: Check Output Floor (Basel 3.1)**
@@ -326,7 +312,7 @@ RWA_SA = 50,000,000 × 100% = £50,000,000
 Floor = 50,000,000 × 0.725 = £36,250,000
 
 # Final RWA
-RWA_final = max(33,154,688, 36,250,000) = £36,250,000
+RWA_final = max(33,981,000, 36,250,000) = £36,250,000
 ```
 
 ## Implementation
@@ -394,15 +380,15 @@ from rwa_calc.contracts.config import CalculationConfig
 # Create calculator
 calculator = IRBCalculator()
 
-# Calculate
+# Calculate — takes a CRMAdjustedBundle, returns a LazyFrameResult
 result = calculator.calculate(
-    exposures=classified_exposures,
+    data=crm_adjusted_bundle,
     config=CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 )
 
-# Results
-print(f"IRB RWA: {result.total_rwa:,.2f}")
-print(f"Expected Loss: {result.total_expected_loss:,.2f}")
+# Result is a LazyFrameResult containing the LazyFrame and any errors
+irb_rwa_df = result.data.collect()
+print(irb_rwa_df.select("rwa", "expected_loss"))
 ```
 
 ### Using IRB Formulas Directly
@@ -412,7 +398,6 @@ The IRB formulas are implemented in [`irb/formulas.py`](https://github.com/OpenA
 !!! info "Implementation Architecture"
     - **Vectorized expressions**: Pure Polars expressions for bulk processing (used by namespace and calculator)
     - **Scalar wrappers**: Thin wrappers around vectorized expressions for single-value calculations
-    - **Stats backend**: Auto-detects `polars-normal-stats` (native) or `scipy` (fallback)
 
 ```python
 from rwa_calc.engine.irb.formulas import (
@@ -426,7 +411,7 @@ from rwa_calc.engine.irb.formulas import (
 R = calculate_correlation(
     pd=0.005,
     exposure_class="CORPORATE",
-    turnover_m=25.0  # Turnover in millions
+    turnover_m=25.0,  # Turnover in GBP millions (converted to EUR internally)
 )
 
 MA = calculate_maturity_adjustment(pd=0.005, maturity=3)
@@ -449,14 +434,13 @@ print(f"RWA: {result['rwa']:,.0f}")
 ```
 
 ??? example "Scalar K Calculation (formulas.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/irb/formulas.py:446:473"
-    ```
+    See `calculate_k()` in `src/rwa_calc/engine/irb/formulas.py`
+    for the scalar wrapper around the Polars expression.
 
 ## Expected Loss Calculation
 
 ```python
-from rwa_calc.engine.irb.calculator import calculate_expected_loss
+from rwa_calc.engine.irb.formulas import calculate_expected_loss
 
 el = calculate_expected_loss(
     pd=0.005,

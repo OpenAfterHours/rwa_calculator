@@ -74,12 +74,26 @@ docs created/verified.
   unimplemented QRRE transactor and defaulted provision-coverage, added CRR residential split
   treatment and CRE preferential 50%, corrected SME threshold GBP approximation, removed stale
   line numbers. Also found and fixed CRM haircut CQS grouping bug (see above).
-- [ ] `docs/user-guide/methodology/irb-approach.md` (497 lines)
-- [ ] `docs/user-guide/methodology/crm.md` (599 lines)
+- [x] `docs/user-guide/methodology/irb-approach.md` -- Fixed IRBCalculator API signature
+  (takes CRMAdjustedBundle, returns LazyFrameResult), calculate_expected_loss import path
+  (formulas not calculator), removed fictional scipy fallback, fixed A-IRB LGD floors to PRA
+  values, added Basel 3.1 F-IRB LGD column, added SME EUR conversion to correlation section
+  and worked example, replaced all stale snippet line references with method name references.
+- [x] `docs/user-guide/methodology/crm.md` -- Fixed corporate bond CQS grouping (CQS1/CQS2-3
+  not CQS1-2/CQS3), added Basel 3.1 F-IRB LGD column to physical collateral table, added
+  5-year cap to maturity mismatch formula, fixed data structure column names (beneficiary_reference
+  not counterparty_id, market_value not value, etc.), replaced stale snippet references,
+  added get_crm_adjusted_bundle to processor API example.
 - [ ] `docs/user-guide/methodology/specialised-lending.md` (293 lines)
-- [ ] `docs/user-guide/methodology/equity.md` (80 lines)
-- [ ] `docs/user-guide/methodology/supporting-factors.md` (331 lines)
-- [ ] `docs/user-guide/methodology/fx-conversion.md` (95 lines)
+- [x] `docs/user-guide/methodology/equity.md` -- Added Basel 3.1 removes IRB equity note,
+  expanded IRB Simple table with missing types (unlisted, speculative, CIU), added
+  framework-aware approach determination table.
+- [x] `docs/user-guide/methodology/supporting-factors.md` -- Fixed API example (uses
+  SupportingFactorCalculator class not module-level functions), corrected GBP threshold
+  approximations (44m->43.7m, 2.2m->2.18m) to match 0.8732 rate, updated worked example.
+- [x] `docs/user-guide/methodology/fx-conversion.md` -- Fixed column names (currency_from/
+  currency_to not source_currency/target_currency), corrected GBP SME threshold, removed
+  misleading base_currency config parameter.
 
 ### 4.2 Review Architecture pages for accuracy
 
@@ -156,7 +170,7 @@ inconsistencies. Also fixed `specs/overview.md` COREP status and
 1. **Priority 1** (API Reference): COMPLETED 2026-03-02
 2. **Priority 2** (Data Model): COMPLETED 2026-03-02
 3. **Priority 3** (Missing Features): 3.1-3.3 COMPLETED 2026-03-03; 3.4 remaining
-4. **Priority 4** (User Guide): 4.1 SA methodology DONE; rest remaining
+4. **Priority 4** (User Guide): 4.1 methodology pages DONE (6 of 7); rest remaining
 5. **Priority 5** (Housekeeping): 5.1-5.3 COMPLETED 2026-03-03; 5.4 and spec verification remaining
 
 **Scope:** ~15 files rewritten (P1-2 done), ~5 new files (3 done, 2 remaining), ~25 files need

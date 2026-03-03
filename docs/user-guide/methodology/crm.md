@@ -54,7 +54,7 @@ RWA = RWA_protected + RWA_unprotected
 
 #### Comprehensive Method
 
-Applies haircuts to both exposure and collateral. See [`crm/haircuts.py:69-143`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/haircuts.py#L69-L143) for the implementation.
+Applies haircuts to both exposure and collateral. See [`crm/haircuts.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/haircuts.py) for the implementation.
 
 !!! info "Conceptual Formula"
     ```python
@@ -82,10 +82,10 @@ Applies haircuts to both exposure and collateral. See [`crm/haircuts.py:69-143`]
 | **Government/PSE CQS2-3** | ≤1 year | 1% |
 | | 1-5 years | 3% |
 | | >5 years | 6% |
-| **Corporate CQS1-2** | ≤1 year | 1% |
+| **Corporate CQS1** | ≤1 year | 1% |
 | | 1-5 years | 4% |
 | | >5 years | 8% |
-| **Corporate CQS3** | ≤1 year | 2% |
+| **Corporate CQS2-3** | ≤1 year | 2% |
 | | 1-5 years | 6% |
 | | >5 years | 12% |
 | **Main Index Equity** | Any | 15% |
@@ -149,13 +149,13 @@ Gross_RWA = 10,000,000 × 100% = £10,000,000
 
 Physical collateral (real estate, equipment) provides CRM for IRB:
 
-| Collateral Type | F-IRB LGD |
-|-----------------|-----------|
-| Residential Real Estate | 35% |
-| Commercial Real Estate | 35% |
-| Receivables | 35% |
-| Other Physical | 40% |
-| Unsecured | 45% |
+| Collateral Type | CRR F-IRB LGD | Basel 3.1 F-IRB LGD |
+|-----------------|---------------|---------------------|
+| Residential Real Estate | 35% | 20% |
+| Commercial Real Estate | 35% | 20% |
+| Receivables | 35% | 20% |
+| Other Physical | 40% | 25% |
+| Unsecured | 45% | 40% |
 
 **Eligibility Requirements:**
 - Legal certainty of enforcement
@@ -285,13 +285,15 @@ Gross_RWA = £5,000,000
 When protection maturity < exposure maturity:
 
 ```python
-# Minimum protection maturity: 1 year
+# Minimum protection maturity: 3 months (0.25 years)
 t = max(0.25, protection_residual_maturity)
-T = max(0.25, exposure_residual_maturity)
+T = min(max(0.25, exposure_residual_maturity), 5.0)  # Capped at 5 years
 
 # Adjustment factor
 if t >= T:
     adjustment = 1.0
+elif t < 0.25:
+    adjustment = 0.0  # Below minimum — no protection
 else:
     adjustment = (t - 0.25) / (T - 0.25)
 
@@ -486,17 +488,19 @@ from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.contracts.config import CalculationConfig
 from datetime import date
 
-# Create processor
-processor = CRMProcessor()
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-# Process exposures through CRM pipeline
+# Create processor
+processor = CRMProcessor(is_basel_3_1=config.is_basel_3_1)
+
+# Process exposures through CRM pipeline — returns CRMAdjustedBundle
 result = processor.get_crm_adjusted_bundle(
     data=classified_exposures_bundle,
-    config=CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+    config=config,
 )
 
-# Access adjusted exposures
-adjusted = result.exposures
+# Access adjusted exposures (split by approach)
+adjusted = result.exposures      # All exposures with CRM adjustments
 sa_adjusted = result.sa_exposures
 irb_adjusted = result.irb_exposures
 ```
@@ -506,15 +510,15 @@ irb_adjusted = result.irb_exposures
       show_root_heading: true
       members:
         - apply_crm
+        - get_crm_adjusted_bundle
         - resolve_provisions
         - apply_collateral
         - apply_guarantees
       show_source: false
 
 ??? example "CRM Processor Implementation (processor.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:51:169"
-    ```
+    See `CRMProcessor.apply_crm()` and `CRMProcessor.get_crm_adjusted_bundle()`
+    in `src/rwa_calc/engine/crm/processor.py` for the full pipeline implementation.
 
 ### Haircut Calculator
 
@@ -539,44 +543,43 @@ print(f"Adjusted value: {result.adjusted_value:,.0f}")
 ```
 
 ??? example "Haircut Application (haircuts.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:145:301"
-    ```
+    See `HaircutCalculator.apply_collateral_haircuts()` in `src/rwa_calc/engine/crm/haircuts.py`
+    for the Polars expression implementation of supervisory haircuts.
 
 ## CRM Data Structure
 
-The calculator accepts CRM data at multiple levels:
+The calculator accepts CRM data at multiple levels. The `beneficiary_reference` column links CRM items to exposures at the appropriate level (direct exposure, facility, or counterparty):
 
 ```python
 # Collateral data
 collateral = {
-    "collateral_id": "COL001",
-    "counterparty_id": "CP001",  # Or facility_id, loan_id
+    "collateral_reference": "COL001",
+    "beneficiary_reference": "CP001",  # Links to exposure/facility/counterparty
     "collateral_type": "cash",
-    "value": 1_000_000,
-    "currency": "GBP",
+    "market_value": 1_000_000,
+    "collateral_currency": "GBP",
     "issuer_cqs": None,  # For bonds
-    "residual_maturity": None  # For bonds
+    "residual_maturity": None,  # For bonds
 }
 
 # Guarantee data
 guarantee = {
-    "guarantee_id": "GAR001",
-    "counterparty_id": "CP001",  # Protected party
-    "guarantor_id": "GP001",
-    "amount": 5_000_000,
+    "guarantee_reference": "GAR001",
+    "beneficiary_reference": "CP001",  # Protected party
+    "guarantor": "GP001",
+    "amount_covered": 5_000_000,
     "guarantor_type": "SOVEREIGN",
     "guarantor_cqs": 1,
-    "maturity_date": date(2028, 12, 31)
+    "maturity_date": date(2028, 12, 31),
 }
 
 # Provision data
 provision = {
-    "provision_id": "PRV001",
-    "counterparty_id": "CP001",  # Or facility_id, loan_id
+    "provision_reference": "PRV001",
+    "beneficiary_reference": "CP001",  # Links to exposure/facility/counterparty
     "provision_type": "SCRA",
     "amount": 500_000,
-    "ifrs_stage": "STAGE_3"
+    "ifrs_stage": "STAGE_3",
 }
 ```
 

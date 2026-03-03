@@ -23,10 +23,9 @@ FX conversion is controlled via `CalculationConfig`:
 from rwa_calc.contracts.config import CalculationConfig
 from datetime import date
 
-# FX conversion enabled by default
+# FX conversion enabled by default (base_currency is always GBP)
 config = CalculationConfig.crr(
     reporting_date=date(2026, 12, 31),
-    base_currency="GBP",           # Target currency
     apply_fx_conversion=True,      # Enable/disable
 )
 ```
@@ -37,16 +36,16 @@ FX rates are provided via the `fx_rates` input table:
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `source_currency` | String | Currency code (e.g., "USD", "EUR") |
-| `target_currency` | String | Target currency (must match `base_currency`) |
+| `currency_from` | String | Currency code (e.g., "USD", "EUR") |
+| `currency_to` | String | Target currency (must match `base_currency`) |
 | `rate` | Float | Exchange rate (source to target) |
 
 ### Example FX Rates
 
 ```python
 fx_rates = pl.DataFrame({
-    "source_currency": ["USD", "EUR", "CHF"],
-    "target_currency": ["GBP", "GBP", "GBP"],
+    "currency_from": ["USD", "EUR", "CHF"],
+    "currency_to": ["GBP", "GBP", "GBP"],
     "rate": [0.79, 0.87, 0.89],
 })
 ```
@@ -88,7 +87,7 @@ Key thresholds that depend on correct FX conversion:
 | Threshold | EUR Value | GBP Equivalent |
 |-----------|-----------|----------------|
 | SME turnover | EUR 50m | ~GBP 43.7m |
-| SME exposure (SF tier) | EUR 2.5m | ~GBP 2.2m |
+| SME exposure (SF tier) | EUR 2.5m | ~GBP 2.18m |
 | Retail aggregate | EUR 1m | ~GBP 880k |
 | QRRE individual | EUR 100k | ~GBP 100k |
 

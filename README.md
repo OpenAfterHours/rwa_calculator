@@ -31,26 +31,42 @@ pip install rwa-calc[ui]
 
 ## Quick Start
 
-**Option 1: Interactive UI**
+**Quickest Start** — one call does everything:
+
+```python
+from rwa_calc.api import quick_calculate
+
+response = quick_calculate("/path/to/data")
+print(f"Total RWA: {response.summary.total_rwa:,.0f}")
+```
+
+**More Control** — choose framework, IRB approach, and reporting date:
+
+```python
+from datetime import date
+from rwa_calc.api import create_service, CalculationRequest
+
+service = create_service()
+response = service.calculate(
+    CalculationRequest(
+        data_path="/path/to/data",
+        framework="CRR",
+        reporting_date=date(2026, 12, 31),
+        irb_approach="full_irb",
+    )
+)
+
+if response.success:
+    print(f"Total RWA: {response.summary.total_rwa:,.0f}")
+    df = response.collect_results()
+```
+
+**Interactive UI** — web-based calculator interface:
 
 ```bash
 pip install rwa-calc[ui]
 rwa-calc-ui
 # Open http://localhost:8000 in your browser
-```
-
-**Option 2: Python API**
-
-```python
-from datetime import date
-from rwa_calc.engine.pipeline import create_pipeline
-from rwa_calc.contracts.config import CalculationConfig
-
-config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-pipeline = create_pipeline()
-result = pipeline.run(config)
-
-print(f"Total RWA: {result.total_rwa:,.2f}")
 ```
 
 ## Regulatory Scope
@@ -59,8 +75,8 @@ This calculator supports two regulatory regimes:
 
 | Regime | Effective Period | UK Implementation | Status |
 |--------|------------------|-------------------|--------|
-| **CRR (Basel 3.0)** | Until 31 December 2026 | UK CRR (EU 575/2013 as onshored) | **Active Development** |
-| **Basel 3.1** | From 1 January 2027 | PRA PS9/24 | Planned |
+| **CRR (Basel 3.0)** | Until 31 December 2026 | UK CRR (EU 575/2013 as onshored) | **Active** |
+| **Basel 3.1** | From 1 January 2027 | PRA PS9/24 | **Active Development** |
 
 A configuration toggle allows switching between calculation modes for:
 - Current regulatory reporting under UK CRR
@@ -75,6 +91,9 @@ A configuration toggle allows switching between calculation modes for:
 - **Credit Risk Mitigation**: Collateral, guarantees, and provisions with RWA-optimized allocation
 - **Complex Hierarchies**: Multi-level counterparty and facility hierarchy support
 - **Audit Trail**: Full calculation transparency for regulatory review
+- **Framework Comparison**: Side-by-side CRR vs Basel 3.1 impact analysis
+- **COREP Output**: Export results to COREP regulatory templates
+- **Multiple Export Formats**: Parquet, CSV, Excel, and COREP
 
 ### Supported Approaches
 
@@ -116,7 +135,7 @@ uv run pytest --cov=src/rwa_calc
 uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m" -o "addopts=" --benchmark-only -v
 ```
 
-**Test Results:** 1,285 tests (1,253 unit/acceptance + 32 benchmark)
+**Test Results:** ~1,915 tests (1,485 unit + 275 acceptance + 123 contract + ~30 benchmark)
 
 ## License
 

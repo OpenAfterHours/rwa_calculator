@@ -18,7 +18,8 @@
       "Bash(find:*)",
       "mcp__polars-mcp__polars_get_docstring",
       "mcp__polars-mcp__polars_search_api",
-      "Edit(/tmp/**)"
+      "Edit(/tmp/**)",
+      "WebFetch(domain:docs.pola.rs)"
     ]
   },
   "enableAllProjectMcpServers": true,

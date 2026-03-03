@@ -84,7 +84,13 @@ docs created/verified.
   5-year cap to maturity mismatch formula, fixed data structure column names (beneficiary_reference
   not counterparty_id, market_value not value, etc.), replaced stale snippet references,
   added get_crm_adjusted_bundle to processor API example.
-- [ ] `docs/user-guide/methodology/specialised-lending.md` (293 lines)
+- [x] `docs/user-guide/methodology/specialised-lending.md` -- Rewrote risk weight tables: CRR
+  expanded to four-way split (HVCRE × maturity), Standard Good corrected 70%→90%. Fixed API
+  examples: `get_slotting_risk_weight` → `lookup_slotting_rw` with correct params, `exposures`
+  → `data: CRMAdjustedBundle`, `result.total_rwa` → `result.frame`. Added
+  `calculate_single_exposure()` example. Fixed HVCRE comparison table (was showing non-HVCRE
+  CRR weights). Clarified infrastructure factor is in SupportingFactorCalculator, not slotting
+  engine. Removed unimplemented 50% EL deduction claim for defaults (code assigns RW=0%).
 - [x] `docs/user-guide/methodology/equity.md` -- Added Basel 3.1 removes IRB equity note,
   expanded IRB Simple table with missing types (unlisted, speculative, CIU), added
   framework-aware approach determination table.
@@ -191,7 +197,7 @@ SME CRE20.47-49→CRE20.47, subordinated debt CRE20.47→CRE20.49.
 1. **Priority 1** (API Reference): COMPLETED 2026-03-02
 2. **Priority 2** (Data Model): COMPLETED 2026-03-02
 3. **Priority 3** (Missing Features): 3.1-3.3 COMPLETED 2026-03-03; 3.4 remaining
-4. **Priority 4** (User Guide): 4.1 methodology pages DONE (6 of 7); rest remaining
+4. **Priority 4** (User Guide): 4.1 methodology pages ALL DONE (7 of 7); rest remaining
 5. **Priority 5** (Housekeeping): 5.1-5.3 COMPLETED 2026-03-03; 5.4 remaining. Spec verification COMPLETED 2026-03-03.
 
 **Scope:** ~15 files rewritten (P1-2 done), ~5 new files (3 done, 2 remaining), ~25 files need

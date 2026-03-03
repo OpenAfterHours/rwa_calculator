@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2104,6 +2164,8 @@
       
         
       
+        
+      
     
     
     
@@ -2315,6 +2377,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -3202,6 +3292,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Marimo Web UI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparison-app-uimarimocomparison_apppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison App (ui/marimo/comparison_app.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3977,6 +4084,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Marimo Web UI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparison-app-uimarimocomparison_apppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison App (ui/marimo/comparison_app.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4107,7 +4231,7 @@
 </tr>
 <tr>
 <td>FR-6.2</td>
-<td>Interactive web UI via Marimo for scenario analysis and exploration</td>
+<td>Interactive web UI via Marimo for scenario analysis, exploration, and dual-framework comparison</td>
 <td>P1</td>
 <td>Done</td>
 </tr>
@@ -4132,6 +4256,13 @@
 </ul>
 <h2 id="marimo-web-ui">Marimo Web UI<a class="headerlink" href="#marimo-web-ui" title="Permanent link">&para;</a></h2>
 <p>Interactive workbooks for scenario analysis, exposure drill-down, and regulatory exploration.</p>
+<h3 id="comparison-app-uimarimocomparison_apppy">Comparison App (<code>ui/marimo/comparison_app.py</code>)<a class="headerlink" href="#comparison-app-uimarimocomparison_apppy" title="Permanent link">&para;</a></h3>
+<p>Registered at <code>/comparison</code> in the multi-app server. Provides:
+- Dual-framework comparison (CRR vs Basel 3.1) using <code>DualFrameworkRunner</code>
+- Capital impact waterfall via <code>CapitalImpactAnalyzer</code>
+- Transitional floor schedule timeline with year slider (<code>TransitionalScheduleRunner</code>)
+- Exposure-level drill-down with filters
+- CSV export for all views</p>
 <h2 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>rwa-calc-ui</code> — launches the Marimo web interface</li>

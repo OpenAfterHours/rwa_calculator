@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2041,22 +2101,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#validation-functions" class="md-nav__link">
+  <a href="#schema-validation-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Validation Functions
+        Schema Validation Functions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Validation Functions">
+    <nav class="md-nav" aria-label="Schema Validation Functions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#schema-validation" class="md-nav__link">
+  <a href="#validate_schema" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schema Validation
+        validate_schema()
       
     </span>
   </a>
@@ -2064,10 +2124,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#required-columns-check" class="md-nav__link">
+  <a href="#validate_required_columns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Required Columns Check
+        validate_required_columns()
       
     </span>
   </a>
@@ -2075,10 +2135,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#structured-error-objects" class="md-nav__link">
+  <a href="#validate_schema_to_errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Structured Error Objects
+        validate_schema_to_errors()
       
     </span>
   </a>
@@ -2091,22 +2151,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#error-types" class="md-nav__link">
+  <a href="#bundle-validation-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Error Types
+        Bundle Validation Functions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Error Types">
+    <nav class="md-nav" aria-label="Bundle Validation Functions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#schema-errors" class="md-nav__link">
+  <a href="#validate_raw_data_bundle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schema Errors
+        validate_raw_data_bundle()
       
     </span>
   </a>
@@ -2114,10 +2174,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#business-rule-errors" class="md-nav__link">
+  <a href="#validate_resolved_hierarchy_bundle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Business Rule Errors
+        validate_resolved_hierarchy_bundle()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_classified_bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_classified_bundle()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_crm_adjusted_bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_crm_adjusted_bundle()
       
     </span>
   </a>
@@ -2126,6 +2208,150 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-rule-validators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Business Rule Validators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Business Rule Validators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validate_non_negative_amounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_non_negative_amounts()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_pd_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_pd_range()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_lgd_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_lgd_range()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_risk_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_risk_type()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_ccf_modelled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_ccf_modelled()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normalize_risk_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        normalize_risk_type()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#column-value-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column Value Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Column Value Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validate_column_values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_column_values()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_bundle_values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_bundle_values()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-in-the-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation in the Pipeline
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2164,10 +2390,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-column-name-case-mismatch" class="md-nav__link">
+  <a href="#3-invalid-categorical-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Column Name Case Mismatch
+        3. Invalid Categorical Values
       
     </span>
   </a>
@@ -2196,113 +2422,8 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#6-missing-reference-foreign-key" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Missing Reference (Foreign Key)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#7-negative-amounts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Negative Amounts
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#business-rule-validators" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Business Rule Validators
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Business Rule Validators">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#non-negative-amounts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Non-Negative Amounts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pd-range-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PD Range Validation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#lgd-range-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        LGD Range Validation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-flight-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-Flight Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#type-compatibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type Compatibility
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-in-the-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Validation in the Pipeline
-      
-    </span>
-  </a>
   
 </li>
       
@@ -2319,10 +2440,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-inspect-schema-before-validation" class="md-nav__link">
+  <a href="#inspect-schema-before-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Inspect Schema Before Validation
+        Inspect Schema Before Validation
       
     </span>
   </a>
@@ -2330,10 +2451,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-compare-expected-vs-actual" class="md-nav__link">
+  <a href="#compare-expected-vs-actual" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Compare Expected vs Actual
+        Compare Expected vs Actual
       
     </span>
   </a>
@@ -2341,21 +2462,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-sample-invalid-rows" class="md-nav__link">
+  <a href="#check-value-distributions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Sample Invalid Rows
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-check-value-distributions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Check Value Distributions
+        Check Value Distributions
       
     </span>
   </a>
@@ -2364,17 +2474,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#strict-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Strict Mode
-      
-    </span>
-  </a>
   
 </li>
       
@@ -2500,6 +2599,8 @@
       
         
           
+        
+      
         
       
         
@@ -2725,6 +2826,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -4251,22 +4380,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#validation-functions" class="md-nav__link">
+  <a href="#schema-validation-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Validation Functions
+        Schema Validation Functions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Validation Functions">
+    <nav class="md-nav" aria-label="Schema Validation Functions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#schema-validation" class="md-nav__link">
+  <a href="#validate_schema" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schema Validation
+        validate_schema()
       
     </span>
   </a>
@@ -4274,10 +4403,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#required-columns-check" class="md-nav__link">
+  <a href="#validate_required_columns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Required Columns Check
+        validate_required_columns()
       
     </span>
   </a>
@@ -4285,10 +4414,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#structured-error-objects" class="md-nav__link">
+  <a href="#validate_schema_to_errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Structured Error Objects
+        validate_schema_to_errors()
       
     </span>
   </a>
@@ -4301,22 +4430,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#error-types" class="md-nav__link">
+  <a href="#bundle-validation-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Error Types
+        Bundle Validation Functions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Error Types">
+    <nav class="md-nav" aria-label="Bundle Validation Functions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#schema-errors" class="md-nav__link">
+  <a href="#validate_raw_data_bundle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schema Errors
+        validate_raw_data_bundle()
       
     </span>
   </a>
@@ -4324,10 +4453,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#business-rule-errors" class="md-nav__link">
+  <a href="#validate_resolved_hierarchy_bundle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Business Rule Errors
+        validate_resolved_hierarchy_bundle()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_classified_bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_classified_bundle()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_crm_adjusted_bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_crm_adjusted_bundle()
       
     </span>
   </a>
@@ -4336,6 +4487,150 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-rule-validators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Business Rule Validators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Business Rule Validators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validate_non_negative_amounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_non_negative_amounts()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_pd_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_pd_range()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_lgd_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_lgd_range()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_risk_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_risk_type()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_ccf_modelled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_ccf_modelled()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normalize_risk_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        normalize_risk_type()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#column-value-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column Value Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Column Value Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validate_column_values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_column_values()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validate_bundle_values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate_bundle_values()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-in-the-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation in the Pipeline
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4374,10 +4669,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-column-name-case-mismatch" class="md-nav__link">
+  <a href="#3-invalid-categorical-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Column Name Case Mismatch
+        3. Invalid Categorical Values
       
     </span>
   </a>
@@ -4406,113 +4701,8 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#6-missing-reference-foreign-key" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Missing Reference (Foreign Key)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#7-negative-amounts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Negative Amounts
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#business-rule-validators" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Business Rule Validators
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Business Rule Validators">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#non-negative-amounts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Non-Negative Amounts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pd-range-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PD Range Validation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#lgd-range-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        LGD Range Validation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-flight-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-Flight Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#type-compatibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type Compatibility
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-in-the-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Validation in the Pipeline
-      
-    </span>
-  </a>
   
 </li>
       
@@ -4529,10 +4719,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-inspect-schema-before-validation" class="md-nav__link">
+  <a href="#inspect-schema-before-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Inspect Schema Before Validation
+        Inspect Schema Before Validation
       
     </span>
   </a>
@@ -4540,10 +4730,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-compare-expected-vs-actual" class="md-nav__link">
+  <a href="#compare-expected-vs-actual" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Compare Expected vs Actual
+        Compare Expected vs Actual
       
     </span>
   </a>
@@ -4551,21 +4741,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-sample-invalid-rows" class="md-nav__link">
+  <a href="#check-value-distributions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Sample Invalid Rows
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-check-value-distributions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Check Value Distributions
+        Check Value Distributions
       
     </span>
   </a>
@@ -4574,17 +4753,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#strict-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Strict Mode
-      
-    </span>
-  </a>
   
 </li>
       
@@ -4668,58 +4836,90 @@
 
 
 <h1 id="data-validation-guide">Data Validation Guide<a class="headerlink" href="#data-validation-guide" title="Permanent link">&para;</a></h1>
-<p>This guide explains how data validation works in the RWA calculator, common validation errors, and how to troubleshoot data issues.</p>
+<p>This guide explains how data validation works in the RWA calculator, the complete set of
+validation functions, and how to troubleshoot data issues.</p>
+<blockquote>
+<p><strong>Source of truth</strong>: All validation utilities are in <code>src/rwa_calc/contracts/validation.py</code>.
+Valid value constraints are defined in <code>COLUMN_VALUE_CONSTRAINTS</code> in <code>src/rwa_calc/data/schemas.py</code>.</p>
+</blockquote>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>The RWA calculator validates input data at multiple stages:</p>
 <ol>
-<li><strong>Load-time validation</strong> - Schema checks when data is loaded</li>
-<li><strong>Pipeline boundary validation</strong> - Checks at each processing stage</li>
-<li><strong>Business rule validation</strong> - Domain-specific constraints (PD/LGD ranges, etc.)</li>
+<li><strong>Load-time validation</strong> — Schema checks when data is loaded</li>
+<li><strong>Pipeline boundary validation</strong> — Checks at each processing stage</li>
+<li><strong>Business rule validation</strong> — Domain-specific constraints (PD/LGD ranges, risk type codes)</li>
+<li><strong>Column value validation</strong> — Categorical values against allowed sets</li>
 </ol>
-<p>Validation is performed <strong>without materialising data</strong> where possible, using Polars LazyFrame schema inspection for efficiency.</p>
+<p>Validation is performed <strong>without materialising data</strong> where possible, using Polars LazyFrame
+schema inspection for efficiency. Only column value validation requires <code>.collect()</code>.</p>
 <hr />
-<h2 id="validation-functions">Validation Functions<a class="headerlink" href="#validation-functions" title="Permanent link">&para;</a></h2>
-<p>The validation utilities are in <code>src/rwa_calc/contracts/validation.py</code>.</p>
-<h3 id="schema-validation">Schema Validation<a class="headerlink" href="#schema-validation" title="Permanent link">&para;</a></h3>
-<p>Validates that a LazyFrame has the expected columns and types:</p>
+<h2 id="schema-validation-functions">Schema Validation Functions<a class="headerlink" href="#schema-validation-functions" title="Permanent link">&para;</a></h2>
+<h3 id="validate_schema"><code>validate_schema()</code><a class="headerlink" href="#validate_schema" title="Permanent link">&para;</a></h3>
+<p>Validates a LazyFrame's schema against an expected schema dictionary without materialising data.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_schema</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.data.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">FACILITY_SCHEMA</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Load your data</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">facilities</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">scan_parquet</span><span class="p">(</span><span class="s2">&quot;data/exposures/facilities.parquet&quot;</span><span class="p">)</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Validate against expected schema</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_schema</span><span class="p">(</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">facilities</span><span class="p">,</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">expected_schema</span><span class="o">=</span><span class="n">FACILITY_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;facilities&quot;</span><span class="p">,</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">strict</span><span class="o">=</span><span class="kc">False</span>  <span class="c1"># Set True to flag unexpected columns</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Validation errors found:&quot;</span><span class="p">)</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Schema validation passed&quot;</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">facilities</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">scan_parquet</span><span class="p">(</span><span class="s2">&quot;data/exposures/facilities.parquet&quot;</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_schema</span><span class="p">(</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">facilities</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">expected_schema</span><span class="o">=</span><span class="n">FACILITY_SCHEMA</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;facilities&quot;</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">strict</span><span class="o">=</span><span class="kc">False</span>  <span class="c1"># Set True to flag unexpected extra columns</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="required-columns-check">Required Columns Check<a class="headerlink" href="#required-columns-check" title="Permanent link">&para;</a></h3>
-<p>Validates that specific columns are present (without type checking):</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lf</code></td>
+<td><code>pl.LazyFrame</code></td>
+<td>LazyFrame to validate</td>
+</tr>
+<tr>
+<td><code>expected_schema</code></td>
+<td><code>dict[str, pl.DataType]</code></td>
+<td>Expected column names and types</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td><code>str</code></td>
+<td>Label for error messages (e.g., <code>"facilities"</code>)</td>
+</tr>
+<tr>
+<td><code>strict</code></td>
+<td><code>bool</code></td>
+<td>If <code>True</code>, flags unexpected extra columns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>list[str]</code> — plain string error messages (empty if valid).</p>
+<h3 id="validate_required_columns"><code>validate_required_columns()</code><a class="headerlink" href="#validate_required_columns" title="Permanent link">&para;</a></h3>
+<p>Checks that specific columns are present (without type checking).</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_required_columns</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;counterparty_reference&quot;</span><span class="p">,</span> <span class="s2">&quot;entity_type&quot;</span><span class="p">,</span> <span class="s2">&quot;country_code&quot;</span><span class="p">]</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">missing</span> <span class="o">=</span> <span class="n">validate_required_columns</span><span class="p">(</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">counterparties</span><span class="p">,</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">required_columns</span><span class="o">=</span><span class="n">required</span><span class="p">,</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;counterparties&quot;</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Missing columns:&quot;</span><span class="p">,</span> <span class="n">missing</span><span class="p">)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">missing</span> <span class="o">=</span> <span class="n">validate_required_columns</span><span class="p">(</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">counterparties</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">required_columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;counterparty_reference&quot;</span><span class="p">,</span> <span class="s2">&quot;entity_type&quot;</span><span class="p">,</span> <span class="s2">&quot;country_code&quot;</span><span class="p">],</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;counterparties&quot;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="structured-error-objects">Structured Error Objects<a class="headerlink" href="#structured-error-objects" title="Permanent link">&para;</a></h3>
-<p>For integration with the pipeline, use error objects:</p>
+<p><strong>Returns:</strong> <code>list[str]</code> — missing-column error messages.</p>
+<h3 id="validate_schema_to_errors"><code>validate_schema_to_errors()</code><a class="headerlink" href="#validate_schema_to_errors" title="Permanent link">&para;</a></h3>
+<p>Same logic as <code>validate_schema()</code> but returns structured <code>CalculationError</code> objects for
+integration with the pipeline error accumulation pattern.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_schema_to_errors</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.data.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">LOAN_SCHEMA</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
@@ -4730,247 +4930,266 @@
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Code: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Message: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Field: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">field_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">expected_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Actual: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">actual_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Code: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">, Field: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">field_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">expected_value</span><span class="si">}</span><span class="s2">, Actual: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">actual_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<p><strong>Returns:</strong> <code>list[CalculationError]</code> — with category <code>SCHEMA_VALIDATION</code>, severity <code>ERROR</code>.</p>
 <hr />
-<h2 id="error-types">Error Types<a class="headerlink" href="#error-types" title="Permanent link">&para;</a></h2>
-<h3 id="schema-errors">Schema Errors<a class="headerlink" href="#schema-errors" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Error Code</th>
-<th>Description</th>
-<th>Example</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>MISSING_FIELD</code></td>
-<td>Required column not present</td>
-<td><code>Missing column 'counterparty_reference'</code></td>
-</tr>
-<tr>
-<td><code>TYPE_MISMATCH</code></td>
-<td>Column has wrong data type</td>
-<td><code>Type mismatch for 'limit': expected Float64, got String</code></td>
-</tr>
-</tbody>
-</table>
-<h3 id="business-rule-errors">Business Rule Errors<a class="headerlink" href="#business-rule-errors" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Error Code</th>
-<th>Description</th>
-<th>Example</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>INVALID_VALUE</code></td>
-<td>Value outside valid range</td>
-<td><code>PD value 1.5 exceeds maximum 1.0</code></td>
-</tr>
-<tr>
-<td><code>INVALID_REFERENCE</code></td>
-<td>Foreign key not found</td>
-<td><code>counterparty_reference 'CORP_999' not found</code></td>
-</tr>
-<tr>
-<td><code>DUPLICATE_KEY</code></td>
-<td>Duplicate primary key</td>
-<td><code>Duplicate facility_reference: 'FAC_001'</code></td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="common-validation-issues">Common Validation Issues<a class="headerlink" href="#common-validation-issues" title="Permanent link">&para;</a></h2>
-<h3 id="1-missing-column">1. Missing Column<a class="headerlink" href="#1-missing-column" title="Permanent link">&para;</a></h3>
-<p><strong>Error:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>[facilities] Missing column: &#39;risk_type&#39; (expected type: String)
-</span></code></pre></div></p>
-<p><strong>Cause:</strong> The input file is missing a required column.</p>
-<p><strong>Fix:</strong> Add the missing column to your data:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+<h2 id="bundle-validation-functions">Bundle Validation Functions<a class="headerlink" href="#bundle-validation-functions" title="Permanent link">&para;</a></h2>
+<p>These functions validate entire pipeline bundles at stage boundaries, checking that
+expected columns exist after each transformation.</p>
+<h3 id="validate_raw_data_bundle"><code>validate_raw_data_bundle()</code><a class="headerlink" href="#validate_raw_data_bundle" title="Permanent link">&para;</a></h3>
+<p>Validates all LazyFrames in a <code>RawDataBundle</code> against expected schemas.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_raw_data_bundle</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_raw_data_bundle</span><span class="p">(</span><span class="n">bundle</span><span class="p">,</span> <span class="n">schemas</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Validates up to 11 named frames: <code>facilities</code>, <code>loans</code>, <code>contingents</code>, <code>counterparties</code>,
+<code>collateral</code>, <code>guarantees</code>, <code>provisions</code>, <code>ratings</code>, <code>facility_mappings</code>, <code>org_mappings</code>,
+<code>lending_mappings</code>.</p>
+<p><strong>Returns:</strong> <code>list[CalculationError]</code></p>
+<h3 id="validate_resolved_hierarchy_bundle"><code>validate_resolved_hierarchy_bundle()</code><a class="headerlink" href="#validate_resolved_hierarchy_bundle" title="Permanent link">&para;</a></h3>
+<p>Validates that hierarchy columns exist in a <code>ResolvedHierarchyBundle.exposures</code> LazyFrame.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_resolved_hierarchy_bundle</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Add missing column with default value</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">facilities</span> <span class="o">=</span> <span class="n">facilities</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;MR&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;risk_type&quot;</span><span class="p">)</span>  <span class="c1"># MR = medium risk (50% SA, 75% F-IRB)</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">)</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">hierarchy_columns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="s2">&quot;counterparty_has_parent&quot;</span><span class="p">,</span> <span class="s2">&quot;parent_counterparty_reference&quot;</span><span class="p">,</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="s2">&quot;ultimate_parent_reference&quot;</span><span class="p">,</span> <span class="s2">&quot;counterparty_hierarchy_depth&quot;</span><span class="p">,</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="s2">&quot;rating_inherited&quot;</span><span class="p">,</span> <span class="s2">&quot;rating_source_counterparty&quot;</span><span class="p">,</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">]</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_resolved_hierarchy_bundle</span><span class="p">(</span><span class="n">bundle</span><span class="p">,</span> <span class="n">hierarchy_columns</span><span class="p">)</span>
 </span></code></pre></div>
-<hr />
-<h3 id="2-type-mismatch">2. Type Mismatch<a class="headerlink" href="#2-type-mismatch" title="Permanent link">&para;</a></h3>
-<p><strong>Error:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>[loans] Type mismatch for &#39;drawn_amount&#39;: expected Float64, got String
-</span></code></pre></div></p>
-<p><strong>Cause:</strong> The column contains string values instead of numbers (common with CSV imports).</p>
-<p><strong>Fix:</strong> Cast the column to the correct type:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bundle</code></td>
+<td><code>ResolvedHierarchyBundle</code></td>
+<td>Bundle to validate</td>
+</tr>
+<tr>
+<td><code>expected_columns</code></td>
+<td><code>list[str]</code></td>
+<td>Hierarchy columns to check for</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>list[CalculationError]</code></p>
+<h3 id="validate_classified_bundle"><code>validate_classified_bundle()</code><a class="headerlink" href="#validate_classified_bundle" title="Permanent link">&para;</a></h3>
+<p>Validates classification columns across <code>all_exposures</code>, <code>sa_exposures</code>, and
+<code>irb_exposures</code> in a <code>ClassifiedExposuresBundle</code>.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_classified_bundle</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">classification_columns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="s2">&quot;exposure_class&quot;</span><span class="p">,</span> <span class="s2">&quot;approach_applied&quot;</span><span class="p">,</span> <span class="s2">&quot;cqs&quot;</span><span class="p">,</span> <span class="s2">&quot;pd&quot;</span><span class="p">,</span> <span class="s2">&quot;is_sme&quot;</span><span class="p">,</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">]</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_classified_bundle</span><span class="p">(</span><span class="n">bundle</span><span class="p">,</span> <span class="n">classification_columns</span><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Returns:</strong> <code>list[CalculationError]</code></p>
+<h3 id="validate_crm_adjusted_bundle"><code>validate_crm_adjusted_bundle()</code><a class="headerlink" href="#validate_crm_adjusted_bundle" title="Permanent link">&para;</a></h3>
+<p>Validates CRM-related columns across <code>exposures</code>, <code>sa_exposures</code>, and <code>irb_exposures</code>
+in a <code>CRMAdjustedBundle</code>.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_crm_adjusted_bundle</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">loans</span> <span class="o">=</span> <span class="n">loans</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">)</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">)</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">crm_columns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="s2">&quot;ccf_applied&quot;</span><span class="p">,</span> <span class="s2">&quot;gross_ead&quot;</span><span class="p">,</span> <span class="s2">&quot;final_ead&quot;</span><span class="p">,</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="s2">&quot;collateral_adjusted_value&quot;</span><span class="p">,</span> <span class="s2">&quot;ead_after_collateral&quot;</span><span class="p">,</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">]</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_crm_adjusted_bundle</span><span class="p">(</span><span class="n">bundle</span><span class="p">,</span> <span class="n">crm_columns</span><span class="p">)</span>
 </span></code></pre></div>
-<hr />
-<h3 id="3-column-name-case-mismatch">3. Column Name Case Mismatch<a class="headerlink" href="#3-column-name-case-mismatch" title="Permanent link">&para;</a></h3>
-<p><strong>Error:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>[counterparties] Missing column: &#39;counterparty_reference&#39; (expected type: String)
-</span></code></pre></div></p>
-<p><strong>Cause:</strong> Column names are case-sensitive. <code>Counterparty_Reference</code> is not the same as <code>counterparty_reference</code>.</p>
-<p><strong>Fix:</strong> Rename columns to match expected names:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">counterparties</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="s2">&quot;Counterparty_Reference&quot;</span><span class="p">:</span> <span class="s2">&quot;counterparty_reference&quot;</span><span class="p">,</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="s2">&quot;Country_Code&quot;</span><span class="p">:</span> <span class="s2">&quot;country_code&quot;</span><span class="p">,</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">})</span>
-</span></code></pre></div>
-<hr />
-<h3 id="4-date-format-issues">4. Date Format Issues<a class="headerlink" href="#4-date-format-issues" title="Permanent link">&para;</a></h3>
-<p><strong>Error:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>[facilities] Type mismatch for &#39;maturity_date&#39;: expected Date, got String
-</span></code></pre></div></p>
-<p><strong>Cause:</strong> Dates are stored as strings instead of proper date types.</p>
-<p><strong>Fix:</strong> Parse dates from strings:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">facilities</span> <span class="o">=</span> <span class="n">facilities</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;maturity_date&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">Date</span><span class="p">,</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="p">)</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># For different formats:</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># &quot;%d/%m/%Y&quot; for 31/12/2024</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># &quot;%m/%d/%Y&quot; for 12/31/2024</span>
-</span></code></pre></div>
-<hr />
-<h3 id="5-invalid-pdlgd-values">5. Invalid PD/LGD Values<a class="headerlink" href="#5-invalid-pdlgd-values" title="Permanent link">&para;</a></h3>
-<p><strong>Error:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>PD value -0.01 is below minimum 0.0
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>LGD value 1.5 exceeds maximum 1.25
-</span></code></pre></div></p>
-<p><strong>Cause:</strong> Risk parameters are outside valid ranges.</p>
-<p><strong>Fix:</strong> Clip or filter invalid values:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Clip PD to valid range [0, 1]</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="p">)</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Or filter out invalid rows</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">valid_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>    <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">)</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="p">)</span>
-</span></code></pre></div>
-<hr />
-<h3 id="6-missing-reference-foreign-key">6. Missing Reference (Foreign Key)<a class="headerlink" href="#6-missing-reference-foreign-key" title="Permanent link">&para;</a></h3>
-<p><strong>Error:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>counterparty_reference &#39;CORP_999&#39; in loans not found in counterparties
-</span></code></pre></div></p>
-<p><strong>Cause:</strong> A loan references a counterparty that doesn't exist.</p>
-<p><strong>Fix:</strong> Either add the missing counterparty or filter orphan records:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Get valid counterparty references</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">valid_refs</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;counterparty_reference&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Filter loans to only valid references</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">loans</span> <span class="o">=</span> <span class="n">loans</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;counterparty_reference&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">valid_refs</span><span class="p">[</span><span class="s2">&quot;counterparty_reference&quot;</span><span class="p">])</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="p">)</span>
-</span></code></pre></div>
-<hr />
-<h3 id="7-negative-amounts">7. Negative Amounts<a class="headerlink" href="#7-negative-amounts" title="Permanent link">&para;</a></h3>
-<p><strong>Error:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Invalid value: drawn_amount cannot be negative
-</span></code></pre></div></p>
-<p><strong>Cause:</strong> Amount columns contain negative values.</p>
-<p><strong>Fix:</strong> Take absolute value or filter:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Take absolute value</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">loans</span> <span class="o">=</span> <span class="n">loans</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="p">)</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Or filter</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="n">loans</span> <span class="o">=</span> <span class="n">loans</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">)</span>
-</span></code></pre></div>
+<p><strong>Returns:</strong> <code>list[CalculationError]</code></p>
 <hr />
 <h2 id="business-rule-validators">Business Rule Validators<a class="headerlink" href="#business-rule-validators" title="Permanent link">&para;</a></h2>
-<p>The calculator includes validators for domain-specific rules:</p>
-<h3 id="non-negative-amounts">Non-Negative Amounts<a class="headerlink" href="#non-negative-amounts" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_non_negative_amounts</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Returns LazyFrame with validation flag columns</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_non_negative_amounts</span><span class="p">(</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">loans</span><span class="p">,</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="n">amount_columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">,</span> <span class="s2">&quot;limit&quot;</span><span class="p">],</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;loans&quot;</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="p">)</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1"># Check validation results</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="n">result</span> <span class="o">=</span> <span class="n">validated</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>    <span class="s2">&quot;_valid_drawn_amount&quot;</span><span class="p">,</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>    <span class="s2">&quot;_valid_limit&quot;</span>
-</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="p">])</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+<p>These functions add boolean validation flag columns to LazyFrames without materialising data.
+The flag columns follow the naming convention <code>_valid_{column_name}</code>.</p>
+<h3 id="validate_non_negative_amounts"><code>validate_non_negative_amounts()</code><a class="headerlink" href="#validate_non_negative_amounts" title="Permanent link">&para;</a></h3>
+<p>Adds validation flag columns for non-negative amount checks.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_non_negative_amounts</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_non_negative_amounts</span><span class="p">(</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">loans</span><span class="p">,</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">amount_columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">,</span> <span class="s2">&quot;limit&quot;</span><span class="p">],</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;loans&quot;</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="p">)</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Adds _valid_drawn_amount and _valid_limit boolean columns</span>
 </span></code></pre></div>
-<h3 id="pd-range-validation">PD Range Validation<a class="headerlink" href="#pd-range-validation" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_pd_range</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_pd_range</span><span class="p">(</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">ratings</span><span class="p">,</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="n">pd_column</span><span class="o">=</span><span class="s2">&quot;pd&quot;</span><span class="p">,</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>    <span class="n">min_pd</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="n">max_pd</span><span class="o">=</span><span class="mf">1.0</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="p">)</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="c1"># Filter to only valid PDs</span>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="n">valid_ratings</span> <span class="o">=</span> <span class="n">validated</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_valid_pd&quot;</span><span class="p">))</span>
+<p><strong>Returns:</strong> <code>pl.LazyFrame</code> — with added <code>_valid_{col}</code> flag columns.</p>
+<h3 id="validate_pd_range"><code>validate_pd_range()</code><a class="headerlink" href="#validate_pd_range" title="Permanent link">&para;</a></h3>
+<p>Validates that PD values are in [0, 1].</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_pd_range</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_pd_range</span><span class="p">(</span><span class="n">lf</span><span class="o">=</span><span class="n">ratings</span><span class="p">,</span> <span class="n">pd_column</span><span class="o">=</span><span class="s2">&quot;pd&quot;</span><span class="p">,</span> <span class="n">min_pd</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">max_pd</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">valid_ratings</span> <span class="o">=</span> <span class="n">validated</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_valid_pd&quot;</span><span class="p">))</span>
 </span></code></pre></div>
-<h3 id="lgd-range-validation">LGD Range Validation<a class="headerlink" href="#lgd-range-validation" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_lgd_range</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_lgd_range</span><span class="p">(</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">exposures</span><span class="p">,</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">lgd_column</span><span class="o">=</span><span class="s2">&quot;lgd&quot;</span><span class="p">,</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="n">min_lgd</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="n">max_lgd</span><span class="o">=</span><span class="mf">1.25</span>  <span class="c1"># Can exceed 1.0 in some cases</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="p">)</span>
+<p><strong>Returns:</strong> <code>pl.LazyFrame</code> — with <code>_valid_pd</code> column.</p>
+<h3 id="validate_lgd_range"><code>validate_lgd_range()</code><a class="headerlink" href="#validate_lgd_range" title="Permanent link">&para;</a></h3>
+<p>Validates that LGD values are in [0, 1.25]. The upper bound exceeds 1.0 because LGD
+can legitimately exceed 100% in certain Basel scenarios.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_lgd_range</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_lgd_range</span><span class="p">(</span><span class="n">lf</span><span class="o">=</span><span class="n">exposures</span><span class="p">,</span> <span class="n">lgd_column</span><span class="o">=</span><span class="s2">&quot;lgd&quot;</span><span class="p">,</span> <span class="n">min_lgd</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">max_lgd</span><span class="o">=</span><span class="mf">1.25</span><span class="p">)</span>
 </span></code></pre></div>
+<p><strong>Returns:</strong> <code>pl.LazyFrame</code> — with <code>_valid_lgd</code> column.</p>
+<h3 id="validate_risk_type"><code>validate_risk_type()</code><a class="headerlink" href="#validate_risk_type" title="Permanent link">&para;</a></h3>
+<p>Validates that risk type values are one of the recognised codes (<code>FR</code>, <code>MR</code>, <code>MLR</code>, <code>LR</code>)
+or full values (<code>full_risk</code>, <code>medium_risk</code>, <code>medium_low_risk</code>, <code>low_risk</code>).
+Comparison is case-insensitive.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_risk_type</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_risk_type</span><span class="p">(</span><span class="n">lf</span><span class="o">=</span><span class="n">facilities</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">&quot;risk_type&quot;</span><span class="p">)</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Adds _valid_risk_type boolean column</span>
+</span></code></pre></div>
+<p><strong>Returns:</strong> <code>pl.LazyFrame</code> — with <code>_valid_risk_type</code> column.</p>
+<h3 id="validate_ccf_modelled"><code>validate_ccf_modelled()</code><a class="headerlink" href="#validate_ccf_modelled" title="Permanent link">&para;</a></h3>
+<p>Validates that modelled CCF values are in [0.0, 1.5]. Null values are treated as valid
+since the field is optional. The 150% cap accommodates Retail IRB CCFs that can exceed
+100% due to additional drawdown behaviour during stress.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_ccf_modelled</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">validated</span> <span class="o">=</span> <span class="n">validate_ccf_modelled</span><span class="p">(</span><span class="n">lf</span><span class="o">=</span><span class="n">facilities</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">&quot;ccf_modelled&quot;</span><span class="p">)</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Adds _valid_ccf_modelled boolean column</span>
+</span></code></pre></div>
+<p><strong>Returns:</strong> <code>pl.LazyFrame</code> — with <code>_valid_ccf_modelled</code> column.</p>
+<h3 id="normalize_risk_type"><code>normalize_risk_type()</code><a class="headerlink" href="#normalize_risk_type" title="Permanent link">&para;</a></h3>
+<p>Normalises risk type short codes to canonical full values. First lowercases the column,
+then maps: <code>FR</code> → <code>full_risk</code>, <code>MR</code> → <code>medium_risk</code>, <code>MLR</code> → <code>medium_low_risk</code>,
+<code>LR</code> → <code>low_risk</code>. Values already in full form pass through unchanged.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">normalize_risk_type</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">normalized</span> <span class="o">=</span> <span class="n">normalize_risk_type</span><span class="p">(</span><span class="n">lf</span><span class="o">=</span><span class="n">facilities</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">&quot;risk_type&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Constants used:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Short Code</th>
+<th>Full Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fr</code></td>
+<td><code>full_risk</code></td>
+</tr>
+<tr>
+<td><code>mr</code></td>
+<td><code>medium_risk</code></td>
+</tr>
+<tr>
+<td><code>mlr</code></td>
+<td><code>medium_low_risk</code></td>
+</tr>
+<tr>
+<td><code>lr</code></td>
+<td><code>low_risk</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>pl.LazyFrame</code> — with normalised <code>risk_type</code> column.</p>
 <hr />
-<h2 id="pre-flight-validation">Pre-Flight Validation<a class="headerlink" href="#pre-flight-validation" title="Permanent link">&para;</a></h2>
-<p>Before running the full pipeline, validate your entire data bundle:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_raw_data_bundle</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.data.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">FACILITY_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">LOAN_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="n">COUNTERPARTY_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>    <span class="n">COLLATERAL_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="p">)</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Define schemas to validate</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="n">schemas</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>    <span class="s2">&quot;facilities&quot;</span><span class="p">:</span> <span class="n">FACILITY_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>    <span class="s2">&quot;loans&quot;</span><span class="p">:</span> <span class="n">LOAN_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>    <span class="s2">&quot;counterparties&quot;</span><span class="p">:</span> <span class="n">COUNTERPARTY_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>    <span class="s2">&quot;collateral&quot;</span><span class="p">:</span> <span class="n">COLLATERAL_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="p">}</span>
-</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>
-</span><span id="__span-20-17"><a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="c1"># Validate entire bundle</span>
-</span><span id="__span-20-18"><a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_raw_data_bundle</span><span class="p">(</span><span class="n">bundle</span><span class="p">,</span> <span class="n">schemas</span><span class="p">)</span>
-</span><span id="__span-20-19"><a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a>
-</span><span id="__span-20-20"><a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a><span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-20-21"><a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span><span class="si">}</span><span class="s2"> validation errors:&quot;</span><span class="p">)</span>
-</span><span id="__span-20-22"><a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a>    <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-20-23"><a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [</span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">category</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-20-24"><a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-20-25"><a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;All data validated successfully&quot;</span><span class="p">)</span>
+<h2 id="column-value-validation">Column Value Validation<a class="headerlink" href="#column-value-validation" title="Permanent link">&para;</a></h2>
+<p>These functions check actual data values against allowed sets. They are the only
+validation functions that materialise data (call <code>.collect()</code>).</p>
+<h3 id="validate_column_values"><code>validate_column_values()</code><a class="headerlink" href="#validate_column_values" title="Permanent link">&para;</a></h3>
+<p>Validates that all non-null values in a column belong to a set of allowed values.
+Performs case-insensitive comparison. Groups invalid values by distinct value with counts.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_column_values</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.data.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">VALID_ENTITY_TYPES</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_column_values</span><span class="p">(</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">counterparties</span><span class="p">,</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">column</span><span class="o">=</span><span class="s2">&quot;entity_type&quot;</span><span class="p">,</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">valid_values</span><span class="o">=</span><span class="n">VALID_ENTITY_TYPES</span><span class="p">,</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;counterparties&quot;</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="p">)</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid value &#39;</span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">actual_value</span><span class="si">}</span><span class="s2">&#39; found </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<p><strong>Returns:</strong> <code>list[CalculationError]</code> — with code <code>ERROR_INVALID_COLUMN_VALUE</code>,
+severity <code>WARNING</code>, category <code>DATA_QUALITY</code>.</p>
+<h3 id="validate_bundle_values"><code>validate_bundle_values()</code><a class="headerlink" href="#validate_bundle_values" title="Permanent link">&para;</a></h3>
+<p>Validates all categorical column values across an entire <code>RawDataBundle</code> in one call.
+Uses the <code>COLUMN_VALUE_CONSTRAINTS</code> registry from <code>data/schemas.py</code> by default.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_bundle_values</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Using default constraints from COLUMN_VALUE_CONSTRAINTS</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_bundle_values</span><span class="p">(</span><span class="n">bundle</span><span class="p">)</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Or with custom constraints</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">custom_constraints</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>    <span class="s2">&quot;counterparties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;entity_type&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;corporate&quot;</span><span class="p">,</span> <span class="s2">&quot;institution&quot;</span><span class="p">}},</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="p">}</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_bundle_values</span><span class="p">(</span><span class="n">bundle</span><span class="p">,</span> <span class="n">constraints</span><span class="o">=</span><span class="n">custom_constraints</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The function validates these tables (when present in the bundle):</p>
+<table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Validated Columns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>facilities</code></td>
+<td><code>seniority</code></td>
+</tr>
+<tr>
+<td><code>loans</code></td>
+<td><code>seniority</code></td>
+</tr>
+<tr>
+<td><code>contingents</code></td>
+<td><code>seniority</code>, <code>bs_type</code></td>
+</tr>
+<tr>
+<td><code>counterparties</code></td>
+<td><code>entity_type</code></td>
+</tr>
+<tr>
+<td><code>collateral</code></td>
+<td><code>collateral_type</code>, <code>property_type</code>, <code>issuer_type</code>, <code>valuation_type</code>, <code>beneficiary_type</code></td>
+</tr>
+<tr>
+<td><code>provisions</code></td>
+<td><code>provision_type</code>, <code>beneficiary_type</code></td>
+</tr>
+<tr>
+<td><code>ratings</code></td>
+<td><code>rating_type</code></td>
+</tr>
+<tr>
+<td><code>specialised_lending</code></td>
+<td><code>sl_type</code>, <code>slotting_category</code></td>
+</tr>
+<tr>
+<td><code>equity_exposures</code></td>
+<td><code>equity_type</code></td>
+</tr>
+<tr>
+<td><code>guarantees</code></td>
+<td><code>beneficiary_type</code></td>
+</tr>
+<tr>
+<td><code>facility_mappings</code></td>
+<td><code>child_type</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Performance:</strong> Internally uses <code>_validate_table_columns_batched()</code> which checks
+multiple columns per table in a single <code>.collect()</code> call.</p>
+<p><strong>Returns:</strong> <code>list[CalculationError]</code></p>
 <hr />
 <h2 id="type-compatibility">Type Compatibility<a class="headerlink" href="#type-compatibility" title="Permanent link">&para;</a></h2>
 <p>The validator allows some type flexibility:</p>
@@ -5000,99 +5219,94 @@
 <hr />
 <h2 id="validation-in-the-pipeline">Validation in the Pipeline<a class="headerlink" href="#validation-in-the-pipeline" title="Permanent link">&para;</a></h2>
 <p>The pipeline validates data at stage boundaries:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>Load → [Validate Raw] → Hierarchy → [Validate Resolved] → Classify → ...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Load → [validate_raw_data_bundle] → Hierarchy → [validate_resolved_hierarchy_bundle]
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>     → Classify → [validate_classified_bundle] → CRM → [validate_crm_adjusted_bundle] → ...
 </span></code></pre></div>
 <p>If validation fails, the pipeline:</p>
 <ol>
-<li><strong>Accumulates errors</strong> - Does not fail immediately</li>
-<li><strong>Continues where possible</strong> - Processes valid records</li>
-<li><strong>Reports all issues</strong> - Returns complete error list</li>
+<li><strong>Accumulates errors</strong> — Does not fail immediately</li>
+<li><strong>Continues where possible</strong> — Processes valid records</li>
+<li><strong>Reports all issues</strong> — Returns complete error list in the result bundle</li>
 </ol>
-<p>Access validation results:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">has_errors</span><span class="p">:</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>        <span class="k">if</span> <span class="n">error</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;SCHEMA_VALIDATION&quot;</span><span class="p">:</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Schema error: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>        <span class="k">elif</span> <span class="n">error</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;BUSINESS_RULE&quot;</span><span class="p">:</span>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Business rule violation: </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<hr />
+<h2 id="common-validation-issues">Common Validation Issues<a class="headerlink" href="#common-validation-issues" title="Permanent link">&para;</a></h2>
+<h3 id="1-missing-column">1. Missing Column<a class="headerlink" href="#1-missing-column" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>[facilities] Missing column: &#39;risk_type&#39; (expected type: String)
+</span></code></pre></div>
+<p><strong>Fix:</strong> Add the missing column with a default value:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">facilities</span> <span class="o">=</span> <span class="n">facilities</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;MR&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;risk_type&quot;</span><span class="p">)</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="2-type-mismatch">2. Type Mismatch<a class="headerlink" href="#2-type-mismatch" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>[loans] Type mismatch for &#39;drawn_amount&#39;: expected Float64, got String
+</span></code></pre></div>
+<p><strong>Fix:</strong> Cast the column to the correct type:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">loans</span> <span class="o">=</span> <span class="n">loans</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">)</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="3-invalid-categorical-values">3. Invalid Categorical Values<a class="headerlink" href="#3-invalid-categorical-values" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>[counterparties] Invalid value &#39;CORP&#39; for entity_type (expected one of: corporate, ...)
+</span></code></pre></div>
+<p><strong>Fix:</strong> Map invalid values to valid ones:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">counterparties</span> <span class="o">=</span> <span class="n">counterparties</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;entity_type&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">to_lowercase</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">({</span><span class="s2">&quot;corp&quot;</span><span class="p">:</span> <span class="s2">&quot;corporate&quot;</span><span class="p">})</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="4-date-format-issues">4. Date Format Issues<a class="headerlink" href="#4-date-format-issues" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>[facilities] Type mismatch for &#39;maturity_date&#39;: expected Date, got String
+</span></code></pre></div>
+<p><strong>Fix:</strong> Parse dates from strings:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">facilities</span> <span class="o">=</span> <span class="n">facilities</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;maturity_date&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">Date</span><span class="p">,</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="5-invalid-pdlgd-values">5. Invalid PD/LGD Values<a class="headerlink" href="#5-invalid-pdlgd-values" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>PD value -0.01 is below minimum 0.0
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>LGD value 1.5 exceeds maximum 1.25
+</span></code></pre></div>
+<p><strong>Fix:</strong> Clip values to valid ranges:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">with_columns</span><span class="p">(</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;lgd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.25</span><span class="p">),</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="p">)</span>
 </span></code></pre></div>
 <hr />
 <h2 id="debugging-tips">Debugging Tips<a class="headerlink" href="#debugging-tips" title="Permanent link">&para;</a></h2>
-<h3 id="1-inspect-schema-before-validation">1. Inspect Schema Before Validation<a class="headerlink" href="#1-inspect-schema-before-validation" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">lf</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">scan_parquet</span><span class="p">(</span><span class="s2">&quot;data/facilities.parquet&quot;</span><span class="p">)</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># View actual schema</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Actual schema:&quot;</span><span class="p">)</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">lf</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span></code></pre></div>
-<h3 id="2-compare-expected-vs-actual">2. Compare Expected vs Actual<a class="headerlink" href="#2-compare-expected-vs-actual" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.data.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">FACILITY_SCHEMA</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Expected schema:&quot;</span><span class="p">)</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">FACILITY_SCHEMA</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Actual schema:&quot;</span><span class="p">)</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">lf</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="c1"># Find differences</span>
-</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="n">expected_cols</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">FACILITY_SCHEMA</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="n">actual_cols</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">lf</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span><span class="o">.</span><span class="n">names</span><span class="p">())</span>
-</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>
-</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Missing columns: </span><span class="si">{</span><span class="n">expected_cols</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">actual_cols</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extra columns: </span><span class="si">{</span><span class="n">actual_cols</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">expected_cols</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span></code></pre></div>
-<h3 id="3-sample-invalid-rows">3. Sample Invalid Rows<a class="headerlink" href="#3-sample-invalid-rows" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># Find rows with negative amounts</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="n">invalid</span> <span class="o">=</span> <span class="n">loans</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;drawn_amount&quot;</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">invalid</span><span class="p">)</span><span class="si">}</span><span class="s2"> rows with negative drawn_amount&quot;</span><span class="p">)</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">invalid</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="c1"># Find rows with null required fields</span>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="n">null_refs</span> <span class="o">=</span> <span class="n">loans</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;counterparty_reference&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_null</span><span class="p">())</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">null_refs</span><span class="p">)</span><span class="si">}</span><span class="s2"> rows with null counterparty_reference&quot;</span><span class="p">)</span>
-</span></code></pre></div>
-<h3 id="4-check-value-distributions">4. Check Value Distributions<a class="headerlink" href="#4-check-value-distributions" title="Permanent link">&para;</a></h3>
+<h3 id="inspect-schema-before-validation">Inspect Schema Before Validation<a class="headerlink" href="#inspect-schema-before-validation" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># Check PD distribution</span>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="n">pd_stats</span> <span class="o">=</span> <span class="n">ratings</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;min_pd&quot;</span><span class="p">),</span>
-</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;max_pd&quot;</span><span class="p">),</span>
-</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;mean_pd&quot;</span><span class="p">),</span>
-</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">null_count</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;null_count&quot;</span><span class="p">),</span>
-</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="p">])</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
-</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>
-</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="nb">print</span><span class="p">(</span><span class="n">pd_stats</span><span class="p">)</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">lf</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">scan_parquet</span><span class="p">(</span><span class="s2">&quot;data/facilities.parquet&quot;</span><span class="p">)</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Actual schema:&quot;</span><span class="p">)</span>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">lf</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<hr />
-<h2 id="strict-mode">Strict Mode<a class="headerlink" href="#strict-mode" title="Permanent link">&para;</a></h2>
-<p>For production use, enable strict validation to catch unexpected columns:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">validate_schema</span><span class="p">(</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>    <span class="n">lf</span><span class="o">=</span><span class="n">facilities</span><span class="p">,</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="n">expected_schema</span><span class="o">=</span><span class="n">FACILITY_SCHEMA</span><span class="p">,</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;facilities&quot;</span><span class="p">,</span>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="n">strict</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Flag unexpected columns</span>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="p">)</span>
+<h3 id="compare-expected-vs-actual">Compare Expected vs Actual<a class="headerlink" href="#compare-expected-vs-actual" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.data.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">FACILITY_SCHEMA</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="n">expected_cols</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">FACILITY_SCHEMA</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="n">actual_cols</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">lf</span><span class="o">.</span><span class="n">collect_schema</span><span class="p">()</span><span class="o">.</span><span class="n">names</span><span class="p">())</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Missing columns: </span><span class="si">{</span><span class="n">expected_cols</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">actual_cols</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extra columns: </span><span class="si">{</span><span class="n">actual_cols</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">expected_cols</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Unexpected columns might indicate:
-- Data from a different version
-- Leftover columns from transformations
-- Incorrectly named columns</p>
+<h3 id="check-value-distributions">Check Value Distributions<a class="headerlink" href="#check-value-distributions" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">pd_stats</span> <span class="o">=</span> <span class="n">ratings</span><span class="o">.</span><span class="n">select</span><span class="p">([</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;min&quot;</span><span class="p">),</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;max&quot;</span><span class="p">),</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;pd&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">null_count</span><span class="p">()</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;nulls&quot;</span><span class="p">),</span>
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="p">])</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">pd_stats</span><span class="p">)</span>
+</span></code></pre></div>
 <hr />
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../input-schemas/">Input Schemas</a> - Complete schema definitions</li>
-<li><a href="../../architecture/data-flow/">Data Flow</a> - How data moves through pipeline</li>
-<li><a href="../../api/contracts/#error-handling">Error Handling</a> - Error types and handling</li>
+<li><a href="../input-schemas/">Input Schemas</a> — Complete schema definitions</li>
+<li><a href="../../architecture/data-flow/">Data Flow</a> — How data moves through pipeline</li>
+<li><a href="../../api/contracts/#error-handling">Error Handling</a> — Error types and handling</li>
 </ul>
 
 

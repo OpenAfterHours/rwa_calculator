@@ -2176,6 +2176,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2247,6 +2251,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2518,6 +2578,8 @@
       
         
       
+        
+      
     
     
     
@@ -2729,6 +2791,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -4703,7 +4793,7 @@
 <tbody>
 <tr>
 <td><strong>Counterparty</strong></td>
-<td>SME (turnover ≤ EUR 50m / GBP 44m)</td>
+<td>SME (turnover ≤ EUR 50m / ~GBP 43.7m)</td>
 </tr>
 <tr>
 <td><strong>Exposure class</strong></td>
@@ -4725,7 +4815,7 @@
 </table>
 <h3 id="calculation">Calculation<a class="headerlink" href="#calculation" title="Permanent link">&para;</a></h3>
 <p>The factor is <strong>tiered</strong> based on total exposure to the counterparty:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">threshold</span> <span class="o">=</span> <span class="n">EUR</span> <span class="mi">2</span><span class="p">,</span><span class="mi">500</span><span class="p">,</span><span class="mi">000</span>  <span class="c1"># GBP 2,200,000</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">threshold</span> <span class="o">=</span> <span class="n">EUR</span> <span class="mi">2</span><span class="p">,</span><span class="mi">500</span><span class="p">,</span><span class="mi">000</span>  <span class="c1"># ~GBP 2,183,000</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">if</span> <span class="n">total_exposure</span> <span class="o">&lt;=</span> <span class="n">threshold</span><span class="p">:</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">factor</span> <span class="o">=</span> <span class="mf">0.7619</span>  <span class="c1"># 23.81% reduction</span>
@@ -4743,7 +4833,7 @@
 </thead>
 <tbody>
 <tr>
-<td>≤ GBP 2.2m</td>
+<td>≤ ~GBP 2.18m</td>
 <td>0.7619</td>
 <td>23.81%</td>
 </tr>
@@ -4786,7 +4876,7 @@
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>     |    ....
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>0.76 |....
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>     |___________________________________
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>     0      2.2m   5m    10m   25m   50m  Exposure
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>     0     2.18m   5m    10m   25m   50m  Exposure
 </span></code></pre></div>
 <h3 id="calculation-example">Calculation Example<a class="headerlink" href="#calculation-example" title="Permanent link">&para;</a></h3>
 <p><strong>Exposure:</strong>
@@ -4794,14 +4884,14 @@
 - Total exposure: £8m
 - Base RWA: £6.4m (80% average RW)</p>
 <p><strong>SME Factor Calculation:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">threshold</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">200</span><span class="p">,</span><span class="mi">000</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">threshold</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">183</span><span class="p">,</span><span class="mi">000</span>  <span class="c1"># EUR 2.5m × 0.8732</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Tiered calculation</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">portion_1</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">200</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mf">0.7619</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="mi">676</span><span class="p">,</span><span class="mi">180</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">portion_2</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">2</span><span class="p">,</span><span class="mi">200</span><span class="p">,</span><span class="mi">000</span><span class="p">)</span> <span class="err">×</span> <span class="mf">0.85</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span><span class="mi">930</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">portion_1</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">183</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mf">0.7619</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="mi">663</span><span class="p">,</span><span class="mi">238</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">portion_2</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">2</span><span class="p">,</span><span class="mi">183</span><span class="p">,</span><span class="mi">000</span><span class="p">)</span> <span class="err">×</span> <span class="mf">0.85</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span><span class="mi">944</span><span class="p">,</span><span class="mi">450</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">total_weighted</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="mi">676</span><span class="p">,</span><span class="mi">180</span> <span class="o">+</span> <span class="mi">4</span><span class="p">,</span><span class="mi">930</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">606</span><span class="p">,</span><span class="mi">180</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">factor</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">606</span><span class="p">,</span><span class="mi">180</span> <span class="o">/</span> <span class="mi">8</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mf">0.826</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">total_weighted</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="mi">663</span><span class="p">,</span><span class="mi">238</span> <span class="o">+</span> <span class="mi">4</span><span class="p">,</span><span class="mi">944</span><span class="p">,</span><span class="mi">450</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">607</span><span class="p">,</span><span class="mi">688</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">factor</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">607</span><span class="p">,</span><span class="mi">688</span> <span class="o">/</span> <span class="mi">8</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mf">0.826</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Apply to RWA</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">Adjusted_RWA</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">400</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mf">0.826</span> <span class="o">=</span> <span class="err">£</span><span class="mi">5</span><span class="p">,</span><span class="mi">286</span><span class="p">,</span><span class="mi">400</span>
@@ -4810,8 +4900,8 @@
 </span></code></pre></div></p>
 <h3 id="sme-definition">SME Definition<a class="headerlink" href="#sme-definition" title="Permanent link">&para;</a></h3>
 <p>An entity qualifies as an SME if:
-- Annual turnover ≤ EUR 50m (GBP 44m), OR
-- Total assets ≤ EUR 43m (GBP 37.84m)</p>
+- Annual turnover ≤ EUR 50m (~GBP 43.7m), OR
+- Total assets ≤ EUR 43m (~GBP 37.6m)</p>
 <p><strong>Turnover Source:</strong>
 1. Audited financial statements (preferred)
 2. Management accounts
@@ -5015,23 +5105,22 @@
 </span></code></pre></div>
 <h3 id="calculating-factors">Calculating Factors<a class="headerlink" href="#calculating-factors" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine.sa.supporting_factors</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">calculate_sme_factor</span><span class="p">,</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">is_qualifying_infrastructure</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">SupportingFactorCalculator</span><span class="p">,</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">create_supporting_factor_calculator</span><span class="p">,</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="p">)</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># SME factor</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">sme_factor</span> <span class="o">=</span> <span class="n">calculate_sme_factor</span><span class="p">(</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">total_exposure</span><span class="o">=</span><span class="mi">8_000_000</span><span class="p">,</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="n">counterparty_turnover</span><span class="o">=</span><span class="mi">30_000_000</span><span class="p">,</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="n">eur_gbp_rate</span><span class="o">=</span><span class="mf">0.8732</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="p">)</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># Infrastructure check</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="n">infra_eligible</span> <span class="o">=</span> <span class="n">is_qualifying_infrastructure</span><span class="p">(</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="n">exposure_type</span><span class="o">=</span><span class="s2">&quot;PROJECT_FINANCE&quot;</span><span class="p">,</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>    <span class="n">revenue_stability</span><span class="o">=</span><span class="s2">&quot;HIGH&quot;</span><span class="p">,</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>    <span class="n">contractual_framework</span><span class="o">=</span><span class="s2">&quot;COMPREHENSIVE&quot;</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="p">)</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationConfig</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">decimal</span><span class="w"> </span><span class="kn">import</span> <span class="n">Decimal</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="n">calculator</span> <span class="o">=</span> <span class="n">create_supporting_factor_calculator</span><span class="p">()</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># SME factor — uses config for EUR/GBP rate and thresholds</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="n">sme_factor</span> <span class="o">=</span> <span class="n">calculator</span><span class="o">.</span><span class="n">calculate_sme_factor</span><span class="p">(</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>    <span class="n">total_exposure</span><span class="o">=</span><span class="n">Decimal</span><span class="p">(</span><span class="s2">&quot;8000000&quot;</span><span class="p">),</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="p">)</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="c1"># Returns ~0.826 for £8m exposure (tiered calculation)</span>
 </span></code></pre></div>
 <h2 id="eurgbp-conversion">EUR/GBP Conversion<a class="headerlink" href="#eurgbp-conversion" title="Permanent link">&para;</a></h2>
 <p>Thresholds are defined in EUR and converted to GBP:</p>

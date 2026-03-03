@@ -896,6 +896,30 @@
   </span>
 </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/corep-reporting/">
+<span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/comparison/">
+<span class="md-ellipsis">
+    
+  
+    Comparison &amp; Impact Analysis
+  
+
+    
+  </span>
+</a>
+</li>
 </ul>
 </nav>
 </li>
@@ -1082,6 +1106,18 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../api/reporting/">
+<span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -1842,12 +1878,11 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a href="#__codelineno-0-1" id="__codelineno-0-1" name="__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationConfig</span>
 </span><span id="__span-0-2"><a href="#__codelineno-0-2" id="__codelineno-0-2" name="__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
 </span><span id="__span-0-3"><a href="#__codelineno-0-3" id="__codelineno-0-3" name="__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a href="#__codelineno-0-4" id="__codelineno-0-4" name="__codelineno-0-4"></a><span class="c1"># FX conversion enabled by default</span>
+</span><span id="__span-0-4"><a href="#__codelineno-0-4" id="__codelineno-0-4" name="__codelineno-0-4"></a><span class="c1"># FX conversion enabled by default (base_currency is always GBP)</span>
 </span><span id="__span-0-5"><a href="#__codelineno-0-5" id="__codelineno-0-5" name="__codelineno-0-5"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span>
 </span><span id="__span-0-6"><a href="#__codelineno-0-6" id="__codelineno-0-6" name="__codelineno-0-6"></a>    <span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">),</span>
-</span><span id="__span-0-7"><a href="#__codelineno-0-7" id="__codelineno-0-7" name="__codelineno-0-7"></a>    <span class="n">base_currency</span><span class="o">=</span><span class="s2">"GBP"</span><span class="p">,</span>           <span class="c1"># Target currency</span>
-</span><span id="__span-0-8"><a href="#__codelineno-0-8" id="__codelineno-0-8" name="__codelineno-0-8"></a>    <span class="n">apply_fx_conversion</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>      <span class="c1"># Enable/disable</span>
-</span><span id="__span-0-9"><a href="#__codelineno-0-9" id="__codelineno-0-9" name="__codelineno-0-9"></a><span class="p">)</span>
+</span><span id="__span-0-7"><a href="#__codelineno-0-7" id="__codelineno-0-7" name="__codelineno-0-7"></a>    <span class="n">apply_fx_conversion</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>      <span class="c1"># Enable/disable</span>
+</span><span id="__span-0-8"><a href="#__codelineno-0-8" id="__codelineno-0-8" name="__codelineno-0-8"></a><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="input-data">Input Data<a class="headerlink" href="#input-data" title="Permanent link">¶</a></h2>
 <p>FX rates are provided via the <code>fx_rates</code> input table:</p>
@@ -1861,12 +1896,12 @@
 </thead>
 <tbody>
 <tr>
-<td><code>source_currency</code></td>
+<td><code>currency_from</code></td>
 <td>String</td>
 <td>Currency code (e.g., "USD", "EUR")</td>
 </tr>
 <tr>
-<td><code>target_currency</code></td>
+<td><code>currency_to</code></td>
 <td>String</td>
 <td>Target currency (must match <code>base_currency</code>)</td>
 </tr>
@@ -1879,8 +1914,8 @@
 </table>
 <h3 id="example-fx-rates">Example FX Rates<a class="headerlink" href="#example-fx-rates" title="Permanent link">¶</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a href="#__codelineno-1-1" id="__codelineno-1-1" name="__codelineno-1-1"></a><span class="n">fx_rates</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
-</span><span id="__span-1-2"><a href="#__codelineno-1-2" id="__codelineno-1-2" name="__codelineno-1-2"></a>    <span class="s2">"source_currency"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"USD"</span><span class="p">,</span> <span class="s2">"EUR"</span><span class="p">,</span> <span class="s2">"CHF"</span><span class="p">],</span>
-</span><span id="__span-1-3"><a href="#__codelineno-1-3" id="__codelineno-1-3" name="__codelineno-1-3"></a>    <span class="s2">"target_currency"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"GBP"</span><span class="p">,</span> <span class="s2">"GBP"</span><span class="p">,</span> <span class="s2">"GBP"</span><span class="p">],</span>
+</span><span id="__span-1-2"><a href="#__codelineno-1-2" id="__codelineno-1-2" name="__codelineno-1-2"></a>    <span class="s2">"currency_from"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"USD"</span><span class="p">,</span> <span class="s2">"EUR"</span><span class="p">,</span> <span class="s2">"CHF"</span><span class="p">],</span>
+</span><span id="__span-1-3"><a href="#__codelineno-1-3" id="__codelineno-1-3" name="__codelineno-1-3"></a>    <span class="s2">"currency_to"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"GBP"</span><span class="p">,</span> <span class="s2">"GBP"</span><span class="p">,</span> <span class="s2">"GBP"</span><span class="p">],</span>
 </span><span id="__span-1-4"><a href="#__codelineno-1-4" id="__codelineno-1-4" name="__codelineno-1-4"></a>    <span class="s2">"rate"</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.79</span><span class="p">,</span> <span class="mf">0.87</span><span class="p">,</span> <span class="mf">0.89</span><span class="p">],</span>
 </span><span id="__span-1-5"><a href="#__codelineno-1-5" id="__codelineno-1-5" name="__codelineno-1-5"></a><span class="p">})</span>
 </span></code></pre></div>
@@ -1940,7 +1975,7 @@
 <tr>
 <td>SME exposure (SF tier)</td>
 <td>EUR 2.5m</td>
-<td>~GBP 2.2m</td>
+<td>~GBP 2.18m</td>
 </tr>
 <tr>
 <td>Retail aggregate</td>

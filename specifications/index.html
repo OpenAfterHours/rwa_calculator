@@ -13,7 +13,7 @@
       
       
       
-        <link rel="prev" href="../api/domain/">
+        <link rel="prev" href="../api/reporting/">
       
       
         <link rel="next" href="crr/sa-risk-weights/">
@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2104,6 +2164,8 @@
       
         
       
+        
+      
     
     
     
@@ -2315,6 +2377,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -3995,10 +4085,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#group-h-basel-31-differences" class="md-nav__link">
+  <a href="#group-h-complexcombined" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Group H: Basel 3.1 Differences
+        Group H: Complex/Combined
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-i-defaulted-exposures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group I: Defaulted Exposures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#basel-31-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basel 3.1 Groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comparison-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison Groups
       
     </span>
   </a>
@@ -4297,15 +4420,33 @@
 <li>SA provision deduction from exposure</li>
 <li>IRB expected loss comparison</li>
 </ul>
-<h3 id="group-h-basel-31-differences">Group H: Basel 3.1 Differences<a class="headerlink" href="#group-h-basel-31-differences" title="Permanent link">&para;</a></h3>
-<p>Covers framework changes:</p>
+<h3 id="group-h-complexcombined">Group H: Complex/Combined<a class="headerlink" href="#group-h-complexcombined" title="Permanent link">&para;</a></h3>
+<p>Covers multi-approach and combined scenarios:</p>
 <ul>
-<li>Removal of supporting factors</li>
-<li>Removal of 1.06 scaling factor</li>
-<li>Output floor (72.5% of SA)</li>
-<li>Differentiated PD floors</li>
-<li>LGD floors for A-IRB</li>
-<li>Revised slotting risk weights</li>
+<li>Mixed SA/IRB portfolios</li>
+<li>Multi-level hierarchy with CRM</li>
+<li>Combined supporting factors with output floor</li>
+</ul>
+<h3 id="group-i-defaulted-exposures">Group I: Defaulted Exposures<a class="headerlink" href="#group-i-defaulted-exposures" title="Permanent link">&para;</a></h3>
+<p>Covers defaulted exposure treatment:</p>
+<ul>
+<li>F-IRB defaulted (K=0, CRR Art. 153(1)(ii))</li>
+<li>A-IRB defaulted (K=max(0, LGD−BEEL), CRR Art. 154(1)(i))</li>
+<li>Defaulted with CRM adjustments</li>
+</ul>
+<h3 id="basel-31-groups">Basel 3.1 Groups<a class="headerlink" href="#basel-31-groups" title="Permanent link">&para;</a></h3>
+<p>Basel 3.1 scenarios mirror the CRR structure with additional framework-specific tests:</p>
+<ul>
+<li>B31-A through B31-H: Same structure as CRR groups with Basel 3.1 rule changes</li>
+<li>B31-D7: Parameter substitution (guarantee-driven IRB→SA CCF/RW substitution)</li>
+<li>B31-F: Output floor phase-in (50%–72.5%, 2027–2032)</li>
+</ul>
+<h3 id="comparison-groups">Comparison Groups<a class="headerlink" href="#comparison-groups" title="Permanent link">&para;</a></h3>
+<p>Dual-framework comparison scenarios:</p>
+<ul>
+<li>M3.1: Side-by-side CRR vs Basel 3.1 RWA comparison</li>
+<li>M3.2: Capital impact analysis with delta decomposition by driver</li>
+<li>M3.3: Transitional floor schedule modelling (2027–2032)</li>
 </ul>
 <h2 id="scenario-id-convention">Scenario ID Convention<a class="headerlink" href="#scenario-id-convention" title="Permanent link">&para;</a></h2>
 <p>Each scenario is tagged with an identifier for traceability:</p>
@@ -4346,8 +4487,56 @@
 <td>CRR Provisions</td>
 </tr>
 <tr>
-<td><code>BASEL31-F</code></td>
-<td>Basel 3.1 Framework Differences</td>
+<td><code>CRR-H</code></td>
+<td>CRR Complex/Combined</td>
+</tr>
+<tr>
+<td><code>CRR-I</code></td>
+<td>CRR Defaulted Exposures</td>
+</tr>
+<tr>
+<td><code>B31-A</code></td>
+<td>Basel 3.1 Standardised Approach</td>
+</tr>
+<tr>
+<td><code>B31-B</code></td>
+<td>Basel 3.1 Foundation IRB</td>
+</tr>
+<tr>
+<td><code>B31-C</code></td>
+<td>Basel 3.1 Advanced IRB</td>
+</tr>
+<tr>
+<td><code>B31-D</code></td>
+<td>Basel 3.1 Credit Risk Mitigation</td>
+</tr>
+<tr>
+<td><code>B31-E</code></td>
+<td>Basel 3.1 Slotting Approach</td>
+</tr>
+<tr>
+<td><code>B31-F</code></td>
+<td>Basel 3.1 Output Floor</td>
+</tr>
+<tr>
+<td><code>B31-G</code></td>
+<td>Basel 3.1 Provisions</td>
+</tr>
+<tr>
+<td><code>B31-H</code></td>
+<td>Basel 3.1 Complex/Combined</td>
+</tr>
+<tr>
+<td><code>M3.1</code></td>
+<td>Dual-framework comparison</td>
+</tr>
+<tr>
+<td><code>M3.2</code></td>
+<td>Capital impact analysis</td>
+</tr>
+<tr>
+<td><code>M3.3</code></td>
+<td>Transitional floor modelling</td>
 </tr>
 <tr>
 <td><code>HIER-</code></td>

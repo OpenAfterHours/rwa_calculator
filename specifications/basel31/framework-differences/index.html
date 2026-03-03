@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2104,6 +2164,8 @@
       
         
       
+        
+      
     
     
     
@@ -2315,6 +2377,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -2983,10 +3073,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#large-corporate-correlation-multiplier-cre315" class="md-nav__link">
+  <a href="#financial-institution-correlation-multiplier-cre315" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Large Corporate Correlation Multiplier (CRE31.5)
+        Financial Institution Correlation Multiplier (CRE31.5)
       
     </span>
   </a>
@@ -4191,10 +4281,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#large-corporate-correlation-multiplier-cre315" class="md-nav__link">
+  <a href="#financial-institution-correlation-multiplier-cre315" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Large Corporate Correlation Multiplier (CRE31.5)
+        Financial Institution Correlation Multiplier (CRE31.5)
       
     </span>
   </a>
@@ -4622,8 +4712,12 @@
 </tbody>
 </table>
 <p>Compare with CRR slotting weights in the <a href="../../crr/slotting-approach/">Slotting Approach</a> specification.</p>
-<h2 id="large-corporate-correlation-multiplier-cre315">Large Corporate Correlation Multiplier (CRE31.5)<a class="headerlink" href="#large-corporate-correlation-multiplier-cre315" title="Permanent link">&para;</a></h2>
-<p>Large corporates (consolidated revenue &gt; £500m) receive a <strong>1.25x</strong> multiplier on their asset correlation under F-IRB.</p>
+<h2 id="financial-institution-correlation-multiplier-cre315">Financial Institution Correlation Multiplier (CRE31.5)<a class="headerlink" href="#financial-institution-correlation-multiplier-cre315" title="Permanent link">&para;</a></h2>
+<p>The 1.25x correlation multiplier applies to exposures to <strong>financial institutions</strong> only (not non-financial corporates):
+- Regulated financial institutions with total assets &gt;= USD 100bn (CRR Art. 153(2): EUR 70bn threshold)
+- Unregulated financial institutions regardless of size</p>
+<p>This multiplier is already implemented via the <code>requires_fi_scalar</code> flag in the classifier and <code>_polars_correlation_expr()</code> in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.</p>
+<p>Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS9/24.</p>
 <h2 id="a-irb-ccf-floor-cre3227">A-IRB CCF Floor (CRE32.27)<a class="headerlink" href="#a-irb-ccf-floor-cre3227" title="Permanent link">&para;</a></h2>
 <p>A-IRB own-estimate CCFs must be at least <strong>50% of the SA CCF</strong> for the same item type.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>

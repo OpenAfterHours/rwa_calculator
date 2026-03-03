@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2402,6 +2462,8 @@
       
         
       
+        
+      
     
     
     
@@ -2613,6 +2675,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -4625,6 +4715,18 @@
 <td>No</td>
 <td>SME managed on pooled retail basis (75% RW per CRR Art. 123)</td>
 </tr>
+<tr>
+<td><code>scra_grade</code></td>
+<td><code>String</code></td>
+<td>No</td>
+<td>SCRA grade for unrated institutions: <code>"A"</code>, <code>"B"</code>, <code>"C"</code> (Basel 3.1 CRE20.16-21)</td>
+</tr>
+<tr>
+<td><code>is_investment_grade</code></td>
+<td><code>Boolean</code></td>
+<td>No</td>
+<td>Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)</td>
+</tr>
 </tbody>
 </table>
 <h3 id="entity-type-the-single-source-of-truth">Entity Type: The Single Source of Truth<a class="headerlink" href="#entity-type-the-single-source-of-truth" title="Permanent link">&para;</a></h3>
@@ -4948,6 +5050,12 @@
 <td>Revolving vs term facility</td>
 </tr>
 <tr>
+<td><code>is_qrre_transactor</code></td>
+<td><code>Boolean</code></td>
+<td>No</td>
+<td>QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period</td>
+</tr>
+<tr>
 <td><code>seniority</code></td>
 <td><code>String</code></td>
 <td>Yes</td>
@@ -5237,11 +5345,11 @@
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="s2">&quot;maturity_date&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">date</span><span class="p">(</span><span class="mi">2029</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2029</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2028</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">1</span><span class="p">)],</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="s2">&quot;currency&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">],</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="s2">&quot;drawn_amount&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">2_000_000.0</span><span class="p">,</span> <span class="mf">1_500_000.0</span><span class="p">,</span> <span class="mf">5_000_000.0</span><span class="p">],</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="s2">&quot;lgd&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="s2">&quot;beel&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="s2">&quot;seniority&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">],</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="s2">&quot;risk_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;FR&quot;</span><span class="p">,</span> <span class="s2">&quot;FR&quot;</span><span class="p">,</span> <span class="s2">&quot;FR&quot;</span><span class="p">],</span>  <span class="c1"># Full risk for drawn loans</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="s2">&quot;ccf_modelled&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>  <span class="c1"># N/A for drawn amounts</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="s2">&quot;interest&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">10_000.0</span><span class="p">,</span> <span class="mf">7_500.0</span><span class="p">,</span> <span class="mf">25_000.0</span><span class="p">],</span>  <span class="c1"># Accrued interest</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="s2">&quot;lgd&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="s2">&quot;beel&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="s2">&quot;seniority&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">],</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="s2">&quot;is_buy_to_let&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">],</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="p">})</span>
 </span></code></pre></div>
 <hr />
@@ -5263,12 +5371,6 @@
 <td><code>String</code></td>
 <td>Yes</td>
 <td>Unique identifier</td>
-</tr>
-<tr>
-<td><code>contract_type</code></td>
-<td><code>String</code></td>
-<td>Yes</td>
-<td>Type of contingent contract</td>
 </tr>
 <tr>
 <td><code>product_type</code></td>
@@ -5325,12 +5427,6 @@
 <td>Best estimate expected loss</td>
 </tr>
 <tr>
-<td><code>ccf_category</code></td>
-<td><code>String</code></td>
-<td>Yes</td>
-<td>Category for CCF lookup (legacy, see <code>risk_type</code>)</td>
-</tr>
-<tr>
 <td><code>seniority</code></td>
 <td><code>String</code></td>
 <td>Yes</td>
@@ -5354,63 +5450,35 @@
 <td>No</td>
 <td>Short-term trade LC for goods movement (Art. 166(9))</td>
 </tr>
-</tbody>
-</table>
-<p><strong>Valid <code>ccf_category</code> values (legacy):</strong></p>
-<table>
-<thead>
 <tr>
-<th>Category</th>
-<th>SA CCF</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>full_risk</code></td>
-<td>100%</td>
-<td>Direct credit substitutes</td>
-</tr>
-<tr>
-<td><code>medium_risk</code></td>
-<td>50%</td>
-<td>Transaction-related contingencies</td>
-</tr>
-<tr>
-<td><code>medium_low_risk</code></td>
-<td>20%</td>
-<td>Short-term self-liquidating trade</td>
-</tr>
-<tr>
-<td><code>low_risk</code></td>
-<td>0%/10%</td>
-<td>Unconditionally cancellable</td>
+<td><code>bs_type</code></td>
+<td><code>String</code></td>
+<td>No</td>
+<td><code>"ONB"</code> (on-balance-sheet / drawn) or <code>"OFB"</code> (off-balance-sheet / undrawn). Default: <code>"OFB"</code></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Note:</strong> The <code>risk_type</code> column is the primary source for CCF determination. The <code>ccf_category</code> column is retained for backwards compatibility but <code>risk_type</code> takes precedence when both are present.</p>
 <p><strong>Example:</strong></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">contingents</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="s2">&quot;contingent_reference&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;CONT_001&quot;</span><span class="p">,</span> <span class="s2">&quot;CONT_002&quot;</span><span class="p">,</span> <span class="s2">&quot;CONT_003&quot;</span><span class="p">],</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="s2">&quot;contract_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;standby_lc&quot;</span><span class="p">,</span> <span class="s2">&quot;performance_guarantee&quot;</span><span class="p">,</span> <span class="s2">&quot;documentary_lc&quot;</span><span class="p">],</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="s2">&quot;product_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;trade_finance&quot;</span><span class="p">,</span> <span class="s2">&quot;guarantee&quot;</span><span class="p">,</span> <span class="s2">&quot;import_lc&quot;</span><span class="p">],</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="s2">&quot;book_code&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;TRADE&quot;</span><span class="p">,</span> <span class="s2">&quot;GUARANTEE&quot;</span><span class="p">,</span> <span class="s2">&quot;TRADE&quot;</span><span class="p">],</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="s2">&quot;counterparty_reference&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;CORP_001&quot;</span><span class="p">,</span> <span class="s2">&quot;CORP_002&quot;</span><span class="p">,</span> <span class="s2">&quot;CORP_003&quot;</span><span class="p">],</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="s2">&quot;value_date&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">)],</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="s2">&quot;maturity_date&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">1</span><span class="p">)],</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="s2">&quot;currency&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">],</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="s2">&quot;nominal_amount&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">500_000.0</span><span class="p">,</span> <span class="mf">1_000_000.0</span><span class="p">,</span> <span class="mf">250_000.0</span><span class="p">],</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="s2">&quot;lgd&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="s2">&quot;beel&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="s2">&quot;ccf_category&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;full_risk&quot;</span><span class="p">,</span> <span class="s2">&quot;medium_risk&quot;</span><span class="p">,</span> <span class="s2">&quot;medium_low_risk&quot;</span><span class="p">],</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="s2">&quot;seniority&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">],</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="s2">&quot;risk_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;FR&quot;</span><span class="p">,</span> <span class="s2">&quot;MR&quot;</span><span class="p">,</span> <span class="s2">&quot;MLR&quot;</span><span class="p">],</span>  <span class="c1"># FR=100%, MR=50%/75%, MLR=20%/75%</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="s2">&quot;ccf_modelled&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>  <span class="c1"># No modelled CCF</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="s2">&quot;is_short_term_trade_lc&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">],</span>  <span class="c1"># Third is Art. 166(9) exception</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="p">})</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="s2">&quot;product_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;trade_finance&quot;</span><span class="p">,</span> <span class="s2">&quot;guarantee&quot;</span><span class="p">,</span> <span class="s2">&quot;import_lc&quot;</span><span class="p">],</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="s2">&quot;book_code&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;TRADE&quot;</span><span class="p">,</span> <span class="s2">&quot;GUARANTEE&quot;</span><span class="p">,</span> <span class="s2">&quot;TRADE&quot;</span><span class="p">],</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="s2">&quot;counterparty_reference&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;CORP_001&quot;</span><span class="p">,</span> <span class="s2">&quot;CORP_002&quot;</span><span class="p">,</span> <span class="s2">&quot;CORP_003&quot;</span><span class="p">],</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="s2">&quot;value_date&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">)],</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="s2">&quot;maturity_date&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">1</span><span class="p">)],</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="s2">&quot;currency&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">],</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="s2">&quot;nominal_amount&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">500_000.0</span><span class="p">,</span> <span class="mf">1_000_000.0</span><span class="p">,</span> <span class="mf">250_000.0</span><span class="p">],</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="s2">&quot;lgd&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="s2">&quot;beel&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="s2">&quot;seniority&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">],</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="s2">&quot;risk_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;FR&quot;</span><span class="p">,</span> <span class="s2">&quot;MR&quot;</span><span class="p">,</span> <span class="s2">&quot;MLR&quot;</span><span class="p">],</span>  <span class="c1"># FR=100%, MR=50%/75%, MLR=20%/75%</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="s2">&quot;ccf_modelled&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>  <span class="c1"># No modelled CCF</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="s2">&quot;is_short_term_trade_lc&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">],</span>  <span class="c1"># Third is Art. 166(9) exception</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="s2">&quot;bs_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;OFB&quot;</span><span class="p">,</span> <span class="s2">&quot;OFB&quot;</span><span class="p">,</span> <span class="s2">&quot;OFB&quot;</span><span class="p">],</span>  <span class="c1"># Off-balance sheet (default)</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="p">})</span>
 </span></code></pre></div>
 <hr />
 <h2 id="collateral-schema">Collateral Schema<a class="headerlink" href="#collateral-schema" title="Permanent link">&para;</a></h2>
@@ -6234,6 +6302,10 @@ After conversion, the following columns are added:
 <td><code>ipre</code></td>
 <td>Income-producing real estate</td>
 </tr>
+<tr>
+<td><code>hvcre</code></td>
+<td>High-volatility commercial real estate</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Valid <code>slotting_category</code> values:</strong></p>
@@ -6359,9 +6431,24 @@ After conversion, the following columns are added:
 </thead>
 <tbody>
 <tr>
+<td><code>central_bank</code></td>
+<td>100%</td>
+<td>Central bank equity holdings</td>
+</tr>
+<tr>
 <td><code>listed</code></td>
 <td>100%</td>
 <td>Exchange-traded equities</td>
+</tr>
+<tr>
+<td><code>exchange_traded</code></td>
+<td>100%</td>
+<td>Listed on recognised exchange</td>
+</tr>
+<tr>
+<td><code>government_supported</code></td>
+<td>100%</td>
+<td>Government-supported programme</td>
 </tr>
 <tr>
 <td><code>unlisted</code></td>
@@ -6374,6 +6461,11 @@ After conversion, the following columns are added:
 <td>Private equity investments</td>
 </tr>
 <tr>
+<td><code>private_equity_diversified</code></td>
+<td>190%</td>
+<td>Diversified private equity portfolio</td>
+</tr>
+<tr>
 <td><code>speculative</code></td>
 <td>400%</td>
 <td>Speculative unlisted</td>
@@ -6382,6 +6474,11 @@ After conversion, the following columns are added:
 <td><code>ciu</code></td>
 <td>Look-through</td>
 <td>Collective investment undertakings</td>
+</tr>
+<tr>
+<td><code>other</code></td>
+<td>250%</td>
+<td>Other equity exposures</td>
 </tr>
 </tbody>
 </table>

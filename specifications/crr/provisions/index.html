@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2104,6 +2164,8 @@
       
         
       
+        
+      
     
     
     
@@ -2315,6 +2377,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -2830,6 +2920,17 @@
     <span class="md-ellipsis">
       
         EL vs Provisions Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#portfolio-level-summary-elportfoliosummary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portfolio-Level Summary (ELPortfolioSummary)
       
     </span>
   </a>
@@ -4097,6 +4198,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#portfolio-level-summary-elportfoliosummary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portfolio-Level Summary (ELPortfolioSummary)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4243,6 +4355,12 @@
 <td>P0</td>
 <td>Done</td>
 </tr>
+<tr>
+<td>FR-2.8</td>
+<td>Portfolio-level EL summary with T2 credit cap (CRR Art. 62(d), Art. 159)</td>
+<td>P1</td>
+<td>Done</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -4344,10 +4462,52 @@
 </span></code></pre></div>
 <h3 id="el-vs-provisions-comparison">EL vs Provisions Comparison<a class="headerlink" href="#el-vs-provisions-comparison" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>EL &gt; Provisions (shortfall):</strong> The difference reduces CET1 capital</li>
-<li><strong>EL &lt; Provisions (excess):</strong> The surplus may be added to Tier 2 capital (subject to caps)</li>
+<li><strong>EL &gt; Provisions (shortfall):</strong> The difference is deducted 50/50 from CET1 and T2 capital (CRR Art. 159)</li>
+<li><strong>EL &lt; Provisions (excess):</strong> The surplus may be added to Tier 2 capital, capped at 0.6% of IRB RWA (CRR Art. 62(d))</li>
 </ul>
-<p>The calculator tracks both values to support this regulatory comparison.</p>
+<h3 id="portfolio-level-summary-elportfoliosummary">Portfolio-Level Summary (ELPortfolioSummary)<a class="headerlink" href="#portfolio-level-summary-elportfoliosummary" title="Permanent link">&para;</a></h3>
+<p>The aggregator computes a portfolio-level <code>ELPortfolioSummary</code> with:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Formula</th>
+<th>Regulatory Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>total_el_shortfall</code></td>
+<td><code>sum(el_shortfall)</code> across all IRB exposures</td>
+<td>CRR Art. 159</td>
+</tr>
+<tr>
+<td><code>total_el_excess</code></td>
+<td><code>sum(el_excess)</code> across all IRB exposures</td>
+<td>CRR Art. 62(d)</td>
+</tr>
+<tr>
+<td><code>t2_credit_cap</code></td>
+<td><code>total_irb_rwa × 0.006</code></td>
+<td>CRR Art. 62(d)</td>
+</tr>
+<tr>
+<td><code>t2_credit</code></td>
+<td><code>min(total_el_excess, t2_credit_cap)</code></td>
+<td>CRR Art. 62(d)</td>
+</tr>
+<tr>
+<td><code>cet1_deduction</code></td>
+<td><code>total_el_shortfall × 0.5</code></td>
+<td>CRR Art. 159</td>
+</tr>
+<tr>
+<td><code>t2_deduction</code></td>
+<td><code>total_el_shortfall × 0.5</code></td>
+<td>CRR Art. 159</td>
+</tr>
+</tbody>
+</table>
 <h2 id="slotting-approach">Slotting Approach<a class="headerlink" href="#slotting-approach" title="Permanent link">&para;</a></h2>
 <p>Same as IRB: provisions are tracked but not deducted from EAD.</p>
 <h2 id="key-scenarios">Key Scenarios<a class="headerlink" href="#key-scenarios" title="Permanent link">&para;</a></h2>
@@ -4399,7 +4559,13 @@
 <tr>
 <td>CRR-G: Provisions</td>
 <td>G1–G3</td>
-<td>7</td>
+<td>17</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>B31-G: Provisions</td>
+<td>G1–G3</td>
+<td>24</td>
 <td>100%</td>
 </tr>
 </tbody>

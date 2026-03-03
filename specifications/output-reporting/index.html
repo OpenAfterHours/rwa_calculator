@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2104,6 +2164,8 @@
       
         
       
+        
+      
     
     
     
@@ -2315,6 +2377,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -3216,6 +3306,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Templates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3234,7 +3346,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#status_1" class="md-nav__link">
+  <a href="#status_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         Status
@@ -4070,6 +4182,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Templates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4088,7 +4222,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#status_1" class="md-nav__link">
+  <a href="#status_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         Status
@@ -4235,13 +4369,13 @@
 <td>FR-4.6</td>
 <td>COREP template generation (CRR reporting)</td>
 <td>P3</td>
-<td>Not Started</td>
+<td>Done</td>
 </tr>
 <tr>
 <td>FR-4.7</td>
 <td>Excel / Parquet export of results</td>
 <td>P2</td>
-<td>Partial</td>
+<td>Done</td>
 </tr>
 </tbody>
 </table>
@@ -4284,17 +4418,32 @@
 </table>
 <h3 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Engine implemented</li>
-<li>Phase-in schedule validation tests pending</li>
+<li>Engine implemented — Done</li>
+<li>Phase-in schedule validation tests — Done (6 acceptance tests in <code>test_scenario_b31_f_output_floor.py</code>)</li>
 </ul>
 <h2 id="corep-templates">COREP Templates<a class="headerlink" href="#corep-templates" title="Permanent link">&para;</a></h2>
 <h3 id="description_1">Description<a class="headerlink" href="#description_1" title="Permanent link">&para;</a></h3>
-<p>Regulatory reporting templates for CRR firms (C07.00, C08.01, C08.02). Stub exists; full implementation deferred to v2.0.</p>
-<h2 id="export">Export<a class="headerlink" href="#export" title="Permanent link">&para;</a></h2>
+<p>Regulatory reporting templates for CRR firms following EBA/PRA COREP structure (Regulation (EU) 2021/451).</p>
+<h3 id="templates">Templates<a class="headerlink" href="#templates" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>C 07.00</strong> — SA credit risk: original exposure, SA EAD, RWA by exposure class. Plus risk weight band breakdown.</li>
+<li><strong>C 08.01</strong> — IRB totals: original exposure, IRB EAD, RWA, EL, weighted-average PD/LGD/maturity by exposure class.</li>
+<li><strong>C 08.02</strong> — IRB PD grade breakdown: obligor-grade-level detail with PD bands, exposure-weighted averages.</li>
+</ul>
 <h3 id="status_1">Status<a class="headerlink" href="#status_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Parquet export: partial</li>
-<li>Excel (XLSX) export via fastexcel: partial</li>
+<li>Generator: Done (<code>reporting/corep/generator.py</code>)</li>
+<li>Template definitions: Done (<code>reporting/corep/templates.py</code>)</li>
+<li>Excel export: Done (multi-sheet via xlsxwriter)</li>
+<li>Integration: Done (<code>ResultExporter.export_to_corep()</code>, <code>CalculationResponse.to_corep()</code>)</li>
+<li>Tests: 48 passed + 4 conditional (xlsxwriter)</li>
+</ul>
+<h2 id="export">Export<a class="headerlink" href="#export" title="Permanent link">&para;</a></h2>
+<h3 id="status_2">Status<a class="headerlink" href="#status_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Parquet export: Done</li>
+<li>CSV export: Done</li>
+<li>Excel (XLSX) export via xlsxwriter: Done</li>
 </ul>
 
 

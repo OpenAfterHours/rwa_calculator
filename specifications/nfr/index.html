@@ -1762,6 +1762,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1833,6 +1837,62 @@
     
   
     Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/corep-reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COREP Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison & Impact Analysis
   
 
     
@@ -2104,6 +2164,8 @@
       
         
       
+        
+      
     
     
     
@@ -2315,6 +2377,34 @@
     
   
     Domain Enums
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting API
   
 
     
@@ -4182,15 +4272,15 @@
 <tbody>
 <tr>
 <td>NFR-2.1</td>
-<td>CRR acceptance test pass rate</td>
+<td>Acceptance test pass rate (CRR + Basel 3.1 + Comparison)</td>
 <td>100%</td>
-<td>96% (71/74, 3 skip)</td>
+<td>100% (97 CRR + 116 B31 + 62 comparison = 275 tests)</td>
 </tr>
 <tr>
 <td>NFR-2.2</td>
 <td>Hand-calculated expected outputs</td>
 <td>Full coverage</td>
-<td>Done (38 CRR scenarios)</td>
+<td>Done (CRR + Basel 3.1 scenarios)</td>
 </tr>
 <tr>
 <td>NFR-2.3</td>
@@ -4219,9 +4309,9 @@
 <tbody>
 <tr>
 <td>NFR-3.1</td>
-<td>Unit test coverage</td>
+<td>Total test coverage</td>
 <td>&gt; 1,000 tests</td>
-<td>Met (1,050)</td>
+<td>Met (1,844+ total: ~1,414 unit, 275 acceptance, 123 contracts, 5 integration, 27 benchmarks)</td>
 </tr>
 <tr>
 <td>NFR-3.2</td>
@@ -4358,8 +4448,8 @@
 </tr>
 <tr>
 <td>Test Coverage</td>
-<td>&gt; 1,200 tests</td>
-<td><code>pytest --co -q</code></td>
+<td>&gt; 1,800 tests</td>
+<td><code>pytest --co -q</code> (1,844+ total)</td>
 </tr>
 <tr>
 <td>Documentation</td>

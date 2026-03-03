@@ -34,10 +34,10 @@ Provisions can be allocated at different levels and are resolved in priority ord
 | Level | Resolution | Description |
 |-------|-----------|-------------|
 | **Direct** | `loan` / `exposure` / `contingent` | Matched directly to a specific exposure |
-| **Facility** | `facility` | Distributed pro-rata across the facility's exposures by `ead_gross` |
-| **Counterparty** | `counterparty` | Distributed pro-rata across all counterparty exposures by `ead_gross` |
+| **Facility** | `facility` | Distributed pro-rata across the facility's exposures by gross amount |
+| **Counterparty** | `counterparty` | Distributed pro-rata across all counterparty exposures by gross amount |
 
-Direct allocations are applied first. Facility-level and counterparty-level provisions are distributed proportionally based on each exposure's share of the total `ead_gross`.
+Direct allocations are applied first. Facility-level and counterparty-level provisions are distributed proportionally based on each exposure's share of the total gross amount (`max(0, drawn_amount) + interest + nominal_amount`).
 
 ## SA Approach (CRR Art. 110, 111(2))
 
@@ -47,8 +47,8 @@ Under the Standardised Approach, provisions use a **drawn-first deduction** appr
 # Step 1: Absorb provision against drawn amount first
 provision_on_drawn = min(provision_allocated, max(0, drawn_amount))
 
-# Step 2: Remainder reduces nominal before CCF
-provision_on_nominal = provision_allocated - provision_on_drawn
+# Step 2: Remainder reduces nominal before CCF (capped at nominal)
+provision_on_nominal = min(provision_allocated - provision_on_drawn, nominal_amount)
 nominal_after_provision = nominal_amount - provision_on_nominal
 
 # Step 3: CCF applied to adjusted nominal

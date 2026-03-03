@@ -26,7 +26,7 @@ Lending groups aggregate exposure across related counterparties for threshold ca
 
 The `facility_mappings` table links facilities to their underlying exposures (loans and contingents):
 
-- Facility undrawn amount = `max(facility_limit - sum(drawn_amounts), 0)`
+- Facility undrawn amount = `max(facility_limit - sum(drawn_amounts) - sum(contingent_nominals), 0)`
 - Supports multiple exposure types under a single facility
 - Pro-rata allocation of facility-level attributes
 
@@ -76,17 +76,17 @@ The `facility_mappings` table may use different column names for the child type 
 
 Counterparty entity type determines the base SA exposure class:
 
-| Entity Type | Exposure Class |
-|-------------|---------------|
-| CENTRAL_GOVERNMENT | CENTRAL_GOVT_CENTRAL_BANK |
-| REGIONAL_GOVERNMENT | CENTRAL_GOVT_CENTRAL_BANK |
-| PUBLIC_SECTOR_ENTITY | CENTRAL_GOVT_CENTRAL_BANK |
-| MULTILATERAL_DEVELOPMENT_BANK | CENTRAL_GOVT_CENTRAL_BANK |
-| INTERNATIONAL_ORGANISATION | CENTRAL_GOVT_CENTRAL_BANK |
-| CREDIT_INSTITUTION | INSTITUTION |
-| INVESTMENT_FIRM | INSTITUTION |
-| CORPORATE | CORPORATE |
-| INDIVIDUAL | Retail (if qualifying) |
+| Entity Type(s) | Exposure Class |
+|----------------|---------------|
+| `sovereign`, `central_bank` | CENTRAL_GOVT_CENTRAL_BANK |
+| `rgla_sovereign`, `rgla_institution` | RGLA |
+| `pse_sovereign`, `pse_institution` | PSE |
+| `mdb`, `international_org` | MDB |
+| `institution`, `bank`, `ccp`, `financial_institution` | INSTITUTION |
+| `corporate`, `company` | CORPORATE |
+| `individual`, `retail` | RETAIL_OTHER (if qualifying) |
+| `specialised_lending` | SPECIALISED_LENDING |
+| `equity` | EQUITY |
 
 ### SME Detection
 
@@ -98,9 +98,9 @@ Corporate counterparties are reclassified as CORPORATE_SME when:
 
 Individual counterparties qualify for retail treatment when:
 
-- **CRR:** Aggregate exposure < EUR 1m (approx. GBP 880k at default rate)
+- **CRR:** Aggregate exposure < EUR 1m (GBP ~873k at default EUR/GBP rate of 0.8732)
 - **Basel 3.1:** Aggregate exposure < GBP 880k
-- **QRRE limit:** Individual exposure ≤ EUR 100k / GBP 100k
+- **QRRE limit:** Individual exposure ≤ EUR 100k (CRR, GBP ~87k at default rate) / GBP 100k (Basel 3.1)
 
 If retail thresholds are breached, the exposure is reclassified as CORPORATE.
 

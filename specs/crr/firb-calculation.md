@@ -79,7 +79,7 @@ R = 0.03 x f(PD) + 0.16 x (1 - f(PD))
 
 ## FI Scalar (CRR Art. 153(2))
 
-A **1.25x** multiplier applied to the capital requirement for large or unregulated financial sector entities.
+A **1.25x** multiplier applied to the **correlation coefficient** for large or unregulated financial sector entities (per CRR Art. 153(2)).
 
 ## Capital Requirement Formula
 

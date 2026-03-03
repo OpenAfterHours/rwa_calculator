@@ -134,18 +134,39 @@ docs created/verified.
 inconsistencies. Also fixed `specs/overview.md` COREP status and
 `specs/regulatory-compliance.md` provisions scenario range.
 
-**Remaining** -- verify `specs/` files against source code:
+**Spec verification against source code -- COMPLETED 2026-03-03.**
 
-- [ ] `specifications/crr/sa-risk-weights.md`
-- [ ] `specifications/crr/supporting-factors.md`
-- [ ] `specifications/crr/firb-calculation.md`
-- [ ] `specifications/crr/airb-calculation.md`
-- [ ] `specifications/crr/credit-conversion-factors.md`
-- [ ] `specifications/crr/credit-risk-mitigation.md`
-- [ ] `specifications/crr/slotting-approach.md`
-- [ ] `specifications/crr/provisions.md`
-- [ ] `specifications/basel31/framework-differences.md`
-- [ ] `specifications/common/hierarchy-classification.md`
+All 10 spec files verified exhaustively against source code. Discrepancies found and fixed:
+
+- [x] `specs/crr/sa-risk-weights.md` -- All values match. EU Standard Unrated (100%) correctly
+  documents the EU standard; code implements UK deviation (40%) which is correct for UK scope.
+- [x] `specs/crr/firb-calculation.md` -- Fixed FI Scalar description: "applied to capital
+  requirement" → "applied to correlation coefficient" per CRR Art. 153(2).
+- [x] `specs/crr/airb-calculation.md` -- All values match exactly (LGD floors, PD floors,
+  formulas, defaulted treatment). No changes needed.
+- [x] `specs/crr/credit-conversion-factors.md` -- Fixed provision_on_nominal formula: added
+  `min(..., nominal_amount)` cap to match code's defensive capping.
+- [x] `specs/crr/credit-risk-mitigation.md` -- Fixed corporate bond CQS grouping (CQS 1-2/CQS 3
+  → CQS 1/CQS 2-3), 5y+ haircut values (6%/8% → 8%/12%), maturity mismatch T definition
+  (constant 5 → min(exposure_maturity, 5)), and no-adjustment conditions (collateral >= exposure
+  maturity, not >= 5 years; collateral < 3 months, not exposure <= 3 months).
+- [x] `specs/crr/slotting-approach.md` -- Fixed IRB Simple equity risk weights: Listed 190%→290%,
+  Unlisted 290%→370%, added Private Equity Diversified at 190% per CRR Art. 155.
+- [x] `specs/crr/provisions.md` -- Fixed pro-rata distribution basis: `ead_gross` →
+  `max(0, drawn_amount) + interest + nominal_amount` (ead_gross doesn't exist at that pipeline
+  stage). Added provision_on_nominal cap at nominal_amount.
+- [x] `specs/crr/supporting-factors.md` -- Fixed blended formula variable: `E` (total exposure) →
+  `D` (drawn + interest, on-balance-sheet amount) to match code behavior.
+- [x] `specs/basel31/framework-differences.md` -- All values match exactly (PD floors, LGD floors,
+  F-IRB supervisory LGD, scaling factors, output floor schedule, slotting weights). No changes needed.
+- [x] `specs/common/hierarchy-classification.md` -- Fixed entity type to exposure class mapping
+  table (RGLA, PSE, MDB are separate classes, not CENTRAL_GOVT_CENTRAL_BANK). Updated entity type
+  names to match source code (lowercase). Fixed facility undrawn formula (added contingent
+  deduction). Corrected CRR retail threshold approximation (GBP 880k → ~873k) and QRRE limit
+  (GBP 100k → ~87k for CRR).
+
+Also fixed `b31_risk_weights.py` CRE reference comments: investment-grade CRE20.47-49→CRE20.44,
+SME CRE20.47-49→CRE20.47, subordinated debt CRE20.47→CRE20.49.
 
 **Internal inconsistencies noted in `specs/`:**
 - Acceptance test group numbering: `index.md` lists groups A-H but compliance matrix has A, C-I
@@ -171,7 +192,7 @@ inconsistencies. Also fixed `specs/overview.md` COREP status and
 2. **Priority 2** (Data Model): COMPLETED 2026-03-02
 3. **Priority 3** (Missing Features): 3.1-3.3 COMPLETED 2026-03-03; 3.4 remaining
 4. **Priority 4** (User Guide): 4.1 methodology pages DONE (6 of 7); rest remaining
-5. **Priority 5** (Housekeeping): 5.1-5.3 COMPLETED 2026-03-03; 5.4 and spec verification remaining
+5. **Priority 5** (Housekeeping): 5.1-5.3 COMPLETED 2026-03-03; 5.4 remaining. Spec verification COMPLETED 2026-03-03.
 
 **Scope:** ~15 files rewritten (P1-2 done), ~5 new files (3 done, 2 remaining), ~25 files need
 review (~4 done, ~21 remaining). Total: ~45 documentation files affected.

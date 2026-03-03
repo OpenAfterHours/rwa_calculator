@@ -112,11 +112,11 @@ B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = {
     None: Decimal("1.00"),  # Unrated
 }
 
-# Investment-grade corporate: 65% (CRE20.47-49)
+# Investment-grade corporate: 65% (CRE20.44)
 # Qualifying: publicly traded + investment grade external rating
 B31_CORPORATE_INVESTMENT_GRADE_RW = Decimal("0.65")
 
-# SME corporate: 85% (CRE20.47-49)
+# SME corporate: 85% (CRE20.47)
 # Qualifying: turnover <= EUR 50m, unrated
 B31_CORPORATE_SME_RW = Decimal("0.85")
 
@@ -134,7 +134,7 @@ B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
 }
 
 # =============================================================================
-# SUBORDINATED DEBT RISK WEIGHT — BASEL 3.1 (CRE20.47)
+# SUBORDINATED DEBT RISK WEIGHT — BASEL 3.1 (CRE20.49)
 # Flat 150% for all subordinated debt (institution + corporate)
 # =============================================================================
 

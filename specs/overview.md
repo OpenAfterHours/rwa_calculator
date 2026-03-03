@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Product** | rwa-calc |
-| **Version** | 0.1.28 (Pre-Release) |
+| **Version** | 0.1.29 (Pre-Release) |
 | **Author** | OpenAfterHours |
 | **License** | Apache 2.0 |
 

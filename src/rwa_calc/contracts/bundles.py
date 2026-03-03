@@ -431,8 +431,8 @@ class CapitalImpactBundle:
 
     1. Scaling factor removal — CRR applies 1.06x to IRB RWA; Basel 3.1 removes it
     2. Supporting factor removal — CRR applies SME/infrastructure factors; Basel 3.1 removes them
-    3. Output floor impact — Basel 3.1 floors IRB RWA at X% of SA RWA
-    4. Methodology & parameter changes — residual (PD/LGD floors, SA RW changes, etc.)
+    3. Methodology & parameter changes — residual (PD/LGD floors, SA RW changes, etc.)
+    4. Output floor impact — Basel 3.1 floors IRB RWA at X% of SA RWA
 
     Why: During Basel 3.1 transition, firms need to understand not just
     the total capital impact but WHY RWA changes — which regulatory

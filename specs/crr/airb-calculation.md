@@ -38,7 +38,8 @@ Under CRR, A-IRB has **no LGD floors**. Under Basel 3.1, the following floors ap
 
 | Collateral Type | LGD Floor |
 |----------------|-----------|
-| Unsecured | 25% |
+| Unsecured (Senior) | 25% |
+| Unsecured (Subordinated) | 50% |
 | Financial collateral | 0% |
 | Receivables | 10% |
 | Commercial real estate | 10% |

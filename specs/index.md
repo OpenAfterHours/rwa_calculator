@@ -106,15 +106,33 @@ Covers provision treatment:
 - SA provision deduction from exposure
 - IRB expected loss comparison
 
-### Group H: Basel 3.1 Differences
-Covers framework changes:
+### Group H: Complex/Combined
+Covers multi-approach and combined scenarios:
 
-- Removal of supporting factors
-- Removal of 1.06 scaling factor
-- Output floor (72.5% of SA)
-- Differentiated PD floors
-- LGD floors for A-IRB
-- Revised slotting risk weights
+- Mixed SA/IRB portfolios
+- Multi-level hierarchy with CRM
+- Combined supporting factors with output floor
+
+### Group I: Defaulted Exposures
+Covers defaulted exposure treatment:
+
+- F-IRB defaulted (K=0, CRR Art. 153(1)(ii))
+- A-IRB defaulted (K=max(0, LGD−BEEL), CRR Art. 154(1)(i))
+- Defaulted with CRM adjustments
+
+### Basel 3.1 Groups
+Basel 3.1 scenarios mirror the CRR structure with additional framework-specific tests:
+
+- B31-A through B31-H: Same structure as CRR groups with Basel 3.1 rule changes
+- B31-D7: Parameter substitution (guarantee-driven IRB→SA CCF/RW substitution)
+- B31-F: Output floor phase-in (50%–72.5%, 2027–2032)
+
+### Comparison Groups
+Dual-framework comparison scenarios:
+
+- M3.1: Side-by-side CRR vs Basel 3.1 RWA comparison
+- M3.2: Capital impact analysis with delta decomposition by driver
+- M3.3: Transitional floor schedule modelling (2027–2032)
 
 ## Scenario ID Convention
 
@@ -129,7 +147,19 @@ Each scenario is tagged with an identifier for traceability:
 | `CRR-E` | CRR Slotting Approach |
 | `CRR-F` | CRR Supporting Factors |
 | `CRR-G` | CRR Provisions |
-| `BASEL31-F` | Basel 3.1 Framework Differences |
+| `CRR-H` | CRR Complex/Combined |
+| `CRR-I` | CRR Defaulted Exposures |
+| `B31-A` | Basel 3.1 Standardised Approach |
+| `B31-B` | Basel 3.1 Foundation IRB |
+| `B31-C` | Basel 3.1 Advanced IRB |
+| `B31-D` | Basel 3.1 Credit Risk Mitigation |
+| `B31-E` | Basel 3.1 Slotting Approach |
+| `B31-F` | Basel 3.1 Output Floor |
+| `B31-G` | Basel 3.1 Provisions |
+| `B31-H` | Basel 3.1 Complex/Combined |
+| `M3.1` | Dual-framework comparison |
+| `M3.2` | Capital impact analysis |
+| `M3.3` | Transitional floor modelling |
 | `HIER-` | Hierarchy scenarios |
 | `CLASS-` | Classification scenarios |
 

@@ -38,36 +38,43 @@
 
 ## Acceptance Test Summary
 
-### CRR Scenarios (91 tests)
+### CRR Scenarios (97 tests)
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
 | CRR-A: Standardised Approach | A1–A12 | 14 | 100% |
-| CRR-C: Advanced IRB | C1–C3 | 7 | 100% |
-| CRR-D: Credit Risk Mitigation | D1–D6 | 9 | 100% |
-| CRR-E: Specialised Lending | E1–E4 | 9 | 100% |
-| CRR-F: Supporting Factors | F1–F7 | 15 | 100% |
-| CRR-G: Provisions | G1–G3 | 7 | 100% |
+| CRR-B: Foundation IRB | B1–B13 | 13 | 100% |
+| CRR-C: Advanced IRB | C1–C7 | 7 | 100% |
+| CRR-D: Credit Risk Mitigation | D1–D9 | 9 | 100% |
+| CRR-E: Specialised Lending | E1–E9 | 9 | 100% |
+| CRR-F: Supporting Factors | F1–F15 | 15 | 100% |
+| CRR-G: Provisions | G1–G17 | 17 | 100% |
 | CRR-H: Complex/Combined | H1–H4 | 4 | 100% |
-| CRR-I: Defaulted Exposures | I1–I3 | 9 | 100% |
-| Additional CRR scenarios | | 17 | 100% |
-| **Total** | | **91** | **100%** |
+| CRR-I: Defaulted Exposures | I1–I9 | 9 | 100% |
+| **Total** | | **97** | **100%** |
 
-### Basel 3.1 Scenarios (112 tests)
+### Basel 3.1 Scenarios (116 tests)
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| B31-A: SA (Revised) | A1–A10+ | 112 | 100% |
-| B31-F: Output Floor | F1–F3 | 6 | 100% |
-| **Total** | | **112** | **100%** |
+| B31-A: SA (Revised) | A1–A14 | 14 | 100% |
+| B31-B: Foundation IRB | B1–B16 | 16 | 100% |
+| B31-C: Advanced IRB | C1–C13 | 13 | 100% |
+| B31-D: Credit Risk Mitigation | D1–D15 | 15 | 100% |
+| B31-D7: Parameter Substitution | D7.1–D7.5 | 5 | 100% |
+| B31-E: Specialised Lending | E1–E13 | 13 | 100% |
+| B31-F: Output Floor | F1–F6 | 6 | 100% |
+| B31-G: Provisions | G1–G24 | 24 | 100% |
+| B31-H: Complex/Combined | H1–H10 | 10 | 100% |
+| **Total** | | **116** | **100%** |
 
 ### Comparison Scenarios (62 tests)
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| Dual-framework comparison (M3.1) | CRR vs Basel 3.1 | 62 | 100% |
-| Capital impact analysis (M3.2) | Driver attribution | included | 100% |
-| Transitional floor modelling (M3.3) | Phase-in schedule | included | 100% |
+| M3.1: Dual-framework comparison | CRR vs Basel 3.1 | 19 | 100% |
+| M3.2: Capital impact analysis | Driver attribution | 24 | 100% |
+| M3.3: Transitional floor modelling | Phase-in schedule | 19 | 100% |
 | **Total** | | **62** | **100%** |
 
 ## Regulatory References

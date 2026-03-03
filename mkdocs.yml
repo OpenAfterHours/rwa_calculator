@@ -124,6 +124,8 @@ nav:
   - Features:
     - features/index.md
     - Classification: features/classification.md
+    - COREP Reporting: features/corep-reporting.md
+    - Comparison & Impact Analysis: features/comparison.md
   - Data Model:
     - data-model/index.md
     - Input Schemas: data-model/input-schemas.md
@@ -139,6 +141,7 @@ nav:
     - Engine Components: api/engine.md
     - Data Contracts: api/contracts.md
     - Domain Enums: api/domain.md
+    - Reporting API: api/reporting.md
   - Specifications:
     - specifications/index.md
     - CRR Framework:

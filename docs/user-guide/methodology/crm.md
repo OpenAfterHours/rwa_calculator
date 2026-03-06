@@ -311,6 +311,45 @@ adjustment = (3 - 0.25) / (5 - 0.25) = 2.75 / 4.75 = 0.579
 # £4m guarantee provides £2.32m effective protection
 ```
 
+## On-Balance Sheet Netting (CRR Art. 195)
+
+When a legally enforceable netting agreement exists, mutual claims between the firm and the counterparty can be netted. In practice, this means a negative drawn amount (credit balance / deposit) on one loan can reduce sibling exposures within the same facility.
+
+### How It Works
+
+The calculator implements netting as **synthetic cash collateral**:
+
+1. Loans with `has_netting_agreement = True` and `drawn_amount < 0` contribute their absolute drawn amount to a **netting pool** per `(parent_facility_reference, currency)`
+2. The pool is allocated **pro-rata by `ead_gross`** to positive-drawn netting-eligible siblings in the same facility
+3. Each allocation becomes a synthetic cash collateral row fed into the existing collateral pipeline
+
+This reuses the full collateral mechanics:
+
+- **SA**: Cash collateral (0% haircut) directly reduces EAD
+- **F-IRB**: Cash collateral has 0% LGD → weighted LGD reduction
+- **FX mismatch**: 8% haircut if the negative-drawn loan's currency differs from the positive sibling's
+
+### No Double-Counting
+
+- The negative-drawn loan's own EAD is already floored to 0 by `drawn_for_ead()` — it never self-reduces
+- The synthetic collateral only benefits positive-drawn siblings — distinct mechanism
+
+### Input Data
+
+Set `has_netting_agreement = True` on the loan record to enable netting. The loan must be under a facility (`parent_facility_reference` is not null) for netting to apply.
+
+### Example
+
+```python
+# Facility FAC_01 with two loans:
+# Loan A: drawn = -200 (credit balance), has_netting_agreement = True
+# Loan B: drawn = 1000, has_netting_agreement = True
+
+# Result (SA):
+# Loan A EAD = 0 (floored)
+# Loan B EAD = 1000 - 200 = 800 (reduced by synthetic cash collateral)
+```
+
 ## Cross-Approach CCF Substitution
 
 When an IRB exposure is guaranteed by a counterparty that falls under the Standardised Approach, the guaranteed portion uses **SA CCFs** instead of the IRB supervisory CCFs. This reflects the principle that the risk of the guaranteed portion should be treated consistently with the guarantor's approach.
@@ -587,6 +626,7 @@ provision = {
 
 | Topic | CRR Article | BCBS CRE |
 |-------|-------------|----------|
+| On-balance sheet netting | Art. 195 | CRE22.11-14 |
 | CRM overview | Art. 192-194 | CRE22.1-10 |
 | Financial collateral | Art. 197-200 | CRE22.35-70 |
 | Haircuts | Art. 224-227 | CRE22.50-55 |

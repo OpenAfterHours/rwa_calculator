@@ -366,9 +366,22 @@ class CRMProcessor:
         # Step 3: Initialize EAD columns
         exposures = self._initialize_ead(exposures)
 
+        # Step 3.5: Generate synthetic collateral from netting (CRR Art. 195)
+        netting_collateral = self._generate_netting_collateral(exposures)
+        collateral: pl.LazyFrame | None = data.collateral
+        if netting_collateral is not None:
+            if collateral is not None and has_required_columns(
+                collateral, self.COLLATERAL_REQUIRED_COLUMNS
+            ):
+                collateral = pl.concat(
+                    [collateral, netting_collateral], how="diagonal"
+                )
+            else:
+                collateral = netting_collateral
+
         # Step 4: Apply collateral (if available and valid)
-        if has_required_columns(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
-            exposures = self.apply_collateral(exposures, data.collateral, config)
+        if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = self.apply_collateral(exposures, collateral, config)
         else:
             # No collateral: still need to set F-IRB supervisory LGD based on seniority
             exposures = self._apply_firb_supervisory_lgd_no_collateral(exposures)
@@ -456,8 +469,21 @@ class CRMProcessor:
         # (collateral, guarantees, finalize, audit) work on materialised data.
         exposures = exposures.collect().lazy()
 
-        if has_required_columns(data.collateral, self.COLLATERAL_REQUIRED_COLUMNS):
-            exposures = self.apply_collateral(exposures, data.collateral, config)
+        # Generate synthetic collateral from netting (CRR Art. 195)
+        netting_collateral = self._generate_netting_collateral(exposures)
+        collateral: pl.LazyFrame | None = data.collateral
+        if netting_collateral is not None:
+            if collateral is not None and has_required_columns(
+                collateral, self.COLLATERAL_REQUIRED_COLUMNS
+            ):
+                collateral = pl.concat(
+                    [collateral, netting_collateral], how="diagonal"
+                )
+            else:
+                collateral = netting_collateral
+
+        if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = self.apply_collateral(exposures, collateral, config)
         else:
             exposures = self._apply_firb_supervisory_lgd_no_collateral(exposures)
 
@@ -597,6 +623,121 @@ class CRMProcessor:
                 pl.col("ead_after_collateral").alias("ead_after_guarantee"),
             ]
         )
+
+    def _generate_netting_collateral(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame | None:
+        """
+        Generate synthetic cash collateral from negative-drawn netting-eligible loans.
+
+        When a loan has a negative drawn amount (credit balance) and is covered by a
+        netting agreement (CRR Art. 195), the absolute value of that negative balance
+        can reduce sibling exposures in the same facility — treated as cash collateral.
+
+        The synthetic collateral rows are allocated pro-rata by ead_gross to positive-drawn
+        netting-eligible siblings within the same facility. Netting pools are grouped by
+        (facility, currency) so the haircut pipeline can apply FX haircuts when the pool
+        currency differs from the sibling's currency.
+
+        Args:
+            exposures: Exposures with ead_gross initialised
+
+        Returns:
+            LazyFrame of synthetic collateral rows, or None if no netting applies
+        """
+        schema = exposures.collect_schema()
+        if "has_netting_agreement" not in schema.names():
+            return None
+        if "parent_facility_reference" not in schema.names():
+            return None
+
+        netting_eligible = exposures.filter(
+            pl.col("has_netting_agreement") == True  # noqa: E712
+        )
+
+        # Negative-drawn loans: these provide the netting pool
+        negative_loans = netting_eligible.filter(
+            (pl.col("drawn_amount") < 0)
+            & pl.col("parent_facility_reference").is_not_null()
+        )
+
+        # Sum abs(drawn_amount) per (facility, currency) → netting pool
+        # Currency is kept so the synthetic collateral carries the source currency,
+        # allowing the haircut pipeline to apply FX haircuts when currencies differ.
+        netting_pool = negative_loans.group_by(
+            ["parent_facility_reference", "currency"]
+        ).agg(
+            pl.col("drawn_amount").abs().sum().alias("netting_pool"),
+        ).rename({"currency": "_pool_currency"})
+
+        # Positive-drawn netting-eligible siblings in same facilities
+        positive_siblings = netting_eligible.filter(
+            (pl.col("ead_gross") > 0)
+            & pl.col("parent_facility_reference").is_not_null()
+        ).select(
+            "exposure_reference",
+            "parent_facility_reference",
+            "currency",
+            "ead_gross",
+            "maturity_date",
+        )
+
+        # Total EAD per facility for pro-rata allocation
+        facility_totals = positive_siblings.group_by(
+            "parent_facility_reference"
+        ).agg(
+            pl.col("ead_gross").sum().alias("_facility_total_ead"),
+        )
+
+        # Join: siblings × pool (cross-join on facility — one row per sibling per currency pool)
+        allocated = (
+            positive_siblings.join(
+                netting_pool,
+                on="parent_facility_reference",
+                how="inner",
+            )
+            .join(
+                facility_totals,
+                on="parent_facility_reference",
+                how="left",
+            )
+            .filter(pl.col("_facility_total_ead") > 0)
+        )
+
+        # Pro-rata market_value per sibling
+        allocated = allocated.with_columns(
+            (pl.col("netting_pool") * pl.col("ead_gross") / pl.col("_facility_total_ead")).alias(
+                "market_value"
+            ),
+        )
+
+        # Build synthetic collateral rows — currency from the pool (source of funds)
+        synthetic = allocated.select(
+            (pl.lit("NETTING_") + pl.col("exposure_reference")).alias("collateral_reference"),
+            pl.lit("cash").alias("collateral_type"),
+            pl.col("_pool_currency").alias("currency"),
+            pl.col("maturity_date"),
+            pl.col("market_value"),
+            pl.lit(None).cast(pl.Float64).alias("nominal_value"),
+            pl.lit(None).cast(pl.Float64).alias("pledge_percentage"),
+            pl.lit("loan").alias("beneficiary_type"),
+            pl.col("exposure_reference").alias("beneficiary_reference"),
+            pl.lit(None).cast(pl.Int8).alias("issuer_cqs"),
+            pl.lit(None).cast(pl.String).alias("issuer_type"),
+            pl.lit(None).cast(pl.Float64).alias("residual_maturity_years"),
+            pl.lit(True).alias("is_eligible_financial_collateral"),
+            pl.lit(True).alias("is_eligible_irb_collateral"),
+            pl.lit(None).cast(pl.Date).alias("valuation_date"),
+            pl.lit(None).cast(pl.String).alias("valuation_type"),
+            pl.lit(None).cast(pl.String).alias("property_type"),
+            pl.lit(None).cast(pl.Float64).alias("property_ltv"),
+            pl.lit(None).cast(pl.Boolean).alias("is_income_producing"),
+            pl.lit(None).cast(pl.Boolean).alias("is_adc"),
+            pl.lit(None).cast(pl.Boolean).alias("is_presold"),
+        )
+
+        return synthetic
 
     def apply_collateral(
         self,

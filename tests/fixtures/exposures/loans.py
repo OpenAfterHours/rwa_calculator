@@ -59,6 +59,7 @@ class Loan:
     lgd: float  # A-IRB modelled LGD (optional)
     beel: float  # Best estimate expected loss
     seniority: str  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
+    has_netting_agreement: bool = False  # CRR Art. 195: on-balance sheet netting
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +75,7 @@ class Loan:
             "lgd": self.lgd,
             "beel": self.beel,
             "seniority": self.seniority,
+            "has_netting_agreement": self.has_netting_agreement,
         }
 
 

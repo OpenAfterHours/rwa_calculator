@@ -622,6 +622,7 @@ class HierarchyResolver:
                     "ccf_modelled": pl.Float64,
                     "is_short_term_trade_lc": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
+                    "has_netting_agreement": pl.Boolean,
                     "is_revolving": pl.Boolean,
                     "is_qrre_transactor": pl.Boolean,
                     "facility_limit": pl.Float64,
@@ -898,6 +899,7 @@ class HierarchyResolver:
                 if "is_buy_to_let" in facility_cols
                 else pl.lit(False).alias("is_buy_to_let")
             ),
+            pl.lit(False).alias("has_netting_agreement"),
             # QRRE classification fields (CRR Art. 147(5), CRE30.55)
             (
                 pl.col("is_revolving").fill_null(False)
@@ -983,6 +985,11 @@ class HierarchyResolver:
                 if "is_buy_to_let" in loan_cols
                 else pl.lit(False).alias("is_buy_to_let")
             ),
+            (
+                pl.col("has_netting_agreement").fill_null(False)
+                if "has_netting_agreement" in loan_cols
+                else pl.lit(False).alias("has_netting_agreement")
+            ),
         ]
         loans_unified = loans.select(loan_select_exprs)
 
@@ -1043,6 +1050,7 @@ class HierarchyResolver:
                     pl.lit(False).alias(
                         "is_buy_to_let"
                     ),  # BTL is a property lending characteristic, not for contingents
+                    pl.lit(False).alias("has_netting_agreement"),
                 ]
             )
             exposure_frames.append(contingents_unified)

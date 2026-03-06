@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### On-Balance Sheet Netting (CRR Article 195)
+Support for on-balance sheet netting of mutual claims when a legally enforceable netting agreement exists:
+
+- **New field**: `has_netting_agreement` on `LOAN_SCHEMA` and `Loan` fixture
+- **Synthetic cash collateral**: Negative-drawn netting-eligible loans generate cash collateral that reduces sibling exposures pro-rata within the same facility
+- **SA**: EAD reduced by netting pool (cash = 0% haircut)
+- **F-IRB**: LGD reduced via cash collateral path (0% LGD)
+- **FX mismatch**: 8% haircut applied when currencies differ
+- **Backward compatible**: Optional column; existing data unaffected
+
 #### Service API Documentation
 Restructured user-facing documentation to promote the high-level Service API (`quick_calculate`, `RWAService`) as the primary entry point:
 

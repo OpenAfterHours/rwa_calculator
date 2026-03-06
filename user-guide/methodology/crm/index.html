@@ -753,6 +753,55 @@
 </nav>
 </li>
 <li class="md-nav__item">
+<a class="md-nav__link" href="#on-balance-sheet-netting-crr-art-195">
+<span class="md-ellipsis">
+      
+        On-Balance Sheet Netting (CRR Art. 195)
+      
+    </span>
+</a>
+<nav aria-label="On-Balance Sheet Netting (CRR Art. 195)" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#how-it-works">
+<span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#no-double-counting">
+<span class="md-ellipsis">
+      
+        No Double-Counting
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#input-data">
+<span class="md-ellipsis">
+      
+        Input Data
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#example">
+<span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#cross-approach-ccf-substitution">
 <span class="md-ellipsis">
       
@@ -2296,6 +2345,55 @@
 </nav>
 </li>
 <li class="md-nav__item">
+<a class="md-nav__link" href="#on-balance-sheet-netting-crr-art-195">
+<span class="md-ellipsis">
+      
+        On-Balance Sheet Netting (CRR Art. 195)
+      
+    </span>
+</a>
+<nav aria-label="On-Balance Sheet Netting (CRR Art. 195)" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#how-it-works">
+<span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#no-double-counting">
+<span class="md-ellipsis">
+      
+        No Double-Counting
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#input-data">
+<span class="md-ellipsis">
+      
+        Input Data
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#example">
+<span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#cross-approach-ccf-substitution">
 <span class="md-ellipsis">
       
@@ -2999,6 +3097,37 @@
 </span><span id="__span-9-2"><a href="#__codelineno-9-2" id="__codelineno-9-2" name="__codelineno-9-2"></a>
 </span><span id="__span-9-3"><a href="#__codelineno-9-3" id="__codelineno-9-3" name="__codelineno-9-3"></a><span class="c1"># £4m guarantee provides £2.32m effective protection</span>
 </span></code></pre></div>
+<h2 id="on-balance-sheet-netting-crr-art-195">On-Balance Sheet Netting (CRR Art. 195)<a class="headerlink" href="#on-balance-sheet-netting-crr-art-195" title="Permanent link">¶</a></h2>
+<p>When a legally enforceable netting agreement exists, mutual claims between the firm and the counterparty can be netted. In practice, this means a negative drawn amount (credit balance / deposit) on one loan can reduce sibling exposures within the same facility.</p>
+<h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">¶</a></h3>
+<p>The calculator implements netting as <strong>synthetic cash collateral</strong>:</p>
+<ol>
+<li>Loans with <code>has_netting_agreement = True</code> and <code>drawn_amount &lt; 0</code> contribute their absolute drawn amount to a <strong>netting pool</strong> per <code>(parent_facility_reference, currency)</code></li>
+<li>The pool is allocated <strong>pro-rata by <code>ead_gross</code></strong> to positive-drawn netting-eligible siblings in the same facility</li>
+<li>Each allocation becomes a synthetic cash collateral row fed into the existing collateral pipeline</li>
+</ol>
+<p>This reuses the full collateral mechanics:</p>
+<ul>
+<li><strong>SA</strong>: Cash collateral (0% haircut) directly reduces EAD</li>
+<li><strong>F-IRB</strong>: Cash collateral has 0% LGD → weighted LGD reduction</li>
+<li><strong>FX mismatch</strong>: 8% haircut if the negative-drawn loan's currency differs from the positive sibling's</li>
+</ul>
+<h3 id="no-double-counting">No Double-Counting<a class="headerlink" href="#no-double-counting" title="Permanent link">¶</a></h3>
+<ul>
+<li>The negative-drawn loan's own EAD is already floored to 0 by <code>drawn_for_ead()</code> — it never self-reduces</li>
+<li>The synthetic collateral only benefits positive-drawn siblings — distinct mechanism</li>
+</ul>
+<h3 id="input-data">Input Data<a class="headerlink" href="#input-data" title="Permanent link">¶</a></h3>
+<p>Set <code>has_netting_agreement = True</code> on the loan record to enable netting. The loan must be under a facility (<code>parent_facility_reference</code> is not null) for netting to apply.</p>
+<h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">¶</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a href="#__codelineno-10-1" id="__codelineno-10-1" name="__codelineno-10-1"></a><span class="c1"># Facility FAC_01 with two loans:</span>
+</span><span id="__span-10-2"><a href="#__codelineno-10-2" id="__codelineno-10-2" name="__codelineno-10-2"></a><span class="c1"># Loan A: drawn = -200 (credit balance), has_netting_agreement = True</span>
+</span><span id="__span-10-3"><a href="#__codelineno-10-3" id="__codelineno-10-3" name="__codelineno-10-3"></a><span class="c1"># Loan B: drawn = 1000, has_netting_agreement = True</span>
+</span><span id="__span-10-4"><a href="#__codelineno-10-4" id="__codelineno-10-4" name="__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a href="#__codelineno-10-5" id="__codelineno-10-5" name="__codelineno-10-5"></a><span class="c1"># Result (SA):</span>
+</span><span id="__span-10-6"><a href="#__codelineno-10-6" id="__codelineno-10-6" name="__codelineno-10-6"></a><span class="c1"># Loan A EAD = 0 (floored)</span>
+</span><span id="__span-10-7"><a href="#__codelineno-10-7" id="__codelineno-10-7" name="__codelineno-10-7"></a><span class="c1"># Loan B EAD = 1000 - 200 = 800 (reduced by synthetic cash collateral)</span>
+</span></code></pre></div>
 <h2 id="cross-approach-ccf-substitution">Cross-Approach CCF Substitution<a class="headerlink" href="#cross-approach-ccf-substitution" title="Permanent link">¶</a></h2>
 <p>When an IRB exposure is guaranteed by a counterparty that falls under the Standardised Approach, the guaranteed portion uses <strong>SA CCFs</strong> instead of the IRB supervisory CCFs. This reflects the principle that the risk of the guaranteed portion should be treated consistently with the guarantor's approach.</p>
 <h3 id="when-it-applies">When It Applies<a class="headerlink" href="#when-it-applies" title="Permanent link">¶</a></h3>
@@ -3036,14 +3165,14 @@
 <p>For example, a sovereign guarantor rated CQS 1 with no internal PD will always be treated as SA, even if the firm has F-IRB permission for sovereign exposures.</p>
 <h3 id="ead-recalculation">EAD Recalculation<a class="headerlink" href="#ead-recalculation" title="Permanent link">¶</a></h3>
 <p>When the guarantor approach is SA, the exposure's EAD is recalculated with a split:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a href="#__codelineno-10-1" id="__codelineno-10-1" name="__codelineno-10-1"></a><span class="c1"># Original EAD uses IRB CCF</span>
-</span><span id="__span-10-2"><a href="#__codelineno-10-2" id="__codelineno-10-2" name="__codelineno-10-2"></a><span class="n">ead_original</span> <span class="o">=</span> <span class="n">drawn</span> <span class="o">+</span> <span class="n">undrawn</span> <span class="err">×</span> <span class="n">ccf_irb</span>
-</span><span id="__span-10-3"><a href="#__codelineno-10-3" id="__codelineno-10-3" name="__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a href="#__codelineno-10-4" id="__codelineno-10-4" name="__codelineno-10-4"></a><span class="c1"># Guaranteed portion recalculated with SA CCF</span>
-</span><span id="__span-10-5"><a href="#__codelineno-10-5" id="__codelineno-10-5" name="__codelineno-10-5"></a><span class="n">ead_guaranteed</span> <span class="o">=</span> <span class="n">guarantee_ratio</span> <span class="err">×</span> <span class="p">(</span><span class="n">drawn</span> <span class="o">+</span> <span class="n">undrawn</span> <span class="err">×</span> <span class="n">ccf_sa</span><span class="p">)</span>
-</span><span id="__span-10-6"><a href="#__codelineno-10-6" id="__codelineno-10-6" name="__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a href="#__codelineno-10-7" id="__codelineno-10-7" name="__codelineno-10-7"></a><span class="c1"># Unguaranteed portion retains IRB CCF</span>
-</span><span id="__span-10-8"><a href="#__codelineno-10-8" id="__codelineno-10-8" name="__codelineno-10-8"></a><span class="n">ead_unguaranteed</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">guarantee_ratio</span><span class="p">)</span> <span class="err">×</span> <span class="p">(</span><span class="n">drawn</span> <span class="o">+</span> <span class="n">undrawn</span> <span class="err">×</span> <span class="n">ccf_irb</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a href="#__codelineno-11-1" id="__codelineno-11-1" name="__codelineno-11-1"></a><span class="c1"># Original EAD uses IRB CCF</span>
+</span><span id="__span-11-2"><a href="#__codelineno-11-2" id="__codelineno-11-2" name="__codelineno-11-2"></a><span class="n">ead_original</span> <span class="o">=</span> <span class="n">drawn</span> <span class="o">+</span> <span class="n">undrawn</span> <span class="err">×</span> <span class="n">ccf_irb</span>
+</span><span id="__span-11-3"><a href="#__codelineno-11-3" id="__codelineno-11-3" name="__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a href="#__codelineno-11-4" id="__codelineno-11-4" name="__codelineno-11-4"></a><span class="c1"># Guaranteed portion recalculated with SA CCF</span>
+</span><span id="__span-11-5"><a href="#__codelineno-11-5" id="__codelineno-11-5" name="__codelineno-11-5"></a><span class="n">ead_guaranteed</span> <span class="o">=</span> <span class="n">guarantee_ratio</span> <span class="err">×</span> <span class="p">(</span><span class="n">drawn</span> <span class="o">+</span> <span class="n">undrawn</span> <span class="err">×</span> <span class="n">ccf_sa</span><span class="p">)</span>
+</span><span id="__span-11-6"><a href="#__codelineno-11-6" id="__codelineno-11-6" name="__codelineno-11-6"></a>
+</span><span id="__span-11-7"><a href="#__codelineno-11-7" id="__codelineno-11-7" name="__codelineno-11-7"></a><span class="c1"># Unguaranteed portion retains IRB CCF</span>
+</span><span id="__span-11-8"><a href="#__codelineno-11-8" id="__codelineno-11-8" name="__codelineno-11-8"></a><span class="n">ead_unguaranteed</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">guarantee_ratio</span><span class="p">)</span> <span class="err">×</span> <span class="p">(</span><span class="n">drawn</span> <span class="o">+</span> <span class="n">undrawn</span> <span class="err">×</span> <span class="n">ccf_irb</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="output-columns">Output Columns<a class="headerlink" href="#output-columns" title="Permanent link">¶</a></h3>
 <p>The cross-approach CCF process adds these columns:</p>
@@ -3086,19 +3215,19 @@
 <h2 id="provisions">Provisions<a class="headerlink" href="#provisions" title="Permanent link">¶</a></h2>
 <h3 id="sa-treatment-art-1112-compliant">SA Treatment (Art. 111(2) Compliant)<a class="headerlink" href="#sa-treatment-art-1112-compliant" title="Permanent link">¶</a></h3>
 <p>Provisions are resolved <strong>before</strong> CCF application using a drawn-first deduction approach:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a href="#__codelineno-11-1" id="__codelineno-11-1" name="__codelineno-11-1"></a><span class="c1"># Step 1: Drawn-first deduction</span>
-</span><span id="__span-11-2"><a href="#__codelineno-11-2" id="__codelineno-11-2" name="__codelineno-11-2"></a><span class="n">provision_on_drawn</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">provision_allocated</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">drawn_amount</span><span class="p">))</span>
-</span><span id="__span-11-3"><a href="#__codelineno-11-3" id="__codelineno-11-3" name="__codelineno-11-3"></a>
-</span><span id="__span-11-4"><a href="#__codelineno-11-4" id="__codelineno-11-4" name="__codelineno-11-4"></a><span class="c1"># Step 2: Remainder reduces nominal before CCF</span>
-</span><span id="__span-11-5"><a href="#__codelineno-11-5" id="__codelineno-11-5" name="__codelineno-11-5"></a><span class="n">provision_on_nominal</span> <span class="o">=</span> <span class="n">provision_allocated</span> <span class="o">-</span> <span class="n">provision_on_drawn</span>
-</span><span id="__span-11-6"><a href="#__codelineno-11-6" id="__codelineno-11-6" name="__codelineno-11-6"></a><span class="n">nominal_after_provision</span> <span class="o">=</span> <span class="n">nominal_amount</span> <span class="o">-</span> <span class="n">provision_on_nominal</span>
-</span><span id="__span-11-7"><a href="#__codelineno-11-7" id="__codelineno-11-7" name="__codelineno-11-7"></a>
-</span><span id="__span-11-8"><a href="#__codelineno-11-8" id="__codelineno-11-8" name="__codelineno-11-8"></a><span class="c1"># Step 3: CCF applied to adjusted nominal</span>
-</span><span id="__span-11-9"><a href="#__codelineno-11-9" id="__codelineno-11-9" name="__codelineno-11-9"></a><span class="n">ead_from_ccf</span> <span class="o">=</span> <span class="n">nominal_after_provision</span> <span class="err">×</span> <span class="n">CCF</span>
-</span><span id="__span-11-10"><a href="#__codelineno-11-10" id="__codelineno-11-10" name="__codelineno-11-10"></a>
-</span><span id="__span-11-11"><a href="#__codelineno-11-11" id="__codelineno-11-11" name="__codelineno-11-11"></a><span class="c1"># Step 4: Final EAD</span>
-</span><span id="__span-11-12"><a href="#__codelineno-11-12" id="__codelineno-11-12" name="__codelineno-11-12"></a><span class="n">EAD</span> <span class="o">=</span> <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">drawn_amount</span><span class="p">)</span> <span class="o">-</span> <span class="n">provision_on_drawn</span><span class="p">)</span> <span class="o">+</span> <span class="n">interest</span> <span class="o">+</span> <span class="n">ead_from_ccf</span>
-</span><span id="__span-11-13"><a href="#__codelineno-11-13" id="__codelineno-11-13" name="__codelineno-11-13"></a><span class="n">RWA</span> <span class="o">=</span> <span class="n">EAD</span> <span class="err">×</span> <span class="n">Risk_Weight</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a href="#__codelineno-12-1" id="__codelineno-12-1" name="__codelineno-12-1"></a><span class="c1"># Step 1: Drawn-first deduction</span>
+</span><span id="__span-12-2"><a href="#__codelineno-12-2" id="__codelineno-12-2" name="__codelineno-12-2"></a><span class="n">provision_on_drawn</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">provision_allocated</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">drawn_amount</span><span class="p">))</span>
+</span><span id="__span-12-3"><a href="#__codelineno-12-3" id="__codelineno-12-3" name="__codelineno-12-3"></a>
+</span><span id="__span-12-4"><a href="#__codelineno-12-4" id="__codelineno-12-4" name="__codelineno-12-4"></a><span class="c1"># Step 2: Remainder reduces nominal before CCF</span>
+</span><span id="__span-12-5"><a href="#__codelineno-12-5" id="__codelineno-12-5" name="__codelineno-12-5"></a><span class="n">provision_on_nominal</span> <span class="o">=</span> <span class="n">provision_allocated</span> <span class="o">-</span> <span class="n">provision_on_drawn</span>
+</span><span id="__span-12-6"><a href="#__codelineno-12-6" id="__codelineno-12-6" name="__codelineno-12-6"></a><span class="n">nominal_after_provision</span> <span class="o">=</span> <span class="n">nominal_amount</span> <span class="o">-</span> <span class="n">provision_on_nominal</span>
+</span><span id="__span-12-7"><a href="#__codelineno-12-7" id="__codelineno-12-7" name="__codelineno-12-7"></a>
+</span><span id="__span-12-8"><a href="#__codelineno-12-8" id="__codelineno-12-8" name="__codelineno-12-8"></a><span class="c1"># Step 3: CCF applied to adjusted nominal</span>
+</span><span id="__span-12-9"><a href="#__codelineno-12-9" id="__codelineno-12-9" name="__codelineno-12-9"></a><span class="n">ead_from_ccf</span> <span class="o">=</span> <span class="n">nominal_after_provision</span> <span class="err">×</span> <span class="n">CCF</span>
+</span><span id="__span-12-10"><a href="#__codelineno-12-10" id="__codelineno-12-10" name="__codelineno-12-10"></a>
+</span><span id="__span-12-11"><a href="#__codelineno-12-11" id="__codelineno-12-11" name="__codelineno-12-11"></a><span class="c1"># Step 4: Final EAD</span>
+</span><span id="__span-12-12"><a href="#__codelineno-12-12" id="__codelineno-12-12" name="__codelineno-12-12"></a><span class="n">EAD</span> <span class="o">=</span> <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">drawn_amount</span><span class="p">)</span> <span class="o">-</span> <span class="n">provision_on_drawn</span><span class="p">)</span> <span class="o">+</span> <span class="n">interest</span> <span class="o">+</span> <span class="n">ead_from_ccf</span>
+</span><span id="__span-12-13"><a href="#__codelineno-12-13" id="__codelineno-12-13" name="__codelineno-12-13"></a><span class="n">RWA</span> <span class="o">=</span> <span class="n">EAD</span> <span class="err">×</span> <span class="n">Risk_Weight</span>
 </span></code></pre></div>
 <p>Provisions are allocated via multi-level beneficiary resolution:</p>
 <ul>
@@ -3108,16 +3237,16 @@
 </ul>
 <h3 id="irb-treatment">IRB Treatment<a class="headerlink" href="#irb-treatment" title="Permanent link">¶</a></h3>
 <p>Under IRB, provisions are tracked (<code>provision_allocated</code>) but <strong>not deducted</strong> from EAD. Instead, the calculator computes Expected Loss for comparison:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a href="#__codelineno-12-1" id="__codelineno-12-1" name="__codelineno-12-1"></a><span class="c1"># Provisions NOT deducted from EAD (provision_deducted = 0)</span>
-</span><span id="__span-12-2"><a href="#__codelineno-12-2" id="__codelineno-12-2" name="__codelineno-12-2"></a><span class="c1"># provision_on_drawn = 0, provision_on_nominal = 0</span>
-</span><span id="__span-12-3"><a href="#__codelineno-12-3" id="__codelineno-12-3" name="__codelineno-12-3"></a><span class="n">EL</span> <span class="o">=</span> <span class="n">PD</span> <span class="err">×</span> <span class="n">LGD</span> <span class="err">×</span> <span class="n">EAD</span>
-</span><span id="__span-12-4"><a href="#__codelineno-12-4" id="__codelineno-12-4" name="__codelineno-12-4"></a>
-</span><span id="__span-12-5"><a href="#__codelineno-12-5" id="__codelineno-12-5" name="__codelineno-12-5"></a><span class="k">if</span> <span class="n">Provisions</span> <span class="o">&gt;=</span> <span class="n">EL</span><span class="p">:</span>
-</span><span id="__span-12-6"><a href="#__codelineno-12-6" id="__codelineno-12-6" name="__codelineno-12-6"></a>    <span class="c1"># Excess provisions can be added to Tier 2 (limited)</span>
-</span><span id="__span-12-7"><a href="#__codelineno-12-7" id="__codelineno-12-7" name="__codelineno-12-7"></a>    <span class="n">Excess</span> <span class="o">=</span> <span class="n">Provisions</span> <span class="o">-</span> <span class="n">EL</span>
-</span><span id="__span-12-8"><a href="#__codelineno-12-8" id="__codelineno-12-8" name="__codelineno-12-8"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-12-9"><a href="#__codelineno-12-9" id="__codelineno-12-9" name="__codelineno-12-9"></a>    <span class="c1"># Shortfall deducted from CET1</span>
-</span><span id="__span-12-10"><a href="#__codelineno-12-10" id="__codelineno-12-10" name="__codelineno-12-10"></a>    <span class="n">Shortfall</span> <span class="o">=</span> <span class="n">EL</span> <span class="o">-</span> <span class="n">Provisions</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a href="#__codelineno-13-1" id="__codelineno-13-1" name="__codelineno-13-1"></a><span class="c1"># Provisions NOT deducted from EAD (provision_deducted = 0)</span>
+</span><span id="__span-13-2"><a href="#__codelineno-13-2" id="__codelineno-13-2" name="__codelineno-13-2"></a><span class="c1"># provision_on_drawn = 0, provision_on_nominal = 0</span>
+</span><span id="__span-13-3"><a href="#__codelineno-13-3" id="__codelineno-13-3" name="__codelineno-13-3"></a><span class="n">EL</span> <span class="o">=</span> <span class="n">PD</span> <span class="err">×</span> <span class="n">LGD</span> <span class="err">×</span> <span class="n">EAD</span>
+</span><span id="__span-13-4"><a href="#__codelineno-13-4" id="__codelineno-13-4" name="__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a href="#__codelineno-13-5" id="__codelineno-13-5" name="__codelineno-13-5"></a><span class="k">if</span> <span class="n">Provisions</span> <span class="o">&gt;=</span> <span class="n">EL</span><span class="p">:</span>
+</span><span id="__span-13-6"><a href="#__codelineno-13-6" id="__codelineno-13-6" name="__codelineno-13-6"></a>    <span class="c1"># Excess provisions can be added to Tier 2 (limited)</span>
+</span><span id="__span-13-7"><a href="#__codelineno-13-7" id="__codelineno-13-7" name="__codelineno-13-7"></a>    <span class="n">Excess</span> <span class="o">=</span> <span class="n">Provisions</span> <span class="o">-</span> <span class="n">EL</span>
+</span><span id="__span-13-8"><a href="#__codelineno-13-8" id="__codelineno-13-8" name="__codelineno-13-8"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-13-9"><a href="#__codelineno-13-9" id="__codelineno-13-9" name="__codelineno-13-9"></a>    <span class="c1"># Shortfall deducted from CET1</span>
+</span><span id="__span-13-10"><a href="#__codelineno-13-10" id="__codelineno-13-10" name="__codelineno-13-10"></a>    <span class="n">Shortfall</span> <span class="o">=</span> <span class="n">EL</span> <span class="o">-</span> <span class="n">Provisions</span>
 </span></code></pre></div>
 <h3 id="scra-and-gcra-provisions">SCRA and GCRA Provisions<a class="headerlink" href="#scra-and-gcra-provisions" title="Permanent link">¶</a></h3>
 <table>
@@ -3167,13 +3296,13 @@
 </table>
 <h2 id="crm-hierarchy">CRM Hierarchy<a class="headerlink" href="#crm-hierarchy" title="Permanent link">¶</a></h2>
 <p>When multiple CRM types are available, provisions are resolved first (before CCF), then the remaining CRM is applied after EAD initialization:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a href="#__codelineno-13-1" id="__codelineno-13-1" name="__codelineno-13-1"></a><span class="c1"># Order of application (Art. 111(2) compliant)</span>
-</span><span id="__span-13-2"><a href="#__codelineno-13-2" id="__codelineno-13-2" name="__codelineno-13-2"></a><span class="mf">1.</span> <span class="n">Resolve</span> <span class="n">provisions</span> <span class="p">(</span><span class="n">before</span> <span class="n">CCF</span><span class="p">)</span> <span class="err">—</span> <span class="n">drawn</span><span class="o">-</span><span class="n">first</span> <span class="n">deduction</span><span class="p">,</span> <span class="n">adjusts</span> <span class="n">nominal</span>
-</span><span id="__span-13-3"><a href="#__codelineno-13-3" id="__codelineno-13-3" name="__codelineno-13-3"></a><span class="mf">2.</span> <span class="n">Apply</span> <span class="n">CCFs</span> <span class="p">(</span><span class="n">uses</span> <span class="n">nominal_after_provision</span> <span class="k">for</span> <span class="n">off</span><span class="o">-</span><span class="n">balance</span> <span class="n">sheet</span> <span class="n">conversion</span><span class="p">)</span>
-</span><span id="__span-13-4"><a href="#__codelineno-13-4" id="__codelineno-13-4" name="__codelineno-13-4"></a><span class="mf">3.</span> <span class="n">Initialize</span> <span class="n">EAD</span> <span class="n">waterfall</span>
-</span><span id="__span-13-5"><a href="#__codelineno-13-5" id="__codelineno-13-5" name="__codelineno-13-5"></a><span class="mf">4.</span> <span class="n">Apply</span> <span class="n">collateral</span> <span class="p">(</span><span class="n">reduce</span> <span class="n">net</span> <span class="n">exposure</span> <span class="k">with</span> <span class="n">haircuts</span><span class="p">)</span>
-</span><span id="__span-13-6"><a href="#__codelineno-13-6" id="__codelineno-13-6" name="__codelineno-13-6"></a><span class="mf">5.</span> <span class="n">Apply</span> <span class="n">guarantees</span> <span class="p">(</span><span class="n">substitution</span> <span class="n">on</span> <span class="n">remainder</span><span class="p">)</span>
-</span><span id="__span-13-7"><a href="#__codelineno-13-7" id="__codelineno-13-7" name="__codelineno-13-7"></a><span class="mf">6.</span> <span class="n">Finalize</span> <span class="n">EAD</span> <span class="p">(</span><span class="n">no</span> <span class="n">further</span> <span class="n">provision</span> <span class="n">subtraction</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a href="#__codelineno-14-1" id="__codelineno-14-1" name="__codelineno-14-1"></a><span class="c1"># Order of application (Art. 111(2) compliant)</span>
+</span><span id="__span-14-2"><a href="#__codelineno-14-2" id="__codelineno-14-2" name="__codelineno-14-2"></a><span class="mf">1.</span> <span class="n">Resolve</span> <span class="n">provisions</span> <span class="p">(</span><span class="n">before</span> <span class="n">CCF</span><span class="p">)</span> <span class="err">—</span> <span class="n">drawn</span><span class="o">-</span><span class="n">first</span> <span class="n">deduction</span><span class="p">,</span> <span class="n">adjusts</span> <span class="n">nominal</span>
+</span><span id="__span-14-3"><a href="#__codelineno-14-3" id="__codelineno-14-3" name="__codelineno-14-3"></a><span class="mf">2.</span> <span class="n">Apply</span> <span class="n">CCFs</span> <span class="p">(</span><span class="n">uses</span> <span class="n">nominal_after_provision</span> <span class="k">for</span> <span class="n">off</span><span class="o">-</span><span class="n">balance</span> <span class="n">sheet</span> <span class="n">conversion</span><span class="p">)</span>
+</span><span id="__span-14-4"><a href="#__codelineno-14-4" id="__codelineno-14-4" name="__codelineno-14-4"></a><span class="mf">3.</span> <span class="n">Initialize</span> <span class="n">EAD</span> <span class="n">waterfall</span>
+</span><span id="__span-14-5"><a href="#__codelineno-14-5" id="__codelineno-14-5" name="__codelineno-14-5"></a><span class="mf">4.</span> <span class="n">Apply</span> <span class="n">collateral</span> <span class="p">(</span><span class="n">reduce</span> <span class="n">net</span> <span class="n">exposure</span> <span class="k">with</span> <span class="n">haircuts</span><span class="p">)</span>
+</span><span id="__span-14-6"><a href="#__codelineno-14-6" id="__codelineno-14-6" name="__codelineno-14-6"></a><span class="mf">5.</span> <span class="n">Apply</span> <span class="n">guarantees</span> <span class="p">(</span><span class="n">substitution</span> <span class="n">on</span> <span class="n">remainder</span><span class="p">)</span>
+</span><span id="__span-14-7"><a href="#__codelineno-14-7" id="__codelineno-14-7" name="__codelineno-14-7"></a><span class="mf">6.</span> <span class="n">Finalize</span> <span class="n">EAD</span> <span class="p">(</span><span class="n">no</span> <span class="n">further</span> <span class="n">provision</span> <span class="n">subtraction</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="example-with-multiple-crm">Example with Multiple CRM<a class="headerlink" href="#example-with-multiple-crm" title="Permanent link">¶</a></h3>
 <p><strong>Exposure:</strong>
@@ -3184,47 +3313,47 @@
 - Cash collateral: £3m
 - Bank guarantee (20% RW): £4m</p>
 <p><strong>Calculation:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a href="#__codelineno-14-1" id="__codelineno-14-1" name="__codelineno-14-1"></a><span class="c1"># Step 1: Apply provision</span>
-</span><span id="__span-14-2"><a href="#__codelineno-14-2" id="__codelineno-14-2" name="__codelineno-14-2"></a><span class="n">Net_1</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mi">9</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-14-3"><a href="#__codelineno-14-3" id="__codelineno-14-3" name="__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a href="#__codelineno-14-4" id="__codelineno-14-4" name="__codelineno-14-4"></a><span class="c1"># Step 2: Apply collateral (no haircut for cash)</span>
-</span><span id="__span-14-5"><a href="#__codelineno-14-5" id="__codelineno-14-5" name="__codelineno-14-5"></a><span class="n">Net_2</span> <span class="o">=</span> <span class="mi">9</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">3</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-14-6"><a href="#__codelineno-14-6" id="__codelineno-14-6" name="__codelineno-14-6"></a>
-</span><span id="__span-14-7"><a href="#__codelineno-14-7" id="__codelineno-14-7" name="__codelineno-14-7"></a><span class="c1"># Step 3: Apply guarantee (substitution)</span>
-</span><span id="__span-14-8"><a href="#__codelineno-14-8" id="__codelineno-14-8" name="__codelineno-14-8"></a><span class="n">Guaranteed</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span><span class="p">)</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-14-9"><a href="#__codelineno-14-9" id="__codelineno-14-9" name="__codelineno-14-9"></a><span class="n">Unguaranteed</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-14-10"><a href="#__codelineno-14-10" id="__codelineno-14-10" name="__codelineno-14-10"></a>
-</span><span id="__span-14-11"><a href="#__codelineno-14-11" id="__codelineno-14-11" name="__codelineno-14-11"></a><span class="c1"># Calculate RWA</span>
-</span><span id="__span-14-12"><a href="#__codelineno-14-12" id="__codelineno-14-12" name="__codelineno-14-12"></a><span class="n">RWA_guaranteed</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">20</span><span class="o">%</span> <span class="o">=</span> <span class="mi">800</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-14-13"><a href="#__codelineno-14-13" id="__codelineno-14-13" name="__codelineno-14-13"></a><span class="n">RWA_unguaranteed</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">100</span><span class="o">%</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-14-14"><a href="#__codelineno-14-14" id="__codelineno-14-14" name="__codelineno-14-14"></a>
-</span><span id="__span-14-15"><a href="#__codelineno-14-15" id="__codelineno-14-15" name="__codelineno-14-15"></a><span class="n">Total_RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">2</span><span class="p">,</span><span class="mi">800</span><span class="p">,</span><span class="mi">000</span>
-</span><span id="__span-14-16"><a href="#__codelineno-14-16" id="__codelineno-14-16" name="__codelineno-14-16"></a>
-</span><span id="__span-14-17"><a href="#__codelineno-14-17" id="__codelineno-14-17" name="__codelineno-14-17"></a><span class="c1"># vs. Gross RWA = £10,000,000</span>
-</span><span id="__span-14-18"><a href="#__codelineno-14-18" id="__codelineno-14-18" name="__codelineno-14-18"></a><span class="c1"># Benefit: 72% reduction</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a href="#__codelineno-15-1" id="__codelineno-15-1" name="__codelineno-15-1"></a><span class="c1"># Step 1: Apply provision</span>
+</span><span id="__span-15-2"><a href="#__codelineno-15-2" id="__codelineno-15-2" name="__codelineno-15-2"></a><span class="n">Net_1</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mi">9</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-15-3"><a href="#__codelineno-15-3" id="__codelineno-15-3" name="__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a href="#__codelineno-15-4" id="__codelineno-15-4" name="__codelineno-15-4"></a><span class="c1"># Step 2: Apply collateral (no haircut for cash)</span>
+</span><span id="__span-15-5"><a href="#__codelineno-15-5" id="__codelineno-15-5" name="__codelineno-15-5"></a><span class="n">Net_2</span> <span class="o">=</span> <span class="mi">9</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">3</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-15-6"><a href="#__codelineno-15-6" id="__codelineno-15-6" name="__codelineno-15-6"></a>
+</span><span id="__span-15-7"><a href="#__codelineno-15-7" id="__codelineno-15-7" name="__codelineno-15-7"></a><span class="c1"># Step 3: Apply guarantee (substitution)</span>
+</span><span id="__span-15-8"><a href="#__codelineno-15-8" id="__codelineno-15-8" name="__codelineno-15-8"></a><span class="n">Guaranteed</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span><span class="p">)</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-15-9"><a href="#__codelineno-15-9" id="__codelineno-15-9" name="__codelineno-15-9"></a><span class="n">Unguaranteed</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">-</span> <span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-15-10"><a href="#__codelineno-15-10" id="__codelineno-15-10" name="__codelineno-15-10"></a>
+</span><span id="__span-15-11"><a href="#__codelineno-15-11" id="__codelineno-15-11" name="__codelineno-15-11"></a><span class="c1"># Calculate RWA</span>
+</span><span id="__span-15-12"><a href="#__codelineno-15-12" id="__codelineno-15-12" name="__codelineno-15-12"></a><span class="n">RWA_guaranteed</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">20</span><span class="o">%</span> <span class="o">=</span> <span class="mi">800</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-15-13"><a href="#__codelineno-15-13" id="__codelineno-15-13" name="__codelineno-15-13"></a><span class="n">RWA_unguaranteed</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span> <span class="err">×</span> <span class="mi">100</span><span class="o">%</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span><span class="mi">000</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-15-14"><a href="#__codelineno-15-14" id="__codelineno-15-14" name="__codelineno-15-14"></a>
+</span><span id="__span-15-15"><a href="#__codelineno-15-15" id="__codelineno-15-15" name="__codelineno-15-15"></a><span class="n">Total_RWA</span> <span class="o">=</span> <span class="err">£</span><span class="mi">2</span><span class="p">,</span><span class="mi">800</span><span class="p">,</span><span class="mi">000</span>
+</span><span id="__span-15-16"><a href="#__codelineno-15-16" id="__codelineno-15-16" name="__codelineno-15-16"></a>
+</span><span id="__span-15-17"><a href="#__codelineno-15-17" id="__codelineno-15-17" name="__codelineno-15-17"></a><span class="c1"># vs. Gross RWA = £10,000,000</span>
+</span><span id="__span-15-18"><a href="#__codelineno-15-18" id="__codelineno-15-18" name="__codelineno-15-18"></a><span class="c1"># Benefit: 72% reduction</span>
 </span></code></pre></div></p>
 <h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">¶</a></h2>
 <p>The CRM processing is implemented in <a href="https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/processor.py"><code>crm/processor.py</code></a> and <a href="https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/haircuts.py"><code>crm/haircuts.py</code></a>.</p>
 <h3 id="crm-processor">CRM Processor<a class="headerlink" href="#crm-processor" title="Permanent link">¶</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a href="#__codelineno-15-1" id="__codelineno-15-1" name="__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine.crm.processor</span><span class="w"> </span><span class="kn">import</span> <span class="n">CRMProcessor</span>
-</span><span id="__span-15-2"><a href="#__codelineno-15-2" id="__codelineno-15-2" name="__codelineno-15-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationConfig</span>
-</span><span id="__span-15-3"><a href="#__codelineno-15-3" id="__codelineno-15-3" name="__codelineno-15-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
-</span><span id="__span-15-4"><a href="#__codelineno-15-4" id="__codelineno-15-4" name="__codelineno-15-4"></a>
-</span><span id="__span-15-5"><a href="#__codelineno-15-5" id="__codelineno-15-5" name="__codelineno-15-5"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>
-</span><span id="__span-15-6"><a href="#__codelineno-15-6" id="__codelineno-15-6" name="__codelineno-15-6"></a>
-</span><span id="__span-15-7"><a href="#__codelineno-15-7" id="__codelineno-15-7" name="__codelineno-15-7"></a><span class="c1"># Create processor</span>
-</span><span id="__span-15-8"><a href="#__codelineno-15-8" id="__codelineno-15-8" name="__codelineno-15-8"></a><span class="n">processor</span> <span class="o">=</span> <span class="n">CRMProcessor</span><span class="p">(</span><span class="n">is_basel_3_1</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">is_basel_3_1</span><span class="p">)</span>
-</span><span id="__span-15-9"><a href="#__codelineno-15-9" id="__codelineno-15-9" name="__codelineno-15-9"></a>
-</span><span id="__span-15-10"><a href="#__codelineno-15-10" id="__codelineno-15-10" name="__codelineno-15-10"></a><span class="c1"># Process exposures through CRM pipeline — returns CRMAdjustedBundle</span>
-</span><span id="__span-15-11"><a href="#__codelineno-15-11" id="__codelineno-15-11" name="__codelineno-15-11"></a><span class="n">result</span> <span class="o">=</span> <span class="n">processor</span><span class="o">.</span><span class="n">get_crm_adjusted_bundle</span><span class="p">(</span>
-</span><span id="__span-15-12"><a href="#__codelineno-15-12" id="__codelineno-15-12" name="__codelineno-15-12"></a>    <span class="n">data</span><span class="o">=</span><span class="n">classified_exposures_bundle</span><span class="p">,</span>
-</span><span id="__span-15-13"><a href="#__codelineno-15-13" id="__codelineno-15-13" name="__codelineno-15-13"></a>    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-15-14"><a href="#__codelineno-15-14" id="__codelineno-15-14" name="__codelineno-15-14"></a><span class="p">)</span>
-</span><span id="__span-15-15"><a href="#__codelineno-15-15" id="__codelineno-15-15" name="__codelineno-15-15"></a>
-</span><span id="__span-15-16"><a href="#__codelineno-15-16" id="__codelineno-15-16" name="__codelineno-15-16"></a><span class="c1"># Access adjusted exposures (split by approach)</span>
-</span><span id="__span-15-17"><a href="#__codelineno-15-17" id="__codelineno-15-17" name="__codelineno-15-17"></a><span class="n">adjusted</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">exposures</span>      <span class="c1"># All exposures with CRM adjustments</span>
-</span><span id="__span-15-18"><a href="#__codelineno-15-18" id="__codelineno-15-18" name="__codelineno-15-18"></a><span class="n">sa_adjusted</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">sa_exposures</span>
-</span><span id="__span-15-19"><a href="#__codelineno-15-19" id="__codelineno-15-19" name="__codelineno-15-19"></a><span class="n">irb_adjusted</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">irb_exposures</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a href="#__codelineno-16-1" id="__codelineno-16-1" name="__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine.crm.processor</span><span class="w"> </span><span class="kn">import</span> <span class="n">CRMProcessor</span>
+</span><span id="__span-16-2"><a href="#__codelineno-16-2" id="__codelineno-16-2" name="__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.contracts.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalculationConfig</span>
+</span><span id="__span-16-3"><a href="#__codelineno-16-3" id="__codelineno-16-3" name="__codelineno-16-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-16-4"><a href="#__codelineno-16-4" id="__codelineno-16-4" name="__codelineno-16-4"></a>
+</span><span id="__span-16-5"><a href="#__codelineno-16-5" id="__codelineno-16-5" name="__codelineno-16-5"></a><span class="n">config</span> <span class="o">=</span> <span class="n">CalculationConfig</span><span class="o">.</span><span class="n">crr</span><span class="p">(</span><span class="n">reporting_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">))</span>
+</span><span id="__span-16-6"><a href="#__codelineno-16-6" id="__codelineno-16-6" name="__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a href="#__codelineno-16-7" id="__codelineno-16-7" name="__codelineno-16-7"></a><span class="c1"># Create processor</span>
+</span><span id="__span-16-8"><a href="#__codelineno-16-8" id="__codelineno-16-8" name="__codelineno-16-8"></a><span class="n">processor</span> <span class="o">=</span> <span class="n">CRMProcessor</span><span class="p">(</span><span class="n">is_basel_3_1</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">is_basel_3_1</span><span class="p">)</span>
+</span><span id="__span-16-9"><a href="#__codelineno-16-9" id="__codelineno-16-9" name="__codelineno-16-9"></a>
+</span><span id="__span-16-10"><a href="#__codelineno-16-10" id="__codelineno-16-10" name="__codelineno-16-10"></a><span class="c1"># Process exposures through CRM pipeline — returns CRMAdjustedBundle</span>
+</span><span id="__span-16-11"><a href="#__codelineno-16-11" id="__codelineno-16-11" name="__codelineno-16-11"></a><span class="n">result</span> <span class="o">=</span> <span class="n">processor</span><span class="o">.</span><span class="n">get_crm_adjusted_bundle</span><span class="p">(</span>
+</span><span id="__span-16-12"><a href="#__codelineno-16-12" id="__codelineno-16-12" name="__codelineno-16-12"></a>    <span class="n">data</span><span class="o">=</span><span class="n">classified_exposures_bundle</span><span class="p">,</span>
+</span><span id="__span-16-13"><a href="#__codelineno-16-13" id="__codelineno-16-13" name="__codelineno-16-13"></a>    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-16-14"><a href="#__codelineno-16-14" id="__codelineno-16-14" name="__codelineno-16-14"></a><span class="p">)</span>
+</span><span id="__span-16-15"><a href="#__codelineno-16-15" id="__codelineno-16-15" name="__codelineno-16-15"></a>
+</span><span id="__span-16-16"><a href="#__codelineno-16-16" id="__codelineno-16-16" name="__codelineno-16-16"></a><span class="c1"># Access adjusted exposures (split by approach)</span>
+</span><span id="__span-16-17"><a href="#__codelineno-16-17" id="__codelineno-16-17" name="__codelineno-16-17"></a><span class="n">adjusted</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">exposures</span>      <span class="c1"># All exposures with CRM adjustments</span>
+</span><span id="__span-16-18"><a href="#__codelineno-16-18" id="__codelineno-16-18" name="__codelineno-16-18"></a><span class="n">sa_adjusted</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">sa_exposures</span>
+</span><span id="__span-16-19"><a href="#__codelineno-16-19" id="__codelineno-16-19" name="__codelineno-16-19"></a><span class="n">irb_adjusted</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">irb_exposures</span>
 </span></code></pre></div>
 <div class="doc doc-object doc-class">
 <h2 class="doc doc-heading" id="rwa_calc.engine.crm.processor.CRMProcessor">
@@ -3730,23 +3859,23 @@ additional joins needed.</p>
 in <code>src/rwa_calc/engine/crm/processor.py</code> for the full pipeline implementation.</p>
 </details>
 <h3 id="haircut-calculator">Haircut Calculator<a class="headerlink" href="#haircut-calculator" title="Permanent link">¶</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a href="#__codelineno-16-1" id="__codelineno-16-1" name="__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine.crm.haircuts</span><span class="w"> </span><span class="kn">import</span> <span class="n">HaircutCalculator</span>
-</span><span id="__span-16-2"><a href="#__codelineno-16-2" id="__codelineno-16-2" name="__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">decimal</span><span class="w"> </span><span class="kn">import</span> <span class="n">Decimal</span>
-</span><span id="__span-16-3"><a href="#__codelineno-16-3" id="__codelineno-16-3" name="__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a href="#__codelineno-16-4" id="__codelineno-16-4" name="__codelineno-16-4"></a><span class="n">calculator</span> <span class="o">=</span> <span class="n">HaircutCalculator</span><span class="p">()</span>
-</span><span id="__span-16-5"><a href="#__codelineno-16-5" id="__codelineno-16-5" name="__codelineno-16-5"></a>
-</span><span id="__span-16-6"><a href="#__codelineno-16-6" id="__codelineno-16-6" name="__codelineno-16-6"></a><span class="c1"># Calculate haircut for a single collateral item</span>
-</span><span id="__span-16-7"><a href="#__codelineno-16-7" id="__codelineno-16-7" name="__codelineno-16-7"></a><span class="n">result</span> <span class="o">=</span> <span class="n">calculator</span><span class="o">.</span><span class="n">calculate_single_haircut</span><span class="p">(</span>
-</span><span id="__span-16-8"><a href="#__codelineno-16-8" id="__codelineno-16-8" name="__codelineno-16-8"></a>    <span class="n">collateral_type</span><span class="o">=</span><span class="s2">"govt_bond"</span><span class="p">,</span>
-</span><span id="__span-16-9"><a href="#__codelineno-16-9" id="__codelineno-16-9" name="__codelineno-16-9"></a>    <span class="n">market_value</span><span class="o">=</span><span class="n">Decimal</span><span class="p">(</span><span class="s2">"8000000"</span><span class="p">),</span>
-</span><span id="__span-16-10"><a href="#__codelineno-16-10" id="__codelineno-16-10" name="__codelineno-16-10"></a>    <span class="n">collateral_currency</span><span class="o">=</span><span class="s2">"GBP"</span><span class="p">,</span>
-</span><span id="__span-16-11"><a href="#__codelineno-16-11" id="__codelineno-16-11" name="__codelineno-16-11"></a>    <span class="n">exposure_currency</span><span class="o">=</span><span class="s2">"GBP"</span><span class="p">,</span>
-</span><span id="__span-16-12"><a href="#__codelineno-16-12" id="__codelineno-16-12" name="__codelineno-16-12"></a>    <span class="n">cqs</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-16-13"><a href="#__codelineno-16-13" id="__codelineno-16-13" name="__codelineno-16-13"></a>    <span class="n">residual_maturity_years</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
-</span><span id="__span-16-14"><a href="#__codelineno-16-14" id="__codelineno-16-14" name="__codelineno-16-14"></a><span class="p">)</span>
-</span><span id="__span-16-15"><a href="#__codelineno-16-15" id="__codelineno-16-15" name="__codelineno-16-15"></a>
-</span><span id="__span-16-16"><a href="#__codelineno-16-16" id="__codelineno-16-16" name="__codelineno-16-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Collateral haircut: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">collateral_haircut</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-16-17"><a href="#__codelineno-16-17" id="__codelineno-16-17" name="__codelineno-16-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Adjusted value: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">adjusted_value</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a href="#__codelineno-17-1" id="__codelineno-17-1" name="__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rwa_calc.engine.crm.haircuts</span><span class="w"> </span><span class="kn">import</span> <span class="n">HaircutCalculator</span>
+</span><span id="__span-17-2"><a href="#__codelineno-17-2" id="__codelineno-17-2" name="__codelineno-17-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">decimal</span><span class="w"> </span><span class="kn">import</span> <span class="n">Decimal</span>
+</span><span id="__span-17-3"><a href="#__codelineno-17-3" id="__codelineno-17-3" name="__codelineno-17-3"></a>
+</span><span id="__span-17-4"><a href="#__codelineno-17-4" id="__codelineno-17-4" name="__codelineno-17-4"></a><span class="n">calculator</span> <span class="o">=</span> <span class="n">HaircutCalculator</span><span class="p">()</span>
+</span><span id="__span-17-5"><a href="#__codelineno-17-5" id="__codelineno-17-5" name="__codelineno-17-5"></a>
+</span><span id="__span-17-6"><a href="#__codelineno-17-6" id="__codelineno-17-6" name="__codelineno-17-6"></a><span class="c1"># Calculate haircut for a single collateral item</span>
+</span><span id="__span-17-7"><a href="#__codelineno-17-7" id="__codelineno-17-7" name="__codelineno-17-7"></a><span class="n">result</span> <span class="o">=</span> <span class="n">calculator</span><span class="o">.</span><span class="n">calculate_single_haircut</span><span class="p">(</span>
+</span><span id="__span-17-8"><a href="#__codelineno-17-8" id="__codelineno-17-8" name="__codelineno-17-8"></a>    <span class="n">collateral_type</span><span class="o">=</span><span class="s2">"govt_bond"</span><span class="p">,</span>
+</span><span id="__span-17-9"><a href="#__codelineno-17-9" id="__codelineno-17-9" name="__codelineno-17-9"></a>    <span class="n">market_value</span><span class="o">=</span><span class="n">Decimal</span><span class="p">(</span><span class="s2">"8000000"</span><span class="p">),</span>
+</span><span id="__span-17-10"><a href="#__codelineno-17-10" id="__codelineno-17-10" name="__codelineno-17-10"></a>    <span class="n">collateral_currency</span><span class="o">=</span><span class="s2">"GBP"</span><span class="p">,</span>
+</span><span id="__span-17-11"><a href="#__codelineno-17-11" id="__codelineno-17-11" name="__codelineno-17-11"></a>    <span class="n">exposure_currency</span><span class="o">=</span><span class="s2">"GBP"</span><span class="p">,</span>
+</span><span id="__span-17-12"><a href="#__codelineno-17-12" id="__codelineno-17-12" name="__codelineno-17-12"></a>    <span class="n">cqs</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-17-13"><a href="#__codelineno-17-13" id="__codelineno-17-13" name="__codelineno-17-13"></a>    <span class="n">residual_maturity_years</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+</span><span id="__span-17-14"><a href="#__codelineno-17-14" id="__codelineno-17-14" name="__codelineno-17-14"></a><span class="p">)</span>
+</span><span id="__span-17-15"><a href="#__codelineno-17-15" id="__codelineno-17-15" name="__codelineno-17-15"></a>
+</span><span id="__span-17-16"><a href="#__codelineno-17-16" id="__codelineno-17-16" name="__codelineno-17-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Collateral haircut: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">collateral_haircut</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-17-17"><a href="#__codelineno-17-17" id="__codelineno-17-17" name="__codelineno-17-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Adjusted value: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">adjusted_value</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </span></code></pre></div>
 <details class="example">
 <summary>Haircut Application (haircuts.py)</summary>
@@ -3755,36 +3884,36 @@ for the Polars expression implementation of supervisory haircuts.</p>
 </details>
 <h2 id="crm-data-structure">CRM Data Structure<a class="headerlink" href="#crm-data-structure" title="Permanent link">¶</a></h2>
 <p>The calculator accepts CRM data at multiple levels. The <code>beneficiary_reference</code> column links CRM items to exposures at the appropriate level (direct exposure, facility, or counterparty):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a href="#__codelineno-17-1" id="__codelineno-17-1" name="__codelineno-17-1"></a><span class="c1"># Collateral data</span>
-</span><span id="__span-17-2"><a href="#__codelineno-17-2" id="__codelineno-17-2" name="__codelineno-17-2"></a><span class="n">collateral</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-17-3"><a href="#__codelineno-17-3" id="__codelineno-17-3" name="__codelineno-17-3"></a>    <span class="s2">"collateral_reference"</span><span class="p">:</span> <span class="s2">"COL001"</span><span class="p">,</span>
-</span><span id="__span-17-4"><a href="#__codelineno-17-4" id="__codelineno-17-4" name="__codelineno-17-4"></a>    <span class="s2">"beneficiary_reference"</span><span class="p">:</span> <span class="s2">"CP001"</span><span class="p">,</span>  <span class="c1"># Links to exposure/facility/counterparty</span>
-</span><span id="__span-17-5"><a href="#__codelineno-17-5" id="__codelineno-17-5" name="__codelineno-17-5"></a>    <span class="s2">"collateral_type"</span><span class="p">:</span> <span class="s2">"cash"</span><span class="p">,</span>
-</span><span id="__span-17-6"><a href="#__codelineno-17-6" id="__codelineno-17-6" name="__codelineno-17-6"></a>    <span class="s2">"market_value"</span><span class="p">:</span> <span class="mi">1_000_000</span><span class="p">,</span>
-</span><span id="__span-17-7"><a href="#__codelineno-17-7" id="__codelineno-17-7" name="__codelineno-17-7"></a>    <span class="s2">"collateral_currency"</span><span class="p">:</span> <span class="s2">"GBP"</span><span class="p">,</span>
-</span><span id="__span-17-8"><a href="#__codelineno-17-8" id="__codelineno-17-8" name="__codelineno-17-8"></a>    <span class="s2">"issuer_cqs"</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># For bonds</span>
-</span><span id="__span-17-9"><a href="#__codelineno-17-9" id="__codelineno-17-9" name="__codelineno-17-9"></a>    <span class="s2">"residual_maturity"</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># For bonds</span>
-</span><span id="__span-17-10"><a href="#__codelineno-17-10" id="__codelineno-17-10" name="__codelineno-17-10"></a><span class="p">}</span>
-</span><span id="__span-17-11"><a href="#__codelineno-17-11" id="__codelineno-17-11" name="__codelineno-17-11"></a>
-</span><span id="__span-17-12"><a href="#__codelineno-17-12" id="__codelineno-17-12" name="__codelineno-17-12"></a><span class="c1"># Guarantee data</span>
-</span><span id="__span-17-13"><a href="#__codelineno-17-13" id="__codelineno-17-13" name="__codelineno-17-13"></a><span class="n">guarantee</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-17-14"><a href="#__codelineno-17-14" id="__codelineno-17-14" name="__codelineno-17-14"></a>    <span class="s2">"guarantee_reference"</span><span class="p">:</span> <span class="s2">"GAR001"</span><span class="p">,</span>
-</span><span id="__span-17-15"><a href="#__codelineno-17-15" id="__codelineno-17-15" name="__codelineno-17-15"></a>    <span class="s2">"beneficiary_reference"</span><span class="p">:</span> <span class="s2">"CP001"</span><span class="p">,</span>  <span class="c1"># Protected party</span>
-</span><span id="__span-17-16"><a href="#__codelineno-17-16" id="__codelineno-17-16" name="__codelineno-17-16"></a>    <span class="s2">"guarantor"</span><span class="p">:</span> <span class="s2">"GP001"</span><span class="p">,</span>
-</span><span id="__span-17-17"><a href="#__codelineno-17-17" id="__codelineno-17-17" name="__codelineno-17-17"></a>    <span class="s2">"amount_covered"</span><span class="p">:</span> <span class="mi">5_000_000</span><span class="p">,</span>
-</span><span id="__span-17-18"><a href="#__codelineno-17-18" id="__codelineno-17-18" name="__codelineno-17-18"></a>    <span class="s2">"guarantor_type"</span><span class="p">:</span> <span class="s2">"SOVEREIGN"</span><span class="p">,</span>
-</span><span id="__span-17-19"><a href="#__codelineno-17-19" id="__codelineno-17-19" name="__codelineno-17-19"></a>    <span class="s2">"guarantor_cqs"</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-17-20"><a href="#__codelineno-17-20" id="__codelineno-17-20" name="__codelineno-17-20"></a>    <span class="s2">"maturity_date"</span><span class="p">:</span> <span class="n">date</span><span class="p">(</span><span class="mi">2028</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">),</span>
-</span><span id="__span-17-21"><a href="#__codelineno-17-21" id="__codelineno-17-21" name="__codelineno-17-21"></a><span class="p">}</span>
-</span><span id="__span-17-22"><a href="#__codelineno-17-22" id="__codelineno-17-22" name="__codelineno-17-22"></a>
-</span><span id="__span-17-23"><a href="#__codelineno-17-23" id="__codelineno-17-23" name="__codelineno-17-23"></a><span class="c1"># Provision data</span>
-</span><span id="__span-17-24"><a href="#__codelineno-17-24" id="__codelineno-17-24" name="__codelineno-17-24"></a><span class="n">provision</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-17-25"><a href="#__codelineno-17-25" id="__codelineno-17-25" name="__codelineno-17-25"></a>    <span class="s2">"provision_reference"</span><span class="p">:</span> <span class="s2">"PRV001"</span><span class="p">,</span>
-</span><span id="__span-17-26"><a href="#__codelineno-17-26" id="__codelineno-17-26" name="__codelineno-17-26"></a>    <span class="s2">"beneficiary_reference"</span><span class="p">:</span> <span class="s2">"CP001"</span><span class="p">,</span>  <span class="c1"># Links to exposure/facility/counterparty</span>
-</span><span id="__span-17-27"><a href="#__codelineno-17-27" id="__codelineno-17-27" name="__codelineno-17-27"></a>    <span class="s2">"provision_type"</span><span class="p">:</span> <span class="s2">"SCRA"</span><span class="p">,</span>
-</span><span id="__span-17-28"><a href="#__codelineno-17-28" id="__codelineno-17-28" name="__codelineno-17-28"></a>    <span class="s2">"amount"</span><span class="p">:</span> <span class="mi">500_000</span><span class="p">,</span>
-</span><span id="__span-17-29"><a href="#__codelineno-17-29" id="__codelineno-17-29" name="__codelineno-17-29"></a>    <span class="s2">"ifrs_stage"</span><span class="p">:</span> <span class="s2">"STAGE_3"</span><span class="p">,</span>
-</span><span id="__span-17-30"><a href="#__codelineno-17-30" id="__codelineno-17-30" name="__codelineno-17-30"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a href="#__codelineno-18-1" id="__codelineno-18-1" name="__codelineno-18-1"></a><span class="c1"># Collateral data</span>
+</span><span id="__span-18-2"><a href="#__codelineno-18-2" id="__codelineno-18-2" name="__codelineno-18-2"></a><span class="n">collateral</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-18-3"><a href="#__codelineno-18-3" id="__codelineno-18-3" name="__codelineno-18-3"></a>    <span class="s2">"collateral_reference"</span><span class="p">:</span> <span class="s2">"COL001"</span><span class="p">,</span>
+</span><span id="__span-18-4"><a href="#__codelineno-18-4" id="__codelineno-18-4" name="__codelineno-18-4"></a>    <span class="s2">"beneficiary_reference"</span><span class="p">:</span> <span class="s2">"CP001"</span><span class="p">,</span>  <span class="c1"># Links to exposure/facility/counterparty</span>
+</span><span id="__span-18-5"><a href="#__codelineno-18-5" id="__codelineno-18-5" name="__codelineno-18-5"></a>    <span class="s2">"collateral_type"</span><span class="p">:</span> <span class="s2">"cash"</span><span class="p">,</span>
+</span><span id="__span-18-6"><a href="#__codelineno-18-6" id="__codelineno-18-6" name="__codelineno-18-6"></a>    <span class="s2">"market_value"</span><span class="p">:</span> <span class="mi">1_000_000</span><span class="p">,</span>
+</span><span id="__span-18-7"><a href="#__codelineno-18-7" id="__codelineno-18-7" name="__codelineno-18-7"></a>    <span class="s2">"collateral_currency"</span><span class="p">:</span> <span class="s2">"GBP"</span><span class="p">,</span>
+</span><span id="__span-18-8"><a href="#__codelineno-18-8" id="__codelineno-18-8" name="__codelineno-18-8"></a>    <span class="s2">"issuer_cqs"</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># For bonds</span>
+</span><span id="__span-18-9"><a href="#__codelineno-18-9" id="__codelineno-18-9" name="__codelineno-18-9"></a>    <span class="s2">"residual_maturity"</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># For bonds</span>
+</span><span id="__span-18-10"><a href="#__codelineno-18-10" id="__codelineno-18-10" name="__codelineno-18-10"></a><span class="p">}</span>
+</span><span id="__span-18-11"><a href="#__codelineno-18-11" id="__codelineno-18-11" name="__codelineno-18-11"></a>
+</span><span id="__span-18-12"><a href="#__codelineno-18-12" id="__codelineno-18-12" name="__codelineno-18-12"></a><span class="c1"># Guarantee data</span>
+</span><span id="__span-18-13"><a href="#__codelineno-18-13" id="__codelineno-18-13" name="__codelineno-18-13"></a><span class="n">guarantee</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-18-14"><a href="#__codelineno-18-14" id="__codelineno-18-14" name="__codelineno-18-14"></a>    <span class="s2">"guarantee_reference"</span><span class="p">:</span> <span class="s2">"GAR001"</span><span class="p">,</span>
+</span><span id="__span-18-15"><a href="#__codelineno-18-15" id="__codelineno-18-15" name="__codelineno-18-15"></a>    <span class="s2">"beneficiary_reference"</span><span class="p">:</span> <span class="s2">"CP001"</span><span class="p">,</span>  <span class="c1"># Protected party</span>
+</span><span id="__span-18-16"><a href="#__codelineno-18-16" id="__codelineno-18-16" name="__codelineno-18-16"></a>    <span class="s2">"guarantor"</span><span class="p">:</span> <span class="s2">"GP001"</span><span class="p">,</span>
+</span><span id="__span-18-17"><a href="#__codelineno-18-17" id="__codelineno-18-17" name="__codelineno-18-17"></a>    <span class="s2">"amount_covered"</span><span class="p">:</span> <span class="mi">5_000_000</span><span class="p">,</span>
+</span><span id="__span-18-18"><a href="#__codelineno-18-18" id="__codelineno-18-18" name="__codelineno-18-18"></a>    <span class="s2">"guarantor_type"</span><span class="p">:</span> <span class="s2">"SOVEREIGN"</span><span class="p">,</span>
+</span><span id="__span-18-19"><a href="#__codelineno-18-19" id="__codelineno-18-19" name="__codelineno-18-19"></a>    <span class="s2">"guarantor_cqs"</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-18-20"><a href="#__codelineno-18-20" id="__codelineno-18-20" name="__codelineno-18-20"></a>    <span class="s2">"maturity_date"</span><span class="p">:</span> <span class="n">date</span><span class="p">(</span><span class="mi">2028</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">),</span>
+</span><span id="__span-18-21"><a href="#__codelineno-18-21" id="__codelineno-18-21" name="__codelineno-18-21"></a><span class="p">}</span>
+</span><span id="__span-18-22"><a href="#__codelineno-18-22" id="__codelineno-18-22" name="__codelineno-18-22"></a>
+</span><span id="__span-18-23"><a href="#__codelineno-18-23" id="__codelineno-18-23" name="__codelineno-18-23"></a><span class="c1"># Provision data</span>
+</span><span id="__span-18-24"><a href="#__codelineno-18-24" id="__codelineno-18-24" name="__codelineno-18-24"></a><span class="n">provision</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-18-25"><a href="#__codelineno-18-25" id="__codelineno-18-25" name="__codelineno-18-25"></a>    <span class="s2">"provision_reference"</span><span class="p">:</span> <span class="s2">"PRV001"</span><span class="p">,</span>
+</span><span id="__span-18-26"><a href="#__codelineno-18-26" id="__codelineno-18-26" name="__codelineno-18-26"></a>    <span class="s2">"beneficiary_reference"</span><span class="p">:</span> <span class="s2">"CP001"</span><span class="p">,</span>  <span class="c1"># Links to exposure/facility/counterparty</span>
+</span><span id="__span-18-27"><a href="#__codelineno-18-27" id="__codelineno-18-27" name="__codelineno-18-27"></a>    <span class="s2">"provision_type"</span><span class="p">:</span> <span class="s2">"SCRA"</span><span class="p">,</span>
+</span><span id="__span-18-28"><a href="#__codelineno-18-28" id="__codelineno-18-28" name="__codelineno-18-28"></a>    <span class="s2">"amount"</span><span class="p">:</span> <span class="mi">500_000</span><span class="p">,</span>
+</span><span id="__span-18-29"><a href="#__codelineno-18-29" id="__codelineno-18-29" name="__codelineno-18-29"></a>    <span class="s2">"ifrs_stage"</span><span class="p">:</span> <span class="s2">"STAGE_3"</span><span class="p">,</span>
+</span><span id="__span-18-30"><a href="#__codelineno-18-30" id="__codelineno-18-30" name="__codelineno-18-30"></a><span class="p">}</span>
 </span></code></pre></div>
 <h2 id="regulatory-references">Regulatory References<a class="headerlink" href="#regulatory-references" title="Permanent link">¶</a></h2>
 <table>
@@ -3796,6 +3925,11 @@ for the Polars expression implementation of supervisory haircuts.</p>
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>On-balance sheet netting</td>
+<td>Art. 195</td>
+<td>CRE22.11-14</td>
+</tr>
 <tr>
 <td>CRM overview</td>
 <td>Art. 192-194</td>

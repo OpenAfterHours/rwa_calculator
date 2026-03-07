@@ -589,6 +589,7 @@ def generate_loans(
             "beel": np.zeros(n_loans),
             "seniority": seniority,
             "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
+            "has_netting_agreement": np.full(n_loans, None),  # Netting flag (CRR Art. 195)
         }
     ).cast(LOAN_SCHEMA)
 

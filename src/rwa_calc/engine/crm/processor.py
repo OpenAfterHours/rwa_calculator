@@ -30,7 +30,13 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.domain.enums import ApproachType
-from rwa_calc.engine.ccf import CCFCalculator, drawn_for_ead, on_balance_ead, sa_ccf_expression
+from rwa_calc.engine.ccf import (
+    CCFCalculator,
+    drawn_for_ead,
+    interest_for_ead,
+    on_balance_ead,
+    sa_ccf_expression,
+)
 from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.utils import has_required_columns
@@ -635,10 +641,14 @@ class CRMProcessor:
         netting agreement (CRR Art. 195), the absolute value of that negative balance
         can reduce sibling exposures in the same facility — treated as cash collateral.
 
+        The netting agreement belongs to the negative-balance loan (the deposit). All
+        positive-drawn siblings in the same facility benefit from the netting pool,
+        regardless of their own has_netting_agreement flag.
+
         The synthetic collateral rows are allocated pro-rata by ead_gross to positive-drawn
-        netting-eligible siblings within the same facility. Netting pools are grouped by
-        (facility, currency) so the haircut pipeline can apply FX haircuts when the pool
-        currency differs from the sibling's currency.
+        siblings within the same facility. Netting pools are grouped by (facility, currency)
+        so the haircut pipeline can apply FX haircuts when the pool currency differs from
+        the sibling's currency.
 
         Args:
             exposures: Exposures with ead_gross initialised
@@ -652,13 +662,10 @@ class CRMProcessor:
         if "parent_facility_reference" not in schema.names():
             return None
 
-        netting_eligible = exposures.filter(
-            pl.col("has_netting_agreement") == True  # noqa: E712
-        )
-
-        # Negative-drawn loans: these provide the netting pool
-        negative_loans = netting_eligible.filter(
-            (pl.col("drawn_amount") < 0)
+        # Negative-drawn loans with a netting agreement provide the pool
+        negative_loans = exposures.filter(
+            (pl.col("has_netting_agreement") == True)  # noqa: E712
+            & (pl.col("drawn_amount") < 0)
             & pl.col("parent_facility_reference").is_not_null()
         )
 
@@ -671,8 +678,9 @@ class CRMProcessor:
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
         ).rename({"currency": "_pool_currency"})
 
-        # Positive-drawn netting-eligible siblings in same facilities
-        positive_siblings = netting_eligible.filter(
+        # All positive-drawn siblings in facilities that have a netting pool.
+        # The netting agreement is on the negative loan — all facility siblings benefit.
+        positive_siblings = exposures.filter(
             (pl.col("ead_gross") > 0)
             & pl.col("parent_facility_reference").is_not_null()
         ).select(
@@ -2371,7 +2379,7 @@ class CRMProcessor:
         if has_provision_cols and has_interest:
             on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(
                 lower_bound=0.0
-            ) + pl.col("interest").fill_null(0.0)
+            ) + interest_for_ead()
         elif has_provision_cols:
             on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(lower_bound=0.0)
         elif has_interest:
@@ -2569,7 +2577,7 @@ class CRMProcessor:
         # --- Compute exposure weight for pro-rata allocation ---
         weight_expr = (
             pl.col("drawn_amount").clip(lower_bound=0.0)
-            + pl.col("interest").fill_null(0.0)
+            + interest_for_ead()
             + pl.col("nominal_amount")
         )
         exposures = exposures.with_columns(weight_expr.alias("_exp_weight"))

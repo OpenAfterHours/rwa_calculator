@@ -283,8 +283,8 @@ class TestNettingCollateralGeneration:
         # Pool = 100 + 200 = 300, all goes to POS01
         assert df["market_value"][0] == pytest.approx(300.0)
 
-    def test_non_netting_excluded(self, processor: CRMProcessor):
-        """Exposures without netting agreement don't contribute or benefit."""
+    def test_non_netting_siblings_still_benefit(self, processor: CRMProcessor):
+        """All facility siblings benefit, even without their own netting flag."""
         exposures = pl.LazyFrame(
             {
                 "exposure_reference": ["NEG01", "POS01", "POS02"],
@@ -297,12 +297,14 @@ class TestNettingCollateralGeneration:
             }
         )
         result = processor._generate_netting_collateral(exposures)
-        df = result.collect()
+        df = result.collect().sort("beneficiary_reference")
 
-        # Only POS01 benefits (POS02 has no netting agreement)
-        assert len(df) == 1
-        assert df["beneficiary_reference"][0] == "POS01"
-        assert df["market_value"][0] == pytest.approx(200.0)
+        # Both POS01 and POS02 benefit (netting agreement is on NEG01)
+        assert len(df) == 2
+        pos01 = df.filter(pl.col("beneficiary_reference") == "POS01")
+        assert pos01["market_value"][0] == pytest.approx(200.0 * 1000 / 1500)
+        pos02 = df.filter(pl.col("beneficiary_reference") == "POS02")
+        assert pos02["market_value"][0] == pytest.approx(200.0 * 500 / 1500)
 
 
 # =============================================================================
@@ -363,10 +365,10 @@ class TestNettingSAEndToEnd:
         pos = df.filter(pl.col("exposure_reference") == "POS01")
         assert pos["ead_final"][0] == pytest.approx(0.0)
 
-    def test_only_netting_eligible_benefit(
+    def test_all_facility_siblings_benefit(
         self, processor: CRMProcessor, sa_config: CalculationConfig
     ):
-        """Only netting-eligible loans benefit; non-netting loans unaffected."""
+        """All facility siblings benefit from netting, not just netting-flagged ones."""
         rows = [
             _netting_exposure("NEG01", drawn=-200.0, has_netting=True),
             _netting_exposure("POS01", drawn=1000.0, has_netting=True),
@@ -377,10 +379,9 @@ class TestNettingSAEndToEnd:
         pos01 = df.filter(pl.col("exposure_reference") == "POS01")
         pos02 = df.filter(pl.col("exposure_reference") == "POS02")
 
-        # POS01: 1000 - 200 = 800
-        assert pos01["ead_final"][0] == pytest.approx(800.0, abs=1.0)
-        # POS02: unaffected (no netting agreement)
-        assert pos02["ead_final"][0] == pytest.approx(500.0)
+        # Pool=200 split pro-rata: POS01 gets 200*1000/1500=133.33, POS02 gets 200*500/1500=66.67
+        assert pos01["ead_final"][0] == pytest.approx(1000.0 - 133.33, abs=1.0)
+        assert pos02["ead_final"][0] == pytest.approx(500.0 - 66.67, abs=1.0)
 
     def test_currency_mismatch_fx_haircut(
         self, processor: CRMProcessor, sa_config: CalculationConfig
@@ -411,6 +412,23 @@ class TestNettingSAEndToEnd:
         pos = df.filter(pl.col("exposure_reference") == "POS01")
         # No netting → EAD = drawn_amount (no collateral benefit)
         assert pos["ead_final"][0] == pytest.approx(1000.0)
+
+
+    def test_netting_pool_exceeds_total_positive_ead(
+        self, processor: CRMProcessor, sa_config: CalculationConfig
+    ):
+        """Pool exceeds total positive EAD → all siblings get ead_final=0."""
+        rows = [
+            _netting_exposure("LOAN_01", drawn=-100.0, has_netting=True),
+            _netting_exposure("LOAN_02", drawn=10.0, has_netting=False),
+            _netting_exposure("LOAN_03", drawn=20.0, has_netting=False),
+            _netting_exposure("LOAN_04", drawn=5.0, has_netting=False),
+        ]
+        df = _run_crm(processor, sa_config, rows)
+
+        for ref in ["LOAN_02", "LOAN_03", "LOAN_04"]:
+            row = df.filter(pl.col("exposure_reference") == ref)
+            assert row["ead_final"][0] == pytest.approx(0.0), f"{ref} should be fully netted"
 
 
 class TestNettingFIRBEndToEnd:

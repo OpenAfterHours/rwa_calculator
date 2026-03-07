@@ -39,14 +39,22 @@ def drawn_for_ead() -> pl.Expr:
     return pl.col("drawn_amount").clip(lower_bound=0.0)
 
 
-def on_balance_ead() -> pl.Expr:
-    """On-balance-sheet EAD: max(0, drawn) + accrued interest.
+def interest_for_ead() -> pl.Expr:
+    """Accrued interest floored at 0 for EAD calculations.
 
-    Combines the floored drawn amount with accrued interest for a single
-    reusable expression. Interest is fill_null(0) so this works even when
-    the interest column contains nulls.
+    Negative interest should not reduce EAD without a netting agreement.
     """
-    return pl.col("drawn_amount").clip(lower_bound=0.0) + pl.col("interest").fill_null(0.0)
+    return pl.col("interest").fill_null(0.0).clip(lower_bound=0.0)
+
+
+def on_balance_ead() -> pl.Expr:
+    """On-balance-sheet EAD: max(0, drawn) + max(0, interest).
+
+    Combines the floored drawn amount with floored accrued interest for a single
+    reusable expression. Both are fill_null(0) so this works even when
+    columns contain nulls.
+    """
+    return pl.col("drawn_amount").clip(lower_bound=0.0) + interest_for_ead()
 
 
 def sa_ccf_expression(
@@ -282,7 +290,7 @@ class CCFCalculator:
         if has_provision_cols and has_interest:
             on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(
                 lower_bound=0.0
-            ) + pl.col("interest").fill_null(0.0)
+            ) + interest_for_ead()
             exposures = exposures.with_columns(
                 [
                     (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
@@ -322,7 +330,7 @@ class CCFCalculator:
                             pl.lit("; drawn="),
                             pl.col("drawn_amount").round(0).cast(pl.String),
                             pl.lit("; interest="),
-                            pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
+                            interest_for_ead().round(0).cast(pl.String),
                             pl.lit("; nominal="),
                             pl.col("nominal_amount").round(0).cast(pl.String),
                             pl.lit("; ead_ccf="),
@@ -358,7 +366,7 @@ class CCFCalculator:
                             pl.lit("%; drawn="),
                             pl.col("drawn_amount").round(0).cast(pl.String),
                             pl.lit("; interest="),
-                            pl.col("interest").fill_null(0.0).round(0).cast(pl.String),
+                            interest_for_ead().round(0).cast(pl.String),
                             pl.lit("; nominal="),
                             pl.col("nominal_amount").round(0).cast(pl.String),
                             pl.lit("; ead_ccf="),

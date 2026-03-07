@@ -270,6 +270,58 @@ class TestNegativeDrawnAmount:
         assert result["nominal_after_provision"][0] == pytest.approx(170_000.0)
 
 
+class TestNegativeInterestAmount:
+    """Negative interest should not inflate provision weight."""
+
+    def test_provision_weight_negative_interest_floored(
+        self, processor: CRMProcessor, crr_config: CalculationConfig
+    ) -> None:
+        """Negative interest floored to 0 in pro-rata weight calculation."""
+        exposures = _make_exposures(
+            exposure_reference=["EXP001", "EXP002"],
+            counterparty_reference=["CP001", "CP001"],
+            parent_facility_reference=["FAC001", "FAC001"],
+            drawn_amount=[100_000.0, 100_000.0],
+            interest=[-50_000.0, 50_000.0],
+            nominal_amount=[100_000.0, 100_000.0],
+            approach=[ApproachType.SA.value, ApproachType.SA.value],
+            risk_type=["MR", "MR"],
+            exposure_class=["corporate", "corporate"],
+            lgd=[0.45, 0.45],
+            seniority=["senior", "senior"],
+        )
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "CP001",
+                    "beneficiary_type": "counterparty",
+                    "amount": 10_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
+
+        result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
+
+        # EXP001 weight: max(0, 100k) + max(0, -50k) + 100k = 200k
+        # EXP002 weight: max(0, 100k) + max(0, 50k)  + 100k = 250k
+        # total = 450k
+        # EXP001 share = 200/450 ≈ 0.4444
+        # EXP002 share = 250/450 ≈ 0.5556
+        row1 = result.filter(pl.col("exposure_reference") == "EXP001")
+        row2 = result.filter(pl.col("exposure_reference") == "EXP002")
+
+        total_prov = (
+            row1["provision_allocated"][0] + row2["provision_allocated"][0]
+        )
+        assert total_prov == pytest.approx(10_000.0)
+        # EXP001 gets less than half (200/450)
+        assert row1["provision_allocated"][0] == pytest.approx(
+            10_000.0 * 200_000 / 450_000, rel=1e-4
+        )
+
+
 # =============================================================================
 # IRB provision tests
 # =============================================================================

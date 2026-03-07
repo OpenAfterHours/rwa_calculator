@@ -30,7 +30,13 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.domain.enums import ApproachType
-from rwa_calc.engine.ccf import CCFCalculator, drawn_for_ead, on_balance_ead, sa_ccf_expression
+from rwa_calc.engine.ccf import (
+    CCFCalculator,
+    drawn_for_ead,
+    interest_for_ead,
+    on_balance_ead,
+    sa_ccf_expression,
+)
 from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.utils import has_required_columns
@@ -2373,7 +2379,7 @@ class CRMProcessor:
         if has_provision_cols and has_interest:
             on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(
                 lower_bound=0.0
-            ) + pl.col("interest").fill_null(0.0)
+            ) + interest_for_ead()
         elif has_provision_cols:
             on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(lower_bound=0.0)
         elif has_interest:
@@ -2571,7 +2577,7 @@ class CRMProcessor:
         # --- Compute exposure weight for pro-rata allocation ---
         weight_expr = (
             pl.col("drawn_amount").clip(lower_bound=0.0)
-            + pl.col("interest").fill_null(0.0)
+            + interest_for_ead()
             + pl.col("nominal_amount")
         )
         exposures = exposures.with_columns(weight_expr.alias("_exp_weight"))

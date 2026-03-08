@@ -319,8 +319,8 @@ When a legally enforceable netting agreement exists, mutual claims between the f
 
 The calculator implements netting as **synthetic cash collateral**:
 
-1. Loans with `has_netting_agreement = True` and `drawn_amount < 0` contribute their absolute drawn amount to a **netting pool** per `(parent_facility_reference, currency)`
-2. The pool is allocated **pro-rata by `ead_gross`** to positive-drawn netting-eligible siblings in the same facility
+1. Loans with `has_netting_agreement = True` and `drawn_amount < 0` contribute their absolute drawn amount to a **netting pool** per `(netting_facility, currency)`, where the netting facility is determined by priority: `netting_facility_reference` → `root_facility_reference` → `parent_facility_reference`
+2. The pool is allocated **pro-rata by `ead_gross`** to all positive-drawn siblings in the same netting facility — siblings benefit regardless of their own `has_netting_agreement` flag
 3. Each allocation becomes a synthetic cash collateral row fed into the existing collateral pipeline
 
 This reuses the full collateral mechanics:
@@ -336,7 +336,9 @@ This reuses the full collateral mechanics:
 
 ### Input Data
 
-Set `has_netting_agreement = True` on the loan record to enable netting. The loan must be under a facility (`parent_facility_reference` is not null) for netting to apply.
+Set `has_netting_agreement = True` on the negative-drawn loan record to enable netting. The loan must be under a facility (`parent_facility_reference` is not null) for netting to apply.
+
+Optionally set `netting_facility_reference` to explicitly control which facility defines the netting group. If omitted, the calculator uses `root_facility_reference` (top-level facility in the hierarchy) or falls back to `parent_facility_reference`.
 
 ### Example
 

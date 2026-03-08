@@ -12,8 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### On-Balance Sheet Netting (CRR Article 195)
 Support for on-balance sheet netting of mutual claims when a legally enforceable netting agreement exists:
 
-- **New field**: `has_netting_agreement` on `LOAN_SCHEMA` and `Loan` fixture
-- **Synthetic cash collateral**: Negative-drawn netting-eligible loans generate cash collateral that reduces sibling exposures pro-rata within the same facility
+- **New fields**: `has_netting_agreement` and `netting_facility_reference` on `LOAN_SCHEMA` and `Loan` fixture
+- **Synthetic cash collateral**: Negative-drawn netting-eligible loans generate cash collateral that reduces all positive-drawn sibling exposures pro-rata within the same netting facility
+- **Netting facility resolution**: Priority chain — explicit `netting_facility_reference` → `root_facility_reference` → `parent_facility_reference`
 - **SA**: EAD reduced by netting pool (cash = 0% haircut)
 - **F-IRB**: LGD reduced via cash collateral path (0% LGD)
 - **FX mismatch**: 8% haircut applied when currencies differ

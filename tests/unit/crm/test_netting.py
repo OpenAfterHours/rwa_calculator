@@ -74,9 +74,11 @@ def _netting_exposure(
     currency: str = "GBP",
     has_netting: bool = True,
     approach: str = ApproachType.SA.value,
+    root_facility_ref: str | None = None,
+    netting_facility_ref: str | None = None,
 ) -> dict:
     """Create an exposure row with netting fields."""
-    return {
+    row: dict = {
         "exposure_reference": ref,
         "counterparty_reference": cp_ref,
         "exposure_class": "corporate",
@@ -92,6 +94,11 @@ def _netting_exposure(
         "maturity_date": None,
         "has_netting_agreement": has_netting,
     }
+    if root_facility_ref is not None:
+        row["root_facility_reference"] = root_facility_ref
+    if netting_facility_ref is not None:
+        row["netting_facility_reference"] = netting_facility_ref
+    return row
 
 
 def _make_bundle(
@@ -429,6 +436,84 @@ class TestNettingSAEndToEnd:
         for ref in ["LOAN_02", "LOAN_03", "LOAN_04"]:
             row = df.filter(pl.col("exposure_reference") == ref)
             assert row["ead_final"][0] == pytest.approx(0.0), f"{ref} should be fully netted"
+
+
+class TestNettingFacilityHierarchy:
+    """Netting across facility hierarchy levels."""
+
+    def test_netting_via_root_facility(
+        self, processor: CRMProcessor, sa_config: CalculationConfig
+    ):
+        """Loans under different sub-facilities net via shared root facility."""
+        rows = [
+            _netting_exposure(
+                "NEG01", drawn=-200.0, has_netting=True,
+                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+            ),
+            _netting_exposure(
+                "POS01", drawn=600.0, has_netting=False,
+                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+            ),
+            _netting_exposure(
+                "POS02", drawn=400.0, has_netting=False,
+                facility_ref="FAC_SUB2", root_facility_ref="FAC_ROOT",
+            ),
+        ]
+        df = _run_crm(processor, sa_config, rows)
+
+        pos01 = df.filter(pl.col("exposure_reference") == "POS01")
+        pos02 = df.filter(pl.col("exposure_reference") == "POS02")
+
+        # Pool=200 split pro-rata via root: POS01=200*600/1000=120, POS02=200*400/1000=80
+        assert pos01["ead_final"][0] == pytest.approx(480.0, abs=1.0)
+        assert pos02["ead_final"][0] == pytest.approx(320.0, abs=1.0)
+
+    def test_explicit_netting_facility_overrides_root(
+        self, processor: CRMProcessor, sa_config: CalculationConfig
+    ):
+        """Explicit netting_facility_reference takes priority over root."""
+        rows = [
+            # Netting agreement is with FAC_SUB1 specifically, not root
+            _netting_exposure(
+                "NEG01", drawn=-200.0, has_netting=True,
+                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+                netting_facility_ref="FAC_SUB1",
+            ),
+            _netting_exposure(
+                "POS01", drawn=1000.0, has_netting=False,
+                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+                netting_facility_ref=None,
+            ),
+            # POS02 is under a different sub-facility — should NOT benefit
+            _netting_exposure(
+                "POS02", drawn=500.0, has_netting=False,
+                facility_ref="FAC_SUB2", root_facility_ref="FAC_ROOT",
+                netting_facility_ref=None,
+            ),
+        ]
+        df = _run_crm(processor, sa_config, rows)
+
+        pos01 = df.filter(pl.col("exposure_reference") == "POS01")
+        pos02 = df.filter(pl.col("exposure_reference") == "POS02")
+
+        # Only POS01 shares netting group FAC_SUB1 with NEG01
+        # POS02's netting group = root (FAC_ROOT) — different from NEG01's FAC_SUB1
+        assert pos01["ead_final"][0] == pytest.approx(800.0, abs=1.0)
+        assert pos02["ead_final"][0] == pytest.approx(500.0)
+
+    def test_no_root_falls_back_to_parent(
+        self, processor: CRMProcessor, sa_config: CalculationConfig
+    ):
+        """Without root_facility_reference, netting falls back to parent facility."""
+        rows = [
+            _netting_exposure("NEG01", drawn=-200.0, has_netting=True),
+            _netting_exposure("POS01", drawn=1000.0, has_netting=False),
+        ]
+        df = _run_crm(processor, sa_config, rows)
+
+        pos = df.filter(pl.col("exposure_reference") == "POS01")
+        # Falls back to parent_facility_reference (FAC_01) — same as before
+        assert pos["ead_final"][0] == pytest.approx(800.0, abs=1.0)
 
 
 class TestNettingFIRBEndToEnd:

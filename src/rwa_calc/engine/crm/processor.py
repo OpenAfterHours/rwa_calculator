@@ -642,13 +642,18 @@ class CRMProcessor:
         can reduce sibling exposures in the same facility — treated as cash collateral.
 
         The netting agreement belongs to the negative-balance loan (the deposit). All
-        positive-drawn siblings in the same facility benefit from the netting pool,
+        positive-drawn exposures under the same netting facility benefit from the pool,
         regardless of their own has_netting_agreement flag.
 
+        The netting facility is determined by:
+        1. netting_facility_reference (explicit, if provided on the negative loan)
+        2. root_facility_reference (top-level facility in hierarchy)
+        3. parent_facility_reference (direct parent, fallback)
+
         The synthetic collateral rows are allocated pro-rata by ead_gross to positive-drawn
-        siblings within the same facility. Netting pools are grouped by (facility, currency)
-        so the haircut pipeline can apply FX haircuts when the pool currency differs from
-        the sibling's currency.
+        siblings within the netting facility. Netting pools are grouped by
+        (netting_facility, currency) so the haircut pipeline can apply FX haircuts when
+        the pool currency differs from the sibling's currency.
 
         Args:
             exposures: Exposures with ead_gross initialised
@@ -662,56 +667,88 @@ class CRMProcessor:
         if "parent_facility_reference" not in schema.names():
             return None
 
+        has_root = "root_facility_reference" in schema.names()
+        has_netting_ref = "netting_facility_reference" in schema.names()
+
+        # Pool netting group: explicit reference > root > direct parent
+        pool_group_parts = [pl.col("parent_facility_reference")]
+        if has_root:
+            pool_group_parts.insert(0, pl.col("root_facility_reference"))
+        if has_netting_ref:
+            pool_group_parts.insert(0, pl.col("netting_facility_reference"))
+
+        pool_group_expr = pl.coalesce(pool_group_parts).alias("_netting_group")
+
         # Negative-drawn loans with a netting agreement provide the pool
         negative_loans = exposures.filter(
             (pl.col("has_netting_agreement") == True)  # noqa: E712
             & (pl.col("drawn_amount") < 0)
             & pl.col("parent_facility_reference").is_not_null()
-        )
+        ).with_columns(pool_group_expr)
 
-        # Sum abs(drawn_amount) per (facility, currency) → netting pool
+        # Sum abs(drawn_amount) per (netting_group, currency) → netting pool
         # Currency is kept so the synthetic collateral carries the source currency,
         # allowing the haircut pipeline to apply FX haircuts when currencies differ.
         netting_pool = negative_loans.group_by(
-            ["parent_facility_reference", "currency"]
+            ["_netting_group", "currency"]
         ).agg(
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
         ).rename({"currency": "_pool_currency"})
 
-        # All positive-drawn siblings in facilities that have a netting pool.
-        # The netting agreement is on the negative loan — all facility siblings benefit.
+        # All positive-drawn exposures that could benefit from netting.
+        # A sibling matches a pool if the pool's netting group equals its
+        # parent_facility_reference OR root_facility_reference.
         positive_siblings = exposures.filter(
             (pl.col("ead_gross") > 0)
             & pl.col("parent_facility_reference").is_not_null()
-        ).select(
+        )
+
+        sibling_cols = [
             "exposure_reference",
             "parent_facility_reference",
             "currency",
             "ead_gross",
             "maturity_date",
+        ]
+        if has_root:
+            sibling_cols.append("root_facility_reference")
+
+        positive_siblings = positive_siblings.select(sibling_cols)
+
+        # Match siblings to pools: pool's netting group can match at parent or root level
+        match_parent = positive_siblings.join(
+            netting_pool,
+            left_on="parent_facility_reference",
+            right_on="_netting_group",
+            how="inner",
         )
 
-        # Total EAD per facility for pro-rata allocation
-        facility_totals = positive_siblings.group_by(
-            "parent_facility_reference"
+        if has_root:
+            match_root = positive_siblings.join(
+                netting_pool,
+                left_on="root_facility_reference",
+                right_on="_netting_group",
+                how="inner",
+            )
+            matched = pl.concat(
+                [match_parent, match_root], how="diagonal"
+            ).unique(subset=["exposure_reference", "_pool_currency"], keep="first")
+        else:
+            matched = match_parent
+
+        # Total EAD per pool for pro-rata allocation (recompute after matching)
+        facility_totals = matched.group_by(
+            "_pool_currency", "netting_pool"
         ).agg(
             pl.col("ead_gross").sum().alias("_facility_total_ead"),
         )
 
-        # Join: siblings × pool (cross-join on facility — one row per sibling per currency pool)
-        allocated = (
-            positive_siblings.join(
-                netting_pool,
-                on="parent_facility_reference",
-                how="inner",
-            )
-            .join(
-                facility_totals,
-                on="parent_facility_reference",
-                how="left",
-            )
-            .filter(pl.col("_facility_total_ead") > 0)
-        )
+        # Join totals back for pro-rata
+        allocated = matched.join(
+            facility_totals,
+            on=["_pool_currency", "netting_pool"],
+            how="left",
+        ).filter(pl.col("_facility_total_ead") > 0)
 
         # Pro-rata market_value per sibling
         allocated = allocated.with_columns(

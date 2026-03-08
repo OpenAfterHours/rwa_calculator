@@ -372,6 +372,12 @@ class CRMProcessor:
         # Step 3: Initialize EAD columns
         exposures = self._initialize_ead(exposures)
 
+        # Materialise the deep lazy plan (provisions → CCF → init_ead) once.
+        # Without this, _generate_netting_collateral's two-join matching and
+        # apply_collateral's 3 lookup collects each re-execute the full upstream
+        # plan, and the plan depth causes Polars optimizer segfaults.
+        exposures = exposures.collect().lazy()
+
         # Step 3.5: Generate synthetic collateral from netting (CRR Art. 195)
         netting_collateral = self._generate_netting_collateral(exposures)
         collateral: pl.LazyFrame | None = data.collateral

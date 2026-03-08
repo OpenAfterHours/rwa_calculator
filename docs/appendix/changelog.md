@@ -61,6 +61,14 @@ Regulatory reporting templates for CRR firms following EBA/PRA COREP structure (
 
 
 
+
+## [0.1.32] - 2026-03-08
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.31] - 2026-03-07
 
 ### Changed
@@ -681,8 +689,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.31 | 2026-03-07 | Current |
-| 0.1.30 | 2026-03-07 | Previous |
+| 0.1.32 | 2026-03-08 | Current |
+| 0.1.31 | 2026-03-08 | Previous |
+| 0.1.30 | 2026-03-07 | - |
 | 0.1.29 | 2026-03-06 | - |
 | 0.1.28 | 2026-03-02 | - |
 | 0.1.27 | 2026-02-24 | - |

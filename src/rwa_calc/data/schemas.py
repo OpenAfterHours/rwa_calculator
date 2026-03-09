@@ -759,7 +759,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "ultimate_parent_reference": pl.String,  # Top-level parent (for group-level analysis)
     "counterparty_hierarchy_depth": pl.Int8,  # Levels from ultimate parent (0=top)
     "internal_pd": pl.Float64,  # Internal PD from firm's IRB model (gates IRB approach)
-    "internal_cqs": pl.Int8,  # CQS from internal rating
     "external_cqs": pl.Int8,  # CQS from external rating agency
     "rating_inherited": pl.Boolean,  # Whether rating came from parent
     "rating_source_counterparty": pl.String,  # Counterparty whose rating was used

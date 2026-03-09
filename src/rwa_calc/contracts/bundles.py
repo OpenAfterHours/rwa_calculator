@@ -508,7 +508,6 @@ def create_empty_counterparty_lookup() -> CounterpartyLookup:
         rating_inheritance=pl.LazyFrame(
             schema={
                 "counterparty_reference": pl.String,
-                "internal_cqs": pl.Int8,
                 "internal_pd": pl.Float64,
                 "internal_rating_value": pl.String,
                 "internal_rating_agency": pl.String,

@@ -229,14 +229,13 @@ class HierarchyLazyFrame:
         if "rating_reference" in rating_schema_names:
             sort_cols.append("rating_reference")
 
-        # Best internal rating per counterparty
+        # Best internal rating per counterparty (no CQS — external only)
         internal_base = ratings.filter(pl.col("rating_type") == "internal")
         if sort_cols:
             internal_base = internal_base.sort(sort_cols, descending=[True] * len(sort_cols))
         best_internal = internal_base.group_by("counterparty_reference").first().select(
             [
                 pl.col("counterparty_reference").alias("_int_cp"),
-                *([pl.col("cqs").alias("internal_cqs")] if "cqs" in rating_schema_names else []),
                 *([pl.col("pd").alias("internal_pd")] if "pd" in rating_schema_names else []),
                 *(
                     [pl.col("rating_value").alias("internal_rating_value")]
@@ -284,14 +283,8 @@ class HierarchyLazyFrame:
         ext_cols = best_external.collect_schema().names()
 
         derive = []
-        if "external_cqs" in ext_cols and "internal_cqs" in int_cols:
-            derive.append(
-                pl.coalesce(pl.col("external_cqs"), pl.col("internal_cqs")).alias("cqs")
-            )
-        elif "external_cqs" in ext_cols:
+        if "external_cqs" in ext_cols:
             derive.append(pl.col("external_cqs").alias("cqs"))
-        elif "internal_cqs" in int_cols:
-            derive.append(pl.col("internal_cqs").alias("cqs"))
 
         if "internal_pd" in int_cols:
             derive.append(pl.col("internal_pd").alias("pd"))
@@ -364,14 +357,8 @@ class HierarchyLazyFrame:
 
             # Re-derive convenience columns after inheritance
             re_derive = []
-            if "external_cqs" in ext_cols and "internal_cqs" in int_cols:
-                re_derive.append(
-                    pl.coalesce(pl.col("external_cqs"), pl.col("internal_cqs")).alias("cqs")
-                )
-            elif "external_cqs" in ext_cols:
+            if "external_cqs" in ext_cols:
                 re_derive.append(pl.col("external_cqs").alias("cqs"))
-            elif "internal_cqs" in int_cols:
-                re_derive.append(pl.col("internal_cqs").alias("cqs"))
             if "internal_pd" in int_cols:
                 re_derive.append(pl.col("internal_pd").alias("pd"))
             if re_derive:
@@ -379,10 +366,6 @@ class HierarchyLazyFrame:
 
             # Inheritance flags
             has_own_internal = (
-                pl.col("internal_cqs").is_not_null()
-                if "internal_cqs" in int_cols
-                else pl.lit(False)
-            ) | (
                 pl.col("internal_pd").is_not_null()
                 if "internal_pd" in int_cols
                 else pl.lit(False)

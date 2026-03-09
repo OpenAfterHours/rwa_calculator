@@ -295,11 +295,11 @@ class HierarchyResolver:
 
         Returns LazyFrame with columns:
         - counterparty_reference: The entity
-        - internal_cqs, internal_pd, internal_rating_value, internal_rating_agency,
+        - internal_pd, internal_rating_value, internal_rating_agency,
           internal_rating_date: Best internal rating
         - external_cqs, external_rating_value, external_rating_agency,
           external_rating_date: Best external rating
-        - cqs: coalesce(external_cqs, internal_cqs) — SA uses external-first
+        - cqs: external_cqs (CQS is an external rating concept only)
         - pd: internal_pd — only internal PD is meaningful for IRB
         - rating_value, rating_agency, rating_type, rating_date: Legacy compat
         - inherited, source_counterparty, inheritance_reason: Legacy compat
@@ -308,7 +308,7 @@ class HierarchyResolver:
         """
         sort_cols = ["rating_date", "rating_reference"]
 
-        # Best internal rating per counterparty
+        # Best internal rating per counterparty (no CQS — that's external only)
         best_internal = (
             ratings.filter(pl.col("rating_type") == "internal")
             .sort(sort_cols, descending=[True, True])
@@ -317,7 +317,6 @@ class HierarchyResolver:
             .select(
                 [
                     pl.col("counterparty_reference").alias("_int_cp"),
-                    pl.col("cqs").alias("internal_cqs"),
                     pl.col("pd").alias("internal_pd"),
                     pl.col("rating_value").alias("internal_rating_value"),
                     pl.col("rating_agency").alias("internal_rating_agency"),
@@ -369,7 +368,6 @@ class HierarchyResolver:
         parent_internal = best_internal.select(
             [
                 pl.col("_int_cp").alias("_p_int_cp"),
-                pl.col("internal_cqs").alias("parent_internal_cqs"),
                 pl.col("internal_pd").alias("parent_internal_pd"),
                 pl.col("internal_rating_value").alias("parent_internal_rating_value"),
                 pl.col("internal_rating_agency").alias("parent_internal_rating_agency"),
@@ -402,14 +400,12 @@ class HierarchyResolver:
 
         # Per-type inheritance: coalesce own → parent for each type
         has_own_internal = (
-            pl.col("internal_cqs").is_not_null()
+            pl.col("internal_pd").is_not_null()
             | pl.col("internal_rating_value").is_not_null()
-            | pl.col("internal_pd").is_not_null()
         )
         has_parent_internal = (
-            pl.col("parent_internal_cqs").is_not_null()
+            pl.col("parent_internal_pd").is_not_null()
             | pl.col("parent_internal_rating_value").is_not_null()
-            | pl.col("parent_internal_pd").is_not_null()
         )
         has_own_external = (
             pl.col("external_cqs").is_not_null()
@@ -422,10 +418,7 @@ class HierarchyResolver:
 
         result = result.with_columns(
             [
-                # Internal fields — coalesce own → parent
-                pl.coalesce(pl.col("internal_cqs"), pl.col("parent_internal_cqs")).alias(
-                    "internal_cqs"
-                ),
+                # Internal fields — coalesce own → parent (no CQS — external only)
                 pl.coalesce(pl.col("internal_pd"), pl.col("parent_internal_pd")).alias(
                     "internal_pd"
                 ),
@@ -506,8 +499,8 @@ class HierarchyResolver:
 
         result = result.with_columns(
             [
-                # cqs: external-first (SA uses external CQS)
-                pl.coalesce(pl.col("external_cqs"), pl.col("internal_cqs")).alias("cqs"),
+                # cqs: external only (CQS is an external rating concept)
+                pl.col("external_cqs").alias("cqs"),
                 # pd: internal only (IRB uses internal PD)
                 pl.col("internal_pd").alias("pd"),
                 # Legacy compat columns
@@ -552,8 +545,7 @@ class HierarchyResolver:
         return result.select(
             [
                 "counterparty_reference",
-                # Per-type internal
-                "internal_cqs",
+                # Per-type internal (no CQS — external only)
                 "internal_pd",
                 "internal_rating_value",
                 "internal_rating_agency",
@@ -711,7 +703,6 @@ class HierarchyResolver:
                         pl.col("counterparty_reference").alias("_ri_cp"),
                         pl.col("cqs"),
                         pl.col("pd"),
-                        pl.col("internal_cqs"),
                         pl.col("internal_pd"),
                         pl.col("external_cqs"),
                         pl.col("rating_value"),

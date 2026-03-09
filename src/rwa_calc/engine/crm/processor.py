@@ -2234,7 +2234,7 @@ class CRMProcessor:
             how="left",
         )
 
-        # Look up guarantor's CQS, rating type, and PD from ratings
+        # Look up guarantor's CQS, rating type, PD, and internal_pd from ratings
         if rating_inheritance is not None:
             ri_schema = rating_inheritance.collect_schema()
             ri_cols = [
@@ -2246,6 +2246,9 @@ class CRMProcessor:
             # Guarantor PD needed for Basel 3.1 parameter substitution (CRE22.70-85)
             if "pd" in ri_schema.names():
                 ri_cols.append(pl.col("pd").alias("guarantor_pd"))
+            # Internal PD for approach determination (IRB requires internal rating)
+            if "internal_pd" in ri_schema.names():
+                ri_cols.append(pl.col("internal_pd").alias("guarantor_internal_pd"))
 
             exposures = exposures.join(
                 rating_inheritance.select(ri_cols),
@@ -2266,12 +2269,19 @@ class CRMProcessor:
                         pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
                     ]
                 )
+            if "internal_pd" not in ri_schema.names():
+                exposures = exposures.with_columns(
+                    [
+                        pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
+                    ]
+                )
         else:
             exposures = exposures.with_columns(
                 [
                     pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
                     pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
                     pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
+                    pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
                 ]
             )
 
@@ -2309,7 +2319,7 @@ class CRMProcessor:
                 pl.when(
                     (pl.col("guarantor_exposure_class") != "")
                     & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
-                    & (pl.col("guarantor_rating_type").fill_null("") == "internal")
+                    & pl.col("guarantor_internal_pd").is_not_null()
                 )
                 .then(pl.lit("irb"))
                 .when(pl.col("guarantor_exposure_class") != "")

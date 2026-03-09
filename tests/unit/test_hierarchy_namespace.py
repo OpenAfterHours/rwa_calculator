@@ -50,6 +50,7 @@ def ratings() -> pl.LazyFrame:
             "cqs": [1, 3],
             "pd": [0.001, 0.01],
             "rating_value": ["AAA", "BBB"],
+            "rating_type": ["external", "external"],
         }
     )
 

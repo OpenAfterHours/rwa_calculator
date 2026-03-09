@@ -154,6 +154,7 @@ def _create_crm_and_irb_result(
             "cqs": [guarantor_cqs],
             "rating_type": [guarantor_rating_type],
             "pd": [guarantor_pd],
+            "internal_pd": [guarantor_pd if guarantor_rating_type == "internal" else None],
         }
     )
 

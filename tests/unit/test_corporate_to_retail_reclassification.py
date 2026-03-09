@@ -66,6 +66,10 @@ def create_test_bundle(
     counterparties_data: dict,
 ) -> ResolvedHierarchyBundle:
     """Create a test ResolvedHierarchyBundle from data dicts."""
+    # Default internal_pd for IRB classification (tests can override with None)
+    if "internal_pd" not in exposures_data:
+        n = len(next(iter(exposures_data.values())))
+        exposures_data = {**exposures_data, "internal_pd": [0.005] * n}
     exposures = pl.DataFrame(exposures_data).lazy()
     counterparties = pl.DataFrame(counterparties_data).lazy()
 
@@ -145,6 +149,7 @@ class TestReclassificationEligibility:
                 "residential_collateral_value": [0.0],
                 "lending_group_adjusted_exposure": [500000.0],  # < EUR 1m
                 "exposure_for_retail_threshold": [500000.0],
+                "internal_pd": [0.005],  # Internal rating required for IRB
             },
             counterparties_data={
                 "counterparty_reference": ["CP001"],

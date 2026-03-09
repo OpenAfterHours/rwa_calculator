@@ -550,6 +550,13 @@ class ExposureClassifier:
 
         Sets: approach, lgd (cleared for FIRB)
         """
+        # Ensure internal_pd exists (added by hierarchy resolver; may be absent
+        # when classifier is invoked directly in tests without full pipeline)
+        if "internal_pd" not in set(exposures.collect_schema().names()):
+            exposures = exposures.with_columns(
+                pl.lit(None).cast(pl.Float64).alias("internal_pd")
+            )
+
         # Pre-compute all permission booleans (Python-side, not Polars)
         airb_corporate = config.irb_permissions.is_permitted(
             ExposureClass.CORPORATE,
@@ -607,14 +614,22 @@ class ExposureClassifier:
             & (pl.col("lgd").is_null())
         )
 
+        # IRB requires an internal rating (PD from the firm's IRB model).
+        # Counterparties with only external ratings fall through to SA.
+        has_internal_rating = pl.col("internal_pd").is_not_null()
+
         # --- Approach expression ---
         approach_expr = (
             pl.when(managed_as_retail_without_lgd)
             .then(pl.lit(ApproachType.SA.value))
             # SL A-IRB takes precedence over slotting
-            .when((pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_airb)
+            .when(
+                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
+                & sl_airb
+                & has_internal_rating
+            )
             .then(pl.lit(ApproachType.AIRB.value))
-            # SL slotting fallback
+            # SL slotting fallback (slotting does not require internal rating)
             .when(
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_slotting
             )
@@ -623,57 +638,70 @@ class ExposureClassifier:
             .when(
                 (pl.col("exposure_class") == ExposureClass.RETAIL_MORTGAGE.value)
                 & pl.lit(airb_retail_mortgage)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.AIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
                 & pl.lit(airb_retail_other)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.AIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.RETAIL_QRRE.value)
                 & pl.lit(airb_retail_qrre)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.AIRB.value))
             # A-IRB for corporate
             .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(airb_corporate)
+                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
+                & pl.lit(airb_corporate)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.AIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
                 & pl.lit(airb_corporate_sme)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.AIRB.value))
             # A-IRB for institution/CGCB
             .when(
                 (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
                 & pl.lit(airb_institution)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.AIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
                 & pl.lit(airb_cgcb)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.AIRB.value))
             # F-IRB for corporate/institution/CGCB
             .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(firb_corporate)
+                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
+                & pl.lit(firb_corporate)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.FIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
                 & pl.lit(firb_corporate_sme)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.FIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
                 & pl.lit(firb_institution)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.FIRB.value))
             .when(
                 (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
                 & pl.lit(firb_cgcb)
+                & has_internal_rating
             )
             .then(pl.lit(ApproachType.FIRB.value))
             .otherwise(pl.lit(ApproachType.SA.value))
@@ -682,27 +710,31 @@ class ExposureClassifier:
 
         # --- FIRB LGD clearing condition (inlined, not referencing approach column) ---
         # Classes eligible for FIRB: corporate, corporate_sme, institution, cgcb
-        # Clear LGD when FIRB permitted AND NOT AIRB permitted for that class
+        # Clear LGD when FIRB permitted AND NOT AIRB permitted AND has internal rating
         firb_clear_condition = (
             (
                 (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
                 & pl.lit(firb_corporate)
                 & pl.lit(not airb_corporate)
+                & has_internal_rating
             )
             | (
                 (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
                 & pl.lit(firb_corporate_sme)
                 & pl.lit(not airb_corporate_sme)
+                & has_internal_rating
             )
             | (
                 (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
                 & pl.lit(firb_institution)
                 & pl.lit(not airb_institution)
+                & has_internal_rating
             )
             | (
                 (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
                 & pl.lit(firb_cgcb)
                 & pl.lit(not airb_cgcb)
+                & has_internal_rating
             )
         )
         # Also clear for managed-as-retail-without-LGD going to SA (lgd already null)

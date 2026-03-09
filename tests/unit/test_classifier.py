@@ -1164,7 +1164,7 @@ class TestApproachAssignment:
         classifier: ExposureClassifier,
         crr_config_with_irb: CalculationConfig,
     ) -> None:
-        """IRB config should assign appropriate IRB approach."""
+        """IRB config should assign A-IRB when counterparty has internal rating."""
         counterparties = pl.DataFrame(
             {
                 "counterparty_reference": ["CORP001"],
@@ -1207,6 +1207,7 @@ class TestApproachAssignment:
                 "counterparty_hierarchy_depth": [1],
                 "lending_group_reference": [None],
                 "lending_group_total_exposure": [0.0],
+                "internal_pd": [0.005],
             }
         ).lazy()
 
@@ -1215,8 +1216,68 @@ class TestApproachAssignment:
 
         df = result.all_exposures.collect()
 
-        # With full IRB permissions, corporate should get A-IRB
+        # With full IRB permissions and internal PD, corporate should get A-IRB
         assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_irb_config_no_internal_rating_gets_sa(
+        self,
+        classifier: ExposureClassifier,
+        crr_config_with_irb: CalculationConfig,
+    ) -> None:
+        """Counterparty without internal rating falls to SA even with IRB permission."""
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CORP001"],
+                "counterparty_name": ["Test Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [100000000.0],
+                "total_assets": [500000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "is_regulated": [True],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CORP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                "internal_pd": [None],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config_with_irb)
+
+        df = result.all_exposures.collect()
+
+        # No internal rating → SA even with IRB permissions
+        assert df["approach"][0] == ApproachType.SA.value
 
 
 # =============================================================================

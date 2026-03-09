@@ -421,6 +421,173 @@ class TestBuildRatingInheritanceLazy:
         assert cp004["inheritance_reason"][0] == "unrated"
 
 
+class TestDualRatingResolution:
+    """Tests for dual per-type (internal/external) rating resolution."""
+
+    def test_dual_rated_counterparty(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Counterparty with both internal and external rating resolves both."""
+        counterparties = pl.DataFrame(
+            {"counterparty_reference": ["CP001"]}
+        ).lazy()
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["RAT_INT", "RAT_EXT"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "rating_type": ["internal", "external"],
+                "rating_agency": ["INTERNAL", "MOODYS"],
+                "rating_value": ["INT_A", "A2"],
+                "cqs": [None, 2],
+                "pd": [0.0063, None],
+                "rating_date": [date(2024, 6, 1), date(2024, 6, 1)],
+            }
+        ).lazy()
+        ultimate_parents = pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }
+        )
+
+        result = resolver._build_rating_inheritance_lazy(
+            counterparties, ratings, ultimate_parents
+        ).collect()
+
+        cp = result.filter(pl.col("counterparty_reference") == "CP001")
+        assert cp["internal_pd"][0] == pytest.approx(0.0063)
+        assert cp["external_cqs"][0] == 2
+        # Derived: cqs = external-first, pd = internal only
+        assert cp["cqs"][0] == 2
+        assert cp["pd"][0] == pytest.approx(0.0063)
+        assert cp["inherited"][0] is False
+
+    def test_most_recent_per_type(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Multiple ratings of same type → most recent wins."""
+        counterparties = pl.DataFrame(
+            {"counterparty_reference": ["CP001"]}
+        ).lazy()
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["OLD_INT", "NEW_INT", "OLD_EXT", "NEW_EXT"],
+                "counterparty_reference": ["CP001"] * 4,
+                "rating_type": ["internal", "internal", "external", "external"],
+                "rating_agency": ["INT", "INT", "MOODYS", "MOODYS"],
+                "rating_value": ["OLD", "NEW", "Baa1", "A2"],
+                "cqs": [None, None, 3, 2],
+                "pd": [0.01, 0.005, None, None],
+                "rating_date": [
+                    date(2023, 1, 1),
+                    date(2024, 6, 1),
+                    date(2023, 1, 1),
+                    date(2024, 6, 1),
+                ],
+            }
+        ).lazy()
+        ultimate_parents = pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }
+        )
+
+        result = resolver._build_rating_inheritance_lazy(
+            counterparties, ratings, ultimate_parents
+        ).collect()
+
+        cp = result.filter(pl.col("counterparty_reference") == "CP001")
+        assert cp["internal_pd"][0] == pytest.approx(0.005)  # Newer internal
+        assert cp["external_cqs"][0] == 2  # Newer external
+
+    def test_per_type_inheritance(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Child has own internal, parent has external → child gets both."""
+        counterparties = pl.DataFrame(
+            {"counterparty_reference": ["PARENT", "CHILD"]}
+        ).lazy()
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["CHILD_INT", "PARENT_EXT"],
+                "counterparty_reference": ["CHILD", "PARENT"],
+                "rating_type": ["internal", "external"],
+                "rating_agency": ["INT", "SP"],
+                "rating_value": ["INT_A", "A+"],
+                "cqs": [None, 1],
+                "pd": [0.003, None],
+                "rating_date": [date(2024, 6, 1), date(2024, 6, 1)],
+            }
+        ).lazy()
+        org_mappings = pl.DataFrame(
+            {
+                "parent_counterparty_reference": ["PARENT"],
+                "child_counterparty_reference": ["CHILD"],
+            }
+        ).lazy()
+        ultimate_parents = resolver._build_ultimate_parent_lazy(org_mappings)
+
+        result = resolver._build_rating_inheritance_lazy(
+            counterparties, ratings, ultimate_parents
+        ).collect()
+
+        child = result.filter(pl.col("counterparty_reference") == "CHILD")
+        # Own internal
+        assert child["internal_pd"][0] == pytest.approx(0.003)
+        assert child["internal_inherited"][0] is False
+        # Inherited external from parent
+        assert child["external_cqs"][0] == 1
+        assert child["external_inherited"][0] is True
+        # Derived
+        assert child["cqs"][0] == 1  # External-first
+        assert child["pd"][0] == pytest.approx(0.003)  # Internal PD
+        assert child["inherited"][0] is False  # Has own rating (internal)
+
+    def test_external_only_counterparty(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Counterparty with only external rating has null internal_pd."""
+        counterparties = pl.DataFrame(
+            {"counterparty_reference": ["CP001"]}
+        ).lazy()
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["RAT_EXT"],
+                "counterparty_reference": ["CP001"],
+                "rating_type": ["external"],
+                "rating_agency": ["MOODYS"],
+                "rating_value": ["A2"],
+                "cqs": [2],
+                "pd": [None],
+                "rating_date": [date(2024, 6, 1)],
+            }
+        ).lazy()
+        ultimate_parents = pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }
+        )
+
+        result = resolver._build_rating_inheritance_lazy(
+            counterparties, ratings, ultimate_parents
+        ).collect()
+
+        cp = result.filter(pl.col("counterparty_reference") == "CP001")
+        assert cp["internal_pd"][0] is None
+        assert cp["external_cqs"][0] == 2
+        assert cp["cqs"][0] == 2
+        assert cp["pd"][0] is None
+
+
 # =============================================================================
 # Exposure Unification Tests
 # =============================================================================

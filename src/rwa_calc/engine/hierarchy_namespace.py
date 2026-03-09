@@ -176,53 +176,131 @@ class HierarchyLazyFrame:
         ultimate_parents: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """
-        Inherit ratings from parent entities.
+        Inherit ratings from parent entities with dual per-type resolution.
 
-        If entity has no rating, use rating from ultimate parent.
+        Resolves best internal and best external rating separately, then
+        inherits each type independently from the ultimate parent.
 
         Args:
-            ratings: LazyFrame with counterparty_reference, cqs, pd, rating_value
-            ultimate_parents: LazyFrame with counterparty_reference and ultimate_parent_reference
+            ratings: LazyFrame with counterparty_reference, cqs, pd, rating_value,
+                     rating_type, rating_agency, rating_date
+            ultimate_parents: LazyFrame with counterparty_reference and
+                              ultimate_parent_reference
 
         Returns:
-            LazyFrame with inherited rating columns
+            LazyFrame with per-type and derived rating columns
         """
         schema_names = self._lf.collect_schema().names()
 
-        # Get reference column
-        if "counterparty_reference" in schema_names:
-            ref_col = "counterparty_reference"
-        else:
+        if "counterparty_reference" not in schema_names:
             return self._lf
 
-        # Get most recent rating per counterparty
+        ref_col = "counterparty_reference"
         rating_schema_names = ratings.collect_schema().names()
-        rating_cols = ["counterparty_reference"]
-        for col in ["cqs", "pd", "rating_value", "rating_agency", "rating_type", "rating_date"]:
-            if col in rating_schema_names:
-                rating_cols.append(col)
+        has_rating_type = "rating_type" in rating_schema_names
 
-        first_ratings = ratings.select(rating_cols).unique(
-            subset=["counterparty_reference"],
-            keep="first",
+        if not has_rating_type:
+            # Fallback: no rating_type column — treat all as external
+            rating_cols = ["counterparty_reference"]
+            for col in ["cqs", "pd", "rating_value", "rating_agency", "rating_date"]:
+                if col in rating_schema_names:
+                    rating_cols.append(col)
+
+            first_ratings = ratings.select(rating_cols).unique(
+                subset=["counterparty_reference"], keep="first"
+            )
+            result = self._lf.join(
+                first_ratings.select(
+                    [
+                        pl.col("counterparty_reference").alias("rated_cp"),
+                        *[pl.col(c) for c in rating_cols if c != "counterparty_reference"],
+                    ]
+                ),
+                left_on=ref_col,
+                right_on="rated_cp",
+                how="left",
+            )
+            return result
+
+        # Dual per-type resolution
+        sort_cols = []
+        if "rating_date" in rating_schema_names:
+            sort_cols.append("rating_date")
+        if "rating_reference" in rating_schema_names:
+            sort_cols.append("rating_reference")
+
+        # Best internal rating per counterparty
+        internal_base = ratings.filter(pl.col("rating_type") == "internal")
+        if sort_cols:
+            internal_base = internal_base.sort(sort_cols, descending=[True] * len(sort_cols))
+        best_internal = internal_base.group_by("counterparty_reference").first().select(
+            [
+                pl.col("counterparty_reference").alias("_int_cp"),
+                *([pl.col("cqs").alias("internal_cqs")] if "cqs" in rating_schema_names else []),
+                *([pl.col("pd").alias("internal_pd")] if "pd" in rating_schema_names else []),
+                *(
+                    [pl.col("rating_value").alias("internal_rating_value")]
+                    if "rating_value" in rating_schema_names
+                    else []
+                ),
+                *(
+                    [pl.col("rating_agency").alias("internal_rating_agency")]
+                    if "rating_agency" in rating_schema_names
+                    else []
+                ),
+            ]
         )
 
-        # Join own ratings
+        # Best external rating per counterparty
+        external_base = ratings.filter(pl.col("rating_type") == "external")
+        if sort_cols:
+            external_base = external_base.sort(sort_cols, descending=[True] * len(sort_cols))
+        best_external = external_base.group_by("counterparty_reference").first().select(
+            [
+                pl.col("counterparty_reference").alias("_ext_cp"),
+                *([pl.col("cqs").alias("external_cqs")] if "cqs" in rating_schema_names else []),
+                *(
+                    [pl.col("rating_value").alias("external_rating_value")]
+                    if "rating_value" in rating_schema_names
+                    else []
+                ),
+                *(
+                    [pl.col("rating_agency").alias("external_rating_agency")]
+                    if "rating_agency" in rating_schema_names
+                    else []
+                ),
+            ]
+        )
+
         result = self._lf.join(
-            first_ratings.select(
-                [
-                    pl.col("counterparty_reference").alias("rated_cp"),
-                    *[pl.col(c) for c in rating_cols if c != "counterparty_reference"],
-                ]
-            ),
-            left_on=ref_col,
-            right_on="rated_cp",
-            how="left",
+            best_internal, left_on=ref_col, right_on="_int_cp", how="left"
+        )
+        result = result.join(
+            best_external, left_on=ref_col, right_on="_ext_cp", how="left"
         )
 
-        # If ultimate parents provided, join parent ratings
+        # Derive convenience columns
+        int_cols = best_internal.collect_schema().names()
+        ext_cols = best_external.collect_schema().names()
+
+        derive = []
+        if "external_cqs" in ext_cols and "internal_cqs" in int_cols:
+            derive.append(
+                pl.coalesce(pl.col("external_cqs"), pl.col("internal_cqs")).alias("cqs")
+            )
+        elif "external_cqs" in ext_cols:
+            derive.append(pl.col("external_cqs").alias("cqs"))
+        elif "internal_cqs" in int_cols:
+            derive.append(pl.col("internal_cqs").alias("cqs"))
+
+        if "internal_pd" in int_cols:
+            derive.append(pl.col("internal_pd").alias("pd"))
+
+        if derive:
+            result = result.with_columns(derive)
+
+        # Parent inheritance
         if ultimate_parents is not None:
-            # Join to get ultimate parent
             result = result.join(
                 ultimate_parents.select(
                     [
@@ -235,44 +313,94 @@ class HierarchyLazyFrame:
                 how="left",
             )
 
-            # Join to get parent's ratings
-            parent_ratings = first_ratings.select(
-                [
-                    pl.col("counterparty_reference").alias("parent_cp"),
-                    *[
-                        pl.col(c).alias(f"parent_{c}")
-                        for c in rating_cols
-                        if c != "counterparty_reference"
-                    ],
-                ]
-            )
+            # Parent internal
+            parent_int_cols = [
+                pl.col(c).alias(f"parent_{c}") for c in int_cols if c != "_int_cp"
+            ]
+            if parent_int_cols:
+                parent_internal = best_internal.select(
+                    [pl.col("_int_cp").alias("_p_int_cp"), *parent_int_cols]
+                )
+                result = result.join(
+                    parent_internal,
+                    left_on="ultimate_parent_reference",
+                    right_on="_p_int_cp",
+                    how="left",
+                )
 
-            result = result.join(
-                parent_ratings,
-                left_on="ultimate_parent_reference",
-                right_on="parent_cp",
-                how="left",
-            )
+            # Parent external
+            parent_ext_cols = [
+                pl.col(c).alias(f"parent_{c}") for c in ext_cols if c != "_ext_cp"
+            ]
+            if parent_ext_cols:
+                parent_external = best_external.select(
+                    [pl.col("_ext_cp").alias("_p_ext_cp"), *parent_ext_cols]
+                )
+                result = result.join(
+                    parent_external,
+                    left_on="ultimate_parent_reference",
+                    right_on="_p_ext_cp",
+                    how="left",
+                )
 
-            # Coalesce own rating with parent rating
-            for col in ["cqs", "pd", "rating_value"]:
-                if col in rating_cols:
-                    result = result.with_columns(
-                        [
-                            pl.coalesce(pl.col(col), pl.col(f"parent_{col}")).alias(col),
-                        ]
+            # Coalesce own → parent per type
+            coalesce_pairs = []
+            for col_name in int_cols:
+                if col_name != "_int_cp":
+                    coalesce_pairs.append(
+                        pl.coalesce(pl.col(col_name), pl.col(f"parent_{col_name}")).alias(
+                            col_name
+                        )
                     )
+            for col_name in ext_cols:
+                if col_name != "_ext_cp":
+                    coalesce_pairs.append(
+                        pl.coalesce(pl.col(col_name), pl.col(f"parent_{col_name}")).alias(
+                            col_name
+                        )
+                    )
+            if coalesce_pairs:
+                result = result.with_columns(coalesce_pairs)
 
-            # Add inheritance flags
-            has_own_rating = pl.col("cqs").is_not_null() if "cqs" in rating_cols else pl.lit(False)
+            # Re-derive convenience columns after inheritance
+            re_derive = []
+            if "external_cqs" in ext_cols and "internal_cqs" in int_cols:
+                re_derive.append(
+                    pl.coalesce(pl.col("external_cqs"), pl.col("internal_cqs")).alias("cqs")
+                )
+            elif "external_cqs" in ext_cols:
+                re_derive.append(pl.col("external_cqs").alias("cqs"))
+            elif "internal_cqs" in int_cols:
+                re_derive.append(pl.col("internal_cqs").alias("cqs"))
+            if "internal_pd" in int_cols:
+                re_derive.append(pl.col("internal_pd").alias("pd"))
+            if re_derive:
+                result = result.with_columns(re_derive)
+
+            # Inheritance flags
+            has_own_internal = (
+                pl.col("internal_cqs").is_not_null()
+                if "internal_cqs" in int_cols
+                else pl.lit(False)
+            ) | (
+                pl.col("internal_pd").is_not_null()
+                if "internal_pd" in int_cols
+                else pl.lit(False)
+            )
+            has_own_external = (
+                pl.col("external_cqs").is_not_null()
+                if "external_cqs" in ext_cols
+                else pl.lit(False)
+            )
+            has_any_own = has_own_internal | has_own_external
 
             result = result.with_columns(
                 [
-                    pl.when(has_own_rating)
+                    pl.when(has_any_own)
                     .then(pl.lit(False))
                     .otherwise(pl.lit(True))
                     .alias("rating_inherited"),
-                    pl.when(has_own_rating)
+                    pl.when(has_any_own)
                     .then(pl.lit("own_rating"))
                     .otherwise(pl.lit("parent_rating"))
                     .alias("inheritance_reason"),

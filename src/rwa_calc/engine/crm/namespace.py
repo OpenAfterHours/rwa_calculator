@@ -608,7 +608,7 @@ class CRMLazyFrame:
             how="left",
         )
 
-        # Look up guarantor's CQS and rating type from ratings
+        # Look up guarantor's CQS, rating type, and internal_pd from ratings
         if rating_inheritance is not None:
             ri_schema = rating_inheritance.collect_schema()
             ri_cols = [
@@ -617,6 +617,8 @@ class CRMLazyFrame:
             ]
             if "rating_type" in ri_schema.names():
                 ri_cols.append(pl.col("rating_type").alias("guarantor_rating_type"))
+            if "internal_pd" in ri_schema.names():
+                ri_cols.append(pl.col("internal_pd").alias("guarantor_internal_pd"))
 
             lf = lf.join(
                 rating_inheritance.select(ri_cols),
@@ -631,11 +633,18 @@ class CRMLazyFrame:
                         pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
                     ]
                 )
+            if "internal_pd" not in ri_schema.names():
+                lf = lf.with_columns(
+                    [
+                        pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
+                    ]
+                )
         else:
             lf = lf.with_columns(
                 [
                     pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
                     pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                    pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
                 ]
             )
 
@@ -655,8 +664,8 @@ class CRMLazyFrame:
             ]
         )
 
-        # Determine guarantor approach from IRB permissions AND rating type.
-        # IRB only if: firm has IRB permission AND guarantor has internal rating.
+        # Determine guarantor approach from IRB permissions AND internal rating.
+        # IRB only if: firm has IRB permission AND guarantor has internal PD.
         irb_exposure_class_values = set()
         for ec, approaches in config.irb_permissions.permissions.items():
             if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
@@ -667,7 +676,7 @@ class CRMLazyFrame:
                 pl.when(
                     (pl.col("guarantor_exposure_class") != "")
                     & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
-                    & (pl.col("guarantor_rating_type").fill_null("") == "internal")
+                    & pl.col("guarantor_internal_pd").is_not_null()
                 )
                 .then(pl.lit("irb"))
                 .when(pl.col("guarantor_exposure_class") != "")

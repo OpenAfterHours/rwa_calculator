@@ -339,6 +339,7 @@ class TestFIRBWithIRBGuarantor:
                     "counterparty_reference": "GUARANTOR01",
                     "cqs": None,
                     "pd": 0.005,
+                    "internal_pd": 0.005,
                     "rating_type": "internal",
                 }
             ],
@@ -621,3 +622,80 @@ class TestGuaranteeRatio:
         row = result.filter(pl.col("exposure_reference") == "EXP001")
         # on_bal should use floored drawn (0, not -100)
         assert row["ead_final"][0] == pytest.approx(190.0)
+
+
+# =============================================================================
+# Test: Guarantor with dual ratings (internal + external)
+# =============================================================================
+
+
+class TestGuarantorDualRating:
+    """Guarantor with both internal and external ratings."""
+
+    def test_dual_rated_guarantor_uses_internal_pd_for_approach(
+        self,
+        crm_processor: CRMProcessor,
+        full_irb_config: CalculationConfig,
+    ) -> None:
+        """
+        Guarantor with both internal PD and external CQS should be IRB
+        when the firm has IRB permission for the guarantor's class.
+        """
+        result = _run_crm(
+            crm_processor,
+            full_irb_config,
+            [_base_exposure()],
+            [_base_guarantee()],
+            [
+                _base_counterparty("GUARANTOR01", "corporate"),
+                _base_counterparty("BORROWER01", "corporate"),
+            ],
+            rating_rows=[
+                {
+                    "counterparty_reference": "GUARANTOR01",
+                    "cqs": 2,
+                    "pd": 0.005,
+                    "internal_pd": 0.005,
+                    "rating_type": "internal",
+                }
+            ],
+        )
+
+        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        assert row["guarantor_approach"][0] == "irb"
+        # IRB approach retains original CCF
+        assert row["ccf_guaranteed"][0] == pytest.approx(0.75)
+
+    def test_external_only_guarantor_gets_sa(
+        self,
+        crm_processor: CRMProcessor,
+        full_irb_config: CalculationConfig,
+    ) -> None:
+        """
+        Guarantor with only external CQS (no internal PD) should be SA
+        even when the firm has IRB permission for the guarantor's class.
+        """
+        result = _run_crm(
+            crm_processor,
+            full_irb_config,
+            [_base_exposure()],
+            [_base_guarantee()],
+            [
+                _base_counterparty("GUARANTOR01", "corporate"),
+                _base_counterparty("BORROWER01", "corporate"),
+            ],
+            rating_rows=[
+                {
+                    "counterparty_reference": "GUARANTOR01",
+                    "cqs": 2,
+                    "pd": None,
+                    "internal_pd": None,
+                    "rating_type": "external",
+                }
+            ],
+        )
+
+        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        assert row["guarantor_approach"][0] == "sa"
+        # SA approach → SA CCF for guaranteed portion
+        assert row["ccf_guaranteed"][0] == pytest.approx(0.50)

@@ -1203,7 +1203,7 @@ wheels = [
 
 [[package]]
 name = "rwa-calc"
-version = "0.1.32"
+version = "0.1.33"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },

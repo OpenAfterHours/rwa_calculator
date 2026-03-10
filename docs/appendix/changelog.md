@@ -81,6 +81,14 @@ Simplified FI scalar control on `COUNTERPARTY_SCHEMA`:
 
 
 
+
+## [0.1.34] - 2026-03-10
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.33] - 2026-03-09
 
 ### Changed
@@ -715,8 +723,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.33 | 2026-03-09 | Current |
-| 0.1.32 | 2026-03-09 | Previous |
+| 0.1.34 | 2026-03-10 | Current |
+| 0.1.33 | 2026-03-10 | Previous |
+| 0.1.32 | 2026-03-09 | - |
 | 0.1.31 | 2026-03-08 | - |
 | 0.1.30 | 2026-03-07 | - |
 | 0.1.29 | 2026-03-06 | - |

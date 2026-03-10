@@ -46,7 +46,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 250_000_000_000.0,
             "default_status": False,
             "sector_code": "06.10",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -58,7 +58,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000_000.0,
             "default_status": False,
             "sector_code": "20.41",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 2 Corporate - 50% Risk Weight
@@ -71,7 +71,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 50_000_000_000.0,
             "default_status": False,
             "sector_code": "47.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 3 Corporate - 75% Risk Weight
@@ -84,7 +84,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 400_000_000.0,
             "default_status": False,
             "sector_code": "25.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 4 Corporate - 100% Risk Weight
@@ -97,7 +97,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000.0,
             "default_status": False,
             "sector_code": "82.99",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 5/6 Corporate - 150% Risk Weight
@@ -110,7 +110,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 30_000_000.0,
             "default_status": False,
             "sector_code": "64.30",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Unrated Corporate - 100% Risk Weight (Scenario A2 from plan)
@@ -123,7 +123,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 500_000_000.0,
             "default_status": False,
             "sector_code": "28.99",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # SME Corporate (revenue < £44m) - eligible for SME supporting factor
@@ -136,7 +136,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 25_000_000.0,
             "default_status": False,
             "sector_code": "25.62",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -148,7 +148,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 28_000_000.0,
             "default_status": False,
             "sector_code": "62.01",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Small SME (revenue < £50m but > £880k, managed as retail - 75% RW)
@@ -161,7 +161,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 3_000_000.0,
             "default_status": False,
             "sector_code": "70.22",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": True,  # Managed on pooled retail basis (CRR Art. 123)
         },
         # Large Corporate (revenue > £440m)
@@ -174,7 +174,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 600_000_000.0,
             "default_status": False,
             "sector_code": "64.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # PSE with institution IRB treatment (commercial PSE)
@@ -187,7 +187,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 50_000_000_000.0,
             "default_status": False,
             "sector_code": "49.31",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Defaulted Corporate
@@ -200,7 +200,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 15_000_000.0,
             "default_status": True,
             "sector_code": "47.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -217,7 +217,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 1_200_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -234,7 +234,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 3_000_000_000.0,
             "default_status": False,
             "sector_code": "64.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -246,7 +246,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 400_000_000.0,
             "default_status": False,
             "sector_code": "25.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -258,7 +258,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 200_000_000.0,
             "default_status": False,
             "sector_code": "82.99",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -270,7 +270,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 100_000_000.0,
             "default_status": False,
             "sector_code": "49.41",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -287,7 +287,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 8_000_000_000.0,
             "default_status": False,
             "sector_code": "64.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -299,7 +299,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 2_000_000_000.0,
             "default_status": False,
             "sector_code": "64.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -311,7 +311,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 600_000_000.0,
             "default_status": False,
             "sector_code": "47.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -323,7 +323,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 300_000_000.0,
             "default_status": False,
             "sector_code": "47.91",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -340,7 +340,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 25_000_000.0,
             "default_status": False,
             "sector_code": "64.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -352,7 +352,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 10_000_000.0,
             "default_status": False,
             "sector_code": "25.62",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -364,7 +364,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 15_000_000.0,
             "default_status": False,
             "sector_code": "41.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -382,7 +382,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 20_000_000.0,
             "default_status": False,
             "sector_code": "70.22",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-F3: SME Large - uses CORP_SME_002 (already exists, turnover £35m)
@@ -396,7 +396,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 500_000_000.0,
             "default_status": False,
             "sector_code": "42.21",  # Construction of utility projects
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-F6: Large Corporate - no SME factor (turnover > £44m)
@@ -409,7 +409,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 300_000_000.0,
             "default_status": False,
             "sector_code": "46.90",  # Non-specialised wholesale trade
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-F7: SME at boundary - turnover £20m (at threshold)
@@ -422,7 +422,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 15_000_000.0,
             "default_status": False,
             "sector_code": "62.02",  # Computer consultancy
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Alias for CRR-F1 (CORP_SME_SMALL -> same characteristics as CORP_SME_001)
@@ -435,7 +435,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 22_000_000.0,
             "default_status": False,
             "sector_code": "25.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Alias for CRR-F3 (CORP_SME_LARGE -> same characteristics as CORP_SME_002)
@@ -448,7 +448,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 30_000_000.0,
             "default_status": False,
             "sector_code": "62.01",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -465,7 +465,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000.0,
             "default_status": False,
             "sector_code": "46.90",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-G2: IRB EL shortfall (F-IRB corporate, PD 2%)
@@ -478,7 +478,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 120_000_000.0,
             "default_status": False,
             "sector_code": "25.99",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-G3: IRB EL excess (F-IRB corporate, PD 0.5%)
@@ -491,7 +491,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 150_000_000.0,
             "default_status": False,
             "sector_code": "28.99",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -508,7 +508,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 100_000_000.0,
             "default_status": False,
             "sector_code": "46.49",  # Wholesale of other household goods
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-H2: Counterparty group parent (rated CQS 2 = 50% RW)
@@ -522,7 +522,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 400_000_000.0,
             "default_status": False,
             "sector_code": "64.20",  # Holding company activities
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-H2: Unrated subsidiary (inherits parent CQS 2 = 50% RW)
@@ -535,7 +535,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 60_000_000.0,
             "default_status": False,
             "sector_code": "46.73",  # Wholesale of building materials
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-H2: Rated subsidiary (own CQS 3 = 100% RW)
@@ -548,7 +548,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 45_000_000.0,
             "default_status": False,
             "sector_code": "43.21",  # Electrical installation
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-H3: SME chain with supporting factor (turnover £25m)
@@ -561,7 +561,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 20_000_000.0,
             "default_status": False,
             "sector_code": "25.62",  # Machining
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-H4: Full CRM chain (unrated corporate = 100% RW base)
@@ -574,7 +574,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 70_000_000.0,
             "default_status": False,
             "sector_code": "28.21",  # Manufacture of ovens and furnaces
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -589,7 +589,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000.0,
             "default_status": False,
             "sector_code": "68.20",  # Renting and operating of own real estate
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -605,7 +605,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000.0,
             "default_status": False,
             "sector_code": "46.90",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -622,7 +622,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "total_assets": 60_000_000.0,
             "default_status": False,
             "sector_code": "46.90",  # Non-specialised wholesale trade
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
     ]

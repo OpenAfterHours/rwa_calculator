@@ -43,7 +43,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 1_500_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -55,7 +55,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 2_000_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -67,7 +67,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 3_500_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -79,7 +79,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 1_300_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 2 Institution - 30% Risk Weight (UK deviation)
@@ -92,7 +92,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 20_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 3 Institution - 50% Risk Weight
@@ -105,7 +105,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 150_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 4/5 Institution - 100% Risk Weight
@@ -118,7 +118,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 50_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 6 Institution - 150% Risk Weight
@@ -131,7 +131,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 5_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Unrated Institution - 40% Risk Weight
@@ -144,7 +144,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 10_000_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Investment Firm - regulated
@@ -157,7 +157,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 500_000_000.0,
             "default_status": False,
             "sector_code": "66.12",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Central Counterparty
@@ -170,7 +170,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 100_000_000_000.0,
             "default_status": False,
             "sector_code": "66.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Defaulted Institution
@@ -183,7 +183,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "total_assets": 1_000_000_000.0,
             "default_status": True,
             "sector_code": "64.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
     ]

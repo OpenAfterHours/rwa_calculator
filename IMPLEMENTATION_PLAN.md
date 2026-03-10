@@ -139,76 +139,18 @@ Add `model_permissions` as an OPTIONAL input file at `config/model_permissions.p
 
 ---
 
-## Issue 2: Rename `is_regulated` → `apply_fi_scalar`
+## Issue 2: Rename `is_regulated` → `apply_fi_scalar` — COMPLETED
 
-### Current State
+All steps implemented and verified. Summary of changes:
 
-- `is_regulated: pl.Boolean` exists in `COUNTERPARTY_SCHEMA` (`schemas.py`, line 153)
-- Classifier joins it as `cp_is_regulated` (`classifier.py`, line 234)
-- FI scalar flag `requires_fi_scalar` is computed in classifier Phase 3 (`classifier.py`, lines 439-450):
-  - `True` when: (FSE AND total_assets >= EUR 70bn) OR (FSE AND `cp_is_regulated == False`)
-- `requires_fi_scalar` is consumed by IRB correlation formula (`irb/formulas.py`, lines 461-473) as a 1.25x multiplier
-- SA does **not** use FI scalar (correct — SA uses fixed risk weight tables)
-
-### Problem
-
-`is_regulated` is only one part of the FI scalar equation. The other condition (LFSE by total assets) is separate. Renaming to `apply_fi_scalar` makes the intent clearer: the user explicitly flags whether the FI scalar should apply, rather than the system inferring it from `is_regulated` + `total_assets`.
-
-### Design Decision
-
-**Rename `is_regulated` → `apply_fi_scalar`** and change the semantics:
-- When `apply_fi_scalar = true` on a counterparty, the 1.25x correlation multiplier applies (if the counterparty is a financial sector entity)
-- The classifier will still compute `requires_fi_scalar` but the logic simplifies: `requires_fi_scalar = is_financial_sector_entity AND apply_fi_scalar`
-- The user controls when the scalar applies, covering both conditions (unregulated FSE, large FSE) in a single flag
-
-### Implementation Steps
-
-#### Step 1: Schema Change
-- [ ] Rename `is_regulated` → `apply_fi_scalar` in `COUNTERPARTY_SCHEMA` (`schemas.py`, line 153)
-- [ ] Update comment to: `"apply_fi_scalar": pl.Boolean,  # 1.25x IRB correlation for LFSE/unregulated FSE (CRR Art. 153(2))`
-
-#### Step 2: Classifier Update
-- [ ] Rename `cp_is_regulated` → `cp_apply_fi_scalar` in `_add_counterparty_attributes()` (`classifier.py`, line 234)
-- [ ] Simplify `requires_fi_scalar` logic in `_classify_sme_and_retail()` (`classifier.py`, lines 439-450):
-  ```python
-  # Before: complex two-condition check
-  # After: direct flag from user
-  pl.when(
-      (pl.col("is_financial_sector_entity") == True)
-      & (pl.col("cp_apply_fi_scalar") == True)
-  )
-  .then(pl.lit(True))
-  .otherwise(pl.lit(False))
-  .alias("requires_fi_scalar")
-  ```
-- [ ] Remove the `is_large_financial_sector_entity` derived column (line 438) — this is now covered by the user's `apply_fi_scalar` flag, OR keep it as a separate informational column but decouple from `requires_fi_scalar`
-
-#### Step 3: Verify FI Scalar Application
-- [ ] **IRB correlation** (`irb/formulas.py`, lines 461-473): Already correct — reads `requires_fi_scalar` column, multiplies correlation by 1.25x. No change needed.
-- [ ] **IRB parametric formulas** (`irb/formulas.py`, lines 596-603): Already correct — same pattern. No change needed.
-- [ ] **IRB namespace defaults** (`irb/namespace.py`): Already defaults `requires_fi_scalar` to False. No change needed.
-- [ ] **SA path**: Confirmed no FI scalar in SA (correct per regulation). No change needed.
-- [ ] **Output schema**: Check if `is_regulated` appears in `CALCULATION_OUTPUT_SCHEMA` and rename to `apply_fi_scalar`
-
-#### Step 4: Validation Update
-- [ ] No value constraint changes needed (boolean field, not categorical)
-- [ ] Update any documentation references to `is_regulated`
-
-#### Step 5: Tests
-- [ ] Update all test fixtures that set `is_regulated` → `apply_fi_scalar`
-- [ ] Verify FI scalar unit tests pass with renamed column
-- [ ] Add explicit test: `apply_fi_scalar=True` on non-FSE entity → `requires_fi_scalar=False` (FSE gate still applies)
-- [ ] Add explicit test: `apply_fi_scalar=True` on FSE → `requires_fi_scalar=True`
-- [ ] Add explicit test: `apply_fi_scalar=False` on LFSE → `requires_fi_scalar=False` (user override)
-
-#### Step 6: Fixture Generation
-- [ ] Update `tests/fixtures/generate_all.py` to use `apply_fi_scalar` column name
-- [ ] Regenerate all fixture parquet files
-
-#### Step 7: Documentation
-- [ ] Update schema documentation
-- [ ] Update changelog
-- [ ] Update any workbook/notebook references
+- **Schema**: `is_regulated` renamed to `apply_fi_scalar` in `COUNTERPARTY_SCHEMA` with updated comment
+- **Classifier**: `cp_is_regulated` renamed to `cp_apply_fi_scalar`; `requires_fi_scalar` simplified to `is_financial_sector_entity AND cp_apply_fi_scalar` (user-controlled flag replaces complex two-condition inference)
+- **`is_large_financial_sector_entity`**: Kept as separate informational column (used in output at line 914), decoupled from `requires_fi_scalar`
+- **IRB formulas**: No changes needed — already read `requires_fi_scalar` column correctly
+- **Output schema**: `is_regulated` was not in `CALCULATION_OUTPUT_SCHEMA` — no change needed
+- **Tests**: All 167 occurrences across 14 test/fixture files renamed with inverted boolean semantics (`is_regulated=True` → `apply_fi_scalar=False`, `is_regulated=False` → `apply_fi_scalar=True`)
+- **Benchmark data generator**: Variable and column renamed with inverted logic
+- **Results**: 275 acceptance tests pass, 1506 unit tests pass, mypy clean, ruff clean
 
 ---
 

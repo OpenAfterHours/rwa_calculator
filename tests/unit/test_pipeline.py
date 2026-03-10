@@ -119,7 +119,7 @@ def mock_raw_data() -> RawDataBundle:
             "total_assets": [50000000.0, None],
             "default_status": [False, False],
             "sector_code": ["62.01", None],
-            "is_regulated": [False, False],
+            "apply_fi_scalar": [True, True],
             "is_managed_as_retail": [False, False],
         }
     )
@@ -270,7 +270,7 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
             "total_assets": [50000000.0, None],
             "default_status": [False, False],
             "sector_code": ["62.01", None],
-            "is_regulated": [False, False],
+            "apply_fi_scalar": [True, True],
             "is_managed_as_retail": [False, False],
         }
     )

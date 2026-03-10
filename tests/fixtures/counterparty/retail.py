@@ -46,7 +46,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -58,7 +58,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -70,7 +70,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Individual - Mortgage borrower (for residential mortgage scenarios)
@@ -83,7 +83,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -95,7 +95,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # SME Retail - Turnover under £880k threshold (Scenario A10)
@@ -108,7 +108,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 300_000.0,
             "default_status": False,
             "sector_code": "47.19",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": True,  # Managed on pooled retail basis
         },
         {
@@ -120,7 +120,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 100_000.0,
             "default_status": False,
             "sector_code": "47.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -132,7 +132,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 400_000.0,
             "default_status": False,
             "sector_code": "81.10",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # SME at threshold boundary (just under £880k)
@@ -145,7 +145,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 500_000.0,
             "default_status": False,
             "sector_code": "62.02",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # QRRE eligible individuals (credit cards, overdrafts)
@@ -158,7 +158,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -170,7 +170,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # High-income individual (still retail if exposure criteria met)
@@ -183,7 +183,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -201,7 +201,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Defaulted retail individual
@@ -214,7 +214,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": True,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Defaulted SME retail
@@ -227,7 +227,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 200_000.0,
             "default_status": True,
             "sector_code": "56.10",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -244,7 +244,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -256,7 +256,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -273,7 +273,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -285,7 +285,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 350_000.0,
             "default_status": False,
             "sector_code": "43.22",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -302,7 +302,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -314,7 +314,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -326,7 +326,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 200_000.0,
             "default_status": False,
             "sector_code": "10.71",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -338,7 +338,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 150_000.0,
             "default_status": False,
             "sector_code": "56.10",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -355,7 +355,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -367,7 +367,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 400_000.0,
             "default_status": False,
             "sector_code": "70.22",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -384,7 +384,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": None,
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -396,7 +396,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 600_000.0,
             "default_status": False,
             "sector_code": "62.01",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -412,7 +412,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "total_assets": 3_000_000.0,
             "default_status": False,
             "sector_code": "47.11",  # Retail trade
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
     ]

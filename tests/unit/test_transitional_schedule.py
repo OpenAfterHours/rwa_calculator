@@ -441,7 +441,7 @@ def _make_minimal_raw_data():
             "sector": ["CORPORATE"],
             "entity_type": ["corporate"],
             "is_sme": [False],
-            "is_regulated": [False],
+            "apply_fi_scalar": [True],
             "is_pse": [False],
             "cqs": [2],
             "pd": [0.01],

@@ -400,16 +400,14 @@ class HierarchyResolver:
 
         # Per-type inheritance: coalesce own → parent for each type
         has_own_internal = (
-            pl.col("internal_pd").is_not_null()
-            | pl.col("internal_rating_value").is_not_null()
+            pl.col("internal_pd").is_not_null() | pl.col("internal_rating_value").is_not_null()
         )
         has_parent_internal = (
             pl.col("parent_internal_pd").is_not_null()
             | pl.col("parent_internal_rating_value").is_not_null()
         )
         has_own_external = (
-            pl.col("external_cqs").is_not_null()
-            | pl.col("external_rating_value").is_not_null()
+            pl.col("external_cqs").is_not_null() | pl.col("external_rating_value").is_not_null()
         )
         has_parent_external = (
             pl.col("parent_external_cqs").is_not_null()
@@ -488,13 +486,11 @@ class HierarchyResolver:
         # Derive convenience columns from post-coalesce per-type fields.
         # Use per-type inheritance flags (computed above) for legacy inheritance
         # to avoid reading the already-coalesced type-specific columns.
-        has_any_own_reason = (
-            (pl.col("internal_inheritance_reason") == "own_rating")
-            | (pl.col("external_inheritance_reason") == "own_rating")
+        has_any_own_reason = (pl.col("internal_inheritance_reason") == "own_rating") | (
+            pl.col("external_inheritance_reason") == "own_rating"
         )
-        has_any_parent_reason = (
-            (pl.col("internal_inheritance_reason") == "parent_rating")
-            | (pl.col("external_inheritance_reason") == "parent_rating")
+        has_any_parent_reason = (pl.col("internal_inheritance_reason") == "parent_rating") | (
+            pl.col("external_inheritance_reason") == "parent_rating"
         )
 
         result = result.with_columns(
@@ -504,9 +500,9 @@ class HierarchyResolver:
                 # pd: internal only (IRB uses internal PD)
                 pl.col("internal_pd").alias("pd"),
                 # Legacy compat columns
-                pl.coalesce(
-                    pl.col("external_rating_value"), pl.col("internal_rating_value")
-                ).alias("rating_value"),
+                pl.coalesce(pl.col("external_rating_value"), pl.col("internal_rating_value")).alias(
+                    "rating_value"
+                ),
                 pl.coalesce(
                     pl.col("external_rating_agency"), pl.col("internal_rating_agency")
                 ).alias("rating_agency"),
@@ -516,9 +512,9 @@ class HierarchyResolver:
                 .then(pl.lit("external"))
                 .otherwise(pl.lit(None).cast(pl.String))
                 .alias("rating_type"),
-                pl.coalesce(
-                    pl.col("internal_rating_date"), pl.col("external_rating_date")
-                ).alias("rating_date"),
+                pl.coalesce(pl.col("internal_rating_date"), pl.col("external_rating_date")).alias(
+                    "rating_date"
+                ),
                 # Legacy inheritance tracking (derived from per-type flags)
                 pl.when(has_any_own_reason)
                 .then(pl.lit(False))

@@ -69,7 +69,7 @@ def simple_counterparties() -> pl.LazyFrame:
             "default_status": [False, False, False, False],
             "sector_code": ["MANU", "MANU", "MANU", "SERV"],
             "is_financial_institution": [False, False, False, False],
-            "is_regulated": [False, False, False, False],
+            "apply_fi_scalar": [True, True, True, True],
             "is_pse": [False, False, False, False],
             "is_mdb": [False, False, False, False],
             "is_international_org": [False, False, False, False],
@@ -203,7 +203,7 @@ def lending_group_counterparties() -> pl.LazyFrame:
             "default_status": [False, False, False, False],
             "sector_code": ["RETAIL", "RETAIL", "RETAIL", "RETAIL"],
             "is_financial_institution": [False, False, False, False],
-            "is_regulated": [False, False, False, False],
+            "apply_fi_scalar": [True, True, True, True],
             "is_pse": [False, False, False, False],
             "is_mdb": [False, False, False, False],
             "is_international_org": [False, False, False, False],
@@ -1714,7 +1714,7 @@ class TestFacilityUndrawnInUnifyExposures:
                 "total_assets": [100000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -1817,7 +1817,7 @@ class TestFacilityUndrawnInUnifyExposures:
                 "total_assets": [100000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -1952,7 +1952,7 @@ class TestSameFacilityAndLoanReference:
                 "total_assets": [100000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -2260,7 +2260,7 @@ class TestSameFacilityAndLoanReference:
                 "total_assets": [100000000.0, 120000000.0],
                 "default_status": [False, False],
                 "sector_code": ["MANU", "MANU"],
-                "is_regulated": [False, False],
+                "apply_fi_scalar": [True, True],
                 "is_managed_as_retail": [False, False],
             }
         ).lazy()
@@ -2374,7 +2374,7 @@ class TestSameFacilityAndLoanReference:
                 "total_assets": [100000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -2466,7 +2466,7 @@ class TestSameFacilityAndLoanReference:
                 "total_assets": [100000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -2583,7 +2583,7 @@ class TestLendingGroupDuplicateMembership:
                 "total_assets": [0.0, 0.0, 0.0],
                 "default_status": [False, False, False],
                 "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-                "is_regulated": [False, False, False],
+                "apply_fi_scalar": [True, True, True],
                 "is_managed_as_retail": [False, False, False],
             }
         ).lazy()
@@ -2665,7 +2665,7 @@ class TestLendingGroupDuplicateMembership:
                 "total_assets": [0.0, 0.0, 0.0],
                 "default_status": [False, False, False],
                 "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-                "is_regulated": [False, False, False],
+                "apply_fi_scalar": [True, True, True],
                 "is_managed_as_retail": [False, False, False],
             }
         ).lazy()
@@ -2750,7 +2750,7 @@ class TestNegativeDrawnAmountInHierarchy:
                 "default_status": [False],
                 "sector_code": ["RETAIL"],
                 "is_financial_institution": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_pse": [False],
                 "is_mdb": [False],
                 "is_international_org": [False],
@@ -2846,7 +2846,7 @@ class TestNegativeDrawnAmountInHierarchy:
                 "default_status": [False, False, False],
                 "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
                 "is_financial_institution": [False, False, False],
-                "is_regulated": [False, False, False],
+                "apply_fi_scalar": [True, True, True],
                 "is_pse": [False, False, False],
                 "is_mdb": [False, False, False],
                 "is_international_org": [False, False, False],
@@ -3160,7 +3160,7 @@ class TestLargerDatasetFacilityUndrawn:
                 "default_status": [False, False, False, False],
                 "sector_code": ["MANU", "MANU", "MANU", "MANU"],
                 "is_financial_institution": [False, False, False, False],
-                "is_regulated": [False, False, False, False],
+                "apply_fi_scalar": [True, True, True, True],
                 "is_pse": [False, False, False, False],
                 "is_mdb": [False, False, False, False],
                 "is_international_org": [False, False, False, False],

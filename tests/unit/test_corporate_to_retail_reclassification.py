@@ -158,7 +158,7 @@ class TestReclassificationEligibility:
                 "annual_revenue": [10000000.0],  # GBP 10m
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail
             },
         )
@@ -198,7 +198,7 @@ class TestReclassificationEligibility:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],  # NOT managed as retail
             },
         )
@@ -242,7 +242,7 @@ class TestReclassificationEligibility:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail, but exceeds threshold
             },
         )
@@ -286,7 +286,7 @@ class TestReclassificationEligibility:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail
             },
         )
@@ -338,7 +338,7 @@ class TestReclassificationEligibility:
                 "annual_revenue": [50000000.0],  # GBP 50m - exceeds SME threshold
                 "total_assets": [100000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail
             },
         )
@@ -384,7 +384,7 @@ class TestReclassificationEligibility:
                 "annual_revenue": [0.0],  # Zero revenue
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail
             },
         )
@@ -429,7 +429,7 @@ class TestReclassificationEligibility:
                 "annual_revenue": [40000000.0],  # GBP 40m - below EUR 50m threshold
                 "total_assets": [30000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail
             },
         )
@@ -480,7 +480,7 @@ class TestPropertyCollateralReclassification:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],
             },
         )
@@ -528,7 +528,7 @@ class TestPropertyCollateralReclassification:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],
             },
         )
@@ -571,7 +571,7 @@ class TestPropertyCollateralReclassification:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],
             },
         )
@@ -621,7 +621,7 @@ class TestReclassificationIRBContext:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Would qualify, but not needed
             },
         )
@@ -665,7 +665,7 @@ class TestReclassificationIRBContext:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],
             },
         )
@@ -757,7 +757,7 @@ class TestMixedPortfolioReclassification:
                 "annual_revenue": [10000000.0] * 6,
                 "total_assets": [5000000.0] * 6,
                 "default_status": [False] * 6,
-                "is_regulated": [False] * 6,
+                "apply_fi_scalar": [True] * 6,
                 "is_managed_as_retail": [True, True, True, True, True, False],
             },
         )
@@ -846,7 +846,7 @@ class TestFIRBLGDClearing:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail but exceeds threshold
             },
         )
@@ -887,7 +887,7 @@ class TestFIRBLGDClearing:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],  # Managed as retail and qualifies
             },
         )
@@ -939,7 +939,7 @@ class TestFIRBLGDClearing:
                 "annual_revenue": [100000.0],  # Low revenue (individual)
                 "total_assets": [2000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [True],
             },
         )

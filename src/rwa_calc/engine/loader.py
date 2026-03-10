@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.config.data_sources import DataSourceRegistry, RequirementLevel
+from rwa_calc.config.data_sources import DataSourceRegistry
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.schemas import (
     COLLATERAL_SCHEMA,

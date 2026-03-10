@@ -385,9 +385,7 @@ class CRMProcessor:
             if collateral is not None and has_required_columns(
                 collateral, self.COLLATERAL_REQUIRED_COLUMNS
             ):
-                collateral = pl.concat(
-                    [collateral, netting_collateral], how="diagonal"
-                )
+                collateral = pl.concat([collateral, netting_collateral], how="diagonal")
             else:
                 collateral = netting_collateral
 
@@ -488,9 +486,7 @@ class CRMProcessor:
             if collateral is not None and has_required_columns(
                 collateral, self.COLLATERAL_REQUIRED_COLUMNS
             ):
-                collateral = pl.concat(
-                    [collateral, netting_collateral], how="diagonal"
-                )
+                collateral = pl.concat([collateral, netting_collateral], how="diagonal")
             else:
                 collateral = netting_collateral
 
@@ -695,18 +691,19 @@ class CRMProcessor:
         # Sum abs(drawn_amount) per (netting_group, currency) → netting pool
         # Currency is kept so the synthetic collateral carries the source currency,
         # allowing the haircut pipeline to apply FX haircuts when currencies differ.
-        netting_pool = negative_loans.group_by(
-            ["_netting_group", "currency"]
-        ).agg(
-            pl.col("drawn_amount").abs().sum().alias("netting_pool"),
-        ).rename({"currency": "_pool_currency"})
+        netting_pool = (
+            negative_loans.group_by(["_netting_group", "currency"])
+            .agg(
+                pl.col("drawn_amount").abs().sum().alias("netting_pool"),
+            )
+            .rename({"currency": "_pool_currency"})
+        )
 
         # All positive-drawn exposures that could benefit from netting.
         # A sibling matches a pool if the pool's netting group equals its
         # parent_facility_reference OR root_facility_reference.
         positive_siblings = exposures.filter(
-            (pl.col("ead_gross") > 0)
-            & pl.col("parent_facility_reference").is_not_null()
+            (pl.col("ead_gross") > 0) & pl.col("parent_facility_reference").is_not_null()
         )
 
         sibling_cols = [
@@ -736,16 +733,14 @@ class CRMProcessor:
                 right_on="_netting_group",
                 how="inner",
             )
-            matched = pl.concat(
-                [match_parent, match_root], how="diagonal"
-            ).unique(subset=["exposure_reference", "_pool_currency"], keep="first")
+            matched = pl.concat([match_parent, match_root], how="diagonal").unique(
+                subset=["exposure_reference", "_pool_currency"], keep="first"
+            )
         else:
             matched = match_parent
 
         # Total EAD per pool for pro-rata allocation (recompute after matching)
-        facility_totals = matched.group_by(
-            "_pool_currency", "netting_pool"
-        ).agg(
+        facility_totals = matched.group_by("_pool_currency", "netting_pool").agg(
             pl.col("ead_gross").sum().alias("_facility_total_ead"),
         )
 

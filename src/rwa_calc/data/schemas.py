@@ -150,7 +150,7 @@ COUNTERPARTY_SCHEMA = {
     "default_status": pl.Boolean,
     "sector_code": pl.String,  # Based on SIC
     # Retained boolean flags - orthogonal to entity_type classification
-    "is_regulated": pl.Boolean,  # For FI scalar: unregulated FSE gets 1.25x correlation (CRR Art. 153(2))
+    "apply_fi_scalar": pl.Boolean,  # 1.25x IRB correlation for LFSE/unregulated FSE (CRR Art. 153(2))
     "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
     "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)

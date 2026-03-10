@@ -88,7 +88,7 @@ def corporate_counterparties() -> pl.LazyFrame:
             "total_assets": [500000000.0, 150000000.0, 5000000.0, 100000000.0],
             "default_status": [False, False, False, False],
             "sector_code": ["MANU", "MANU", "SERV", "TECH"],
-            "is_regulated": [True, True, True, True],
+            "apply_fi_scalar": [False, False, False, False],
             "is_managed_as_retail": [False, False, False, False],
         }
     ).lazy()
@@ -128,7 +128,7 @@ def mixed_counterparties() -> pl.LazyFrame:
             "total_assets": [0.0, 100000000000.0, 250000000.0, 0.0, 0.0, 0.0],
             "default_status": [False, False, False, False, False, False],
             "sector_code": ["GOVT", "BANK", "MANU", "RETAIL", "HEALTH", "MDB"],
-            "is_regulated": [True, True, True, True, True, True],
+            "apply_fi_scalar": [False, False, False, False, False, False],
             "is_managed_as_retail": [False, False, False, False, False, False],
         }
     ).lazy()
@@ -151,7 +151,7 @@ def retail_counterparties() -> pl.LazyFrame:
             "total_assets": [0.0, 0.0, 0.0],
             "default_status": [False, False, False],
             "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-            "is_regulated": [True, True, True],
+            "apply_fi_scalar": [False, False, False],
             "is_managed_as_retail": [False, False, False],
         }
     ).lazy()
@@ -170,7 +170,7 @@ def defaulted_counterparties() -> pl.LazyFrame:
             "total_assets": [50000000.0, 50000000.0],
             "default_status": [True, False],  # First one is in default
             "sector_code": ["MANU", "MANU"],
-            "is_regulated": [True, True],
+            "apply_fi_scalar": [False, False],
             "is_managed_as_retail": [False, False],
         }
     ).lazy()
@@ -500,7 +500,7 @@ class TestSMEClassification:
                 "total_assets": [300000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -558,7 +558,7 @@ class TestSMEClassification:
                 "total_assets": [150000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -618,7 +618,7 @@ class TestSMEClassification:
                 "total_assets": [200000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -685,7 +685,7 @@ class TestRetailClassification:
                 "total_assets": [0.0],
                 "default_status": [False],
                 "sector_code": ["RETAIL"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -743,7 +743,7 @@ class TestRetailClassification:
                 "total_assets": [0.0],
                 "default_status": [False],
                 "sector_code": ["RETAIL"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -808,7 +808,7 @@ class TestRetailClassification:
                 "total_assets": [0.0],
                 "default_status": [False],
                 "sector_code": ["RETAIL"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [True],
             }
         ).lazy()
@@ -879,7 +879,7 @@ class TestRetailClassification:
                 "total_assets": [50000000.0],
                 "default_status": [False],
                 "sector_code": ["RETAIL"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [True],
             }
         ).lazy()
@@ -948,7 +948,7 @@ class TestRetailClassification:
                 "total_assets": [0.0],
                 "default_status": [False],
                 "sector_code": ["RETAIL"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -1017,7 +1017,7 @@ class TestRetailClassification:
                 "total_assets": [0.0, 0.0],
                 "default_status": [False, False],
                 "sector_code": ["RETAIL", "RETAIL"],
-                "is_regulated": [True, True],
+                "apply_fi_scalar": [False, False],
                 "is_managed_as_retail": [True, True],
             }
         ).lazy()
@@ -1175,7 +1175,7 @@ class TestApproachAssignment:
                 "total_assets": [500000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()
@@ -1235,7 +1235,7 @@ class TestApproachAssignment:
                 "total_assets": [500000000.0],
                 "default_status": [False],
                 "sector_code": ["MANU"],
-                "is_regulated": [True],
+                "apply_fi_scalar": [False],
                 "is_managed_as_retail": [False],
             }
         ).lazy()

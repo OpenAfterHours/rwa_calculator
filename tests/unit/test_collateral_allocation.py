@@ -127,7 +127,7 @@ class TestFacilityUndrawnLinkage:
                 "annual_revenue": [0.0],
                 "total_assets": [0.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             },
         )
@@ -186,7 +186,7 @@ class TestFacilityUndrawnLinkage:
                 "annual_revenue": [0.0],
                 "total_assets": [0.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             },
             collateral_data={
@@ -260,7 +260,7 @@ class TestPropertyCollateralFlagForUndrawn:
                 "annual_revenue": [0.0],
                 "total_assets": [0.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             },
             collateral_data={
@@ -336,7 +336,7 @@ class TestPropertyCollateralFlagForUndrawn:
                 "annual_revenue": [10000000.0],
                 "total_assets": [5000000.0],
                 "default_status": [False],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             },
             collateral_data={

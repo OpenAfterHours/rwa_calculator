@@ -218,7 +218,7 @@ class ExposureClassifier:
         - total_assets (for large financial sector entity threshold)
         - default_status
         - country_code
-        - is_regulated (for FI scalar - unregulated FSE)
+        - apply_fi_scalar (for FI scalar - LFSE/unregulated FSE)
         - is_managed_as_retail (for SME retail treatment)
         """
         cp_schema = counterparties.collect_schema()
@@ -231,7 +231,7 @@ class ExposureClassifier:
             pl.col("annual_revenue").alias("cp_annual_revenue"),
             pl.col("total_assets").alias("cp_total_assets"),
             pl.col("default_status").alias("cp_default_status"),
-            pl.col("is_regulated").alias("cp_is_regulated"),
+            pl.col("apply_fi_scalar").alias("cp_apply_fi_scalar"),
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ]
 
@@ -436,18 +436,10 @@ class ExposureClassifier:
                     (pl.col("is_financial_sector_entity") == True)  # noqa: E712
                     & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
                 ).alias("is_large_financial_sector_entity"),
-                pl.when(
+                (
                     (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                    & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
-                )
-                .then(pl.lit(True))
-                .when(
-                    (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                    & (pl.col("cp_is_regulated") == False)  # noqa: E712
-                )
-                .then(pl.lit(True))
-                .otherwise(pl.lit(False))
-                .alias("requires_fi_scalar"),
+                    & (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
+                ).alias("requires_fi_scalar"),
                 # --- HVCRE flag (depends on sl_type from Phase 2) ---
                 (pl.col("sl_type") == "hvcre").alias("is_hvcre"),
             ]
@@ -553,9 +545,7 @@ class ExposureClassifier:
         # Ensure internal_pd exists (added by hierarchy resolver; may be absent
         # when classifier is invoked directly in tests without full pipeline)
         if "internal_pd" not in set(exposures.collect_schema().names()):
-            exposures = exposures.with_columns(
-                pl.lit(None).cast(pl.Float64).alias("internal_pd")
-            )
+            exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
 
         # Pre-compute all permission booleans (Python-side, not Polars)
         airb_corporate = config.irb_permissions.is_permitted(

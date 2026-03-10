@@ -41,7 +41,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -53,7 +53,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -65,7 +65,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 2 Sovereign - 20% Risk Weight
@@ -78,7 +78,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 3 Sovereign - 50% Risk Weight
@@ -91,7 +91,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 4/5 Sovereign - 100% Risk Weight
@@ -104,7 +104,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CQS 6 Sovereign - 150% Risk Weight
@@ -117,7 +117,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Unrated Sovereign - 100% Risk Weight
@@ -130,7 +130,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": False,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Defaulted Sovereign - for scenario testing
@@ -143,7 +143,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "total_assets": None,
             "default_status": True,
             "sector_code": "84.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
     ]

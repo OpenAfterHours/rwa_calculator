@@ -62,7 +62,7 @@ def _make_minimal_bundle(**overrides) -> RawDataBundle:
             "total_assets": [5_000_000.0],
             "default_status": [False],
             "sector_code": ["6200"],
-            "is_regulated": [False],
+            "apply_fi_scalar": [True],
             "is_managed_as_retail": [False],
         }
     )
@@ -133,7 +133,7 @@ class TestPipelineInputValidation:
                 "total_assets": [5_000_000.0],
                 "default_status": [False],
                 "sector_code": ["6200"],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             }
         )
@@ -164,7 +164,7 @@ class TestPipelineInputValidation:
                 "total_assets": [5_000_000.0],
                 "default_status": [False],
                 "sector_code": ["6200"],
-                "is_regulated": [False],
+                "apply_fi_scalar": [True],
                 "is_managed_as_retail": [False],
             }
         )

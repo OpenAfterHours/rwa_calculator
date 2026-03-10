@@ -160,7 +160,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
 
     # Entity flags - vectorized
     is_fi = inst_mask
-    is_regulated = inst_mask | sov_mask
+    apply_fi_scalar = ~(inst_mask | sov_mask)
     pse_rand = rng.random(n) < 0.3
     is_pse = sov_mask & pse_rand
     ccp_rand = rng.random(n) < 0.05
@@ -181,7 +181,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "default_status": pl.Series(defaults),
                 "sector_code": pl.Series(sector_codes),
                 "is_financial_institution": pl.Series(is_fi),
-                "is_regulated": pl.Series(is_regulated),
+                "apply_fi_scalar": pl.Series(apply_fi_scalar),
                 "is_pse": pl.Series(is_pse),
                 "is_mdb": pl.Series(np.zeros(n, dtype=bool)),
                 "is_international_org": pl.Series(np.zeros(n, dtype=bool)),

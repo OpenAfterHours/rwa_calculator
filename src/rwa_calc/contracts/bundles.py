@@ -51,6 +51,7 @@ class RawDataBundle:
         specialised_lending: Specialised lending metadata (slotting)
         equity_exposures: Equity exposure details
         fx_rates: FX rates for currency conversion (optional)
+        model_permissions: Per-model IRB permissions (optional, overrides org-wide IRBPermissions)
     """
 
     facilities: pl.LazyFrame
@@ -67,6 +68,7 @@ class RawDataBundle:
     specialised_lending: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
     fx_rates: pl.LazyFrame | None = None
+    model_permissions: pl.LazyFrame | None = None
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,7 @@ class ResolvedHierarchyBundle:
         collateral: Collateral with beneficiary hierarchy resolved (optional)
         guarantees: Guarantees with beneficiary hierarchy resolved (optional)
         provisions: Provisions with beneficiary hierarchy resolved (optional)
+        model_permissions: Per-model IRB permissions (optional, passed from RawDataBundle)
         hierarchy_errors: Any errors encountered during resolution
     """
 
@@ -118,6 +121,7 @@ class ResolvedHierarchyBundle:
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
+    model_permissions: pl.LazyFrame | None = None
     hierarchy_errors: list = field(default_factory=list)
 
 

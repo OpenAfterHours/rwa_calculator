@@ -233,50 +233,58 @@ class HierarchyLazyFrame:
         internal_base = ratings.filter(pl.col("rating_type") == "internal")
         if sort_cols:
             internal_base = internal_base.sort(sort_cols, descending=[True] * len(sort_cols))
-        best_internal = internal_base.group_by("counterparty_reference").first().select(
-            [
-                pl.col("counterparty_reference").alias("_int_cp"),
-                *([pl.col("pd").alias("internal_pd")] if "pd" in rating_schema_names else []),
-                *(
-                    [pl.col("rating_value").alias("internal_rating_value")]
-                    if "rating_value" in rating_schema_names
-                    else []
-                ),
-                *(
-                    [pl.col("rating_agency").alias("internal_rating_agency")]
-                    if "rating_agency" in rating_schema_names
-                    else []
-                ),
-            ]
+        best_internal = (
+            internal_base.group_by("counterparty_reference")
+            .first()
+            .select(
+                [
+                    pl.col("counterparty_reference").alias("_int_cp"),
+                    *([pl.col("pd").alias("internal_pd")] if "pd" in rating_schema_names else []),
+                    *(
+                        [pl.col("rating_value").alias("internal_rating_value")]
+                        if "rating_value" in rating_schema_names
+                        else []
+                    ),
+                    *(
+                        [pl.col("rating_agency").alias("internal_rating_agency")]
+                        if "rating_agency" in rating_schema_names
+                        else []
+                    ),
+                ]
+            )
         )
 
         # Best external rating per counterparty
         external_base = ratings.filter(pl.col("rating_type") == "external")
         if sort_cols:
             external_base = external_base.sort(sort_cols, descending=[True] * len(sort_cols))
-        best_external = external_base.group_by("counterparty_reference").first().select(
-            [
-                pl.col("counterparty_reference").alias("_ext_cp"),
-                *([pl.col("cqs").alias("external_cqs")] if "cqs" in rating_schema_names else []),
-                *(
-                    [pl.col("rating_value").alias("external_rating_value")]
-                    if "rating_value" in rating_schema_names
-                    else []
-                ),
-                *(
-                    [pl.col("rating_agency").alias("external_rating_agency")]
-                    if "rating_agency" in rating_schema_names
-                    else []
-                ),
-            ]
+        best_external = (
+            external_base.group_by("counterparty_reference")
+            .first()
+            .select(
+                [
+                    pl.col("counterparty_reference").alias("_ext_cp"),
+                    *(
+                        [pl.col("cqs").alias("external_cqs")]
+                        if "cqs" in rating_schema_names
+                        else []
+                    ),
+                    *(
+                        [pl.col("rating_value").alias("external_rating_value")]
+                        if "rating_value" in rating_schema_names
+                        else []
+                    ),
+                    *(
+                        [pl.col("rating_agency").alias("external_rating_agency")]
+                        if "rating_agency" in rating_schema_names
+                        else []
+                    ),
+                ]
+            )
         )
 
-        result = self._lf.join(
-            best_internal, left_on=ref_col, right_on="_int_cp", how="left"
-        )
-        result = result.join(
-            best_external, left_on=ref_col, right_on="_ext_cp", how="left"
-        )
+        result = self._lf.join(best_internal, left_on=ref_col, right_on="_int_cp", how="left")
+        result = result.join(best_external, left_on=ref_col, right_on="_ext_cp", how="left")
 
         # Derive convenience columns
         int_cols = best_internal.collect_schema().names()
@@ -307,9 +315,7 @@ class HierarchyLazyFrame:
             )
 
             # Parent internal
-            parent_int_cols = [
-                pl.col(c).alias(f"parent_{c}") for c in int_cols if c != "_int_cp"
-            ]
+            parent_int_cols = [pl.col(c).alias(f"parent_{c}") for c in int_cols if c != "_int_cp"]
             if parent_int_cols:
                 parent_internal = best_internal.select(
                     [pl.col("_int_cp").alias("_p_int_cp"), *parent_int_cols]
@@ -322,9 +328,7 @@ class HierarchyLazyFrame:
                 )
 
             # Parent external
-            parent_ext_cols = [
-                pl.col(c).alias(f"parent_{c}") for c in ext_cols if c != "_ext_cp"
-            ]
+            parent_ext_cols = [pl.col(c).alias(f"parent_{c}") for c in ext_cols if c != "_ext_cp"]
             if parent_ext_cols:
                 parent_external = best_external.select(
                     [pl.col("_ext_cp").alias("_p_ext_cp"), *parent_ext_cols]
@@ -341,16 +345,12 @@ class HierarchyLazyFrame:
             for col_name in int_cols:
                 if col_name != "_int_cp":
                     coalesce_pairs.append(
-                        pl.coalesce(pl.col(col_name), pl.col(f"parent_{col_name}")).alias(
-                            col_name
-                        )
+                        pl.coalesce(pl.col(col_name), pl.col(f"parent_{col_name}")).alias(col_name)
                     )
             for col_name in ext_cols:
                 if col_name != "_ext_cp":
                     coalesce_pairs.append(
-                        pl.coalesce(pl.col(col_name), pl.col(f"parent_{col_name}")).alias(
-                            col_name
-                        )
+                        pl.coalesce(pl.col(col_name), pl.col(f"parent_{col_name}")).alias(col_name)
                     )
             if coalesce_pairs:
                 result = result.with_columns(coalesce_pairs)
@@ -366,9 +366,7 @@ class HierarchyLazyFrame:
 
             # Inheritance flags
             has_own_internal = (
-                pl.col("internal_pd").is_not_null()
-                if "internal_pd" in int_cols
-                else pl.lit(False)
+                pl.col("internal_pd").is_not_null() if "internal_pd" in int_cols else pl.lit(False)
             )
             has_own_external = (
                 pl.col("external_cqs").is_not_null()

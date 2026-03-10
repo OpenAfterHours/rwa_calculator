@@ -58,7 +58,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 500_000_000.0,
             "default_status": False,
             "sector_code": "42.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Project Finance - Good (Scenario E2)
@@ -71,7 +71,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 800_000_000.0,
             "default_status": False,
             "sector_code": "35.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Project Finance - Satisfactory
@@ -84,7 +84,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 200_000_000.0,
             "default_status": False,
             "sector_code": "35.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Project Finance - Weak
@@ -97,7 +97,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 100_000_000.0,
             "default_status": False,
             "sector_code": "42.99",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Object Finance - Aircraft
@@ -110,7 +110,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 300_000_000.0,
             "default_status": False,
             "sector_code": "77.35",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Object Finance - Shipping
@@ -123,7 +123,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 150_000_000.0,
             "default_status": False,
             "sector_code": "77.34",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Commodities Finance
@@ -136,7 +136,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 500_000_000.0,
             "default_status": False,
             "sector_code": "46.71",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -148,7 +148,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 200_000_000.0,
             "default_status": False,
             "sector_code": "46.72",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # IPRE - Strong
@@ -161,7 +161,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 400_000_000.0,
             "default_status": False,
             "sector_code": "68.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # IPRE - Satisfactory/Speculative (Scenario E3)
@@ -174,7 +174,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 150_000_000.0,
             "default_status": False,
             "sector_code": "68.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # HVCRE - High Volatility Commercial Real Estate (Scenario E4)
@@ -187,7 +187,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000.0,
             "default_status": False,
             "sector_code": "41.10",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         {
@@ -199,7 +199,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 50_000_000.0,
             "default_status": False,
             "sector_code": "68.10",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # ADC - Acquisition, Development, Construction
@@ -212,7 +212,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 100_000_000.0,
             "default_status": False,
             "sector_code": "41.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # Defaulted Specialised Lending
@@ -225,7 +225,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 30_000_000.0,
             "default_status": True,
             "sector_code": "42.99",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # =============================================================================
@@ -242,7 +242,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 500_000_000.0,
             "default_status": False,
             "sector_code": "42.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-E2: Project Finance - Good (90% RW under CRR, >=2.5yr maturity)
@@ -255,7 +255,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 400_000_000.0,
             "default_status": False,
             "sector_code": "35.11",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-E3: IPRE - Weak (250% RW - punitive)
@@ -268,7 +268,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 100_000_000.0,
             "default_status": False,
             "sector_code": "68.20",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
         # CRR-E4: HVCRE - Strong (95% RW under CRR, >=2.5yr maturity)
@@ -281,7 +281,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000.0,
             "default_status": False,
             "sector_code": "41.10",
-            "is_regulated": True,
+            "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
     ]

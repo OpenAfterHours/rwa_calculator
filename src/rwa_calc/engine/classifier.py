@@ -177,8 +177,17 @@ class ExposureClassifier:
             schema_names,
         )
 
+        # Step 4b: Model-level permission resolution (optional, 1 join + filter)
+        # When model_permissions data is present, resolve per-row AIRB/FIRB permissions.
+        # Otherwise, falls back to org-wide IRBPermissions in _determine_approach_and_finalize.
+        model_permissions = data.model_permissions
+        if model_permissions is not None:
+            classified = self._resolve_model_permissions(classified, model_permissions)
+
         # Step 5: Approach assignment + finalization (1 .with_columns)
-        classified = self._determine_approach_and_finalize(classified, config)
+        classified = self._determine_approach_and_finalize(
+            classified, config, has_model_permissions=model_permissions is not None
+        )
 
         # Step 6: Split by approach (filter/select — no depth added)
         sa_exposures = self._filter_by_approach(classified, ApproachType.SA)
@@ -218,7 +227,7 @@ class ExposureClassifier:
         - total_assets (for large financial sector entity threshold)
         - default_status
         - country_code
-        - is_regulated (for FI scalar - unregulated FSE)
+        - apply_fi_scalar (for FI scalar - LFSE/unregulated FSE)
         - is_managed_as_retail (for SME retail treatment)
         """
         cp_schema = counterparties.collect_schema()
@@ -231,7 +240,7 @@ class ExposureClassifier:
             pl.col("annual_revenue").alias("cp_annual_revenue"),
             pl.col("total_assets").alias("cp_total_assets"),
             pl.col("default_status").alias("cp_default_status"),
-            pl.col("is_regulated").alias("cp_is_regulated"),
+            pl.col("apply_fi_scalar").alias("cp_apply_fi_scalar"),
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ]
 
@@ -436,18 +445,10 @@ class ExposureClassifier:
                     (pl.col("is_financial_sector_entity") == True)  # noqa: E712
                     & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
                 ).alias("is_large_financial_sector_entity"),
-                pl.when(
+                (
                     (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                    & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
-                )
-                .then(pl.lit(True))
-                .when(
-                    (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                    & (pl.col("cp_is_regulated") == False)  # noqa: E712
-                )
-                .then(pl.lit(True))
-                .otherwise(pl.lit(False))
-                .alias("requires_fi_scalar"),
+                    & (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
+                ).alias("requires_fi_scalar"),
                 # --- HVCRE flag (depends on sl_type from Phase 2) ---
                 (pl.col("sl_type") == "hvcre").alias("is_hvcre"),
             ]
@@ -533,6 +534,106 @@ class ExposureClassifier:
         )
 
     # =========================================================================
+    # Phase 4b: Model-level permission resolution (optional)
+    # =========================================================================
+
+    def _resolve_model_permissions(
+        self,
+        exposures: pl.LazyFrame,
+        model_permissions: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """
+        Join exposures with model_permissions to produce per-row permission flags.
+
+        Resolves which IRB approach each exposure is permitted to use based on:
+        - model_id match (exposure's model_id must exist in model_permissions)
+        - exposure_class match
+        - Geography filter: country_codes is null OR cp_country_code is in the list
+        - Book code exclusion: excluded_book_codes is null OR book_code NOT in the list
+
+        Priority: AIRB > FIRB. If a model has both, AIRB wins for exposures that
+        also have modelled LGD; otherwise FIRB is used if the exposure has internal_pd.
+
+        Sets: model_airb_permitted (bool), model_firb_permitted (bool)
+
+        Exposures without a model_id get both flags as False (→ SA fallback).
+        """
+        # Ensure model_id column exists on exposures
+        schema_names = set(exposures.collect_schema().names())
+        if "model_id" not in schema_names:
+            return exposures.with_columns(
+                pl.lit(False).alias("model_airb_permitted"),
+                pl.lit(False).alias("model_firb_permitted"),
+            )
+
+        # Cast model_id to String to handle null-typed columns (all values null)
+        exposures = exposures.with_columns(pl.col("model_id").cast(pl.String))
+
+        # Join exposures with model_permissions on model_id
+        # Each exposure may match multiple permission rows (AIRB + FIRB for same model)
+        joined = exposures.join(
+            model_permissions.select(
+                pl.col("model_id").alias("mp_model_id"),
+                pl.col("exposure_class").alias("mp_exposure_class"),
+                pl.col("approach").alias("mp_approach"),
+                pl.col("country_codes").alias("mp_country_codes"),
+                pl.col("excluded_book_codes").alias("mp_excluded_book_codes"),
+            ),
+            left_on="model_id",
+            right_on="mp_model_id",
+            how="left",
+        )
+
+        # Apply filters: exposure_class match, geography, book code exclusion
+        # A permission row is valid when:
+        # 1. exposure_class matches
+        # 2. geography passes (country_codes is null OR cp_country_code in list)
+        # 3. book code not excluded (excluded_book_codes is null OR book_code NOT in list)
+        exposure_class_match = pl.col("exposure_class") == pl.col("mp_exposure_class")
+
+        geo_passes = pl.col("mp_country_codes").is_null() | (
+            pl.col("mp_country_codes").str.contains(pl.col("cp_country_code"))
+        )
+
+        book_not_excluded = pl.col("mp_excluded_book_codes").is_null() | ~(
+            pl.col("mp_excluded_book_codes").str.contains(pl.col("book_code"))
+        )
+
+        permission_valid = exposure_class_match & geo_passes & book_not_excluded
+
+        # Compute per-row permission flags
+        airb_permitted = (
+            permission_valid & (pl.col("mp_approach") == ApproachType.AIRB.value)
+        ).alias("_airb_match")
+        firb_permitted = (
+            permission_valid & (pl.col("mp_approach") == ApproachType.FIRB.value)
+        ).alias("_firb_match")
+
+        # Add match flags then aggregate: group by all original columns,
+        # take max of the match flags (any valid AIRB/FIRB permission → True)
+        result = joined.with_columns(airb_permitted, firb_permitted)
+
+        # Aggregate back to one row per exposure using .over() to avoid group_by
+        result = result.with_columns(
+            pl.col("_airb_match").max().over("exposure_reference").alias("model_airb_permitted"),
+            pl.col("_firb_match").max().over("exposure_reference").alias("model_firb_permitted"),
+        )
+
+        # Drop the join columns and keep only one row per exposure
+        result = result.select(
+            pl.exclude(
+                "mp_exposure_class",
+                "mp_approach",
+                "mp_country_codes",
+                "mp_excluded_book_codes",
+                "_airb_match",
+                "_firb_match",
+            )
+        ).unique(subset=["exposure_reference"], keep="first")
+
+        return result
+
+    # =========================================================================
     # Phase 5: Approach assignment + finalization (1 .with_columns)
     # =========================================================================
 
@@ -540,6 +641,8 @@ class ExposureClassifier:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        has_model_permissions: bool = False,
     ) -> pl.LazyFrame:
         """
         Determine calculation approach and finalize classification.
@@ -548,61 +651,17 @@ class ExposureClassifier:
         and the classification audit string. Permission checks are inlined
         as pl.lit(bool) to avoid intermediate columns.
 
+        When has_model_permissions=True, uses per-row model_airb_permitted /
+        model_firb_permitted columns (set by _resolve_model_permissions) instead
+        of org-wide pl.lit(bool) permission flags. AIRB additionally requires
+        lgd to be non-null (bank-modelled LGD).
+
         Sets: approach, lgd (cleared for FIRB)
         """
         # Ensure internal_pd exists (added by hierarchy resolver; may be absent
         # when classifier is invoked directly in tests without full pipeline)
         if "internal_pd" not in set(exposures.collect_schema().names()):
-            exposures = exposures.with_columns(
-                pl.lit(None).cast(pl.Float64).alias("internal_pd")
-            )
-
-        # Pre-compute all permission booleans (Python-side, not Polars)
-        airb_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE,
-            ApproachType.AIRB,
-        )
-        airb_corporate_sme = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE_SME,
-            ApproachType.AIRB,
-        )
-        airb_retail_mortgage = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_MORTGAGE,
-            ApproachType.AIRB,
-        )
-        airb_retail_other = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_OTHER,
-            ApproachType.AIRB,
-        )
-        airb_retail_qrre = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_QRRE,
-            ApproachType.AIRB,
-        )
-        airb_institution = config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION,
-            ApproachType.AIRB,
-        )
-        airb_cgcb = config.irb_permissions.is_permitted(
-            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK,
-            ApproachType.AIRB,
-        )
-
-        firb_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE,
-            ApproachType.FIRB,
-        )
-        firb_corporate_sme = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE_SME,
-            ApproachType.FIRB,
-        )
-        firb_institution = config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION,
-            ApproachType.FIRB,
-        )
-        firb_cgcb = config.irb_permissions.is_permitted(
-            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK,
-            ApproachType.FIRB,
-        )
+            exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
 
         sl_airb = self._check_sl_airb_permitted(config)
         sl_slotting = self._check_slotting_permitted(config)
@@ -617,6 +676,27 @@ class ExposureClassifier:
         # IRB requires an internal rating (PD from the firm's IRB model).
         # Counterparties with only external ratings fall through to SA.
         has_internal_rating = pl.col("internal_pd").is_not_null()
+        has_modelled_lgd = pl.col("lgd").is_not_null()
+
+        if has_model_permissions:
+            # --- Model-level permissions: per-row flags from _resolve_model_permissions ---
+            # model_airb_permitted / model_firb_permitted are boolean columns
+            # already filtered by exposure_class, geography, and book code.
+            # AIRB additionally requires modelled LGD (bank-estimated LGD).
+            airb_permitted_expr = (
+                pl.col("model_airb_permitted") & has_internal_rating & has_modelled_lgd
+            )
+            firb_permitted_expr = pl.col("model_firb_permitted") & has_internal_rating
+            firb_clear_expr = (
+                pl.col("model_firb_permitted")
+                & has_internal_rating
+                & ~(pl.col("model_airb_permitted") & has_modelled_lgd)
+            )
+        else:
+            # --- Org-wide permissions: pre-compute booleans Python-side ---
+            airb_permitted_expr, firb_permitted_expr, firb_clear_expr = (
+                self._build_orgwide_permission_exprs(config, has_internal_rating)
+            )
 
         # --- Approach expression ---
         approach_expr = (
@@ -634,114 +714,21 @@ class ExposureClassifier:
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_slotting
             )
             .then(pl.lit(ApproachType.SLOTTING.value))
-            # A-IRB for retail
-            .when(
-                (pl.col("exposure_class") == ExposureClass.RETAIL_MORTGAGE.value)
-                & pl.lit(airb_retail_mortgage)
-                & has_internal_rating
-            )
+            # A-IRB (model or org-wide)
+            .when(airb_permitted_expr)
             .then(pl.lit(ApproachType.AIRB.value))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
-                & pl.lit(airb_retail_other)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.AIRB.value))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.RETAIL_QRRE.value)
-                & pl.lit(airb_retail_qrre)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.AIRB.value))
-            # A-IRB for corporate
-            .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
-                & pl.lit(airb_corporate)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.AIRB.value))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
-                & pl.lit(airb_corporate_sme)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.AIRB.value))
-            # A-IRB for institution/CGCB
-            .when(
-                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
-                & pl.lit(airb_institution)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.AIRB.value))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-                & pl.lit(airb_cgcb)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.AIRB.value))
-            # F-IRB for corporate/institution/CGCB
-            .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
-                & pl.lit(firb_corporate)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.FIRB.value))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
-                & pl.lit(firb_corporate_sme)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.FIRB.value))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
-                & pl.lit(firb_institution)
-                & has_internal_rating
-            )
-            .then(pl.lit(ApproachType.FIRB.value))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-                & pl.lit(firb_cgcb)
-                & has_internal_rating
-            )
+            # F-IRB (model or org-wide)
+            .when(firb_permitted_expr)
             .then(pl.lit(ApproachType.FIRB.value))
             .otherwise(pl.lit(ApproachType.SA.value))
             .alias("approach")
         )
 
-        # --- FIRB LGD clearing condition (inlined, not referencing approach column) ---
-        # Classes eligible for FIRB: corporate, corporate_sme, institution, cgcb
-        # Clear LGD when FIRB permitted AND NOT AIRB permitted AND has internal rating
-        firb_clear_condition = (
-            (
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
-                & pl.lit(firb_corporate)
-                & pl.lit(not airb_corporate)
-                & has_internal_rating
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
-                & pl.lit(firb_corporate_sme)
-                & pl.lit(not airb_corporate_sme)
-                & has_internal_rating
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
-                & pl.lit(firb_institution)
-                & pl.lit(not airb_institution)
-                & has_internal_rating
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-                & pl.lit(firb_cgcb)
-                & pl.lit(not airb_cgcb)
-                & has_internal_rating
-            )
-        )
-        # Also clear for managed-as-retail-without-LGD going to SA (lgd already null)
-        # and we must NOT clear for reclassified retail exposures
-
+        # --- FIRB LGD clearing ---
+        # Clear LGD when FIRB approach is chosen (FIRB uses regulatory supervisory LGD).
+        # Must NOT clear for reclassified retail exposures.
         lgd_expr = (
-            pl.when(firb_clear_condition & ~pl.col("reclassified_to_retail"))
+            pl.when(firb_clear_expr & ~pl.col("reclassified_to_retail"))
             .then(pl.lit(None).cast(pl.Float64))
             .otherwise(pl.col("lgd"))
             .alias("lgd")
@@ -753,6 +740,122 @@ class ExposureClassifier:
                 lgd_expr,
             ]
         )
+
+    @staticmethod
+    def _build_orgwide_permission_exprs(
+        config: CalculationConfig,
+        has_internal_rating: pl.Expr,
+    ) -> tuple[pl.Expr, pl.Expr, pl.Expr]:
+        """Build org-wide permission expressions (backward compat when no model_permissions).
+
+        Returns (airb_permitted_expr, firb_permitted_expr, firb_clear_expr).
+        """
+        airb_corporate = config.irb_permissions.is_permitted(
+            ExposureClass.CORPORATE, ApproachType.AIRB
+        )
+        airb_corporate_sme = config.irb_permissions.is_permitted(
+            ExposureClass.CORPORATE_SME, ApproachType.AIRB
+        )
+        airb_retail_mortgage = config.irb_permissions.is_permitted(
+            ExposureClass.RETAIL_MORTGAGE, ApproachType.AIRB
+        )
+        airb_retail_other = config.irb_permissions.is_permitted(
+            ExposureClass.RETAIL_OTHER, ApproachType.AIRB
+        )
+        airb_retail_qrre = config.irb_permissions.is_permitted(
+            ExposureClass.RETAIL_QRRE, ApproachType.AIRB
+        )
+        airb_institution = config.irb_permissions.is_permitted(
+            ExposureClass.INSTITUTION, ApproachType.AIRB
+        )
+        airb_cgcb = config.irb_permissions.is_permitted(
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.AIRB
+        )
+
+        firb_corporate = config.irb_permissions.is_permitted(
+            ExposureClass.CORPORATE, ApproachType.FIRB
+        )
+        firb_corporate_sme = config.irb_permissions.is_permitted(
+            ExposureClass.CORPORATE_SME, ApproachType.FIRB
+        )
+        firb_institution = config.irb_permissions.is_permitted(
+            ExposureClass.INSTITUTION, ApproachType.FIRB
+        )
+        firb_cgcb = config.irb_permissions.is_permitted(
+            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.FIRB
+        )
+
+        # A-IRB expression: matches per-class permission
+        airb_expr = (
+            (
+                (pl.col("exposure_class") == ExposureClass.RETAIL_MORTGAGE.value)
+                & pl.lit(airb_retail_mortgage)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+                & pl.lit(airb_retail_other)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.RETAIL_QRRE.value)
+                & pl.lit(airb_retail_qrre)
+            )
+            | ((pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(airb_corporate))
+            | (
+                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
+                & pl.lit(airb_corporate_sme)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
+                & pl.lit(airb_institution)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+                & pl.lit(airb_cgcb)
+            )
+        ) & has_internal_rating
+
+        # F-IRB expression: matches per-class permission (retail not eligible for FIRB)
+        firb_expr = (
+            ((pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(firb_corporate))
+            | (
+                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
+                & pl.lit(firb_corporate_sme)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
+                & pl.lit(firb_institution)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+                & pl.lit(firb_cgcb)
+            )
+        ) & has_internal_rating
+
+        # FIRB LGD clearing: FIRB permitted AND NOT AIRB permitted
+        firb_clear = (
+            (
+                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
+                & pl.lit(firb_corporate)
+                & pl.lit(not airb_corporate)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
+                & pl.lit(firb_corporate_sme)
+                & pl.lit(not airb_corporate_sme)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
+                & pl.lit(firb_institution)
+                & pl.lit(not airb_institution)
+            )
+            | (
+                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+                & pl.lit(firb_cgcb)
+                & pl.lit(not airb_cgcb)
+            )
+        ) & has_internal_rating
+
+        return airb_expr, firb_expr, firb_clear
 
     # =========================================================================
     # Expression builders (static helpers returning pl.Expr)

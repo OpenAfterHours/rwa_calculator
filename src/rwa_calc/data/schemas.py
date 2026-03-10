@@ -72,6 +72,7 @@ FACILITY_SCHEMA = {
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
 LOAN_SCHEMA = {
@@ -90,6 +91,7 @@ LOAN_SCHEMA = {
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
     "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
+    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -111,6 +113,7 @@ CONTINGENTS_SCHEMA = {
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
+    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
 COUNTERPARTY_SCHEMA = {
@@ -150,7 +153,7 @@ COUNTERPARTY_SCHEMA = {
     "default_status": pl.Boolean,
     "sector_code": pl.String,  # Based on SIC
     # Retained boolean flags - orthogonal to entity_type classification
-    "is_regulated": pl.Boolean,  # For FI scalar: unregulated FSE gets 1.25x correlation (CRR Art. 153(2))
+    "apply_fi_scalar": pl.Boolean,  # 1.25x IRB correlation for LFSE/unregulated FSE (CRR Art. 153(2))
     "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
     "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)
@@ -365,6 +368,19 @@ CORRELATION_PARAMETER_SCHEMA = {
 # =============================================================================
 # COLUMN VALUE CONSTRAINTS
 # =============================================================================
+# MODEL PERMISSIONS SCHEMA
+# =============================================================================
+
+MODEL_PERMISSIONS_SCHEMA = {
+    "model_id": pl.String,  # Unique model identifier (e.g., "UK_CORP_PD_01")
+    "exposure_class": pl.String,  # ExposureClass value this permission covers
+    "approach": pl.String,  # "foundation_irb" or "advanced_irb"
+    "country_codes": pl.String,  # Comma-separated ISO codes, null = all geographies
+    "excluded_book_codes": pl.String,  # Comma-separated book codes to exclude, null = none
+}
+
+
+# =============================================================================
 # Valid value sets for categorical input columns.
 # Used by validate_bundle_values() to catch invalid values at input time.
 
@@ -440,6 +456,8 @@ VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 
+VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb"}
+
 # Registry: maps table_name -> {column_name -> valid_values_set}
 # Used by validate_bundle_values() for input validation.
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
@@ -482,6 +500,9 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "facility_mappings": {
         "child_type": VALID_CHILD_TYPES,
+    },
+    "model_permissions": {
+        "approach": VALID_MODEL_PERMISSION_APPROACHES,
     },
 }
 
@@ -750,6 +771,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "counterparty_reference": pl.String,  # Links to counterparty
     "book_code": pl.String,  # Portfolio/book classification
     "currency": pl.String,  # Exposure currency
+    "model_id": pl.String,  # IRB model identifier (for model-level permission audit trail)
     "basel_version": pl.String,  # "3.0" or "3.1"
     # -------------------------------------------------------------------------
     # COUNTERPARTY HIERARCHY (Rating Inheritance)

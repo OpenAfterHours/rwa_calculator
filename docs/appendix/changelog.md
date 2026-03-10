@@ -46,6 +46,23 @@ Regulatory reporting templates for CRR firms following EBA/PRA COREP structure (
 - `CalculationResponse.to_corep()` convenience method
 - 48 unit tests + 4 conditional (xlsxwriter)
 
+#### Model-Level IRB Permissions
+Per-model IRB approach gating replaces the org-wide `IRBPermissions` config when a `model_permissions` input file is provided:
+
+- **New schema**: `MODEL_PERMISSIONS_SCHEMA` with `model_id`, `exposure_class`, `approach`, `country_codes`, `excluded_book_codes`
+- **New column**: `model_id` on `FACILITY_SCHEMA`, `LOAN_SCHEMA`, `CONTINGENTS_SCHEMA` — links exposures to their IRB model
+- **Classifier**: `_resolve_model_permissions()` joins exposures with model permissions, filters by geography and book code, gates approach on both permission and data availability (AIRB requires `internal_pd` + `lgd`; FIRB requires only `internal_pd`)
+- **Backward compatible**: When no `model_permissions` file is present, org-wide `IRBPermissions` fallback applies
+- **Validation**: `model_permissions` included in `validate_raw_data_bundle()` and `validate_bundle_values()` for schema and value validation
+- 10 unit tests covering AIRB/FIRB gating, geography filters, book code exclusions, and backward compatibility
+
+#### Rename `is_regulated` → `apply_fi_scalar`
+Simplified FI scalar control on `COUNTERPARTY_SCHEMA`:
+
+- **Schema**: `is_regulated` renamed to `apply_fi_scalar` — direct user-controlled flag replacing the intermediate boolean
+- **Classifier**: `requires_fi_scalar` now derives from `is_financial_sector_entity AND cp_apply_fi_scalar` (simpler than the previous two-condition inference from `is_regulated`)
+- **Documentation**: All references updated across input schemas, architecture, and classification docs
+
 ### Fixed
 - Benchmark data generators now include all schema columns (`is_buy_to_let` for loans/facilities, `interest` for loans, `bs_type` for contingents, `pledge_percentage` for collateral, `is_qrre_transactor` for facilities)
 - Benchmark tests updated for current API: `_unify_exposures` signature (added `facilities` arg), `CRMProcessor.get_crm_adjusted_bundle` (replaces removed `process` method)

@@ -245,7 +245,7 @@ Step 5a: _apply_infrastructure_classification()
 Step 5b: _apply_fi_scalar_classification()
         Determine if FI scalar (1.25x correlation) applies:
         - Large FSE: total_assets >= EUR 70bn
-        - Unregulated FSE: is_regulated = False
+        - Financial sector entity with apply_fi_scalar = True
 
 Step 6: _determine_approach()
         Assign SA/FIRB/AIRB/SLOTTING based on IRB permissions
@@ -277,7 +277,7 @@ FINANCIAL_SECTOR_ENTITY_TYPES = {
 
 **FI Scalar triggers 1.25x correlation multiplier when:**
 - `is_large_financial_sector_entity`: total_assets >= EUR 70bn, OR
-- `is_financial_sector_entity` AND `is_regulated = False`
+- `is_financial_sector_entity` AND `apply_fi_scalar = True`
 
 ### Key Features
 

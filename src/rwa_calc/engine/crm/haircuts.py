@@ -365,27 +365,19 @@ class HaircutCalculator:
             return (
                 # CQS 1 (AAA to AA-) — CRE22.52
                 pl.when(
-                    corp_types
-                    & (pl.col("issuer_cqs") == 1)
-                    & (pl.col("maturity_band") == "0_1y")
+                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "0_1y")
                 )
                 .then(pl.lit(0.01))
                 .when(
-                    corp_types
-                    & (pl.col("issuer_cqs") == 1)
-                    & (pl.col("maturity_band") == "1_3y")
+                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "1_3y")
                 )
                 .then(pl.lit(0.04))
                 .when(
-                    corp_types
-                    & (pl.col("issuer_cqs") == 1)
-                    & (pl.col("maturity_band") == "3_5y")
+                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "3_5y")
                 )
                 .then(pl.lit(0.06))
                 .when(
-                    corp_types
-                    & (pl.col("issuer_cqs") == 1)
-                    & (pl.col("maturity_band") == "5_10y")
+                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "5_10y")
                 )
                 .then(pl.lit(0.10))
                 .when(
@@ -429,17 +421,9 @@ class HaircutCalculator:
             )
         return (
             # CQS 1 (AAA to AA-) — CRR Art. 224 Table 1
-            pl.when(
-                corp_types
-                & (pl.col("issuer_cqs") == 1)
-                & (pl.col("maturity_band") == "0_1y")
-            )
+            pl.when(corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "0_1y"))
             .then(pl.lit(0.01))
-            .when(
-                corp_types
-                & (pl.col("issuer_cqs") == 1)
-                & (pl.col("maturity_band") == "1_5y")
-            )
+            .when(corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "1_5y"))
             .then(pl.lit(0.04))
             .when(corp_types & (pl.col("issuer_cqs") == 1))
             .then(pl.lit(0.08))

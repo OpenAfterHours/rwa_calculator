@@ -17,6 +17,7 @@ This page documents the authoritative schemas for all input data files required 
 | [FX Rates](#fx-rates-schema) | `fx_rates/fx_rates.parquet` | No | Currency conversion rates |
 | [Specialised Lending](#specialised-lending-schema) | N/A | No | Slotting approach data |
 | [Equity Exposure](#equity-exposure-schema) | N/A | No | Equity holdings |
+| [Model Permissions](#model-permissions-schema) | `config/model_permissions.parquet` | No | Per-model IRB approach permissions |
 
 **Mapping Files:**
 
@@ -44,7 +45,7 @@ This page documents the authoritative schemas for all input data files required 
 | `total_assets` | `Float64` | No | Total assets in GBP (for large FSE threshold - EUR 70bn per CRR Art. 4(1)(146)) |
 | `default_status` | `Boolean` | No | Whether counterparty is in default |
 | `sector_code` | `String` | No | Industry sector code (SIC-based) |
-| `is_regulated` | `Boolean` | No | Prudentially regulated (affects FI scalar - CRR Art. 153(2)) |
+| `apply_fi_scalar` | `Boolean` | No | User flag: True = apply 1.25x FI correlation scalar (CRR Art. 153(2)) |
 | `is_managed_as_retail` | `Boolean` | No | SME managed on pooled retail basis (75% RW per CRR Art. 123) |
 | `scra_grade` | `String` | No | SCRA grade for unrated institutions: `"A"`, `"B"`, `"C"` (Basel 3.1 CRE20.16-21) |
 | `is_investment_grade` | `Boolean` | No | Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47) |
@@ -95,7 +96,7 @@ For certain entity types, the regulatory treatment differs between SA and IRB ap
 
 | Column | Purpose | When Used |
 |--------|---------|-----------|
-| `is_regulated` | Determines if FI scalar (1.25x correlation) applies | Unregulated financial sector entities get FI scalar under IRB (CRR Art. 153(2)) |
+| `apply_fi_scalar` | Directly controls whether FI scalar (1.25x correlation) applies | Financial sector entities with this flag set to True get FI scalar under IRB (CRR Art. 153(2)) |
 | `is_managed_as_retail` | SME managed on pooled retail basis | Can use 75% RW under SA (CRR Art. 123) |
 
 ### Financial Sector Entity (FSE) Determination
@@ -111,7 +112,7 @@ The following entity types are classified as Financial Sector Entities for FI sc
 
 **FI Scalar applies when (CRR Art. 153(2)):**
 1. Large FSE: `total_assets >= EUR 70bn`, OR
-2. Unregulated FSE: `is_regulated = False`
+2. Financial sector entity with `apply_fi_scalar = True`
 
 **Example:**
 
@@ -127,7 +128,7 @@ counterparties = pl.DataFrame({
     "total_assets": [30_000_000.0, 600_000_000.0, None, 80_000_000_000.0, 500_000_000.0],
     "default_status": [False, False, False, False, False],
     "sector_code": ["62.01", "28.11", None, "64.19", None],
-    "is_regulated": [False, False, True, True, True],
+    "apply_fi_scalar": [False, False, False, False, False],
     "is_managed_as_retail": [False, False, False, False, False],
 })
 ```
@@ -173,6 +174,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
+| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Null defaults to SA. |
 
 **Valid `product_type` values:**
 
@@ -261,6 +263,7 @@ facilities = pl.DataFrame({
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
+| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Null defaults to SA. |
 
 **Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
 
@@ -312,6 +315,7 @@ loans = pl.DataFrame({
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
 | `bs_type` | `String` | No | `"ONB"` (on-balance-sheet / drawn) or `"OFB"` (off-balance-sheet / undrawn). Default: `"OFB"` |
+| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Null defaults to SA. |
 
 **Example:**
 
@@ -773,6 +777,49 @@ org_mapping = pl.DataFrame({
 | `child_counterparty_reference` | `String` | Yes | Member counterparty reference |
 
 Exposures are aggregated to the group level for retail eligibility (threshold: EUR 1m / GBP 880k).
+
+---
+
+## Model Permissions Schema
+
+**Purpose:** Defines per-model IRB approach permissions, enabling granular control over which exposures can use FIRB or AIRB. When provided, model permissions take precedence over org-wide `IRBPermissions` config. When absent, the calculator falls back to org-wide permissions.
+
+**Why model-level permissions matter:** Banks typically have multiple IRB models, each approved for specific exposure classes, geographies, and portfolios. This schema allows the calculator to resolve the correct approach per-exposure based on the model it belongs to, rather than applying a single org-wide permission.
+
+**File:** `config/model_permissions.parquet`
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `model_id` | `String` | Yes | Unique model identifier (e.g., `"UK_CORP_PD_01"`) — referenced by `model_id` on facilities/loans/contingents |
+| `exposure_class` | `String` | Yes | ExposureClass value this permission covers (e.g., `"corporate"`, `"institution"`) |
+| `approach` | `String` | Yes | Approved approach: `"foundation_irb"` or `"advanced_irb"` |
+| `country_codes` | `String` | No | Comma-separated ISO country codes where this permission applies. Null = all geographies. |
+| `excluded_book_codes` | `String` | No | Comma-separated book codes excluded from this permission. Null = no exclusions. |
+
+**Approach determination logic:**
+
+| Condition | Result |
+|-----------|--------|
+| AIRB permission + `internal_pd` + modelled `lgd` | **A-IRB** |
+| AIRB permission + `internal_pd` + no `lgd` | **SA** (falls back unless FIRB permission also exists) |
+| FIRB permission + `internal_pd` + no `lgd` | **F-IRB** (uses regulatory LGD floors) |
+| Both AIRB + FIRB permissions + `internal_pd` + `lgd` | **A-IRB** (higher approach wins) |
+| Both AIRB + FIRB permissions + `internal_pd` + no `lgd` | **F-IRB** (fallback) |
+| No `model_id` on exposure | **SA** (default) |
+
+**Example:**
+
+```python
+import polars as pl
+
+model_permissions = pl.DataFrame({
+    "model_id": ["UK_CORP_PD_01", "UK_CORP_PD_01", "EU_INST_01"],
+    "exposure_class": ["corporate", "corporate_sme", "institution"],
+    "approach": ["advanced_irb", "foundation_irb", "advanced_irb"],
+    "country_codes": ["GB", "GB,IE", None],  # None = all geographies
+    "excluded_book_codes": [None, "LEGACY_BOOK", None],
+})
+```
 
 ---
 

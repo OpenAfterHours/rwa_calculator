@@ -223,6 +223,7 @@ def validate_raw_data_bundle(
         "facility_mappings": bundle.facility_mappings,
         "org_mappings": bundle.org_mappings,
         "lending_mappings": bundle.lending_mappings,
+        "model_permissions": bundle.model_permissions,
     }
 
     for name, lf in frame_mapping.items():
@@ -636,6 +637,7 @@ def validate_bundle_values(
         "specialised_lending": bundle.specialised_lending,
         "equity_exposures": bundle.equity_exposures,
         "facility_mappings": bundle.facility_mappings,
+        "model_permissions": bundle.model_permissions,
     }
 
     all_errors: list[CalculationError] = []

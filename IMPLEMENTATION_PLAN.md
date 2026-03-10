@@ -110,10 +110,14 @@ All core steps implemented and verified. 1925 tests pass, ruff clean on all chan
 - [x] `test_no_model_permissions_uses_orgwide` — backward compat test
 
 #### Remaining (lower priority, can be done separately)
-- [ ] Step 5: API documentation updates
-- [ ] Step 6: Input validation (model_id references, country_codes format)
-- [ ] Step 8: Fixture generation for acceptance tests
-- [ ] Step 9: User guide documentation and changelog
+- [ ] Step 5: API documentation updates (document model_permissions in API layer — `models.py`, `service.py`)
+- [x] Step 6: Input validation — `model_permissions` added to `validate_raw_data_bundle()` and `validate_bundle_values()` frame mappings. Approach column values validated via `COLUMN_VALUE_CONSTRAINTS`. Referential integrity (model_id cross-check) deferred.
+- [ ] Step 8: Fixture generation for acceptance tests (add model_permissions fixtures, model_id to exposure generators)
+- [x] Step 9: User guide documentation and changelog — changelog entries added for model-level permissions and FI scalar rename; `is_regulated` references updated to `apply_fi_scalar` in 4 doc files; model_permissions schema documented in input-schemas.md
+
+#### Bug fixes applied
+- [x] Fixed mypy error in `loader.py:173` — `get_p()` return type corrected from `str | None` to `Path | None`
+- [x] Fixed stale `is_regulated` references in `docs/data-model/input-schemas.md`, `docs/features/classification.md`, `docs/architecture/data-flow.md`, `docs/architecture/components.md`
 
 ---
 

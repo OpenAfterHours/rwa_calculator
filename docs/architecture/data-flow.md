@@ -73,7 +73,7 @@ COUNTERPARTY_SCHEMA = {
     "total_assets": pl.Float64,           # For large FSE threshold (EUR 70bn)
     "default_status": pl.Boolean,         # Default indicator
     "sector_code": pl.String,             # Based on SIC
-    "is_regulated": pl.Boolean,           # For FI scalar: unregulated FSE gets 1.25x correlation
+    "apply_fi_scalar": pl.Boolean,        # User flag: True = apply 1.25x FI correlation scalar
     "is_managed_as_retail": pl.Boolean,   # SME managed on pooled retail basis - 75% RW
 }
 ```

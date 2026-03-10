@@ -133,7 +133,7 @@ Joins exposure data with counterparty attributes needed for classification:
 - `annual_revenue` - For SME check
 - `total_assets` - For large FSE threshold
 - `default_status` - For default identification
-- `is_regulated` - For FI scalar determination
+- `apply_fi_scalar` - For FI scalar determination
 - `is_managed_as_retail` - For SME retail treatment
 
 ### Step 2: Classify Exposure Class

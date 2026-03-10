@@ -170,7 +170,7 @@ class DataSourceConfig:
         """
         reg = registry or DataSourceRegistry()
 
-        def get_p(id_str: str) -> str | None:
+        def get_p(id_str: str) -> Path | None:
             source = reg.get_by_id(id_str)
             return source.get_path(extension) if source else None
 

@@ -59,6 +59,7 @@ class Facility:
     is_qrre_transactor: bool | None = (
         None  # CRR Art. 147(5), CRE30.55: True if borrower repays in full each period
     )
+    model_id: str | None = None  # IRB model identifier — links to model_permissions
 
     def to_dict(self) -> dict:
         return {
@@ -79,6 +80,7 @@ class Facility:
             "risk_type": self.risk_type,
             "ccf_modelled": self.ccf_modelled,
             "is_short_term_trade_lc": self.is_short_term_trade_lc,
+            "model_id": self.model_id,
         }
 
 

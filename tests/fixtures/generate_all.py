@@ -56,6 +56,7 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ("Guarantees", "guarantee", _generate_guarantees),
         ("Provisions", "provision", _generate_provisions),
         ("FX Rates", "fx_rates", _generate_fx_rates),
+        ("Model Permissions", "model_permissions", _generate_model_permissions),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -221,6 +222,19 @@ def _generate_fx_rates(output_dir: Path) -> list[tuple[str, int]]:
         df = create_fx_rates()
         save_fx_rates(output_dir)
         return [("fx_rates.parquet", len(df))]
+    finally:
+        sys.path.remove(str(output_dir))
+
+
+def _generate_model_permissions(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate model permissions fixtures."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from model_permissions import create_model_permissions, save_model_permissions
+
+        df = create_model_permissions()
+        save_model_permissions(output_dir)
+        return [("model_permissions.parquet", len(df))]
     finally:
         sys.path.remove(str(output_dir))
 
@@ -418,6 +432,36 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
             errors.append(f"Provisions reference missing loans: {missing_prov_loans}")
         else:
             print("[OK] All provision loan references valid")
+
+        # Check 12: Model ID references (exposures → model_permissions)
+        model_perms_path = fixtures_dir / "model_permissions" / "model_permissions.parquet"
+        if model_perms_path.exists():
+            model_perms = pl.read_parquet(model_perms_path)
+            valid_model_ids = set(model_perms["model_id"].to_list())
+
+            # Collect non-null model_ids from all exposure types
+            exposure_model_ids: set[str] = set()
+            for exp_df, id_col in [
+                (facilities, "model_id"),
+                (loans, "model_id"),
+                (contingents, "model_id"),
+            ]:
+                if id_col in exp_df.columns:
+                    non_null = exp_df.filter(pl.col(id_col).is_not_null())[id_col].to_list()
+                    exposure_model_ids.update(non_null)
+
+            missing_model_ids = exposure_model_ids - valid_model_ids
+            if missing_model_ids:
+                errors.append(
+                    f"Exposures reference missing model_ids: {missing_model_ids}"
+                )
+            else:
+                print(
+                    f"[OK] All exposure model_id references valid "
+                    f"({len(exposure_model_ids)} unique model_ids)"
+                )
+        else:
+            print("[--] Model permissions file not found, skipping model_id check")
 
     except Exception as e:
         errors.append(f"Error during integrity check: {e}")

@@ -54,13 +54,22 @@ class CalculationRequest(BaseRequest):
         framework: Regulatory framework ("CRR" or "BASEL_3_1")
         reporting_date: As-of date for the calculation
         base_currency: Currency for reporting (default GBP)
-        irb_approach: IRB approach selection
+        irb_approach: IRB approach selection (org-wide fallback)
             - "sa_only": Standardised only, no IRB
             - "firb": Foundation IRB where permitted
             - "airb": Advanced IRB where permitted
             - "full_irb": Both FIRB and AIRB permitted (AIRB preferred)
         data_format: Format of input files ("parquet" or "csv")
         eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
+
+    IRB Permissions Precedence:
+        Model-level permissions (from ``model_permissions.parquet`` in data_path)
+        take precedence over the org-wide ``irb_approach`` setting. When
+        ``model_permissions`` is present in the data directory, exposures with a
+        ``model_id`` are matched to their model's approved approach. Exposures
+        without a ``model_id`` (or without a matching permission) fall back to SA.
+        When no ``model_permissions`` file exists, the ``irb_approach`` parameter
+        controls permissions org-wide.
     """
 
     framework: Literal["CRR", "BASEL_3_1"]

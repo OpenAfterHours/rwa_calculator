@@ -59,6 +59,7 @@ class Contingent:
     is_short_term_trade_lc: bool | None = (
         None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
     )
+    model_id: str | None = None  # IRB model identifier — links to model_permissions
 
     def to_dict(self) -> dict:
         return {
@@ -76,6 +77,7 @@ class Contingent:
             "risk_type": self.risk_type,
             "ccf_modelled": self.ccf_modelled,
             "is_short_term_trade_lc": self.is_short_term_trade_lc,
+            "model_id": self.model_id,
         }
 
 

@@ -40,6 +40,19 @@ class RWAService:
     for UI integration. Handles configuration setup, data loading,
     and result formatting.
 
+    IRB Permissions:
+        Two permission modes are supported, with model-level taking precedence:
+
+        1. **Model-level** (data-driven): Place a ``model_permissions.parquet``
+           file in the data directory. Each row grants IRB approval for a model_id
+           + exposure_class, optionally scoped by geography and book code
+           exclusions. Exposures link via ``model_id`` on the facility/loan/
+           contingent. The classifier joins permissions per-exposure and gates
+           on data availability (internal_pd for FIRB, internal_pd + lgd for AIRB).
+
+        2. **Org-wide** (config-driven): Set ``irb_approach`` on the request.
+           Used as fallback when no ``model_permissions`` file is present.
+
     Usage:
         from rwa_calc.api import RWAService, CalculationRequest
         from datetime import date
@@ -201,6 +214,12 @@ class RWAService:
     def _create_config(self, request: CalculationRequest) -> CalculationConfig:
         """
         Create CalculationConfig from request parameters.
+
+        The ``irb_approach`` on the request maps to org-wide IRBPermissions.
+        These are used as fallback when no ``model_permissions`` file exists
+        in the data directory. When model_permissions is present, the
+        classifier resolves permissions per-exposure via model_id join,
+        ignoring the org-wide setting for matched exposures.
 
         Args:
             request: CalculationRequest with parameters

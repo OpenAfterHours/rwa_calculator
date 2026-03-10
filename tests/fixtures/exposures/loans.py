@@ -61,6 +61,7 @@ class Loan:
     seniority: str  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     has_netting_agreement: bool = False  # CRR Art. 195: on-balance sheet netting
     netting_facility_reference: str | None = None  # Facility the netting agreement applies to
+    model_id: str | None = None  # IRB model identifier — links to model_permissions
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +79,7 @@ class Loan:
             "seniority": self.seniority,
             "has_netting_agreement": self.has_netting_agreement,
             "netting_facility_reference": self.netting_facility_reference,
+            "model_id": self.model_id,
         }
 
 

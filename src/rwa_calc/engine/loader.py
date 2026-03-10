@@ -39,6 +39,7 @@ from rwa_calc.data.schemas import (
     GUARANTEE_SCHEMA,
     LENDING_MAPPING_SCHEMA,
     LOAN_SCHEMA,
+    MODEL_PERMISSIONS_SCHEMA,
     ORG_MAPPING_SCHEMA,
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
@@ -134,6 +135,7 @@ class DataSourceConfig:
         specialised_lending_file: Optional path to specialised lending data
         equity_exposures_file: Optional path to equity exposure data
         fx_rates_file: Optional path to FX rates data for currency conversion
+        model_permissions_file: Optional path to per-model IRB permissions
     """
 
     counterparty_files: list[Path] = field(default_factory=list)
@@ -150,6 +152,7 @@ class DataSourceConfig:
     specialised_lending_file: Path | None = None
     equity_exposures_file: Path | None = None
     fx_rates_file: Path | None = None
+    model_permissions_file: Path | None = None
 
     @classmethod
     def from_registry(
@@ -190,6 +193,7 @@ class DataSourceConfig:
             specialised_lending_file=get_p("specialised_lending"),
             equity_exposures_file=get_p("equity"),
             fx_rates_file=get_p("fx_rates"),
+            model_permissions_file=get_p("model_permissions"),
         )
 
 
@@ -240,6 +244,7 @@ class ParquetLoader:
         "specialised_lending_file": SPECIALISED_LENDING_SCHEMA,
         "equity_exposures_file": EQUITY_EXPOSURE_SCHEMA,
         "fx_rates_file": FX_RATES_SCHEMA,
+        "model_permissions_file": MODEL_PERMISSIONS_SCHEMA,
     }
 
     def __init__(
@@ -413,6 +418,9 @@ class ParquetLoader:
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
             ),
             fx_rates=self._load_parquet_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
+            model_permissions=self._load_parquet_optional(
+                self.config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA
+            ),
         )
 
 
@@ -607,6 +615,9 @@ class CSVLoader:
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
             ),
             fx_rates=self._load_csv_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
+            model_permissions=self._load_csv_optional(
+                self.config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA
+            ),
         )
 
 

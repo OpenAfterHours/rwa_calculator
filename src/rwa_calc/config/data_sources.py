@@ -157,6 +157,13 @@ DATA_SOURCES = [
         requirement=RequirementLevel.OPTIONAL,
         description="Foreign exchange rates for currency conversion",
     ),
+    # Configuration Data
+    DataSourceFile(
+        id="model_permissions",
+        relative_path=Path("config/model_permissions"),
+        requirement=RequirementLevel.OPTIONAL,
+        description="Per-model IRB permissions (overrides org-wide IRBPermissions when present)",
+    ),
 ]
 
 

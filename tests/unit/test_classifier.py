@@ -263,6 +263,7 @@ def create_resolved_bundle(
     counterparties: pl.LazyFrame,
     residential_collateral_value: float = 0.0,
     lending_group_adjusted_exposure: float | None = None,
+    model_permissions: pl.LazyFrame | None = None,
 ) -> ResolvedHierarchyBundle:
     """Helper to create a ResolvedHierarchyBundle for testing.
 
@@ -272,6 +273,7 @@ def create_resolved_bundle(
         residential_collateral_value: Optional residential collateral value per exposure
         lending_group_adjusted_exposure: Optional adjusted exposure for lending group
             (defaults to lending_group_total_exposure if not specified)
+        model_permissions: Optional model-level IRB permissions LazyFrame
     """
     # Add hierarchy columns to counterparties
     enriched_cp = counterparties.with_columns(
@@ -356,6 +358,7 @@ def create_resolved_bundle(
         collateral=pl.LazyFrame(),
         guarantees=pl.LazyFrame(),
         provisions=pl.LazyFrame(),
+        model_permissions=model_permissions,
         lending_group_totals=pl.LazyFrame(
             schema={
                 "lending_group_reference": pl.String,
@@ -1403,3 +1406,261 @@ class TestReturnTypes:
         assert result.irb_exposures is not None
         assert result.classification_audit is not None
         assert isinstance(result.classification_errors, list)
+
+
+# =============================================================================
+# Model-Level IRB Permissions Tests
+# =============================================================================
+
+
+def _make_model_permissions_df(**overrides: object) -> pl.LazyFrame:
+    """Helper to create a model_permissions LazyFrame."""
+    data = {
+        "model_id": ["CORP_PD_01"],
+        "exposure_class": [ExposureClass.CORPORATE.value],
+        "approach": [ApproachType.AIRB.value],
+        "country_codes": [None],
+        "excluded_book_codes": [None],
+    }
+    data.update(overrides)
+    schema = {
+        "model_id": pl.String,
+        "exposure_class": pl.String,
+        "approach": pl.String,
+        "country_codes": pl.String,
+        "excluded_book_codes": pl.String,
+    }
+    return pl.DataFrame(data, schema=schema).lazy()
+
+
+def _make_exposure_with_model_id(
+    model_id: str | None = "CORP_PD_01",
+    exposure_class_entity: str = "corporate",
+    internal_pd: float | None = 0.01,
+    lgd: float | None = 0.45,
+    book_code: str = "CORP",
+    country_code: str = "GB",
+) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+    """Helper: creates (exposures, counterparties) for a single exposure with model_id."""
+    counterparties = pl.DataFrame(
+        {
+            "counterparty_reference": ["CP01"],
+            "counterparty_name": ["Test Corp"],
+            "entity_type": [exposure_class_entity],
+            "country_code": [country_code],
+            "annual_revenue": [100_000_000.0],
+            "total_assets": [500_000_000.0],
+            "default_status": [False],
+            "sector_code": ["MANU"],
+            "apply_fi_scalar": [False],
+            "is_managed_as_retail": [False],
+        }
+    ).lazy()
+
+    exp_data: dict[str, list] = {
+        "exposure_reference": ["EXP01"],
+        "exposure_type": ["loan"],
+        "product_type": ["TERM_LOAN"],
+        "book_code": [book_code],
+        "counterparty_reference": ["CP01"],
+        "value_date": [date(2024, 1, 1)],
+        "maturity_date": [date(2029, 1, 1)],
+        "currency": ["GBP"],
+        "drawn_amount": [1_000_000.0],
+        "undrawn_amount": [0.0],
+        "nominal_amount": [0.0],
+        "lgd": [lgd],
+        "seniority": ["senior"],
+        "exposure_has_parent": [False],
+        "root_facility_reference": [None],
+        "facility_hierarchy_depth": [1],
+        "counterparty_has_parent": [False],
+        "parent_counterparty_reference": [None],
+        "rating_inherited": [False],
+        "rating_source_counterparty": [None],
+        "rating_inheritance_reason": ["own_rating"],
+        "ultimate_parent_reference": [None],
+        "counterparty_hierarchy_depth": [1],
+        "lending_group_reference": [None],
+        "lending_group_total_exposure": [0.0],
+        "model_id": [model_id],
+    }
+    if internal_pd is not None:
+        exp_data["internal_pd"] = [internal_pd]
+
+    exposures = pl.DataFrame(exp_data).lazy()
+    return exposures, counterparties
+
+
+class TestModelPermissions:
+    """Tests for model-level IRB permissions."""
+
+    def test_airb_permission_with_pd_and_lgd(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """AIRB permission + internal_pd + modelled LGD -> AIRB approach."""
+        model_perms = _make_model_permissions_df()
+        exposures, cps = _make_exposure_with_model_id(internal_pd=0.01, lgd=0.45)
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_airb_permission_without_lgd_falls_to_sa(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """AIRB permission + internal_pd but NO modelled LGD -> SA (not FIRB)."""
+        model_perms = _make_model_permissions_df()
+        exposures, cps = _make_exposure_with_model_id(internal_pd=0.01, lgd=None)
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_firb_permission_without_lgd_uses_firb(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """FIRB permission + internal_pd but no LGD -> FIRB (uses regulatory floors)."""
+        model_perms = _make_model_permissions_df(approach=[ApproachType.FIRB.value])
+        exposures, cps = _make_exposure_with_model_id(internal_pd=0.01, lgd=None)
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_missing_model_id_defaults_to_sa(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Exposure without model_id -> SA (even if model permissions exist)."""
+        model_perms = _make_model_permissions_df()
+        exposures, cps = _make_exposure_with_model_id(model_id=None, internal_pd=0.01, lgd=0.45)
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_geography_filter_permits(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Model permission with matching country_codes -> AIRB."""
+        model_perms = _make_model_permissions_df(country_codes=["GB,US"])
+        exposures, cps = _make_exposure_with_model_id(country_code="GB")
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_geography_filter_excludes(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Model permission with non-matching country_codes -> SA."""
+        model_perms = _make_model_permissions_df(country_codes=["US,DE"])
+        exposures, cps = _make_exposure_with_model_id(country_code="GB")
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_book_code_exclusion(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Model permission with excluded book code -> SA."""
+        model_perms = _make_model_permissions_df(excluded_book_codes=["CORP,FI"])
+        exposures, cps = _make_exposure_with_model_id(book_code="CORP")
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_airb_plus_firb_permissions_airb_wins(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Both AIRB and FIRB permissions for same model -> AIRB when LGD available."""
+        model_perms = pl.DataFrame(
+            {
+                "model_id": ["CORP_PD_01", "CORP_PD_01"],
+                "exposure_class": [ExposureClass.CORPORATE.value] * 2,
+                "approach": [ApproachType.AIRB.value, ApproachType.FIRB.value],
+                "country_codes": [None, None],
+                "excluded_book_codes": [None, None],
+            },
+            schema={
+                "model_id": pl.String,
+                "exposure_class": pl.String,
+                "approach": pl.String,
+                "country_codes": pl.String,
+                "excluded_book_codes": pl.String,
+            },
+        ).lazy()
+        exposures, cps = _make_exposure_with_model_id(internal_pd=0.01, lgd=0.45)
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_airb_plus_firb_permissions_firb_when_no_lgd(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Both AIRB and FIRB permissions but no LGD -> FIRB (falls back from AIRB)."""
+        model_perms = pl.DataFrame(
+            {
+                "model_id": ["CORP_PD_01", "CORP_PD_01"],
+                "exposure_class": [ExposureClass.CORPORATE.value] * 2,
+                "approach": [ApproachType.AIRB.value, ApproachType.FIRB.value],
+                "country_codes": [None, None],
+                "excluded_book_codes": [None, None],
+            },
+            schema={
+                "model_id": pl.String,
+                "exposure_class": pl.String,
+                "approach": pl.String,
+                "country_codes": pl.String,
+                "excluded_book_codes": pl.String,
+            },
+        ).lazy()
+        exposures, cps = _make_exposure_with_model_id(internal_pd=0.01, lgd=None)
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_no_model_permissions_uses_orgwide(
+        self,
+        classifier: ExposureClassifier,
+        crr_config_with_irb: CalculationConfig,
+    ) -> None:
+        """No model_permissions file -> org-wide IRBPermissions still work (backward compat)."""
+        exposures, cps = _make_exposure_with_model_id(model_id=None)
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=None)
+        result = classifier.classify(bundle, crr_config_with_irb)
+
+        df = result.all_exposures.collect()
+        # With full_irb org-wide permissions and internal_pd, should get AIRB
+        assert df["approach"][0] == ApproachType.AIRB.value

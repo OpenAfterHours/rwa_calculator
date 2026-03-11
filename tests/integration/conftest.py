@@ -33,7 +33,11 @@ from rwa_calc.data.schemas import (
     ORG_MAPPING_SCHEMA,
 )
 from rwa_calc.engine.classifier import ExposureClassifier
+from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from rwa_calc.engine.irb.calculator import IRBCalculator
+from rwa_calc.engine.sa.calculator import SACalculator
+from rwa_calc.engine.slotting.calculator import SlottingCalculator
 
 # =============================================================================
 # CONFIG FACTORIES
@@ -306,3 +310,28 @@ def hierarchy_resolver() -> HierarchyResolver:
 @pytest.fixture
 def classifier() -> ExposureClassifier:
     return ExposureClassifier()
+
+
+@pytest.fixture
+def crm_processor() -> CRMProcessor:
+    return CRMProcessor()
+
+
+@pytest.fixture
+def crm_processor_b31() -> CRMProcessor:
+    return CRMProcessor(is_basel_3_1=True)
+
+
+@pytest.fixture
+def sa_calculator() -> SACalculator:
+    return SACalculator()
+
+
+@pytest.fixture
+def irb_calculator() -> IRBCalculator:
+    return IRBCalculator()
+
+
+@pytest.fixture
+def slotting_calculator() -> SlottingCalculator:
+    return SlottingCalculator()

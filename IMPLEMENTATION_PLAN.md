@@ -1,6 +1,6 @@
 # Implementation Plan — Integration Test Strategy
 
-## Status: Phase 1 Complete
+## Status: Phase 2 Complete
 
 Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests covering every pipeline handoff.
 
@@ -10,6 +10,17 @@ Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests 
   - `tests/integration/test_hierarchy_to_classifier.py` — 18 tests across 5 test classes: model_id propagation (5), entity type classification (4), default status (2), FI scalar (2), column completeness (2), parent-child hierarchy (3)
   - `tests/integration/__init__.py` — package marker
   - **Learnings**: facility_mappings auto-generation must NOT include self-referencing `child_type=facility` entries for standalone facilities, as the hierarchy resolver's `_build_facility_root_lookup` anti-join excludes them from undrawn exposure generation
+
+- **Phase 2 — P2 Classifier→CRM and CRM→Calculators** (2026-03-11)
+  - `tests/integration/conftest.py` — added CRM processor fixtures (`crm_processor`, `crm_processor_b31`), calculator fixtures (`sa_calculator`, `irb_calculator`, `slotting_calculator`)
+  - `tests/integration/test_classifier_to_crm.py` — 14 tests across 4 test classes: approach-specific CRM (5), provision handling (3), CCF conversion (3), approach split correctness (3)
+  - `tests/integration/test_crm_to_calculators.py` — 15 tests across 4 test classes: SA branch (4), IRB branch (5), slotting branch (3), split correctness (3)
+  - **Learnings**:
+    - IRB approach assignment requires `internal_pd` from the ratings table — counterparties without internal ratings fall back to SA regardless of IRBPermissions config
+    - To test AIRB vs FIRB: with `full_irb` config, counterparties with modelled `lgd` on loans get AIRB; without `lgd` they get FIRB
+    - `_bundle_with_ratings()` helper needed to inject ratings into frozen `RawDataBundle` (uses `dataclasses.replace` or manual reconstruction)
+    - CRM processor has two mid-pipeline `.collect().lazy()` barriers to prevent Polars optimizer segfaults from deep plan trees
+    - CRR IRB scaling factor is 1.06; Basel 3.1 is 1.0 — verified via `scaling_factor` column in IRB output
 
 ---
 
@@ -21,7 +32,7 @@ Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests 
 | Unit | ~35 files | ~1,509 | Individual functions/methods in isolation |
 | Acceptance | ~15 files | ~275 | Full pipeline with golden-file comparison |
 | Contract | ~5 files | ~123 | Schema conformance and protocol adherence |
-| Integration | 2 files | ~23 | Pre/post-CRM reporting + hierarchy→classifier |
+| Integration | 4 files | ~52 | Pre/post-CRM reporting + hierarchy→classifier + classifier→CRM + CRM→calculators |
 | Benchmark | ~1 file | ~27 | Performance regressions |
 
 ### Gap Analysis
@@ -372,9 +383,9 @@ def aggregator() -> OutputAggregator:
 1. `tests/integration/conftest.py` — shared builders, fixtures, config factories ✓
 2. `tests/integration/test_hierarchy_to_classifier.py` — 18 tests ✓
 
-### Phase 2 — P2 (Week 2)
-3. `tests/integration/test_classifier_to_crm.py` — 14 tests
-4. `tests/integration/test_crm_to_calculators.py` — 15 tests
+### Phase 2 — P2 ✓ DONE
+3. `tests/integration/test_classifier_to_crm.py` — 14 tests ✓
+4. `tests/integration/test_crm_to_calculators.py` — 15 tests ✓
 
 ### Phase 3 — P3+P4 (Week 3)
 5. `tests/integration/test_loader_to_hierarchy.py` — 8 tests

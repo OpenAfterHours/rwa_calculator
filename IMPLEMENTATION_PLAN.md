@@ -1,8 +1,8 @@
 # Implementation Plan — Integration Test Strategy
 
-## Status: Phase 2 Complete
+## Status: Phase 3 Complete
 
-Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests covering every pipeline handoff.
+Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests. Phases 1-3 complete with ~87 tests across 7 files.
 
 ### Completed
 - **Phase 1 — Infrastructure + P1** (2026-03-11)
@@ -22,6 +22,18 @@ Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests 
     - CRM processor has two mid-pipeline `.collect().lazy()` barriers to prevent Polars optimizer segfaults from deep plan trees
     - CRR IRB scaling factor is 1.06; Basel 3.1 is 1.0 — verified via `scaling_factor` column in IRB output
 
+- **Phase 3 — P3+P4 Loader→Hierarchy, Model Permissions, Output Floor** (2026-03-11)
+  - `tests/integration/conftest.py` — added `aggregator` fixture (OutputAggregator)
+  - `tests/integration/test_loader_to_hierarchy.py` — 8 tests across 3 test classes: schema conformance (3), data integrity (3), edge cases (2)
+  - `tests/integration/test_model_permissions_pipeline.py` — 12 tests across 3 test classes: basic model resolution (4), filtering (4), end-to-end with CRM (4)
+  - `tests/integration/test_output_floor_and_aggregation.py` — 15 tests across 3 test classes: output floor (5), summaries (5), error accumulation (5)
+  - **Bug fix**: `OutputAggregator._compute_el_portfolio_summary()` now falls back to `rwa` column when `rwa_post_factor` and `rwa_final` are missing — previously crashed when called with raw calculator output
+  - **Learnings**:
+    - Lending mappings use `parent_counterparty_reference`/`child_counterparty_reference` — parent is the group head, child is the member
+    - When model_permissions exist in the bundle, counterparties without a matching model_id fall to SA regardless of org-level IRB config
+    - `_compute_el_portfolio_summary()` receives raw calculator output (with `rwa` column), not pipeline-standardized output (with `rwa_final`) — fixed to handle all column name variants
+    - ParquetLoader requires explicit `DataSourceConfig` with file paths when testing — `DataSourceConfig.from_registry()` uses the DataSourceRegistry which needs standard file names
+
 ---
 
 ## Current State
@@ -32,7 +44,7 @@ Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests 
 | Unit | ~35 files | ~1,509 | Individual functions/methods in isolation |
 | Acceptance | ~15 files | ~275 | Full pipeline with golden-file comparison |
 | Contract | ~5 files | ~123 | Schema conformance and protocol adherence |
-| Integration | 4 files | ~52 | Pre/post-CRM reporting + hierarchy→classifier + classifier→CRM + CRM→calculators |
+| Integration | 7 files | ~87 | Pre/post-CRM reporting + hierarchy→classifier + classifier→CRM + CRM→calculators + loader→hierarchy + model permissions + output floor & aggregation |
 | Benchmark | ~1 file | ~27 | Performance regressions |
 
 ### Gap Analysis
@@ -387,10 +399,10 @@ def aggregator() -> OutputAggregator:
 3. `tests/integration/test_classifier_to_crm.py` — 14 tests ✓
 4. `tests/integration/test_crm_to_calculators.py` — 15 tests ✓
 
-### Phase 3 — P3+P4 (Week 3)
-5. `tests/integration/test_loader_to_hierarchy.py` — 8 tests
-6. `tests/integration/test_model_permissions_pipeline.py` — 12 tests
-7. `tests/integration/test_output_floor_and_aggregation.py` — 15 tests
+### Phase 3 — P3+P4 ✓ DONE
+5. `tests/integration/test_loader_to_hierarchy.py` — 8 tests ✓
+6. `tests/integration/test_model_permissions_pipeline.py` — 12 tests ✓
+7. `tests/integration/test_output_floor_and_aggregation.py` — 15 tests ✓
 
 ### Phase 4 — P5 (Week 4)
 8. `tests/integration/test_equity_flow.py` — 10 tests

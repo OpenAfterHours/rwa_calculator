@@ -32,6 +32,7 @@ from rwa_calc.data.schemas import (
     MODEL_PERMISSIONS_SCHEMA,
     ORG_MAPPING_SCHEMA,
 )
+from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
@@ -335,3 +336,8 @@ def irb_calculator() -> IRBCalculator:
 @pytest.fixture
 def slotting_calculator() -> SlottingCalculator:
     return SlottingCalculator()
+
+
+@pytest.fixture
+def aggregator() -> OutputAggregator:
+    return OutputAggregator()

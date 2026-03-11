@@ -233,13 +233,34 @@ FINANCIAL_SECTOR_ENTITY_TYPES = {
 
 **FI Scalar effect**: 1.25x multiplier on IRB correlation
 
+### Step 5c: Resolve Model Permissions
+
+```python
+_resolve_model_permissions(exposures, model_permissions)
+```
+
+When `model_permissions` data is provided, resolves per-exposure IRB permissions:
+
+1. Joins exposures to `model_permissions` via `model_id` (propagated from counterparty)
+2. Filters by `exposure_class` match
+3. Applies geography filter (`country_codes`) and book code exclusions
+4. Sets `model_airb_permitted` and `model_firb_permitted` boolean columns
+5. Exposures without `model_id` get both flags set to `False` (fall back to org-wide permissions)
+
+When model permissions are active, Step 6 uses per-row `model_airb_permitted` /
+`model_firb_permitted` instead of org-wide `IRBPermissions`.
+
+See [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema) for the data schema.
+
 ### Step 6: Determine Approach
 
 ```python
 _determine_approach(exposures, config)
 ```
 
-Assigns calculation approach based on IRB permissions:
+Assigns calculation approach based on IRB permissions. When model permissions are
+present, per-row `model_airb_permitted` / `model_firb_permitted` flags take precedence
+over org-wide `IRBPermissions` config.
 
 | Condition | Approach |
 |-----------|----------|
@@ -249,6 +270,11 @@ Assigns calculation approach based on IRB permissions:
 | Corporate classes + A-IRB permission | AIRB |
 | Corporate/Institution/Central Govt/Central Bank + F-IRB (no A-IRB) | FIRB |
 | Default / No IRB permission | SA |
+
+!!! note
+    "A-IRB permission" and "F-IRB permission" above refer to either org-wide
+    `IRBPermissions` or per-row model permissions when `model_permissions` data
+    is provided. See [Step 5c](#step-5c-resolve-model-permissions).
 
 ### Step 7: Add Classification Audit
 

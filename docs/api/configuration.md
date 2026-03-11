@@ -389,6 +389,13 @@ class IRBPermissions:
         """
 ```
 
+!!! note "Model-level override"
+    When `model_permissions.parquet` is provided in the data directory,
+    per-model permissions take precedence over `IRBPermissions` config for
+    counterparties with a `model_id`. `IRBPermissions` still applies as the
+    fallback for exposures without model-level permissions. See
+    [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema).
+
 ## Usage Examples
 
 ### CRR Configuration

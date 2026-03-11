@@ -61,6 +61,12 @@ if response.success:
     df = response.collect_results()
 ```
 
+**Per-Model IRB Permissions** — for banks with multiple approved IRB models, place a
+`config/model_permissions.parquet` file in your data directory to control IRB approach at
+the model level. Counterparties link to models via `model_id`. See the
+[Data Model docs](https://OpenAfterHours.github.io/rwa_calculator/data-model/input-schemas/#model-permissions-schema)
+for schema details.
+
 **Interactive UI** — web-based calculator interface:
 
 ```bash

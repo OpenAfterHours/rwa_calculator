@@ -199,6 +199,14 @@ request = CalculationRequest(
 | `"full_irb"` | Both FIRB and AIRB (AIRB preferred) |
 | `"retail_airb_corporate_firb"` | A-IRB for retail, F-IRB for corporate |
 
+!!! note "Model-level permissions"
+    If `config/model_permissions.parquet` exists in `data_path`, per-model permissions
+    take precedence over `irb_approach`. Counterparties are linked to models via
+    `model_id` on the counterparty schema. Exposures without a `model_id` fall back to
+    the org-wide `irb_approach` setting. See
+    [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema)
+    for the schema.
+
 ### ValidationRequest
 
 Request for data path validation.

@@ -2070,6 +2070,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#step-5c-resolve-model-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5c: Resolve Model Permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#step-6-determine-approach" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4408,6 +4419,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#step-5c-resolve-model-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5c: Resolve Model Permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#step-6-determine-approach" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4822,7 +4844,7 @@
 - <code>annual_revenue</code> - For SME check
 - <code>total_assets</code> - For large FSE threshold
 - <code>default_status</code> - For default identification
-- <code>is_regulated</code> - For FI scalar determination
+- <code>apply_fi_scalar</code> - For FI scalar determination
 - <code>is_managed_as_retail</code> - For SME retail treatment</p>
 <h3 id="step-2-classify-exposure-class">Step 2: Classify Exposure Class<a class="headerlink" href="#step-2-classify-exposure-class" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">_classify_exposure_class</span><span class="p">(</span><span class="n">exposures</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
@@ -4890,10 +4912,26 @@
 - <code>is_large_financial_sector_entity</code> - FSE with total_assets &gt;= EUR 70bn
 - <code>requires_fi_scalar</code> - True if large FSE OR unregulated FSE</p>
 <p><strong>FI Scalar effect</strong>: 1.25x multiplier on IRB correlation</p>
-<h3 id="step-6-determine-approach">Step 6: Determine Approach<a class="headerlink" href="#step-6-determine-approach" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">_determine_approach</span><span class="p">(</span><span class="n">exposures</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+<h3 id="step-5c-resolve-model-permissions">Step 5c: Resolve Model Permissions<a class="headerlink" href="#step-5c-resolve-model-permissions" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">_resolve_model_permissions</span><span class="p">(</span><span class="n">exposures</span><span class="p">,</span> <span class="n">model_permissions</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Assigns calculation approach based on IRB permissions:</p>
+<p>When <code>model_permissions</code> data is provided, resolves per-exposure IRB permissions:</p>
+<ol>
+<li>Joins exposures to <code>model_permissions</code> via <code>model_id</code> (propagated from counterparty)</li>
+<li>Filters by <code>exposure_class</code> match</li>
+<li>Applies geography filter (<code>country_codes</code>) and book code exclusions</li>
+<li>Sets <code>model_airb_permitted</code> and <code>model_firb_permitted</code> boolean columns</li>
+<li>Exposures without <code>model_id</code> get both flags set to <code>False</code> (fall back to org-wide permissions)</li>
+</ol>
+<p>When model permissions are active, Step 6 uses per-row <code>model_airb_permitted</code> /
+<code>model_firb_permitted</code> instead of org-wide <code>IRBPermissions</code>.</p>
+<p>See <a href="../../data-model/input-schemas/#model-permissions-schema">Input Schemas — Model Permissions</a> for the data schema.</p>
+<h3 id="step-6-determine-approach">Step 6: Determine Approach<a class="headerlink" href="#step-6-determine-approach" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">_determine_approach</span><span class="p">(</span><span class="n">exposures</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Assigns calculation approach based on IRB permissions. When model permissions are
+present, per-row <code>model_airb_permitted</code> / <code>model_firb_permitted</code> flags take precedence
+over org-wide <code>IRBPermissions</code> config.</p>
 <table>
 <thead>
 <tr>
@@ -4928,16 +4966,22 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>"A-IRB permission" and "F-IRB permission" above refer to either org-wide
+<code>IRBPermissions</code> or per-row model permissions when <code>model_permissions</code> data
+is provided. See <a href="#step-5c-resolve-model-permissions">Step 5c</a>.</p>
+</div>
 <h3 id="step-7-add-classification-audit">Step 7: Add Classification Audit<a class="headerlink" href="#step-7-add-classification-audit" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">_add_classification_audit</span><span class="p">(</span><span class="n">exposures</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">_add_classification_audit</span><span class="p">(</span><span class="n">exposures</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Builds audit trail string for each exposure:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>entity_type=corporate; exp_class_sa=CORPORATE; exp_class_irb=CORPORATE;
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>is_sme=true; is_mortgage=false; is_defaulted=false; is_infrastructure=false;
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>requires_fi_scalar=false; qualifies_as_retail=true
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>entity_type=corporate; exp_class_sa=CORPORATE; exp_class_irb=CORPORATE;
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>is_sme=true; is_mortgage=false; is_defaulted=false; is_infrastructure=false;
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>requires_fi_scalar=false; qualifies_as_retail=true
 </span></code></pre></div></p>
 <h3 id="step-7a-enrich-slotting-exposures">Step 7a: Enrich Slotting Exposures<a class="headerlink" href="#step-7a-enrich-slotting-exposures" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">_enrich_slotting_exposures</span><span class="p">(</span><span class="n">exposures</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">_enrich_slotting_exposures</span><span class="p">(</span><span class="n">exposures</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Derives slotting metadata from patterns in reference fields:</p>
 <p><strong>Slotting Category</strong> (from counterparty_reference):

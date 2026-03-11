@@ -4828,6 +4828,14 @@ permitted for each class — must align with PRA permissions granted to the firm
 </span><span id="__span-10-43"><a id="__codelineno-10-43" name="__codelineno-10-43" href="#__codelineno-10-43"></a><span class="sd">        - Must have internally modelled LGD</span>
 </span><span id="__span-10-44"><a id="__codelineno-10-44" name="__codelineno-10-44" href="#__codelineno-10-44"></a><span class="sd">        &quot;&quot;&quot;</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Model-level override</p>
+<p>When <code>model_permissions.parquet</code> is provided in the data directory,
+per-model permissions take precedence over <code>IRBPermissions</code> config for
+counterparties with a <code>model_id</code>. <code>IRBPermissions</code> still applies as the
+fallback for exposures without model-level permissions. See
+<a href="../../data-model/input-schemas/#model-permissions-schema">Input Schemas — Model Permissions</a>.</p>
+</div>
 <h2 id="usage-examples">Usage Examples<a class="headerlink" href="#usage-examples" title="Permanent link">&para;</a></h2>
 <h3 id="crr-configuration">CRR Configuration<a class="headerlink" href="#crr-configuration" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>

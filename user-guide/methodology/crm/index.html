@@ -3102,8 +3102,8 @@
 <h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">¶</a></h3>
 <p>The calculator implements netting as <strong>synthetic cash collateral</strong>:</p>
 <ol>
-<li>Loans with <code>has_netting_agreement = True</code> and <code>drawn_amount &lt; 0</code> contribute their absolute drawn amount to a <strong>netting pool</strong> per <code>(parent_facility_reference, currency)</code></li>
-<li>The pool is allocated <strong>pro-rata by <code>ead_gross</code></strong> to positive-drawn netting-eligible siblings in the same facility</li>
+<li>Loans with <code>has_netting_agreement = True</code> and <code>drawn_amount &lt; 0</code> contribute their absolute drawn amount to a <strong>netting pool</strong> per <code>(netting_facility, currency)</code>, where the netting facility is determined by priority: <code>netting_facility_reference</code> → <code>root_facility_reference</code> → <code>parent_facility_reference</code></li>
+<li>The pool is allocated <strong>pro-rata by <code>ead_gross</code></strong> to all positive-drawn siblings in the same netting facility — siblings benefit regardless of their own <code>has_netting_agreement</code> flag</li>
 <li>Each allocation becomes a synthetic cash collateral row fed into the existing collateral pipeline</li>
 </ol>
 <p>This reuses the full collateral mechanics:</p>
@@ -3118,7 +3118,8 @@
 <li>The synthetic collateral only benefits positive-drawn siblings — distinct mechanism</li>
 </ul>
 <h3 id="input-data">Input Data<a class="headerlink" href="#input-data" title="Permanent link">¶</a></h3>
-<p>Set <code>has_netting_agreement = True</code> on the loan record to enable netting. The loan must be under a facility (<code>parent_facility_reference</code> is not null) for netting to apply.</p>
+<p>Set <code>has_netting_agreement = True</code> on the negative-drawn loan record to enable netting. The loan must be under a facility (<code>parent_facility_reference</code> is not null) for netting to apply.</p>
+<p>Optionally set <code>netting_facility_reference</code> to explicitly control which facility defines the netting group. If omitted, the calculator uses <code>root_facility_reference</code> (top-level facility in the hierarchy) or falls back to <code>parent_facility_reference</code>.</p>
 <h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">¶</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a href="#__codelineno-10-1" id="__codelineno-10-1" name="__codelineno-10-1"></a><span class="c1"># Facility FAC_01 with two loans:</span>
 </span><span id="__span-10-2"><a href="#__codelineno-10-2" id="__codelineno-10-2" name="__codelineno-10-2"></a><span class="c1"># Loan A: drawn = -200 (credit balance), has_netting_agreement = True</span>

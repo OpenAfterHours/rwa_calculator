@@ -5713,7 +5713,7 @@
 </span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>Step 5b: _apply_fi_scalar_classification()
 </span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>        Determine if FI scalar (1.25x correlation) applies:
 </span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>        - Large FSE: total_assets &gt;= EUR 70bn
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>        - Unregulated FSE: is_regulated = False
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>        - Financial sector entity with apply_fi_scalar = True
 </span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
 </span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>Step 6: _determine_approach()
 </span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>        Assign SA/FIRB/AIRB/SLOTTING based on IRB permissions
@@ -5740,7 +5740,7 @@
 </span></code></pre></div>
 <p><strong>FI Scalar triggers 1.25x correlation multiplier when:</strong>
 - <code>is_large_financial_sector_entity</code>: total_assets &gt;= EUR 70bn, OR
-- <code>is_financial_sector_entity</code> AND <code>is_regulated = False</code></p>
+- <code>is_financial_sector_entity</code> AND <code>apply_fi_scalar = True</code></p>
 <h3 id="key-features_2">Key Features<a class="headerlink" href="#key-features_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Dual exposure class mapping</strong>: SA and IRB classes tracked separately</li>

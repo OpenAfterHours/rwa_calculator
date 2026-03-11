@@ -2288,6 +2288,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#model-permissions-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Permissions Schema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#data-preparation-checklist" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4444,6 +4455,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#model-permissions-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Permissions Schema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#data-preparation-checklist" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4612,6 +4634,12 @@
 <td>No</td>
 <td>Equity holdings</td>
 </tr>
+<tr>
+<td><a href="#model-permissions-schema">Model Permissions</a></td>
+<td><code>config/model_permissions.parquet</code></td>
+<td>No</td>
+<td>Per-model IRB approach permissions</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Mapping Files:</strong></p>
@@ -4704,10 +4732,10 @@
 <td>Industry sector code (SIC-based)</td>
 </tr>
 <tr>
-<td><code>is_regulated</code></td>
+<td><code>apply_fi_scalar</code></td>
 <td><code>Boolean</code></td>
 <td>No</td>
-<td>Prudentially regulated (affects FI scalar - CRR Art. 153(2))</td>
+<td>User flag: True = apply 1.25x FI correlation scalar (CRR Art. 153(2))</td>
 </tr>
 <tr>
 <td><code>is_managed_as_retail</code></td>
@@ -4726,6 +4754,12 @@
 <td><code>Boolean</code></td>
 <td>No</td>
 <td>Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)</td>
+</tr>
+<tr>
+<td><code>model_id</code></td>
+<td><code>String</code></td>
+<td>No</td>
+<td>IRB model identifier — links to <a href="#model-permissions-schema">Model Permissions</a> for per-model approach gating. Propagated to exposures by the hierarchy resolver. Null defaults to SA.</td>
 </tr>
 </tbody>
 </table>
@@ -4912,9 +4946,9 @@
 </thead>
 <tbody>
 <tr>
-<td><code>is_regulated</code></td>
-<td>Determines if FI scalar (1.25x correlation) applies</td>
-<td>Unregulated financial sector entities get FI scalar under IRB (CRR Art. 153(2))</td>
+<td><code>apply_fi_scalar</code></td>
+<td>Directly controls whether FI scalar (1.25x correlation) applies</td>
+<td>Financial sector entities with this flag set to True get FI scalar under IRB (CRR Art. 153(2))</td>
 </tr>
 <tr>
 <td><code>is_managed_as_retail</code></td>
@@ -4935,7 +4969,7 @@
 </ul>
 <p><strong>FI Scalar applies when (CRR Art. 153(2)):</strong>
 1. Large FSE: <code>total_assets &gt;= EUR 70bn</code>, OR
-2. Unregulated FSE: <code>is_regulated = False</code></p>
+2. Financial sector entity with <code>apply_fi_scalar = True</code></p>
 <p><strong>Example:</strong></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -4948,7 +4982,7 @@
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="s2">&quot;total_assets&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">30_000_000.0</span><span class="p">,</span> <span class="mf">600_000_000.0</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mf">80_000_000_000.0</span><span class="p">,</span> <span class="mf">500_000_000.0</span><span class="p">],</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="s2">&quot;default_status&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">],</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="s2">&quot;sector_code&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;62.01&quot;</span><span class="p">,</span> <span class="s2">&quot;28.11&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;64.19&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="s2">&quot;is_regulated&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">],</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="s2">&quot;apply_fi_scalar&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">],</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="s2">&quot;is_managed_as_retail&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">],</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">})</span>
 </span></code></pre></div>
@@ -6590,6 +6624,99 @@ After conversion, the following columns are added:
 </tbody>
 </table>
 <p>Exposures are aggregated to the group level for retail eligibility (threshold: EUR 1m / GBP 880k).</p>
+<hr />
+<h2 id="model-permissions-schema">Model Permissions Schema<a class="headerlink" href="#model-permissions-schema" title="Permanent link">&para;</a></h2>
+<p><strong>Purpose:</strong> Defines per-model IRB approach permissions, enabling granular control over which exposures can use FIRB or AIRB. When provided, model permissions take precedence over org-wide <code>IRBPermissions</code> config. When absent, the calculator falls back to org-wide permissions.</p>
+<p><strong>Why model-level permissions matter:</strong> Banks typically have multiple IRB models, each approved for specific exposure classes, geographies, and portfolios. This schema allows the calculator to resolve the correct approach per-exposure based on the model it belongs to, rather than applying a single org-wide permission.</p>
+<p><strong>File:</strong> <code>config/model_permissions.parquet</code></p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_id</code></td>
+<td><code>String</code></td>
+<td>Yes</td>
+<td>Unique model identifier (e.g., <code>"UK_CORP_PD_01"</code>) — referenced by <code>model_id</code> on counterparties</td>
+</tr>
+<tr>
+<td><code>exposure_class</code></td>
+<td><code>String</code></td>
+<td>Yes</td>
+<td>ExposureClass value this permission covers (e.g., <code>"corporate"</code>, <code>"institution"</code>)</td>
+</tr>
+<tr>
+<td><code>approach</code></td>
+<td><code>String</code></td>
+<td>Yes</td>
+<td>Approved approach: <code>"foundation_irb"</code> or <code>"advanced_irb"</code></td>
+</tr>
+<tr>
+<td><code>country_codes</code></td>
+<td><code>String</code></td>
+<td>No</td>
+<td>Comma-separated ISO country codes where this permission applies. Null = all geographies.</td>
+</tr>
+<tr>
+<td><code>excluded_book_codes</code></td>
+<td><code>String</code></td>
+<td>No</td>
+<td>Comma-separated book codes excluded from this permission. Null = no exclusions.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Approach determination logic:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AIRB permission + <code>internal_pd</code> + modelled <code>lgd</code></td>
+<td><strong>A-IRB</strong></td>
+</tr>
+<tr>
+<td>AIRB permission + <code>internal_pd</code> + no <code>lgd</code></td>
+<td><strong>SA</strong> (falls back unless FIRB permission also exists)</td>
+</tr>
+<tr>
+<td>FIRB permission + <code>internal_pd</code> + no <code>lgd</code></td>
+<td><strong>F-IRB</strong> (uses regulatory LGD floors)</td>
+</tr>
+<tr>
+<td>Both AIRB + FIRB permissions + <code>internal_pd</code> + <code>lgd</code></td>
+<td><strong>A-IRB</strong> (higher approach wins)</td>
+</tr>
+<tr>
+<td>Both AIRB + FIRB permissions + <code>internal_pd</code> + no <code>lgd</code></td>
+<td><strong>F-IRB</strong> (fallback)</td>
+</tr>
+<tr>
+<td>No <code>model_id</code> on counterparty</td>
+<td><strong>SA</strong> (default)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example:</strong></p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">model_permissions</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="s2">&quot;model_id&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;UK_CORP_PD_01&quot;</span><span class="p">,</span> <span class="s2">&quot;UK_CORP_PD_01&quot;</span><span class="p">,</span> <span class="s2">&quot;EU_INST_01&quot;</span><span class="p">],</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="s2">&quot;exposure_class&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;corporate&quot;</span><span class="p">,</span> <span class="s2">&quot;corporate_sme&quot;</span><span class="p">,</span> <span class="s2">&quot;institution&quot;</span><span class="p">],</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="s2">&quot;approach&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;advanced_irb&quot;</span><span class="p">,</span> <span class="s2">&quot;foundation_irb&quot;</span><span class="p">,</span> <span class="s2">&quot;advanced_irb&quot;</span><span class="p">],</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="s2">&quot;country_codes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;GB&quot;</span><span class="p">,</span> <span class="s2">&quot;GB,IE&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>  <span class="c1"># None = all geographies</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="s2">&quot;excluded_book_codes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;LEGACY_BOOK&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="p">})</span>
+</span></code></pre></div>
 <hr />
 <h2 id="data-preparation-checklist">Data Preparation Checklist<a class="headerlink" href="#data-preparation-checklist" title="Permanent link">&para;</a></h2>
 <p>Before running the calculator, verify your data meets these requirements:</p>

@@ -1,8 +1,15 @@
 # Implementation Plan — Integration Test Strategy
 
-## Status: Not Started
+## Status: Phase 1 Complete
 
-Fill gaps in stage-to-stage integration testing. Currently 1 integration test file exists (`test_pre_post_crm_reporting.py`). Target: 7 new files, ~92 tests covering every pipeline handoff.
+Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests covering every pipeline handoff.
+
+### Completed
+- **Phase 1 — Infrastructure + P1** (2026-03-11)
+  - `tests/integration/conftest.py` — shared builders (`make_counterparty`, `make_loan`, `make_facility`, `make_contingent`, `make_model_permission`, `make_raw_data_bundle`), config fixtures (CRR, Basel 3.1, with IRB variants), component fixtures
+  - `tests/integration/test_hierarchy_to_classifier.py` — 18 tests across 5 test classes: model_id propagation (5), entity type classification (4), default status (2), FI scalar (2), column completeness (2), parent-child hierarchy (3)
+  - `tests/integration/__init__.py` — package marker
+  - **Learnings**: facility_mappings auto-generation must NOT include self-referencing `child_type=facility` entries for standalone facilities, as the hierarchy resolver's `_build_facility_root_lookup` anti-join excludes them from undrawn exposure generation
 
 ---
 
@@ -14,7 +21,7 @@ Fill gaps in stage-to-stage integration testing. Currently 1 integration test fi
 | Unit | ~35 files | ~1,509 | Individual functions/methods in isolation |
 | Acceptance | ~15 files | ~275 | Full pipeline with golden-file comparison |
 | Contract | ~5 files | ~123 | Schema conformance and protocol adherence |
-| Integration | 1 file | ~30 | Pre/post-CRM reporting views only |
+| Integration | 2 files | ~23 | Pre/post-CRM reporting + hierarchy→classifier |
 | Benchmark | ~1 file | ~27 | Performance regressions |
 
 ### Gap Analysis
@@ -361,9 +368,9 @@ def aggregator() -> OutputAggregator:
 
 ## Implementation Sequence
 
-### Phase 1 — Infrastructure + P1 (Week 1)
-1. `tests/integration/conftest.py` — shared builders, fixtures, config factories
-2. `tests/integration/test_hierarchy_to_classifier.py` — 18 tests
+### Phase 1 — Infrastructure + P1 ✓ DONE
+1. `tests/integration/conftest.py` — shared builders, fixtures, config factories ✓
+2. `tests/integration/test_hierarchy_to_classifier.py` — 18 tests ✓
 
 ### Phase 2 — P2 (Week 2)
 3. `tests/integration/test_classifier_to_crm.py` — 14 tests

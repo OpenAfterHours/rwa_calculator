@@ -72,7 +72,6 @@ FACILITY_SCHEMA = {
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
-    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
 LOAN_SCHEMA = {
@@ -91,7 +90,6 @@ LOAN_SCHEMA = {
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
     "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
-    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -113,7 +111,6 @@ CONTINGENTS_SCHEMA = {
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
-    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
 COUNTERPARTY_SCHEMA = {
@@ -158,6 +155,8 @@ COUNTERPARTY_SCHEMA = {
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
     "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
+    # IRB model assignment — flows from counterparty to exposures via hierarchy resolver
+    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
 COLLATERAL_SCHEMA = {

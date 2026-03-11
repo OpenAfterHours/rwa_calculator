@@ -190,6 +190,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "is_managed_as_retail": pl.Series(np.zeros(n, dtype=bool)),
                 "scra_grade": pl.Series([None] * n, dtype=pl.String),
                 "is_investment_grade": pl.Series(np.zeros(n, dtype=bool)),
+                "model_id": pl.Series([None] * n, dtype=pl.String),
             }
         )
         .cast(COUNTERPARTY_SCHEMA)
@@ -400,7 +401,6 @@ def generate_facilities(
                 "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
                 "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
                 "is_buy_to_let": np.full(n_facilities, None),  # BTL flag for SME supporting factor
-                "model_id": np.full(n_facilities, None),  # No model permissions for benchmarks
             }
         )
         .cast(FACILITY_SCHEMA)
@@ -592,7 +592,6 @@ def generate_loans(
             "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
             "has_netting_agreement": np.full(n_loans, None),  # Netting flag (CRR Art. 195)
             "netting_facility_reference": np.full(n_loans, None),  # Facility for netting agreement
-            "model_id": np.full(n_loans, None),  # No model permissions for benchmarks
         }
     ).cast(LOAN_SCHEMA)
 
@@ -927,7 +926,6 @@ def generate_contingents(
                 "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
                 "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
                 "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default
-                "model_id": np.full(n_contingents, None),  # No model permissions for benchmarks
             }
         )
         .cast(CONTINGENTS_SCHEMA)

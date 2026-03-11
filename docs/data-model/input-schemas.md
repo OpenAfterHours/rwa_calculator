@@ -49,6 +49,7 @@ This page documents the authoritative schemas for all input data files required 
 | `is_managed_as_retail` | `Boolean` | No | SME managed on pooled retail basis (75% RW per CRR Art. 123) |
 | `scra_grade` | `String` | No | SCRA grade for unrated institutions: `"A"`, `"B"`, `"C"` (Basel 3.1 CRE20.16-21) |
 | `is_investment_grade` | `Boolean` | No | Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47) |
+| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Propagated to exposures by the hierarchy resolver. Null defaults to SA. |
 
 ### Entity Type: The Single Source of Truth
 
@@ -174,7 +175,6 @@ See [Classification](../features/classification.md) for the complete classificat
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
-| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Null defaults to SA. |
 
 **Valid `product_type` values:**
 
@@ -263,7 +263,6 @@ facilities = pl.DataFrame({
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
-| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Null defaults to SA. |
 
 **Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
 
@@ -315,7 +314,6 @@ loans = pl.DataFrame({
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
 | `bs_type` | `String` | No | `"ONB"` (on-balance-sheet / drawn) or `"OFB"` (off-balance-sheet / undrawn). Default: `"OFB"` |
-| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Null defaults to SA. |
 
 **Example:**
 
@@ -790,7 +788,7 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `model_id` | `String` | Yes | Unique model identifier (e.g., `"UK_CORP_PD_01"`) — referenced by `model_id` on facilities/loans/contingents |
+| `model_id` | `String` | Yes | Unique model identifier (e.g., `"UK_CORP_PD_01"`) — referenced by `model_id` on counterparties |
 | `exposure_class` | `String` | Yes | ExposureClass value this permission covers (e.g., `"corporate"`, `"institution"`) |
 | `approach` | `String` | Yes | Approved approach: `"foundation_irb"` or `"advanced_irb"` |
 | `country_codes` | `String` | No | Comma-separated ISO country codes where this permission applies. Null = all geographies. |
@@ -805,7 +803,7 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 | FIRB permission + `internal_pd` + no `lgd` | **F-IRB** (uses regulatory LGD floors) |
 | Both AIRB + FIRB permissions + `internal_pd` + `lgd` | **A-IRB** (higher approach wins) |
 | Both AIRB + FIRB permissions + `internal_pd` + no `lgd` | **F-IRB** (fallback) |
-| No `model_id` on exposure | **SA** (default) |
+| No `model_id` on counterparty | **SA** (default) |
 
 **Example:**
 

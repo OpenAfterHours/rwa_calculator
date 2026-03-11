@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### Model ID moved from exposure to counterparty level (Breaking)
+`model_id` has been moved from `FACILITY_SCHEMA`, `LOAN_SCHEMA`, and `CONTINGENTS_SCHEMA` to `COUNTERPARTY_SCHEMA`. The hierarchy resolver now propagates `model_id` from counterparty to exposure, consistent with how ratings flow through the pipeline. This fixes a bug where `model_id` was silently dropped during exposure unification in `_unify_exposures()`.
+
+- **Removed**: `model_id` from `FACILITY_SCHEMA`, `LOAN_SCHEMA`, `CONTINGENTS_SCHEMA`
+- **Added**: `model_id` to `COUNTERPARTY_SCHEMA`
+- **Updated**: Hierarchy resolver propagates `model_id` from counterparty to exposure via the existing counterparty join
+- **Updated**: Fixture generators, benchmark data generators, and documentation
+
 ### Added
 
 #### On-Balance Sheet Netting (CRR Article 195)

@@ -46,9 +46,10 @@ class RWAService:
         1. **Model-level** (data-driven): Place a ``model_permissions.parquet``
            file in the data directory. Each row grants IRB approval for a model_id
            + exposure_class, optionally scoped by geography and book code
-           exclusions. Exposures link via ``model_id`` on the facility/loan/
-           contingent. The classifier joins permissions per-exposure and gates
-           on data availability (internal_pd for FIRB, internal_pd + lgd for AIRB).
+           exclusions. Counterparties link via ``model_id`` on the counterparty
+           record; the hierarchy resolver propagates this to exposures. The
+           classifier joins permissions per-exposure and gates on data
+           availability (internal_pd for FIRB, internal_pd + lgd for AIRB).
 
         2. **Org-wide** (config-driven): Set ``irb_approach`` on the request.
            Used as fallback when no ``model_permissions`` file is present.

@@ -1406,6 +1406,8 @@ class HierarchyResolver:
             cp_select.append(pl.col("internal_pd"))
         if "external_cqs" in cp_schema:
             cp_select.append(pl.col("external_cqs"))
+        if "model_id" in cp_schema:
+            cp_select.append(pl.col("model_id"))
 
         exposures = exposures.join(
             counterparty_lookup.counterparties.select(cp_select),
@@ -1413,12 +1415,14 @@ class HierarchyResolver:
             how="left",
         )
 
-        # Ensure internal_pd and external_cqs always exist for classifier
+        # Ensure internal_pd, external_cqs, and model_id always exist for classifier
         rating_defaults = []
         if "internal_pd" not in cp_schema:
             rating_defaults.append(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
         if "external_cqs" not in cp_schema:
             rating_defaults.append(pl.lit(None).cast(pl.Int8).alias("external_cqs"))
+        if "model_id" not in cp_schema:
+            rating_defaults.append(pl.lit(None).cast(pl.String).alias("model_id"))
         if rating_defaults:
             exposures = exposures.with_columns(rating_defaults)
 

@@ -65,11 +65,11 @@ class CalculationRequest(BaseRequest):
     IRB Permissions Precedence:
         Model-level permissions (from ``model_permissions.parquet`` in data_path)
         take precedence over the org-wide ``irb_approach`` setting. When
-        ``model_permissions`` is present in the data directory, exposures with a
-        ``model_id`` are matched to their model's approved approach. Exposures
-        without a ``model_id`` (or without a matching permission) fall back to SA.
-        When no ``model_permissions`` file exists, the ``irb_approach`` parameter
-        controls permissions org-wide.
+        ``model_permissions`` is present in the data directory, counterparties
+        with a ``model_id`` have their model's approved approach resolved onto
+        exposures. Counterparties without a ``model_id`` (or without a matching
+        permission) fall back to SA. When no ``model_permissions`` file exists,
+        the ``irb_approach`` parameter controls permissions org-wide.
     """
 
     framework: Literal["CRR", "BASEL_3_1"]

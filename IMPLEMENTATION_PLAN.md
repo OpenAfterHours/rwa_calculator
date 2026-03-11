@@ -1,8 +1,8 @@
 # Implementation Plan — Integration Test Strategy
 
-## Status: Phase 3 Complete
+## Status: Phase 4 Complete
 
-Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests. Phases 1-3 complete with ~87 tests across 7 files.
+Fill gaps in stage-to-stage integration testing. Target: 8 new files, ~100 tests. Phases 1-4 complete with ~100 tests across 8 files.
 
 ### Completed
 - **Phase 1 — Infrastructure + P1** (2026-03-11)
@@ -34,6 +34,16 @@ Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests.
     - `_compute_el_portfolio_summary()` receives raw calculator output (with `rwa` column), not pipeline-standardized output (with `rwa_final`) — fixed to handle all column name variants
     - ParquetLoader requires explicit `DataSourceConfig` with file paths when testing — `DataSourceConfig.from_registry()` uses the DataSourceRegistry which needs standard file names
 
+- **Phase 4 — P5 Equity Flow** (2026-03-11)
+  - `tests/integration/conftest.py` — added `make_equity_exposure()` builder, `equity_exposures` parameter on `make_raw_data_bundle()`, `equity_calculator` fixture (EquityCalculator), imported `EQUITY_EXPOSURE_SCHEMA`
+  - `tests/integration/test_equity_flow.py` — 13 tests across 4 test classes: approach selection (3), risk weights (5), aggregation (3), pipeline pass-through (2)
+  - **Learnings**:
+    - `CRMAdjustedBundle` requires an `exposures` field in addition to `sa_exposures`/`irb_exposures` — use empty LazyFrame for direct calculator tests
+    - The aggregator's bundle-based method is `aggregate_with_audit()`, not `aggregate()` which takes raw LazyFrames
+    - CRM processor's bundle-based method is `get_crm_adjusted_bundle()`, not `apply_crm()` which returns `LazyFrameResult`
+    - Under Basel 3.1, IRB for equity is removed (CRE20.58-62) — all equity forced to SA regardless of IRB permissions
+    - Equity exposures pass through hierarchy, classifier, and CRM completely untouched — no CRM adjustments applied
+
 ---
 
 ## Current State
@@ -44,7 +54,7 @@ Fill gaps in stage-to-stage integration testing. Target: 7 new files, ~92 tests.
 | Unit | ~35 files | ~1,509 | Individual functions/methods in isolation |
 | Acceptance | ~15 files | ~275 | Full pipeline with golden-file comparison |
 | Contract | ~5 files | ~123 | Schema conformance and protocol adherence |
-| Integration | 7 files | ~87 | Pre/post-CRM reporting + hierarchy→classifier + classifier→CRM + CRM→calculators + loader→hierarchy + model permissions + output floor & aggregation |
+| Integration | 8 files | ~100 | Pre/post-CRM reporting + hierarchy→classifier + classifier→CRM + CRM→calculators + loader→hierarchy + model permissions + output floor & aggregation + equity flow |
 | Benchmark | ~1 file | ~27 | Performance regressions |
 
 ### Gap Analysis
@@ -404,8 +414,8 @@ def aggregator() -> OutputAggregator:
 6. `tests/integration/test_model_permissions_pipeline.py` — 12 tests ✓
 7. `tests/integration/test_output_floor_and_aggregation.py` — 15 tests ✓
 
-### Phase 4 — P5 (Week 4)
-8. `tests/integration/test_equity_flow.py` — 10 tests
+### Phase 4 — P5 ✓ DONE
+8. `tests/integration/test_equity_flow.py` — 13 tests ✓
 
 ---
 

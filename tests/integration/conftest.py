@@ -25,6 +25,7 @@ from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.data.schemas import (
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
+    EQUITY_EXPOSURE_SCHEMA,
     FACILITY_MAPPING_SCHEMA,
     FACILITY_SCHEMA,
     LENDING_MAPPING_SCHEMA,
@@ -35,6 +36,7 @@ from rwa_calc.data.schemas import (
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
+from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.sa.calculator import SACalculator
@@ -160,6 +162,19 @@ _CONTINGENT_DEFAULTS: dict[str, Any] = {
     "bs_type": "OFB",
 }
 
+_EQUITY_EXPOSURE_DEFAULTS: dict[str, Any] = {
+    "exposure_reference": "EQ001",
+    "counterparty_reference": "CP001",
+    "equity_type": "listed",
+    "currency": "GBP",
+    "carrying_value": 500_000.0,
+    "fair_value": 500_000.0,
+    "is_speculative": False,
+    "is_exchange_traded": False,
+    "is_government_supported": False,
+    "is_significant_investment": False,
+}
+
 _MODEL_PERMISSION_DEFAULTS: dict[str, Any] = {
     "model_id": "MODEL_01",
     "exposure_class": "corporate",
@@ -187,6 +202,11 @@ def make_facility(**overrides: Any) -> dict[str, Any]:
 def make_contingent(**overrides: Any) -> dict[str, Any]:
     """Single contingent row with defaults."""
     return {**_CONTINGENT_DEFAULTS, **overrides}
+
+
+def make_equity_exposure(**overrides: Any) -> dict[str, Any]:
+    """Single equity exposure row with defaults."""
+    return {**_EQUITY_EXPOSURE_DEFAULTS, **overrides}
 
 
 def make_model_permission(**overrides: Any) -> dict[str, Any]:
@@ -218,6 +238,7 @@ def make_raw_data_bundle(
     facility_mappings: list[dict[str, Any]] | None = None,
     lending_mappings: list[dict[str, Any]] | None = None,
     org_mappings: list[dict[str, Any]] | None = None,
+    equity_exposures: list[dict[str, Any]] | None = None,
 ) -> RawDataBundle:
     """Build a RawDataBundle from row dicts, applying schema defaults.
 
@@ -294,6 +315,10 @@ def make_raw_data_bundle(
         )
     if org_mappings is not None:
         bundle_kwargs["org_mappings"] = _rows_to_lazyframe(org_mappings, ORG_MAPPING_SCHEMA)
+    if equity_exposures is not None:
+        bundle_kwargs["equity_exposures"] = _rows_to_lazyframe(
+            equity_exposures, EQUITY_EXPOSURE_SCHEMA
+        )
 
     return RawDataBundle(**bundle_kwargs)
 
@@ -336,6 +361,11 @@ def irb_calculator() -> IRBCalculator:
 @pytest.fixture
 def slotting_calculator() -> SlottingCalculator:
     return SlottingCalculator()
+
+
+@pytest.fixture
+def equity_calculator() -> EquityCalculator:
+    return EquityCalculator()
 
 
 @pytest.fixture

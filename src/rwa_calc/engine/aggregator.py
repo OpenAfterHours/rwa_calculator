@@ -820,8 +820,15 @@ class OutputAggregator:
         if "el_shortfall" not in cols or "el_excess" not in cols:
             return None
 
-        # Determine available column names
-        rwa_col = "rwa_post_factor" if "rwa_post_factor" in cols else "rwa_final"
+        # Determine available column names — fall back through all known RWA column names
+        if "rwa_post_factor" in cols:
+            rwa_col = "rwa_post_factor"
+        elif "rwa_final" in cols:
+            rwa_col = "rwa_final"
+        elif "rwa" in cols:
+            rwa_col = "rwa"
+        else:
+            return None
         has_el = "expected_loss" in cols
         has_provisions = "provision_allocated" in cols
 

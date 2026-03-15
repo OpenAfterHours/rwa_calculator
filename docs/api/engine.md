@@ -22,7 +22,7 @@ ensures columns are cast to expected Polars types.
 @dataclass
 class DataSourceConfig:
     """Configuration for data file locations (relative to base_path)."""
-    counterparty_files: list[str]          # default: ["counterparty/sovereign.parquet", ...]
+    counterparties_file: str               # default: "counterparty/counterparties.parquet"
     facilities_file: str                   # default: "exposures/facilities.parquet"
     loans_file: str                        # default: "exposures/loans.parquet"
     contingents_file: str                  # default: "exposures/contingents.parquet"
@@ -33,7 +33,6 @@ class DataSourceConfig:
     facility_mappings_file: str            # default: "exposures/facility_mapping.parquet"
     org_mappings_file: str                 # default: "mapping/org_mapping.parquet"
     lending_mappings_file: str             # default: "mapping/lending_mapping.parquet"
-    specialised_lending_file: str | None   # default: "counterparty/specialised_lending.parquet"
     equity_exposures_file: str | None      # default: None
     fx_rates_file: str | None              # default: "fx_rates/fx_rates.parquet"
 ```

@@ -17,6 +17,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 from rwa_calc.engine.loader import (
     CSVLoader,
     DataLoadError,
@@ -54,42 +55,15 @@ def temp_parquet_dir(tmp_path: Path) -> Path:
     (tmp_path / "ratings").mkdir()
     (tmp_path / "mapping").mkdir()
 
-    # Create minimal counterparty files
-    sovereign_df = pl.DataFrame(
+    # Create counterparty file
+    counterparties_df = pl.DataFrame(
         {
-            "counterparty_id": ["SOV001"],
-            "counterparty_type": ["SOVEREIGN"],
-            "name": ["Test Sovereign"],
+            "counterparty_id": ["SOV001", "INST001", "CORP001", "RET001"],
+            "counterparty_type": ["SOVEREIGN", "INSTITUTION", "CORPORATE", "RETAIL"],
+            "name": ["Test Sovereign", "Test Institution", "Test Corporate", "Test Retail"],
         }
     )
-    sovereign_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
-
-    institution_df = pl.DataFrame(
-        {
-            "counterparty_id": ["INST001"],
-            "counterparty_type": ["INSTITUTION"],
-            "name": ["Test Institution"],
-        }
-    )
-    institution_df.write_parquet(tmp_path / "counterparty" / "institution.parquet")
-
-    corporate_df = pl.DataFrame(
-        {
-            "counterparty_id": ["CORP001"],
-            "counterparty_type": ["CORPORATE"],
-            "name": ["Test Corporate"],
-        }
-    )
-    corporate_df.write_parquet(tmp_path / "counterparty" / "corporate.parquet")
-
-    retail_df = pl.DataFrame(
-        {
-            "counterparty_id": ["RET001"],
-            "counterparty_type": ["RETAIL"],
-            "name": ["Test Retail"],
-        }
-    )
-    retail_df.write_parquet(tmp_path / "counterparty" / "retail.parquet")
+    counterparties_df.write_parquet(tmp_path / "counterparty" / "counterparties.parquet")
 
     # Create exposure files
     facilities_df = pl.DataFrame(
@@ -198,42 +172,15 @@ def temp_csv_dir(tmp_path: Path) -> Path:
     (tmp_path / "ratings").mkdir()
     (tmp_path / "mapping").mkdir()
 
-    # Create minimal counterparty files
-    sovereign_df = pl.DataFrame(
+    # Create counterparty file
+    counterparties_df = pl.DataFrame(
         {
-            "counterparty_id": ["SOV001"],
-            "counterparty_type": ["SOVEREIGN"],
-            "name": ["Test Sovereign"],
+            "counterparty_id": ["SOV001", "INST001", "CORP001", "RET001"],
+            "counterparty_type": ["SOVEREIGN", "INSTITUTION", "CORPORATE", "RETAIL"],
+            "name": ["Test Sovereign", "Test Institution", "Test Corporate", "Test Retail"],
         }
     )
-    sovereign_df.write_csv(tmp_path / "counterparty" / "sovereign.csv")
-
-    institution_df = pl.DataFrame(
-        {
-            "counterparty_id": ["INST001"],
-            "counterparty_type": ["INSTITUTION"],
-            "name": ["Test Institution"],
-        }
-    )
-    institution_df.write_csv(tmp_path / "counterparty" / "institution.csv")
-
-    corporate_df = pl.DataFrame(
-        {
-            "counterparty_id": ["CORP001"],
-            "counterparty_type": ["CORPORATE"],
-            "name": ["Test Corporate"],
-        }
-    )
-    corporate_df.write_csv(tmp_path / "counterparty" / "corporate.csv")
-
-    retail_df = pl.DataFrame(
-        {
-            "counterparty_id": ["RET001"],
-            "counterparty_type": ["RETAIL"],
-            "name": ["Test Retail"],
-        }
-    )
-    retail_df.write_csv(tmp_path / "counterparty" / "retail.csv")
+    counterparties_df.write_csv(tmp_path / "counterparty" / "counterparties.csv")
 
     # Create exposure files
     facilities_df = pl.DataFrame(
@@ -338,14 +285,10 @@ def temp_csv_dir(tmp_path: Path) -> Path:
 class TestDataSourceConfig:
     """Tests for DataSourceConfig dataclass."""
 
-    def test_default_counterparty_files(self) -> None:
-        """Default counterparty files should include all standard types."""
+    def test_default_counterparties_file(self) -> None:
+        """Default counterparties file should be set correctly."""
         config = DataSourceConfig.from_registry()
-        assert len(config.counterparty_files) == 4
-        assert Path("counterparty/sovereign.parquet") in config.counterparty_files
-        assert Path("counterparty/institution.parquet") in config.counterparty_files
-        assert Path("counterparty/corporate.parquet") in config.counterparty_files
-        assert Path("counterparty/retail.parquet") in config.counterparty_files
+        assert config.counterparties_file == Path("counterparty/counterparties.parquet")
 
     def test_default_exposure_files(self) -> None:
         """Default exposure file paths should be set correctly."""
@@ -370,20 +313,17 @@ class TestDataSourceConfig:
     def test_default_optional_files(self) -> None:
         """Default optional file paths should be set correctly."""
         config = DataSourceConfig.from_registry()
-        assert config.specialised_lending_file == Path("counterparty/specialised_lending.parquet")
         assert config.equity_exposures_file == Path("equity/equity_exposures.parquet")
 
     def test_custom_configuration(self) -> None:
         """Custom configuration should override defaults."""
         config = DataSourceConfig(
-            counterparty_files=[Path("custom/counterparties.parquet")],
+            counterparties_file=Path("custom/counterparties.parquet"),
             facilities_file=Path("custom/facilities.parquet"),
-            specialised_lending_file=None,
             loans_file=Path("exposures/loans.parquet"),
         )
-        assert config.counterparty_files == [Path("custom/counterparties.parquet")]
+        assert config.counterparties_file == Path("custom/counterparties.parquet")
         assert config.facilities_file == Path("custom/facilities.parquet")
-        assert config.specialised_lending_file is None
         # Other defaults should remain
         assert config.loans_file == Path("exposures/loans.parquet")
 
@@ -435,7 +375,9 @@ class TestParquetLoaderInit:
 
     def test_init_with_custom_config(self, temp_parquet_dir: Path) -> None:
         """Loader should accept custom configuration."""
-        custom_config = DataSourceConfig(counterparty_files=[Path("counterparty/sovereign.parquet")])
+        custom_config = DataSourceConfig(
+            counterparties_file=Path("counterparty/counterparties.parquet")
+        )
         loader = ParquetLoader(temp_parquet_dir, config=custom_config)
         assert loader.config == custom_config
 
@@ -506,22 +448,13 @@ class TestParquetLoaderLoad:
         # equity_exposures should be None (not configured)
         assert bundle.equity_exposures is None
 
-    def test_load_optional_specialised_lending(self, temp_parquet_dir: Path) -> None:
-        """Specialised lending should load when file exists."""
-        # Create specialised lending file
-        sl_df = pl.DataFrame(
-            {
-                "counterparty_id": ["SL001"],
-                "specialised_lending_type": ["PROJECT_FINANCE"],
-            }
-        )
-        sl_df.write_parquet(temp_parquet_dir / "counterparty" / "specialised_lending.parquet")
-
+    def test_load_counterparties_from_single_file(self, temp_parquet_dir: Path) -> None:
+        """Counterparties should load from the single counterparties file."""
         loader = ParquetLoader(temp_parquet_dir)
         bundle = loader.load()
 
-        assert bundle.specialised_lending is not None
-        assert isinstance(bundle.specialised_lending, pl.LazyFrame)
+        counterparties_df = bundle.counterparties.collect()
+        assert len(counterparties_df) == 4
 
 
 class TestParquetLoaderWithRealFixtures:
@@ -572,7 +505,7 @@ class TestCSVLoaderInit:
         """Loader should use CSV file extensions in default config."""
         loader = CSVLoader(temp_csv_dir)
         assert loader.config.facilities_file == Path("exposures/facilities.csv")
-        assert Path("counterparty/sovereign.csv") in loader.config.counterparty_files
+        assert loader.config.counterparties_file == Path("counterparty/counterparties.csv")
 
     def test_init_with_invalid_path_raises_error(self) -> None:
         """Loader should raise DataLoadError for non-existent path."""
@@ -664,12 +597,6 @@ class TestHeaderNormalization:
     def test_parquet_loader_normalizes_headers_to_lowercase(self, tmp_path: Path) -> None:
         """Headers should be converted to lowercase."""
         (tmp_path / "counterparty").mkdir()
-        (tmp_path / "exposures").mkdir()
-        (tmp_path / "collateral").mkdir()
-        (tmp_path / "guarantee").mkdir()
-        (tmp_path / "provision").mkdir()
-        (tmp_path / "ratings").mkdir()
-        (tmp_path / "mapping").mkdir()
 
         # Create file with uppercase headers
         df = pl.DataFrame(
@@ -679,13 +606,17 @@ class TestHeaderNormalization:
                 "Name": ["Test Sovereign"],
             }
         )
-        df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
+        df.write_parquet(tmp_path / "counterparty" / "counterparties.parquet")
 
         loader = ParquetLoader(
-            tmp_path, config=DataSourceConfig(counterparty_files=["counterparty/sovereign.parquet"])
+            tmp_path,
+            config=DataSourceConfig(
+                counterparties_file=Path("counterparty/counterparties.parquet")
+            ),
         )
-        counterparties = loader._load_and_combine_counterparties()
-        result = counterparties.collect()
+        result = loader._load_parquet(
+            loader.config.counterparties_file
+        ).collect()
 
         assert "counterparty_id" in result.columns
         assert "counterparty_type" in result.columns
@@ -730,13 +661,15 @@ class TestHeaderNormalization:
                 "Name": ["Test Sovereign"],
             }
         )
-        df.write_csv(tmp_path / "counterparty" / "sovereign.csv")
+        df.write_csv(tmp_path / "counterparty" / "counterparties.csv")
 
         loader = CSVLoader(
-            tmp_path, config=DataSourceConfig(counterparty_files=["counterparty/sovereign.csv"])
+            tmp_path,
+            config=DataSourceConfig(
+                counterparties_file=Path("counterparty/counterparties.csv")
+            ),
         )
-        counterparties = loader._load_and_combine_counterparties()
-        result = counterparties.collect()
+        result = loader._load_csv(loader.config.counterparties_file).collect()
 
         assert "counterparty_id" in result.columns
         assert "counterparty_type" in result.columns
@@ -980,35 +913,14 @@ class TestSchemaEnforcementInLoaders:
 class TestEdgeCases:
     """Tests for edge cases and error conditions."""
 
-    def test_empty_counterparty_directory_raises_error(self, tmp_path: Path) -> None:
-        """Empty counterparty directory should raise DataLoadError."""
-        # Create minimal structure but no counterparty files
+    def test_missing_counterparty_file_raises_error(self, tmp_path: Path) -> None:
+        """Missing counterparties file should raise DataLoadError."""
         (tmp_path / "counterparty").mkdir()
         (tmp_path / "exposures").mkdir()
 
         loader = ParquetLoader(tmp_path)
-        with pytest.raises(DataLoadError, match="No counterparty files found"):
-            loader._load_and_combine_counterparties()
-
-    def test_partial_counterparty_files_loads_available(self, tmp_path: Path) -> None:
-        """Should load available counterparty files even if some missing."""
-        (tmp_path / "counterparty").mkdir()
-
-        # Only create sovereign file
-        sovereign_df = pl.DataFrame(
-            {
-                "counterparty_id": ["SOV001"],
-                "counterparty_type": ["SOVEREIGN"],
-            }
-        )
-        sovereign_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
-
-        loader = ParquetLoader(tmp_path)
-        counterparties = loader._load_and_combine_counterparties()
-
-        df = counterparties.collect()
-        assert len(df) == 1
-        assert df["counterparty_type"][0] == "SOVEREIGN"
+        with pytest.raises(DataLoadError, match="File not found"):
+            loader._load_parquet(loader.config.counterparties_file, COUNTERPARTY_SCHEMA)
 
     def test_corrupted_parquet_file_raises_error_during_load(self, tmp_path: Path) -> None:
         """Corrupted parquet file should raise DataLoadError during loading.
@@ -1020,13 +932,13 @@ class TestEdgeCases:
         (tmp_path / "counterparty").mkdir()
 
         # Create a file that's not valid parquet
-        (tmp_path / "counterparty" / "sovereign.parquet").write_text("not parquet data")
+        (tmp_path / "counterparty" / "counterparties.parquet").write_text("not parquet data")
 
         loader = ParquetLoader(tmp_path)
 
         # Error occurs during loading due to schema enforcement
         with pytest.raises(DataLoadError):
-            loader._load_and_combine_counterparties()
+            loader._load_parquet(loader.config.counterparties_file, COUNTERPARTY_SCHEMA)
 
     def test_corrupted_parquet_file_raises_error_at_collect_without_schema_enforcement(
         self, tmp_path: Path
@@ -1039,47 +951,15 @@ class TestEdgeCases:
         (tmp_path / "counterparty").mkdir()
 
         # Create a file that's not valid parquet
-        (tmp_path / "counterparty" / "sovereign.parquet").write_text("not parquet data")
+        (tmp_path / "counterparty" / "counterparties.parquet").write_text("not parquet data")
 
         loader = ParquetLoader(tmp_path, enforce_schemas=False)
         # scan_parquet succeeds (lazy) when schema enforcement is off
-        lf = loader._load_and_combine_counterparties()
+        lf = loader._load_parquet("counterparty/counterparties.parquet")
 
         # Error occurs at collect time
         with pytest.raises(pl.exceptions.ComputeError):
             lf.collect()
-
-    def test_config_with_different_schema_counterparties(self, tmp_path: Path) -> None:
-        """Counterparties with different schemas should concatenate with diagonal_relaxed."""
-        (tmp_path / "counterparty").mkdir()
-
-        # Create files with different schemas
-        sovereign_df = pl.DataFrame(
-            {
-                "counterparty_id": ["SOV001"],
-                "counterparty_type": ["SOVEREIGN"],
-                "country_code": ["GB"],  # Extra column
-            }
-        )
-        sovereign_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
-
-        corporate_df = pl.DataFrame(
-            {
-                "counterparty_id": ["CORP001"],
-                "counterparty_type": ["CORPORATE"],
-                "industry_code": ["MANU"],  # Different extra column
-            }
-        )
-        corporate_df.write_parquet(tmp_path / "counterparty" / "corporate.parquet")
-
-        loader = ParquetLoader(tmp_path)
-        counterparties = loader._load_and_combine_counterparties()
-
-        df = counterparties.collect()
-        assert len(df) == 2
-        # Both extra columns should be present (diagonal_relaxed behavior)
-        assert "country_code" in df.columns
-        assert "industry_code" in df.columns
 
     def test_empty_optional_parquet_file_returns_none(self, tmp_path: Path) -> None:
         """Empty optional parquet file should return None, not empty LazyFrame.

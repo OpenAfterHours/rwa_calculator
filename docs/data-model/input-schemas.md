@@ -6,7 +6,7 @@ This page documents the authoritative schemas for all input data files required 
 
 | Data Category | File(s) | Required | Purpose |
 |---------------|---------|----------|---------|
-| [Counterparty](#counterparty-schema) | `counterparty/*.parquet` | Yes | Borrower/obligor information |
+| [Counterparty](#counterparty-schema) | `counterparty/counterparties.parquet` | Yes | Borrower/obligor information |
 | [Facility](#facility-schema) | `exposures/facilities.parquet` | Yes | Committed credit limits |
 | [Loan](#loan-schema) | `exposures/loans.parquet` | Yes | Drawn exposures |
 | [Contingent](#contingent-schema) | `exposures/contingents.parquet` | No | Off-balance sheet items |
@@ -33,7 +33,7 @@ This page documents the authoritative schemas for all input data files required 
 
 **Purpose:** Defines borrower/obligor information used for exposure classification, risk weight determination, and hierarchy resolution.
 
-**File:** `counterparty/{entity_type}.parquet` (e.g., `counterparty/corporate.parquet`)
+**File:** `counterparty/counterparties.parquet`
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|

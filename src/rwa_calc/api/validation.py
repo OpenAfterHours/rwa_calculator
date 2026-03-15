@@ -70,7 +70,6 @@ class DataPathValidator:
         files_missing: list[Path] = []
 
         self._check_mandatory(path, request.data_format, files_found, files_missing, errors)
-        self._check_groups(path, request.data_format, files_found, files_missing, errors)
         self._check_optional(path, request.data_format, files_found)
 
         return ValidationResponse(
@@ -104,37 +103,6 @@ class DataPathValidator:
             else:
                 missing.append(file_path)
                 errors.append(create_file_not_found_error(file_path))
-
-    def _check_groups(
-        self,
-        base_path: Path,
-        fmt: str,
-        found: list[Path],
-        missing: list[Path],
-        errors: list[APIError],
-    ) -> None:
-        """Check group-based mandatory files (e.g. at least one counterparty)."""
-        for group_name, group_files in self.registry.get_groups().items():
-            group_found = []
-            group_missing = []
-
-            for source in group_files:
-                file_path = source.get_path(fmt)
-                if (base_path / file_path).exists():
-                    group_found.append(file_path)
-                else:
-                    group_missing.append(file_path)
-
-            if not group_found:
-                errors.append(
-                    create_validation_error(
-                        f"At least one {group_name} file is required",
-                        path=base_path / group_name,
-                    )
-                )
-                missing.extend(group_missing)
-            else:
-                found.extend(group_found)
 
     def _check_optional(self, base_path: Path, fmt: str, found: list[Path]) -> None:
         """Check optional files and record if they exist."""

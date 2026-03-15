@@ -209,7 +209,7 @@ def _write_minimal_dataset(
     _write_parquet(lm_df, lm_path)
 
     config = DataSourceConfig(
-        counterparty_files=[cp_path],
+        counterparties_file=cp_path,
         facilities_file=fac_path,
         loans_file=ln_path,
         facility_mappings_file=fm_path,

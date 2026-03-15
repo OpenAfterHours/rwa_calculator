@@ -47,11 +47,8 @@ def temp_valid_dir(tmp_path: Path) -> Path:
     # Create minimal files with actual data
     empty_df = pl.DataFrame({"id": ["1"]})
 
-    # Counterparty files
-    empty_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
-    empty_df.write_parquet(tmp_path / "counterparty" / "institution.parquet")
-    empty_df.write_parquet(tmp_path / "counterparty" / "corporate.parquet")
-    empty_df.write_parquet(tmp_path / "counterparty" / "retail.parquet")
+    # Counterparty file
+    empty_df.write_parquet(tmp_path / "counterparty" / "counterparties.parquet")
 
     # Exposure files
     empty_df.write_parquet(tmp_path / "exposures" / "facilities.parquet")

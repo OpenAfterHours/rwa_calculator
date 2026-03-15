@@ -20,7 +20,7 @@ from rwa_calc.api.validation import (
     get_required_files,
     validate_data_path,
 )
-from rwa_calc.config.data_sources import DataSourceRegistry, RequirementLevel
+from rwa_calc.config.data_sources import DataSourceRegistry
 
 # =============================================================================
 # Fixtures
@@ -42,11 +42,8 @@ def temp_valid_dir(tmp_path: Path) -> Path:
     # Create minimal files
     empty_df = pl.DataFrame({"id": []})
 
-    # Counterparty files (at least one required)
-    empty_df.write_parquet(tmp_path / "counterparty" / "sovereign.parquet")
-    empty_df.write_parquet(tmp_path / "counterparty" / "institution.parquet")
-    empty_df.write_parquet(tmp_path / "counterparty" / "corporate.parquet")
-    empty_df.write_parquet(tmp_path / "counterparty" / "retail.parquet")
+    # Counterparty file (mandatory)
+    empty_df.write_parquet(tmp_path / "counterparty" / "counterparties.parquet")
 
     # Exposure files
     empty_df.write_parquet(tmp_path / "exposures" / "facilities.parquet")
@@ -77,7 +74,7 @@ def temp_partial_dir(tmp_path: Path) -> Path:
     empty_df = pl.DataFrame({"id": []})
 
     # Only create some files
-    empty_df.write_parquet(tmp_path / "counterparty" / "corporate.parquet")
+    empty_df.write_parquet(tmp_path / "counterparty" / "counterparties.parquet")
     empty_df.write_parquet(tmp_path / "exposures" / "facilities.parquet")
 
     return tmp_path
@@ -112,6 +109,9 @@ class TestDataSourceRegistry:
         registry = DataSourceRegistry()
         mandatory = set(registry.get_mandatory("parquet"))
 
+        # Check counterparty file
+        assert Path("counterparty/counterparties.parquet") in mandatory
+
         # Check core exposure files
         assert Path("exposures/facilities.parquet") in mandatory
         assert Path("exposures/loans.parquet") in mandatory
@@ -135,17 +135,14 @@ class TestDataSourceRegistry:
         # Check optional mapping files
         assert Path("mapping/org_mapping.parquet") in optional
 
-    def test_counterparty_files_grouped(self) -> None:
-        """Counterparty files should be in the counterparty group."""
+    def test_counterparty_file_is_mandatory(self) -> None:
+        """Counterparty file should be mandatory."""
         registry = DataSourceRegistry()
-        groups = registry.get_groups()
-        assert "counterparty" in groups
-        cp_ids = {s.id for s in groups["counterparty"]}
+        source = registry.get_by_id("counterparties")
+        assert source is not None
+        from rwa_calc.config.data_sources import RequirementLevel
 
-        assert "sovereign" in cp_ids
-        assert "institution" in cp_ids
-        assert "corporate" in cp_ids
-        assert "retail" in cp_ids
+        assert source.requirement == RequirementLevel.MANDATORY
 
 
 # =============================================================================
@@ -204,7 +201,7 @@ class TestDataPathValidator:
         empty_df = pl.DataFrame({"id": []})
 
         # Create CSV files
-        empty_df.write_csv(tmp_path / "counterparty" / "corporate.csv")
+        empty_df.write_csv(tmp_path / "counterparty" / "counterparties.csv")
         empty_df.write_csv(tmp_path / "exposures" / "facilities.csv")
         empty_df.write_csv(tmp_path / "exposures" / "loans.csv")
         empty_df.write_csv(tmp_path / "exposures" / "contingents.csv")
@@ -221,9 +218,9 @@ class TestDataPathValidator:
         # Should pass with at least one counterparty file
         assert response.found_count > 0
 
-    def test_validate_at_least_one_counterparty_required(self, tmp_path: Path) -> None:
-        """Should require at least one counterparty file."""
-        # Create directory structure without counterparty files
+    def test_validate_missing_counterparty_file_fails(self, tmp_path: Path) -> None:
+        """Should fail when counterparties file is missing."""
+        # Create directory structure without counterparty file
         (tmp_path / "counterparty").mkdir()
         (tmp_path / "exposures").mkdir()
         (tmp_path / "collateral").mkdir()
@@ -234,7 +231,7 @@ class TestDataPathValidator:
 
         empty_df = pl.DataFrame({"id": []})
 
-        # Create all files except counterparty
+        # Create all files except counterparties
         empty_df.write_parquet(tmp_path / "exposures" / "facilities.parquet")
         empty_df.write_parquet(tmp_path / "exposures" / "loans.parquet")
         empty_df.write_parquet(tmp_path / "exposures" / "contingents.parquet")
@@ -249,18 +246,7 @@ class TestDataPathValidator:
         validator = DataPathValidator()
         response = validator.validate(ValidationRequest(data_path=tmp_path))
         assert response.valid is False
-        assert any("counterparty" in e.message.lower() for e in response.errors)
-
-    def test_validate_partial_counterparty_files_ok(self, temp_valid_dir: Path) -> None:
-        """Should pass with only some counterparty files."""
-        # Remove some counterparty files
-        (temp_valid_dir / "counterparty" / "sovereign.parquet").unlink()
-        (temp_valid_dir / "counterparty" / "institution.parquet").unlink()
-
-        validator = DataPathValidator()
-        response = validator.validate(ValidationRequest(data_path=temp_valid_dir))
-        # Should still pass with corporate and retail counterparty files
-        assert response.valid is True
+        assert Path("counterparty/counterparties.parquet") in response.files_missing
 
 
 

@@ -84,35 +84,23 @@ def _generate_counterparties(output_dir: Path) -> list[tuple[str, int]]:
     """Generate counterparty fixtures."""
     sys.path.insert(0, str(output_dir))
     try:
-        from corporate import create_corporate_counterparties, save_corporate_counterparties
-        from institution import create_institution_counterparties, save_institution_counterparties
-        from retail import create_retail_counterparties, save_retail_counterparties
-        from sovereign import create_sovereign_counterparties, save_sovereign_counterparties
-        from specialised_lending import (
-            create_specialised_lending_counterparties,
-            save_specialised_lending_counterparties,
-        )
+        from corporate import create_corporate_counterparties
+        from institution import create_institution_counterparties
+        from retail import create_retail_counterparties
+        from sovereign import create_sovereign_counterparties
+        from specialised_lending import create_specialised_lending_counterparties
 
-        files = []
-        for name, create_fn, save_fn in [
-            ("sovereign.parquet", create_sovereign_counterparties, save_sovereign_counterparties),
-            (
-                "institution.parquet",
-                create_institution_counterparties,
-                save_institution_counterparties,
-            ),
-            ("corporate.parquet", create_corporate_counterparties, save_corporate_counterparties),
-            ("retail.parquet", create_retail_counterparties, save_retail_counterparties),
-            (
-                "specialised_lending.parquet",
-                create_specialised_lending_counterparties,
-                save_specialised_lending_counterparties,
-            ),
-        ]:
-            df = create_fn()
-            save_fn(output_dir)
-            files.append((name, len(df)))
-        return files
+        frames = [
+            create_sovereign_counterparties(),
+            create_institution_counterparties(),
+            create_corporate_counterparties(),
+            create_retail_counterparties(),
+            create_specialised_lending_counterparties(),
+        ]
+
+        combined = pl.concat(frames)
+        combined.write_parquet(output_dir / "counterparties.parquet")
+        return [("counterparties.parquet", len(combined))]
     finally:
         sys.path.remove(str(output_dir))
 
@@ -281,14 +269,8 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
 
     # Load all parquet files
     try:
-        counterparties = pl.concat(
-            [
-                pl.read_parquet(fixtures_dir / "counterparty" / "sovereign.parquet"),
-                pl.read_parquet(fixtures_dir / "counterparty" / "institution.parquet"),
-                pl.read_parquet(fixtures_dir / "counterparty" / "corporate.parquet"),
-                pl.read_parquet(fixtures_dir / "counterparty" / "retail.parquet"),
-                pl.read_parquet(fixtures_dir / "counterparty" / "specialised_lending.parquet"),
-            ]
+        counterparties = pl.read_parquet(
+            fixtures_dir / "counterparty" / "counterparties.parquet"
         )
         loans = pl.read_parquet(fixtures_dir / "exposures" / "loans.parquet")
         facilities = pl.read_parquet(fixtures_dir / "exposures" / "facilities.parquet")

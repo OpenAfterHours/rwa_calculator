@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-#### Model ID moved from exposure to counterparty level (Breaking)
-`model_id` has been moved from `FACILITY_SCHEMA`, `LOAN_SCHEMA`, and `CONTINGENTS_SCHEMA` to `COUNTERPARTY_SCHEMA`. The hierarchy resolver now propagates `model_id` from counterparty to exposure, consistent with how ratings flow through the pipeline. This fixes a bug where `model_id` was silently dropped during exposure unification in `_unify_exposures()`.
+#### Model ID moved from counterparty to ratings level (Breaking)
+`model_id` has been moved from `COUNTERPARTY_SCHEMA` to `RATINGS_SCHEMA`. The rating inheritance pipeline now carries `model_id` alongside `internal_pd` through parent-child inheritance, eliminating the redundant counterparty-to-exposure propagation path.
 
-- **Removed**: `model_id` from `FACILITY_SCHEMA`, `LOAN_SCHEMA`, `CONTINGENTS_SCHEMA`
-- **Added**: `model_id` to `COUNTERPARTY_SCHEMA`
-- **Updated**: Hierarchy resolver propagates `model_id` from counterparty to exposure via the existing counterparty join
-- **Updated**: Fixture generators, benchmark data generators, and documentation
+- **Removed**: `model_id` from `COUNTERPARTY_SCHEMA`
+- **Added**: `model_id` to `RATINGS_SCHEMA`
+- **Updated**: Rating inheritance pipeline carries `internal_model_id` through coalesce (own → parent)
+- **Updated**: `_unify_exposures()` sources `model_id` from rating inheritance instead of counterparty join
+- **Updated**: Fixture generators, integration tests, benchmark data generators, and documentation
 
 ### Added
 
@@ -92,6 +93,14 @@ Simplified FI scalar control on `COUNTERPARTY_SCHEMA`:
 
 
 
+
+
+## [0.1.36] - 2026-03-15
+
+### Changed
+- Version bump for PyPI release
+
+---
 
 ## [0.1.35] - 2026-03-11
 
@@ -741,8 +750,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.35 | 2026-03-11 | Current |
-| 0.1.34 | 2026-03-11 | Previous |
+| 0.1.36 | 2026-03-15 | Current |
+| 0.1.35 | 2026-03-15 | Previous |
+| 0.1.34 | 2026-03-11 | - |
 | 0.1.33 | 2026-03-10 | - |
 | 0.1.32 | 2026-03-09 | - |
 | 0.1.31 | 2026-03-08 | - |

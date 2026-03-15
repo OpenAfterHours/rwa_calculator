@@ -2,9 +2,9 @@
 Integration tests: Model Permissions Pipeline.
 
 Cross-cutting feature spanning HierarchyResolver → Classifier → CRMProcessor.
-Validates end-to-end model permission resolution: model_id on counterparty
-flows through hierarchy into classifier where model_permissions table drives
-per-row approach assignment, then CRM applies correct treatment.
+Validates end-to-end model permission resolution: model_id on internal rating
+flows through rating inheritance pipeline into classifier where model_permissions
+table drives per-row approach assignment, then CRM applies correct treatment.
 
 Why Priority 4: Model permissions override org-wide IRB config at the
 exposure level. A break here silently misroutes individual exposures to
@@ -50,6 +50,7 @@ _RATING_DATE = date(2024, 6, 1)
 def _make_internal_rating(
     counterparty_reference: str = "CP001",
     pd: float = 0.02,
+    model_id: str | None = None,
     **overrides: Any,
 ) -> dict[str, Any]:
     """Build an internal rating row for IRB eligibility."""
@@ -63,6 +64,7 @@ def _make_internal_rating(
         "pd": pd,
         "rating_date": _RATING_DATE,
         "is_solicited": True,
+        "model_id": model_id,
     }
     defaults.update(overrides)
     return defaults
@@ -112,7 +114,7 @@ class TestBasicModelResolution:
     def test_model_airb_permission_routes_to_airb(
         self, hierarchy_resolver, classifier, crm_processor, crr_config
     ):
-        """Counterparty with model_id and AIRB model permission → AIRB approach.
+        """Internal rating with model_id and AIRB model permission → AIRB approach.
 
         Even with SA-only org config, model-level AIRB permission overrides.
         """
@@ -121,7 +123,6 @@ class TestBasicModelResolution:
                 counterparties=[make_counterparty(
                     counterparty_reference="CP001",
                     entity_type="corporate",
-                    model_id="MODEL_AIRB",
                 )],
                 loans=[make_loan(lgd=0.30)],
                 facilities=[make_facility(lgd=0.30)],
@@ -133,7 +134,9 @@ class TestBasicModelResolution:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AIRB",
+            )],
         )
 
         crm_bundle = _run_pipeline(
@@ -148,13 +151,12 @@ class TestBasicModelResolution:
     def test_model_firb_permission_routes_to_firb(
         self, hierarchy_resolver, classifier, crm_processor, crr_config
     ):
-        """Counterparty with FIRB model permission → FIRB approach."""
+        """Internal rating with FIRB model permission → FIRB approach."""
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
                 counterparties=[make_counterparty(
                     counterparty_reference="CP001",
                     entity_type="corporate",
-                    model_id="MODEL_FIRB",
                 )],
                 loans=[make_loan()],
                 facilities=[make_facility()],
@@ -166,7 +168,9 @@ class TestBasicModelResolution:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_FIRB",
+            )],
         )
 
         crm_bundle = _run_pipeline(
@@ -181,12 +185,11 @@ class TestBasicModelResolution:
     def test_no_model_permission_falls_to_sa(
         self, hierarchy_resolver, classifier, crm_processor, crr_config
     ):
-        """Counterparty without model_id → SA fallback (no org IRB permissions either)."""
+        """Rating without model_id → SA fallback (no org IRB permissions either)."""
         bundle = make_raw_data_bundle(
             counterparties=[make_counterparty(
                 counterparty_reference="CP001",
                 entity_type="corporate",
-                model_id=None,
             )],
             loans=[make_loan()],
         )
@@ -212,7 +215,6 @@ class TestBasicModelResolution:
                 counterparties=[make_counterparty(
                     counterparty_reference="CP001",
                     entity_type="corporate",
-                    model_id="MODEL_AIRB",
                 )],
                 loans=[make_loan(lgd=0.30)],
                 facilities=[make_facility(lgd=0.30)],
@@ -224,7 +226,9 @@ class TestBasicModelResolution:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AIRB",
+            )],
         )
 
         crm_bundle = _run_pipeline(
@@ -255,12 +259,10 @@ class TestModelPermissionFiltering:
                     make_counterparty(
                         counterparty_reference="CP_CORP",
                         entity_type="corporate",
-                        model_id="MODEL_01",
                     ),
                     make_counterparty(
                         counterparty_reference="CP_INST",
                         entity_type="institution",
-                        model_id="MODEL_01",
                         total_assets=500_000_000.0,
                     ),
                 ],
@@ -293,11 +295,14 @@ class TestModelPermissionFiltering:
                 ],
             ),
             ratings=[
-                _make_internal_rating(counterparty_reference="CP_CORP", pd=0.02),
+                _make_internal_rating(
+                    counterparty_reference="CP_CORP", pd=0.02, model_id="MODEL_01",
+                ),
                 _make_internal_rating(
                     counterparty_reference="CP_INST",
                     rating_reference="RAT_CP_INST",
                     pd=0.01,
+                    model_id="MODEL_01",
                 ),
             ],
         )
@@ -325,13 +330,11 @@ class TestModelPermissionFiltering:
                     make_counterparty(
                         counterparty_reference="CP_UK",
                         entity_type="corporate",
-                        model_id="MODEL_GEO",
                         country_code="GB",
                     ),
                     make_counterparty(
                         counterparty_reference="CP_DE",
                         entity_type="corporate",
-                        model_id="MODEL_GEO",
                         country_code="DE",
                     ),
                 ],
@@ -365,11 +368,14 @@ class TestModelPermissionFiltering:
                 ],
             ),
             ratings=[
-                _make_internal_rating(counterparty_reference="CP_UK", pd=0.02),
+                _make_internal_rating(
+                    counterparty_reference="CP_UK", pd=0.02, model_id="MODEL_GEO",
+                ),
                 _make_internal_rating(
                     counterparty_reference="CP_DE",
                     rating_reference="RAT_CP_DE",
                     pd=0.02,
+                    model_id="MODEL_GEO",
                 ),
             ],
         )
@@ -397,7 +403,6 @@ class TestModelPermissionFiltering:
                     make_counterparty(
                         counterparty_reference="CP001",
                         entity_type="corporate",
-                        model_id="MODEL_BOOK",
                     ),
                 ],
                 loans=[
@@ -427,7 +432,9 @@ class TestModelPermissionFiltering:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_BOOK",
+            )],
         )
 
         crm_bundle = _run_pipeline(
@@ -455,7 +462,6 @@ class TestModelPermissionFiltering:
             counterparties=[make_counterparty(
                 counterparty_reference="CP001",
                 entity_type="corporate",
-                model_id="MODEL_AIRB",
             )],
             loans=[make_loan(lgd=0.30)],
             facilities=[make_facility(lgd=0.30)],
@@ -467,7 +473,7 @@ class TestModelPermissionFiltering:
                 ),
             ],
         )
-        # No ratings → no internal PD
+        # No ratings → no internal PD, no model_id
 
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
@@ -497,7 +503,6 @@ class TestEndToEndWithCRM:
                 counterparties=[make_counterparty(
                     counterparty_reference="CP001",
                     entity_type="corporate",
-                    model_id="MODEL_FIRB",
                 )],
                 loans=[make_loan(seniority="senior", lgd=None)],
                 facilities=[make_facility()],
@@ -509,7 +514,9 @@ class TestEndToEndWithCRM:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_FIRB",
+            )],
         )
 
         crm_bundle = _run_pipeline(
@@ -531,7 +538,6 @@ class TestEndToEndWithCRM:
                 counterparties=[make_counterparty(
                     counterparty_reference="CP001",
                     entity_type="corporate",
-                    model_id="MODEL_AIRB",
                 )],
                 loans=[make_loan(lgd=0.30)],
                 facilities=[make_facility(lgd=0.30)],
@@ -543,7 +549,9 @@ class TestEndToEndWithCRM:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AIRB",
+            )],
         )
 
         crm_bundle = _run_pipeline(
@@ -563,8 +571,8 @@ class TestEndToEndWithCRM:
     ):
         """Two counterparties with different model permissions → each gets own approach.
 
-        CP_AIRB has model_id with AIRB permission + modelled LGD.
-        CP_FIRB has model_id with FIRB permission + no modelled LGD.
+        CP_AIRB has rating with model_id → AIRB permission + modelled LGD.
+        CP_FIRB has rating with model_id → FIRB permission + no modelled LGD.
         """
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
@@ -572,12 +580,10 @@ class TestEndToEndWithCRM:
                     make_counterparty(
                         counterparty_reference="CP_AIRB",
                         entity_type="corporate",
-                        model_id="MODEL_AIRB",
                     ),
                     make_counterparty(
                         counterparty_reference="CP_FIRB",
                         entity_type="corporate",
-                        model_id="MODEL_FIRB",
                     ),
                 ],
                 loans=[
@@ -616,11 +622,14 @@ class TestEndToEndWithCRM:
                 ],
             ),
             ratings=[
-                _make_internal_rating(counterparty_reference="CP_AIRB", pd=0.02),
+                _make_internal_rating(
+                    counterparty_reference="CP_AIRB", pd=0.02, model_id="MODEL_AIRB",
+                ),
                 _make_internal_rating(
                     counterparty_reference="CP_FIRB",
                     rating_reference="RAT_CP_FIRB",
                     pd=0.02,
+                    model_id="MODEL_FIRB",
                 ),
             ],
         )
@@ -647,7 +656,6 @@ class TestEndToEndWithCRM:
                 counterparties=[make_counterparty(
                     counterparty_reference="CP001",
                     entity_type="corporate",
-                    model_id="MODEL_AUDIT",
                 )],
                 loans=[make_loan()],
                 facilities=[make_facility()],
@@ -659,7 +667,9 @@ class TestEndToEndWithCRM:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AUDIT",
+            )],
         )
 
         crm_bundle = _run_pipeline(

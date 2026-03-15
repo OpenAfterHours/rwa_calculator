@@ -32,6 +32,7 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     MODEL_PERMISSIONS_SCHEMA,
     ORG_MAPPING_SCHEMA,
+    RATINGS_SCHEMA,
 )
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
@@ -102,7 +103,6 @@ _COUNTERPARTY_DEFAULTS: dict[str, Any] = {
     "is_managed_as_retail": False,
     "scra_grade": None,
     "is_investment_grade": False,
-    "model_id": None,
 }
 
 _LOAN_DEFAULTS: dict[str, Any] = {
@@ -183,6 +183,19 @@ _MODEL_PERMISSION_DEFAULTS: dict[str, Any] = {
     "excluded_book_codes": None,
 }
 
+_RATING_DEFAULTS: dict[str, Any] = {
+    "rating_reference": "RAT001",
+    "counterparty_reference": "CP001",
+    "rating_type": "internal",
+    "rating_agency": "internal",
+    "rating_value": "BB",
+    "cqs": None,
+    "pd": 0.02,
+    "rating_date": _REPORTING_DATE,
+    "is_solicited": True,
+    "model_id": None,
+}
+
 
 def make_counterparty(**overrides: Any) -> dict[str, Any]:
     """Single counterparty row with defaults."""
@@ -214,6 +227,11 @@ def make_model_permission(**overrides: Any) -> dict[str, Any]:
     return {**_MODEL_PERMISSION_DEFAULTS, **overrides}
 
 
+def make_rating(**overrides: Any) -> dict[str, Any]:
+    """Single rating row with defaults."""
+    return {**_RATING_DEFAULTS, **overrides}
+
+
 def _rows_to_lazyframe(rows: list[dict[str, Any]], schema: dict[str, Any]) -> pl.LazyFrame:
     """Convert row dicts to a LazyFrame, casting to the target schema."""
     if not rows:
@@ -239,6 +257,7 @@ def make_raw_data_bundle(
     lending_mappings: list[dict[str, Any]] | None = None,
     org_mappings: list[dict[str, Any]] | None = None,
     equity_exposures: list[dict[str, Any]] | None = None,
+    ratings: list[dict[str, Any]] | None = None,
 ) -> RawDataBundle:
     """Build a RawDataBundle from row dicts, applying schema defaults.
 
@@ -319,6 +338,8 @@ def make_raw_data_bundle(
         bundle_kwargs["equity_exposures"] = _rows_to_lazyframe(
             equity_exposures, EQUITY_EXPOSURE_SCHEMA
         )
+    if ratings is not None:
+        bundle_kwargs["ratings"] = _rows_to_lazyframe(ratings, RATINGS_SCHEMA)
 
     return RawDataBundle(**bundle_kwargs)
 

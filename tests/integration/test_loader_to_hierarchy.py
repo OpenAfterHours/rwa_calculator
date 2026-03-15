@@ -66,7 +66,6 @@ def _make_counterparty_df(**overrides: Any) -> pl.DataFrame:
         "is_managed_as_retail": False,
         "scra_grade": None,
         "is_investment_grade": False,
-        "model_id": None,
     }
     defaults.update(overrides)
     df = pl.DataFrame([defaults])
@@ -209,7 +208,7 @@ def _write_minimal_dataset(
     _write_parquet(lm_df, lm_path)
 
     config = DataSourceConfig(
-        counterparty_files=[cp_path],
+        counterparties_file=cp_path,
         facilities_file=fac_path,
         loans_file=ln_path,
         facility_mappings_file=fm_path,
@@ -241,7 +240,7 @@ class TestSchemaConformance:
         bundle = loader.load()
 
         cp_cols = set(bundle.counterparties.collect_schema().names())
-        required = {"counterparty_reference", "entity_type", "country_code", "model_id"}
+        required = {"counterparty_reference", "entity_type", "country_code"}
         missing = required - cp_cols
         assert not missing, f"Loaded counterparties missing hierarchy columns: {missing}"
 

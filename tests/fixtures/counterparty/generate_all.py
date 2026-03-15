@@ -1,12 +1,13 @@
 """
-Generate all counterparty test fixture parquet files.
+Generate consolidated counterparty test fixture parquet file.
+
+Combines all counterparty types (sovereign, institution, corporate, retail,
+specialised lending) into a single counterparties.parquet file.
 
 Usage:
     uv run python tests/fixtures/counterparty/generate_all.py
 """
 
-from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
@@ -15,142 +16,64 @@ import polars as pl
 def main() -> None:
     """Entry point for counterparty fixture generation."""
     output_dir = Path(__file__).parent
-    results = generate_all_counterparties(output_dir)
-    print_report(results, output_dir)
+    df = generate_all_counterparties()
+    output_path = output_dir / "counterparties.parquet"
+    df.write_parquet(output_path)
+    print_report(df, output_path)
 
 
-@dataclass
-class GeneratorResult:
-    """Result of a single counterparty generator execution."""
-
-    name: str
-    dataframe: pl.DataFrame
-    output_path: Path
-
-    @property
-    def record_count(self) -> int:
-        return len(self.dataframe)
-
-    @property
-    def filename(self) -> str:
-        return self.output_path.name
-
-    @property
-    def reference_prefixes(self) -> list[str]:
-        refs = self.dataframe.select("counterparty_reference").to_series().to_list()
-        return sorted({self._extract_prefix(ref) for ref in refs})
-
-    @staticmethod
-    def _extract_prefix(reference: str) -> str:
-        parts = reference.split("_")
-        return f"{parts[0]}_{parts[1]}" if len(parts) >= 2 else reference
-
-
-@dataclass
-class CounterpartyGenerator:
-    """Configuration for a counterparty type generator."""
-
-    name: str
-    create: Callable[[], pl.DataFrame]
-    save: Callable[[Path], Path]
-
-    def run(self, output_dir: Path) -> GeneratorResult:
-        df = self.create()
-        output_path = self.save(output_dir)
-        return GeneratorResult(name=self.name, dataframe=df, output_path=output_path)
-
-
-def get_generators() -> list[CounterpartyGenerator]:
-    """Return all configured counterparty generators."""
-    from corporate import create_corporate_counterparties, save_corporate_counterparties
-    from institution import create_institution_counterparties, save_institution_counterparties
-    from retail import create_retail_counterparties, save_retail_counterparties
-    from sovereign import create_sovereign_counterparties, save_sovereign_counterparties
-    from specialised_lending import (
-        create_specialised_lending_counterparties,
-        save_specialised_lending_counterparties,
-    )
-
-    return [
-        CounterpartyGenerator(
-            "Sovereign", create_sovereign_counterparties, save_sovereign_counterparties
-        ),
-        CounterpartyGenerator(
-            "Institution", create_institution_counterparties, save_institution_counterparties
-        ),
-        CounterpartyGenerator(
-            "Corporate", create_corporate_counterparties, save_corporate_counterparties
-        ),
-        CounterpartyGenerator("Retail", create_retail_counterparties, save_retail_counterparties),
-        CounterpartyGenerator(
-            "Specialised Lending",
-            create_specialised_lending_counterparties,
-            save_specialised_lending_counterparties,
-        ),
-    ]
-
-
-def generate_all_counterparties(output_dir: Path) -> list[GeneratorResult]:
+def generate_all_counterparties() -> pl.DataFrame:
     """
-    Generate all counterparty parquet files.
-
-    Args:
-        output_dir: Directory to write parquet files to.
+    Generate consolidated counterparty DataFrame from all type generators.
 
     Returns:
-        List of generation results for each counterparty type.
+        Combined DataFrame of all counterparty types.
     """
-    return [generator.run(output_dir) for generator in get_generators()]
+    from corporate import create_corporate_counterparties
+    from institution import create_institution_counterparties
+    from retail import create_retail_counterparties
+    from sovereign import create_sovereign_counterparties
+    from specialised_lending import create_specialised_lending_counterparties
+
+    frames = [
+        create_sovereign_counterparties(),
+        create_institution_counterparties(),
+        create_corporate_counterparties(),
+        create_retail_counterparties(),
+        create_specialised_lending_counterparties(),
+    ]
+
+    return pl.concat(frames)
 
 
-def print_report(results: list[GeneratorResult], output_dir: Path) -> None:
+def print_report(df: pl.DataFrame, output_path: Path) -> None:
     """Print generation report to stdout."""
-    print_header(output_dir)
-    print_generation_progress(results)
-    print_summary(results)
-    print_schema_validation(results)
-    print_reference_prefixes(results)
-
-
-def print_header(output_dir: Path) -> None:
     print("=" * 70)
     print("COUNTERPARTY FIXTURE GENERATOR")
     print("=" * 70)
-    print(f"Output directory: {output_dir}\n")
+    print(f"Output: {output_path}")
+    print(f"Total: {len(df)} counterparties")
+    print(f"Schema: {df.schema}")
 
+    # Entity type breakdown
+    if "entity_type" in df.columns:
+        print("\nEntity type breakdown:")
+        for row in df.group_by("entity_type").len().sort("entity_type").iter_rows(named=True):
+            print(f"  {row['entity_type']:<25} {row['len']:>5} records")
 
-def print_generation_progress(results: list[GeneratorResult]) -> None:
-    for result in results:
-        print(f"✓ {result.name}: {result.record_count} counterparties -> {result.filename}")
+    # Reference prefixes
+    print("\nCounterparty reference prefixes:")
+    refs = df.select("counterparty_reference").to_series().to_list()
+    prefixes = sorted({_extract_prefix(ref) for ref in refs})
+    for prefix in prefixes:
+        print(f"  {prefix}")
 
-
-def print_summary(results: list[GeneratorResult]) -> None:
-    total_records = sum(r.record_count for r in results)
-
-    print("\n" + "-" * 70)
-    print("SUMMARY")
-    print("-" * 70)
-
-    for result in results:
-        print(f"  {result.name:<25} {result.record_count:>5} records  ({result.filename})")
-
-    print("-" * 70)
-    print(f"  {'TOTAL':<25} {total_records:>5} records")
     print("=" * 70)
 
 
-def print_schema_validation(results: list[GeneratorResult]) -> None:
-    combined = pl.concat([r.dataframe for r in results])
-
-    print("\nSchema validation:")
-    print(f"  Combined DataFrame: {len(combined)} rows x {len(combined.columns)} columns")
-    print(f"  Schema: {combined.schema}")
-
-
-def print_reference_prefixes(results: list[GeneratorResult]) -> None:
-    print("\nCounterparty reference prefixes:")
-    for result in results:
-        print(f"  {result.name}: {', '.join(result.reference_prefixes)}")
+def _extract_prefix(reference: str) -> str:
+    parts = reference.split("_")
+    return f"{parts[0]}_{parts[1]}" if len(parts) >= 2 else reference
 
 
 if __name__ == "__main__":

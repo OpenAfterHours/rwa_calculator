@@ -19,7 +19,8 @@
       "mcp__polars-mcp__polars_get_docstring",
       "mcp__polars-mcp__polars_search_api",
       "Edit(/tmp/**)",
-      "WebFetch(domain:docs.pola.rs)"
+      "WebFetch(domain:docs.pola.rs)",
+      "Bash(uvx ruff:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

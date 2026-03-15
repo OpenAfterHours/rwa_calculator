@@ -20,7 +20,7 @@ for the calculation pipeline.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -43,7 +43,6 @@ from rwa_calc.data.schemas import (
     ORG_MAPPING_SCHEMA,
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
-    SPECIALISED_LENDING_SCHEMA,
 )
 from rwa_calc.engine.utils import has_rows
 
@@ -121,7 +120,7 @@ class DataSourceConfig:
     Supports both standard fixture layout and custom layouts.
 
     Attributes:
-        counterparty_files: List of counterparty source files to combine
+        counterparties_file: Path to consolidated counterparty data
         facilities_file: Path to facilities data
         loans_file: Path to loans data
         contingents_file: Path to contingent/off-balance sheet data
@@ -132,13 +131,12 @@ class DataSourceConfig:
         facility_mappings_file: Path to facility hierarchy mappings
         org_mappings_file: Path to organisational hierarchy mappings
         lending_mappings_file: Path to lending group mappings
-        specialised_lending_file: Optional path to specialised lending data
         equity_exposures_file: Optional path to equity exposure data
         fx_rates_file: Optional path to FX rates data for currency conversion
         model_permissions_file: Optional path to per-model IRB permissions
     """
 
-    counterparty_files: list[Path] = field(default_factory=list)
+    counterparties_file: Path | None = None
     facilities_file: Path | None = None
     loans_file: Path | None = None
     contingents_file: Path | None = None
@@ -149,7 +147,6 @@ class DataSourceConfig:
     facility_mappings_file: Path | None = None
     org_mappings_file: Path | None = None
     lending_mappings_file: Path | None = None
-    specialised_lending_file: Path | None = None
     equity_exposures_file: Path | None = None
     fx_rates_file: Path | None = None
     model_permissions_file: Path | None = None
@@ -174,12 +171,8 @@ class DataSourceConfig:
             source = reg.get_by_id(id_str)
             return source.get_path(extension) if source else None
 
-        # Counterparty group
-        cp_group = reg.get_groups().get("counterparty", [])
-        cp_files = [s.get_path(extension) for s in cp_group]
-
         return cls(
-            counterparty_files=cp_files,
+            counterparties_file=get_p("counterparties"),
             facilities_file=get_p("facilities"),
             loans_file=get_p("loans"),
             contingents_file=get_p("contingents"),
@@ -190,7 +183,6 @@ class DataSourceConfig:
             facility_mappings_file=get_p("facility_mapping"),
             org_mappings_file=get_p("org_mapping"),
             lending_mappings_file=get_p("lending_mapping"),
-            specialised_lending_file=get_p("specialised_lending"),
             equity_exposures_file=get_p("equity"),
             fx_rates_file=get_p("fx_rates"),
             model_permissions_file=get_p("model_permissions"),
@@ -231,6 +223,7 @@ class ParquetLoader:
 
     # Mapping of file config attributes to their schemas
     _SCHEMA_MAP: dict[str, dict[str, pl.DataType]] = {
+        "counterparties_file": COUNTERPARTY_SCHEMA,
         "facilities_file": FACILITY_SCHEMA,
         "loans_file": LOAN_SCHEMA,
         "contingents_file": CONTINGENTS_SCHEMA,
@@ -241,7 +234,6 @@ class ParquetLoader:
         "facility_mappings_file": FACILITY_MAPPING_SCHEMA,
         "org_mappings_file": ORG_MAPPING_SCHEMA,
         "lending_mappings_file": LENDING_MAPPING_SCHEMA,
-        "specialised_lending_file": SPECIALISED_LENDING_SCHEMA,
         "equity_exposures_file": EQUITY_EXPOSURE_SCHEMA,
         "fx_rates_file": FX_RATES_SCHEMA,
         "model_permissions_file": MODEL_PERMISSIONS_SCHEMA,
@@ -347,37 +339,6 @@ class ParquetLoader:
         except Exception:
             return None
 
-    def _load_and_combine_counterparties(self) -> pl.LazyFrame:
-        """
-        Load and combine all counterparty files with schema enforcement.
-
-        Returns:
-            Combined LazyFrame of all counterparty types
-        """
-        frames = []
-        for file_path in self.config.counterparty_files:
-            full_path = self.base_path / file_path
-            if full_path.exists():
-                try:
-                    lf = normalize_columns(pl.scan_parquet(full_path))
-
-                    # Apply schema enforcement if enabled
-                    if self.enforce_schemas:
-                        lf = enforce_schema(lf, COUNTERPARTY_SCHEMA, strict=False)
-
-                    frames.append(lf)
-                except Exception as e:
-                    raise DataLoadError(
-                        f"Failed to load counterparty file: {e}", source=file_path
-                    ) from e
-
-        if not frames:
-            raise DataLoadError("No counterparty files found")
-
-        # Concatenate all counterparty frames
-        # Use diagonal_relaxed to handle schema differences
-        return pl.concat(frames, how="diagonal_relaxed")
-
     def load(self) -> RawDataBundle:
         """
         Load all required data and return as a RawDataBundle.
@@ -396,7 +357,9 @@ class ParquetLoader:
         return RawDataBundle(
             facilities=self._load_parquet(self.config.facilities_file, FACILITY_SCHEMA),
             loans=self._load_parquet(self.config.loans_file, LOAN_SCHEMA),
-            counterparties=self._load_and_combine_counterparties(),
+            counterparties=self._load_parquet(
+                self.config.counterparties_file, COUNTERPARTY_SCHEMA
+            ),
             facility_mappings=self._load_parquet(
                 self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
             ),
@@ -411,9 +374,6 @@ class ParquetLoader:
             guarantees=self._load_parquet_optional(self.config.guarantees_file, GUARANTEE_SCHEMA),
             provisions=self._load_parquet_optional(self.config.provisions_file, PROVISION_SCHEMA),
             ratings=self._load_parquet_optional(self.config.ratings_file, RATINGS_SCHEMA),
-            specialised_lending=self._load_parquet_optional(
-                self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
-            ),
             equity_exposures=self._load_parquet_optional(
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
             ),
@@ -548,35 +508,6 @@ class CSVLoader:
         except Exception:
             return None
 
-    def _load_and_combine_counterparties(self) -> pl.LazyFrame:
-        """
-        Load and combine all counterparty CSV files with schema enforcement.
-
-        Returns:
-            Combined LazyFrame of all counterparty types
-        """
-        frames = []
-        for file_path in self.config.counterparty_files:
-            full_path = self.base_path / file_path
-            if full_path.exists():
-                try:
-                    lf = normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
-
-                    # Apply schema enforcement if enabled
-                    if self.enforce_schemas:
-                        lf = enforce_schema(lf, COUNTERPARTY_SCHEMA, strict=False)
-
-                    frames.append(lf)
-                except Exception as e:
-                    raise DataLoadError(
-                        f"Failed to load counterparty file: {e}", source=file_path
-                    ) from e
-
-        if not frames:
-            raise DataLoadError("No counterparty files found")
-
-        return pl.concat(frames, how="diagonal_relaxed")
-
     def load(self) -> RawDataBundle:
         """
         Load all required data and return as a RawDataBundle.
@@ -595,7 +526,9 @@ class CSVLoader:
         return RawDataBundle(
             facilities=self._load_csv(self.config.facilities_file, FACILITY_SCHEMA),
             loans=self._load_csv(self.config.loans_file, LOAN_SCHEMA),
-            counterparties=self._load_and_combine_counterparties(),
+            counterparties=self._load_csv(
+                self.config.counterparties_file, COUNTERPARTY_SCHEMA
+            ),
             facility_mappings=self._load_csv(
                 self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
             ),
@@ -608,9 +541,6 @@ class CSVLoader:
             guarantees=self._load_csv_optional(self.config.guarantees_file, GUARANTEE_SCHEMA),
             provisions=self._load_csv_optional(self.config.provisions_file, PROVISION_SCHEMA),
             ratings=self._load_csv_optional(self.config.ratings_file, RATINGS_SCHEMA),
-            specialised_lending=self._load_csv_optional(
-                self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
-            ),
             equity_exposures=self._load_csv_optional(
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
             ),

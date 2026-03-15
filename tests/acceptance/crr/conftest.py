@@ -442,7 +442,7 @@ def raw_data_bundle(load_test_fixtures):
         facilities=fixtures.facilities,
         loans=fixtures.loans,
         contingents=fixtures.contingents,
-        counterparties=fixtures.get_all_counterparties(),
+        counterparties=fixtures.counterparties,
         collateral=fixtures.collateral,
         guarantees=fixtures.guarantees,
         provisions=fixtures.provisions,

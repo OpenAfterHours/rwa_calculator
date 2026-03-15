@@ -18,11 +18,7 @@ class FixtureData:
     """Container for all loaded fixture data."""
 
     # Counterparties
-    sovereigns: pl.LazyFrame
-    institutions: pl.LazyFrame
-    corporates: pl.LazyFrame
-    retail: pl.LazyFrame
-    specialised_lending: pl.LazyFrame
+    counterparties: pl.LazyFrame
 
     # Exposures
     facilities: pl.LazyFrame
@@ -42,20 +38,14 @@ class FixtureData:
     org_mappings: pl.LazyFrame
     lending_mappings: pl.LazyFrame
 
-    def get_all_counterparties(self) -> pl.LazyFrame:
-        """Combine all counterparty types into a single LazyFrame."""
-        return pl.concat([
-            self.sovereigns,
-            self.institutions,
-            self.corporates,
-            self.retail,
-            self.specialised_lending,
-        ])
+    @property
+    def specialised_lending(self) -> pl.LazyFrame:
+        """Filter specialised lending counterparties from combined data."""
+        return self.counterparties.filter(pl.col("entity_type") == "specialised_lending")
 
     def get_counterparty(self, reference: str) -> dict | None:
         """Get a single counterparty by reference."""
-        all_cpty = self.get_all_counterparties()
-        result = all_cpty.filter(
+        result = self.counterparties.filter(
             pl.col("counterparty_reference") == reference
         ).collect()
         if result.height == 0:
@@ -155,8 +145,9 @@ class FixtureData:
 
     def get_specialised_lending_counterparty(self, reference: str) -> dict | None:
         """Get a specialised lending counterparty by reference."""
-        result = self.specialised_lending.filter(
-            pl.col("counterparty_reference") == reference
+        result = self.counterparties.filter(
+            (pl.col("counterparty_reference") == reference)
+            & (pl.col("entity_type") == "specialised_lending")
         ).collect()
         if result.height == 0:
             return None
@@ -196,11 +187,7 @@ def load_fixtures() -> FixtureData:
 
     return FixtureData(
         # Counterparties
-        sovereigns=pl.scan_parquet(fixture_path / "counterparty" / "sovereign.parquet"),
-        institutions=pl.scan_parquet(fixture_path / "counterparty" / "institution.parquet"),
-        corporates=pl.scan_parquet(fixture_path / "counterparty" / "corporate.parquet"),
-        retail=pl.scan_parquet(fixture_path / "counterparty" / "retail.parquet"),
-        specialised_lending=pl.scan_parquet(fixture_path / "counterparty" / "specialised_lending.parquet"),
+        counterparties=pl.scan_parquet(fixture_path / "counterparty" / "counterparties.parquet"),
 
         # Exposures
         facilities=pl.scan_parquet(fixture_path / "exposures" / "facilities.parquet"),
@@ -233,11 +220,7 @@ def load_fixtures_eager() -> dict[str, pl.DataFrame]:
 
     return {
         # Counterparties
-        "sovereigns": pl.read_parquet(fixture_path / "counterparty" / "sovereign.parquet"),
-        "institutions": pl.read_parquet(fixture_path / "counterparty" / "institution.parquet"),
-        "corporates": pl.read_parquet(fixture_path / "counterparty" / "corporate.parquet"),
-        "retail": pl.read_parquet(fixture_path / "counterparty" / "retail.parquet"),
-        "specialised_lending": pl.read_parquet(fixture_path / "counterparty" / "specialised_lending.parquet"),
+        "counterparties": pl.read_parquet(fixture_path / "counterparty" / "counterparties.parquet"),
 
         # Exposures
         "facilities": pl.read_parquet(fixture_path / "exposures" / "facilities.parquet"),

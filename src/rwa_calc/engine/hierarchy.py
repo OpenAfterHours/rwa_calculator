@@ -212,6 +212,7 @@ class HierarchyResolver:
                     "cqs": pl.Int8,
                     "pd": pl.Float64,
                     "rating_date": pl.Date,
+                    "model_id": pl.String,
                 }
             )
 
@@ -309,6 +310,10 @@ class HierarchyResolver:
         """
         sort_cols = ["rating_date", "rating_reference"]
 
+        # Ensure model_id column exists on ratings (may be absent in legacy data)
+        if "model_id" not in ratings.collect_schema().names():
+            ratings = ratings.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
+
         # Best internal rating per counterparty (no CQS — that's external only)
         best_internal = (
             ratings.filter(pl.col("rating_type") == "internal")
@@ -322,6 +327,7 @@ class HierarchyResolver:
                     pl.col("rating_value").alias("internal_rating_value"),
                     pl.col("rating_agency").alias("internal_rating_agency"),
                     pl.col("rating_date").alias("internal_rating_date"),
+                    pl.col("model_id").alias("internal_model_id"),
                 ]
             )
         )
@@ -373,6 +379,7 @@ class HierarchyResolver:
                 pl.col("internal_rating_value").alias("parent_internal_rating_value"),
                 pl.col("internal_rating_agency").alias("parent_internal_rating_agency"),
                 pl.col("internal_rating_date").alias("parent_internal_rating_date"),
+                pl.col("internal_model_id").alias("parent_internal_model_id"),
             ]
         )
         result = result.join(
@@ -430,6 +437,9 @@ class HierarchyResolver:
                 pl.coalesce(
                     pl.col("internal_rating_date"), pl.col("parent_internal_rating_date")
                 ).alias("internal_rating_date"),
+                pl.coalesce(
+                    pl.col("internal_model_id"), pl.col("parent_internal_model_id")
+                ).alias("internal_model_id"),
                 # External fields — coalesce own → parent
                 pl.coalesce(pl.col("external_cqs"), pl.col("parent_external_cqs")).alias(
                     "external_cqs"
@@ -547,6 +557,7 @@ class HierarchyResolver:
                 "internal_rating_value",
                 "internal_rating_agency",
                 "internal_rating_date",
+                "internal_model_id",
                 "internal_inherited",
                 "internal_source_counterparty",
                 "internal_inheritance_reason",
@@ -702,6 +713,7 @@ class HierarchyResolver:
                         pl.col("pd"),
                         pl.col("internal_pd"),
                         pl.col("external_cqs"),
+                        pl.col("internal_model_id"),
                         pl.col("rating_value"),
                         pl.col("rating_agency"),
                         pl.col("inherited").alias("rating_inherited"),
@@ -1399,15 +1411,16 @@ class HierarchyResolver:
         # Add counterparty rating fields needed by downstream calculators.
         # cqs and pd are used by SA/IRB calculators; internal_pd is used by
         # the classifier to gate IRB approach on internal rating availability;
-        # external_cqs is carried for audit trail.
+        # external_cqs is carried for audit trail; internal_model_id links to
+        # model_permissions for per-model approach gating.
         cp_schema = set(counterparty_lookup.counterparties.collect_schema().names())
         cp_select = [pl.col("counterparty_reference"), pl.col("cqs"), pl.col("pd")]
         if "internal_pd" in cp_schema:
             cp_select.append(pl.col("internal_pd"))
         if "external_cqs" in cp_schema:
             cp_select.append(pl.col("external_cqs"))
-        if "model_id" in cp_schema:
-            cp_select.append(pl.col("model_id"))
+        if "internal_model_id" in cp_schema:
+            cp_select.append(pl.col("internal_model_id"))
 
         exposures = exposures.join(
             counterparty_lookup.counterparties.select(cp_select),
@@ -1421,10 +1434,19 @@ class HierarchyResolver:
             rating_defaults.append(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
         if "external_cqs" not in cp_schema:
             rating_defaults.append(pl.lit(None).cast(pl.Int8).alias("external_cqs"))
-        if "model_id" not in cp_schema:
-            rating_defaults.append(pl.lit(None).cast(pl.String).alias("model_id"))
         if rating_defaults:
             exposures = exposures.with_columns(rating_defaults)
+
+        # model_id: sourced from internal_model_id (rating inheritance pipeline)
+        exp_schema = set(exposures.collect_schema().names())
+        if "internal_model_id" in exp_schema:
+            exposures = exposures.with_columns(
+                pl.col("internal_model_id").alias("model_id")
+            ).drop("internal_model_id")
+        elif "model_id" not in exp_schema:
+            exposures = exposures.with_columns(
+                pl.lit(None).cast(pl.String).alias("model_id")
+            )
 
         return exposures, errors
 

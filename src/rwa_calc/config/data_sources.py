@@ -21,9 +21,6 @@ class RequirementLevel(Enum):
     OPTIONAL = auto()
     """Data file is optional for calculation"""
 
-    AT_LEAST_ONE_IN_GROUP = auto()
-    """At least one file from this group is required for calculation"""
-
 
 @dataclass(frozen=True)
 class DataSourceFile:
@@ -32,7 +29,6 @@ class DataSourceFile:
     id: str
     relative_path: Path
     requirement: RequirementLevel
-    group: str | None = None
     description: str | None = None
 
     def get_path(self, extension: str) -> Path:
@@ -73,38 +69,10 @@ DATA_SOURCES = [
     ),
     # Counterparties
     DataSourceFile(
-        id="sovereign",
-        relative_path=Path("counterparty/sovereign"),
-        requirement=RequirementLevel.AT_LEAST_ONE_IN_GROUP,
-        group="counterparty",
-        description="Sovereign and central bank counterparties",
-    ),
-    DataSourceFile(
-        id="institution",
-        relative_path=Path("counterparty/institution"),
-        requirement=RequirementLevel.AT_LEAST_ONE_IN_GROUP,
-        group="counterparty",
-        description="Bank and investment firm counterparties",
-    ),
-    DataSourceFile(
-        id="corporate",
-        relative_path=Path("counterparty/corporate"),
-        requirement=RequirementLevel.AT_LEAST_ONE_IN_GROUP,
-        group="counterparty",
-        description="Corporate and SME counterparties",
-    ),
-    DataSourceFile(
-        id="retail",
-        relative_path=Path("counterparty/retail"),
-        requirement=RequirementLevel.AT_LEAST_ONE_IN_GROUP,
-        group="counterparty",
-        description="Individual and small business retail counterparties",
-    ),
-    DataSourceFile(
-        id="specialised_lending",
-        relative_path=Path("counterparty/specialised_lending"),
-        requirement=RequirementLevel.OPTIONAL,
-        description="Specialised lending (project/object finance) counterparties",
+        id="counterparties",
+        relative_path=Path("counterparty/counterparties"),
+        requirement=RequirementLevel.MANDATORY,
+        description="All counterparty data (sovereigns, institutions, corporates, retail, specialised lending)",
     ),
     # Risk Mitigants & Others
     DataSourceFile(
@@ -195,16 +163,6 @@ class DataSourceRegistry:
             for s in self.sources
             if s.requirement == RequirementLevel.OPTIONAL
         ]
-
-    def get_groups(self) -> dict[str, list[DataSourceFile]]:
-        """Get all files grouped by their group name."""
-        groups: dict[str, list[DataSourceFile]] = {}
-        for s in self.sources:
-            if s.group:
-                if s.group not in groups:
-                    groups[s.group] = []
-                groups[s.group].append(s)
-        return groups
 
     def get_all_paths(self, extension: str) -> list[Path]:
         """Get relative paths for all known files for a format."""

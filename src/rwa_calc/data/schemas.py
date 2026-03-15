@@ -155,8 +155,6 @@ COUNTERPARTY_SCHEMA = {
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
     "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
-    # IRB model assignment — flows from counterparty to exposures via hierarchy resolver
-    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
 COLLATERAL_SCHEMA = {
@@ -220,6 +218,8 @@ RATINGS_SCHEMA = {
     "pd": pl.Float64,  # Probability of Default (for internal ratings)
     "rating_date": pl.Date,
     "is_solicited": pl.Boolean,
+    # IRB model assignment — flows through rating inheritance pipeline to exposures
+    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS9/24 Ch.5)

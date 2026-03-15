@@ -241,7 +241,7 @@ _resolve_model_permissions(exposures, model_permissions)
 
 When `model_permissions` data is provided, resolves per-exposure IRB permissions:
 
-1. Joins exposures to `model_permissions` via `model_id` (propagated from counterparty)
+1. Joins exposures to `model_permissions` via `model_id` (propagated from internal rating via rating inheritance)
 2. Filters by `exposure_class` match
 3. Applies geography filter (`country_codes`) and book code exclusions
 4. Sets `model_airb_permitted` and `model_firb_permitted` boolean columns

@@ -48,6 +48,7 @@ class Rating:
     pd: float | None
     rating_date: date
     is_solicited: bool
+    model_id: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -60,6 +61,7 @@ class Rating:
             "pd": self.pd,
             "rating_date": self.rating_date,
             "is_solicited": self.is_solicited,
+            "model_id": self.model_id,
         }
 
 

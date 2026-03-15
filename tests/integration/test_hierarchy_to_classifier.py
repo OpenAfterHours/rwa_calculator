@@ -28,7 +28,7 @@ from .conftest import (
     make_counterparty,
     make_facility,
     make_loan,
-    make_model_permission,
+    make_rating,
     make_raw_data_bundle,
 )
 
@@ -51,15 +51,16 @@ def _run_pipeline(
 
 
 class TestModelIdPropagation:
-    """Verify model_id flows from counterparty through hierarchy to classifier output."""
+    """Verify model_id flows from internal rating through hierarchy to classifier output."""
 
-    def test_model_id_propagates_from_counterparty_to_loan(
+    def test_model_id_propagates_from_rating_to_loan(
         self, hierarchy_resolver, classifier, crr_config
     ):
-        """Counterparty has model_id → loan exposure gets it after hierarchy unification."""
+        """Internal rating has model_id → loan exposure gets it after hierarchy unification."""
         bundle = make_raw_data_bundle(
-            counterparties=[make_counterparty(model_id="MOD_CORP_01")],
+            counterparties=[make_counterparty()],
             loans=[make_loan()],
+            ratings=[make_rating(model_id="MOD_CORP_01")],
         )
         df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)
 
@@ -67,14 +68,15 @@ class TestModelIdPropagation:
         assert loan_row.height >= 1
         assert loan_row["model_id"][0] == "MOD_CORP_01"
 
-    def test_model_id_propagates_from_counterparty_to_contingent(
+    def test_model_id_propagates_from_rating_to_contingent(
         self, hierarchy_resolver, classifier, crr_config
     ):
-        """Counterparty model_id propagates to contingent exposures."""
+        """Internal rating model_id propagates to contingent exposures."""
         bundle = make_raw_data_bundle(
-            counterparties=[make_counterparty(model_id="MOD_CORP_02")],
+            counterparties=[make_counterparty()],
             loans=[make_loan()],
             contingents=[make_contingent()],
+            ratings=[make_rating(model_id="MOD_CORP_02")],
         )
         df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)
 
@@ -82,14 +84,15 @@ class TestModelIdPropagation:
         assert cont_row.height >= 1
         assert cont_row["model_id"][0] == "MOD_CORP_02"
 
-    def test_model_id_propagates_from_counterparty_to_facility_undrawn(
+    def test_model_id_propagates_from_rating_to_facility_undrawn(
         self, hierarchy_resolver, classifier, crr_config
     ):
-        """Counterparty model_id propagates to facility_undrawn exposures."""
+        """Internal rating model_id propagates to facility_undrawn exposures."""
         bundle = make_raw_data_bundle(
-            counterparties=[make_counterparty(model_id="MOD_CORP_03")],
+            counterparties=[make_counterparty()],
             loans=[make_loan(drawn_amount=500_000.0)],
             facilities=[make_facility(limit=2_000_000.0)],
+            ratings=[make_rating(model_id="MOD_CORP_03")],
         )
         df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)
 
@@ -97,12 +100,12 @@ class TestModelIdPropagation:
         assert undrawn_row.height >= 1
         assert undrawn_row["model_id"][0] == "MOD_CORP_03"
 
-    def test_null_model_id_when_counterparty_has_none(
+    def test_null_model_id_when_rating_has_none(
         self, hierarchy_resolver, classifier, crr_config
     ):
-        """Counterparty without model_id → exposure gets null model_id."""
+        """Rating without model_id → exposure gets null model_id."""
         bundle = make_raw_data_bundle(
-            counterparties=[make_counterparty(model_id=None)],
+            counterparties=[make_counterparty()],
             loans=[make_loan()],
         )
         df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)
@@ -113,11 +116,11 @@ class TestModelIdPropagation:
     def test_different_counterparties_get_own_model_id(
         self, hierarchy_resolver, classifier, crr_config
     ):
-        """Two counterparties with different model_ids → each exposure gets its own."""
+        """Two counterparties with different model_ids on ratings → each exposure gets its own."""
         bundle = make_raw_data_bundle(
             counterparties=[
-                make_counterparty(counterparty_reference="CP_A", model_id="MOD_A"),
-                make_counterparty(counterparty_reference="CP_B", model_id="MOD_B"),
+                make_counterparty(counterparty_reference="CP_A"),
+                make_counterparty(counterparty_reference="CP_B"),
             ],
             loans=[
                 make_loan(loan_reference="LN_A", counterparty_reference="CP_A"),
@@ -126,6 +129,18 @@ class TestModelIdPropagation:
             facilities=[
                 make_facility(facility_reference="FAC_A", counterparty_reference="CP_A"),
                 make_facility(facility_reference="FAC_B", counterparty_reference="CP_B"),
+            ],
+            ratings=[
+                make_rating(
+                    rating_reference="RAT_A",
+                    counterparty_reference="CP_A",
+                    model_id="MOD_A",
+                ),
+                make_rating(
+                    rating_reference="RAT_B",
+                    counterparty_reference="CP_B",
+                    model_id="MOD_B",
+                ),
             ],
         )
         df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)

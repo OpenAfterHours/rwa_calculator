@@ -415,29 +415,29 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
         else:
             print("[OK] All provision loan references valid")
 
-        # Check 12: Model ID references (counterparties → model_permissions)
+        # Check 12: Model ID references (ratings → model_permissions)
         model_perms_path = fixtures_dir / "model_permissions" / "model_permissions.parquet"
         if model_perms_path.exists():
             model_perms = pl.read_parquet(model_perms_path)
             valid_model_ids = set(model_perms["model_id"].to_list())
 
-            # Collect non-null model_ids from counterparties
-            counterparty_model_ids: set[str] = set()
-            if "model_id" in counterparties.columns:
-                non_null = counterparties.filter(pl.col("model_id").is_not_null())[
+            # Collect non-null model_ids from ratings
+            rating_model_ids: set[str] = set()
+            if "model_id" in ratings.columns:
+                non_null = ratings.filter(pl.col("model_id").is_not_null())[
                     "model_id"
                 ].to_list()
-                counterparty_model_ids.update(non_null)
+                rating_model_ids.update(non_null)
 
-            missing_model_ids = counterparty_model_ids - valid_model_ids
+            missing_model_ids = rating_model_ids - valid_model_ids
             if missing_model_ids:
                 errors.append(
-                    f"Counterparties reference missing model_ids: {missing_model_ids}"
+                    f"Ratings reference missing model_ids: {missing_model_ids}"
                 )
             else:
                 print(
-                    f"[OK] All counterparty model_id references valid "
-                    f"({len(counterparty_model_ids)} unique model_ids)"
+                    f"[OK] All rating model_id references valid "
+                    f"({len(rating_model_ids)} unique model_ids)"
                 )
         else:
             print("[--] Model permissions file not found, skipping model_id check")

@@ -49,7 +49,6 @@ This page documents the authoritative schemas for all input data files required 
 | `is_managed_as_retail` | `Boolean` | No | SME managed on pooled retail basis (75% RW per CRR Art. 123) |
 | `scra_grade` | `String` | No | SCRA grade for unrated institutions: `"A"`, `"B"`, `"C"` (Basel 3.1 CRE20.16-21) |
 | `is_investment_grade` | `Boolean` | No | Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47) |
-| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Propagated to exposures by the hierarchy resolver. Null defaults to SA. |
 
 ### Entity Type: The Single Source of Truth
 
@@ -551,6 +550,7 @@ provisions = pl.DataFrame({
 | `pd` | `Float64` | No | Probability of Default (internal ratings) |
 | `rating_date` | `Date` | Yes | Rating as-of date |
 | `is_solicited` | `Boolean` | No | Whether rating was solicited |
+| `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Flows through rating inheritance pipeline to exposures. Null defaults to SA. |
 
 **Valid `rating_agency` values:**
 
@@ -788,7 +788,7 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `model_id` | `String` | Yes | Unique model identifier (e.g., `"UK_CORP_PD_01"`) — referenced by `model_id` on counterparties |
+| `model_id` | `String` | Yes | Unique model identifier (e.g., `"UK_CORP_PD_01"`) — referenced by `model_id` on internal ratings |
 | `exposure_class` | `String` | Yes | ExposureClass value this permission covers (e.g., `"corporate"`, `"institution"`) |
 | `approach` | `String` | Yes | Approved approach: `"foundation_irb"` or `"advanced_irb"` |
 | `country_codes` | `String` | No | Comma-separated ISO country codes where this permission applies. Null = all geographies. |
@@ -803,7 +803,7 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 | FIRB permission + `internal_pd` + no `lgd` | **F-IRB** (uses regulatory LGD floors) |
 | Both AIRB + FIRB permissions + `internal_pd` + `lgd` | **A-IRB** (higher approach wins) |
 | Both AIRB + FIRB permissions + `internal_pd` + no `lgd` | **F-IRB** (fallback) |
-| No `model_id` on counterparty | **SA** (default) |
+| No `model_id` on internal rating | **SA** (default) |
 
 **Example:**
 

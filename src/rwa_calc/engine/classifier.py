@@ -545,10 +545,10 @@ class ExposureClassifier:
         """
         Join exposures with model_permissions to produce per-row permission flags.
 
-        model_id originates on the counterparty and is propagated to exposures by
-        the hierarchy resolver. This method resolves which IRB approach each
+        model_id originates on internal ratings and is propagated to exposures by
+        the rating inheritance pipeline. This method resolves which IRB approach each
         exposure is permitted to use based on:
-        - model_id match (counterparty's model_id must exist in model_permissions)
+        - model_id match (rating's model_id must exist in model_permissions)
         - exposure_class match
         - Geography filter: country_codes is null OR cp_country_code is in the list
         - Book code exclusion: excluded_book_codes is null OR book_code NOT in the list

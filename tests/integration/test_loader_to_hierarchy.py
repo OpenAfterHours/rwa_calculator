@@ -66,7 +66,6 @@ def _make_counterparty_df(**overrides: Any) -> pl.DataFrame:
         "is_managed_as_retail": False,
         "scra_grade": None,
         "is_investment_grade": False,
-        "model_id": None,
     }
     defaults.update(overrides)
     df = pl.DataFrame([defaults])
@@ -241,7 +240,7 @@ class TestSchemaConformance:
         bundle = loader.load()
 
         cp_cols = set(bundle.counterparties.collect_schema().names())
-        required = {"counterparty_reference", "entity_type", "country_code", "model_id"}
+        required = {"counterparty_reference", "entity_type", "country_code"}
         missing = required - cp_cols
         assert not missing, f"Loaded counterparties missing hierarchy columns: {missing}"
 

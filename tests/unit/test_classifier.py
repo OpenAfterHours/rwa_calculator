@@ -1443,9 +1443,9 @@ def _make_exposure_with_model_id(
 ) -> tuple[pl.LazyFrame, pl.LazyFrame]:
     """Helper: creates (exposures, counterparties) for a single exposure with model_id.
 
-    model_id lives on the counterparty. In the real pipeline, the hierarchy resolver
-    copies it to exposures via counterparty join. Since classifier tests bypass the
-    hierarchy resolver, we put model_id on both counterparty and exposure to simulate
+    model_id originates on internal ratings. In the real pipeline, the hierarchy resolver
+    propagates it to exposures via rating inheritance. Since classifier tests bypass the
+    hierarchy resolver, we put model_id directly on the exposure to simulate
     the post-resolution state.
     """
     counterparties = pl.DataFrame(
@@ -1460,7 +1460,6 @@ def _make_exposure_with_model_id(
             "sector_code": ["MANU"],
             "apply_fi_scalar": [False],
             "is_managed_as_retail": [False],
-            "model_id": [model_id],
         }
     ).lazy()
 

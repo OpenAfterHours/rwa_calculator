@@ -190,7 +190,6 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "is_managed_as_retail": pl.Series(np.zeros(n, dtype=bool)),
                 "scra_grade": pl.Series([None] * n, dtype=pl.String),
                 "is_investment_grade": pl.Series(np.zeros(n, dtype=bool)),
-                "model_id": pl.Series([None] * n, dtype=pl.String),
             }
         )
         .cast(COUNTERPARTY_SCHEMA)

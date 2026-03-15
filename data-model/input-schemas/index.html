@@ -4570,7 +4570,7 @@
 <tbody>
 <tr>
 <td><a href="#counterparty-schema">Counterparty</a></td>
-<td><code>counterparty/*.parquet</code></td>
+<td><code>counterparty/counterparties.parquet</code></td>
 <td>Yes</td>
 <td>Borrower/obligor information</td>
 </tr>
@@ -4672,7 +4672,7 @@
 <hr />
 <h2 id="counterparty-schema">Counterparty Schema<a class="headerlink" href="#counterparty-schema" title="Permanent link">&para;</a></h2>
 <p><strong>Purpose:</strong> Defines borrower/obligor information used for exposure classification, risk weight determination, and hierarchy resolution.</p>
-<p><strong>File:</strong> <code>counterparty/{entity_type}.parquet</code> (e.g., <code>counterparty/corporate.parquet</code>)</p>
+<p><strong>File:</strong> <code>counterparty/counterparties.parquet</code></p>
 <table>
 <thead>
 <tr>
@@ -4754,12 +4754,6 @@
 <td><code>Boolean</code></td>
 <td>No</td>
 <td>Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)</td>
-</tr>
-<tr>
-<td><code>model_id</code></td>
-<td><code>String</code></td>
-<td>No</td>
-<td>IRB model identifier — links to <a href="#model-permissions-schema">Model Permissions</a> for per-model approach gating. Propagated to exposures by the hierarchy resolver. Null defaults to SA.</td>
 </tr>
 </tbody>
 </table>
@@ -6091,6 +6085,12 @@
 <td>No</td>
 <td>Whether rating was solicited</td>
 </tr>
+<tr>
+<td><code>model_id</code></td>
+<td><code>String</code></td>
+<td>No</td>
+<td>IRB model identifier — links to <a href="#model-permissions-schema">Model Permissions</a> for per-model approach gating. Flows through rating inheritance pipeline to exposures. Null defaults to SA.</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Valid <code>rating_agency</code> values:</strong></p>
@@ -6643,7 +6643,7 @@ After conversion, the following columns are added:
 <td><code>model_id</code></td>
 <td><code>String</code></td>
 <td>Yes</td>
-<td>Unique model identifier (e.g., <code>"UK_CORP_PD_01"</code>) — referenced by <code>model_id</code> on counterparties</td>
+<td>Unique model identifier (e.g., <code>"UK_CORP_PD_01"</code>) — referenced by <code>model_id</code> on internal ratings</td>
 </tr>
 <tr>
 <td><code>exposure_class</code></td>
@@ -6701,7 +6701,7 @@ After conversion, the following columns are added:
 <td><strong>F-IRB</strong> (fallback)</td>
 </tr>
 <tr>
-<td>No <code>model_id</code> on counterparty</td>
+<td>No <code>model_id</code> on internal rating</td>
 <td><strong>SA</strong> (default)</td>
 </tr>
 </tbody>

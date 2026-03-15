@@ -3950,10 +3950,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#model-id-moved-from-exposure-to-counterparty-level-breaking" class="md-nav__link">
+  <a href="#model-id-moved-from-counterparty-to-ratings-level-breaking" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Model ID moved from exposure to counterparty level (Breaking)
+        Model ID moved from counterparty to ratings level (Breaking)
       
     </span>
   </a>
@@ -5873,10 +5873,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#model-id-moved-from-exposure-to-counterparty-level-breaking" class="md-nav__link">
+  <a href="#model-id-moved-from-counterparty-to-ratings-level-breaking" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Model ID moved from exposure to counterparty level (Breaking)
+        Model ID moved from counterparty to ratings level (Breaking)
       
     </span>
   </a>
@@ -7803,13 +7803,14 @@
 and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
-<h4 id="model-id-moved-from-exposure-to-counterparty-level-breaking">Model ID moved from exposure to counterparty level (Breaking)<a class="headerlink" href="#model-id-moved-from-exposure-to-counterparty-level-breaking" title="Permanent link">&para;</a></h4>
-<p><code>model_id</code> has been moved from <code>FACILITY_SCHEMA</code>, <code>LOAN_SCHEMA</code>, and <code>CONTINGENTS_SCHEMA</code> to <code>COUNTERPARTY_SCHEMA</code>. The hierarchy resolver now propagates <code>model_id</code> from counterparty to exposure, consistent with how ratings flow through the pipeline. This fixes a bug where <code>model_id</code> was silently dropped during exposure unification in <code>_unify_exposures()</code>.</p>
+<h4 id="model-id-moved-from-counterparty-to-ratings-level-breaking">Model ID moved from counterparty to ratings level (Breaking)<a class="headerlink" href="#model-id-moved-from-counterparty-to-ratings-level-breaking" title="Permanent link">&para;</a></h4>
+<p><code>model_id</code> has been moved from <code>COUNTERPARTY_SCHEMA</code> to <code>RATINGS_SCHEMA</code>. The rating inheritance pipeline now carries <code>model_id</code> alongside <code>internal_pd</code> through parent-child inheritance, eliminating the redundant counterparty-to-exposure propagation path.</p>
 <ul>
-<li><strong>Removed</strong>: <code>model_id</code> from <code>FACILITY_SCHEMA</code>, <code>LOAN_SCHEMA</code>, <code>CONTINGENTS_SCHEMA</code></li>
-<li><strong>Added</strong>: <code>model_id</code> to <code>COUNTERPARTY_SCHEMA</code></li>
-<li><strong>Updated</strong>: Hierarchy resolver propagates <code>model_id</code> from counterparty to exposure via the existing counterparty join</li>
-<li><strong>Updated</strong>: Fixture generators, benchmark data generators, and documentation</li>
+<li><strong>Removed</strong>: <code>model_id</code> from <code>COUNTERPARTY_SCHEMA</code></li>
+<li><strong>Added</strong>: <code>model_id</code> to <code>RATINGS_SCHEMA</code></li>
+<li><strong>Updated</strong>: Rating inheritance pipeline carries <code>internal_model_id</code> through coalesce (own → parent)</li>
+<li><strong>Updated</strong>: <code>_unify_exposures()</code> sources <code>model_id</code> from rating inheritance instead of counterparty join</li>
+<li><strong>Updated</strong>: Fixture generators, integration tests, benchmark data generators, and documentation</li>
 </ul>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <h4 id="on-balance-sheet-netting-crr-article-195">On-Balance Sheet Netting (CRR Article 195)<a class="headerlink" href="#on-balance-sheet-netting-crr-article-195" title="Permanent link">&para;</a></h4>

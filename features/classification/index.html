@@ -4917,7 +4917,7 @@
 </span></code></pre></div>
 <p>When <code>model_permissions</code> data is provided, resolves per-exposure IRB permissions:</p>
 <ol>
-<li>Joins exposures to <code>model_permissions</code> via <code>model_id</code> (propagated from counterparty)</li>
+<li>Joins exposures to <code>model_permissions</code> via <code>model_id</code> (propagated from internal rating via rating inheritance)</li>
 <li>Filters by <code>exposure_class</code> match</li>
 <li>Applies geography filter (<code>country_codes</code>) and book code exclusions</li>
 <li>Sets <code>model_airb_permitted</code> and <code>model_firb_permitted</code> boolean columns</li>

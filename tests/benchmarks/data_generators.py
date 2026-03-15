@@ -827,6 +827,7 @@ def generate_ratings(
                 "pd": pds_arr,
                 "rating_date": rating_dates,
                 "is_solicited": solicited,
+                "model_id": pl.Series([None] * n_rated, dtype=pl.String),
             }
         )
         .cast(RATINGS_SCHEMA)

@@ -187,7 +187,7 @@ def _(Path, data_path_input, format_dropdown, mo):
             kind="success",
         )
     elif validation_result:
-        missing = ", ".join(validation_result.files_missing[:3])
+        missing = ", ".join(str(f) for f in validation_result.files_missing[:3])
         more = (
             f" (+{len(validation_result.files_missing) - 3} more)"
             if len(validation_result.files_missing) > 3

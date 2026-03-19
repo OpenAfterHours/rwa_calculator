@@ -3824,17 +3824,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#remaining-skipped-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Remaining Skipped Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#key-achievements" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4078,21 +4067,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basel-31-implementation" class="md-nav__link">
+  <a href="#basel-31-implementation-complete" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Basel 3.1 Implementation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#remaining-fixture-completion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Remaining Fixture Completion
+        Basel 3.1 Implementation — Complete
       
     </span>
   </a>
@@ -4442,17 +4420,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#remaining-skipped-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Remaining Skipped Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#key-achievements" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4696,21 +4663,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basel-31-implementation" class="md-nav__link">
+  <a href="#basel-31-implementation-complete" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Basel 3.1 Implementation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#remaining-fixture-completion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Remaining Fixture Completion
+        Basel 3.1 Implementation — Complete
       
     </span>
   </a>
@@ -4859,12 +4815,12 @@
 <tr>
 <td>CRR Acceptance Tests</td>
 <td>Complete</td>
-<td>74 tests (71 pass, 3 skip)</td>
+<td>97 tests across 9 files</td>
 </tr>
 <tr>
 <td>Basel 3.1 Expected Outputs</td>
-<td>Not Started</td>
-<td>Planned for Phase 1.2B</td>
+<td>Complete</td>
+<td>116 Basel 3.1 acceptance tests across 9 files</td>
 </tr>
 </tbody>
 </table>
@@ -4913,7 +4869,7 @@
 <tr>
 <td><strong>Total</strong></td>
 <td><strong>6 modules</strong></td>
-<td><strong>97 tests</strong></td>
+<td><strong>123 tests</strong></td>
 </tr>
 </tbody>
 </table>
@@ -4948,7 +4904,7 @@
 <td>Risk weight tables</td>
 <td><code>data/tables/crr_risk_weights.py</code></td>
 <td>Complete</td>
-<td>Planned</td>
+<td>Complete</td>
 <td>-</td>
 </tr>
 <tr>
@@ -5018,7 +4974,7 @@
 <td>Equity Calculator</td>
 <td><code>engine/equity/calculator.py</code></td>
 <td>Complete</td>
-<td>N/A</td>
+<td>Complete</td>
 <td>-</td>
 </tr>
 <tr>
@@ -5079,97 +5035,39 @@
 <li><strong>Retail A-IRB / Corporate F-IRB</strong>: Hybrid IRB permissions with corporate-to-retail reclassification for qualifying exposures</li>
 <li><strong>FX Conversion</strong>: Multi-currency portfolio support with configurable target currency and full audit trail</li>
 <li><strong>Pipeline Orchestrator</strong>: Complete pipeline wiring with error accumulation and audit trail</li>
-<li><strong>8 Polars Namespace Extensions</strong>: Fluent, chainable APIs for SA, IRB, CRM, Haircuts, Slotting, Hierarchy, Aggregator, and Audit</li>
+<li><strong>9 Polars Namespace Extensions</strong>: Fluent, chainable APIs for SA, IRB, CRM, Haircuts, Slotting, Hierarchy, Aggregator, Audit, and Equity</li>
 </ul>
 <hr />
 <h2 id="phase-4-acceptance-testing">Phase 4: Acceptance Testing<a class="headerlink" href="#phase-4-acceptance-testing" title="Permanent link">&para;</a></h2>
-<p>CRR acceptance tests validate production pipeline outputs against expected values:</p>
+<p>Acceptance tests validate production pipeline outputs against expected values across CRR, Basel 3.1, and comparison suites:</p>
 <table>
 <thead>
 <tr>
-<th>Group</th>
-<th>Description</th>
+<th>Suite</th>
 <th>Tests</th>
 <th>Status</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>CRR-A</td>
-<td>Standardised Approach</td>
-<td>14</td>
-<td><strong>12 PASS, 2 SKIP</strong></td>
+<td>CRR scenarios</td>
+<td>97</td>
+<td>All passing</td>
 </tr>
 <tr>
-<td>CRR-C</td>
-<td>Advanced IRB</td>
-<td>7</td>
-<td><strong>6 PASS, 1 SKIP</strong></td>
+<td>Basel 3.1 scenarios</td>
+<td>116</td>
+<td>All passing</td>
 </tr>
 <tr>
-<td>CRR-D</td>
-<td>Credit Risk Mitigation</td>
-<td>9</td>
-<td><strong>9 PASS</strong></td>
+<td>Comparison tests</td>
+<td>62</td>
+<td>All passing</td>
 </tr>
 <tr>
-<td>CRR-E</td>
-<td>Specialised Lending (Slotting)</td>
-<td>9</td>
-<td><strong>9 PASS</strong></td>
-</tr>
-<tr>
-<td>CRR-F</td>
-<td>Supporting Factors</td>
-<td>15</td>
-<td><strong>15 PASS</strong></td>
-</tr>
-<tr>
-<td>CRR-G</td>
-<td>Provisions &amp; Impairments</td>
-<td>7</td>
-<td><strong>7 PASS</strong></td>
-</tr>
-<tr>
-<td>CRR-H</td>
-<td>Complex/Combined</td>
-<td>4</td>
-<td><strong>4 PASS</strong></td>
-</tr>
-<tr>
-<td>CRR-I</td>
-<td>Defaulted Exposures</td>
-<td>9</td>
-<td><strong>9 PASS</strong></td>
-</tr>
-<tr>
-<td></td>
 <td><strong>Total</strong></td>
-<td><strong>74</strong></td>
-<td><strong>71 PASS, 3 SKIP</strong></td>
-</tr>
-</tbody>
-</table>
-<h3 id="remaining-skipped-tests">Remaining Skipped Tests<a class="headerlink" href="#remaining-skipped-tests" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Test</th>
-<th>Reason</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>CRR-A7</td>
-<td>Commercial RE low LTV — fixture data needed</td>
-</tr>
-<tr>
-<td>CRR-A8</td>
-<td>Off-balance sheet commitment CCF — fixture data needed</td>
-</tr>
-<tr>
-<td>CRR-C3</td>
-<td>Specialised lending A-IRB — fixture data needed</td>
+<td><strong>275</strong></td>
+<td><strong>All passing</strong></td>
 </tr>
 </tbody>
 </table>
@@ -5177,9 +5075,9 @@
 <ul>
 <li>Pipeline-based testing using session-scoped fixtures</li>
 <li>Scenario-to-exposure reference mapping for all scenarios</li>
-<li>96% acceptance test pass rate (71/74)</li>
-<li>All major calculation approaches validated end-to-end (SA, A-IRB, CRM, Slotting, Supporting Factors, Provisions, Defaulted Exposures)</li>
-<li>F-IRB scenarios covered within A-IRB and Defaulted Exposure test groups</li>
+<li>100% acceptance test pass rate (275/275)</li>
+<li>All major calculation approaches validated end-to-end (SA, F-IRB, A-IRB, CRM, Slotting, Equity, Supporting Factors, Provisions, Defaulted Exposures)</li>
+<li>Full Basel 3.1 coverage including output floor, PD/LGD floors, and LTV-based risk weights</li>
 </ul>
 <hr />
 <h2 id="crr-workbook-components">CRR Workbook Components<a class="headerlink" href="#crr-workbook-components" title="Permanent link">&para;</a></h2>
@@ -5237,7 +5135,7 @@
 </table>
 <hr />
 <h2 id="test-results-summary">Test Results Summary<a class="headerlink" href="#test-results-summary" title="Permanent link">&para;</a></h2>
-<p><strong>Total: 1,286 tests</strong> (1,050 unit + 74 acceptance + 162 benchmark)</p>
+<p><strong>Total: ~2,047 tests</strong> (1,522 unit + 275 acceptance + 123 contract + 100 integration + 27-34 benchmark)</p>
 <table>
 <thead>
 <tr>
@@ -5249,17 +5147,27 @@
 <tbody>
 <tr>
 <td>Unit tests</td>
-<td>1,050</td>
+<td>1,522</td>
 <td>All passing</td>
 </tr>
 <tr>
 <td>Acceptance tests</td>
-<td>74</td>
-<td>71 pass, 3 skip</td>
+<td>275</td>
+<td>All passing</td>
+</tr>
+<tr>
+<td>Contract tests</td>
+<td>123</td>
+<td>All passing</td>
+</tr>
+<tr>
+<td>Integration tests</td>
+<td>100</td>
+<td>All passing</td>
 </tr>
 <tr>
 <td>Benchmark tests</td>
-<td>162</td>
+<td>27–34</td>
 <td>All passing</td>
 </tr>
 </tbody>
@@ -5361,20 +5269,15 @@
 </ul>
 <hr />
 <h2 id="upcoming-work">Upcoming Work<a class="headerlink" href="#upcoming-work" title="Permanent link">&para;</a></h2>
-<h3 id="basel-31-implementation">Basel 3.1 Implementation<a class="headerlink" href="#basel-31-implementation" title="Permanent link">&para;</a></h3>
+<h3 id="basel-31-implementation-complete">Basel 3.1 Implementation — Complete<a class="headerlink" href="#basel-31-implementation-complete" title="Permanent link">&para;</a></h3>
+<p>All Basel 3.1 items have been implemented:</p>
 <ul>
-<li>[ ] Basel 3.1 expected outputs</li>
-<li>[ ] Basel 3.1 acceptance tests</li>
-<li>[ ] Updated risk weight tables (LTV-based real estate)</li>
-<li>[ ] Differentiated PD floors</li>
-<li>[ ] A-IRB LGD floors</li>
-<li>[ ] Output floor phase-in validation</li>
-</ul>
-<h3 id="remaining-fixture-completion">Remaining Fixture Completion<a class="headerlink" href="#remaining-fixture-completion" title="Permanent link">&para;</a></h3>
-<ul>
-<li>[ ] Commercial RE low LTV fixture data (CRR-A7)</li>
-<li>[ ] Off-balance sheet commitment CCF fixture data (CRR-A8)</li>
-<li>[ ] Specialised lending A-IRB fixture data (CRR-C3)</li>
+<li>[x] Basel 3.1 expected outputs</li>
+<li>[x] Basel 3.1 acceptance tests (116 tests)</li>
+<li>[x] Updated risk weight tables (LTV-based real estate)</li>
+<li>[x] Differentiated PD floors</li>
+<li>[x] A-IRB LGD floors</li>
+<li>[x] Output floor phase-in validation</li>
 </ul>
 <hr />
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>

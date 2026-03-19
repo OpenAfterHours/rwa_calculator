@@ -4770,7 +4770,7 @@
 
 
 <h1 id="testing-guide">Testing Guide<a class="headerlink" href="#testing-guide" title="Permanent link">&para;</a></h1>
-<p>This guide covers the testing approach, test organisation, and how to write effective tests. The test suite currently contains <strong>~1,915 tests</strong> across unit, acceptance, contract, integration, and benchmark categories.</p>
+<p>This guide covers the testing approach, test organisation, and how to write effective tests. The test suite currently contains <strong>~2,047 tests</strong> across unit, acceptance, contract, integration, and benchmark categories.</p>
 <table>
 <thead>
 <tr>
@@ -4782,7 +4782,7 @@
 <tbody>
 <tr>
 <td>Unit</td>
-<td style="text-align: right;">1,485</td>
+<td style="text-align: right;">1,522</td>
 <td>Component tests in isolation</td>
 </tr>
 <tr>
@@ -4802,19 +4802,19 @@
 </tr>
 <tr>
 <td>Integration</td>
-<td style="text-align: right;">5</td>
+<td style="text-align: right;">100</td>
 <td>Cross-component integration</td>
 </tr>
 <tr>
 <td><strong>Total</strong></td>
-<td style="text-align: right;"><strong>~1,915</strong></td>
+<td style="text-align: right;"><strong>~2,047</strong></td>
 <td></td>
 </tr>
 </tbody>
 </table>
 <h2 id="test-organisation">Test Organisation<a class="headerlink" href="#test-organisation" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>tests/
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── unit/                    # Component unit tests (1,485 tests)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── unit/                    # Component unit tests (1,522 tests)
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   ├── crr/                 # CRR-specific tests
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   ├── crm/                 # Credit risk mitigation tests
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── irb/                 # IRB-specific tests
@@ -4825,7 +4825,7 @@
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   ├── basel31/             # Basel 3.1 framework scenarios (116 tests)
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   └── comparison/          # Cross-framework comparison tests (62 tests)
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>├── contracts/               # Interface compliance tests (123 tests)
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├── integration/             # Cross-component integration tests (5 tests)
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├── integration/             # Cross-component integration tests (100 tests)
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>├── benchmarks/              # Performance tests (27–34 tests)
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   ├── data_generators.py   # Dataset generation for various scales
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│   └── data/                # Cached benchmark datasets (parquet)

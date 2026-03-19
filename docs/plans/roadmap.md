@@ -19,8 +19,8 @@ This page tracks the development status and progress of the RWA Calculator acros
 |-----------|--------|---------|
 | Test Data Fixtures | Complete | 15 fixture types covering all counterparty, exposure, CRM, and mapping scenarios |
 | CRR Expected Outputs | Complete | 38 scenarios across 8 groups (SA, A-IRB, CRM, Slotting, Supporting Factors, Provisions, Complex, Defaulted) |
-| CRR Acceptance Tests | Complete | 74 tests (71 pass, 3 skip) |
-| Basel 3.1 Expected Outputs | Not Started | Planned for Phase 1.2B |
+| CRR Acceptance Tests | Complete | 97 tests across 9 files |
+| Basel 3.1 Expected Outputs | Complete | 116 Basel 3.1 acceptance tests across 9 files |
 
 ---
 
@@ -36,7 +36,7 @@ Interfaces and contracts between RWA calculator components have been implemented
 | Data Bundles | `src/rwa_calc/contracts/bundles.py` | 24 |
 | Protocols | `src/rwa_calc/contracts/protocols.py` | 14 |
 | Validation | `src/rwa_calc/contracts/validation.py` | 19 |
-| **Total** | **6 modules** | **97 tests** |
+| **Total** | **6 modules** | **123 tests** |
 
 ### Key Features
 
@@ -52,7 +52,7 @@ Interfaces and contracts between RWA calculator components have been implemented
 | Component | Location | CRR Status | Basel 3.1 Status | Tests |
 |-----------|----------|------------|------------------|-------|
 | Domain enums | `domain/enums.py` | Complete | Complete | - |
-| Risk weight tables | `data/tables/crr_risk_weights.py` | Complete | Planned | - |
+| Risk weight tables | `data/tables/crr_risk_weights.py` | Complete | Complete | - |
 | CCF tables | `engine/ccf.py` | Complete | Complete | 57 |
 | Data Loader | `engine/loader.py` | Complete | Complete | 31 |
 | Hierarchy Resolver | `engine/hierarchy.py` | Complete | Complete | 66 |
@@ -62,7 +62,7 @@ Interfaces and contracts between RWA calculator components have been implemented
 | SA Calculator | `engine/sa/calculator.py` | Complete | Complete | - |
 | IRB Calculator | `engine/irb/calculator.py` | Complete | Complete | - |
 | Slotting Calculator | `engine/slotting/calculator.py` | Complete | Complete | - |
-| Equity Calculator | `engine/equity/calculator.py` | Complete | N/A | - |
+| Equity Calculator | `engine/equity/calculator.py` | Complete | Complete | - |
 | Supporting Factors | `engine/sa/supporting_factors.py` | Complete | N/A | - |
 | FX Converter | `engine/fx_converter.py` | Complete | Complete | 14 |
 | Input Validation | `contracts/validation.py` | Complete | Complete | - |
@@ -84,41 +84,28 @@ Interfaces and contracts between RWA calculator components have been implemented
 - **Retail A-IRB / Corporate F-IRB**: Hybrid IRB permissions with corporate-to-retail reclassification for qualifying exposures
 - **FX Conversion**: Multi-currency portfolio support with configurable target currency and full audit trail
 - **Pipeline Orchestrator**: Complete pipeline wiring with error accumulation and audit trail
-- **8 Polars Namespace Extensions**: Fluent, chainable APIs for SA, IRB, CRM, Haircuts, Slotting, Hierarchy, Aggregator, and Audit
+- **9 Polars Namespace Extensions**: Fluent, chainable APIs for SA, IRB, CRM, Haircuts, Slotting, Hierarchy, Aggregator, Audit, and Equity
 
 ---
 
 ## Phase 4: Acceptance Testing
 
-CRR acceptance tests validate production pipeline outputs against expected values:
+Acceptance tests validate production pipeline outputs against expected values across CRR, Basel 3.1, and comparison suites:
 
-| Group | Description | Tests | Status |
-|-------|-------------|-------|--------|
-| CRR-A | Standardised Approach | 14 | **12 PASS, 2 SKIP** |
-| CRR-C | Advanced IRB | 7 | **6 PASS, 1 SKIP** |
-| CRR-D | Credit Risk Mitigation | 9 | **9 PASS** |
-| CRR-E | Specialised Lending (Slotting) | 9 | **9 PASS** |
-| CRR-F | Supporting Factors | 15 | **15 PASS** |
-| CRR-G | Provisions & Impairments | 7 | **7 PASS** |
-| CRR-H | Complex/Combined | 4 | **4 PASS** |
-| CRR-I | Defaulted Exposures | 9 | **9 PASS** |
-| | **Total** | **74** | **71 PASS, 3 SKIP** |
-
-### Remaining Skipped Tests
-
-| Test | Reason |
-|------|--------|
-| CRR-A7 | Commercial RE low LTV — fixture data needed |
-| CRR-A8 | Off-balance sheet commitment CCF — fixture data needed |
-| CRR-C3 | Specialised lending A-IRB — fixture data needed |
+| Suite | Tests | Status |
+|-------|-------|--------|
+| CRR scenarios | 97 | All passing |
+| Basel 3.1 scenarios | 116 | All passing |
+| Comparison tests | 62 | All passing |
+| **Total** | **275** | **All passing** |
 
 ### Key Achievements
 
 - Pipeline-based testing using session-scoped fixtures
 - Scenario-to-exposure reference mapping for all scenarios
-- 96% acceptance test pass rate (71/74)
-- All major calculation approaches validated end-to-end (SA, A-IRB, CRM, Slotting, Supporting Factors, Provisions, Defaulted Exposures)
-- F-IRB scenarios covered within A-IRB and Defaulted Exposure test groups
+- 100% acceptance test pass rate (275/275)
+- All major calculation approaches validated end-to-end (SA, F-IRB, A-IRB, CRM, Slotting, Equity, Supporting Factors, Provisions, Defaulted Exposures)
+- Full Basel 3.1 coverage including output floor, PD/LGD floors, and LTV-based risk weights
 
 ---
 
@@ -141,13 +128,15 @@ Reference implementations for expected output generation:
 
 ## Test Results Summary
 
-**Total: 1,286 tests** (1,050 unit + 74 acceptance + 162 benchmark)
+**Total: ~2,047 tests** (1,522 unit + 275 acceptance + 123 contract + 100 integration + 27-34 benchmark)
 
 | Category | Tests | Status |
 |----------|-------|--------|
-| Unit tests | 1,050 | All passing |
-| Acceptance tests | 74 | 71 pass, 3 skip |
-| Benchmark tests | 162 | All passing |
+| Unit tests | 1,522 | All passing |
+| Acceptance tests | 275 | All passing |
+| Contract tests | 123 | All passing |
+| Integration tests | 100 | All passing |
+| Benchmark tests | 27–34 | All passing |
 
 Run all tests:
 ```bash
@@ -236,20 +225,16 @@ uv run pytest -v
 
 ## Upcoming Work
 
-### Basel 3.1 Implementation
+### Basel 3.1 Implementation — Complete
 
-- [ ] Basel 3.1 expected outputs
-- [ ] Basel 3.1 acceptance tests
-- [ ] Updated risk weight tables (LTV-based real estate)
-- [ ] Differentiated PD floors
-- [ ] A-IRB LGD floors
-- [ ] Output floor phase-in validation
+All Basel 3.1 items have been implemented:
 
-### Remaining Fixture Completion
-
-- [ ] Commercial RE low LTV fixture data (CRR-A7)
-- [ ] Off-balance sheet commitment CCF fixture data (CRR-A8)
-- [ ] Specialised lending A-IRB fixture data (CRR-C3)
+- [x] Basel 3.1 expected outputs
+- [x] Basel 3.1 acceptance tests (116 tests)
+- [x] Updated risk weight tables (LTV-based real estate)
+- [x] Differentiated PD floors
+- [x] A-IRB LGD floors
+- [x] Output floor phase-in validation
 
 ---
 

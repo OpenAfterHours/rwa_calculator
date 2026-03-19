@@ -29,6 +29,7 @@ The calculator uses Polars namespace extensions to provide fluent, chainable API
 | `lf.slotting` | `engine/slotting/namespace.py` | Slotting risk weights |
 | `lf.hierarchy` | `engine/hierarchy_namespace.py` | Parent resolution, rating inheritance |
 | `lf.aggregator` | `engine/aggregator_namespace.py` | Result combination, output floor |
+| `lf.equity` | `engine/equity/namespace.py` | Equity risk weights and RWA |
 | `lf.audit` | `engine/audit_namespace.py` | Audit trail formatting |
 | `expr.audit` | `engine/audit_namespace.py` | Column formatting (currency, %, bps) |
 
@@ -39,7 +40,7 @@ from rwa_calc.engine import (
     SALazyFrame, IRBLazyFrame, CRMLazyFrame,
     HaircutsLazyFrame, SlottingLazyFrame,
     HierarchyLazyFrame, AggregatorLazyFrame,
-    AuditLazyFrame, AuditExpr,
+    EquityLazyFrame, AuditLazyFrame, AuditExpr,
 )
 ```
 
@@ -76,6 +77,9 @@ class ParquetLoader:
             ratings=self._load_optional(path / "ratings.parquet"),
             org_mapping=self._load_optional(path / "org_mapping.parquet"),
             lending_mapping=self._load_optional(path / "lending_mapping.parquet"),
+            fx_rates=self._load_optional(path / "fx_rates.parquet"),
+            facility_mapping=self._load_optional(path / "facility_mapping.parquet"),
+            model_permissions=self._load_optional(path / "model_permissions.parquet"),
         )
 
     def _load_optional(self, path: Path) -> pl.LazyFrame | None:

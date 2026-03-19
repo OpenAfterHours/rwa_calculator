@@ -201,9 +201,10 @@ request = CalculationRequest(
 
 !!! note "Model-level permissions"
     If `config/model_permissions.parquet` exists in `data_path`, per-model permissions
-    take precedence over `irb_approach`. Counterparties are linked to models via
-    `model_id` on the counterparty schema. Exposures without a `model_id` fall back to
-    the org-wide `irb_approach` setting. See
+    take precedence over `irb_approach`. Models are linked to counterparties via
+    `model_id` on the **ratings schema** (not the counterparty schema). The rating
+    inheritance pipeline flows `model_id` through to exposures. Exposures without a
+    `model_id` fall back to the org-wide `irb_approach` setting. See
     [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema)
     for the schema.
 

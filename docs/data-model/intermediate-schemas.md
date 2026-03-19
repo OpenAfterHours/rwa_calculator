@@ -114,7 +114,7 @@ classification in five phases.
 | `is_buy_to_let` | `Boolean` | BTL property lending flag |
 | `exposure_class` | `String` | Regulatory exposure class (see values below) |
 | `exposure_class_reason` | `String` | Explanation of classification decision |
-| `approach_permitted` | `String` | `"SA"`, `"FIRB"`, `"AIRB"` based on IRB permissions |
+| `approach_permitted` | `String` | `"standardised"`, `"foundation_irb"`, `"advanced_irb"` based on IRB permissions |
 | `approach_applied` | `String` | Actual approach used for this exposure |
 | `approach_selection_reason` | `String` | Why this approach was selected |
 | `cqs` | `Int8` | Credit Quality Step (1–6, 0 for unrated) |
@@ -126,30 +126,27 @@ classification in five phases.
 
 **Valid `exposure_class` values:**
 
-- `CENTRAL_GOVT_CENTRAL_BANK`
-- `INSTITUTION`
-- `CORPORATE`
-- `CORPORATE_SME`
-- `RETAIL`
-- `RETAIL_MORTGAGE`
-- `RETAIL_QRRE`
-- `RETAIL_OTHER`
-- `SPECIALISED_LENDING`
-- `EQUITY`
-- `DEFAULTED`
-- `PSE`
-- `MDB`
-- `RGLA`
-- `OTHER`
-- `CIU`
-- `SECURED_BY_RE`
+- `central_govt_central_bank`
+- `institution`
+- `corporate`
+- `corporate_sme`
+- `retail_mortgage`
+- `retail_qrre`
+- `retail_other`
+- `specialised_lending`
+- `equity`
+- `defaulted`
+- `pse`
+- `mdb`
+- `rgla`
+- `other`
 
 **Valid `approach_applied` values:**
 
-- `SA` — Standardised Approach
-- `FIRB` — Foundation IRB
-- `AIRB` — Advanced IRB
-- `SLOTTING` — Slotting Approach
+- `standardised` — Standardised Approach
+- `foundation_irb` — Foundation IRB
+- `advanced_irb` — Advanced IRB
+- `slotting` — Slotting Approach
 
 ## CRM Adjusted Schema
 
@@ -242,19 +239,19 @@ classification based on counterparty and product attributes.
 
 **Valid `sl_type` values:**
 
-- `PROJECT_FINANCE`
-- `OBJECT_FINANCE`
-- `COMMODITIES_FINANCE`
-- `IPRE` — Income-producing real estate
-- `HVCRE` — High volatility CRE
+- `project_finance`
+- `object_finance`
+- `commodities_finance`
+- `ipre` — Income-producing real estate
+- `hvcre` — High volatility CRE
 
 **Valid `slotting_category` values:**
 
-- `STRONG`
-- `GOOD`
-- `SATISFACTORY`
-- `WEAK`
-- `DEFAULT`
+- `strong`
+- `good`
+- `satisfactory`
+- `weak`
+- `default`
 
 ## Transformation Examples
 

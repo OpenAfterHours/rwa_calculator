@@ -118,19 +118,22 @@ class RawDataBundle:
 ```python
 @dataclass
 class LazyFrameResult:
-    data: pl.LazyFrame
-    errors: list[CalculationError]
-    warnings: list[CalculationWarning]
+    frame: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
-        return len(self.errors) > 0
+        return any(e.severity != ErrorSeverity.WARNING for e in self.errors)
+
+    @property
+    def warnings(self) -> list[CalculationError]:
+        return [e for e in self.errors if e.severity == ErrorSeverity.WARNING]
 
 # Usage
-result = processor.process(exposures, config)
+result = processor.apply_crm(data, config)
 if result.has_errors:
     for error in result.errors:
-        logger.error(f"{error.exposure_id}: {error.message}")
+        logger.error(f"{error.exposure_reference}: {error.message}")
 ```
 
 ### 6. Factory Methods for Configuration

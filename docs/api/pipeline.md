@@ -45,7 +45,6 @@ pipeline = create_pipeline()
 # Configure for CRR
 config = CalculationConfig.crr(
     reporting_date=date(2026, 12, 31),
-    apply_sme_supporting_factor=True,
 )
 
 # Run calculation

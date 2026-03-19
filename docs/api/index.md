@@ -68,13 +68,11 @@ from rwa_calc.contracts.config import CalculationConfig
 # CRR configuration
 config = CalculationConfig.crr(
     reporting_date=date(2026, 12, 31),
-    apply_sme_supporting_factor=True,
 )
 
 # Basel 3.1 configuration
 config = CalculationConfig.basel_3_1(
     reporting_date=date(2027, 1, 1),
-    output_floor_percentage=0.725,
 )
 ```
 

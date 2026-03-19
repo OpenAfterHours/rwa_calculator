@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Product** | rwa-calc |
-| **Version** | 0.1.29 (Pre-Release) |
+| **Version** | 0.1.37 (Pre-Release) |
 | **Author** | OpenAfterHours |
 | **License** | Apache 2.0 |
 
@@ -21,7 +21,7 @@ UK credit institutions face a major regulatory transition: migrating from CRR (E
 
 - **Dual-regime operation**: Firms must run CRR and Basel 3.1 in parallel during the transition period
 - **Opacity of vendor solutions**: Commercial RWA engines are black-box systems with limited auditability
-- **Regulatory complexity**: 9 exposure classes, 4 calculation approaches, CRM, supporting factors, output floors
+- **Regulatory complexity**: 14 exposure classes, 4 calculation approaches, CRM, supporting factors, output floors
 - **Performance at scale**: Calculations must complete in seconds for hundreds of thousands to millions of exposures
 
 ## Target Users

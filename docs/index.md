@@ -145,7 +145,7 @@ The calculator is built using modern, high-performance technologies:
 - **Polars** - Vectorized DataFrame operations with LazyFrame optimization
 - **Pydantic** - Data validation and type safety
 - **polars-normal-stats** - Pure Polars statistical functions for IRB formulas
-- **Pytest** - Comprehensive test coverage (1,286+ tests)
+- **Pytest** - Comprehensive test coverage (2,047+ tests)
 
 ## Regulatory References
 
@@ -164,5 +164,5 @@ See the [Regulatory References](appendix/regulatory-references.md) appendix for 
 |-----------|---------|
 | Calculator | 0.1.37 |
 | CRR Support | Full |
-| Basel 3.1 Support | In Development |
+| Basel 3.1 Support | Complete |
 | Python Required | >= 3.13 |

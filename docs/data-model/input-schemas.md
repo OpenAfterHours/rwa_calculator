@@ -794,6 +794,9 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 | `country_codes` | `String` | No | Comma-separated ISO country codes where this permission applies. Null = all geographies. |
 | `excluded_book_codes` | `String` | No | Comma-separated book codes excluded from this permission. Null = no exclusions. |
 
+!!! note "Optional columns"
+    When `country_codes` or `excluded_book_codes` columns are entirely absent from the input file, they are treated as null for all rows — all geographies are permitted and no book codes are excluded. You only need to include these columns if you want to restrict permissions by geography or exclude specific book codes.
+
 **Approach determination logic:**
 
 | Condition | Result |

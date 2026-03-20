@@ -240,7 +240,7 @@ SPECIALISED_LENDING_SCHEMA = {
 EQUITY_EXPOSURE_SCHEMA = {
     "exposure_reference": pl.String,
     "counterparty_reference": pl.String,
-    "equity_type": pl.String,  # listed, unlisted, private_equity, ciu, other
+    "equity_type": pl.String,  # central_bank, listed, exchange_traded, government_supported, unlisted, speculative, private_equity, private_equity_diversified, ciu, other
     "currency": pl.String,
     "carrying_value": pl.Float64,  # Balance sheet value
     "fair_value": pl.Float64,  # For mark-to-market positions

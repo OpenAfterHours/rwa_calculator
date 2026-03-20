@@ -51,6 +51,7 @@ class RawDataBundle:
     specialised_lending: pl.LazyFrame | None = None # Specialised lending metadata (slotting)
     equity_exposures: pl.LazyFrame | None = None    # Equity exposure details
     fx_rates: pl.LazyFrame | None = None            # FX rates for currency conversion
+    model_permissions: pl.LazyFrame | None = None  # Per-model IRB approach permissions
 ```
 
 #### `CounterpartyLookup`
@@ -83,6 +84,7 @@ class ResolvedHierarchyBundle:
     guarantees: pl.LazyFrame | None = None            # Guarantees with beneficiary hierarchy resolved
     provisions: pl.LazyFrame | None = None            # Provisions with beneficiary hierarchy resolved
     equity_exposures: pl.LazyFrame | None = None      # Equity exposure details (passed through)
+    model_permissions: pl.LazyFrame | None = None    # Per-model IRB approach permissions
     hierarchy_errors: list = field(default_factory=list)  # Errors encountered during resolution
 ```
 

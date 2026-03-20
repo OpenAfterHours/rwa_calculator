@@ -83,6 +83,8 @@ The `entity_type` field is the **authoritative source** for determining both SA 
 | `retail` | RETAIL_OTHER | RETAIL_OTHER | CRR Art. 112(h) |
 | **Specialised Lending Class** |
 | `specialised_lending` | SPECIALISED_LENDING | SPECIALISED_LENDING | CRR Art. 147(8) |
+| **Equity Class** |
+| `equity` | EQUITY | EQUITY | CRR Art. 133 |
 
 ### Why SA and IRB Classes Can Differ
 
@@ -262,6 +264,8 @@ facilities = pl.DataFrame({
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
+| `has_netting_agreement` | `Boolean` | No | Whether loan is part of a netting agreement |
+| `netting_facility_reference` | `String` | No | Reference to netting facility (if applicable) |
 
 **Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
 
@@ -285,6 +289,8 @@ loans = pl.DataFrame({
     "beel": [None, None, None],
     "seniority": ["senior", "senior", "senior"],
     "is_buy_to_let": [False, False, False],
+    "has_netting_agreement": [False, False, False],
+    "netting_facility_reference": [None, None, None],
 })
 ```
 
@@ -480,7 +486,7 @@ guarantees = pl.DataFrame({
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `provision_reference` | `String` | Yes | Unique identifier |
-| `provision_type` | `String` | Yes | `SCRA` (specific) or `GCRA` (general) |
+| `provision_type` | `String` | Yes | `scra` (specific) or `gcra` (general) |
 | `ifrs9_stage` | `Int8` | No | IFRS 9 stage (1, 2, or 3) |
 | `currency` | `String` | Yes | ISO 4217 currency code |
 | `amount` | `Float64` | Yes | Provision amount |
@@ -492,15 +498,14 @@ guarantees = pl.DataFrame({
 
 | Value | Description | Usage |
 |-------|-------------|-------|
-| `SCRA` | Specific Credit Risk Adjustment | Reduces exposure value; affects defaulted RW |
-| `GCRA` | General Credit Risk Adjustment | Reduces exposure value |
+| `scra` | Specific Credit Risk Adjustment | Reduces exposure value; affects defaulted RW |
+| `gcra` | General Credit Risk Adjustment | Reduces exposure value |
 
 **Valid `beneficiary_type` values:**
 
 | Value | Description | Resolution |
 |-------|-------------|------------|
 | `loan` | Allocated directly to a specific loan | Matched by `beneficiary_reference` = `loan_reference` |
-| `exposure` | Allocated directly to a specific exposure | Matched by `beneficiary_reference` = exposure reference |
 | `contingent` | Allocated directly to a contingent | Matched by `beneficiary_reference` = `contingent_reference` |
 | `facility` | Allocated at facility level | Distributed pro-rata across facility's exposures by `ead_gross` |
 | `counterparty` | Allocated at counterparty level | Distributed pro-rata across all counterparty exposures by `ead_gross` |
@@ -521,7 +526,7 @@ import polars as pl
 
 provisions = pl.DataFrame({
     "provision_reference": ["PROV_001", "PROV_002"],
-    "provision_type": ["SCRA", "GCRA"],
+    "provision_type": ["scra", "gcra"],
     "ifrs9_stage": [1, 2],
     "currency": ["GBP", "GBP"],
     "amount": [50_000.0, 100_000.0],
@@ -672,7 +677,7 @@ fx_rates = pl.DataFrame({
 | Category | CRR RW | Description |
 |----------|--------|-------------|
 | `strong` | 70% | Excellent risk profile |
-| `good` | 70% | Good risk profile (same as Strong under CRR) |
+| `good` | 90% (70% if <2.5yr) | Good risk profile |
 | `satisfactory` | 115% | Acceptable risk profile |
 | `weak` | 250% | Higher risk profile |
 | `default` | 0% | In default (provisions apply) |
@@ -700,7 +705,7 @@ fx_rates = pl.DataFrame({
 
 | Value | Risk Weight | Description |
 |-------|-------------|-------------|
-| `central_bank` | 100% | Central bank equity holdings |
+| `central_bank` | 0% | Central bank equity holdings (Art. 133(6)) |
 | `listed` | 100% | Exchange-traded equities |
 | `exchange_traded` | 100% | Listed on recognised exchange |
 | `government_supported` | 100% | Government-supported programme |

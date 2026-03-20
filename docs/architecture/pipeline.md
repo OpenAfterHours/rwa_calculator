@@ -467,7 +467,7 @@ def apply_output_floor(
     """Apply output floor to IRB results."""
     return (
         irb_rwa
-        .join(sa_rwa, on="exposure_id", suffix="_sa")
+        .join(sa_rwa, on="exposure_reference", suffix="_sa")
         .with_columns(
             floor=pl.col("rwa_sa") * floor_percentage,
             rwa_floored=pl.max_horizontal(
@@ -484,10 +484,9 @@ Each stage accumulates errors:
 
 ```python
 @dataclass
-class StageResult:
-    data: pl.LazyFrame
-    errors: list[CalculationError]
-    warnings: list[CalculationWarning]
+class LazyFrameResult:
+    frame: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
 
 # Pipeline accumulates across stages
 all_errors = []

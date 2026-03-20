@@ -75,6 +75,8 @@ COUNTERPARTY_SCHEMA = {
     "sector_code": pl.String,             # Based on SIC
     "apply_fi_scalar": pl.Boolean,        # User flag: True = apply 1.25x FI correlation scalar
     "is_managed_as_retail": pl.Boolean,   # SME managed on pooled retail basis - 75% RW
+    "scra_grade": pl.String,              # SCRA grade for unrated institutions: A, B, C
+    "is_investment_grade": pl.Boolean,    # Publicly traded + investment grade → 65% SA RW
 }
 ```
 
@@ -99,6 +101,7 @@ FACILITY_SCHEMA = {
     "ccf_modelled": pl.Float64,          # A-IRB modelled CCF (0.0-1.5)
     "is_short_term_trade_lc": pl.Boolean, # 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,         # BTL - excluded from SME supporting factor
+    "is_qrre_transactor": pl.Boolean,    # QRRE transactor flag (CRE30.55)
 }
 ```
 
@@ -119,6 +122,8 @@ LOAN_SCHEMA = {
     "beel": pl.Float64,                  # Best estimate expected loss
     "seniority": pl.String,             # senior/subordinated
     "is_buy_to_let": pl.Boolean,        # BTL property lending
+    "has_netting_agreement": pl.Boolean, # Netting agreement flag
+    "netting_facility_reference": pl.String, # Netting facility reference
 }
 ```
 
@@ -133,6 +138,9 @@ RATINGS_SCHEMA = {
     "rating_value": pl.String,            # AAA, AA+, Aa1, etc.
     "cqs": pl.Int8,                       # Credit Quality Step 1-6
     "pd": pl.Float64,                     # Probability of Default (for internal ratings)
+    "rating_date": pl.Date,               # Rating as-of date
+    "is_solicited": pl.Boolean,           # Whether rating was solicited
+    "model_id": pl.String,                # IRB model identifier
 }
 ```
 
@@ -156,6 +164,12 @@ COLLATERAL_SCHEMA = {
     "property_ltv": pl.Float64,          # Loan-to-value ratio
     "is_income_producing": pl.Boolean,   # Material income dependence
     "is_adc": pl.Boolean,               # Acquisition/Development/Construction
+    "is_eligible_financial_collateral": pl.Boolean, # SA eligibility (CRR Art 197)
+    "is_eligible_irb_collateral": pl.Boolean,       # IRB eligibility (CRR Art 199)
+    "valuation_date": pl.Date,           # Date of last valuation
+    "valuation_type": pl.String,         # market, indexed, independent
+    "pledge_percentage": pl.Float64,     # Fraction of beneficiary EAD
+    "is_presold": pl.Boolean,            # ADC pre-sold to qualifying buyer
 }
 ```
 
@@ -419,18 +433,18 @@ def validate_exposure(exposure: dict) -> list[ValidationError]:
 ### Result Schema
 
 ```python
-RESULT_SCHEMA = {
-    "exposure_id": pl.Utf8,
-    "counterparty_id": pl.Utf8,
-    "facility_id": pl.Utf8,
-    "exposure_class": pl.Utf8,
-    "approach_type": pl.Utf8,
-    "ead": pl.Float64,
-    "risk_weight": pl.Float64,
-    "rwa": pl.Float64,
-    "expected_loss": pl.Float64,  # IRB only
-    "rwa_before_floor": pl.Float64,  # Basel 3.1
-    "floor_impact": pl.Float64,  # Basel 3.1
+CALCULATION_OUTPUT_SCHEMA = {
+    "exposure_reference": pl.String,
+    "counterparty_reference": pl.String,
+    "exposure_class": pl.String,
+    "approach_applied": pl.String,
+    "final_ead": pl.Float64,
+    "sa_final_risk_weight": pl.Float64,
+    "irb_risk_weight": pl.Float64,
+    "final_rwa": pl.Float64,
+    "irb_expected_loss": pl.Float64,  # IRB only
+    "rwa_before_floor": pl.Float64,   # Basel 3.1
+    "floor_impact": pl.Float64,       # Basel 3.1
 }
 ```
 

@@ -95,9 +95,9 @@ from rwa_calc.data.schemas import FACILITY_SCHEMA
 
 # Create DataFrame with explicit schema
 facilities = pl.DataFrame({
-    "facility_id": ["F001", "F002"],
-    "counterparty_id": ["C001", "C001"],
-    "committed_amount": [1_000_000.0, 500_000.0],
+    "facility_reference": ["F001", "F002"],
+    "counterparty_reference": ["C001", "C001"],
+    "limit": [1_000_000.0, 500_000.0],
 }).cast(FACILITY_SCHEMA)
 ```
 
@@ -105,9 +105,9 @@ facilities = pl.DataFrame({
 
 | Polars Type | Python Type | Usage |
 |-------------|-------------|-------|
-| `pl.Utf8` | `str` | IDs, names, codes |
+| `pl.String` | `str` | IDs, names, codes |
 | `pl.Float64` | `float` | Amounts, rates, weights |
-| `pl.Int32` | `int` | Counts, CQS values |
+| `pl.Int8` | `int` | CQS values, IFRS 9 stages |
 | `pl.Boolean` | `bool` | Flags, indicators |
 | `pl.Date` | `date` | Dates |
 | `pl.Datetime` | `datetime` | Timestamps |
@@ -118,9 +118,9 @@ Optional fields are marked with `| None` in schemas:
 
 ```python
 COUNTERPARTY_SCHEMA = {
-    "counterparty_id": pl.Utf8,          # Required
-    "annual_turnover": pl.Float64,        # Optional (can be null)
-    "parent_id": pl.Utf8,                 # Optional
+    "counterparty_reference": pl.String,  # Required
+    "annual_revenue": pl.Float64,         # Optional (can be null)
+    "entity_type": pl.String,             # Required
 }
 ```
 

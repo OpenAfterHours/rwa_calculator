@@ -65,7 +65,7 @@ assigned by supervisory category, lending type, and (under CRR) remaining maturi
 |--------|------|-------------|
 | `exposure_reference` | `String` | Exposure identifier |
 | `sl_type` | `String` | Specialised lending type (see Specialised Lending Schema) |
-| `slotting_category` | `String` | `STRONG`/`GOOD`/`SATISFACTORY`/`WEAK`/`DEFAULT` |
+| `slotting_category` | `String` | `strong`/`good`/`satisfactory`/`weak`/`default` |
 | `remaining_maturity_years` | `Float64` | Remaining maturity (CRR maturity-band differentiation) |
 | `is_hvcre` | `Boolean` | High Volatility CRE indicator |
 | `sl_base_risk_weight` | `Float64` | Base slotting risk weight |
@@ -144,7 +144,7 @@ from the output data alone.
 |--------|------|-------------|
 | `exposure_class` | `String` | Determined regulatory class |
 | `exposure_class_reason` | `String` | Explanation of classification decision |
-| `approach_permitted` | `String` | `"SA"`, `"FIRB"`, `"AIRB"` based on permissions |
+| `approach_permitted` | `String` | `"standardised"`, `"foundation_irb"`, `"advanced_irb"` based on permissions |
 | `approach_applied` | `String` | Actual approach used |
 | `approach_selection_reason` | `String` | Why this approach was selected |
 
@@ -161,7 +161,7 @@ from the output data alone.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `ccf_applied` | `Float64` | CCF percentage (0%, 20%, 50%, 100%) |
+| `ccf_applied` | `Float64` | CCF percentage (0%, 20%, 40%, 50%, 100%) |
 | `ccf_source` | `String` | Reference to regulatory article |
 | `converted_undrawn` | `Float64` | `undrawn_amount × ccf_applied` |
 
@@ -253,7 +253,7 @@ from the output data alone.
 | `irb_correlation_r` | `Float64` | Asset correlation |
 | `irb_maturity_adj_b` | `Float64` | Maturity adjustment factor |
 | `irb_capital_k` | `Float64` | Capital requirement (K) |
-| `irb_risk_weight` | `Float64` | `12.5 × K` |
+| `irb_risk_weight` | `Float64` | `12.5 × K × scaling_factor` |
 
 ### Specialised lending and equity
 

@@ -75,10 +75,10 @@ class ParquetLoader:
             guarantees=self._load_optional(path / "guarantees.parquet"),
             provisions=self._load_optional(path / "provisions.parquet"),
             ratings=self._load_optional(path / "ratings.parquet"),
-            org_mapping=self._load_optional(path / "org_mapping.parquet"),
-            lending_mapping=self._load_optional(path / "lending_mapping.parquet"),
+            org_mappings=self._load_optional(path / "org_mapping.parquet"),
+            lending_mappings=self._load_optional(path / "lending_mapping.parquet"),
             fx_rates=self._load_optional(path / "fx_rates.parquet"),
-            facility_mapping=self._load_optional(path / "facility_mapping.parquet"),
+            facility_mappings=self._load_optional(path / "facility_mapping.parquet"),
             model_permissions=self._load_optional(path / "model_permissions.parquet"),
         )
 
@@ -327,12 +327,21 @@ Apply credit risk mitigation (collateral, guarantees, provisions).
 
 ```python
 class CRMProcessorProtocol(Protocol):
-    def process(
+    def apply_crm(
         self,
-        classified: ClassifiedExposuresBundle,
-        config: CalculationConfig
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> LazyFrameResult:
+        """Apply credit risk mitigation. Returns LazyFrameResult with CRM-adjusted
+        exposures and any errors."""
+        ...
+
+    def get_crm_adjusted_bundle(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
     ) -> CRMAdjustedBundle:
-        """Apply credit risk mitigation."""
+        """Apply CRM and return as a bundle."""
         ...
 ```
 
@@ -342,11 +351,11 @@ class CRMProcessorProtocol(Protocol):
 class CRMProcessor:
     """Process credit risk mitigation (Art. 111(2) compliant)."""
 
-    def process(
+    def apply_crm(
         self,
-        classified: ClassifiedExposuresBundle,
-        config: CalculationConfig
-    ) -> CRMAdjustedBundle:
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> LazyFrameResult:
         # Provisions resolved BEFORE CCF, then CRM waterfall after EAD init
 
         # Step 1: Resolve provisions (before CCF)

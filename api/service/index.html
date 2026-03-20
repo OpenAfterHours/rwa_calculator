@@ -5135,9 +5135,10 @@ clean API suitable for UI integration, automation, and scripting.</p>
 <div class="admonition note">
 <p class="admonition-title">Model-level permissions</p>
 <p>If <code>config/model_permissions.parquet</code> exists in <code>data_path</code>, per-model permissions
-take precedence over <code>irb_approach</code>. Counterparties are linked to models via
-<code>model_id</code> on the counterparty schema. Exposures without a <code>model_id</code> fall back to
-the org-wide <code>irb_approach</code> setting. See
+take precedence over <code>irb_approach</code>. Models are linked to counterparties via
+<code>model_id</code> on the <strong>ratings schema</strong> (not the counterparty schema). The rating
+inheritance pipeline flows <code>model_id</code> through to exposures. Exposures without a
+<code>model_id</code> fall back to the org-wide <code>irb_approach</code> setting. See
 <a href="../../data-model/input-schemas/#model-permissions-schema">Input Schemas — Model Permissions</a>
 for the schema.</p>
 </div>

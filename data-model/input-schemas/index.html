@@ -4920,6 +4920,18 @@
 <td>SPECIALISED_LENDING</td>
 <td>CRR Art. 147(8)</td>
 </tr>
+<tr>
+<td><strong>Equity Class</strong></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>equity</code></td>
+<td>EQUITY</td>
+<td>EQUITY</td>
+<td>CRR Art. 133</td>
+</tr>
 </tbody>
 </table>
 <h3 id="why-sa-and-irb-classes-can-differ">Why SA and IRB Classes Can Differ<a class="headerlink" href="#why-sa-and-irb-classes-can-differ" title="Permanent link">&para;</a></h3>
@@ -5357,6 +5369,18 @@
 <td>No</td>
 <td>Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501)</td>
 </tr>
+<tr>
+<td><code>has_netting_agreement</code></td>
+<td><code>Boolean</code></td>
+<td>No</td>
+<td>Whether loan is part of a netting agreement</td>
+</tr>
+<tr>
+<td><code>netting_facility_reference</code></td>
+<td><code>String</code></td>
+<td>No</td>
+<td>Reference to netting facility (if applicable)</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Note:</strong> Loans do not have CCF fields (<code>risk_type</code>, <code>ccf_modelled</code>, <code>is_short_term_trade_lc</code>) because CCF only applies to off-balance sheet items. For drawn loans, EAD = <code>drawn_amount</code> + <code>interest</code> directly.</p>
@@ -5378,7 +5402,9 @@
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="s2">&quot;beel&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="s2">&quot;seniority&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">,</span> <span class="s2">&quot;senior&quot;</span><span class="p">],</span>
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="s2">&quot;is_buy_to_let&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">],</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="p">})</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="s2">&quot;has_netting_agreement&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">],</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="s2">&quot;netting_facility_reference&quot;</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="p">})</span>
 </span></code></pre></div>
 <hr />
 <h2 id="contingent-schema">Contingent Schema<a class="headerlink" href="#contingent-schema" title="Permanent link">&para;</a></h2>
@@ -5876,7 +5902,7 @@
 <td><code>provision_type</code></td>
 <td><code>String</code></td>
 <td>Yes</td>
-<td><code>SCRA</code> (specific) or <code>GCRA</code> (general)</td>
+<td><code>scra</code> (specific) or <code>gcra</code> (general)</td>
 </tr>
 <tr>
 <td><code>ifrs9_stage</code></td>
@@ -5927,12 +5953,12 @@
 </thead>
 <tbody>
 <tr>
-<td><code>SCRA</code></td>
+<td><code>scra</code></td>
 <td>Specific Credit Risk Adjustment</td>
 <td>Reduces exposure value; affects defaulted RW</td>
 </tr>
 <tr>
-<td><code>GCRA</code></td>
+<td><code>gcra</code></td>
 <td>General Credit Risk Adjustment</td>
 <td>Reduces exposure value</td>
 </tr>
@@ -5952,11 +5978,6 @@
 <td><code>loan</code></td>
 <td>Allocated directly to a specific loan</td>
 <td>Matched by <code>beneficiary_reference</code> = <code>loan_reference</code></td>
-</tr>
-<tr>
-<td><code>exposure</code></td>
-<td>Allocated directly to a specific exposure</td>
-<td>Matched by <code>beneficiary_reference</code> = exposure reference</td>
 </tr>
 <tr>
 <td><code>contingent</code></td>
@@ -6008,7 +6029,7 @@
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">provisions</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="s2">&quot;provision_reference&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;PROV_001&quot;</span><span class="p">,</span> <span class="s2">&quot;PROV_002&quot;</span><span class="p">],</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="s2">&quot;provision_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;SCRA&quot;</span><span class="p">,</span> <span class="s2">&quot;GCRA&quot;</span><span class="p">],</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="s2">&quot;provision_type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;scra&quot;</span><span class="p">,</span> <span class="s2">&quot;gcra&quot;</span><span class="p">],</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="s2">&quot;ifrs9_stage&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="s2">&quot;currency&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;GBP&quot;</span><span class="p">,</span> <span class="s2">&quot;GBP&quot;</span><span class="p">],</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="s2">&quot;amount&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">50_000.0</span><span class="p">,</span> <span class="mf">100_000.0</span><span class="p">],</span>
@@ -6359,8 +6380,8 @@ After conversion, the following columns are added:
 </tr>
 <tr>
 <td><code>good</code></td>
-<td>70%</td>
-<td>Good risk profile (same as Strong under CRR)</td>
+<td>90% (70% if &lt;2.5yr)</td>
+<td>Good risk profile</td>
 </tr>
 <tr>
 <td><code>satisfactory</code></td>
@@ -6466,8 +6487,8 @@ After conversion, the following columns are added:
 <tbody>
 <tr>
 <td><code>central_bank</code></td>
-<td>100%</td>
-<td>Central bank equity holdings</td>
+<td>0%</td>
+<td>Central bank equity holdings (Art. 133(6))</td>
 </tr>
 <tr>
 <td><code>listed</code></td>
@@ -6671,6 +6692,10 @@ After conversion, the following columns are added:
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Optional columns</p>
+<p>When <code>country_codes</code> or <code>excluded_book_codes</code> columns are entirely absent from the input file, they are treated as null for all rows — all geographies are permitted and no book codes are excluded. You only need to include these columns if you want to restrict permissions by geography or exclude specific book codes.</p>
+</div>
 <p><strong>Approach determination logic:</strong></p>
 <table>
 <thead>

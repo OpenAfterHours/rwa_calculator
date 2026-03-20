@@ -5102,7 +5102,7 @@ assigned by supervisory category, lending type, and (under CRR) remaining maturi
 <tr>
 <td><code>slotting_category</code></td>
 <td><code>String</code></td>
-<td><code>STRONG</code>/<code>GOOD</code>/<code>SATISFACTORY</code>/<code>WEAK</code>/<code>DEFAULT</code></td>
+<td><code>strong</code>/<code>good</code>/<code>satisfactory</code>/<code>weak</code>/<code>default</code></td>
 </tr>
 <tr>
 <td><code>remaining_maturity_years</code></td>
@@ -5384,7 +5384,7 @@ from the output data alone.</p>
 <tr>
 <td><code>approach_permitted</code></td>
 <td><code>String</code></td>
-<td><code>"SA"</code>, <code>"FIRB"</code>, <code>"AIRB"</code> based on permissions</td>
+<td><code>"standardised"</code>, <code>"foundation_irb"</code>, <code>"advanced_irb"</code> based on permissions</td>
 </tr>
 <tr>
 <td><code>approach_applied</code></td>
@@ -5443,7 +5443,7 @@ from the output data alone.</p>
 <tr>
 <td><code>ccf_applied</code></td>
 <td><code>Float64</code></td>
-<td>CCF percentage (0%, 20%, 50%, 100%)</td>
+<td>CCF percentage (0%, 20%, 40%, 50%, 100%)</td>
 </tr>
 <tr>
 <td><code>ccf_source</code></td>
@@ -5812,7 +5812,7 @@ from the output data alone.</p>
 <tr>
 <td><code>irb_risk_weight</code></td>
 <td><code>Float64</code></td>
-<td><code>12.5 × K</code></td>
+<td><code>12.5 × K × scaling_factor</code></td>
 </tr>
 </tbody>
 </table>

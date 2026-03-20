@@ -4851,7 +4851,7 @@ classification in five phases.</p>
 <tr>
 <td><code>approach_permitted</code></td>
 <td><code>String</code></td>
-<td><code>"SA"</code>, <code>"FIRB"</code>, <code>"AIRB"</code> based on IRB permissions</td>
+<td><code>"standardised"</code>, <code>"foundation_irb"</code>, <code>"advanced_irb"</code> based on IRB permissions</td>
 </tr>
 <tr>
 <td><code>approach_applied</code></td>
@@ -4897,30 +4897,27 @@ classification in five phases.</p>
 </table>
 <p><strong>Valid <code>exposure_class</code> values:</strong></p>
 <ul>
-<li><code>CENTRAL_GOVT_CENTRAL_BANK</code></li>
-<li><code>INSTITUTION</code></li>
-<li><code>CORPORATE</code></li>
-<li><code>CORPORATE_SME</code></li>
-<li><code>RETAIL</code></li>
-<li><code>RETAIL_MORTGAGE</code></li>
-<li><code>RETAIL_QRRE</code></li>
-<li><code>RETAIL_OTHER</code></li>
-<li><code>SPECIALISED_LENDING</code></li>
-<li><code>EQUITY</code></li>
-<li><code>DEFAULTED</code></li>
-<li><code>PSE</code></li>
-<li><code>MDB</code></li>
-<li><code>RGLA</code></li>
-<li><code>OTHER</code></li>
-<li><code>CIU</code></li>
-<li><code>SECURED_BY_RE</code></li>
+<li><code>central_govt_central_bank</code></li>
+<li><code>institution</code></li>
+<li><code>corporate</code></li>
+<li><code>corporate_sme</code></li>
+<li><code>retail_mortgage</code></li>
+<li><code>retail_qrre</code></li>
+<li><code>retail_other</code></li>
+<li><code>specialised_lending</code></li>
+<li><code>equity</code></li>
+<li><code>defaulted</code></li>
+<li><code>pse</code></li>
+<li><code>mdb</code></li>
+<li><code>rgla</code></li>
+<li><code>other</code></li>
 </ul>
 <p><strong>Valid <code>approach_applied</code> values:</strong></p>
 <ul>
-<li><code>SA</code> — Standardised Approach</li>
-<li><code>FIRB</code> — Foundation IRB</li>
-<li><code>AIRB</code> — Advanced IRB</li>
-<li><code>SLOTTING</code> — Slotting Approach</li>
+<li><code>standardised</code> — Standardised Approach</li>
+<li><code>foundation_irb</code> — Foundation IRB</li>
+<li><code>advanced_irb</code> — Advanced IRB</li>
+<li><code>slotting</code> — Slotting Approach</li>
 </ul>
 <h2 id="crm-adjusted-schema">CRM Adjusted Schema<a class="headerlink" href="#crm-adjusted-schema" title="Permanent link">&para;</a></h2>
 <p>After CRM processing, exposures include the full EAD waterfall: provisions → CCF →
@@ -5212,19 +5209,19 @@ classification based on counterparty and product attributes.</p>
 </table>
 <p><strong>Valid <code>sl_type</code> values:</strong></p>
 <ul>
-<li><code>PROJECT_FINANCE</code></li>
-<li><code>OBJECT_FINANCE</code></li>
-<li><code>COMMODITIES_FINANCE</code></li>
-<li><code>IPRE</code> — Income-producing real estate</li>
-<li><code>HVCRE</code> — High volatility CRE</li>
+<li><code>project_finance</code></li>
+<li><code>object_finance</code></li>
+<li><code>commodities_finance</code></li>
+<li><code>ipre</code> — Income-producing real estate</li>
+<li><code>hvcre</code> — High volatility CRE</li>
 </ul>
 <p><strong>Valid <code>slotting_category</code> values:</strong></p>
 <ul>
-<li><code>STRONG</code></li>
-<li><code>GOOD</code></li>
-<li><code>SATISFACTORY</code></li>
-<li><code>WEAK</code></li>
-<li><code>DEFAULT</code></li>
+<li><code>strong</code></li>
+<li><code>good</code></li>
+<li><code>satisfactory</code></li>
+<li><code>weak</code></li>
+<li><code>default</code></li>
 </ul>
 <h2 id="transformation-examples">Transformation Examples<a class="headerlink" href="#transformation-examples" title="Permanent link">&para;</a></h2>
 <h3 id="hierarchy-resolution">Hierarchy Resolution<a class="headerlink" href="#hierarchy-resolution" title="Permanent link">&para;</a></h3>

@@ -378,6 +378,10 @@ MODEL_PERMISSIONS_SCHEMA = {
     "excluded_book_codes": pl.String,  # Comma-separated book codes to exclude, null = none
 }
 
+# Columns in MODEL_PERMISSIONS_SCHEMA that may be absent from input data.
+# When absent, they are treated as null (all geographies permitted / no exclusions).
+MODEL_PERMISSIONS_OPTIONAL_COLUMNS: set[str] = {"country_codes", "excluded_book_codes"}
+
 
 # =============================================================================
 # Valid value sets for categorical input columns.

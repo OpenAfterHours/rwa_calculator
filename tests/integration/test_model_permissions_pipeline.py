@@ -681,3 +681,61 @@ class TestEndToEndWithCRM:
         assert loan_row.height >= 1
         assert "model_id" in df.columns
         assert loan_row["model_id"][0] == "MODEL_AUDIT"
+
+
+# =============================================================================
+# Optional columns absent (1 test)
+# =============================================================================
+
+
+class TestModelPermissionsMinimalSchema:
+    """Verify model_permissions works without optional columns."""
+
+    def test_model_permissions_minimal_schema_end_to_end(
+        self, hierarchy_resolver, classifier, crm_processor, crr_config
+    ):
+        """model_permissions with only required columns → correct approach assignment.
+
+        When country_codes and excluded_book_codes columns are absent from the
+        input file, all geographies should be permitted and no books excluded.
+        """
+        # Build model_permissions LazyFrame with only the 3 required columns
+        model_perms = pl.DataFrame(
+            {
+                "model_id": ["MODEL_MIN"],
+                "exposure_class": ["corporate"],
+                "approach": ["foundation_irb"],
+            },
+            schema={
+                "model_id": pl.String,
+                "exposure_class": pl.String,
+                "approach": pl.String,
+            },
+        ).lazy()
+
+        bundle = _bundle_with_ratings(
+            replace(
+                make_raw_data_bundle(
+                    counterparties=[make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                        country_code="DE",
+                    )],
+                    loans=[make_loan(book_code="LEGACY")],
+                    facilities=[make_facility()],
+                ),
+                model_permissions=model_perms,
+            ),
+            ratings=[_make_internal_rating(
+                counterparty_reference="CP001", pd=0.02, model_id="MODEL_MIN",
+            )],
+        )
+
+        crm_bundle = _run_pipeline(
+            hierarchy_resolver, classifier, crm_processor, crr_config, bundle
+        )
+        df = crm_bundle.exposures.collect()
+
+        loan_row = df.filter(pl.col("exposure_type") == "loan")
+        assert loan_row.height >= 1
+        assert loan_row["approach"][0] == ApproachType.FIRB.value

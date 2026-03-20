@@ -173,6 +173,37 @@ class TestValidateSchemaToErrors:
         assert "Int64" in str(errors[0].expected_value)
         assert "String" in str(errors[0].actual_value)
 
+    def test_optional_columns_not_reported_as_missing(self):
+        """Optional columns absent from data should not produce errors."""
+        lf = pl.LazyFrame({"model_id": ["M1"], "exposure_class": ["corporate"]})
+        expected = {
+            "model_id": pl.String,
+            "exposure_class": pl.String,
+            "country_codes": pl.String,
+        }
+
+        errors = validate_schema_to_errors(
+            lf, expected, context="test", optional_columns={"country_codes"},
+        )
+
+        assert len(errors) == 0
+
+    def test_required_columns_still_reported_with_optional_set(self):
+        """Missing required columns should still produce errors even when optional set is given."""
+        lf = pl.LazyFrame({"model_id": ["M1"]})
+        expected = {
+            "model_id": pl.String,
+            "exposure_class": pl.String,
+            "country_codes": pl.String,
+        }
+
+        errors = validate_schema_to_errors(
+            lf, expected, context="test", optional_columns={"country_codes"},
+        )
+
+        assert len(errors) == 1
+        assert errors[0].field_name == "exposure_class"
+
 
 class TestValidateNonNegativeAmounts:
     """Tests for validate_non_negative_amounts function."""

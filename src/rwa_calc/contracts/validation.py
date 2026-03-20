@@ -148,6 +148,7 @@ def validate_schema_to_errors(
     lf: pl.LazyFrame,
     expected_schema: dict[str, pl.DataType],
     context: str = "",
+    optional_columns: set[str] | None = None,
 ) -> list[CalculationError]:
     """
     Validate schema and return CalculationError objects.
@@ -158,6 +159,7 @@ def validate_schema_to_errors(
         lf: LazyFrame to validate
         expected_schema: Dict mapping column names to expected Polars types
         context: Context string for error messages
+        optional_columns: Column names that may be absent without error
 
     Returns:
         List of CalculationError objects for any schema issues
@@ -167,6 +169,8 @@ def validate_schema_to_errors(
 
     for col_name, expected_type in expected_schema.items():
         if col_name not in actual_schema:
+            if optional_columns and col_name in optional_columns:
+                continue
             errors.append(
                 CalculationError(
                     code=ERROR_MISSING_FIELD,
@@ -226,9 +230,19 @@ def validate_raw_data_bundle(
         "model_permissions": bundle.model_permissions,
     }
 
+    from rwa_calc.data.schemas import MODEL_PERMISSIONS_OPTIONAL_COLUMNS
+
+    # Registry of optional columns per table (columns that may be absent from input)
+    optional_columns_registry: dict[str, set[str]] = {
+        "model_permissions": MODEL_PERMISSIONS_OPTIONAL_COLUMNS,
+    }
+
     for name, lf in frame_mapping.items():
         if name in schemas and lf is not None:
-            errors = validate_schema_to_errors(lf, schemas[name], context=name)
+            errors = validate_schema_to_errors(
+                lf, schemas[name], context=name,
+                optional_columns=optional_columns_registry.get(name),
+            )
             all_errors.extend(errors)
 
     return all_errors

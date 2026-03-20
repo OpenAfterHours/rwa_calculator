@@ -1670,3 +1670,84 @@ class TestModelPermissions:
         df = result.all_exposures.collect()
         # With full_irb org-wide permissions and internal_pd, should get AIRB
         assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_missing_country_codes_column_permits_all_geographies(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """model_permissions without country_codes column -> all geographies permitted."""
+        model_perms = pl.DataFrame(
+            {
+                "model_id": ["CORP_PD_01"],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.AIRB.value],
+                "excluded_book_codes": [None],
+            },
+            schema={
+                "model_id": pl.String,
+                "exposure_class": pl.String,
+                "approach": pl.String,
+                "excluded_book_codes": pl.String,
+            },
+        ).lazy()
+        exposures, cps = _make_exposure_with_model_id(country_code="DE")
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_missing_excluded_book_codes_column_permits_all_books(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """model_permissions without excluded_book_codes column -> no books excluded."""
+        model_perms = pl.DataFrame(
+            {
+                "model_id": ["CORP_PD_01"],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.AIRB.value],
+                "country_codes": [None],
+            },
+            schema={
+                "model_id": pl.String,
+                "exposure_class": pl.String,
+                "approach": pl.String,
+                "country_codes": pl.String,
+            },
+        ).lazy()
+        exposures, cps = _make_exposure_with_model_id(book_code="LEGACY")
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_missing_both_optional_columns(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """model_permissions with only required columns -> AIRB resolution works."""
+        model_perms = pl.DataFrame(
+            {
+                "model_id": ["CORP_PD_01"],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.AIRB.value],
+            },
+            schema={
+                "model_id": pl.String,
+                "exposure_class": pl.String,
+                "approach": pl.String,
+            },
+        ).lazy()
+        exposures, cps = _make_exposure_with_model_id(
+            country_code="DE", book_code="LEGACY",
+        )
+        bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["approach"][0] == ApproachType.AIRB.value

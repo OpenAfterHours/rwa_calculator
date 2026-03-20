@@ -571,6 +571,17 @@ class ExposureClassifier:
         # Cast model_id to String to handle null-typed columns (all values null)
         exposures = exposures.with_columns(pl.col("model_id").cast(pl.String))
 
+        # Ensure optional columns exist (may be absent when user omits geography/book filters)
+        mp_schema_names = set(model_permissions.collect_schema().names())
+        if "country_codes" not in mp_schema_names:
+            model_permissions = model_permissions.with_columns(
+                pl.lit(None).cast(pl.String).alias("country_codes")
+            )
+        if "excluded_book_codes" not in mp_schema_names:
+            model_permissions = model_permissions.with_columns(
+                pl.lit(None).cast(pl.String).alias("excluded_book_codes")
+            )
+
         # Join exposures with model_permissions on model_id
         # Each exposure may match multiple permission rows (AIRB + FIRB for same model)
         joined = exposures.join(

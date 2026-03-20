@@ -140,6 +140,14 @@ B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
 
 B31_SUBORDINATED_DEBT_RW = Decimal("1.50")
 
+# =============================================================================
+# DEFAULTED EXPOSURE RISK WEIGHTS — BASEL 3.1 (CRE20.88-90)
+# =============================================================================
+
+B31_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # CRE20.89: provisions >= 50%
+B31_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # CRE20.88: provisions < 50%
+B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.50")  # 50% threshold
+
 
 def _create_b31_corporate_df() -> pl.DataFrame:
     """Create Basel 3.1 corporate risk weight lookup DataFrame."""

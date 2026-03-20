@@ -16,16 +16,19 @@ Key responsibilities:
 - Investment-grade corporate treatment (65%, Basel 3.1)
 - SME corporate treatment (85%, Basel 3.1)
 - Subordinated debt flat 150% (Basel 3.1)
+- Defaulted exposure treatment (CRR Art. 127 / CRE20.88-90)
 - Supporting factor application (CRR only — removed under Basel 3.1)
 - RWA calculation (EAD × RW × supporting factor)
 
 References:
 - CRR Art. 112-134: SA risk weights
+- CRR Art. 127: Defaulted exposure risk weights
 - CRR Art. 501: SME supporting factor
 - CRR Art. 501a: Infrastructure supporting factor
 - CRE20.16-21: Basel 3.1 institution ECRA/SCRA risk weights
 - CRE20.22-26: Basel 3.1 revised corporate CQS risk weights
 - CRE20.47-49: Basel 3.1 subordinated debt, investment-grade, SME corporate
+- CRE20.88-90: Basel 3.1 defaulted exposure risk weights
 - CRE20.73: Basel 3.1 residential RE (general) whole-loan LTV bands
 - CRE20.82: Basel 3.1 residential RE (income-producing) LTV bands
 - CRE20.85: Basel 3.1 commercial RE (general) preferential treatment
@@ -51,6 +54,9 @@ from rwa_calc.contracts.errors import (
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_SME_RW,
+    B31_DEFAULTED_PROVISION_THRESHOLD,
+    B31_DEFAULTED_RW_HIGH_PROVISION,
+    B31_DEFAULTED_RW_LOW_PROVISION,
     B31_SCRA_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
     b31_adc_rw_expr,
@@ -60,6 +66,9 @@ from rwa_calc.data.tables.b31_risk_weights import (
 )
 from rwa_calc.data.tables.crr_risk_weights import (
     COMMERCIAL_RE_PARAMS,
+    CRR_DEFAULTED_PROVISION_THRESHOLD,
+    CRR_DEFAULTED_RW_HIGH_PROVISION,
+    CRR_DEFAULTED_RW_LOW_PROVISION,
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
     get_combined_cqs_risk_weights,
@@ -323,6 +332,12 @@ class SACalculator:
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_scra_grade"))
         if "cp_is_investment_grade" not in schema.names():
             missing_cols.append(pl.lit(False).alias("cp_is_investment_grade"))
+        if "is_defaulted" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_defaulted"))
+        if "provision_allocated" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("provision_allocated"))
+        if "provision_deducted" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("provision_deducted"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -382,12 +397,32 @@ class SACalculator:
             inv_grade_rw = float(B31_CORPORATE_INVESTMENT_GRADE_RW)
             sme_corp_rw = float(B31_CORPORATE_SME_RW)
             sub_debt_rw = float(B31_SUBORDINATED_DEBT_RW)
+            b31_def_threshold = float(B31_DEFAULTED_PROVISION_THRESHOLD)
+            b31_def_high_rw = float(B31_DEFAULTED_RW_HIGH_PROVISION)
+            b31_def_low_rw = float(B31_DEFAULTED_RW_LOW_PROVISION)
+
+            # EAD column for provision ratio denominator
+            schema_for_ead = exposures.collect_schema()
+            _ead_col = "ead_final" if "ead_final" in schema_for_ead.names() else "ead"
 
             exposures = exposures.with_columns(
                 [
-                    # 0. Subordinated debt: flat 150% (CRE20.47, checked first)
+                    # 0. Defaulted exposures: 150% or 100% (CRE20.88-90)
+                    # Provision ratio = provision_allocated / (ead + provision_deducted)
+                    # where denominator reconstructs pre-provision unsecured EAD
+                    pl.when(pl.col("is_defaulted").fill_null(False))
+                    .then(
+                        pl.when(
+                            pl.col("provision_allocated")
+                            >= b31_def_threshold
+                            * (pl.col(_ead_col) + pl.col("provision_deducted"))
+                        )
+                        .then(pl.lit(b31_def_high_rw))
+                        .otherwise(pl.lit(b31_def_low_rw))
+                    )
+                    # 1. Subordinated debt: flat 150% (CRE20.47)
                     # Overrides all CQS-based weights for institution + corporate
-                    pl.when(
+                    .when(
                         (pl.col("seniority").fill_null("senior") == "subordinated")
                         & (
                             _uc.str.contains("INSTITUTION", literal=True)
@@ -462,11 +497,31 @@ class SACalculator:
             cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
             cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
             cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
+            crr_def_threshold = float(CRR_DEFAULTED_PROVISION_THRESHOLD)
+            crr_def_high_rw = float(CRR_DEFAULTED_RW_HIGH_PROVISION)
+            crr_def_low_rw = float(CRR_DEFAULTED_RW_LOW_PROVISION)
+
+            # EAD column for provision ratio denominator
+            schema_for_ead = exposures.collect_schema()
+            _ead_col = "ead_final" if "ead_final" in schema_for_ead.names() else "ead"
 
             exposures = exposures.with_columns(
                 [
+                    # 0. Defaulted exposures: 100% or 150% (CRR Art. 127)
+                    # Provision ratio = provision_allocated / (ead + provision_deducted)
+                    # where denominator reconstructs pre-provision unsecured EAD
+                    pl.when(pl.col("is_defaulted").fill_null(False))
+                    .then(
+                        pl.when(
+                            pl.col("provision_allocated")
+                            >= crr_def_threshold
+                            * (pl.col(_ead_col) + pl.col("provision_deducted"))
+                        )
+                        .then(pl.lit(crr_def_high_rw))
+                        .otherwise(pl.lit(crr_def_low_rw))
+                    )
                     # 1. Residential mortgage: LTV split (CRR Art. 125)
-                    pl.when(
+                    .when(
                         _uc.str.contains("MORTGAGE", literal=True)
                         | _uc.str.contains("RESIDENTIAL", literal=True)
                     )
@@ -829,6 +884,9 @@ class SACalculator:
         seniority: str = "senior",
         scra_grade: str | None = None,
         is_investment_grade: bool = False,
+        is_defaulted: bool = False,
+        provision_allocated: Decimal | None = None,
+        provision_deducted: Decimal | None = None,
         config: CalculationConfig | None = None,
     ) -> dict:
         """
@@ -849,6 +907,9 @@ class SACalculator:
             seniority: "senior" or "subordinated" — subordinated gets 150% under Basel 3.1
             scra_grade: SCRA grade for unrated institutions ("A"/"B"/"C", Basel 3.1 only)
             is_investment_grade: Whether counterparty qualifies as investment grade (Basel 3.1)
+            is_defaulted: Whether counterparty is in default (CRR Art. 127 / CRE20.88-90)
+            provision_allocated: Total specific provisions allocated to exposure
+            provision_deducted: Total provisions deducted from EAD
             config: Calculation configuration (defaults to CRR)
 
         Returns:
@@ -879,6 +940,13 @@ class SACalculator:
                 "seniority": [seniority],
                 "cp_scra_grade": [scra_grade],
                 "cp_is_investment_grade": [is_investment_grade],
+                "is_defaulted": [is_defaulted],
+                "provision_allocated": [
+                    float(provision_allocated) if provision_allocated else 0.0
+                ],
+                "provision_deducted": [
+                    float(provision_deducted) if provision_deducted else 0.0
+                ],
             }
         ).lazy()
 

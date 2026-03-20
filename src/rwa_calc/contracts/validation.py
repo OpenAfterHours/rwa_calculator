@@ -581,9 +581,10 @@ def validate_column_values(
         return []
 
     # Find distinct invalid values with counts
+    valid_lower = {v.lower() for v in valid_values}
     invalid_df = (
         lf.filter(pl.col(column).is_not_null())
-        .filter(~pl.col(column).str.to_lowercase().is_in(valid_values))
+        .filter(~pl.col(column).str.to_lowercase().is_in(valid_lower))
         .group_by(column)
         .len()
         .collect()
@@ -699,9 +700,10 @@ def _validate_table_columns_batched(
     invalid_queries: list[pl.LazyFrame] = []
     for col_name in columns_to_check:
         valid_values = table_constraints[col_name]
+        valid_lower = {v.lower() for v in valid_values}
         q = (
             lf.filter(pl.col(col_name).is_not_null())
-            .filter(~pl.col(col_name).str.to_lowercase().is_in(valid_values))
+            .filter(~pl.col(col_name).str.to_lowercase().is_in(valid_lower))
             .group_by(pl.col(col_name).alias("bad_value"))
             .len()
             .with_columns(pl.lit(col_name).alias("column_name"))

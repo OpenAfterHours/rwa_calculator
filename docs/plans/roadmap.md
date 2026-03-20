@@ -128,14 +128,14 @@ Reference implementations for expected output generation:
 
 ## Test Results Summary
 
-**Total: ~2,047 tests** (1,522 unit + 275 acceptance + 123 contract + 100 integration + 27-34 benchmark)
+**Total: ~2,065 tests** (1,537 unit + 275 acceptance + 125 contract + 101 integration + 27-34 benchmark)
 
 | Category | Tests | Status |
 |----------|-------|--------|
-| Unit tests | 1,522 | All passing |
+| Unit tests | 1,537 | All passing |
 | Acceptance tests | 275 | All passing |
-| Contract tests | 123 | All passing |
-| Integration tests | 100 | All passing |
+| Contract tests | 125 | All passing |
+| Integration tests | 101 | All passing |
 | Benchmark tests | 27–34 | All passing |
 
 Run all tests:

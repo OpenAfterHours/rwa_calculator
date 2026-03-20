@@ -30,19 +30,23 @@ flowchart TD
         E1[CRMAdjustedBundle]
     end
 
-    subgraph Stage5[Stage 5: RWA Calculation]
-        F[SA Calculator]
-        G[IRB Calculator]
-        H[Slotting Calculator]
+    subgraph Stage5[Stage 5: Split-Once + Parallel Calculate]
+        M["Materialise barrier<br/>(collect → lazy)"]
+        U["SA calculate_unified<br/>(Basel 3.1 floor only)"]
+        SP[Split once by approach]
+        F["SA branch<br/>calculate_branch()"]
+        G["IRB branch<br/>calculate_branch()"]
+        H["Slotting branch<br/>calculate_branch()"]
+        CA["pl.collect_all()<br/>(parallel collection)"]
+    end
+
+    subgraph Equity[Equity — Separate Path]
         L[Equity Calculator]
-        F1[SAResultBundle]
-        G1[IRBResultBundle]
-        H1[SlottingResultBundle]
         L1[EquityResultBundle]
     end
 
     subgraph Stage6[Stage 6: Aggregation]
-        I[Aggregator]
+        I["_aggregate_single_pass()"]
         I1[AggregatedResultBundle]
     end
 
@@ -50,11 +54,11 @@ flowchart TD
     B1 --> C --> C1
     C1 --> D --> D1
     D1 --> E --> E1
-    E1 --> F --> F1
-    E1 --> G --> G1
-    E1 --> H --> H1
+    E1 --> M --> U --> SP
+    SP --> F & G & H
+    F & G & H --> CA
     E1 --> L --> L1
-    F1 & G1 & H1 & L1 --> I --> I1
+    CA & L1 --> I --> I1
 ```
 
 ## Pipeline Orchestration
@@ -289,39 +293,47 @@ Provisions are resolved **before** CCF application so that the nominal amount is
 6. **Finalize EAD** — floor at zero; provisions already baked into `ead_pre_crm`
 
 ```python
-def process_crm(
-    exposures: pl.LazyFrame,
-    collateral: pl.LazyFrame,
-    guarantees: pl.LazyFrame,
-    provisions: pl.LazyFrame,
-    counterparty_lookup: pl.LazyFrame,
-    config: CalculationConfig
-) -> pl.LazyFrame:
-    """Apply CRM in correct order (Art. 111(2) compliant)."""
+class CRMProcessor:
+    def get_crm_adjusted_bundle(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        """Apply CRM in correct order (Art. 111(2) compliant).
 
-    # Step 1: Resolve provisions (before CCF)
-    #   SA: drawn-first deduction, remainder reduces nominal
-    #   IRB/Slotting: tracked but not deducted from EAD
-    after_provisions = resolve_provisions(exposures, provisions, config)
+        Returns CRMAdjustedBundle with exposures split by approach."""
 
-    # Step 2: Apply CCFs (uses nominal_after_provision)
-    after_ccf = apply_credit_conversion_factors(after_provisions, config)
+        # Step 1: Resolve provisions (before CCF)
+        #   SA: drawn-first deduction, remainder reduces nominal
+        #   IRB/Slotting: tracked but not deducted from EAD
+        after_provisions = self._resolve_provisions(exposures, provisions, config)
 
-    # Step 3: Initialize EAD waterfall
-    after_init = initialize_ead_waterfall(after_ccf)
+        # Step 2: Apply CCFs (uses nominal_after_provision)
+        after_ccf = self._apply_ccf(after_provisions, config)
 
-    # Step 4: Collateral
-    after_collateral = apply_collateral_haircuts(
-        after_init, collateral, config
-    )
+        # Step 3: Initialize EAD waterfall — includes collect barrier
+        #   (flattens deep lazy plan to prevent 3× re-evaluation downstream)
+        after_init = self._initialize_ead(after_ccf)
 
-    # Step 5: Guarantees
-    after_guarantees = apply_guarantee_substitution(
-        after_collateral, guarantees, counterparty_lookup, config
-    )
+        # Step 4: Collateral (3 lookup collects: direct/facility/counterparty)
+        after_collateral = self._apply_collateral(after_init, collateral, config)
 
-    # Step 6: Finalize (no provision subtraction — already in ead_pre_crm)
-    return finalize_ead(after_guarantees)
+        # Step 5: Guarantees (cross-approach CCF substitution)
+        after_guarantees = self._apply_guarantees(
+            after_collateral, guarantees, counterparty_lookup, config
+        )
+
+        # Step 6: Finalize (no provision subtraction — already in ead_pre_crm)
+        return self._finalize_ead(after_guarantees)
+
+    def get_crm_unified_bundle(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        """Unified CRM — does not split by approach.
+
+        Used for Basel 3.1 output floor: SA-equivalent RW needed on all rows."""
 ```
 
 ## Stage 5: RWA Calculation

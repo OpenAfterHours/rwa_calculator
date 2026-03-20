@@ -180,8 +180,8 @@ movement of goods retain 20% CCF under F-IRB. Flag these with `is_short_term_tra
 | Cash | 0% | 0% | 0% |
 | Government CQS 1 | 0.5% | 2% | 4% |
 | Government CQS 2-3 | 1% | 3% | 6% |
-| Corporate CQS 1-2 | 1% | 4% | 6% |
-| Corporate CQS 3 | 2% | 6% | 8% |
+| Corporate CQS 1 | 1% | 4% | 8% |
+| Corporate CQS 2-3 | 2% | 6% | 12% |
 | Equity (main index) | 15% | — | — |
 | Equity (other) | 25% | — | — |
 | Gold | 15% | — | — |

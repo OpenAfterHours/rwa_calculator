@@ -18,7 +18,7 @@ The `entity_type` field on counterparties is the **authoritative source** for ex
 
 ### Valid Entity Types
 
-The system supports 17 entity types organised into logical groups:
+The system supports 18 entity types organised into logical groups:
 
 ```python
 VALID_ENTITY_TYPES = {
@@ -54,6 +54,9 @@ VALID_ENTITY_TYPES = {
 
     # Specialised lending
     "specialised_lending",
+
+    # Equity
+    "equity",
 }
 ```
 
@@ -84,6 +87,7 @@ Used for SA risk weight table lookups:
 | `individual` | RETAIL_OTHER | CRR Art. 112(h) |
 | `retail` | RETAIL_OTHER | CRR Art. 112(h) |
 | `specialised_lending` | SPECIALISED_LENDING | CRR Art. 147(8) |
+| `equity` | EQUITY | CRR Art. 112(p) |
 
 ### IRB Exposure Class Mapping
 
@@ -108,6 +112,7 @@ Used for IRB formula selection:
 | `individual` | RETAIL_OTHER | Standard retail treatment |
 | `retail` | RETAIL_OTHER | Standard retail treatment |
 | `specialised_lending` | SPECIALISED_LENDING | Slotting or IRB |
+| `equity` | EQUITY | CRE60 |
 
 ### Why Classes Can Differ
 
@@ -136,13 +141,17 @@ Joins exposure data with counterparty attributes needed for classification:
 - `apply_fi_scalar` - For FI scalar determination
 - `is_managed_as_retail` - For SME retail treatment
 
-### Step 2: Classify Exposure Class
+### Step 2: Derive Independent Flags
 
 ```python
-_classify_exposure_class(exposures, config)
+_derive_independent_flags(exposures, config, schema_names)
 ```
 
-Maps `entity_type` to exposure classes using the constant mappings:
+Derives all independent classification flags in a single `.with_columns()` call for
+LazyFrame plan optimisation. This batch covers exposure class mapping, default identification,
+infrastructure classification, and FI scalar classification.
+
+**Exposure class mapping** — maps `entity_type` to exposure classes using the constant mappings:
 
 ```python
 # Result columns:
@@ -151,68 +160,17 @@ exposure_class_irb  # IRB class for formula selection
 exposure_class      # Unified class (SA class for backwards compatibility)
 ```
 
-### Step 3: Apply SME Classification
-
-```python
-_apply_sme_classification(exposures, config)
-```
-
-Checks SME criteria per CRR Art. 501:
-- Entity must be classified as CORPORATE
-- `annual_revenue < EUR 50m` (converted to GBP using config FX rate)
-- Revenue must be > 0 (excludes missing data)
-
-If criteria met:
-- Sets `is_sme = True`
-- Updates `exposure_class` to `CORPORATE_SME`
-
-### Step 4: Apply Retail Classification
-
-```python
-_apply_retail_classification(exposures, lending_group_totals, config)
-```
-
-Checks retail eligibility per CRR Art. 123:
-
-1. **Mortgage detection**: Identifies mortgages via product_type pattern matching
-2. **Threshold check**: Aggregated exposure to lending group < EUR 1m
-3. **Residential exclusion**: Residential property collateral excluded from threshold (CRR Art. 123(c))
-
-Classification outcomes:
-- Mortgages to individuals → `RETAIL_MORTGAGE`
-- Retail exceeding threshold + SME revenue → `CORPORATE_SME`
-- Retail exceeding threshold + no SME criteria → `CORPORATE`
-- Retail within threshold → remains `RETAIL_OTHER`
-
-### Step 5: Identify Defaults
-
-```python
-_identify_defaults(exposures)
-```
-
-Checks `default_status` flag:
+**Default identification** — checks `default_status` flag:
 - Sets `is_defaulted = True`
 - Sets `exposure_class_for_sa = DEFAULTED` (SA treatment)
 - IRB exposures keep their class but use default LGD
 
-### Step 5a: Infrastructure Classification
-
-```python
-_apply_infrastructure_classification(exposures)
-```
-
-Identifies infrastructure exposures per CRR Art. 501a:
+**Infrastructure classification** — identifies infrastructure exposures per CRR Art. 501a:
 - Checks product_type for "INFRASTRUCTURE" pattern
 - Sets `is_infrastructure = True`
 - Eligible for 0.75 supporting factor under CRR (not Basel 3.1)
 
-### Step 5b: FI Scalar Classification
-
-```python
-_apply_fi_scalar_classification(exposures, config)
-```
-
-Determines Financial Sector Entity (FSE) status and FI scalar eligibility per CRR Art. 153(2):
+**FI scalar classification** — determines Financial Sector Entity (FSE) status and FI scalar eligibility per CRR Art. 153(2):
 
 **Financial Sector Entity Types:**
 ```python
@@ -233,69 +191,7 @@ FINANCIAL_SECTOR_ENTITY_TYPES = {
 
 **FI Scalar effect**: 1.25x multiplier on IRB correlation
 
-### Step 5c: Resolve Model Permissions
-
-```python
-_resolve_model_permissions(exposures, model_permissions)
-```
-
-When `model_permissions` data is provided, resolves per-exposure IRB permissions:
-
-1. Joins exposures to `model_permissions` via `model_id` (propagated from internal rating via rating inheritance)
-2. Filters by `exposure_class` match
-3. Applies geography filter (`country_codes`) and book code exclusions
-4. Sets `model_airb_permitted` and `model_firb_permitted` boolean columns
-5. Exposures without `model_id` get both flags set to `False` (fall back to org-wide permissions)
-
-When model permissions are active, Step 6 uses per-row `model_airb_permitted` /
-`model_firb_permitted` instead of org-wide `IRBPermissions`.
-
-See [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema) for the data schema.
-
-### Step 6: Determine Approach
-
-```python
-_determine_approach(exposures, config)
-```
-
-Assigns calculation approach based on IRB permissions. When model permissions are
-present, per-row `model_airb_permitted` / `model_firb_permitted` flags take precedence
-over org-wide `IRBPermissions` config.
-
-| Condition | Approach |
-|-----------|----------|
-| Specialised lending + A-IRB permission for SL | AIRB |
-| Specialised lending + Slotting permission | SLOTTING |
-| Retail classes + A-IRB permission | AIRB |
-| Corporate classes + A-IRB permission | AIRB |
-| Corporate/Institution/Central Govt/Central Bank + F-IRB (no A-IRB) | FIRB |
-| Default / No IRB permission | SA |
-
-!!! note
-    "A-IRB permission" and "F-IRB permission" above refer to either org-wide
-    `IRBPermissions` or per-row model permissions when `model_permissions` data
-    is provided. See [Step 5c](#step-5c-resolve-model-permissions).
-
-### Step 7: Add Classification Audit
-
-```python
-_add_classification_audit(exposures)
-```
-
-Builds audit trail string for each exposure:
-```
-entity_type=corporate; exp_class_sa=CORPORATE; exp_class_irb=CORPORATE;
-is_sme=true; is_mortgage=false; is_defaulted=false; is_infrastructure=false;
-requires_fi_scalar=false; qualifies_as_retail=true
-```
-
-### Step 7a: Enrich Slotting Exposures
-
-```python
-_enrich_slotting_exposures(exposures)
-```
-
-Derives slotting metadata from patterns in reference fields:
+**Slotting enrichment** — derives slotting metadata from patterns in reference fields:
 
 **Slotting Category** (from counterparty_reference):
 - `*_STRONG*` → strong
@@ -314,7 +210,93 @@ Derives slotting metadata from patterns in reference fields:
 **HVCRE Flag**:
 - `is_hvcre = True` if sl_type == "hvcre"
 
-### Step 8: Split by Approach
+### Step 3: SME and Retail Classification
+
+```python
+_classify_sme_and_retail(exposures, config)
+```
+
+Applies SME and retail classification in a single `.with_columns()` call.
+
+**SME criteria** per CRR Art. 501:
+- Entity must be classified as CORPORATE
+- `annual_revenue < EUR 50m` (converted to GBP using config FX rate)
+- Revenue must be > 0 (excludes missing data)
+
+If criteria met:
+- Sets `is_sme = True`
+- Updates `exposure_class` to `CORPORATE_SME`
+
+**Retail eligibility** per CRR Art. 123:
+
+1. **Mortgage detection**: Identifies mortgages via product_type pattern matching
+2. **Threshold check**: Aggregated exposure to lending group < EUR 1m
+3. **Residential exclusion**: Residential property collateral excluded from threshold (CRR Art. 123(c))
+
+### Step 4: Corporate to Retail Reclassification
+
+```python
+_reclassify_corporate_to_retail(exposures, config, schema_names)
+```
+
+Reclassifies exposures based on retail threshold outcomes:
+- Mortgages to individuals → `RETAIL_MORTGAGE`
+- Retail exceeding threshold + SME revenue → `CORPORATE_SME`
+- Retail exceeding threshold + no SME criteria → `CORPORATE`
+- Retail within threshold → remains `RETAIL_OTHER`
+
+### Step 5: Resolve Model Permissions
+
+```python
+_resolve_model_permissions(exposures, model_permissions)
+```
+
+When `model_permissions` data is provided, resolves per-exposure IRB permissions:
+
+1. Joins exposures to `model_permissions` via `model_id` (propagated from internal rating via rating inheritance)
+2. Filters by `exposure_class` match
+3. Applies geography filter (`country_codes`) and book code exclusions
+4. Sets `model_airb_permitted` and `model_firb_permitted` boolean columns
+5. Exposures without `model_id` get both flags set to `False` (fall back to org-wide permissions)
+
+When model permissions are active, Step 6 uses per-row `model_airb_permitted` /
+`model_firb_permitted` instead of org-wide `IRBPermissions`.
+
+See [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema) for the data schema.
+
+### Step 6: Determine Approach and Finalize
+
+```python
+_determine_approach_and_finalize(exposures, config, has_model_permissions)
+```
+
+Assigns calculation approach and builds classification audit trail in a single
+`.with_columns()` call. When model permissions are present, per-row
+`model_airb_permitted` / `model_firb_permitted` flags take precedence over
+org-wide `IRBPermissions` config.
+
+| Condition | Approach |
+|-----------|----------|
+| Specialised lending + A-IRB permission for SL | AIRB |
+| Specialised lending + Slotting permission | SLOTTING |
+| Retail classes + A-IRB permission | AIRB |
+| Corporate classes + A-IRB permission | AIRB |
+| Corporate/Institution/Central Govt/Central Bank + F-IRB (no A-IRB) | FIRB |
+| Default / No IRB permission | SA |
+
+!!! note
+    "A-IRB permission" and "F-IRB permission" above refer to either org-wide
+    `IRBPermissions` or per-row model permissions when `model_permissions` data
+    is provided. See [Step 5](#step-5-resolve-model-permissions).
+
+**Audit trail** — builds a classification reason string for each exposure:
+```
+entity_type=corporate; exp_class_sa=CORPORATE; exp_class_irb=CORPORATE;
+is_sme=true; is_mortgage=false; is_defaulted=false; is_infrastructure=false;
+requires_fi_scalar=false; qualifies_as_retail=true
+```
+
+### Step 7: Split by Approach
 
 Filters exposures into separate LazyFrames:
 - `sa_exposures` - Approach = SA

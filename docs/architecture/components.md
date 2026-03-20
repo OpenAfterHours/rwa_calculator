@@ -347,55 +347,59 @@ class CRMProcessorProtocol(Protocol):
 
 ### Implementation
 
+The `CRMProcessor` provides three public methods:
+
+- `apply_crm()` → `LazyFrameResult` — returns CRM-adjusted LazyFrame with errors
+- `get_crm_adjusted_bundle()` → `CRMAdjustedBundle` — wraps `apply_crm()` result as a bundle with approach-split exposures
+- `get_crm_unified_bundle()` → `CRMAdjustedBundle` — unified path (no approach split), used for Basel 3.1 output floor calculation where SA-equivalent RWA is needed on all rows
+
 ```python
 class CRMProcessor:
     """Process credit risk mitigation (Art. 111(2) compliant)."""
 
-    def apply_crm(
+    def get_crm_adjusted_bundle(
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
-    ) -> LazyFrameResult:
+    ) -> CRMAdjustedBundle:
         # Provisions resolved BEFORE CCF, then CRM waterfall after EAD init
 
         # Step 1: Resolve provisions (before CCF)
         #   SA: drawn-first deduction, remainder reduces nominal
         #   IRB/Slotting: tracked but not deducted
-        after_provisions = resolve_provisions(
-            classified.all_exposures,
-            classified.provisions,
-            config
+        after_provisions = self._resolve_provisions(
+            data.all_exposures, data.provisions, config
         )
 
         # Step 2: Apply CCFs (uses nominal_after_provision)
         after_ccf = self._apply_ccf(after_provisions, config)
 
-        # Step 3: Initialize EAD waterfall
+        # Step 3: Initialize EAD waterfall + collect barrier
+        #   (flattens deep plan to prevent 3× re-evaluation downstream)
         after_init = self._initialize_ead(after_ccf)
 
-        # Step 4: Apply collateral
+        # Step 4: Apply collateral (3 lookup collects: direct/facility/counterparty)
         after_collateral = self._apply_collateral(
-            after_init,
-            classified.collateral,
-            config
+            after_init, data.collateral, config
         )
 
-        # Step 5: Apply guarantees
+        # Step 5: Apply guarantees (cross-approach CCF substitution)
         after_guarantees = self._apply_guarantees(
-            after_collateral,
-            classified.guarantees,
-            classified.counterparty_lookup,
-            config
+            after_collateral, data.guarantees, data.counterparty_lookup, config
         )
 
-        # Step 6: Finalize EAD (no provision subtraction)
+        # Step 6: Finalize EAD (no provision subtraction — already in ead_pre_crm)
         final = self._finalize_ead(after_guarantees)
 
-        return CRMAdjustedBundle(
-            sa_exposures=self._filter_sa(final),
-            irb_exposures=self._filter_irb(final),
-            slotting_exposures=self._filter_slotting(final),
-        )
+        return CRMAdjustedBundle(exposures=final, ...)
+
+    def get_crm_unified_bundle(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        """Same pipeline, but does not split by approach.
+        Used for Basel 3.1 output floor (SA-equiv RW on all rows)."""
 ```
 
 ### Key Features

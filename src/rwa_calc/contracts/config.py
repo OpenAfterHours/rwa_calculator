@@ -483,7 +483,6 @@ class CalculationConfig:
         retail_thresholds: Retail classification thresholds
         irb_permissions: IRB approach permissions
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
-        correlation_multiplier: SME correlation adjustment multiplier
         collect_engine: Polars engine for .collect() - 'streaming' (default)
             processes in batches for lower memory usage, 'cpu' for in-memory
     """

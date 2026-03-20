@@ -1,21 +1,21 @@
 # Testing Guide
 
-This guide covers the testing approach, test organisation, and how to write effective tests. The test suite currently contains **~2,047 tests** across unit, acceptance, contract, integration, and benchmark categories.
+This guide covers the testing approach, test organisation, and how to write effective tests. The test suite currently contains **~2,065 tests** across unit, acceptance, contract, integration, and benchmark categories.
 
 | Category | Tests | Description |
 |----------|------:|-------------|
-| Unit | 1,522 | Component tests in isolation |
+| Unit | 1,537 | Component tests in isolation |
 | Acceptance | 275 | End-to-end regulatory scenarios (CRR + Basel 3.1 + comparison) |
-| Contract | 123 | Protocol/interface compliance |
+| Contract | 125 | Protocol/interface compliance |
 | Benchmark | 27–34 | Performance at various scales (7 slow tests deselected by default) |
-| Integration | 100 | Cross-component integration |
-| **Total** | **~2,047** | |
+| Integration | 101 | Cross-component integration |
+| **Total** | **~2,065** | |
 
 ## Test Organisation
 
 ```
 tests/
-├── unit/                    # Component unit tests (1,522 tests)
+├── unit/                    # Component unit tests (1,537 tests)
 │   ├── crr/                 # CRR-specific tests
 │   ├── crm/                 # Credit risk mitigation tests
 │   ├── irb/                 # IRB-specific tests
@@ -25,8 +25,8 @@ tests/
 │   ├── crr/                 # CRR framework scenarios (97 tests)
 │   ├── basel31/             # Basel 3.1 framework scenarios (116 tests)
 │   └── comparison/          # Cross-framework comparison tests (62 tests)
-├── contracts/               # Interface compliance tests (123 tests)
-├── integration/             # Cross-component integration tests (100 tests)
+├── contracts/               # Interface compliance tests (125 tests)
+├── integration/             # Cross-component integration tests (101 tests)
 ├── benchmarks/              # Performance tests (27–34 tests)
 │   ├── data_generators.py   # Dataset generation for various scales
 │   └── data/                # Cached benchmark datasets (parquet)

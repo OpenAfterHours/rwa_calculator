@@ -71,6 +71,30 @@ stage, adding 14+ columns to each exposure record.
 | `rating_source_counterparty` | `String` | Counterparty whose rating was used |
 | `rating_inheritance_reason` | `String` | `"own_rating"`, `"parent_rating"`, `"group_rating"`, `"unrated"` |
 
+### Per-type rating columns
+
+The hierarchy resolver resolves internal and external ratings independently via
+`_build_rating_inheritance_lazy()`. Each rating type is inherited separately
+(own → parent → ultimate parent), producing per-type columns:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `internal_pd` | `Float64` | Best internal PD (own or inherited from parent) |
+| `internal_rating_value` | `String` | Internal rating grade |
+| `external_cqs` | `Int8` | Best external CQS (own or inherited from parent) |
+| `external_rating_value` | `String` | External rating grade |
+| `internal_model_id` | `String` | Model ID from rating inheritance (links to `model_permissions`) |
+
+Derived convenience columns:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `cqs` | `Int8` | Alias for `external_cqs` (CQS is an external-only concept) |
+| `pd` | `Float64` | Alias for `internal_pd` (PD is an internal-only concept) |
+| `rating_value` | `String` | Coalesce of external then internal rating value |
+| `has_internal_rating` | `Boolean` | `internal_pd IS NOT NULL` — gates IRB approach eligibility |
+| `has_external_rating` | `Boolean` | `external_cqs IS NOT NULL` |
+
 ### Facility hierarchy columns
 
 | Column | Type | Description |

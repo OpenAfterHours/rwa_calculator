@@ -2,7 +2,7 @@
 
 ## Current State
 
-The pipeline has **17 `.collect()` calls** across 7 engine files. Of these, **9 are on the hot path** (every calculation run hits them). The pipeline cannot currently run as a single LazyFrame operation due to three categories of blockers.
+The pipeline has `.collect()` calls across several engine files. The hot-path collects (every calculation run) are concentrated in CRM processing and the pipeline's split-once + collect_all pattern. The pipeline cannot currently run as a single LazyFrame operation due to three categories of blockers.
 
 ---
 
@@ -12,11 +12,12 @@ These are **platform-level** constraints in Polars itself:
 
 | Location | Barrier | Root Cause |
 |---|---|---|
-| `pipeline.py:622` | Pre-branch materialisation | CRM output is a deep plan tree. Without collecting, `collect_all` re-optimizes it 3x (once per SA/IRB/Slotting branch). |
-| `pipeline.py:656` | `collect_all()` for 3 branches | Must use CPU engine (not streaming) because streaming doesn't support CSE. Without CSE, each branch re-executes the full CRM plan (~9x slower). |
-| `crm/processor.py:396` | Post-CRM materialisation (fan-out path) | Plan depth causes **Polars optimizer segfaults** when combined with downstream approach filtering. |
-| `crm/processor.py:452` | Pre-collateral materialisation (unified path) | Without this, the 3 downstream lookup collects each re-execute provisions → CCF → init_ead (4x total). |
-| `crm/processor.py:624-626` | 3 lookup table collects | Each lookup is referenced in 5+ downstream joins. Without materialisation, the `group_by().agg()` expressions re-evaluate at each reference. |
+| `pipeline.py:631` | Pre-branch materialisation | CRM output is a deep plan tree. Without collecting, `collect_all` re-optimizes it 3× (once per SA/IRB/Slotting branch). |
+| `pipeline.py:665` | `collect_all()` for 3 branches | Must use CPU engine (not streaming) because streaming doesn't support CSE. Without CSE, each branch re-executes the full CRM plan (~9× slower). |
+| `crm/processor.py:379` | Post-init_ead materialisation (fan-out path) | Flattens deep plan to prevent re-evaluation when 3 lookup collects reference the upstream. |
+| `crm/processor.py:424` | Post-init_ead materialisation (unified path) | Same as above but for Basel 3.1 output floor path (all rows, no approach split). |
+| `crm/processor.py:480` | Pre-collateral materialisation (unified path) | Without this, the 3 downstream lookup collects each re-execute provisions → CCF → init_ead (4× total). |
+| `crm/processor.py:816-818` | 3 lookup table collects | Each lookup is referenced in 5+ downstream joins. Without materialisation, the `group_by().agg()` expressions re-evaluate at each reference. |
 
 **Why they exist:** Polars' lazy engine lacks robust CSE (Common Subexpression Elimination) for deep plan trees. When the same LazyFrame is referenced by multiple downstream consumers (fan-out pattern), the optimizer either re-executes the shared upstream per consumer or segfaults on very deep plans.
 
@@ -72,11 +73,9 @@ LAZY ─────────────────────────
     │
   Classifier (fully lazy, schema checks only)
     │
-  CCF (fully lazy, schema checks only)
-    │
   CRM: provisions → CCF → init_ead
     │
-EAGER ─── COLLECT #1: flatten deep plan ──── Category 1 ──────
+EAGER ─── COLLECT #1: post-init_ead flatten ── Category 1 ────
     │
 LAZY ──────────────────────────────────────────────────────────
   CRM: build 3 lookup tables (group_by)
@@ -85,15 +84,22 @@ EAGER ─── COLLECT #2: 3 small lookups ──── Category 1 ────
     │
 LAZY ──────────────────────────────────────────────────────────
   CRM: collateral allocation, guarantees, finalize_ead
+    │   (no final CRM collect — plan tree is shallow post-collateral)
+    │
+  Pipeline: _run_single_pass()
     │
 EAGER ─── COLLECT #3: pre-branch flatten ── Category 1 ───────
+    │   (pipeline.py:631 — materialise CRM output before split)
     │
 LAZY ──────────────────────────────────────────────────────────
+  SA calculate_unified() (Basel 3.1 only — SA-equiv RW on all rows)
+  Split once by approach
   ├── SA calculator (lazy)
   ├── IRB calculator (lazy)
   └── Slotting calculator (lazy)
     │
 EAGER ─── COLLECT #4: collect_all(3 branches) ─────────────────
+    │   (pipeline.py:665 — CPU engine, not streaming)
     │
   Aggregator (re-lazify for summaries, then final output)
 ```
@@ -114,7 +120,7 @@ EAGER ─── COLLECT #4: collect_all(3 branches) ─────────�
 
 ## Key Takeaway
 
-**7 of the 9 hot-path collects exist because of Polars optimizer limitations** (deep plan re-execution, no streaming CSE, segfaults). The remaining 2 are algorithmic (graph traversal on small data). The pipeline architecture is already well-optimized — the `collect().lazy()` pattern at each barrier is the standard workaround. The realistic path forward is:
+**Most hot-path collects exist because of Polars optimizer limitations** (deep plan re-execution, no streaming CSE). The remaining 2 are algorithmic (graph traversal on small data). The pipeline architecture is already well-optimized — the `collect().lazy()` pattern at each barrier is the standard workaround. The realistic path forward is:
 
 1. **Short term**: Accept current architecture. The collects are well-placed and well-documented.
 2. **Medium term**: Monitor Polars' `LazyFrame.cache()` and CSE roadmap. When available, the 3 lookup collects and the pre-branch collect can likely be replaced.

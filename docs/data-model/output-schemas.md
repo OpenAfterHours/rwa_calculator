@@ -92,6 +92,7 @@ from the output data alone.
 | `counterparty_reference` | `String` | Links to counterparty |
 | `book_code` | `String` | Portfolio/book classification |
 | `currency` | `String` | Exposure currency |
+| `model_id` | `String` | IRB model identifier (for model-level permission audit trail) |
 | `basel_version` | `String` | `"3.0"` or `"3.1"` |
 
 ### Counterparty hierarchy (rating inheritance)

@@ -450,7 +450,7 @@ class ExposureClassifier:
                     & (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
                 ).alias("requires_fi_scalar"),
                 # --- HVCRE flag (depends on sl_type from Phase 2) ---
-                (pl.col("sl_type") == "hvcre").alias("is_hvcre"),
+                (pl.col("sl_type") == "hvcre").fill_null(False).alias("is_hvcre"),
             ]
         )
 
@@ -898,9 +898,14 @@ class ExposureClassifier:
 
     @staticmethod
     def _build_slotting_category_expr() -> pl.Expr:
-        """Build slotting_category expression using _cp_ref_upper (pre-computed)."""
+        """Build slotting_category expression using _cp_ref_upper (pre-computed).
+
+        Only populated for specialised lending exposures; null for all others.
+        """
         return (
-            pl.when(pl.col("_cp_ref_upper").str.contains("_STRONG"))
+            pl.when(pl.col("_sa_class") != ExposureClass.SPECIALISED_LENDING.value)
+            .then(pl.lit(None).cast(pl.String))
+            .when(pl.col("_cp_ref_upper").str.contains("_STRONG"))
             .then(pl.lit("strong"))
             .when(pl.col("_cp_ref_upper").str.contains("_GOOD"))
             .then(pl.lit("good"))
@@ -916,9 +921,16 @@ class ExposureClassifier:
 
     @staticmethod
     def _build_sl_type_expr(schema_names: set[str]) -> pl.Expr:
-        """Build sl_type expression using _pt_upper/_cp_ref_upper (pre-computed)."""
+        """Build sl_type expression using _pt_upper/_cp_ref_upper (pre-computed).
+
+        Only populated for specialised lending exposures; null for all others.
+        """
+        non_sl_guard = pl.col("_sa_class") != ExposureClass.SPECIALISED_LENDING.value
+
         cp_ref_chain = (
-            pl.when(pl.col("_cp_ref_upper").str.contains("_PF_"))
+            pl.when(non_sl_guard)
+            .then(pl.lit(None).cast(pl.String))
+            .when(pl.col("_cp_ref_upper").str.contains("_PF_"))
             .then(pl.lit("project_finance"))
             .when(pl.col("_cp_ref_upper").str.contains("_IPRE_"))
             .then(pl.lit("ipre"))
@@ -931,7 +943,9 @@ class ExposureClassifier:
             return cp_ref_chain.alias("sl_type")
 
         return (
-            pl.when(pl.col("_pt_upper").str.contains("PROJECT"))
+            pl.when(non_sl_guard)
+            .then(pl.lit(None).cast(pl.String))
+            .when(pl.col("_pt_upper").str.contains("PROJECT"))
             .then(pl.lit("project_finance"))
             .when(pl.col("_pt_upper").str.contains("OBJECT"))
             .then(pl.lit("object_finance"))

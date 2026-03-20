@@ -1751,3 +1751,144 @@ class TestModelPermissions:
 
         df = result.all_exposures.collect()
         assert df["approach"][0] == ApproachType.AIRB.value
+
+
+# =============================================================================
+# Slotting Column Null Tests
+# =============================================================================
+
+
+class TestSlottingColumnsNullForNonSL:
+    """Verify slotting_category and sl_type are null for non-slotting exposures."""
+
+    def test_corporate_has_null_slotting_columns(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Corporate exposures should have null slotting_category and sl_type."""
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CORP_01"],
+                "counterparty_name": ["Corp Ltd"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],
+                "total_assets": [250000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP_CORP"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CORP_01"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [1000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config)
+        df = result.all_exposures.collect()
+
+        assert df["slotting_category"][0] is None
+        assert df["sl_type"][0] is None
+        assert df["is_hvcre"][0] is False
+
+    def test_sl_has_non_null_slotting_columns(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Specialised lending exposures should retain non-null slotting columns."""
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SL_PF_STRONG"],
+                "counterparty_name": ["SL Project Strong"],
+                "entity_type": ["specialised_lending"],
+                "country_code": ["GB"],
+                "annual_revenue": [0.0],
+                "total_assets": [0.0],
+                "default_status": [False],
+                "sector_code": ["SL"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP_SL"],
+                "exposure_type": ["loan"],
+                "product_type": ["PROJECT_FINANCE"],
+                "book_code": ["SL"],
+                "counterparty_reference": ["SL_PF_STRONG"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config)
+        df = result.all_exposures.collect()
+
+        assert df["slotting_category"][0] == "strong"
+        assert df["sl_type"][0] == "project_finance"
+
+    def test_mixed_exposures_slotting_columns(
+        self,
+        classifier: ExposureClassifier,
+        mixed_exposures: pl.LazyFrame,
+        mixed_counterparties: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Non-SL rows in mixed dataset should have null slotting columns."""
+        bundle = create_resolved_bundle(mixed_exposures, mixed_counterparties)
+        result = classifier.classify(bundle, crr_config)
+        df = result.all_exposures.collect()
+
+        # All rows in mixed_exposures are non-SL (sovereign, bank, corporate, etc.)
+        assert df["slotting_category"].is_null().all()
+        assert df["sl_type"].is_null().all()
+        assert (df["is_hvcre"] == False).all()  # noqa: E712

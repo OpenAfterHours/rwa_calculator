@@ -821,3 +821,192 @@ class TestSAAuditTrail:
             assert "RW=" in calc_str
             assert "SF=" in calc_str
             assert "RWA=" in calc_str
+
+
+# =============================================================================
+# Defaulted Exposure Risk Weight Tests (CRR Art. 127 / CRE20.88-90)
+# =============================================================================
+
+
+class TestDefaultedExposureRiskWeights:
+    """Tests for defaulted exposure risk weight treatment.
+
+    CRR Art. 127: Defaulted exposures receive 100% RW if specific provisions
+    >= 20% of unsecured EAD, otherwise 150% RW.
+
+    Basel 3.1 CRE20.88-90: 100% RW if provisions >= 50%, otherwise 150%.
+    """
+
+    def test_crr_defaulted_high_provision_100pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR Art. 127: provision >= 20% of unsecured EAD -> 100% RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_defaulted=True,
+            # provision_allocated=250k, provision_deducted=0
+            # ratio = 250k / (1m + 0) = 25% >= 20%
+            provision_allocated=Decimal("250000"),
+            provision_deducted=Decimal("0"),
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("1.0"))
+
+    def test_crr_defaulted_low_provision_150pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR Art. 127: provision < 20% of unsecured EAD -> 150% RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_defaulted=True,
+            # provision_allocated=50k, provision_deducted=0
+            # ratio = 50k / (1m + 0) = 5% < 20%
+            provision_allocated=Decimal("50000"),
+            provision_deducted=Decimal("0"),
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+
+    def test_crr_defaulted_zero_provision_150pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR Art. 127: no provisions at all -> 150% RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_defaulted=True,
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+
+    def test_crr_defaulted_mortgage_gets_defaulted_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Defaulted mortgage should get defaulted treatment, not LTV-based RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("500000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            config=crr_config,
+        )
+
+        # Should be 150% (no provisions), NOT the 35% LTV-based weight
+        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+
+    def test_crr_non_defaulted_corporate_unchanged(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Non-defaulted corporate should still get normal CQS-based RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=2,
+            config=crr_config,
+        )
+
+        # CQS 2 corporate = 50%
+        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+
+    def test_b31_defaulted_high_provision_100pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """CRE20.89: provision >= 50% -> 100% RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_defaulted=True,
+            # provision_allocated=600k, provision_deducted=0
+            # ratio = 600k / (1m + 0) = 60% >= 50%
+            provision_allocated=Decimal("600000"),
+            provision_deducted=Decimal("0"),
+            config=basel31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("1.0"))
+
+    def test_b31_defaulted_low_provision_150pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """CRE20.88: provision < 50% -> 150% RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_defaulted=True,
+            # provision_allocated=100k, provision_deducted=0
+            # ratio = 100k / (1m + 0) = 10% < 50%
+            provision_allocated=Decimal("100000"),
+            provision_deducted=Decimal("0"),
+            config=basel31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+
+
+class TestDefaultedSMEExclusion:
+    """Tests for SME supporting factor exclusion of defaulted exposures.
+
+    CRR Art. 501: SME supporting factor applies only to non-defaulted exposures.
+    """
+
+    def test_sme_factor_excluded_for_defaulted(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Defaulted SME should NOT receive supporting factor."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_sme=True,
+            is_defaulted=True,
+            provision_allocated=Decimal("250000"),
+            provision_deducted=Decimal("0"),
+            config=crr_config,
+        )
+
+        assert result["supporting_factor"] == pytest.approx(Decimal("1.0"))
+        assert result["supporting_factor_applied"] is False
+
+    def test_sme_factor_applies_to_performing_sme(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Non-defaulted SME should still receive supporting factor."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_sme=True,
+            is_defaulted=False,
+            config=crr_config,
+        )
+
+        assert result["supporting_factor"] < Decimal("1.0")
+        assert result["supporting_factor_applied"] is True

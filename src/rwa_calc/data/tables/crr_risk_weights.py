@@ -137,6 +137,15 @@ def _create_corporate_df() -> pl.DataFrame:
 RETAIL_RISK_WEIGHT: Decimal = Decimal("0.75")
 
 
+# =============================================================================
+# DEFAULTED EXPOSURE RISK WEIGHTS (CRR Art. 127)
+# =============================================================================
+
+CRR_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # Provisions >= 20% of unsecured EAD
+CRR_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # Provisions < 20% of unsecured EAD
+CRR_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # 20% threshold
+
+
 def _create_retail_df() -> pl.DataFrame:
     """Create retail risk weight DataFrame (single row, no CQS dependency)."""
     return pl.DataFrame(

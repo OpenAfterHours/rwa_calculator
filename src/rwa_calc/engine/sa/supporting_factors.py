@@ -5,6 +5,7 @@ Applies SME and infrastructure supporting factors to RWA calculations.
 These factors are CRR-specific and NOT available under Basel 3.1.
 
 SME Supporting Factor - Tiered Approach (CRR2 Art. 501):
+- Applies only to non-defaulted exposures (Art. 501 exclusion)
 - Exposures up to EUR 2.5m (GBP 2.2m): factor of 0.7619
 - Exposures above EUR 2.5m (GBP 2.2m): factor of 0.85
 
@@ -213,6 +214,7 @@ class SupportingFactorCalculator:
         has_infra = "is_infrastructure" in schema.names()
         has_counterparty = "counterparty_reference" in schema.names()
         has_btl = "is_buy_to_let" in schema.names()
+        has_defaulted = "is_defaulted" in schema.names()
         has_drawn = "drawn_amount" in schema.names()
 
         # Build the drawn (on-balance-sheet) expression for tier calculation.
@@ -262,11 +264,13 @@ class SupportingFactorCalculator:
             # BTL exposures are excluded from the SME factor but still
             # contribute to total_cp_drawn for tier calculation (CRR Art. 501)
             is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
+            # Defaulted exposures are excluded from SME factor (CRR Art. 501)
+            is_defaulted = pl.col("is_defaulted") if has_defaulted else pl.lit(False)
 
             sme_factor_expr = (
-                pl.when(pl.col("is_sme") & (ead_for_tier > 0) & ~is_btl)
+                pl.when(pl.col("is_sme") & (ead_for_tier > 0) & ~is_btl & ~is_defaulted)
                 .then((tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier)
-                .when(pl.col("is_sme") & (ead_for_tier <= 0) & ~is_btl)
+                .when(pl.col("is_sme") & (ead_for_tier <= 0) & ~is_btl & ~is_defaulted)
                 .then(
                     # Zero drawn = all within tier 1 → pure 0.7619
                     pl.lit(factor_tier1)

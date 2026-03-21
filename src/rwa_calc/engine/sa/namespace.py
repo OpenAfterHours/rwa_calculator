@@ -133,6 +133,10 @@ class SALazyFrame:
         if "cp_is_managed_as_retail" not in schema.names():
             lf = lf.with_columns([pl.lit(False).alias("cp_is_managed_as_retail")])
 
+        # Retail threshold qualification (CRR Art. 123 - aggregated exposure ≤ EUR 1m)
+        if "qualifies_as_retail" not in schema.names():
+            lf = lf.with_columns([pl.lit(True).alias("qualifies_as_retail")])
+
         return lf
 
     # =========================================================================
@@ -226,9 +230,12 @@ class SALazyFrame:
                     .otherwise(pl.lit(cre_rw_standard))
                 )
                 # 3. SME managed as retail: 75% RW (CRR Art. 123)
+                # All three Art. 123 conditions required: SME entity, managed
+                # as retail pool, AND aggregated exposure ≤ EUR 1m threshold.
                 .when(
                     (pl.col("exposure_class").str.contains("(?i)sme"))
                     & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                    & (pl.col("qualifies_as_retail") == True)  # noqa: E712
                 )
                 .then(pl.lit(retail_rw))
                 # 4. Corporate SME: 100% RW

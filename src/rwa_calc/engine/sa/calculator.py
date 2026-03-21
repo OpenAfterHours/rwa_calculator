@@ -320,6 +320,8 @@ class SACalculator:
             missing_cols.append(pl.lit("").alias("book_code"))
         if "cp_is_managed_as_retail" not in schema.names():
             missing_cols.append(pl.lit(False).alias("cp_is_managed_as_retail"))
+        if "qualifies_as_retail" not in schema.names():
+            missing_cols.append(pl.lit(True).alias("qualifies_as_retail"))
         if "property_type" not in schema.names():
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("property_type"))
         if "is_adc" not in schema.names():
@@ -470,9 +472,11 @@ class SACalculator:
                     )
                     .then(pl.lit(inv_grade_rw))
                     # 6. SME managed as retail: 75% (same both frameworks)
+                    # Art. 123 requires aggregated exposure ≤ EUR 1m threshold.
                     .when(
                         _uc.str.contains("SME", literal=True)
                         & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                        & (pl.col("qualifies_as_retail") == True)  # noqa: E712
                     )
                     .then(pl.lit(retail_rw))
                     # 7. Corporate SME: 85% (CRE20.47-49, Basel 3.1)
@@ -550,9 +554,11 @@ class SACalculator:
                         .otherwise(pl.lit(cre_rw_standard))
                     )
                     # 3. SME managed as retail: 75% (CRR Art. 123)
+                    # Art. 123 requires aggregated exposure ≤ EUR 1m threshold.
                     .when(
                         _uc.str.contains("SME", literal=True)
                         & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+                        & (pl.col("qualifies_as_retail") == True)  # noqa: E712
                     )
                     .then(pl.lit(retail_rw))
                     # 4. Corporate SME: 100%
@@ -877,6 +883,7 @@ class SACalculator:
         is_sme: bool = False,
         is_infrastructure: bool = False,
         is_managed_as_retail: bool = False,
+        qualifies_as_retail: bool = True,
         has_income_cover: bool = False,
         property_type: str | None = None,
         is_adc: bool = False,
@@ -934,6 +941,7 @@ class SACalculator:
                 "is_infrastructure": [is_infrastructure],
                 "has_income_cover": [has_income_cover],
                 "cp_is_managed_as_retail": [is_managed_as_retail],
+                "qualifies_as_retail": [qualifies_as_retail],
                 "property_type": [property_type],
                 "is_adc": [is_adc],
                 "is_presold": [is_presold],

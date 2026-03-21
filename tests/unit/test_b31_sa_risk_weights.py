@@ -1184,17 +1184,36 @@ class TestB31SMECorporate:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """SME managed as retail keeps 75% under both frameworks."""
+        """SME managed as retail keeps 75% when under EUR 1m threshold."""
         result = sa_calculator.calculate_single_exposure(
             ead=Decimal("500000"),
             exposure_class="corporate_sme",
             cqs=None,
             is_managed_as_retail=True,
+            qualifies_as_retail=True,
             config=b31_config,
         )
 
-        # Managed-as-retail overrides SME corporate → 75%
+        # Managed-as-retail + qualifies (under threshold) → 75%
         assert float(result["risk_weight"]) == pytest.approx(0.75)
+
+    def test_sme_managed_as_retail_over_threshold_not_75pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """SME managed as retail but over EUR 1m threshold gets standard SME RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1500000"),
+            exposure_class="corporate_sme",
+            cqs=None,
+            is_managed_as_retail=True,
+            qualifies_as_retail=False,
+            config=b31_config,
+        )
+
+        # Over threshold → not retail, falls through to corporate SME 85%
+        assert float(result["risk_weight"]) == pytest.approx(0.85)
 
 
 # =============================================================================

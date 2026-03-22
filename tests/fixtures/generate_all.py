@@ -103,6 +103,8 @@ def _generate_counterparties(output_dir: Path) -> list[tuple[str, int]]:
         return [("counterparties.parquet", len(combined))]
     finally:
         sys.path.remove(str(output_dir))
+        # Clear cached module to avoid collision with ratings/specialised_lending.py
+        sys.modules.pop("specialised_lending", None)
 
 
 def _generate_mappings(output_dir: Path) -> list[tuple[str, int]]:

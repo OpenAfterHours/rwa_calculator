@@ -284,6 +284,61 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
+        # =============================================================================
+        # CRR-E Short Maturity Scenarios (<2.5yr remaining maturity)
+        # =============================================================================
+        # CRR-E5: Project Finance - Strong, short maturity (50% RW)
+        {
+            "counterparty_reference": "SL_PF_STRONG_SHORT",
+            "counterparty_name": "Strong PF SPV Short Maturity - CRR-E5",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 500_000_000.0,
+            "default_status": False,
+            "sector_code": "42.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # CRR-E6: Project Finance - Good, short maturity (70% RW)
+        {
+            "counterparty_reference": "SL_PF_GOOD_SHORT",
+            "counterparty_name": "Good PF SPV Short Maturity - CRR-E6",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 400_000_000.0,
+            "default_status": False,
+            "sector_code": "35.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # CRR-E7: HVCRE - Strong, short maturity (70% RW)
+        {
+            "counterparty_reference": "SL_HVCRE_STRONG_SHORT",
+            "counterparty_name": "Strong HVCRE SPV Short Maturity - CRR-E7",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 80_000_000.0,
+            "default_status": False,
+            "sector_code": "41.10",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # CRR-E8: HVCRE - Good, short maturity (95% RW)
+        {
+            "counterparty_reference": "SL_HVCRE_GOOD_SHORT",
+            "counterparty_name": "Good HVCRE SPV Short Maturity - CRR-E8",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 80_000_000.0,
+            "default_status": False,
+            "sector_code": "41.10",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
     ]
 
     return pl.DataFrame(specialised_lending, schema=COUNTERPARTY_SCHEMA)

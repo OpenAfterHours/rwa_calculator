@@ -30,7 +30,6 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -46,49 +45,7 @@ from rwa_calc.engine.irb.formulas import (
     _polars_correlation_expr,
     _polars_maturity_adjustment_expr,
 )
-
-
-def _exact_fractional_years_expr(
-    start_date: date,
-    end_col: str,
-) -> pl.Expr:
-    """
-    Calculate fractional years between a fixed start date and an end date column.
-
-    Uses the year fraction method where each day represents 1/365 of a year,
-    regardless of leap years. This provides consistent treatment across all
-    periods and is standard for regulatory maturity calculations (CRR Article 162).
-
-    Formula:
-        years = (end_year - start_year) + (end_ordinal/365) - (start_ordinal/365)
-
-    This treats each day-of-year as a fraction of 365, ensuring leap days don't
-    cause inconsistencies in maturity calculations.
-
-    Works with LazyFrames and streaming (pure expression-based).
-
-    Args:
-        start_date: The fixed start date (e.g., reporting_date from config)
-        end_col: Name of the end date column
-
-    Returns:
-        Polars expression calculating fractional years
-    """
-    end = pl.col(end_col)
-
-    # Pre-compute start date components (scalar values)
-    start_year = start_date.year
-    start_ordinal = start_date.timetuple().tm_yday
-    start_frac = start_ordinal / 365.0
-
-    # End date components (from column)
-    end_year = end.dt.year()
-    end_ordinal = end.dt.ordinal_day()
-    end_frac = end_ordinal.cast(pl.Float64) / 365.0
-
-    # Year fraction = year difference + ordinal adjustment
-    return (end_year - start_year).cast(pl.Float64) + (end_frac - pl.lit(start_frac))
-
+from rwa_calc.engine.utils import exact_fractional_years_expr as _exact_fractional_years_expr
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

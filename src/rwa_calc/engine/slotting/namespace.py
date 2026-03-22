@@ -33,8 +33,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars import col, lit
 
+from rwa_calc.engine.utils import exact_fractional_years_expr
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+# Threshold for short maturity classification under CRR Art. 153(5)
+_SHORT_MATURITY_THRESHOLD_YEARS = 2.5
 
 
 # =============================================================================
@@ -114,8 +119,20 @@ class SlottingLazyFrame:
     def __init__(self, lf: pl.LazyFrame) -> None:
         self._lf = lf
 
-    def prepare_columns(self) -> pl.LazyFrame:
-        """Ensure all required columns exist with defaults."""
+    def prepare_columns(self, config: CalculationConfig | None = None) -> pl.LazyFrame:
+        """Ensure all required columns exist with defaults.
+
+        When ``config`` is provided and ``maturity_date`` exists in the frame,
+        ``is_short_maturity`` is derived automatically:
+            remaining_maturity = (maturity_date - reporting_date) in years
+            is_short_maturity  = remaining_maturity < 2.5
+
+        A pre-existing ``is_short_maturity`` column is never overwritten so that
+        callers can supply an explicit override.
+
+        Args:
+            config: Calculation configuration (provides reporting_date for maturity calc).
+        """
         schema = self._lf.collect_schema()
 
         # Define default columns to add if they don't exist
@@ -123,7 +140,6 @@ class SlottingLazyFrame:
             "slotting_category": lit("satisfactory"),
             "is_hvcre": lit(False),
             "sl_type": lit("project_finance"),
-            "is_short_maturity": lit(False),
             "is_pre_operational": lit(False),
         }
 
@@ -138,6 +154,33 @@ class SlottingLazyFrame:
                 else lit(0.0)
             )
             to_add.append(ead_col.alias("ead_final"))
+
+        # Derive is_short_maturity from maturity_date when not already present
+        if "is_short_maturity" not in schema:
+            if config is not None and "maturity_date" in schema:
+                remaining = exact_fractional_years_expr(config.reporting_date, "maturity_date")
+                to_add.append(
+                    remaining.alias("remaining_maturity_years"),
+                )
+                to_add.append(
+                    pl.when(col("maturity_date").is_not_null())
+                    .then(remaining < _SHORT_MATURITY_THRESHOLD_YEARS)
+                    .otherwise(lit(False))
+                    .alias("is_short_maturity"),
+                )
+            else:
+                # No config or no maturity_date — conservative default (long maturity)
+                to_add.append(lit(False).alias("is_short_maturity"))
+
+        # Add remaining_maturity_years for audit even when is_short_maturity exists
+        if (
+            "remaining_maturity_years" not in schema
+            and "is_short_maturity" in schema
+            and config is not None
+            and "maturity_date" in schema
+        ):
+            remaining = exact_fractional_years_expr(config.reporting_date, "maturity_date")
+            to_add.append(remaining.alias("remaining_maturity_years"))
 
         # Add missing default columns
         for name, expr in defaults.items():
@@ -173,7 +216,9 @@ class SlottingLazyFrame:
     def apply_all(self, config: CalculationConfig) -> pl.LazyFrame:
         """Apply full slotting calculation pipeline."""
         return (
-            self.prepare_columns().slotting.apply_slotting_weights(config).slotting.calculate_rwa()
+            self.prepare_columns(config)
+            .slotting.apply_slotting_weights(config)
+            .slotting.calculate_rwa()
         )
 
     def build_audit(self) -> pl.LazyFrame:
@@ -187,6 +232,8 @@ class SlottingLazyFrame:
             "sl_type",
             "slotting_category",
             "is_hvcre",
+            "is_short_maturity",
+            "remaining_maturity_years",
             "ead_final",
             "risk_weight",
             "rwa",

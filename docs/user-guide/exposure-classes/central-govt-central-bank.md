@@ -66,19 +66,31 @@ R = 0.12 × (1 - exp(-50 × PD)) / (1 - exp(-50)) +
 
 ## Domestic Sovereign
 
-### UK Government Exposures
+### UK Domestic Currency Treatment (Art. 114(3))
 
-The UK Government receives 0% risk weight for:
-- Treasury bonds (Gilts)
+Exposures to the **UK central government and central bank** denominated and funded
+in **GBP** receive a **0% risk weight**, regardless of external credit rating or CQS.
+
+This applies to:
+- Treasury bonds (Gilts) denominated in GBP
 - National Savings products
-- Loans to HM Treasury
-- Exposures guaranteed by UK Government
+- Loans to HM Treasury in GBP
+- Bank of England reserves in GBP
+
+The override requires both:
+1. Counterparty `country_code = "GB"` (UK sovereign or central bank)
+2. Exposure `currency = "GBP"` (denominated in sterling)
+
+Exposures to UK sovereign entities in **foreign currencies** (e.g. USD-denominated Gilts)
+fall back to the standard CQS-based risk weight table.
 
 ### Treatment
 
 ```python
-if counterparty.country == "UK" and counterparty.type == "SOVEREIGN":
-    risk_weight = 0.00  # 0% RW
+if counterparty.country_code == "GB" and exposure.currency == "GBP":
+    risk_weight = 0.00  # Art. 114(3) domestic currency 0% RW
+else:
+    risk_weight = cqs_lookup(counterparty.cqs)  # Standard CQS table
 ```
 
 ## Foreign Sovereigns
@@ -210,6 +222,7 @@ RWA = £20,000,000 × 100% = £20,000,000
 |-------|-------------|----------|
 | Sovereign definition | Art. 114 | CRE20.7-10 |
 | Risk weights | Art. 114 | CRE20.11 |
+| Domestic currency 0% RW | Art. 114(3) | CRE20.9 |
 | MDB treatment | Art. 117 | CRE20.12-14 |
 | Central bank treatment | Art. 114(4) | CRE20.8 |
 

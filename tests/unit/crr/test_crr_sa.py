@@ -118,6 +118,156 @@ class TestSovereignRiskWeights:
         assert result["rwa"] == pytest.approx(Decimal("1000000"))
 
 
+class TestArticle114_3DomesticCurrency:
+    """Tests for CRR Art. 114(3) — UK domestic currency 0% RW override.
+
+    Art. 114(3) provides that exposures to UK central government and
+    central bank denominated in GBP receive 0% RW regardless of CQS.
+    """
+
+    def test_uk_sovereign_gbp_cqs2_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """UK sovereign + GBP + CQS 2 → 0% RW (domestic currency override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            currency="GBP",
+            country_code="GB",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_uk_sovereign_gbp_unrated_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """UK sovereign + GBP + unrated → 0% RW (domestic currency override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=None,
+            currency="GBP",
+            country_code="GB",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_uk_sovereign_usd_uses_cqs_based_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """UK sovereign + USD + CQS 2 → 20% RW (foreign currency, no override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            currency="USD",
+            country_code="GB",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
+        assert result["rwa"] == pytest.approx(Decimal("200000"))
+
+    def test_non_uk_sovereign_gbp_uses_cqs_based_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Non-UK sovereign (US) + GBP + CQS 2 → 20% RW (not UK, no override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            currency="GBP",
+            country_code="US",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
+        assert result["rwa"] == pytest.approx(Decimal("200000"))
+
+    def test_corporate_gb_gbp_no_override(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Corporate + GB + GBP → CQS-based RW (Art. 114(3) only applies to CGCB)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=2,
+            currency="GBP",
+            country_code="GB",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+        assert result["rwa"] == pytest.approx(Decimal("500000"))
+
+    def test_missing_currency_falls_through_to_cqs(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Missing currency → falls through to CQS-based RW."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            country_code="GB",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
+
+    def test_uk_sovereign_gbp_cqs1_still_zero(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """UK sovereign + GBP + CQS 1 → 0% RW (both paths agree)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=1,
+            currency="GBP",
+            country_code="GB",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_uk_sovereign_gbp_basel31_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 114(3) also applies under Basel 3.1 — UK sovereign + GBP → 0%."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=3,
+            currency="GBP",
+            country_code="GB",
+            config=basel31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+
 class TestInstitutionRiskWeights:
     """Tests for institution exposure risk weights."""
 

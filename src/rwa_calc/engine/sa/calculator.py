@@ -340,8 +340,17 @@ class SACalculator:
             missing_cols.append(pl.lit(0.0).alias("provision_allocated"))
         if "provision_deducted" not in schema.names():
             missing_cols.append(pl.lit(0.0).alias("provision_deducted"))
+        if "currency" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("currency"))
+        if "cp_country_code" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_country_code"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
+
+        # CRR Art. 114(3): UK CGCB exposures denominated in GBP → 0% RW
+        _is_uk_domestic_currency = (pl.col("cp_country_code") == "GB") & (
+            pl.col("currency") == "GBP"
+        )
 
         # Prepare exposures for join
         # Compute uppercase once for all comparisons (avoids repeated regex)
@@ -409,10 +418,16 @@ class SACalculator:
 
             exposures = exposures.with_columns(
                 [
-                    # 0. Defaulted exposures: 150% or 100% (CRE20.88-90)
+                    # 0. Art. 114(3): UK CGCB + GBP → 0% RW (overrides all CQS)
+                    pl.when(
+                        _uc.str.contains("CENTRAL_GOVT", literal=True)
+                        & _is_uk_domestic_currency
+                    )
+                    .then(pl.lit(0.0))
+                    # 1. Defaulted exposures: 150% or 100% (CRE20.88-90)
                     # Provision ratio = provision_allocated / (ead + provision_deducted)
                     # where denominator reconstructs pre-provision unsecured EAD
-                    pl.when(pl.col("is_defaulted").fill_null(False))
+                    .when(pl.col("is_defaulted").fill_null(False))
                     .then(
                         pl.when(
                             pl.col("provision_allocated")
@@ -422,7 +437,7 @@ class SACalculator:
                         .then(pl.lit(b31_def_high_rw))
                         .otherwise(pl.lit(b31_def_low_rw))
                     )
-                    # 1. Subordinated debt: flat 150% (CRE20.47)
+                    # 2. Subordinated debt: flat 150% (CRE20.47)
                     # Overrides all CQS-based weights for institution + corporate
                     .when(
                         (pl.col("seniority").fill_null("senior") == "subordinated")
@@ -511,10 +526,16 @@ class SACalculator:
 
             exposures = exposures.with_columns(
                 [
-                    # 0. Defaulted exposures: 100% or 150% (CRR Art. 127)
+                    # 0. Art. 114(3): UK CGCB + GBP → 0% RW (overrides all CQS)
+                    pl.when(
+                        _uc.str.contains("CENTRAL_GOVT", literal=True)
+                        & _is_uk_domestic_currency
+                    )
+                    .then(pl.lit(0.0))
+                    # 1. Defaulted exposures: 100% or 150% (CRR Art. 127)
                     # Provision ratio = provision_allocated / (ead + provision_deducted)
                     # where denominator reconstructs pre-provision unsecured EAD
-                    pl.when(pl.col("is_defaulted").fill_null(False))
+                    .when(pl.col("is_defaulted").fill_null(False))
                     .then(
                         pl.when(
                             pl.col("provision_allocated")
@@ -524,7 +545,7 @@ class SACalculator:
                         .then(pl.lit(crr_def_high_rw))
                         .otherwise(pl.lit(crr_def_low_rw))
                     )
-                    # 1. Residential mortgage: LTV split (CRR Art. 125)
+                    # 2. Residential mortgage: LTV split (CRR Art. 125)
                     .when(
                         _uc.str.contains("MORTGAGE", literal=True)
                         | _uc.str.contains("RESIDENTIAL", literal=True)
@@ -894,6 +915,8 @@ class SACalculator:
         is_defaulted: bool = False,
         provision_allocated: Decimal | None = None,
         provision_deducted: Decimal | None = None,
+        currency: str | None = None,
+        country_code: str | None = None,
         config: CalculationConfig | None = None,
     ) -> dict:
         """
@@ -917,6 +940,8 @@ class SACalculator:
             is_defaulted: Whether counterparty is in default (CRR Art. 127 / CRE20.88-90)
             provision_allocated: Total specific provisions allocated to exposure
             provision_deducted: Total provisions deducted from EAD
+            currency: Exposure denomination currency (ISO, e.g. "GBP") for Art. 114(3)
+            country_code: Counterparty country (ISO, e.g. "GB") for Art. 114(3)
             config: Calculation configuration (defaults to CRR)
 
         Returns:
@@ -955,6 +980,8 @@ class SACalculator:
                 "provision_deducted": [
                     float(provision_deducted) if provision_deducted else 0.0
                 ],
+                "currency": [currency],
+                "cp_country_code": [country_code],
             }
         ).lazy()
 

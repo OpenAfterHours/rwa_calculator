@@ -105,6 +105,12 @@ DATA_SOURCES = [
         requirement=RequirementLevel.OPTIONAL,
         description="Equity investment exposures",
     ),
+    DataSourceFile(
+        id="specialised_lending",
+        relative_path=Path("ratings/specialised_lending"),
+        requirement=RequirementLevel.OPTIONAL,
+        description="Specialised lending metadata for slotting approach (CRE33)",
+    ),
     # Mappings
     DataSourceFile(
         id="lending_mapping",

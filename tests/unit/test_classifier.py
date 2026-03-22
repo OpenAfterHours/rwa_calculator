@@ -264,6 +264,7 @@ def create_resolved_bundle(
     residential_collateral_value: float = 0.0,
     lending_group_adjusted_exposure: float | None = None,
     model_permissions: pl.LazyFrame | None = None,
+    specialised_lending: pl.LazyFrame | None = None,
 ) -> ResolvedHierarchyBundle:
     """Helper to create a ResolvedHierarchyBundle for testing.
 
@@ -274,6 +275,7 @@ def create_resolved_bundle(
         lending_group_adjusted_exposure: Optional adjusted exposure for lending group
             (defaults to lending_group_total_exposure if not specified)
         model_permissions: Optional model-level IRB permissions LazyFrame
+        specialised_lending: Optional specialised lending metadata LazyFrame
     """
     # Add hierarchy columns to counterparties
     enriched_cp = counterparties.with_columns(
@@ -358,6 +360,7 @@ def create_resolved_bundle(
         collateral=pl.LazyFrame(),
         guarantees=pl.LazyFrame(),
         provisions=pl.LazyFrame(),
+        specialised_lending=specialised_lending,
         model_permissions=model_permissions,
         lending_group_totals=pl.LazyFrame(
             schema={
@@ -1829,7 +1832,7 @@ class TestSlottingColumnsNullForNonSL:
             {
                 "counterparty_reference": ["SL_PF_STRONG"],
                 "counterparty_name": ["SL Project Strong"],
-                "entity_type": ["specialised_lending"],
+                "entity_type": ["corporate"],
                 "country_code": ["GB"],
                 "annual_revenue": [0.0],
                 "total_assets": [0.0],
@@ -1869,7 +1872,18 @@ class TestSlottingColumnsNullForNonSL:
             }
         ).lazy()
 
-        bundle = create_resolved_bundle(exposures, counterparties)
+        sl_data = pl.DataFrame(
+            {
+                "counterparty_reference": ["SL_PF_STRONG"],
+                "sl_type": ["project_finance"],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(
+            exposures, counterparties, specialised_lending=sl_data
+        )
         result = classifier.classify(bundle, crr_config)
         df = result.all_exposures.collect()
 

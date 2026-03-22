@@ -225,10 +225,9 @@ RATINGS_SCHEMA = {
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS9/24 Ch.5)
 # These are corporate exposures with specific risk characteristics requiring separate treatment
 SPECIALISED_LENDING_SCHEMA = {
-    "exposure_reference": pl.String,  # Links to facility/loan reference
-    "sl_type": pl.String,  # project_finance, object_finance, commodities_finance, ipre
+    "counterparty_reference": pl.String,  # Links to counterparty (all exposures inherit SL treatment)
+    "sl_type": pl.String,  # project_finance, object_finance, commodities_finance, ipre, hvcre
     "slotting_category": pl.String,  # strong, good, satisfactory, weak, default
-    "remaining_maturity_years": pl.Float64,  # <2.5yr gets reduced RW for strong/good categories
     "is_hvcre": pl.Boolean,  # High-volatility commercial real estate (higher RW)
     # Supervisory risk weights by category (CRE33.5):
     # strong: 70% (50% if <2.5yr), good: 90% (70% if <2.5yr),

@@ -38,10 +38,8 @@ class FixtureData:
     org_mappings: pl.LazyFrame
     lending_mappings: pl.LazyFrame
 
-    @property
-    def specialised_lending(self) -> pl.LazyFrame:
-        """Filter specialised lending counterparties from combined data."""
-        return self.counterparties.filter(pl.col("entity_type") == "specialised_lending")
+    # Specialised lending metadata
+    specialised_lending: pl.LazyFrame | None = None
 
     def get_counterparty(self, reference: str) -> dict | None:
         """Get a single counterparty by reference."""
@@ -143,15 +141,6 @@ class FixtureData:
             return None
         return result.row(0, named=True)
 
-    def get_specialised_lending_counterparty(self, reference: str) -> dict | None:
-        """Get a specialised lending counterparty by reference."""
-        result = self.counterparties.filter(
-            (pl.col("counterparty_reference") == reference)
-            & (pl.col("entity_type") == "specialised_lending")
-        ).collect()
-        if result.height == 0:
-            return None
-        return result.row(0, named=True)
 
 
 def get_fixture_path() -> Path:
@@ -206,6 +195,11 @@ def load_fixtures() -> FixtureData:
         # Mappings
         lending_mappings=pl.scan_parquet(fixture_path / "mapping" / "lending_mapping.parquet"),
         org_mappings=_load_optional_parquet(fixture_path / "mapping" / "org_mapping.parquet"),
+
+        # Specialised lending metadata
+        specialised_lending=_load_optional_parquet(
+            fixture_path / "ratings" / "specialised_lending.parquet"
+        ),
     )
 
 

@@ -25,6 +25,13 @@ Specialised lending metadata (`sl_type`, `slotting_category`, `is_hvcre`) is now
 
 #### UK govt guarantee exposure marked "not beneficial" for non-sovereign entity types
 Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g., `contains("SOVEREIGN")`), which only matched `sovereign` but not `central_bank`, `bank`, `company`, or `mdb`. These entity types produced `null` guarantor RW, causing beneficial guarantees to be incorrectly skipped. The lookup now uses `guarantor_exposure_class` (derived from the existing `ENTITY_TYPE_TO_SA_CLASS` mapping), ensuring all valid entity types resolve to the correct SA risk weight. Also adds Art. 114(3) domestic sovereign treatment: UK CGCB guarantors in GBP receive 0% RW regardless of CQS. Both SA calculator and IRB namespace are fixed. CRM processor and namespace now propagate `guarantor_country_code` from counterparty data.
+#### Slotting maturity not derived from `maturity_date`
+The `is_short_maturity` flag for CRR Art. 153(5) specialised lending was never calculated from exposure `maturity_date`. It defaulted to `False`, causing all exposures to receive the >= 2.5yr risk weights regardless of actual remaining maturity. Strong category exposures with <2.5yr maturity now correctly receive 50% RW (was 70%), Good receives 70% (was 90%), HVCRE Strong receives 70% (was 95%), and HVCRE Good receives 95% (was 120%).
+
+- `prepare_columns()` now accepts `CalculationConfig` and derives `is_short_maturity` from `maturity_date` and `reporting_date`
+- Extracted `exact_fractional_years_expr` to shared `engine/utils.py` (reused by IRB and slotting)
+- Added `remaining_maturity_years` column to slotting audit trail
+- Added CRR-E5 through CRR-E8 acceptance scenarios for short-maturity slotting
 
 #### FI scalar (`apply_fi_scalar`) not applied to IRB correlation
 The `apply_fi_scalar` counterparty flag was gated on `is_financial_sector_entity`, which required the `entity_type` to be an institution-like value. Counterparties with `entity_type="corporate"` and `apply_fi_scalar=True` silently received no 1.25x correlation multiplier. The classifier now derives `requires_fi_scalar` directly from the user-supplied `apply_fi_scalar` flag.

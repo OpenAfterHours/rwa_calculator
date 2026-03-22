@@ -1,13 +1,51 @@
 """
 Shared utility functions for the RWA calculation engine.
 
-Provides common LazyFrame validation helpers used across
-loader, pipeline, hierarchy, and CRM modules.
+Provides common LazyFrame validation helpers and date utilities used across
+loader, pipeline, hierarchy, CRM, IRB, and slotting modules.
 """
 
 from __future__ import annotations
 
+from datetime import date
+
 import polars as pl
+
+
+def exact_fractional_years_expr(
+    start_date: date,
+    end_col: str,
+) -> pl.Expr:
+    """
+    Calculate fractional years between a fixed start date and an end date column.
+
+    Uses the year fraction method where each day represents 1/365 of a year,
+    regardless of leap years. This provides consistent treatment across all
+    periods and is standard for regulatory maturity calculations (CRR Article 162).
+
+    Formula:
+        years = (end_year - start_year) + (end_ordinal/365) - (start_ordinal/365)
+
+    Works with LazyFrames and streaming (pure expression-based).
+
+    Args:
+        start_date: The fixed start date (e.g., reporting_date from config)
+        end_col: Name of the end date column
+
+    Returns:
+        Polars expression calculating fractional years
+    """
+    end = pl.col(end_col)
+
+    start_year = start_date.year
+    start_ordinal = start_date.timetuple().tm_yday
+    start_frac = start_ordinal / 365.0
+
+    end_year = end.dt.year()
+    end_ordinal = end.dt.ordinal_day()
+    end_frac = end_ordinal.cast(pl.Float64) / 365.0
+
+    return (end_year - start_year).cast(pl.Float64) + (end_frac - pl.lit(start_frac))
 
 
 def has_rows(lf: pl.LazyFrame) -> bool:

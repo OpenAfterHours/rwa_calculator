@@ -23,8 +23,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.slotting import SlottingLazyFrame, SlottingExpr  # noqa: F401
-
+from rwa_calc.engine.slotting import SlottingExpr, SlottingLazyFrame  # noqa: F401
 
 # =============================================================================
 # Fixtures
@@ -135,6 +134,159 @@ class TestPrepareColumns:
 
         assert result["slotting_category"][0] == "strong"
         assert result["is_hvcre"][0] == False  # noqa: E712
+
+
+# =============================================================================
+# Maturity Derivation Tests (CRR Art. 153(5) — <2.5yr vs >=2.5yr)
+# =============================================================================
+
+
+class TestMaturityDerivation:
+    """Tests for is_short_maturity derivation from maturity_date."""
+
+    def test_short_maturity_derived_from_date(self, crr_config: CalculationConfig) -> None:
+        """Remaining maturity < 2.5yr should set is_short_maturity=True."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "maturity_date": [date(2026, 7, 1)],  # ~0.5yr from 2024-12-31
+            }
+        )
+        result = lf.slotting.prepare_columns(crr_config).collect()
+
+        assert result["is_short_maturity"][0] is True
+
+    def test_long_maturity_derived_from_date(self, crr_config: CalculationConfig) -> None:
+        """Remaining maturity >= 2.5yr should set is_short_maturity=False."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "maturity_date": [date(2030, 1, 1)],  # ~5yr from 2024-12-31
+            }
+        )
+        result = lf.slotting.prepare_columns(crr_config).collect()
+
+        assert result["is_short_maturity"][0] is False
+
+    def test_boundary_at_2_5_years_is_not_short(self) -> None:
+        """Remaining maturity >= 2.5yr should be classified as not short."""
+        config = CalculationConfig.crr(reporting_date=date(2026, 1, 1))
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "maturity_date": [date(2028, 7, 2)],  # 2.501yr from 2026-01-01 (>=2.5yr)
+            }
+        )
+        result = lf.slotting.prepare_columns(config).collect()
+
+        assert result["is_short_maturity"][0] is False
+
+    def test_boundary_just_below_2_5_years_is_short(self) -> None:
+        """Remaining maturity just below 2.5yr should be classified as short."""
+        config = CalculationConfig.crr(reporting_date=date(2026, 1, 1))
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "maturity_date": [date(2028, 7, 1)],  # 2.499yr from 2026-01-01 (<2.5yr)
+            }
+        )
+        result = lf.slotting.prepare_columns(config).collect()
+
+        assert result["is_short_maturity"][0] is True
+
+    def test_null_maturity_date_defaults_to_not_short(self, crr_config: CalculationConfig) -> None:
+        """Null maturity_date should conservatively default to is_short_maturity=False."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "maturity_date": pl.Series([None], dtype=pl.Date),
+            }
+        )
+        result = lf.slotting.prepare_columns(crr_config).collect()
+
+        assert result["is_short_maturity"][0] is False
+
+    def test_existing_is_short_maturity_not_overwritten(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """Pre-existing is_short_maturity column should not be overwritten."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "is_short_maturity": [True],
+                "maturity_date": [date(2030, 1, 1)],  # Long maturity
+            }
+        )
+        result = lf.slotting.prepare_columns(crr_config).collect()
+
+        # Should preserve the explicit True, not recalculate from date
+        assert result["is_short_maturity"][0] is True
+
+    def test_remaining_maturity_years_column_added(self, crr_config: CalculationConfig) -> None:
+        """remaining_maturity_years should be added for audit trail."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "maturity_date": [date(2029, 12, 31)],  # ~5yr from 2024-12-31
+            }
+        )
+        result = lf.slotting.prepare_columns(crr_config).collect()
+
+        assert "remaining_maturity_years" in result.columns
+        assert result["remaining_maturity_years"][0] == pytest.approx(5.0, abs=0.01)
+
+    def test_no_config_defaults_to_not_short(self) -> None:
+        """Without config, is_short_maturity should default to False."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "maturity_date": [date(2026, 6, 1)],
+            }
+        )
+        result = lf.slotting.prepare_columns().collect()
+
+        assert result["is_short_maturity"][0] is False
+
+    def test_short_maturity_gives_reduced_risk_weight(self, crr_config: CalculationConfig) -> None:
+        """Strong with <2.5yr maturity should get 50% RW (not 70%)."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1_000_000.0],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "maturity_date": [date(2025, 6, 1)],  # Short maturity from 2024-12-31
+            }
+        )
+        result = (
+            lf.slotting.prepare_columns(crr_config)
+            .slotting.apply_slotting_weights(crr_config)
+            .collect()
+        )
+
+        assert result["risk_weight"][0] == pytest.approx(0.50)
 
 
 # =============================================================================

@@ -264,24 +264,9 @@ Step 8: Split by approach
         Filter into sa_exposures, irb_exposures, slotting_exposures
 ```
 
-### Financial Sector Entity (FSE) Classification
+### FI Scalar (CRR Art. 153(2))
 
-The classifier identifies Financial Sector Entities for the FI scalar (CRR Art. 153(2)):
-
-```python
-FINANCIAL_SECTOR_ENTITY_TYPES = {
-    "institution",
-    "bank",
-    "ccp",
-    "financial_institution",
-    "pse_institution",   # PSE treated as institution
-    "rgla_institution",  # RGLA treated as institution
-}
-```
-
-**FI Scalar triggers 1.25x correlation multiplier when:**
-- `is_large_financial_sector_entity`: total_assets >= EUR 70bn, OR
-- `is_financial_sector_entity` AND `apply_fi_scalar = True`
+The 1.25x IRB correlation multiplier is controlled by the user-supplied `apply_fi_scalar` flag on counterparties. The classifier derives `requires_fi_scalar` directly from this flag.
 
 ### Key Features
 
@@ -290,7 +275,7 @@ FINANCIAL_SECTOR_ENTITY_TYPES = {
 - **SME identification**: Corporate exposures with revenue < EUR 50m
 - **Retail threshold checking**: Lending group aggregation against EUR 1m
 - **Mortgage detection**: Product type pattern matching
-- **FI scalar determination**: Large or unregulated FSE identification
+- **FI scalar**: User-controlled `apply_fi_scalar` flag
 - **Infrastructure classification**: For supporting factor eligibility
 - **Slotting enrichment**: Category, type, HVCRE flags from patterns
 - **Full audit trail**: Classification reasoning captured per exposure
@@ -308,8 +293,6 @@ The classifier adds these columns to exposures:
 | `is_mortgage` | Mortgage product flag |
 | `is_defaulted` | Default status flag |
 | `is_infrastructure` | Infrastructure lending flag |
-| `is_financial_sector_entity` | FSE flag |
-| `is_large_financial_sector_entity` | Large FSE flag (>= EUR 70bn) |
 | `requires_fi_scalar` | FI scalar required (1.25x correlation) |
 | `qualifies_as_retail` | Meets retail threshold |
 | `approach` | Assigned calculation approach (SA/FIRB/AIRB/SLOTTING) |

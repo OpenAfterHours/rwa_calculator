@@ -37,7 +37,6 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.config.fx_rates import CRR_REGULATORY_THRESHOLDS_EUR
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     ResolvedHierarchyBundle,
@@ -97,17 +96,6 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "retail": ExposureClass.RETAIL_OTHER.value,
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
     "equity": ExposureClass.EQUITY.value,
-}
-
-# Financial sector entity types (for FI scalar determination per CRR Art. 153(2))
-# Note: MDB and international_org are excluded as they receive sovereign IRB treatment
-FINANCIAL_SECTOR_ENTITY_TYPES: set[str] = {
-    "institution",
-    "bank",
-    "ccp",
-    "financial_institution",
-    "pse_institution",
-    "rgla_institution",
 }
 
 
@@ -278,8 +266,8 @@ class ExposureClassifier:
 
         Sets: exposure_class_sa, exposure_class_irb, exposure_class, is_mortgage,
               is_defaulted, exposure_class_for_sa, is_infrastructure,
-              is_financial_sector_entity, qualifies_as_retail,
-              retail_threshold_exclusion_applied, slotting_category, sl_type
+              qualifies_as_retail, retail_threshold_exclusion_applied,
+              slotting_category, sl_type
         """
         max_retail_exposure = float(config.retail_thresholds.max_exposure_threshold)
 
@@ -319,10 +307,6 @@ class ExposureClassifier:
                 .alias("exposure_class_for_sa"),
                 # --- Infrastructure flag (uses _pt_upper) ---
                 pl.col("_pt_upper").str.contains("INFRASTRUCTURE").alias("is_infrastructure"),
-                # --- Financial sector entity flag ---
-                pl.col("cp_entity_type")
-                .is_in(FINANCIAL_SECTOR_ENTITY_TYPES)
-                .alias("is_financial_sector_entity"),
                 # --- Retail threshold check ---
                 pl.when(pl.col("lending_group_adjusted_exposure") > max_retail_exposure)
                 .then(pl.lit(False))
@@ -359,17 +343,13 @@ class ExposureClassifier:
         SME only touches "corporate", retail only touches "retail_other",
         QRRE specialises qualifying revolving retail.
 
-        Also derives FI scalar flags which depend on is_financial_sector_entity
-        (set in Phase 2) but not on exposure_class mutations.
+        Also derives requires_fi_scalar directly from the user-supplied
+        apply_fi_scalar flag (no entity-type gate).
 
-        Sets: exposure_class (updated), is_sme, is_large_financial_sector_entity,
-              requires_fi_scalar, is_hvcre
+        Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
         """
         sme_threshold_gbp = float(
             config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
-        )
-        lfse_threshold_gbp = float(
-            CRR_REGULATORY_THRESHOLDS_EUR["lfse_total_assets"] * config.eur_gbp_rate
         )
         qrre_max_limit = float(config.retail_thresholds.qrre_max_limit)
 
@@ -440,15 +420,10 @@ class ExposureClassifier:
                 # --- is_sme flag ---
                 # True for: corporate SME OR retail reclassified to CORPORATE_SME
                 (is_corporate_sme | is_retail_sme).alias("is_sme"),
-                # --- FI scalar flags (depend on is_financial_sector_entity from Phase 2) ---
-                (
-                    (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                    & (pl.col("cp_total_assets") >= lfse_threshold_gbp)
-                ).alias("is_large_financial_sector_entity"),
-                (
-                    (pl.col("is_financial_sector_entity") == True)  # noqa: E712
-                    & (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
-                ).alias("requires_fi_scalar"),
+                # --- FI scalar: user flag is authoritative (CRR Art. 153(2)) ---
+                (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
+                .fill_null(False)
+                .alias("requires_fi_scalar"),
                 # --- HVCRE flag (depends on sl_type from Phase 2) ---
                 (pl.col("sl_type") == "hvcre").fill_null(False).alias("is_hvcre"),
             ]
@@ -1048,8 +1023,6 @@ class ExposureClassifier:
                 pl.col("is_sme"),
                 pl.col("is_mortgage"),
                 pl.col("is_defaulted"),
-                pl.col("is_financial_sector_entity"),
-                pl.col("is_large_financial_sector_entity"),
                 pl.col("requires_fi_scalar"),
                 pl.col("qualifies_as_retail"),
                 pl.col("retail_threshold_exclusion_applied"),

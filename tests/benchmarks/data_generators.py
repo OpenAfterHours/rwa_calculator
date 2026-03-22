@@ -160,7 +160,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
 
     # Entity flags - vectorized
     is_fi = inst_mask
-    apply_fi_scalar = ~(inst_mask | sov_mask)
+    apply_fi_scalar = np.zeros(n, dtype=bool)
     pse_rand = rng.random(n) < 0.3
     is_pse = sov_mask & pse_rand
     ccp_rand = rng.random(n) < 0.05

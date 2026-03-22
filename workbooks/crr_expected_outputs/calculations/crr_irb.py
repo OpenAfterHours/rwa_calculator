@@ -182,6 +182,7 @@ def calculate_irb_rwa_with_turnover(
     apply_pd_floor_flag: bool = True,
     turnover_currency: str = "EUR",
     eur_gbp_rate: float = 0.8732,
+    apply_fi_scalar: bool = False,
 ) -> dict:
     """
     Calculate RWA using CRR IRB approach with automatic correlation calculation.
@@ -233,6 +234,7 @@ def calculate_irb_rwa_with_turnover(
         sme_threshold=50.0,  # EUR 50m
         eur_gbp_rate=eur_gbp_rate,
         turnover_currency=turnover_currency,
+        apply_fi_scalar=apply_fi_scalar,
     )
 
     # Track whether SME adjustment was applied

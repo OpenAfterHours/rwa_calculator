@@ -284,6 +284,23 @@ class TestFIScalarPropagation:
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row["requires_fi_scalar"][0] is True
 
+    def test_fi_scalar_true_for_corporate_with_flag(
+        self, hierarchy_resolver, classifier, crr_config
+    ):
+        """Corporate with apply_fi_scalar=True → requires_fi_scalar=True.
+
+        The user flag is authoritative — entity_type should not gate it.
+        """
+        bundle = make_raw_data_bundle(
+            counterparties=[
+                make_counterparty(entity_type="corporate", apply_fi_scalar=True)
+            ],
+        )
+        df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)
+
+        loan_row = df.filter(pl.col("exposure_type") == "loan")
+        assert loan_row["requires_fi_scalar"][0] is True
+
     def test_fi_scalar_false_for_non_financial(
         self, hierarchy_resolver, classifier, crr_config
     ):

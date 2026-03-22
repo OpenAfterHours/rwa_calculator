@@ -20,7 +20,8 @@
       "mcp__polars-mcp__polars_search_api",
       "Edit(/tmp/**)",
       "WebFetch(domain:docs.pola.rs)",
-      "Bash(uvx ruff:*)"
+      "Bash(uvx ruff:*)",
+      "Bash(xargs grep:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -43,6 +43,7 @@ from rwa_calc.data.schemas import (
     ORG_MAPPING_SCHEMA,
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
+    SPECIALISED_LENDING_SCHEMA,
 )
 from rwa_calc.engine.utils import has_rows
 
@@ -148,6 +149,7 @@ class DataSourceConfig:
     org_mappings_file: Path | None = None
     lending_mappings_file: Path | None = None
     equity_exposures_file: Path | None = None
+    specialised_lending_file: Path | None = None
     fx_rates_file: Path | None = None
     model_permissions_file: Path | None = None
 
@@ -184,6 +186,7 @@ class DataSourceConfig:
             org_mappings_file=get_p("org_mapping"),
             lending_mappings_file=get_p("lending_mapping"),
             equity_exposures_file=get_p("equity"),
+            specialised_lending_file=get_p("specialised_lending"),
             fx_rates_file=get_p("fx_rates"),
             model_permissions_file=get_p("model_permissions"),
         )
@@ -235,6 +238,7 @@ class ParquetLoader:
         "org_mappings_file": ORG_MAPPING_SCHEMA,
         "lending_mappings_file": LENDING_MAPPING_SCHEMA,
         "equity_exposures_file": EQUITY_EXPOSURE_SCHEMA,
+        "specialised_lending_file": SPECIALISED_LENDING_SCHEMA,
         "fx_rates_file": FX_RATES_SCHEMA,
         "model_permissions_file": MODEL_PERMISSIONS_SCHEMA,
     }
@@ -376,6 +380,9 @@ class ParquetLoader:
             ratings=self._load_parquet_optional(self.config.ratings_file, RATINGS_SCHEMA),
             equity_exposures=self._load_parquet_optional(
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
+            ),
+            specialised_lending=self._load_parquet_optional(
+                self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
             ),
             fx_rates=self._load_parquet_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
             model_permissions=self._load_parquet_optional(
@@ -543,6 +550,9 @@ class CSVLoader:
             ratings=self._load_csv_optional(self.config.ratings_file, RATINGS_SCHEMA),
             equity_exposures=self._load_csv_optional(
                 self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
+            ),
+            specialised_lending=self._load_csv_optional(
+                self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
             ),
             fx_rates=self._load_csv_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
             model_permissions=self._load_csv_optional(

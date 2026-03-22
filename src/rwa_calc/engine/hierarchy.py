@@ -169,6 +169,7 @@ class HierarchyResolver:
             guarantees=guarantees,
             provisions=provisions,
             equity_exposures=equity_exposures,
+            specialised_lending=data.specialised_lending,
             model_permissions=data.model_permissions,
             lending_group_totals=lending_group_totals,
             hierarchy_errors=errors,

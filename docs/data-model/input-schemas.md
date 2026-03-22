@@ -15,7 +15,7 @@ This page documents the authoritative schemas for all input data files required 
 | [Provision](#provision-schema) | `provision/provision.parquet` | No | IFRS 9 provisions |
 | [Rating](#rating-schema) | `ratings/ratings.parquet` | No | Credit ratings |
 | [FX Rates](#fx-rates-schema) | `fx_rates/fx_rates.parquet` | No | Currency conversion rates |
-| [Specialised Lending](#specialised-lending-schema) | N/A | No | Slotting approach data |
+| [Specialised Lending](#specialised-lending-schema) | `ratings/specialised_lending.parquet` | No | Slotting approach data |
 | [Equity Exposure](#equity-exposure-schema) | N/A | No | Equity holdings |
 | [Model Permissions](#model-permissions-schema) | `config/model_permissions.parquet` | No | Per-model IRB approach permissions |
 
@@ -652,14 +652,15 @@ fx_rates = pl.DataFrame({
 
 ## Specialised Lending Schema
 
-**Purpose:** Defines specialised lending exposures for slotting approach treatment (CRE33).
+**Purpose:** Defines specialised lending metadata for slotting approach treatment (CRE33). Keyed by `counterparty_reference` — all exposures to an SL counterparty inherit the same slotting treatment. This allows a corporate counterparty to have both SL and non-SL exposures.
+
+**File:** `ratings/specialised_lending.parquet`
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `exposure_reference` | `String` | Yes | Links to facility/loan reference |
+| `counterparty_reference` | `String` | Yes | Links to counterparty (all exposures inherit SL treatment) |
 | `sl_type` | `String` | Yes | Type of specialised lending |
 | `slotting_category` | `String` | Yes | Slotting category |
-| `remaining_maturity_years` | `Float64` | Yes | Remaining maturity in years |
 | `is_hvcre` | `Boolean` | No | High-volatility commercial real estate |
 
 **Valid `sl_type` values:**

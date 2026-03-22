@@ -149,6 +149,23 @@ class ExposureClassifier:
             data.counterparty_lookup.counterparties,
         )
 
+        # Step 1b: Join specialised lending metadata (by counterparty)
+        sl_data = data.specialised_lending
+        if sl_data is not None:
+            exposures = exposures.join(
+                sl_data.select(
+                    ["counterparty_reference", "sl_type", "slotting_category", "is_hvcre"]
+                ),
+                on="counterparty_reference",
+                how="left",
+            )
+        else:
+            exposures = exposures.with_columns(
+                pl.lit(None).cast(pl.String).alias("sl_type"),
+                pl.lit(None).cast(pl.String).alias("slotting_category"),
+                pl.lit(None).cast(pl.Boolean).alias("is_hvcre"),
+            )
+
         # Single schema check for conditional column logic
         schema_names = set(exposures.collect_schema().names())
 
@@ -266,16 +283,18 @@ class ExposureClassifier:
 
         Sets: exposure_class_sa, exposure_class_irb, exposure_class, is_mortgage,
               is_defaulted, exposure_class_for_sa, is_infrastructure,
-              qualifies_as_retail, retail_threshold_exclusion_applied,
-              slotting_category, sl_type
+              qualifies_as_retail, retail_threshold_exclusion_applied
         """
         max_retail_exposure = float(config.retail_thresholds.max_exposure_threshold)
+
+        # SL override: exposures with sl_type (from specialised_lending join) get
+        # SPECIALISED_LENDING class regardless of counterparty entity_type.
+        sl_override = pl.col("sl_type").is_not_null()
 
         # Batch 1: Pre-compute shared intermediates to avoid redundant work.
         # - _sa_class: entity type → SA class mapping (used 3× below)
         # - _irb_class: entity type → IRB class mapping
-        # - _pt_upper: product_type uppercased (used 6× in is_mortgage, infrastructure, sl_type)
-        # - _cp_ref_upper: counterparty_reference uppercased (used 11× in slotting)
+        # - _pt_upper: product_type uppercased (used in is_mortgage, infrastructure)
         exposures = exposures.with_columns(
             [
                 pl.col("cp_entity_type")
@@ -285,17 +304,21 @@ class ExposureClassifier:
                 .replace_strict(ENTITY_TYPE_TO_IRB_CLASS, default=ExposureClass.OTHER.value)
                 .alias("_irb_class"),
                 pl.col("product_type").str.to_uppercase().alias("_pt_upper"),
-                pl.col("counterparty_reference").str.to_uppercase().alias("_cp_ref_upper"),
             ]
         )
+
+        sl_class = pl.lit(ExposureClass.SPECIALISED_LENDING.value)
 
         # Batch 2: Derive all flags from pre-computed intermediates.
         return exposures.with_columns(
             [
-                # --- Exposure class mappings (reuse _sa_class / _irb_class) ---
-                pl.col("_sa_class").alias("exposure_class_sa"),
-                pl.col("_irb_class").alias("exposure_class_irb"),
-                pl.col("_sa_class").alias("exposure_class"),
+                # --- Exposure class mappings (SL table overrides entity_type) ---
+                pl.when(sl_override).then(sl_class).otherwise(pl.col("_sa_class"))
+                .alias("exposure_class_sa"),
+                pl.when(sl_override).then(sl_class).otherwise(pl.col("_irb_class"))
+                .alias("exposure_class_irb"),
+                pl.when(sl_override).then(sl_class).otherwise(pl.col("_sa_class"))
+                .alias("exposure_class"),
                 # --- Mortgage flag ---
                 self._build_is_mortgage_expr(schema_names),
                 # --- Default flags ---
@@ -303,6 +326,8 @@ class ExposureClassifier:
                 .alias("is_defaulted"),
                 pl.when(pl.col("cp_default_status") == True)  # noqa: E712
                 .then(pl.lit(ExposureClass.DEFAULTED.value))
+                .when(sl_override)
+                .then(sl_class)
                 .otherwise(pl.col("_sa_class"))
                 .alias("exposure_class_for_sa"),
                 # --- Infrastructure flag (uses _pt_upper) ---
@@ -321,11 +346,8 @@ class ExposureClassifier:
                 .then(pl.lit(True))
                 .otherwise(pl.lit(False))
                 .alias("retail_threshold_exclusion_applied"),
-                # --- Slotting metadata (uses _cp_ref_upper, _pt_upper) ---
-                self._build_slotting_category_expr(),
-                self._build_sl_type_expr(schema_names),
             ]
-        ).drop(["_sa_class", "_irb_class", "_pt_upper", "_cp_ref_upper"])
+        ).drop(["_sa_class", "_irb_class", "_pt_upper"])
 
     # =========================================================================
     # Phase 3: SME + retail classification (1 .with_columns — 5 expressions)
@@ -424,8 +446,8 @@ class ExposureClassifier:
                 (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
                 .fill_null(False)
                 .alias("requires_fi_scalar"),
-                # --- HVCRE flag (depends on sl_type from Phase 2) ---
-                (pl.col("sl_type") == "hvcre").fill_null(False).alias("is_hvcre"),
+                # --- HVCRE flag (from specialised lending join, null → False) ---
+                pl.col("is_hvcre").fill_null(False).alias("is_hvcre"),
             ]
         )
 
@@ -870,75 +892,6 @@ class ExposureClassifier:
         if "property_collateral_value" in schema_names:
             return (base | (pl.col("property_collateral_value") > 0)).alias("is_mortgage")
         return base.alias("is_mortgage")
-
-    @staticmethod
-    def _build_slotting_category_expr() -> pl.Expr:
-        """Build slotting_category expression using _cp_ref_upper (pre-computed).
-
-        Only populated for specialised lending exposures; null for all others.
-        """
-        return (
-            pl.when(pl.col("_sa_class") != ExposureClass.SPECIALISED_LENDING.value)
-            .then(pl.lit(None).cast(pl.String))
-            .when(pl.col("_cp_ref_upper").str.contains("_STRONG"))
-            .then(pl.lit("strong"))
-            .when(pl.col("_cp_ref_upper").str.contains("_GOOD"))
-            .then(pl.lit("good"))
-            .when(pl.col("_cp_ref_upper").str.contains("_WEAK"))
-            .then(pl.lit("weak"))
-            .when(pl.col("_cp_ref_upper").str.contains("_DEFAULT"))
-            .then(pl.lit("default"))
-            .when(pl.col("_cp_ref_upper").str.contains("_SATISFACTORY"))
-            .then(pl.lit("satisfactory"))
-            .otherwise(pl.lit("satisfactory"))
-            .alias("slotting_category")
-        )
-
-    @staticmethod
-    def _build_sl_type_expr(schema_names: set[str]) -> pl.Expr:
-        """Build sl_type expression using _pt_upper/_cp_ref_upper (pre-computed).
-
-        Only populated for specialised lending exposures; null for all others.
-        """
-        non_sl_guard = pl.col("_sa_class") != ExposureClass.SPECIALISED_LENDING.value
-
-        cp_ref_chain = (
-            pl.when(non_sl_guard)
-            .then(pl.lit(None).cast(pl.String))
-            .when(pl.col("_cp_ref_upper").str.contains("_PF_"))
-            .then(pl.lit("project_finance"))
-            .when(pl.col("_cp_ref_upper").str.contains("_IPRE_"))
-            .then(pl.lit("ipre"))
-            .when(pl.col("_cp_ref_upper").str.contains("_HVCRE_"))
-            .then(pl.lit("hvcre"))
-            .otherwise(pl.lit("project_finance"))
-        )
-
-        if "product_type" not in schema_names:
-            return cp_ref_chain.alias("sl_type")
-
-        return (
-            pl.when(non_sl_guard)
-            .then(pl.lit(None).cast(pl.String))
-            .when(pl.col("_pt_upper").str.contains("PROJECT"))
-            .then(pl.lit("project_finance"))
-            .when(pl.col("_pt_upper").str.contains("OBJECT"))
-            .then(pl.lit("object_finance"))
-            .when(pl.col("_pt_upper").str.contains("COMMOD"))
-            .then(pl.lit("commodities_finance"))
-            .when(pl.col("_pt_upper") == "IPRE")
-            .then(pl.lit("ipre"))
-            .when(pl.col("_pt_upper") == "HVCRE")
-            .then(pl.lit("hvcre"))
-            .when(pl.col("_cp_ref_upper").str.contains("_PF_"))
-            .then(pl.lit("project_finance"))
-            .when(pl.col("_cp_ref_upper").str.contains("_IPRE_"))
-            .then(pl.lit("ipre"))
-            .when(pl.col("_cp_ref_upper").str.contains("_HVCRE_"))
-            .then(pl.lit("hvcre"))
-            .otherwise(pl.lit("project_finance"))
-            .alias("sl_type")
-        )
 
     @staticmethod
     def _build_has_property_expr(schema_names: set[str]) -> pl.Expr:

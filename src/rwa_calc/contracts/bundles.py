@@ -111,6 +111,7 @@ class ResolvedHierarchyBundle:
         guarantees: Guarantees with beneficiary hierarchy resolved (optional)
         provisions: Provisions with beneficiary hierarchy resolved (optional)
         model_permissions: Per-model IRB permissions (optional, passed from RawDataBundle)
+        specialised_lending: Specialised lending metadata (optional, passed from RawDataBundle)
         hierarchy_errors: Any errors encountered during resolution
     """
 
@@ -121,6 +122,7 @@ class ResolvedHierarchyBundle:
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
+    specialised_lending: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
     hierarchy_errors: list = field(default_factory=list)
 

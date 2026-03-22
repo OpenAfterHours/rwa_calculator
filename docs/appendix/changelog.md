@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### Specialised lending now input-driven via `counterparty_reference`
+Specialised lending metadata (`sl_type`, `slotting_category`, `is_hvcre`) is now supplied as an input file (`exposures/specialised_lending.parquet`) keyed by `counterparty_reference`, rather than being derived from counterparty reference naming conventions. This allows a corporate counterparty to have both SL and non-SL exposures, aligning with CRR Art. 147(8) and BCBS CRE30.6.
+
+- **New input file**: `ratings/specialised_lending.parquet`
+- **Schema change**: `exposure_reference` replaced with `counterparty_reference`; `remaining_maturity_years` removed (sourced from loan/facility data)
+- **Removed dead code**: `_build_slotting_category_expr()`, `_build_sl_type_expr()`, and counterparty reference naming convention logic in the classifier
+
 ### Fixed
 
 #### FI scalar (`apply_fi_scalar`) not applied to IRB correlation

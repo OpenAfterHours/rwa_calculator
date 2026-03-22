@@ -130,10 +130,21 @@ def _generate_ratings(output_dir: Path) -> list[tuple[str, int]]:
     sys.path.insert(0, str(output_dir))
     try:
         from ratings import create_ratings, save_ratings
+        from specialised_lending import create_specialised_lending_data, save_specialised_lending_data
 
-        df = create_ratings()
-        save_ratings(output_dir)
-        return [("ratings.parquet", len(df))]
+        files = []
+        for name, create_fn, save_fn in [
+            ("ratings.parquet", create_ratings, save_ratings),
+            (
+                "specialised_lending.parquet",
+                create_specialised_lending_data,
+                save_specialised_lending_data,
+            ),
+        ]:
+            df = create_fn()
+            save_fn(output_dir)
+            files.append((name, len(df)))
+        return files
     finally:
         sys.path.remove(str(output_dir))
 

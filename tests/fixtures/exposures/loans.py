@@ -1067,6 +1067,78 @@ def _slotting_scenario_loans() -> list[Loan]:
             beel=0.0,
             seniority="senior",
         ),
+        # =============================================================================
+        # CRR-E5: Project Finance - Strong, short maturity (<2.5yr)
+        # £10m PF, Strong = 50% RW (CRR Art. 153(5) Table 1, <2.5yr)
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_SL_PF_003",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="SL_PF_STRONG_SHORT",
+            value_date=VALUE_DATE,
+            maturity_date=date(2027, 7, 1),  # 1.5yr maturity (<2.5yr)
+            currency="GBP",
+            drawn_amount=10_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # CRR-E6: Project Finance - Good, short maturity (<2.5yr)
+        # £10m PF, Good = 70% RW (CRR Art. 153(5) Table 1, <2.5yr)
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_SL_PF_004",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="SL_PF_GOOD_SHORT",
+            value_date=VALUE_DATE,
+            maturity_date=date(2027, 7, 1),  # 1.5yr maturity (<2.5yr)
+            currency="GBP",
+            drawn_amount=10_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # CRR-E7: HVCRE - Strong, short maturity (<2.5yr)
+        # £5m HVCRE, Strong = 70% RW (CRR Art. 153(5) Table 2, <2.5yr)
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_SL_HVCRE_002",
+            product_type="HVCRE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="SL_HVCRE_STRONG_SHORT",
+            value_date=VALUE_DATE,
+            maturity_date=date(2027, 7, 1),  # 1.5yr maturity (<2.5yr)
+            currency="GBP",
+            drawn_amount=5_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # CRR-E8: HVCRE - Good, short maturity (<2.5yr)
+        # £5m HVCRE, Good = 95% RW (CRR Art. 153(5) Table 2, <2.5yr)
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_SL_HVCRE_003",
+            product_type="HVCRE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="SL_HVCRE_GOOD_SHORT",
+            value_date=VALUE_DATE,
+            maturity_date=date(2027, 7, 1),  # 1.5yr maturity (<2.5yr)
+            currency="GBP",
+            drawn_amount=5_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
     ]
 
 

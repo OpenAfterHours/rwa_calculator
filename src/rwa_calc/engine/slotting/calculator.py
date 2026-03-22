@@ -134,7 +134,7 @@ class SlottingCalculator:
             LazyFrame with slotting RWA columns populated
         """
         return (
-            exposures.slotting.prepare_columns()
+            exposures.slotting.prepare_columns(config)
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
         )
@@ -210,7 +210,7 @@ class SlottingCalculator:
 
         # Apply calculation pipeline using registered namespace
         exposures = (
-            exposures.slotting.prepare_columns()
+            exposures.slotting.prepare_columns(config)
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
         )

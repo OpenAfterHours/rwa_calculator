@@ -141,6 +141,35 @@ def create_specialised_lending_data() -> pl.DataFrame:
             "slotting_category": "strong",
             "is_hvcre": True,
         },
+        # --- CRR-E Short maturity (<2.5yr) test scenario counterparties ---
+        # E5: PF Strong, short maturity -> 50% RW
+        {
+            "counterparty_reference": "SL_PF_STRONG_SHORT",
+            "sl_type": "project_finance",
+            "slotting_category": "strong",
+            "is_hvcre": False,
+        },
+        # E6: PF Good, short maturity -> 70% RW
+        {
+            "counterparty_reference": "SL_PF_GOOD_SHORT",
+            "sl_type": "project_finance",
+            "slotting_category": "good",
+            "is_hvcre": False,
+        },
+        # E7: HVCRE Strong, short maturity -> 70% RW
+        {
+            "counterparty_reference": "SL_HVCRE_STRONG_SHORT",
+            "sl_type": "hvcre",
+            "slotting_category": "strong",
+            "is_hvcre": True,
+        },
+        # E8: HVCRE Good, short maturity -> 95% RW
+        {
+            "counterparty_reference": "SL_HVCRE_GOOD_SHORT",
+            "sl_type": "hvcre",
+            "slotting_category": "good",
+            "is_hvcre": True,
+        },
     ]
 
     return pl.DataFrame(rows, schema=SPECIALISED_LENDING_SCHEMA)

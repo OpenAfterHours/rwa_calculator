@@ -25,6 +25,10 @@ SCENARIO_EXPOSURE_MAP = {
     "CRR-E2": "LOAN_SL_PF_002",
     "CRR-E3": "LOAN_SL_IPRE_001",
     "CRR-E4": "LOAN_SL_HVCRE_001",
+    "CRR-E5": "LOAN_SL_PF_003",
+    "CRR-E6": "LOAN_SL_PF_004",
+    "CRR-E7": "LOAN_SL_HVCRE_002",
+    "CRR-E8": "LOAN_SL_HVCRE_003",
 }
 
 
@@ -156,6 +160,119 @@ class TestCRRGroupE_SlottingApproach:
         )
 
 
+class TestCRRGroupE_ShortMaturitySlotting:
+    """
+    CRR Slotting acceptance tests for short maturity (<2.5yr).
+
+    CRR Art. 153(5) assigns reduced risk weights when remaining maturity < 2.5 years:
+    - Non-HVCRE Strong: 50% (vs 70% for >=2.5yr)
+    - Non-HVCRE Good: 70% (vs 90% for >=2.5yr)
+    - HVCRE Strong: 70% (vs 95% for >=2.5yr)
+    - HVCRE Good: 95% (vs 120% for >=2.5yr)
+    """
+
+    def test_crr_e5_pf_strong_short_maturity(
+        self,
+        slotting_results_df: pl.DataFrame,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """
+        CRR-E5: PF Strong with <2.5yr remaining maturity.
+
+        Expected: 50% RW (CRR Art. 153(5) Table 1, <2.5yr)
+        """
+        expected = expected_outputs_dict["CRR-E5"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E5"]
+
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E5",
+        )
+        assert_rwa_within_tolerance(
+            result["rwa_final"],
+            expected["rwa_after_sf"],
+            scenario_id="CRR-E5",
+        )
+
+    def test_crr_e6_pf_good_short_maturity(
+        self,
+        slotting_results_df: pl.DataFrame,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """
+        CRR-E6: PF Good with <2.5yr remaining maturity.
+
+        Expected: 70% RW (CRR Art. 153(5) Table 1, <2.5yr)
+        """
+        expected = expected_outputs_dict["CRR-E6"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E6"]
+
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E6",
+        )
+
+    def test_crr_e7_hvcre_strong_short_maturity(
+        self,
+        slotting_results_df: pl.DataFrame,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """
+        CRR-E7: HVCRE Strong with <2.5yr remaining maturity.
+
+        Expected: 70% RW (CRR Art. 153(5) Table 2, <2.5yr)
+        """
+        expected = expected_outputs_dict["CRR-E7"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E7"]
+
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E7",
+        )
+
+    def test_crr_e8_hvcre_good_short_maturity(
+        self,
+        slotting_results_df: pl.DataFrame,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """
+        CRR-E8: HVCRE Good with <2.5yr remaining maturity.
+
+        Expected: 95% RW (CRR Art. 153(5) Table 2, <2.5yr)
+        """
+        expected = expected_outputs_dict["CRR-E8"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E8"]
+
+        result = get_result_for_exposure(slotting_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_risk_weight_match(
+            result["risk_weight"],
+            expected["risk_weight"],
+            scenario_id="CRR-E8",
+        )
+
+
 class TestCRRGroupE_ParameterizedValidation:
     """
     Parametrized tests to validate expected outputs structure.
@@ -167,7 +284,7 @@ class TestCRRGroupE_ParameterizedValidation:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """Verify all CRR-E scenarios exist in expected outputs."""
-        expected_ids = [f"CRR-E{i}" for i in range(1, 5)]
+        expected_ids = [f"CRR-E{i}" for i in range(1, 9)]
         for scenario_id in expected_ids:
             assert scenario_id in expected_outputs_dict, (
                 f"Missing expected output for {scenario_id}"

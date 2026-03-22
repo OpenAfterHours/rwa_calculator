@@ -643,6 +643,24 @@ class SACalculator:
             # No guarantee data, return as-is
             return exposures
 
+        # Ensure guarantor_exposure_class is available (set by CRM processor;
+        # fallback for unit tests that construct LazyFrames directly)
+        if "guarantor_exposure_class" not in cols:
+            from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
+
+            exposures = exposures.with_columns(
+                pl.col("guarantor_entity_type")
+                .fill_null("")
+                .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+                .alias("guarantor_exposure_class"),
+            )
+
+        # Ensure guarantor_country_code exists
+        if "guarantor_country_code" not in cols:
+            exposures = exposures.with_columns(
+                pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
+            )
+
         # Preserve pre-CRM risk weight before any guarantee substitution
         # This is needed for regulatory reporting (pre-CRM vs post-CRM views)
         exposures = exposures.with_columns(
@@ -651,21 +669,42 @@ class SACalculator:
             ]
         )
 
-        # Calculate guarantor's risk weight based on entity type and CQS
-        # Use UK deviation for institutions (30% for CQS 2 instead of 50%)
+        # Calculate guarantor's risk weight based on exposure class and CQS.
+        # Uses guarantor_exposure_class (derived from ENTITY_TYPE_TO_SA_CLASS dict)
+        # instead of regex on entity_type, ensuring all valid entity types are covered.
+        # UK deviation for institutions (30% for CQS 2 instead of 50%).
         use_uk_deviation = config.base_currency == "GBP"
 
-        # Guarantor risk weights by entity type and CQS
-        # Sovereign: 0%, 20%, 50%, 100%, 100%, 150%
-        # Institution (UK): 20%, 30%, 50%, 100%, 100%, 150%
-        # Corporate: 20%, 50%, 100%, 100%, 150%, 150%
-        _ugt = pl.col("guarantor_entity_type").str.to_uppercase()
+        # Art. 114(3): UK CGCB guarantors in GBP → 0% RW regardless of CQS
+        schema_now = exposures.collect_schema()
+        _has_country = "guarantor_country_code" in schema_now.names()
+        _has_currency = "currency" in schema_now.names()
+        _is_uk_domestic_guarantor = (
+            (
+                pl.col("guarantor_country_code").fill_null("") == "GB"
+            ) & (pl.col("currency") == "GBP")
+            if (_has_country and _has_currency)
+            else pl.lit(False)
+        )
+
+        # Guarantor exposure class (set by CRM processor from ENTITY_TYPE_TO_SA_CLASS)
+        _gec = pl.col("guarantor_exposure_class").fill_null("")
+
+        # Guarantor risk weights by exposure class and CQS
+        # CGCB: 0%, 20%, 50%, 100%, 100%, 150% (unrated 100%)
+        # Institution/MDB: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated 40%)
+        # Corporate: 20%, 50%, 100%, 100%, 150%, 150% (unrated 100%)
         exposures = exposures.with_columns(
             [
                 pl.when(pl.col("guaranteed_portion") <= 0)
                 .then(pl.lit(None).cast(pl.Float64))
-                # Sovereign guarantors
-                .when(_ugt.str.contains("SOVEREIGN", literal=True))
+                # Art. 114(3): UK domestic sovereign → 0% regardless of CQS
+                .when(
+                    (_gec == "central_govt_central_bank") & _is_uk_domestic_guarantor
+                )
+                .then(pl.lit(0.0))
+                # CGCB guarantors (sovereign, central_bank)
+                .when(_gec == "central_govt_central_bank")
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
                     .then(pl.lit(0.0))
@@ -679,8 +718,8 @@ class SACalculator:
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(1.0))  # Unrated
                 )
-                # Institution guarantors (UK deviation: CQS 2 = 30%)
-                .when(_ugt.str.contains("INSTITUTION", literal=True))
+                # Institution/MDB guarantors (institution, bank, ccp, mdb, etc.)
+                .when(_gec.is_in(["institution", "mdb"]))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
                     .then(pl.lit(0.20))
@@ -694,8 +733,8 @@ class SACalculator:
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(0.40))  # Unrated
                 )
-                # Corporate guarantors
-                .when(_ugt.str.contains("CORPORATE", literal=True))
+                # Corporate guarantors (corporate, company)
+                .when(_gec.is_in(["corporate", "corporate_sme"]))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
                     .then(pl.lit(0.20))
@@ -707,7 +746,7 @@ class SACalculator:
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(1.0))  # Unrated
                 )
-                # Unknown entity type - no substitution
+                # Unknown exposure class - no substitution
                 .otherwise(pl.lit(None).cast(pl.Float64))
                 .alias("guarantor_rw"),
             ]

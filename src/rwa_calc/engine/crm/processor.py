@@ -2215,19 +2215,28 @@ class CRMProcessor:
             ]
         )
 
-        # Look up guarantor's entity type and CQS for risk weight substitution
-        # Join with counterparty to get guarantor's entity type
+        # Look up guarantor's entity type, country code, and CQS for risk weight substitution
+        # Join with counterparty to get guarantor's entity type and country
+        cp_schema = counterparty_lookup.collect_schema()
+        cp_select_cols = [
+            pl.col("counterparty_reference"),
+            pl.col("entity_type").alias("guarantor_entity_type"),
+        ]
+        if "country_code" in cp_schema.names():
+            cp_select_cols.append(pl.col("country_code").alias("guarantor_country_code"))
+
         exposures = exposures.join(
-            counterparty_lookup.select(
-                [
-                    pl.col("counterparty_reference"),
-                    pl.col("entity_type").alias("guarantor_entity_type"),
-                ]
-            ),
+            counterparty_lookup.select(cp_select_cols),
             left_on="guarantor_reference",
             right_on="counterparty_reference",
             how="left",
         )
+
+        # Ensure guarantor_country_code exists (fill null if not in counterparty data)
+        if "guarantor_country_code" not in exposures.collect_schema().names():
+            exposures = exposures.with_columns(
+                pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
+            )
 
         # Look up guarantor's CQS, rating type, PD, and internal_pd from ratings
         if rating_inheritance is not None:

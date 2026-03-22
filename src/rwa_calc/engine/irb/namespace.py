@@ -658,13 +658,45 @@ class IRBLazyFrame:
         lf = self._lf.with_columns(store_originals)
 
         # --- Compute SA risk weight for guarantor (used for SA guarantors) ---
+        # Uses guarantor_exposure_class (derived from ENTITY_TYPE_TO_SA_CLASS dict)
+        # instead of regex on entity_type, ensuring all valid entity types are covered.
         use_uk_deviation = config.base_currency == "GBP"
+
+        # Ensure guarantor_exposure_class is available (set by CRM processor;
+        # fallback for unit tests that construct LazyFrames directly)
+        if "guarantor_exposure_class" not in cols:
+            from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
+
+            lf = lf.with_columns(
+                pl.col("guarantor_entity_type")
+                .fill_null("")
+                .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+                .alias("guarantor_exposure_class"),
+            )
+
+        _gec = pl.col("guarantor_exposure_class").fill_null("")
+
+        # Art. 114(3): UK CGCB guarantors in GBP → 0% RW regardless of CQS
+        _has_country = "guarantor_country_code" in lf.collect_schema().names()
+        _is_uk_domestic_guarantor = (
+            (
+                pl.col("guarantor_country_code").fill_null("") == "GB"
+            ) & (pl.col("currency") == "GBP")
+            if _has_country
+            else pl.lit(False)
+        )
 
         lf = lf.with_columns(
             [
                 pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
                 .then(pl.lit(None).cast(pl.Float64))
-                .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)sovereign"))
+                # Art. 114(3): UK domestic sovereign → 0% regardless of CQS
+                .when(
+                    (_gec == "central_govt_central_bank") & _is_uk_domestic_guarantor
+                )
+                .then(pl.lit(0.0))
+                # CGCB guarantors (sovereign, central_bank)
+                .when(_gec == "central_govt_central_bank")
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
                     .then(pl.lit(0.0))
@@ -678,7 +710,8 @@ class IRBLazyFrame:
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(1.0))
                 )
-                .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)institution"))
+                # Institution/MDB guarantors (institution, bank, ccp, mdb, etc.)
+                .when(_gec.is_in(["institution", "mdb"]))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
                     .then(pl.lit(0.20))
@@ -692,7 +725,8 @@ class IRBLazyFrame:
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(0.40))
                 )
-                .when(pl.col("guarantor_entity_type").fill_null("").str.contains("(?i)corporate"))
+                # Corporate guarantors (corporate, company)
+                .when(_gec.is_in(["corporate", "corporate_sme"]))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
                     .then(pl.lit(0.20))

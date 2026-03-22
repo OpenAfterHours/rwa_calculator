@@ -1,0 +1,224 @@
+"""
+Unit tests for guarantor risk weight lookup using guarantor_exposure_class.
+
+Verifies that all valid entity types (sovereign, central_bank, bank, company,
+institution, corporate, mdb) correctly map to the right SA exposure class and
+produce correct guarantor risk weights. Also tests UK domestic sovereign
+treatment under Art. 114(3).
+
+References:
+- CRR Art. 114: CGCB risk weights
+- CRR Art. 114(3): 0% RW for domestic sovereign in domestic currency
+- CRR Art. 120-121: Institution risk weights
+- CRR Art. 122: Corporate risk weights
+"""
+
+from __future__ import annotations
+
+from datetime import date
+
+import polars as pl
+import pytest
+
+import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.sa.calculator import SACalculator
+
+
+@pytest.fixture
+def crr_config() -> CalculationConfig:
+    """CRR configuration (GBP base currency)."""
+    return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+
+
+def _make_sa_calculator() -> SACalculator:
+    """Create a minimal SA calculator for testing guarantee substitution."""
+    return SACalculator()
+
+
+def _sa_guarantee_result(
+    guarantor_entity_type: str,
+    guarantor_cqs: int,
+    config: CalculationConfig,
+    *,
+    guarantor_country_code: str | None = None,
+    currency: str = "GBP",
+) -> pl.DataFrame:
+    """Run SA guarantee substitution and return the result."""
+    data: dict[str, list] = {
+        "exposure_reference": ["EXP001"],
+        "ead": [1_000_000.0],
+        "risk_weight": [1.0],
+        "guaranteed_portion": [1_000_000.0],
+        "unguaranteed_portion": [0.0],
+        "guarantor_entity_type": [guarantor_entity_type],
+        "guarantor_cqs": [guarantor_cqs],
+        "currency": [currency],
+    }
+    if guarantor_country_code is not None:
+        data["guarantor_country_code"] = [guarantor_country_code]
+
+    lf = pl.LazyFrame(data)
+    calc = _make_sa_calculator()
+    # Call the private method directly for isolated testing
+    result_lf = calc._apply_guarantee_substitution(lf, config)
+    return result_lf.collect()
+
+
+def _irb_guarantee_result(
+    guarantor_entity_type: str,
+    guarantor_cqs: int,
+    config: CalculationConfig,
+    *,
+    guarantor_country_code: str | None = None,
+    currency: str = "GBP",
+) -> pl.DataFrame:
+    """Run IRB guarantee substitution and return the result."""
+    data: dict[str, list] = {
+        "exposure_reference": ["EXP001"],
+        "pd": [0.01],
+        "lgd": [0.45],
+        "ead_final": [1_000_000.0],
+        "maturity": [2.5],
+        "exposure_class": ["CORPORATE"],
+        "rwa": [500_000.0],
+        "risk_weight": [0.50],
+        "guaranteed_portion": [1_000_000.0],
+        "unguaranteed_portion": [0.0],
+        "guarantor_entity_type": [guarantor_entity_type],
+        "guarantor_cqs": [guarantor_cqs],
+        "currency": [currency],
+    }
+    if guarantor_country_code is not None:
+        data["guarantor_country_code"] = [guarantor_country_code]
+
+    lf = pl.LazyFrame(data)
+    return lf.irb.apply_guarantee_substitution(config).collect()
+
+
+class TestSAGuarantorExposureClassMapping:
+    """SA calculator correctly maps entity types to exposure classes for guarantor RW."""
+
+    def test_sovereign_cqs1_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """Sovereign entity type → CGCB class → 0% RW for CQS 1."""
+        result = _sa_guarantee_result("sovereign", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_central_bank_cqs1_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """central_bank entity type → CGCB class → 0% RW for CQS 1."""
+        result = _sa_guarantee_result("central_bank", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_central_bank_cqs3(self, crr_config: CalculationConfig) -> None:
+        """central_bank entity type → CGCB class → 50% RW for CQS 3."""
+        result = _sa_guarantee_result("central_bank", 3, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+    def test_institution_cqs1(self, crr_config: CalculationConfig) -> None:
+        """institution entity type → INSTITUTION class → 20% RW for CQS 1."""
+        result = _sa_guarantee_result("institution", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+    def test_bank_cqs1(self, crr_config: CalculationConfig) -> None:
+        """bank entity type → INSTITUTION class → 20% RW for CQS 1."""
+        result = _sa_guarantee_result("bank", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+    def test_bank_cqs2_uk_deviation(self, crr_config: CalculationConfig) -> None:
+        """bank entity type → INSTITUTION class → 30% RW for CQS 2 (UK deviation)."""
+        result = _sa_guarantee_result("bank", 2, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.30)
+
+    def test_corporate_cqs1(self, crr_config: CalculationConfig) -> None:
+        """corporate entity type → CORPORATE class → 20% RW for CQS 1."""
+        result = _sa_guarantee_result("corporate", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+    def test_company_cqs1(self, crr_config: CalculationConfig) -> None:
+        """company entity type → CORPORATE class → 20% RW for CQS 1."""
+        result = _sa_guarantee_result("company", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+    def test_company_cqs2(self, crr_config: CalculationConfig) -> None:
+        """company entity type → CORPORATE class → 50% RW for CQS 2."""
+        result = _sa_guarantee_result("company", 2, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+    def test_mdb_cqs1(self, crr_config: CalculationConfig) -> None:
+        """mdb entity type → MDB class → 20% RW for CQS 1."""
+        result = _sa_guarantee_result("mdb", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+
+class TestSADomesticSovereignTreatment:
+    """Art. 114(3): UK sovereign guarantor in GBP → 0% RW regardless of CQS."""
+
+    def test_uk_sovereign_cqs3_gbp_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """UK sovereign guarantor (CQS 3) in GBP should get 0% RW under Art. 114(3)."""
+        result = _sa_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="GB", currency="GBP"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_uk_central_bank_cqs3_gbp_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """UK central bank guarantor (CQS 3) in GBP should get 0% RW under Art. 114(3)."""
+        result = _sa_guarantee_result(
+            "central_bank", 3, crr_config, guarantor_country_code="GB", currency="GBP"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_non_uk_sovereign_cqs3_standard_rw(self, crr_config: CalculationConfig) -> None:
+        """Non-UK sovereign (CQS 3) should get standard 50% RW."""
+        result = _sa_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="US", currency="GBP"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+    def test_uk_sovereign_non_gbp_standard_rw(self, crr_config: CalculationConfig) -> None:
+        """UK sovereign in non-GBP currency should get standard CQS-based RW."""
+        result = _sa_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="GB", currency="USD"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+
+class TestIRBGuarantorExposureClassMapping:
+    """IRB namespace correctly maps entity types to exposure classes for guarantor RW."""
+
+    def test_sovereign_cqs1_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """Sovereign entity type → CGCB class → 0% SA RW for CQS 1."""
+        result = _irb_guarantee_result("sovereign", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_central_bank_cqs1_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """central_bank entity type → CGCB class → 0% SA RW for CQS 1."""
+        result = _irb_guarantee_result("central_bank", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_bank_cqs1(self, crr_config: CalculationConfig) -> None:
+        """bank entity type → INSTITUTION class → 20% SA RW for CQS 1."""
+        result = _irb_guarantee_result("bank", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+    def test_company_cqs1(self, crr_config: CalculationConfig) -> None:
+        """company entity type → CORPORATE class → 20% SA RW for CQS 1."""
+        result = _irb_guarantee_result("company", 1, crr_config)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
+
+
+class TestIRBDomesticSovereignTreatment:
+    """Art. 114(3): UK sovereign guarantor in GBP → 0% RW in IRB namespace."""
+
+    def test_uk_sovereign_cqs3_gbp_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """UK sovereign guarantor (CQS 3) in GBP should get 0% SA RW under Art. 114(3)."""
+        result = _irb_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="GB", currency="GBP"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_non_uk_sovereign_cqs3_standard_rw(self, crr_config: CalculationConfig) -> None:
+        """Non-UK sovereign (CQS 3) should get standard 50% SA RW."""
+        result = _irb_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="US", currency="GBP"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)

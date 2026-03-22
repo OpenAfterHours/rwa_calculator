@@ -170,26 +170,10 @@ exposure_class      # Unified class (SA class for backwards compatibility)
 - Sets `is_infrastructure = True`
 - Eligible for 0.75 supporting factor under CRR (not Basel 3.1)
 
-**FI scalar classification** — determines Financial Sector Entity (FSE) status and FI scalar eligibility per CRR Art. 153(2):
+**FI scalar classification** — determines FI scalar eligibility per CRR Art. 153(2):
 
-**Financial Sector Entity Types:**
-```python
-FINANCIAL_SECTOR_ENTITY_TYPES = {
-    "institution",
-    "bank",
-    "ccp",
-    "financial_institution",
-    "pse_institution",
-    "rgla_institution",
-}
-```
-
-**Output columns:**
-- `is_financial_sector_entity` - True if entity_type in FSE set
-- `is_large_financial_sector_entity` - FSE with total_assets >= EUR 70bn
-- `requires_fi_scalar` - True if large FSE OR unregulated FSE
-
-**FI Scalar effect**: 1.25x multiplier on IRB correlation
+- `requires_fi_scalar` — derived directly from the user-supplied `apply_fi_scalar` flag on counterparties
+- **Effect**: 1.25x multiplier on IRB asset correlation
 
 **Slotting enrichment** — derives slotting metadata from patterns in reference fields:
 
@@ -319,9 +303,7 @@ The classifier adds these columns to the exposure data:
 | `is_defaulted` | Boolean | Default status |
 | `exposure_class_for_sa` | String | SA class (DEFAULTED if in default) |
 | `is_infrastructure` | Boolean | Infrastructure lending flag |
-| `is_financial_sector_entity` | Boolean | FSE flag |
-| `is_large_financial_sector_entity` | Boolean | Large FSE (>= EUR 70bn assets) |
-| `requires_fi_scalar` | Boolean | Requires 1.25x correlation |
+| `requires_fi_scalar` | Boolean | Requires 1.25x IRB correlation (from `apply_fi_scalar`) |
 | `approach` | String | Calculation approach (SA/FIRB/AIRB/SLOTTING) |
 | `firb_permitted` | Boolean | F-IRB permitted by config |
 | `airb_permitted` | Boolean | A-IRB permitted by config |

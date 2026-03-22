@@ -143,6 +143,7 @@ def calculate_correlation(
     sme_threshold: float = 50.0,
     eur_gbp_rate: float = 0.8732,
     turnover_currency: str = "GBP",
+    apply_fi_scalar: bool = False,
 ) -> float:
     """
     Calculate asset correlation for IRB formula.
@@ -154,6 +155,7 @@ def calculate_correlation(
         sme_threshold: SME turnover threshold in EUR millions (default EUR 50m)
         eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR
         turnover_currency: Currency of turnover ("GBP" or "EUR")
+        apply_fi_scalar: Whether to apply 1.25x FI scalar (CRR Art. 153(2))
 
     Returns:
         Asset correlation (R)
@@ -204,6 +206,11 @@ def calculate_correlation(
         if turnover_currency.upper() == "GBP":
             turnover_eur = turnover / eur_gbp_rate
         correlation = _apply_sme_adjustment(correlation, turnover_eur, sme_threshold)
+
+    # FI scalar: 1.25x for large/unregulated financial sector entities
+    # (CRR Art. 153(2) / CRE31.6)
+    if apply_fi_scalar:
+        correlation *= 1.25
 
     return correlation
 

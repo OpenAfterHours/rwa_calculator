@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### FI scalar (`apply_fi_scalar`) not applied to IRB correlation
+The `apply_fi_scalar` counterparty flag was gated on `is_financial_sector_entity`, which required the `entity_type` to be an institution-like value. Counterparties with `entity_type="corporate"` and `apply_fi_scalar=True` silently received no 1.25x correlation multiplier. The classifier now derives `requires_fi_scalar` directly from the user-supplied `apply_fi_scalar` flag.
+
+**Removed dead code**: `FINANCIAL_SECTOR_ENTITY_TYPES`, `is_financial_sector_entity`, and `is_large_financial_sector_entity` — set in the classifier but never consumed by any calculation engine.
+
 #### Model permissions optional columns
 `country_codes` and `excluded_book_codes` columns in `model_permissions` input are now truly optional. When these columns are absent from the input file, they are treated as null for all rows (all geographies permitted, no book code exclusions). Previously, omitting these columns caused a `ColumnNotFoundError`.
 

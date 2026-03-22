@@ -288,7 +288,6 @@ class ExposureClassifier:
 ```python
 ENTITY_TYPE_TO_SA_CLASS: dict[str, str]   # entity_type → SA exposure class
 ENTITY_TYPE_TO_IRB_CLASS: dict[str, str]  # entity_type → IRB exposure class
-FINANCIAL_SECTOR_ENTITY_TYPES: set[str]   # institution, bank, ccp, etc.
 ```
 
 **Factory:**

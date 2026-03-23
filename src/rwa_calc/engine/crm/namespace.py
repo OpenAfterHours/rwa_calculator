@@ -43,6 +43,109 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
 
+def _resolve_guarantees_multi_level(
+    guarantees: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """
+    Expand facility and counterparty-level guarantees to exposure-level.
+
+    Direct (loan/contingent) guarantees pass through unchanged. Facility-level
+    guarantees are allocated pro-rata by EAD to child exposures. Counterparty-level
+    guarantees are allocated pro-rata across all exposures of that counterparty.
+
+    Args:
+        guarantees: Guarantee data with beneficiary_type and beneficiary_reference
+        exposures: Exposures with ead_after_collateral or ead_final
+
+    Returns:
+        Guarantees expanded to exposure-level beneficiary_reference
+    """
+    guar_schema = guarantees.collect_schema()
+    if "beneficiary_type" not in guar_schema.names():
+        return guarantees
+
+    exp_schema = exposures.collect_schema()
+    ead_col = "ead_after_collateral" if "ead_after_collateral" in exp_schema.names() else "ead_final"
+
+    bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+    direct_types = ["exposure", "loan", "contingent"]
+
+    direct_guarantees = guarantees.filter(bt_lower.is_in(direct_types))
+    expanded_parts: list[pl.LazyFrame] = [direct_guarantees]
+
+    has_parent_fac = "parent_facility_reference" in exp_schema.names()
+    if has_parent_fac:
+        facility_guarantees = guarantees.filter(bt_lower == "facility")
+        fac_exposures = exposures.filter(
+            pl.col("parent_facility_reference").is_not_null()
+        ).select("exposure_reference", "parent_facility_reference", pl.col(ead_col))
+
+        fac_totals = fac_exposures.group_by("parent_facility_reference").agg(
+            pl.col(ead_col).sum().alias("_fac_total_ead"),
+        )
+        fac_exposures_weighted = (
+            fac_exposures.join(fac_totals, on="parent_facility_reference", how="left")
+            .with_columns(
+                pl.when(pl.col("_fac_total_ead") > 0)
+                .then(pl.col(ead_col) / pl.col("_fac_total_ead"))
+                .otherwise(pl.lit(0.0))
+                .alias("_weight"),
+            )
+            .select("exposure_reference", "parent_facility_reference", "_weight")
+        )
+        expanded_fac = (
+            facility_guarantees.join(
+                fac_exposures_weighted,
+                left_on="beneficiary_reference",
+                right_on="parent_facility_reference",
+                how="inner",
+            )
+            .with_columns(
+                (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
+                pl.col("exposure_reference").alias("beneficiary_reference"),
+                pl.lit("loan").alias("beneficiary_type"),
+            )
+            .drop("exposure_reference", "_weight")
+        )
+        expanded_parts.append(expanded_fac)
+
+    cp_guarantees = guarantees.filter(bt_lower == "counterparty")
+    cp_exposures = exposures.select(
+        "exposure_reference", "counterparty_reference", pl.col(ead_col)
+    )
+    cp_totals = cp_exposures.group_by("counterparty_reference").agg(
+        pl.col(ead_col).sum().alias("_cp_total_ead"),
+    )
+    cp_exposures_weighted = (
+        cp_exposures.join(cp_totals, on="counterparty_reference", how="left")
+        .with_columns(
+            pl.when(pl.col("_cp_total_ead") > 0)
+            .then(pl.col(ead_col) / pl.col("_cp_total_ead"))
+            .otherwise(pl.lit(0.0))
+            .alias("_weight"),
+        )
+        .select("exposure_reference", "counterparty_reference", "_weight")
+    )
+    expanded_cp = (
+        cp_guarantees.join(
+            cp_exposures_weighted,
+            left_on="beneficiary_reference",
+            right_on="counterparty_reference",
+            how="inner",
+        )
+        .with_columns(
+            (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
+            pl.col("exposure_reference").alias("beneficiary_reference"),
+            pl.lit("loan").alias("beneficiary_type"),
+        )
+        .drop("exposure_reference", "_weight")
+    )
+    expanded_parts.append(expanded_cp)
+
+    return pl.concat(expanded_parts, how="diagonal")
+
+
 # =============================================================================
 # LAZYFRAME NAMESPACE
 # =============================================================================
@@ -548,6 +651,9 @@ class CRMLazyFrame:
             LazyFrame with guarantee effects applied
         """
         schema = self._lf.collect_schema()
+
+        # Expand facility/counterparty-level guarantees to exposure-level
+        guarantees = _resolve_guarantees_multi_level(guarantees, self._lf)
 
         # Aggregate guarantees by beneficiary
         guarantees_by_exposure = guarantees.group_by("beneficiary_reference").agg(

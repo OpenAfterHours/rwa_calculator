@@ -47,6 +47,14 @@ The `apply_fi_scalar` counterparty flag was gated on `is_financial_sector_entity
 
 
 
+
+## [0.1.43] - 2026-03-24
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.42] - 2026-03-22
 
 ### Changed
@@ -825,8 +833,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.42 | 2026-03-22 | Current |
-| 0.1.41 | 2026-03-22 | Previous |
+| 0.1.43 | 2026-03-24 | Current |
+| 0.1.42 | 2026-03-24 | Previous |
+| 0.1.41 | 2026-03-22 | - |
 | 0.1.40 | 2026-03-22 | - |
 | 0.1.39 | 2026-03-22 | - |
 | 0.1.38 | 2026-03-21 | - |

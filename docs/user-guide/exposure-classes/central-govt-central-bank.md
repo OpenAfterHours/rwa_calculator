@@ -84,11 +84,35 @@ The override requires both:
 Exposures to UK sovereign entities in **foreign currencies** (e.g. USD-denominated Gilts)
 fall back to the standard CQS-based risk weight table.
 
+### EU Domestic Currency Treatment (Art. 114(4))
+
+Exposures to **EU member state central governments and central banks** denominated in
+that member state's **domestic currency** receive a **0% risk weight**, regardless of
+external credit rating or CQS.
+
+This applies to all 27 EU member states:
+
+- **Eurozone members** (AT, BE, CY, DE, EE, ES, FI, FR, GR, HR, IE, IT, LT, LU, LV,
+  MT, NL, PT, SI, SK): domestic currency is **EUR**
+- **Non-euro EU members**: BG (BGN), CZ (CZK), DK (DKK), HU (HUF), PL (PLN),
+  RO (RON), SE (SEK)
+
+Each member state's domestic currency must match — e.g., a Polish sovereign exposure
+in EUR does **not** qualify (EUR is not Poland's domestic currency), but a Polish
+sovereign exposure in PLN does.
+
+EU domestic sovereign exposures are also **forced to the Standardised Approach (SA)**,
+even if the firm has IRB permissions for the CGCB exposure class. This ensures the
+regulatory 0% RW is applied rather than an internal model estimate.
+
 ### Treatment
 
 ```python
 if counterparty.country_code == "GB" and exposure.currency == "GBP":
-    risk_weight = 0.00  # Art. 114(3) domestic currency 0% RW
+    risk_weight = 0.00  # Art. 114(3) UK domestic currency 0% RW
+elif is_eu_member(counterparty.country_code) and exposure.currency == domestic_currency(counterparty.country_code):
+    risk_weight = 0.00  # Art. 114(4) EU domestic currency 0% RW
+    approach = "SA"     # Forced to standardised approach
 else:
     risk_weight = cqs_lookup(counterparty.cqs)  # Standard CQS table
 ```

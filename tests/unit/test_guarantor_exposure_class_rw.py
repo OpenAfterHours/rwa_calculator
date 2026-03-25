@@ -222,3 +222,71 @@ class TestIRBDomesticSovereignTreatment:
             "sovereign", 3, crr_config, guarantor_country_code="US", currency="GBP"
         )
         assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+
+class TestSAEUDomesticSovereignTreatment:
+    """Art. 114(4): EU sovereign guarantor in domestic currency → 0% RW regardless of CQS."""
+
+    def test_eu_sovereign_eur_cqs3_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """German sovereign guarantor (CQS 3) in EUR → 0% RW under Art. 114(4)."""
+        result = _sa_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="DE", currency="EUR"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_eu_central_bank_eur_cqs3_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """French central bank guarantor (CQS 3) in EUR → 0% RW under Art. 114(4)."""
+        result = _sa_guarantee_result(
+            "central_bank", 3, crr_config, guarantor_country_code="FR", currency="EUR"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_eu_non_euro_sovereign_domestic_currency_zero_rw(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """Polish sovereign guarantor (CQS 3) in PLN → 0% RW (non-euro EU domestic)."""
+        result = _sa_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="PL", currency="PLN"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_eu_sovereign_usd_standard_rw(self, crr_config: CalculationConfig) -> None:
+        """EU sovereign guarantor in USD → standard CQS-based RW (foreign currency)."""
+        result = _sa_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="DE", currency="USD"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+    def test_non_eu_sovereign_eur_standard_rw(self, crr_config: CalculationConfig) -> None:
+        """Non-EU sovereign (US) in EUR → standard CQS-based RW."""
+        result = _sa_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="US", currency="EUR"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+
+class TestIRBEUDomesticSovereignTreatment:
+    """Art. 114(4): EU sovereign guarantor in domestic currency → 0% RW in IRB namespace."""
+
+    def test_eu_sovereign_eur_cqs3_zero_rw(self, crr_config: CalculationConfig) -> None:
+        """German sovereign guarantor (CQS 3) in EUR → 0% SA RW under Art. 114(4)."""
+        result = _irb_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="DE", currency="EUR"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_eu_non_euro_sovereign_domestic_zero_rw(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """Swedish sovereign (CQS 3) in SEK → 0% SA RW under Art. 114(4)."""
+        result = _irb_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="SE", currency="SEK"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_eu_sovereign_usd_standard_rw(self, crr_config: CalculationConfig) -> None:
+        """EU sovereign in USD → standard 50% SA RW (foreign currency)."""
+        result = _irb_guarantee_result(
+            "sovereign", 3, crr_config, guarantor_country_code="DE", currency="USD"
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)

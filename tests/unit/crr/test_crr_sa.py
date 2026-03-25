@@ -1160,3 +1160,194 @@ class TestDefaultedSMEExclusion:
 
         assert result["supporting_factor"] < Decimal("1.0")
         assert result["supporting_factor_applied"] is True
+
+
+# =============================================================================
+# Art. 114(4) — EU Domestic Currency 0% RW
+# =============================================================================
+
+
+class TestArticle114_4EUDomesticCurrency:
+    """Tests for CRR Art. 114(4) — EU domestic currency 0% RW override.
+
+    Art. 114(4) provides that exposures to EU central government and
+    central bank denominated in the member state's domestic currency
+    receive 0% RW regardless of CQS.
+    """
+
+    def test_eu_eurozone_sovereign_eur_cqs2_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """German sovereign + EUR + CQS 2 → 0% RW (EU domestic currency override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            currency="EUR",
+            country_code="DE",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_eu_eurozone_sovereign_eur_unrated_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """French sovereign + EUR + unrated → 0% RW (EU domestic currency override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=None,
+            currency="EUR",
+            country_code="FR",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_eu_non_euro_sovereign_domestic_currency_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Polish sovereign + PLN + CQS 3 → 0% RW (non-euro EU domestic currency)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=3,
+            currency="PLN",
+            country_code="PL",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_eu_non_euro_sovereign_eur_uses_cqs_based_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Polish sovereign + EUR → CQS-based RW (EUR is not Poland's domestic currency)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=3,
+            currency="EUR",
+            country_code="PL",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+
+    def test_eu_sovereign_usd_uses_cqs_based_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """German sovereign + USD + CQS 2 → 20% RW (foreign currency, no override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            currency="USD",
+            country_code="DE",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
+        assert result["rwa"] == pytest.approx(Decimal("200000"))
+
+    def test_non_eu_sovereign_eur_uses_cqs_based_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Non-EU sovereign (US) + EUR → CQS-based RW (not EU, no override)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            currency="EUR",
+            country_code="US",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
+
+    def test_eu_sovereign_eur_basel31_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 114(4) also applies under Basel 3.1 — EU sovereign + EUR → 0%."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=3,
+            currency="EUR",
+            country_code="DE",
+            config=basel31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_eu_corporate_eur_no_override(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Corporate + DE + EUR → CQS-based RW (Art. 114(4) only applies to CGCB)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=2,
+            currency="EUR",
+            country_code="DE",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+
+    def test_eu_sovereign_cqs6_domestic_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Even CQS 6 (150%) gets overridden to 0% for EU domestic sovereign."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=6,
+            currency="EUR",
+            country_code="IT",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+
+    def test_sweden_sek_gets_zero_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Swedish sovereign + SEK → 0% RW (non-euro EU domestic currency)."""
+        result = sa_calculator.calculate_single_exposure(
+            ead=Decimal("1000000"),
+            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            cqs=2,
+            currency="SEK",
+            country_code="SE",
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["rwa"] == pytest.approx(Decimal("0.0"))

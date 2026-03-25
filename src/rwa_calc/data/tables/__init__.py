@@ -48,6 +48,11 @@ from .crr_haircuts import (
     FX_HAIRCUT,
     get_haircut_table,
 )
+from .eu_sovereign import (
+    EU_COUNTRY_DOMESTIC_CURRENCY,
+    EU_MEMBER_STATES,
+    build_eu_domestic_currency_expr,
+)
 from .crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
@@ -101,6 +106,10 @@ __all__ = [
     "BASEL31_FIRB_SUPERVISORY_LGD",
     "get_firb_lgd_table",
     "get_firb_lgd_table_for_framework",
+    # EU sovereign treatment
+    "EU_MEMBER_STATES",
+    "EU_COUNTRY_DOMESTIC_CURRENCY",
+    "build_eu_domestic_currency_expr",
     # Equity risk weights
     "SA_EQUITY_RISK_WEIGHTS",
     "IRB_SIMPLE_EQUITY_RISK_WEIGHTS",

@@ -1408,6 +1408,133 @@ class TestApproachAssignment:
 
 
 # =============================================================================
+# CCP Approach Assignment Tests
+# =============================================================================
+
+
+class TestCCPApproachAssignment:
+    """CCP exposures must always use SA regardless of IRB permissions (CRR Art. 300-311)."""
+
+    def test_ccp_forced_to_sa_even_with_irb_permissions(
+        self,
+        classifier: ExposureClassifier,
+        crr_config_with_irb: CalculationConfig,
+    ) -> None:
+        """CCP with internal rating should still get SA, not IRB."""
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CCP001"],
+                "counterparty_name": ["LCH Ltd"],
+                "entity_type": ["ccp"],
+                "country_code": ["GB"],
+                "annual_revenue": [None],
+                "total_assets": [100_000_000_000.0],
+                "default_status": [False],
+                "sector_code": ["66.11"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+                "is_ccp_client_cleared": [False],
+            }
+        ).lazy()
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_EXP"],
+                "exposure_type": ["loan"],
+                "product_type": ["CCP_TRADE"],
+                "book_code": ["FI"],
+                "counterparty_reference": ["CCP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [10_000_000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                "internal_pd": [0.005],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config_with_irb)
+
+        df = result.all_exposures.collect()
+
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_ccp_classified_as_institution(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CCP entity_type should map to INSTITUTION exposure class."""
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CCP001"],
+                "counterparty_name": ["LCH Ltd"],
+                "entity_type": ["ccp"],
+                "country_code": ["GB"],
+                "annual_revenue": [None],
+                "total_assets": [100_000_000_000.0],
+                "default_status": [False],
+                "sector_code": ["66.11"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_EXP"],
+                "exposure_type": ["loan"],
+                "product_type": ["CCP_TRADE"],
+                "book_code": ["FI"],
+                "counterparty_reference": ["CCP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [10_000_000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+
+        assert df["exposure_class"][0] == ExposureClass.INSTITUTION.value
+
+
+# =============================================================================
 # Exposure Splitting Tests
 # =============================================================================
 

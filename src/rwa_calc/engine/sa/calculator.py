@@ -69,6 +69,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
+    QCCP_CLIENT_CLEARED_RW,
+    QCCP_PROPRIETARY_RW,
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
     get_combined_cqs_risk_weights,
@@ -345,6 +347,10 @@ class SACalculator:
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("currency"))
         if "cp_country_code" not in schema.names():
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_country_code"))
+        if "cp_entity_type" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_entity_type"))
+        if "cp_is_ccp_client_cleared" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Boolean).alias("cp_is_ccp_client_cleared"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -443,7 +449,15 @@ class SACalculator:
                         .then(pl.lit(b31_def_high_rw))
                         .otherwise(pl.lit(b31_def_low_rw))
                     )
-                    # 2. Subordinated debt: flat 150% (CRE20.47)
+                    # 2. QCCP trade exposures: 2% proprietary / 4% client-cleared
+                    # (CRR Art. 306, CRE54.14-15)
+                    .when(pl.col("cp_entity_type") == "ccp")
+                    .then(
+                        pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
+                        .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
+                        .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+                    )
+                    # 3. Subordinated debt: flat 150% (CRE20.47)
                     # Overrides all CQS-based weights for institution + corporate
                     .when(
                         (pl.col("seniority").fill_null("senior") == "subordinated")
@@ -453,7 +467,7 @@ class SACalculator:
                         )
                     )
                     .then(pl.lit(sub_debt_rw))
-                    # 1. ADC: 150% or 100% pre-sold (CRE20.87-88)
+                    # 4. ADC: 150% or 100% pre-sold (CRE20.87-88)
                     .when(pl.col("is_adc").fill_null(False))
                     .then(b31_adc_rw_expr())
                     # 2. Residential mortgage: LTV-band (CRE20.73/82)
@@ -551,7 +565,15 @@ class SACalculator:
                         .then(pl.lit(crr_def_high_rw))
                         .otherwise(pl.lit(crr_def_low_rw))
                     )
-                    # 2. Residential mortgage: LTV split (CRR Art. 125)
+                    # 2. QCCP trade exposures: 2% proprietary / 4% client-cleared
+                    # (CRR Art. 306, CRE54.14-15)
+                    .when(pl.col("cp_entity_type") == "ccp")
+                    .then(
+                        pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
+                        .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
+                        .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+                    )
+                    # 3. Residential mortgage: LTV split (CRR Art. 125)
                     .when(
                         _uc.str.contains("MORTGAGE", literal=True)
                         | _uc.str.contains("RESIDENTIAL", literal=True)

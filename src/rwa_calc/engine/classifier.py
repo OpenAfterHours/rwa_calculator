@@ -256,6 +256,12 @@ class ExposureClassifier:
         if "is_investment_grade" in cp_col_names:
             select_cols.append(pl.col("is_investment_grade").alias("cp_is_investment_grade"))
 
+        # CCP fields (CRR Art. 300-311, CRE54.14-15)
+        if "is_ccp_client_cleared" in cp_col_names:
+            select_cols.append(
+                pl.col("is_ccp_client_cleared").alias("cp_is_ccp_client_cleared")
+            )
+
         cp_cols = counterparties.select(select_cols)
 
         return exposures.join(
@@ -717,11 +723,17 @@ class ExposureClassifier:
         )
 
         # --- Approach expression ---
+        # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
+        is_ccp = pl.col("cp_entity_type") == "ccp"
+
         approach_expr = (
             pl.when(managed_as_retail_without_lgd)
             .then(pl.lit(ApproachType.SA.value))
             # Art. 114(4): EU CGCB in domestic currency → forced SA (0% RW)
             .when(_is_eu_domestic_sovereign)
+            .then(pl.lit(ApproachType.SA.value))
+            # Qualifying CCP trade exposures — always SA with prescribed RW (CRE54.14-15)
+            .when(is_ccp)
             .then(pl.lit(ApproachType.SA.value))
             # SL A-IRB takes precedence over slotting
             .when(

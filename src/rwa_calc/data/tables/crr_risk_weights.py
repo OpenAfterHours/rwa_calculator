@@ -138,6 +138,14 @@ RETAIL_RISK_WEIGHT: Decimal = Decimal("0.75")
 
 
 # =============================================================================
+# QUALIFYING CCP RISK WEIGHTS (CRR Art. 306, CRE54.14-15)
+# =============================================================================
+
+QCCP_PROPRIETARY_RW: Decimal = Decimal("0.02")  # CRE54.14: clearing member's own trades
+QCCP_CLIENT_CLEARED_RW: Decimal = Decimal("0.04")  # CRE54.15: client-cleared trades
+
+
+# =============================================================================
 # DEFAULTED EXPOSURE RISK WEIGHTS (CRR Art. 127)
 # =============================================================================
 

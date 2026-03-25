@@ -160,7 +160,7 @@ def create_institution_counterparties() -> pl.DataFrame:
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
-        # Central Counterparty
+        # Central Counterparty — proprietary (2% RW, CRE54.14)
         {
             "counterparty_reference": "INST_CCP_001",
             "counterparty_name": "LCH Ltd",
@@ -172,6 +172,21 @@ def create_institution_counterparties() -> pl.DataFrame:
             "sector_code": "66.11",
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
+            "is_ccp_client_cleared": False,
+        },
+        # Central Counterparty — client-cleared (4% RW, CRE54.15)
+        {
+            "counterparty_reference": "INST_CCP_002",
+            "counterparty_name": "LCH Ltd (Client Clearing)",
+            "entity_type": "ccp",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 100_000_000_000.0,
+            "default_status": False,
+            "sector_code": "66.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+            "is_ccp_client_cleared": True,
         },
         # Defaulted Institution
         {

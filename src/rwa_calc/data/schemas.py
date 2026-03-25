@@ -155,6 +155,8 @@ COUNTERPARTY_SCHEMA = {
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
     "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
+    # CCP fields (CRR Art. 300-311, CRE54.14-15)
+    "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
 }
 
 COLLATERAL_SCHEMA = {

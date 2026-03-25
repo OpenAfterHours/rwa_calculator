@@ -535,6 +535,232 @@ class TestCommercialRERiskWeights:
 
 
 # =============================================================================
+# CCP Risk Weight Tests (CRR Art. 306, CRE54.14-15)
+# =============================================================================
+
+
+class TestCCPRiskWeights:
+    """Qualifying CCP exposures get prescribed risk weights, not CQS-based."""
+
+    def test_ccp_proprietary_trade_gets_2pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Proprietary CCP trade exposure should get 2% RW (CRE54.14)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_PROP"],
+                "ead_final": [10_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.02)
+
+    def test_ccp_client_cleared_trade_gets_4pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Client-cleared CCP trade exposure should get 4% RW (CRE54.15)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_CLIENT"],
+                "ead_final": [10_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.04)
+
+    def test_ccp_null_client_cleared_defaults_to_proprietary(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CCP with null is_ccp_client_cleared should default to 2% (proprietary)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_NULL"],
+                "ead_final": [10_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [None],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.02)
+
+    def test_ccp_rwa_calculation(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CCP RWA should be EAD × 4% for client-cleared trade."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_RWA"],
+                "ead_final": [10_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        # RWA = 10,000,000 × 4% = 400,000
+        assert df["rwa_pre_factor"][0] == pytest.approx(400_000.0)
+
+    def test_ccp_overrides_cqs_institution_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CCP should get 2% RW even though CQS 1 institution would normally get 20%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_OVERRIDE"],
+                "ead_final": [5_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        # Should be 2% (CCP), NOT 20% (institution CQS 1)
+        assert df["risk_weight"][0] == pytest.approx(0.02)
+        assert df["risk_weight"][0] != pytest.approx(0.20)
+
+
+class TestCCPRiskWeightsBasel31:
+    """CCP risk weights under Basel 3.1 (same treatment as CRR for QCCPs)."""
+
+    def test_b31_ccp_proprietary_trade_gets_2pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Proprietary CCP trade should get 2% RW under Basel 3.1."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_B31_PROP"],
+                "ead_final": [10_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, basel31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.02)
+
+    def test_b31_ccp_client_cleared_trade_gets_4pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Client-cleared CCP trade should get 4% RW under Basel 3.1."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_B31_CLIENT"],
+                "ead_final": [10_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, basel31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.04)
+
+
+# =============================================================================
 # Supporting Factor Tests
 # =============================================================================
 

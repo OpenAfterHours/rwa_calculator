@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Article 114(4) EU domestic currency 0% risk weight for EU sovereigns
+EU member state central government and central bank exposures denominated in that member state's domestic currency now receive 0% risk weight regardless of CQS, per CRR Art. 114(4). Covers all 27 EU member states: eurozone members (EUR) and non-euro members in their national currencies (PLN, SEK, CZK, DKK, HUF, BGN, RON). EU domestic sovereign exposures are also forced to the Standardised Approach, preventing internal models from overriding the regulatory 0% treatment. Applies to both direct exposures and guarantor risk weight substitution (SA and IRB).
+
 #### Article 114(3) domestic currency 0% risk weight for UK sovereign
 UK central government and central bank exposures denominated in GBP now receive 0% risk weight regardless of CQS, per CRR Art. 114(3). Previously, 0% was only assigned via CQS 1 external rating lookup. The override applies in both CRR and Basel 3.1 SA risk weight chains. Foreign-currency UK sovereign exposures continue to use the standard CQS-based risk weight table.
 

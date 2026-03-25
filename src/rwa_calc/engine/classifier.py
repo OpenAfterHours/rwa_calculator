@@ -41,6 +41,7 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
@@ -708,9 +709,19 @@ class ExposureClassifier:
                 self._build_orgwide_permission_exprs(config, has_internal_rating)
             )
 
+        # Art. 114(3)/(4): EU domestic sovereign exposures must use SA
+        # to receive the 0% RW — forced to standardised regardless of IRB permissions.
+        _is_eu_domestic_sovereign = (
+            (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+            & build_eu_domestic_currency_expr("cp_country_code", "currency")
+        )
+
         # --- Approach expression ---
         approach_expr = (
             pl.when(managed_as_retail_without_lgd)
+            .then(pl.lit(ApproachType.SA.value))
+            # Art. 114(4): EU CGCB in domestic currency → forced SA (0% RW)
+            .when(_is_eu_domestic_sovereign)
             .then(pl.lit(ApproachType.SA.value))
             # SL A-IRB takes precedence over slotting
             .when(

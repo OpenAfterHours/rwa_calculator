@@ -73,6 +73,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RETAIL_RISK_WEIGHT,
     get_combined_cqs_risk_weights,
 )
+from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
@@ -347,10 +348,15 @@ class SACalculator:
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
-        # CRR Art. 114(3): UK CGCB exposures denominated in GBP → 0% RW
+        # CRR Art. 114(3)/(4): Domestic CGCB exposures → 0% RW
+        # UK sovereign in GBP, or EU sovereign in that member state's domestic currency
         _is_uk_domestic_currency = (pl.col("cp_country_code") == "GB") & (
             pl.col("currency") == "GBP"
         )
+        _is_eu_domestic_currency = build_eu_domestic_currency_expr(
+            "cp_country_code", "currency"
+        )
+        _is_domestic_currency = _is_uk_domestic_currency | _is_eu_domestic_currency
 
         # Prepare exposures for join
         # Compute uppercase once for all comparisons (avoids repeated regex)
@@ -418,10 +424,10 @@ class SACalculator:
 
             exposures = exposures.with_columns(
                 [
-                    # 0. Art. 114(3): UK CGCB + GBP → 0% RW (overrides all CQS)
+                    # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
                     pl.when(
                         _uc.str.contains("CENTRAL_GOVT", literal=True)
-                        & _is_uk_domestic_currency
+                        & _is_domestic_currency
                     )
                     .then(pl.lit(0.0))
                     # 1. Defaulted exposures: 150% or 100% (CRE20.88-90)
@@ -526,10 +532,10 @@ class SACalculator:
 
             exposures = exposures.with_columns(
                 [
-                    # 0. Art. 114(3): UK CGCB + GBP → 0% RW (overrides all CQS)
+                    # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
                     pl.when(
                         _uc.str.contains("CENTRAL_GOVT", literal=True)
-                        & _is_uk_domestic_currency
+                        & _is_domestic_currency
                     )
                     .then(pl.lit(0.0))
                     # 1. Defaulted exposures: 100% or 150% (CRR Art. 127)
@@ -675,7 +681,8 @@ class SACalculator:
         # UK deviation for institutions (30% for CQS 2 instead of 50%).
         use_uk_deviation = config.base_currency == "GBP"
 
-        # Art. 114(3): UK CGCB guarantors in GBP → 0% RW regardless of CQS
+        # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS
+        # UK guarantor in GBP, or EU guarantor in that member state's domestic currency
         schema_now = exposures.collect_schema()
         _has_country = "guarantor_country_code" in schema_now.names()
         _has_currency = "currency" in schema_now.names()
@@ -686,6 +693,12 @@ class SACalculator:
             if (_has_country and _has_currency)
             else pl.lit(False)
         )
+        _is_eu_domestic_guarantor = (
+            build_eu_domestic_currency_expr("guarantor_country_code", "currency")
+            if (_has_country and _has_currency)
+            else pl.lit(False)
+        )
+        _is_domestic_guarantor = _is_uk_domestic_guarantor | _is_eu_domestic_guarantor
 
         # Guarantor exposure class (set by CRM processor from ENTITY_TYPE_TO_SA_CLASS)
         _gec = pl.col("guarantor_exposure_class").fill_null("")
@@ -698,9 +711,9 @@ class SACalculator:
             [
                 pl.when(pl.col("guaranteed_portion") <= 0)
                 .then(pl.lit(None).cast(pl.Float64))
-                # Art. 114(3): UK domestic sovereign → 0% regardless of CQS
+                # Art. 114(3)/(4): Domestic sovereign → 0% regardless of CQS
                 .when(
-                    (_gec == "central_govt_central_bank") & _is_uk_domestic_guarantor
+                    (_gec == "central_govt_central_bank") & _is_domestic_guarantor
                 )
                 .then(pl.lit(0.0))
                 # CGCB guarantors (sovereign, central_bank)

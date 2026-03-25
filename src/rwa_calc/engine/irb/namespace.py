@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
     _lgd_floor_expression,
@@ -676,7 +677,8 @@ class IRBLazyFrame:
 
         _gec = pl.col("guarantor_exposure_class").fill_null("")
 
-        # Art. 114(3): UK CGCB guarantors in GBP → 0% RW regardless of CQS
+        # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS
+        # UK guarantor in GBP, or EU guarantor in that member state's domestic currency
         _has_country = "guarantor_country_code" in lf.collect_schema().names()
         _is_uk_domestic_guarantor = (
             (
@@ -685,14 +687,20 @@ class IRBLazyFrame:
             if _has_country
             else pl.lit(False)
         )
+        _is_eu_domestic_guarantor = (
+            build_eu_domestic_currency_expr("guarantor_country_code", "currency")
+            if _has_country
+            else pl.lit(False)
+        )
+        _is_domestic_guarantor = _is_uk_domestic_guarantor | _is_eu_domestic_guarantor
 
         lf = lf.with_columns(
             [
                 pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
                 .then(pl.lit(None).cast(pl.Float64))
-                # Art. 114(3): UK domestic sovereign → 0% regardless of CQS
+                # Art. 114(3)/(4): Domestic sovereign → 0% regardless of CQS
                 .when(
-                    (_gec == "central_govt_central_bank") & _is_uk_domestic_guarantor
+                    (_gec == "central_govt_central_bank") & _is_domestic_guarantor
                 )
                 .then(pl.lit(0.0))
                 # CGCB guarantors (sovereign, central_bank)

@@ -1285,6 +1285,127 @@ class TestApproachAssignment:
         # No internal rating → SA even with IRB permissions
         assert df["approach"][0] == ApproachType.SA.value
 
+    def test_eu_domestic_sovereign_forced_to_sa(
+        self,
+        classifier: ExposureClassifier,
+        crr_config_with_irb: CalculationConfig,
+    ) -> None:
+        """EU sovereign in domestic currency must be forced to SA for 0% RW treatment."""
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SOV_DE"],
+                "counterparty_name": ["Federal Republic of Germany"],
+                "entity_type": ["sovereign"],
+                "country_code": ["DE"],
+                "annual_revenue": [None],
+                "total_assets": [None],
+                "default_status": [False],
+                "sector_code": ["GOVT"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["GOVT"],
+                "counterparty_reference": ["SOV_DE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["EUR"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                "internal_pd": [0.001],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config_with_irb)
+
+        df = result.all_exposures.collect()
+
+        # EU domestic sovereign must be forced to SA even with IRB permissions
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_eu_sovereign_foreign_currency_not_forced_to_sa(
+        self,
+        classifier: ExposureClassifier,
+        crr_config_with_irb: CalculationConfig,
+    ) -> None:
+        """EU sovereign in foreign currency should follow normal IRB permissions."""
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SOV_DE"],
+                "counterparty_name": ["Federal Republic of Germany"],
+                "entity_type": ["sovereign"],
+                "country_code": ["DE"],
+                "annual_revenue": [None],
+                "total_assets": [None],
+                "default_status": [False],
+                "sector_code": ["GOVT"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["GOVT"],
+                "counterparty_reference": ["SOV_DE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["USD"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "rating_inherited": [False],
+                "rating_source_counterparty": [None],
+                "rating_inheritance_reason": ["own_rating"],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                "internal_pd": [0.001],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config_with_irb)
+
+        df = result.all_exposures.collect()
+
+        # EU sovereign in foreign currency follows normal IRB permissions
+        # full_irb() permits AIRB for CGCB, so this should get AIRB
+        assert df["approach"][0] == ApproachType.AIRB.value
+
 
 # =============================================================================
 # Exposure Splitting Tests

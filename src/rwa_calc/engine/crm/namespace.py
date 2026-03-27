@@ -705,10 +705,14 @@ class CRMLazyFrame:
         cp_schema = counterparty_lookup.collect_schema()
         cp_select_cols = [
             pl.col("counterparty_reference"),
-            pl.col("entity_type").alias("guarantor_entity_type"),
+            pl.col("entity_type").str.to_lowercase().alias("guarantor_entity_type"),
         ]
         if "country_code" in cp_schema.names():
             cp_select_cols.append(pl.col("country_code").alias("guarantor_country_code"))
+        if "is_ccp_client_cleared" in cp_schema.names():
+            cp_select_cols.append(
+                pl.col("is_ccp_client_cleared").alias("guarantor_is_ccp_client_cleared")
+            )
 
         lf = lf.join(
             counterparty_lookup.select(cp_select_cols),
@@ -717,10 +721,14 @@ class CRMLazyFrame:
             how="left",
         )
 
-        # Ensure guarantor_country_code exists
+        # Ensure optional guarantor columns exist
         if "guarantor_country_code" not in lf.collect_schema().names():
             lf = lf.with_columns(
                 pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
+            )
+        if "guarantor_is_ccp_client_cleared" not in lf.collect_schema().names():
+            lf = lf.with_columns(
+                pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"),
             )
 
         # Look up guarantor's CQS, rating type, and internal_pd from ratings

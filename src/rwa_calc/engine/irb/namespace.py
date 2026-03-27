@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+from rwa_calc.data.tables.crr_risk_weights import QCCP_CLIENT_CLEARED_RW, QCCP_PROPRIETARY_RW
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
@@ -674,6 +675,10 @@ class IRBLazyFrame:
                 .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
                 .alias("guarantor_exposure_class"),
             )
+        if "guarantor_is_ccp_client_cleared" not in cols:
+            lf = lf.with_columns(
+                pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"),
+            )
 
         _gec = pl.col("guarantor_exposure_class").fill_null("")
 
@@ -718,7 +723,15 @@ class IRBLazyFrame:
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(1.0))
                 )
-                # Institution/MDB guarantors (institution, bank, ccp, mdb, etc.)
+                # CCP guarantors: 2% proprietary / 4% client-cleared
+                # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights
+                .when(pl.col("guarantor_entity_type") == "ccp")
+                .then(
+                    pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
+                    .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
+                    .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+                )
+                # Institution/MDB guarantors (institution, bank, mdb, etc.)
                 .when(_gec.is_in(["institution", "mdb"]))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)

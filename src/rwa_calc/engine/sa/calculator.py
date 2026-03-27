@@ -683,10 +683,14 @@ class SACalculator:
                 .alias("guarantor_exposure_class"),
             )
 
-        # Ensure guarantor_country_code exists
+        # Ensure optional guarantor columns exist
         if "guarantor_country_code" not in cols:
             exposures = exposures.with_columns(
                 pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
+            )
+        if "guarantor_is_ccp_client_cleared" not in cols:
+            exposures = exposures.with_columns(
+                pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"),
             )
 
         # Preserve pre-CRM risk weight before any guarantee substitution
@@ -753,7 +757,15 @@ class SACalculator:
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(1.0))  # Unrated
                 )
-                # Institution/MDB guarantors (institution, bank, ccp, mdb, etc.)
+                # CCP guarantors: 2% proprietary / 4% client-cleared
+                # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights
+                .when(pl.col("guarantor_entity_type") == "ccp")
+                .then(
+                    pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
+                    .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
+                    .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+                )
+                # Institution/MDB guarantors (institution, bank, mdb, etc.)
                 .when(_gec.is_in(["institution", "mdb"]))
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)

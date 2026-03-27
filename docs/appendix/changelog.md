@@ -26,6 +26,9 @@ Specialised lending metadata (`sl_type`, `slotting_category`, `is_hvcre`) is now
 
 ### Fixed
 
+#### CCP guarantor risk weight substitution applied 40% instead of 2%/4%
+CCP guarantors were treated as generic unrated institutions (40% RW) instead of receiving the prescribed QCCP risk weight (2% proprietary / 4% client-cleared) per CRR Art. 306 / CRE54.14-15. The guarantee substitution when/then chain in both the SA calculator and IRB namespace now checks `guarantor_entity_type == "ccp"` before the institution/MDB branch, applying `QCCP_PROPRIETARY_RW` (2%) or `QCCP_CLIENT_CLEARED_RW` (4%) based on `guarantor_is_ccp_client_cleared`. CRM processor and namespace now propagate `is_ccp_client_cleared` from guarantor counterparty data. Entity type normalization (`.str.to_lowercase()`) also applied to guarantor entity type joins, matching the fix for primary counterparties.
+
 #### UK govt guarantee exposure marked "not beneficial" for non-sovereign entity types
 Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g., `contains("SOVEREIGN")`), which only matched `sovereign` but not `central_bank`, `bank`, `company`, or `mdb`. These entity types produced `null` guarantor RW, causing beneficial guarantees to be incorrectly skipped. The lookup now uses `guarantor_exposure_class` (derived from the existing `ENTITY_TYPE_TO_SA_CLASS` mapping), ensuring all valid entity types resolve to the correct SA risk weight. Also adds Art. 114(3) domestic sovereign treatment: UK CGCB guarantors in GBP receive 0% RW regardless of CQS. Both SA calculator and IRB namespace are fixed. CRM processor and namespace now propagate `guarantor_country_code` from counterparty data.
 #### Slotting maturity not derived from `maturity_date`
@@ -51,6 +54,14 @@ The `apply_fi_scalar` counterparty flag was gated on `is_financial_sector_entity
 
 
 
+
+
+## [0.1.45] - 2026-03-27
+
+### Changed
+- Version bump for PyPI release
+
+---
 
 ## [0.1.44] - 2026-03-25
 
@@ -844,8 +855,9 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 
 | Version | Date | Status |
 |---------|------|--------|
-| 0.1.44 | 2026-03-25 | Current |
-| 0.1.43 | 2026-03-25 | Previous |
+| 0.1.45 | 2026-03-27 | Current |
+| 0.1.44 | 2026-03-27 | Previous |
+| 0.1.43 | 2026-03-25 | - |
 | 0.1.42 | 2026-03-24 | - |
 | 0.1.41 | 2026-03-22 | - |
 | 0.1.40 | 2026-03-22 | - |

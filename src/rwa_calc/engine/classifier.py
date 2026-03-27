@@ -241,7 +241,7 @@ class ExposureClassifier:
 
         select_cols = [
             pl.col("counterparty_reference"),
-            pl.col("entity_type").alias("cp_entity_type"),
+            pl.col("entity_type").str.to_lowercase().alias("cp_entity_type"),
             pl.col("country_code").alias("cp_country_code"),
             pl.col("annual_revenue").alias("cp_annual_revenue"),
             pl.col("total_assets").alias("cp_total_assets"),

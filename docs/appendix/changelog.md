@@ -26,6 +26,9 @@ Specialised lending metadata (`sl_type`, `slotting_category`, `is_hvcre`) is now
 
 ### Fixed
 
+#### CCP guarantor risk weight substitution applied 40% instead of 2%/4%
+CCP guarantors were treated as generic unrated institutions (40% RW) instead of receiving the prescribed QCCP risk weight (2% proprietary / 4% client-cleared) per CRR Art. 306 / CRE54.14-15. The guarantee substitution when/then chain in both the SA calculator and IRB namespace now checks `guarantor_entity_type == "ccp"` before the institution/MDB branch, applying `QCCP_PROPRIETARY_RW` (2%) or `QCCP_CLIENT_CLEARED_RW` (4%) based on `guarantor_is_ccp_client_cleared`. CRM processor and namespace now propagate `is_ccp_client_cleared` from guarantor counterparty data. Entity type normalization (`.str.to_lowercase()`) also applied to guarantor entity type joins, matching the fix for primary counterparties.
+
 #### UK govt guarantee exposure marked "not beneficial" for non-sovereign entity types
 Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g., `contains("SOVEREIGN")`), which only matched `sovereign` but not `central_bank`, `bank`, `company`, or `mdb`. These entity types produced `null` guarantor RW, causing beneficial guarantees to be incorrectly skipped. The lookup now uses `guarantor_exposure_class` (derived from the existing `ENTITY_TYPE_TO_SA_CLASS` mapping), ensuring all valid entity types resolve to the correct SA risk weight. Also adds Art. 114(3) domestic sovereign treatment: UK CGCB guarantors in GBP receive 0% RW regardless of CQS. Both SA calculator and IRB namespace are fixed. CRM processor and namespace now propagate `guarantor_country_code` from counterparty data.
 #### Slotting maturity not derived from `maturity_date`

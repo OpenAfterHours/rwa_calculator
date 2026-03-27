@@ -33,7 +33,7 @@ Run these after implementing to get immediate feedback:
 - Python 3.13+ required
 - Source code: `src/rwa_calc/`
 - Tests: `tests/` (unit/, acceptance/, benchmarks/, fixtures/)
-- Docs: `docs/` (MkDocs Material), serve with `uv run mkdocs serve`
+- Docs: `docs/` (Zensical), serve with `uv run zensical serve`
 - Config: `pyproject.toml` (ruff, mypy, pytest settings)
 - Line length: 100 chars (ruff enforced)
 - Every module starts with `from __future__ import annotations`

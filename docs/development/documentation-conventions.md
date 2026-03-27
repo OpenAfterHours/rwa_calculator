@@ -104,7 +104,7 @@ Use collapsible sections to show lengthy actual code without cluttering the page
 1. **Check for documentation** - Search for references to your function/class
 2. **Update line numbers** - Snippet references may need adjustment
 3. **Update docstrings** - mkdocstrings will pull these automatically
-4. **Run docs locally** - `mkdocs serve` to verify everything renders
+4. **Run docs locally** - `zensical serve` to verify everything renders
 
 ### Documentation Structure
 
@@ -148,7 +148,7 @@ Available types: `note`, `info`, `tip`, `warning`, `danger`, `example`
 
 Before submitting changes:
 
-1. Run `mkdocs serve` locally
+1. Run `zensical serve` locally
 2. Check that snippets render correctly
 3. Verify GitHub links point to correct lines
 4. Ensure mkdocstrings generates expected output

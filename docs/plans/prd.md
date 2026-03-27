@@ -443,7 +443,7 @@ Input Data (Parquet/CSV/DataFrames)
 | Excel Export | fastexcel | 0.19+ | XLSX output |
 | Configuration | PyYAML | 6.0+ | YAML-based config files |
 | Web UI | Marimo | — | Interactive notebooks |
-| Documentation | MkDocs (Material) | — | Documentation site |
+| Documentation | Zensical | — | Documentation site |
 | Testing | Pytest + pytest-benchmark | — | Unit, acceptance, and performance tests |
 | Linting | Ruff | — | Linting and formatting |
 | Type Checking | Mypy | — | Static type analysis |

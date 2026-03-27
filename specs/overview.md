@@ -67,7 +67,7 @@ Market Risk (FRTB), Operational Risk, CVA Risk, Securitisation, Large Exposures,
 | Serialisation | PyArrow | 14.0+ |
 | Excel Export | fastexcel | 0.19+ |
 | Web UI | Marimo | — |
-| Documentation | MkDocs (Material) | — |
+| Documentation | Zensical | — |
 | Testing | Pytest + pytest-benchmark | — |
 | Linting | Ruff | — |
 | Type Checking | Mypy | — |

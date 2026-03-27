@@ -243,7 +243,7 @@ IRB formula calculation alone achieves 3.4M rows/second throughput using `polars
 | Validation | Pydantic | Type-safe data validation |
 | Numerics | polars-normal-stats | IRB formulas (pure Polars) |
 | Testing | Pytest | Comprehensive testing |
-| Documentation | MkDocs | This documentation |
+| Documentation | Zensical | This documentation |
 
 ## Next Steps
 

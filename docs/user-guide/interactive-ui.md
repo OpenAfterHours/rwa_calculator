@@ -32,7 +32,7 @@ Launch the multi-application server:
     python -m rwa_calc.ui.marimo.server
 
     # Or using uvicorn
-    uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
+    uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
     ```
 
 === "From Source"
@@ -42,7 +42,7 @@ Launch the multi-application server:
     uv run python src/rwa_calc/ui/marimo/server.py
 
     # Or using uvicorn
-    uv run uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
+    uv run uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
     ```
 
 Once started, open your browser to [http://localhost:8000](http://localhost:8000).

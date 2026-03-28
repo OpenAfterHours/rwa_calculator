@@ -9,7 +9,7 @@
 Run these after implementing to get immediate feedback:
 
 - Tests: `uv run pytest tests/ --benchmark-skip`
-- Typecheck: `uv run mypy src/`
+- Typecheck: `uv run ty src/`
 - Lint: `uv run ruff check src/ && uv run ruff format --check src/`
 - Fix lint: `uv run ruff check --fix src/ && uv run ruff format src/`
 - Single test file: `uv run pytest tests/unit/test_<name>.py -x`

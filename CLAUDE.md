@@ -41,7 +41,6 @@ Key topics: SA risk weights (CRE20-22), IRB approach (CRE30-36), Credit risk mit
 
 - **Polars** (default dataframe library) — LazyFrames over eager. Docs: https://docs.pola.rs/api/python/stable/reference/index.html
 - **polars-normal-stats** — for CDF, PPF, PDF (not scipy/numpy). Docs: https://pypi.org/project/polars-normal-stats/
-- **DuckDB** — only where more suitable than Polars (e.g., complex SQL-style joins)
 - **UV** — use `uv add` / `uv run`, never `pip install`
 - **Pytest** — test runner with `pytest-benchmark` for perf tests
 - **Ruff** — linter and formatter (config in `pyproject.toml`)

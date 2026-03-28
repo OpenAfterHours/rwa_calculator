@@ -130,11 +130,9 @@ pip install -e ".[dev]"
 | Package | Purpose |
 |---------|---------|
 | `polars` | High-performance DataFrame operations |
-| `pydantic` | Data validation and settings management |
 | `polars-normal-stats` | Statistical functions for IRB calculations (normal CDF/PPF) |
-| `pyarrow` | Parquet file support |
-| `pyyaml` | Configuration file parsing |
-| `duckdb` | SQL analytics engine |
+| `fastexcel` | Excel file reading (polars read_excel backend) |
+| `xlsxwriter` | Excel file writing |
 
 ### Optional Dependencies
 

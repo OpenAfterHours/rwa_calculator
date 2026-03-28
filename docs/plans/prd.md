@@ -437,11 +437,7 @@ Input Data (Parquet/CSV/DataFrames)
 | Language | Python | 3.13+ | Core runtime |
 | DataFrame Engine | Polars | 1.0+ | Vectorised LazyFrame operations |
 | Statistical Functions | polars-normal-stats | 0.2+ | CDF, PPF, PDF for IRB formulas |
-| SQL Engine | DuckDB | 0.9+ | Complex join operations (where needed) |
-| Data Validation | Pydantic | 2.0+ | API input validation |
-| Serialisation | PyArrow | 14.0+ | Parquet I/O |
 | Excel Export | fastexcel | 0.19+ | XLSX output |
-| Configuration | PyYAML | 6.0+ | YAML-based config files |
 | Web UI | Marimo | — | Interactive notebooks |
 | Documentation | Zensical | — | Documentation site |
 | Testing | Pytest + pytest-benchmark | — | Unit, acceptance, and performance tests |

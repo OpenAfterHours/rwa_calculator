@@ -43,7 +43,6 @@ These are **platform-level** constraints in Polars itself:
 **Alternatives:**
 
 - **Iterative self-join** — Polars `join` in a Python loop up to `max_depth` times. Stays "lazier" but still requires a fixed iteration count and builds a very wide plan.
-- **DuckDB recursive CTE** — `WITH RECURSIVE` can express graph traversal natively. Could scan the edges LazyFrame via DuckDB and return results as a LazyFrame. This is the most natural fit but introduces a DuckDB dependency mid-pipeline.
 - **Accept as-is** — The data is small and early in the pipeline. This is the lowest-impact collect in the entire chain.
 
 ---
@@ -111,7 +110,6 @@ EAGER ─── COLLECT #4: collect_all(3 branches) ─────────�
 | Priority | Action | Collects Removed | Difficulty | Dependency |
 |---|---|---|---|---|
 | 1 | **Wait for Polars CSE improvements** | Up to 5 (CRM + pipeline) | None (upstream) | Polars roadmap — CSE for deep plans and streaming |
-| 2 | **Replace graph traversal with DuckDB recursive CTE** | 2 (hierarchy) | Medium | Already a project dependency |
 | 3 | **Flatten CRM plan tree** — restructure provisions/CCF/collateral to produce a shallower plan | Potentially 1-2 | High | Requires significant CRM refactor; risk of correctness regressions |
 | 4 | **Move lookup collects into the CRM plan** — if Polars adds `cache()` / explicit CSE hints | 3 (lookups) | Low (if available) | Polars `LazyFrame.cache()` API (proposed but not yet stable) |
 | 5 | **Single-collect architecture** — eliminate pre-branch collect by moving to a single `collect_all` with CSE | 1 (pipeline:622) | Low-Medium | Requires Polars optimizer to handle deep plans without segfault |

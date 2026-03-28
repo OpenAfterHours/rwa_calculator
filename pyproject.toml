@@ -26,10 +26,6 @@ classifiers = [
 ]
 dependencies = [
     "polars>=1.0.0",
-    "pydantic>=2.0.0",
-    "duckdb>=0.9.0",
-    "pyarrow>=14.0.0",
-    "pyyaml>=6.0.0",
     "polars-normal-stats>=0.2.0",  # Required for IRB statistical functions
     "fastexcel>=0.19.0",
     "xlsxwriter>=3.1.0",
@@ -123,13 +119,11 @@ python-version = "3.13"
 exclude = ["src/rwa_calc/ui/marimo/"]
 
 [tool.ty.rules]
-# Polars custom namespaces (register_lazyframe_namespace) and DuckDB InProcessQuery
-# union types produce false positives ty cannot resolve.
+# Polars custom namespaces (register_lazyframe_namespace) produce false positives
+# ty cannot resolve.
 unresolved-attribute = "ignore"   # Polars namespaces (.rwa_sa, .irb, etc.) + union narrowing
-invalid-argument-type = "ignore"  # Polars type[DataType] vs DataType + DuckDB unions
-not-subscriptable = "ignore"      # DuckDB InProcessQuery union type
+invalid-argument-type = "ignore"  # Polars type[DataType] vs DataType
 invalid-assignment = "ignore"     # Polars ChainedThen vs Then in when/then chains
-invalid-return-type = "ignore"    # DuckDB InProcessQuery | DataFrame union on .collect()
 
 [dependency-groups]
 dev = [

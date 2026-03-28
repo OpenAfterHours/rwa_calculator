@@ -97,6 +97,7 @@ link = "https://github.com/OpenAfterHours/rwa_calculator"
 
 nav = [
   { "Home" = "index.md" },
+  { "Overview" = "overview.md" },
   { "Getting Started" = [
     "getting-started/index.md",
     { "Installation" = "getting-started/installation.md" },

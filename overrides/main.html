@@ -2,21 +2,46 @@
 
 {% block hero %}
   {% if not page.url %}
-    <div class="formula-background" aria-hidden="true">
-      <div class="formula-background__inner">
-        <span class="formula formula--1">K = LGD &times; &Phi;[&radic;(1&minus;R)&sup1; &times; &Phi;&sup1;(PD) + &radic;(R/(1&minus;R)) &times; &Phi;&sup1;(0.999)] &minus; PD &times; LGD</span>
-        <span class="formula formula--2">RWA = K &times; 12.5 &times; EAD</span>
-        <span class="formula formula--3">R = 0.12 &times; (1 &minus; e<sup>&minus;50&middot;PD</sup>) / (1 &minus; e<sup>&minus;50</sup>) + 0.24 &times; [1 &minus; (1 &minus; e<sup>&minus;50&middot;PD</sup>) / (1 &minus; e<sup>&minus;50</sup>)]</span>
-        <span class="formula formula--4">b = (0.11852 &minus; 0.05478 &times; ln(PD))&sup2;</span>
-        <span class="formula formula--5">MA = (1 + (M &minus; 2.5) &times; b) / (1 &minus; 1.5 &times; b)</span>
-        <span class="formula formula--6">&Phi;(x) = &frac12;[1 + erf(x/&radic;2)]</span>
-        <span class="formula formula--7">EL = PD &times; LGD</span>
-        <span class="formula formula--8">RW = K &times; 12.5 &times; MA</span>
-        <span class="formula formula--9">CCF &times; Off-Balance = EAD</span>
-        <span class="formula formula--10">SA: RWA = EAD &times; RW%</span>
-        <span class="formula formula--11">&Phi;&sup1;(PD)</span>
-        <span class="formula formula--12">N[(1&minus;R)<sup>&minus;0.5</sup> &times; G(PD)]</span>
+    <div class="landing-hero">
+      <div class="formula-background" aria-hidden="true">
+        <div class="formula-background__inner">
+          <span class="formula formula--1">K = LGD &times; &Phi;[&radic;(1&minus;R)&sup1; &times; &Phi;&sup1;(PD) + &radic;(R/(1&minus;R)) &times; &Phi;&sup1;(0.999)] &minus; PD &times; LGD</span>
+          <span class="formula formula--2">RWA = K &times; 12.5 &times; EAD</span>
+          <span class="formula formula--3">R = 0.12 &times; (1 &minus; e<sup>&minus;50&middot;PD</sup>) / (1 &minus; e<sup>&minus;50</sup>) + 0.24 &times; [1 &minus; (1 &minus; e<sup>&minus;50&middot;PD</sup>) / (1 &minus; e<sup>&minus;50</sup>)]</span>
+          <span class="formula formula--4">b = (0.11852 &minus; 0.05478 &times; ln(PD))&sup2;</span>
+          <span class="formula formula--5">MA = (1 + (M &minus; 2.5) &times; b) / (1 &minus; 1.5 &times; b)</span>
+          <span class="formula formula--6">&Phi;(x) = &frac12;[1 + erf(x/&radic;2)]</span>
+          <span class="formula formula--7">EL = PD &times; LGD</span>
+          <span class="formula formula--8">RW = K &times; 12.5 &times; MA</span>
+          <span class="formula formula--9">CCF &times; Off-Balance = EAD</span>
+          <span class="formula formula--10">SA: RWA = EAD &times; RW%</span>
+          <span class="formula formula--11">&Phi;&sup1;(PD)</span>
+          <span class="formula formula--12">N[(1&minus;R)<sup>&minus;0.5</sup> &times; G(PD)]</span>
+        </div>
+      </div>
+      <div class="landing-content">
+        <img src="assets/openafterhours_icon_512.png" alt="" class="landing-logo">
+        <h1 class="landing-title">UK Credit Risk RWA Calculator</h1>
+        <p class="landing-tagline">High-performance Risk-Weighted Assets calculation<br>for Basel 3.1 and CRR frameworks</p>
+        <div class="landing-actions">
+          <a href="overview/" class="landing-btn landing-btn--primary">Explore Documentation</a>
+          <a href="getting-started/quickstart/" class="landing-btn landing-btn--secondary">Quick Start</a>
+        </div>
       </div>
     </div>
+  {% endif %}
+{% endblock %}
+
+{% block site_nav %}
+  {% if not page.url %}
+  {% else %}
+    {{ super() }}
+  {% endif %}
+{% endblock %}
+
+{% block container %}
+  {% if not page.url %}
+  {% else %}
+    {{ super() }}
   {% endif %}
 {% endblock %}

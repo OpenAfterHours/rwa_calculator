@@ -9,10 +9,8 @@ repo_url = "https://github.com/OpenAfterHours/rwa_calculator"
 [project.theme]
 name = "material"
 logo = "assets/openafterhours_icon_512.png"
+favicon = "assets/openafterhours_icon_512.png"
 features = [
-  "navigation.tabs",
-  "navigation.sections",
-  "navigation.expand",
   "navigation.path",
   "navigation.indexes",
   "toc.follow",

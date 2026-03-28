@@ -45,7 +45,7 @@ Key topics: SA risk weights (CRE20-22), IRB approach (CRE30-36), Credit risk mit
 - **UV** — use `uv add` / `uv run`, never `pip install`
 - **Pytest** — test runner with `pytest-benchmark` for perf tests
 - **Ruff** — linter and formatter (config in `pyproject.toml`)
-- **Mypy** — static type checking
+- **ty** — static type checking
 - **Marimo** — interactive workbooks. Docs: https://docs.marimo.io/api/
 - **Zensical** — project documentation site
 

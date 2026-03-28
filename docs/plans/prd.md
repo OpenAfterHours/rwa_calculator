@@ -63,19 +63,20 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 
 ### 4.1 In Scope
 
-| Area | Description |
-|------|-------------|
-| **Credit Risk RWA** | Standardised Approach (SA), Foundation IRB (F-IRB), Advanced IRB (A-IRB), Specialised Lending (Slotting), Equity |
-| **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS9/24) |
+| Area | Description                                                                                                                                        |
+|------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Credit Risk RWA** | Standardised Approach (SA), Foundation IRB (F-IRB), Advanced IRB (A-IRB), Specialised Lending (Slotting), Equity                                   |
+| **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS9/24)                                                                                                   |
 | **Credit Risk Mitigation** | Collateral (9 types with supervisory haircuts), guarantees (substitution approach), provisions (drawn-first SA deduction, IRB EL shortfall/excess) |
-| **Supporting Factors** | CRR SME tiered factor (0.7619/0.85), infrastructure factor (0.75) |
-| **Output Floor** | Basel 3.1 output floor with transitional phase-in schedule (50%–72.5%, 2027–2032) |
-| **Multi-Currency** | FX conversion to configurable target currency with haircut adjustments |
-| **Hierarchies** | Multi-level counterparty hierarchies (up to 10 levels) with rating inheritance; multi-level facility hierarchies with drawn aggregation |
-| **Input Validation** | Non-blocking error accumulation with categorised error codes |
-| **Audit Trail** | Pre/post-CRM RWA tracking, guarantee benefit attribution, full calculation transparency |
-| **Interfaces** | Python API, interactive web UI (Marimo), CLI entry point |
-| **Documentation** | MkDocs site with user guide, architecture docs, API reference, regulatory specifications |
+| **Supporting Factors** | CRR SME tiered factor (0.7619/0.85), infrastructure factor (0.75)                                                                                  |
+| **Output Floor** | Basel 3.1 output floor with transitional phase-in schedule (50%–72.5%, 2027–2032)                                                                  |
+| **Multi-Currency** | FX conversion to configurable target currency with haircut adjustments                                                                             |
+| **Hierarchies** | Multi-level counterparty hierarchies (up to 10 levels) with rating inheritance; multi-level facility hierarchies with drawn aggregation            |
+| **Input Validation** | Non-blocking error accumulation with categorised error codes                                                                                       |
+| **Audit Trail** | Pre/post-CRM RWA tracking, guarantee benefit attribution, full calculation transparency                                                            |
+| **Interfaces** | Python API, interactive web UI (Marimo), CLI entry point                                                                                           |
+| **Documentation** | MkDocs site with user guide, architecture docs, API reference, regulatory specifications                                                           |
+| COREP/Regulatory Reporting Templates | C07 and C08 Templates                                                                                                                              |
 
 ### 4.2 Out of Scope (Current Release)
 
@@ -87,7 +88,6 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 | Securitisation | Specialised framework (CRR Part 3, Title II, Chapter 5) — future consideration |
 | Large Exposures | Reporting framework, not RWA calculation |
 | Leverage Ratio | Different capital metric |
-| COREP/Regulatory Reporting Templates | Stub exists; full implementation deferred |
 | Database / Data Warehouse Integration | Users provide data as Parquet/CSV/DataFrames; persistence is out of scope |
 | User Authentication / Multi-Tenancy | Standalone tool, not a hosted SaaS |
 
@@ -375,15 +375,15 @@ Input Data (Parquet/CSV/DataFrames)
 
 ### v1.0 — Production-Ready CRR (Target: Q1 2026)
 
-| Milestone | Description | Status |
-|-----------|-------------|--------|
+| Milestone | Description | Status                 |
+|-----------|-------------|------------------------|
 | M1.1 | All CRR acceptance tests passing (74/74) | 71/74 (3 fixture gaps) |
-| M1.2 | Performance benchmarks documented and reproducible | Done |
-| M1.3 | Full MkDocs documentation site | Done |
-| M1.4 | PyPI package published | Done (v0.1.28) |
-| M1.5 | Interactive web UI (Marimo) operational | Done |
-| M1.6 | CI/CD pipeline with linting, type checking, and tests | Partial |
-| M1.7 | Complete remaining 3 acceptance tests (CRR-A7, A8, C3) | Not Started |
+| M1.2 | Performance benchmarks documented and reproducible | Done                   |
+| M1.3 | Full MkDocs documentation site | Done                   |
+| M1.4 | PyPI package published | Done (v0.1.28)         |
+| M1.5 | Interactive web UI (Marimo) operational | Done                   |
+| M1.6 | CI/CD pipeline with linting, type checking, and tests | Done                   |
+| M1.7 | Complete remaining 3 acceptance tests (CRR-A7, A8, C3) | Not Started            |
 
 ### v1.1 — Basel 3.1 Core (Target: Q2 2026)
 

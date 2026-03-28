@@ -56,5 +56,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
       - name: Run tests
         run: uv run pytest tests/ --benchmark-disable -m 'not slow'

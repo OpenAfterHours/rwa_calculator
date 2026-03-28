@@ -22,7 +22,9 @@
       "WebFetch(domain:docs.pola.rs)",
       "Bash(uvx ruff:*)",
       "Bash(xargs grep:*)",
-      "Bash(ls -la /c/Users/philm/PycharmProjects/rwa_calculator/tests/unit/test_guar*)"
+      "Bash(ls -la /c/Users/philm/PycharmProjects/rwa_calculator/tests/unit/test_guar*)",
+      "Bash(uv run:*)",
+      "Bash(uv sync:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

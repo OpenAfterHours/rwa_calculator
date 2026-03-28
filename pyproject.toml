@@ -55,7 +55,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-benchmark>=4.0.0",
     "ruff>=0.3.0",
-    "mypy>=1.8.0",
+    "ty",
     "zensical>=0.0.29",
     "mkdocstrings[python]>=0.24.0",
     "numpy>=1.26.0",  # For benchmark data generation only
@@ -115,30 +115,26 @@ exclude_lines = [
     "raise NotImplementedError",
 ]
 
-[tool.mypy]
-python_version = "3.13"
-warn_unused_configs = true
-ignore_missing_imports = true
-# Polars custom namespaces (register_lazyframe_namespace) return types mypy
-# cannot resolve. Polars type[DataType] vs DataType also causes false positives.
-disable_error_code = [
-    "attr-defined",   # Polars custom namespaces (.rwa_sa, .irb, .slotting, etc.)
-    "union-attr",     # Protocol | None narrowing in pipeline orchestrator
-    "no-any-return",  # Polars namespace methods returning self._lf via pipe()
-    "arg-type",       # Polars type[DataType] vs DataType in loader schemas
-    "dict-item",      # Polars type[DataType] vs DataType in schema dicts
-    "assignment",     # Polars ChainedThen vs Then in when/then chains
-]
+[tool.ty.environment]
+python-version = "3.13"
 
-[[tool.mypy.overrides]]
-module = "rwa_calc.ui.marimo.*"
-ignore_errors = true
+[tool.ty.src]
+# Marimo UI module excluded from type checking (equivalent to mypy ignore_errors)
+exclude = ["src/rwa_calc/ui/marimo/"]
+
+[tool.ty.rules]
+# Polars custom namespaces (register_lazyframe_namespace) and DuckDB InProcessQuery
+# union types produce false positives ty cannot resolve.
+unresolved-attribute = "ignore"   # Polars namespaces (.rwa_sa, .irb, etc.) + union narrowing
+invalid-argument-type = "ignore"  # Polars type[DataType] vs DataType + DuckDB unions
+not-subscriptable = "ignore"      # DuckDB InProcessQuery union type
+invalid-assignment = "ignore"     # Polars ChainedThen vs Then in when/then chains
+invalid-return-type = "ignore"    # DuckDB InProcessQuery | DataFrame union on .collect()
 
 [dependency-groups]
 dev = [
     "zensical>=0.0.29",
     "mkdocstrings[python]>=1.0.0",
-    "mypy>=1.19.1",
     "pytest-benchmark>=5.2.3",
     "numpy>=1.26.0",  # For benchmark data generation only
 ]

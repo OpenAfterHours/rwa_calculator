@@ -3,11 +3,13 @@ site_name = "UK Credit Risk RWA Calculator"
 site_description = "Documentation for the UK Credit Risk RWA Calculator - supporting CRR and Basel 3.1 frameworks"
 site_author = "OpenAfterHours"
 repo_url = "https://github.com/OpenAfterHours/rwa_calculator"
+extra_css = ["assets/stylesheets/homepage.css"]
 
 # -- Theme ------------------------------------------------------------------
 
 [project.theme]
 name = "material"
+custom_dir = "overrides"
 logo = "assets/openafterhours_icon_512.png"
 favicon = "assets/openafterhours_icon_512.png"
 features = [

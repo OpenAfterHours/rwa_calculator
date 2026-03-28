@@ -1,0 +1,76 @@
+/* Formula background — homepage hero only */
+.formula-background {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 260px;
+  pointer-events: none;
+  user-select: none;
+  margin-bottom: -60px;
+  z-index: 0;
+}
+
+.formula-background__inner {
+  position: relative;
+  max-width: 1220px;
+  margin: 0 auto;
+  height: 100%;
+}
+
+.formula {
+  position: absolute;
+  font-family: "JetBrains Mono", "Roboto Mono", "Fira Code", monospace;
+  white-space: nowrap;
+  opacity: 0.07;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--md-default-fg-color);
+}
+
+/* Light mode */
+[data-md-color-scheme="default"] .formula {
+  opacity: 0.06;
+  color: #000;
+}
+
+/* Dark mode */
+[data-md-color-scheme="slate"] .formula {
+  opacity: 0.08;
+  color: #fff;
+}
+
+/* Individual formula positions — scattered across the hero area */
+.formula--1  { top: 15%; left: 5%;  font-size: 0.9rem;  transform: rotate(-2deg); }
+.formula--2  { top: 55%; left: 60%; font-size: 1.1rem;  transform: rotate(1deg); }
+.formula--3  { top: 70%; left: 2%;  font-size: 0.75rem; transform: rotate(-1deg); }
+.formula--4  { top: 30%; left: 45%; font-size: 0.85rem; transform: rotate(2deg); }
+.formula--5  { top: 10%; left: 70%; font-size: 0.8rem;  transform: rotate(-3deg); }
+.formula--6  { top: 85%; left: 40%; font-size: 0.95rem; transform: rotate(1.5deg); }
+.formula--7  { top: 45%; left: 20%; font-size: 1.0rem;  transform: rotate(-0.5deg); }
+.formula--8  { top: 5%;  left: 35%; font-size: 0.7rem;  transform: rotate(2.5deg); }
+.formula--9  { top: 60%; left: 80%; font-size: 0.75rem; transform: rotate(-1.5deg); }
+.formula--10 { top: 25%; left: 85%; font-size: 0.8rem;  transform: rotate(0.5deg); }
+.formula--11 { top: 80%; left: 75%; font-size: 1.2rem;  transform: rotate(-2.5deg); }
+.formula--12 { top: 40%; left: 55%; font-size: 0.7rem;  transform: rotate(1deg); }
+
+/* Tablet: reduce height */
+@media screen and (max-width: 76.25em) {
+  .formula-background {
+    height: 180px;
+    margin-bottom: -40px;
+  }
+}
+
+/* Mobile: reduce further and hide long formulas */
+@media screen and (max-width: 600px) {
+  .formula-background {
+    height: 120px;
+    margin-bottom: -20px;
+  }
+
+  .formula--1,
+  .formula--3,
+  .formula--5 {
+    display: none;
+  }
+}

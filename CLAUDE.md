@@ -150,7 +150,7 @@ tests/
 
 ## Documentation
 
-- **Zensical site**: Source in `docs/`, config in `mkdocs.yml`. Run locally: `uv run zensical serve`
+- **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`
 - **Docstrings**: All public classes and functions must have docstrings following the module docstring pattern (purpose, responsibilities, references)
 - **Changelog**: Update `docs/appendix/changelog.md` for any user-facing changes
 - **After every change**: Update relevant docs, docstrings, and changelog entry

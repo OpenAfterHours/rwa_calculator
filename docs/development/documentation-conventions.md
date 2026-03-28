@@ -119,25 +119,22 @@ Use collapsible sections to show lengthy actual code without cluttering the page
 
 ### pymdownx.snippets
 
-Configuration in `mkdocs.yml`:
-```yaml
-- pymdownx.snippets:
-    base_path: ['.']
-    check_paths: false
+Configuration in `zensical.toml`:
+```toml
+[project.markdown_extensions.pymdownx.snippets]
+base_path = ["."]
+check_paths = false
 ```
 
 ### mkdocstrings
 
-Configuration in `mkdocs.yml`:
-```yaml
-- mkdocstrings:
-    handlers:
-      python:
-        options:
-          docstring_style: google
-          show_source: true
-          show_root_heading: true
-          members_order: source
+Configuration in `zensical.toml`:
+```toml
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+show_source = true
+show_root_heading = true
+members_order = "source"
 ```
 
 ### Admonitions

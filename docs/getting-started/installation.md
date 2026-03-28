@@ -196,7 +196,7 @@ rwa_calculator/
 ├── ref_docs/               # Regulatory documents
 ├── docs/                   # This documentation
 ├── pyproject.toml          # Project configuration
-└── mkdocs.yml              # Documentation configuration
+└── zensical.toml           # Documentation configuration
 ```
 
 ## Environment Variables

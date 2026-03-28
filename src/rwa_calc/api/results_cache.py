@@ -206,7 +206,8 @@ class ResultsCache:
         Returns:
             DataFrame with the requested page of results
         """
-        return lazy.slice(offset, page_size).collect()
+        result: pl.DataFrame = lazy.slice(offset, page_size).collect()
+        return result
 
     def _sink_or_collect(self, lf: pl.LazyFrame, path: Path) -> None:
         """

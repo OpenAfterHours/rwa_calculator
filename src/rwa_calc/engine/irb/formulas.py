@@ -724,7 +724,7 @@ def _run_scalar_via_vectorized(
         msg = f"Unknown output column: {output_col}"
         raise ValueError(msg)
 
-    result = lf.with_columns(expr.alias(output_col)).collect()
+    result: pl.DataFrame = lf.with_columns(expr.alias(output_col)).collect()
     return float(result[output_col][0])
 
 

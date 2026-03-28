@@ -102,7 +102,7 @@ def update_changelog(new_version: str, old_version: str) -> bool:
         return True
 
     # Replace [Unreleased] section with new version
-    unreleased_pattern = r"## \[Unreleased\]\n\n### Added\n- \(Next release changes will go here\)\n\n### Changed\n- \(Next release changes will go here\)\n\n---"
+    unreleased_pattern = "## [Unreleased]\n\n### Added\n- (Next release changes will go here)\n\n### Changed\n- (Next release changes will go here)\n\n---"
 
     new_unreleased = f"""## [Unreleased]
 
@@ -119,8 +119,8 @@ def update_changelog(new_version: str, old_version: str) -> bool:
 ### Changed
 - Version bump for PyPI release"""
 
-    if re.search(unreleased_pattern, content):
-        content = re.sub(unreleased_pattern, new_unreleased, content)
+    if unreleased_pattern in content:
+        content = content.replace(unreleased_pattern, new_unreleased)
     else:
         # Fallback: insert after [Unreleased] header
         unreleased_simple = r"(## \[Unreleased\].*?)(## \[\d)"

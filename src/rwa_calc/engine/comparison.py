@@ -336,7 +336,7 @@ def _extract_floor_metrics(
     # Get total RWA from summary_by_approach (covers all approaches)
     if result.summary_by_approach is not None:
         try:
-            approach_df = result.summary_by_approach.collect()
+            approach_df: pl.DataFrame = result.summary_by_approach.collect()
             if "total_rwa" in approach_df.columns:
                 metrics["total_rwa_post_floor"] = approach_df["total_rwa"].sum()
             if "total_ead" in approach_df.columns:
@@ -347,7 +347,7 @@ def _extract_floor_metrics(
     # Get floor-specific metrics from floor_impact
     if result.floor_impact is not None:
         try:
-            floor_df = result.floor_impact.collect()
+            floor_df: pl.DataFrame = result.floor_impact.collect()
             if floor_df.height > 0:
                 metrics["total_irb_exposure_count"] = floor_df.height
                 if "rwa_pre_floor" in floor_df.columns:
@@ -749,7 +749,7 @@ def _compute_portfolio_waterfall(attribution: pl.LazyFrame) -> pl.LazyFrame:
     aggregate impact and cumulative RWA from CRR baseline to B31 total.
     """
     # Aggregate each driver across the whole portfolio
-    totals = attribution.select(
+    totals: pl.DataFrame = attribution.select(
         [
             pl.col("rwa_crr").sum().alias("total_rwa_crr"),
             pl.col("scaling_factor_impact").sum().alias("total_scaling"),

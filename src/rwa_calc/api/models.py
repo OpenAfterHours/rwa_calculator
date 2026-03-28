@@ -251,7 +251,8 @@ class CalculationResponse:
 
     def collect_results(self) -> pl.DataFrame:
         """Collect the full results into an eager DataFrame."""
-        return self.scan_results().collect()
+        result: pl.DataFrame = self.scan_results().collect()
+        return result
 
     def scan_summary_by_class(self) -> pl.LazyFrame | None:
         """Lazy-scan the class summary parquet, or None if not available."""

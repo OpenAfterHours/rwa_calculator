@@ -261,7 +261,7 @@ class ResultFormatter:
         floor_impact_value = Decimal("0")
         if floor_impact is not None:
             try:
-                floor_df = floor_impact.collect()
+                floor_df: pl.DataFrame = floor_impact.collect()
                 if "floor_binding" in floor_df.columns:
                     floor_applied = floor_df["floor_binding"].any()
                 if "floor_add_on" in floor_df.columns:

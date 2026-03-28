@@ -846,7 +846,7 @@ class OutputAggregator:
             )
 
         # Single collect for all aggregations
-        agg_df = irb_results.select(agg_exprs).collect()
+        agg_df: pl.DataFrame = irb_results.select(agg_exprs).collect()
 
         total_el_shortfall = float(agg_df["total_el_shortfall"][0] or 0.0)
         total_el_excess = float(agg_df["total_el_excess"][0] or 0.0)

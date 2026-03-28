@@ -10,7 +10,7 @@ Usage (from source):
     uv run python src/rwa_calc/ui/marimo/server.py
 
 Or with uvicorn directly:
-    uvicorn rwa_calc.ui.marimo.server:app --host 0.0.0.0 --port 8000
+    uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
 """
 
 from pathlib import Path
@@ -43,7 +43,7 @@ def main():
     print("  - http://localhost:8000/results    (Results Explorer)")
     print("  - http://localhost:8000/comparison (Impact Analysis)")
     print("  - http://localhost:8000/reference  (Framework Reference)")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":

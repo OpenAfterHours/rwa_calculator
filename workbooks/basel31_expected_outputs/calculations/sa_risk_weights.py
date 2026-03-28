@@ -180,9 +180,17 @@ def get_slotting_risk_weight(
     """
     # Get base risk weight
     if category == "strong":
-        rw = SLOTTING_RISK_WEIGHTS["strong_short"] if remaining_maturity_years < 2.5 else SLOTTING_RISK_WEIGHTS["strong"]
+        rw = (
+            SLOTTING_RISK_WEIGHTS["strong_short"]
+            if remaining_maturity_years < 2.5
+            else SLOTTING_RISK_WEIGHTS["strong"]
+        )
     elif category == "good":
-        rw = SLOTTING_RISK_WEIGHTS["good_short"] if remaining_maturity_years < 2.5 else SLOTTING_RISK_WEIGHTS["good"]
+        rw = (
+            SLOTTING_RISK_WEIGHTS["good_short"]
+            if remaining_maturity_years < 2.5
+            else SLOTTING_RISK_WEIGHTS["good"]
+        )
     elif category == "satisfactory":
         rw = SLOTTING_RISK_WEIGHTS["satisfactory"]
     elif category == "weak":

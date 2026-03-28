@@ -429,9 +429,7 @@ class TestDualRatingResolution:
         resolver: HierarchyResolver,
     ) -> None:
         """Counterparty with both internal and external rating resolves both."""
-        counterparties = pl.DataFrame(
-            {"counterparty_reference": ["CP001"]}
-        ).lazy()
+        counterparties = pl.DataFrame({"counterparty_reference": ["CP001"]}).lazy()
         ratings = pl.DataFrame(
             {
                 "rating_reference": ["RAT_INT", "RAT_EXT"],
@@ -469,9 +467,7 @@ class TestDualRatingResolution:
         resolver: HierarchyResolver,
     ) -> None:
         """Multiple ratings of same type → most recent wins."""
-        counterparties = pl.DataFrame(
-            {"counterparty_reference": ["CP001"]}
-        ).lazy()
+        counterparties = pl.DataFrame({"counterparty_reference": ["CP001"]}).lazy()
         ratings = pl.DataFrame(
             {
                 "rating_reference": ["OLD_INT", "NEW_INT", "OLD_EXT", "NEW_EXT"],
@@ -510,9 +506,7 @@ class TestDualRatingResolution:
         resolver: HierarchyResolver,
     ) -> None:
         """Child has own internal, parent has external → child gets both."""
-        counterparties = pl.DataFrame(
-            {"counterparty_reference": ["PARENT", "CHILD"]}
-        ).lazy()
+        counterparties = pl.DataFrame({"counterparty_reference": ["PARENT", "CHILD"]}).lazy()
         ratings = pl.DataFrame(
             {
                 "rating_reference": ["CHILD_INT", "PARENT_EXT"],
@@ -554,9 +548,7 @@ class TestDualRatingResolution:
         resolver: HierarchyResolver,
     ) -> None:
         """Counterparty with only external rating has null internal_pd."""
-        counterparties = pl.DataFrame(
-            {"counterparty_reference": ["CP001"]}
-        ).lazy()
+        counterparties = pl.DataFrame({"counterparty_reference": ["CP001"]}).lazy()
         ratings = pl.DataFrame(
             {
                 "rating_reference": ["RAT_EXT"],

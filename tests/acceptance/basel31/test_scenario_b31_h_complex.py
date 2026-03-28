@@ -246,9 +246,7 @@ class TestB31GroupH_ParameterizedValidation:
         """Verify all B31-H scenarios have SF=1.0 (disabled under Basel 3.1)."""
         for scenario in b31_h_scenarios:
             sf = scenario["supporting_factor"]
-            assert sf == 1.0, (
-                f"Scenario {scenario['scenario_id']}: SF should be 1.0, got {sf}"
-            )
+            assert sf == 1.0, f"Scenario {scenario['scenario_id']}: SF should be 1.0, got {sf}"
             assert scenario["rwa_before_sf"] == pytest.approx(
                 scenario["rwa_after_sf"], rel=0.001
             ), (

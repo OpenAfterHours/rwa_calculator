@@ -25,13 +25,10 @@ import pytest
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.data.schemas import RATINGS_SCHEMA
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
-from rwa_calc.engine.irb.calculator import IRBCalculator
-from rwa_calc.engine.sa.calculator import SACalculator
-from rwa_calc.engine.slotting.calculator import SlottingCalculator
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -86,9 +83,7 @@ def _make_bundle_with_ratings(
         facilities=facilities,
         **kwargs,
     )
-    ratings_lf = (
-        _rows_to_lazyframe(ratings, RATINGS_SCHEMA) if ratings else None
-    )
+    ratings_lf = _rows_to_lazyframe(ratings, RATINGS_SCHEMA) if ratings else None
     # Reconstruct with ratings (frozen dataclass — use __class__ constructor)
     return RawDataBundle(
         facilities=bundle.facilities,
@@ -393,9 +388,7 @@ class TestSlottingBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        slotting_result = slotting_calculator.get_slotting_result_bundle(
-            crm_bundle, crr_config
-        )
+        slotting_result = slotting_calculator.get_slotting_result_bundle(crm_bundle, crr_config)
         df = slotting_result.results.collect()
 
         # No slotting exposures in a simple corporate portfolio
@@ -418,9 +411,7 @@ class TestSlottingBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        slotting_result = slotting_calculator.get_slotting_result_bundle(
-            crm_bundle, crr_config
-        )
+        slotting_result = slotting_calculator.get_slotting_result_bundle(crm_bundle, crr_config)
 
         # Bundle has the expected attributes
         assert hasattr(slotting_result, "results")
@@ -429,9 +420,7 @@ class TestSlottingBranch:
         # Results is a LazyFrame
         assert isinstance(slotting_result.results, pl.LazyFrame)
 
-    def test_slotting_calculator_handles_none_exposures(
-        self, slotting_calculator, crr_config
-    ):
+    def test_slotting_calculator_handles_none_exposures(self, slotting_calculator, crr_config):
         """slotting_exposures=None → empty result."""
         # Construct a CRMAdjustedBundle with slotting_exposures=None directly
         empty_lf = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
@@ -441,9 +430,7 @@ class TestSlottingBranch:
             irb_exposures=empty_lf,
             slotting_exposures=None,
         )
-        slotting_result = slotting_calculator.get_slotting_result_bundle(
-            crm_bundle, crr_config
-        )
+        slotting_result = slotting_calculator.get_slotting_result_bundle(crm_bundle, crr_config)
         df = slotting_result.results.collect()
 
         assert df.height == 0
@@ -515,20 +502,14 @@ class TestSplitCorrectness:
         )
         slotting_df = crm_bundle.slotting_exposures
         slotting_refs = (
-            set(
-                slotting_df.select("exposure_reference")
-                .collect()["exposure_reference"]
-                .to_list()
-            )
+            set(slotting_df.select("exposure_reference").collect()["exposure_reference"].to_list())
             if slotting_df is not None
             else set()
         )
 
         # No overlap between branches
         assert sa_refs.isdisjoint(irb_refs), f"SA/IRB overlap: {sa_refs & irb_refs}"
-        assert sa_refs.isdisjoint(slotting_refs), (
-            f"SA/slotting overlap: {sa_refs & slotting_refs}"
-        )
+        assert sa_refs.isdisjoint(slotting_refs), f"SA/slotting overlap: {sa_refs & slotting_refs}"
         assert irb_refs.isdisjoint(slotting_refs), (
             f"IRB/slotting overlap: {irb_refs & slotting_refs}"
         )

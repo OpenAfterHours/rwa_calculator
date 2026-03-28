@@ -13,11 +13,12 @@ from typing import TypedDict
 
 class CorrelationParams(TypedDict):
     """Parameters for asset correlation calculation."""
-    type: str           # "fixed" or "pd_dependent"
-    r_min: float        # Minimum correlation (at high PD)
-    r_max: float        # Maximum correlation (at low PD)
-    fixed: float        # Fixed correlation value
-    decay_factor: float # K factor in formula (50 for corp, 35 for retail)
+
+    type: str  # "fixed" or "pd_dependent"
+    r_min: float  # Minimum correlation (at high PD)
+    r_max: float  # Maximum correlation (at low PD)
+    fixed: float  # Fixed correlation value
+    decay_factor: float  # K factor in formula (50 for corp, 35 for retail)
 
 
 # Asset correlation parameters (same for CRR and Basel 3.1)
@@ -177,7 +178,7 @@ def calculate_correlation(
     # Get correlation parameters for exposure class
     params = CORRELATION_PARAMS.get(
         exposure_class,
-        CORRELATION_PARAMS.get("CORPORATE")  # Default to corporate
+        CORRELATION_PARAMS.get("CORPORATE"),  # Default to corporate
     )
 
     if params is None:
@@ -267,11 +268,14 @@ def get_correlation_for_class(exposure_class: str) -> CorrelationParams:
     """
     return CORRELATION_PARAMS.get(
         exposure_class,
-        CORRELATION_PARAMS.get("CORPORATE", {
-            "type": "pd_dependent",
-            "r_min": 0.12,
-            "r_max": 0.24,
-            "fixed": 0.0,
-            "decay_factor": 50.0,
-        })
+        CORRELATION_PARAMS.get(
+            "CORPORATE",
+            {
+                "type": "pd_dependent",
+                "r_min": 0.12,
+                "r_max": 0.24,
+                "fixed": 0.0,
+                "decay_factor": 50.0,
+            },
+        ),
     )

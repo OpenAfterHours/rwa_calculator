@@ -281,9 +281,7 @@ class TestIRBEUDomesticSovereignTreatment:
         )
         assert result["guarantor_rw"][0] == pytest.approx(0.0)
 
-    def test_eu_non_euro_sovereign_domestic_zero_rw(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_eu_non_euro_sovereign_domestic_zero_rw(self, crr_config: CalculationConfig) -> None:
         """Swedish sovereign (CQS 3) in SEK → 0% SA RW under Art. 114(4)."""
         result = _irb_guarantee_result(
             "sovereign", 3, crr_config, guarantor_country_code="SE", currency="SEK"
@@ -310,9 +308,7 @@ class TestSACCPGuarantorRiskWeight:
 
     def test_ccp_client_cleared_4pct(self, crr_config: CalculationConfig) -> None:
         """CCP guarantor (client-cleared) should get 4% RW."""
-        result = _sa_guarantee_result(
-            "ccp", None, crr_config, guarantor_is_ccp_client_cleared=True
-        )
+        result = _sa_guarantee_result("ccp", None, crr_config, guarantor_is_ccp_client_cleared=True)
         assert result["guarantor_rw"][0] == pytest.approx(0.04)
 
     def test_ccp_null_client_cleared_defaults_to_proprietary(
@@ -324,9 +320,7 @@ class TestSACCPGuarantorRiskWeight:
 
     def test_ccp_with_cqs_still_uses_ccp_rw(self, crr_config: CalculationConfig) -> None:
         """CCP branch overrides CQS-based institution RW even if CQS exists."""
-        result = _sa_guarantee_result(
-            "ccp", 1, crr_config, guarantor_is_ccp_client_cleared=False
-        )
+        result = _sa_guarantee_result("ccp", 1, crr_config, guarantor_is_ccp_client_cleared=False)
         assert result["guarantor_rw"][0] == pytest.approx(0.02)
 
 

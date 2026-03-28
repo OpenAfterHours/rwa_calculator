@@ -16,8 +16,6 @@ Regulatory References:
 - PRA PS9/24: Transitional schedule: 50% (2027), 55% (2028), ..., 72.5% (2032+)
 """
 
-from typing import Any
-
 import polars as pl
 import pytest
 from tests.acceptance.basel31.conftest import (
@@ -80,8 +78,7 @@ class TestB31GroupF_OutputFloor:
             assert floor_rwa > 0, "B31-F1: Floor RWA should be positive"
             # Floor RWA should be approximately 72.5% of SA RWA
             assert floor_rwa == pytest.approx(sa_rwa * 0.725, rel=0.01), (
-                f"B31-F1: Floor RWA ({floor_rwa:,.0f}) should be ~72.5% of "
-                f"SA RWA ({sa_rwa:,.0f})"
+                f"B31-F1: Floor RWA ({floor_rwa:,.0f}) should be ~72.5% of SA RWA ({sa_rwa:,.0f})"
             )
 
     def test_b31_f2_output_floor_not_binding_high_pd(
@@ -139,19 +136,13 @@ class TestB31GroupF_OutputFloor:
             (50% in 2027 → 72.5% in 2032+), reducing the capital impact
             of the floor in the early years.
         """
-        result_transitional = get_result_for_exposure(
-            transitional_results_df, "LOAN_CORP_UK_003"
-        )
-        result_full = get_result_for_exposure(
-            irb_pipeline_results_df, "LOAN_CORP_UK_003"
-        )
+        result_transitional = get_result_for_exposure(transitional_results_df, "LOAN_CORP_UK_003")
+        result_full = get_result_for_exposure(irb_pipeline_results_df, "LOAN_CORP_UK_003")
 
         assert result_transitional is not None, (
             "Exposure LOAN_CORP_UK_003 not found in transitional results"
         )
-        assert result_full is not None, (
-            "Exposure LOAN_CORP_UK_003 not found in full-phase results"
-        )
+        assert result_full is not None, "Exposure LOAN_CORP_UK_003 not found in full-phase results"
 
         # Both should be IRB
         for label, result in [("transitional", result_transitional), ("full", result_full)]:
@@ -175,14 +166,11 @@ class TestB31GroupF_OutputFloor:
             if full_floor_rwa > 0:
                 ratio = transitional_floor_rwa / full_floor_rwa
                 assert ratio == pytest.approx(50.0 / 72.5, rel=0.05), (
-                    f"B31-F3: Floor ratio ({ratio:.3f}) should be ~{50/72.5:.3f} "
-                    f"(50% / 72.5%)"
+                    f"B31-F3: Floor ratio ({ratio:.3f}) should be ~{50 / 72.5:.3f} (50% / 72.5%)"
                 )
 
         # RWA under transitional should be lower or equal to full-phase RWA
-        rwa_transitional = result_transitional.get(
-            "rwa_final", result_transitional.get("rwa", 0)
-        )
+        rwa_transitional = result_transitional.get("rwa_final", result_transitional.get("rwa", 0))
         rwa_full = result_full.get("rwa_final", result_full.get("rwa", 0))
         assert rwa_transitional <= rwa_full + 1, (
             f"B31-F3: Transitional RWA ({rwa_transitional:,.0f}) should not exceed "
@@ -209,9 +197,7 @@ class TestB31GroupF_StructuralValidation:
 
         rwa_col = "rwa_post_factor" if "rwa_post_factor" in irb_df.columns else "rwa"
         negative = irb_df.filter(pl.col(rwa_col) < 0)
-        assert negative.height == 0, (
-            f"Found {negative.height} IRB exposures with negative RWA"
-        )
+        assert negative.height == 0, f"Found {negative.height} IRB exposures with negative RWA"
 
     def test_output_floor_never_reduces_rwa(
         self,

@@ -106,9 +106,7 @@ def _make_bundle(
     collateral: pl.LazyFrame | None = None,
 ) -> ClassifiedExposuresBundle:
     """Build a ClassifiedExposuresBundle with optional collateral."""
-    empty_cp = pl.LazyFrame(
-        schema={"counterparty_reference": pl.String, "entity_type": pl.String}
-    )
+    empty_cp = pl.LazyFrame(schema={"counterparty_reference": pl.String, "entity_type": pl.String})
     empty_mappings = pl.LazyFrame(
         schema={
             "child_counterparty_reference": pl.String,
@@ -322,9 +320,7 @@ class TestNettingCollateralGeneration:
 class TestNettingSAEndToEnd:
     """SA pipeline: netting reduces EAD via synthetic cash collateral."""
 
-    def test_sa_ead_reduced_by_netting(
-        self, processor: CRMProcessor, sa_config: CalculationConfig
-    ):
+    def test_sa_ead_reduced_by_netting(self, processor: CRMProcessor, sa_config: CalculationConfig):
         """SA: negative-drawn loan reduces sibling's EAD."""
         rows = [
             _netting_exposure("NEG01", drawn=-200.0),
@@ -340,9 +336,7 @@ class TestNettingSAEndToEnd:
         # Positive-drawn: EAD reduced by 200 (cash collateral, 0% haircut)
         assert pos["ead_final"][0] == pytest.approx(800.0, abs=1.0)
 
-    def test_sa_pro_rata_two_positive(
-        self, processor: CRMProcessor, sa_config: CalculationConfig
-    ):
+    def test_sa_pro_rata_two_positive(self, processor: CRMProcessor, sa_config: CalculationConfig):
         """SA: netting pool split pro-rata across two positive siblings."""
         rows = [
             _netting_exposure("NEG01", drawn=-300.0),
@@ -406,9 +400,7 @@ class TestNettingSAEndToEnd:
         # EAD = 1000 - 920 = 80
         assert pos["ead_final"][0] == pytest.approx(80.0, abs=1.0)
 
-    def test_no_netting_flag_no_change(
-        self, processor: CRMProcessor, sa_config: CalculationConfig
-    ):
+    def test_no_netting_flag_no_change(self, processor: CRMProcessor, sa_config: CalculationConfig):
         """No netting agreement → pipeline unchanged."""
         rows = [
             _netting_exposure("NEG01", drawn=-200.0, has_netting=False),
@@ -419,7 +411,6 @@ class TestNettingSAEndToEnd:
         pos = df.filter(pl.col("exposure_reference") == "POS01")
         # No netting → EAD = drawn_amount (no collateral benefit)
         assert pos["ead_final"][0] == pytest.approx(1000.0)
-
 
     def test_netting_pool_exceeds_total_positive_ead(
         self, processor: CRMProcessor, sa_config: CalculationConfig
@@ -441,22 +432,29 @@ class TestNettingSAEndToEnd:
 class TestNettingFacilityHierarchy:
     """Netting across facility hierarchy levels."""
 
-    def test_netting_via_root_facility(
-        self, processor: CRMProcessor, sa_config: CalculationConfig
-    ):
+    def test_netting_via_root_facility(self, processor: CRMProcessor, sa_config: CalculationConfig):
         """Loans under different sub-facilities net via shared root facility."""
         rows = [
             _netting_exposure(
-                "NEG01", drawn=-200.0, has_netting=True,
-                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+                "NEG01",
+                drawn=-200.0,
+                has_netting=True,
+                facility_ref="FAC_SUB1",
+                root_facility_ref="FAC_ROOT",
             ),
             _netting_exposure(
-                "POS01", drawn=600.0, has_netting=False,
-                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+                "POS01",
+                drawn=600.0,
+                has_netting=False,
+                facility_ref="FAC_SUB1",
+                root_facility_ref="FAC_ROOT",
             ),
             _netting_exposure(
-                "POS02", drawn=400.0, has_netting=False,
-                facility_ref="FAC_SUB2", root_facility_ref="FAC_ROOT",
+                "POS02",
+                drawn=400.0,
+                has_netting=False,
+                facility_ref="FAC_SUB2",
+                root_facility_ref="FAC_ROOT",
             ),
         ]
         df = _run_crm(processor, sa_config, rows)
@@ -475,19 +473,28 @@ class TestNettingFacilityHierarchy:
         rows = [
             # Netting agreement is with FAC_SUB1 specifically, not root
             _netting_exposure(
-                "NEG01", drawn=-200.0, has_netting=True,
-                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+                "NEG01",
+                drawn=-200.0,
+                has_netting=True,
+                facility_ref="FAC_SUB1",
+                root_facility_ref="FAC_ROOT",
                 netting_facility_ref="FAC_SUB1",
             ),
             _netting_exposure(
-                "POS01", drawn=1000.0, has_netting=False,
-                facility_ref="FAC_SUB1", root_facility_ref="FAC_ROOT",
+                "POS01",
+                drawn=1000.0,
+                has_netting=False,
+                facility_ref="FAC_SUB1",
+                root_facility_ref="FAC_ROOT",
                 netting_facility_ref=None,
             ),
             # POS02 is under a different sub-facility — should NOT benefit
             _netting_exposure(
-                "POS02", drawn=500.0, has_netting=False,
-                facility_ref="FAC_SUB2", root_facility_ref="FAC_ROOT",
+                "POS02",
+                drawn=500.0,
+                has_netting=False,
+                facility_ref="FAC_SUB2",
+                root_facility_ref="FAC_ROOT",
                 netting_facility_ref=None,
             ),
         ]
@@ -524,12 +531,8 @@ class TestNettingFIRBEndToEnd:
     ):
         """FIRB: netting generates cash collateral → LGD reduction."""
         rows = [
-            _netting_exposure(
-                "NEG01", drawn=-200.0, approach=ApproachType.FIRB.value
-            ),
-            _netting_exposure(
-                "POS01", drawn=1000.0, approach=ApproachType.FIRB.value
-            ),
+            _netting_exposure("NEG01", drawn=-200.0, approach=ApproachType.FIRB.value),
+            _netting_exposure("POS01", drawn=1000.0, approach=ApproachType.FIRB.value),
         ]
         df = _run_crm(processor, firb_config, rows)
 

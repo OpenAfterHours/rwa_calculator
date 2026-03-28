@@ -57,6 +57,7 @@ def _():
         CRR_PD_FLOOR,
         CRR_FIRB_LGD,
     )
+
     return (
         CRR_PD_FLOOR,
         Decimal,
@@ -120,6 +121,7 @@ def _():
     @dataclass
     class CRRFIRBResult:
         """Container for a single CRR F-IRB scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -144,6 +146,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (CRRFIRBResult,)
 
 
@@ -243,7 +246,9 @@ def _(
         regulatory_reference="CRR Art. 153, 161, 162, 163",
     )
 
-    print(f"CRR-B1: EAD=£{ead_b1:,.0f}, PD={pd_floored_b1*100:.2f}%, LGD={lgd_b1*100:.0f}%, MATURITY={maturity_b1}, MAT ADJ={result_dict_b1["maturity_adjustment"]:,.4f}, CORRELATION={correlation_b1:,.4f}, K={result_dict_b1["k"]:,.4f} RWA=£{result_dict_b1['rwa']:,.0f}")
+    print(
+        f"CRR-B1: EAD=£{ead_b1:,.0f}, PD={pd_floored_b1 * 100:.2f}%, LGD={lgd_b1 * 100:.0f}%, MATURITY={maturity_b1}, MAT ADJ={result_dict_b1['maturity_adjustment']:,.4f}, CORRELATION={correlation_b1:,.4f}, K={result_dict_b1['k']:,.4f} RWA=£{result_dict_b1['rwa']:,.0f}"
+    )
     return (result_crr_b1,)
 
 
@@ -336,7 +341,9 @@ def _(
         regulatory_reference="CRR Art. 153, 161, 162",
     )
 
-    print(f"CRR-B2: EAD=£{ead_b2:,.0f}, PD={pd_floored_b2*100:.2f}%, LGD={lgd_b2*100:.0f}%, RWA=£{result_dict_b2['rwa']:,.0f}")
+    print(
+        f"CRR-B2: EAD=£{ead_b2:,.0f}, PD={pd_floored_b2 * 100:.2f}%, LGD={lgd_b2 * 100:.0f}%, RWA=£{result_dict_b2['rwa']:,.0f}"
+    )
     return (result_crr_b2,)
 
 
@@ -432,7 +439,9 @@ def _(
         regulatory_reference="CRR Art. 153, 161",
     )
 
-    print(f"CRR-B3: EAD=£{ead_b3:,.0f}, PD={pd_floored_b3*100:.2f}%, LGD={lgd_b3*100:.0f}%, RWA=£{result_dict_b3['rwa']:,.0f}")
+    print(
+        f"CRR-B3: EAD=£{ead_b3:,.0f}, PD={pd_floored_b3 * 100:.2f}%, LGD={lgd_b3 * 100:.0f}%, RWA=£{result_dict_b3['rwa']:,.0f}"
+    )
     return (result_crr_b3,)
 
 
@@ -485,7 +494,9 @@ def _(
     collateral_coverage_b4 = 0.50
     lgd_unsecured_b4 = float(get_firb_lgd("unsecured"))  # 45%
     lgd_secured_b4 = float(get_firb_lgd("financial_collateral"))  # 0%
-    lgd_b4 = (collateral_coverage_b4 * lgd_secured_b4) + ((1 - collateral_coverage_b4) * lgd_unsecured_b4)
+    lgd_b4 = (collateral_coverage_b4 * lgd_secured_b4) + (
+        (1 - collateral_coverage_b4) * lgd_unsecured_b4
+    )
 
     correlation_b4 = calculate_correlation(pd_floored_b4, "CORPORATE")
 
@@ -535,7 +546,9 @@ def _(
         regulatory_reference="CRR Art. 153, 161, 228",
     )
 
-    print(f"CRR-B4: EAD=£{ead_b4:,.0f}, PD={pd_floored_b4*100:.2f}%, LGD={lgd_b4*100:.1f}%, RWA=£{result_dict_b4['rwa']:,.0f}")
+    print(
+        f"CRR-B4: EAD=£{ead_b4:,.0f}, PD={pd_floored_b4 * 100:.2f}%, LGD={lgd_b4 * 100:.1f}%, RWA=£{result_dict_b4['rwa']:,.0f}"
+    )
     return (result_crr_b4,)
 
 
@@ -653,7 +666,7 @@ def _(
         regulatory_reference="CRR Art. 153(4), 501",
     )
 
-    print(f"CRR-B5: EAD=£{ead_b5:,.0f}, PD={result_dict_b5['pd_floored']*100:.2f}%")
+    print(f"CRR-B5: EAD=£{ead_b5:,.0f}, PD={result_dict_b5['pd_floored'] * 100:.2f}%")
     print(f"  Correlation (with SME firm size adj): {result_dict_b5['correlation']:.4f}")
     print(f"  SME adjustment applied: {result_dict_b5['sme_adjustment_applied']}")
     print(f"  RWA before SF: £{rwa_before_sf_b5:,.0f}")
@@ -703,7 +716,9 @@ def _(
 
     # Input parameters - PD from internal rating fixture
     ead_b6 = float(loan_b6["drawn_amount"])
-    pd_raw_b6 = float(internal_rating_b6["pd"])  # From fixture: 0.0001 (0.01%) - very low, will be floored
+    pd_raw_b6 = float(
+        internal_rating_b6["pd"]
+    )  # From fixture: 0.0001 (0.01%) - very low, will be floored
     pd_floored_b6 = apply_pd_floor(pd_raw_b6)  # Will become 0.03%
     lgd_b6 = float(get_firb_lgd("unsecured"))
     maturity_b6 = 2.0
@@ -759,7 +774,9 @@ def _(
         regulatory_reference="CRR Art. 153, 163",
     )
 
-    print(f"CRR-B6: EAD=£{ead_b6:,.0f}, PD={pd_raw_b6*100:.2f}% -> {pd_floored_b6*100:.2f}%, RWA=£{result_dict_b6['rwa']:,.0f}")
+    print(
+        f"CRR-B6: EAD=£{ead_b6:,.0f}, PD={pd_raw_b6 * 100:.2f}% -> {pd_floored_b6 * 100:.2f}%, RWA=£{result_dict_b6['rwa']:,.0f}"
+    )
     return (result_crr_b6,)
 
 
@@ -857,7 +874,9 @@ def _(
         regulatory_reference="CRR Art. 153, 162",
     )
 
-    print(f"CRR-B7: EAD=£{ead_b7:,.0f}, Maturity={maturity_raw_b7}y -> {maturity_b7}y, RWA=£{result_dict_b7['rwa']:,.0f}")
+    print(
+        f"CRR-B7: EAD=£{ead_b7:,.0f}, Maturity={maturity_raw_b7}y -> {maturity_b7}y, RWA=£{result_dict_b7['rwa']:,.0f}"
+    )
     return (result_crr_b7,)
 
 
@@ -893,23 +912,30 @@ def _(
 ):
     """Compile all Group CRR-B results."""
     group_crr_b_results = [
-        result_crr_b1, result_crr_b2, result_crr_b3, result_crr_b4,
-        result_crr_b5, result_crr_b6, result_crr_b7,
+        result_crr_b1,
+        result_crr_b2,
+        result_crr_b3,
+        result_crr_b4,
+        result_crr_b5,
+        result_crr_b6,
+        result_crr_b7,
     ]
 
     # Create summary DataFrame
     summary_data_b = []
     for r in group_crr_b_results:
-        summary_data_b.append({
-            "Scenario": r.scenario_id,
-            "Description": r.description,
-            "EAD (£)": f"{r.ead:,.0f}",
-            "PD": f"{r.pd_floored*100:.2f}%",
-            "LGD": f"{r.lgd*100:.0f}%",
-            "RWA Before SF": f"{r.rwa_before_sf:,.0f}",
-            "SF": f"{r.supporting_factor:.4f}" if r.supporting_factor != 1.0 else "-",
-            "RWA After SF": f"{r.rwa_after_sf:,.0f}",
-        })
+        summary_data_b.append(
+            {
+                "Scenario": r.scenario_id,
+                "Description": r.description,
+                "EAD (£)": f"{r.ead:,.0f}",
+                "PD": f"{r.pd_floored * 100:.2f}%",
+                "LGD": f"{r.lgd * 100:.0f}%",
+                "RWA Before SF": f"{r.rwa_before_sf:,.0f}",
+                "SF": f"{r.supporting_factor:.4f}" if r.supporting_factor != 1.0 else "-",
+                "RWA After SF": f"{r.rwa_after_sf:,.0f}",
+            }
+        )
 
     summary_df_b = pl.DataFrame(summary_data_b)
     mo.ui.table(summary_df_b)
@@ -919,9 +945,11 @@ def _(
 @app.cell
 def _(group_crr_b_results):
     """Export function for use by main workbook."""
+
     def get_group_crr_b_results():
         """Return all Group CRR-B scenario results."""
         return group_crr_b_results
+
     return
 
 

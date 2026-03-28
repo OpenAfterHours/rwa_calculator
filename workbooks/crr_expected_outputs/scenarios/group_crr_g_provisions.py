@@ -51,6 +51,7 @@ def _():
     )
     from workbooks.shared.correlation import calculate_correlation
     from workbooks.crr_expected_outputs.data.crr_params import CRR_PD_FLOOR
+
     return (
         CRR_PD_FLOOR,
         Decimal,
@@ -115,6 +116,7 @@ def _():
     @dataclass
     class CRRProvisionResult:
         """Container for a single CRR provision scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -145,6 +147,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (CRRProvisionResult,)
 
 
@@ -317,7 +320,7 @@ def _(
         calculation_details={
             "pd_floor": float(CRR_PD_FLOOR),
             "el_formula": "EL = PD × LGD × EAD",
-            "el_calculation": f"EL = {pd_floored_g2*100:.2f}% × {lgd_g2*100:.0f}% × £{gross_exp_g2:,.0f} = £{el_g2:,.0f}",
+            "el_calculation": f"EL = {pd_floored_g2 * 100:.2f}% × {lgd_g2 * 100:.0f}% × £{gross_exp_g2:,.0f} = £{el_g2:,.0f}",
             "provisions": f"£{total_prov_g2:,.0f}",
             "shortfall_calc": f"Shortfall = £{el_g2:,.0f} - £{total_prov_g2:,.0f} = £{el_shortfall_g2:,.0f}",
             "capital_treatment": "50% CET1 deduction, 50% T2 deduction",
@@ -429,7 +432,7 @@ def _(
         calculation_details={
             "pd_floor": float(CRR_PD_FLOOR),
             "el_formula": "EL = PD × LGD × EAD",
-            "el_calculation": f"EL = {pd_floored_g3*100:.2f}% × {lgd_g3*100:.0f}% × £{gross_exp_g3:,.0f} = £{el_g3:,.0f}",
+            "el_calculation": f"EL = {pd_floored_g3 * 100:.2f}% × {lgd_g3 * 100:.0f}% × £{gross_exp_g3:,.0f} = £{el_g3:,.0f}",
             "provisions": f"£{total_prov_g3:,.0f}",
             "excess_calc": f"Excess = £{total_prov_g3:,.0f} - £{el_g3:,.0f} = £{el_excess_g3:,.0f}",
             "t2_cap": f"0.6% × £{rwa_g3:,.0f} = £{t2_cap_g3:,.0f}",
@@ -477,24 +480,28 @@ def _(mo):
 def _(mo, pl, result_crr_g1, result_crr_g2, result_crr_g3):
     """Compile all Group CRR-G results."""
     group_crr_g_results = [
-        result_crr_g1, result_crr_g2, result_crr_g3,
+        result_crr_g1,
+        result_crr_g2,
+        result_crr_g3,
     ]
 
     # Create summary DataFrame
     summary_data_g = []
     for r in group_crr_g_results:
-        summary_data_g.append({
-            "Scenario": r.scenario_id,
-            "Approach": r.approach,
-            "Gross (£)": f"{r.gross_exposure:,.0f}",
-            "Provision (£)": f"{r.total_provision:,.0f}",
-            "EL (£)": f"{r.expected_loss:,.0f}" if r.expected_loss else "-",
-            "Shortfall (£)": f"{r.el_shortfall:,.0f}" if r.el_shortfall else "-",
-            "Excess (£)": f"{r.el_excess:,.0f}" if r.el_excess else "-",
-            "RWA (£)": f"{r.rwa:,.0f}",
-            "CET1 Deduct (£)": f"{r.cet1_deduction:,.0f}" if r.cet1_deduction > 0 else "-",
-            "T2 Credit (£)": f"{r.t2_credit:,.0f}" if r.t2_credit > 0 else "-",
-        })
+        summary_data_g.append(
+            {
+                "Scenario": r.scenario_id,
+                "Approach": r.approach,
+                "Gross (£)": f"{r.gross_exposure:,.0f}",
+                "Provision (£)": f"{r.total_provision:,.0f}",
+                "EL (£)": f"{r.expected_loss:,.0f}" if r.expected_loss else "-",
+                "Shortfall (£)": f"{r.el_shortfall:,.0f}" if r.el_shortfall else "-",
+                "Excess (£)": f"{r.el_excess:,.0f}" if r.el_excess else "-",
+                "RWA (£)": f"{r.rwa:,.0f}",
+                "CET1 Deduct (£)": f"{r.cet1_deduction:,.0f}" if r.cet1_deduction > 0 else "-",
+                "T2 Credit (£)": f"{r.t2_credit:,.0f}" if r.t2_credit > 0 else "-",
+            }
+        )
 
     summary_df_g = pl.DataFrame(summary_data_g)
     mo.ui.table(summary_df_g)
@@ -504,9 +511,11 @@ def _(mo, pl, result_crr_g1, result_crr_g2, result_crr_g3):
 @app.cell
 def _(group_crr_g_results):
     """Export function for use by main workbook."""
+
     def get_group_crr_g_results():
         """Return all Group CRR-G scenario results."""
         return group_crr_g_results
+
     return (get_group_crr_g_results,)
 
 

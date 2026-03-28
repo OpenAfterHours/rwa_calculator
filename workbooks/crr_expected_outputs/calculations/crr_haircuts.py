@@ -23,7 +23,7 @@ def get_collateral_haircut(
     collateral_type: str,
     cqs: int | None = None,
     residual_maturity_years: float | None = None,
-    is_main_index: bool = False
+    is_main_index: bool = False,
 ) -> Decimal:
     """
     Get supervisory haircut for collateral (CRR Art. 224).
@@ -105,10 +105,7 @@ def get_collateral_haircut(
     return CRR_HAIRCUTS["other_physical"]
 
 
-def get_fx_haircut(
-    exposure_currency: str,
-    collateral_currency: str
-) -> Decimal:
+def get_fx_haircut(exposure_currency: str, collateral_currency: str) -> Decimal:
     """
     Get FX mismatch haircut (CRR Art. 224).
 
@@ -125,9 +122,7 @@ def get_fx_haircut(
 
 
 def calculate_adjusted_collateral_value(
-    collateral_value: Decimal,
-    collateral_haircut: Decimal,
-    fx_haircut: Decimal = Decimal("0.00")
+    collateral_value: Decimal, collateral_haircut: Decimal, fx_haircut: Decimal = Decimal("0.00")
 ) -> Decimal:
     """
     Calculate adjusted collateral value after haircuts (CRR Art. 223).
@@ -150,7 +145,7 @@ def apply_maturity_mismatch(
     collateral_value: Decimal,
     collateral_maturity_years: float,
     exposure_maturity_years: float,
-    minimum_maturity_years: float = 0.25
+    minimum_maturity_years: float = 0.25,
 ) -> tuple[Decimal, str]:
     """
     Apply maturity mismatch adjustment (CRR Art. 238).

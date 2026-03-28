@@ -54,10 +54,7 @@ def apply_pd_floor(pd: float, exposure_class: str | None = None) -> float:
     return _base_apply_pd_floor(pd, float(CRR_PD_FLOOR))
 
 
-def get_firb_lgd(
-    collateral_type: str = "unsecured",
-    is_subordinated: bool = False
-) -> Decimal:
+def get_firb_lgd(collateral_type: str = "unsecured", is_subordinated: bool = False) -> Decimal:
     """
     Get F-IRB supervisory LGD (CRR Art. 161).
 
@@ -244,9 +241,9 @@ def calculate_irb_rwa_with_turnover(
         turnover_eur = turnover_m / eur_gbp_rate
 
     sme_adjustment_applied = (
-        turnover_eur is not None and
-        turnover_eur < 50.0 and
-        exposure_class.upper() in ["CORPORATE", "CORPORATE_SME", "CORPORATES"]
+        turnover_eur is not None
+        and turnover_eur < 50.0
+        and exposure_class.upper() in ["CORPORATE", "CORPORATE_SME", "CORPORATES"]
     )
 
     result = _base_calculate_irb_rwa(

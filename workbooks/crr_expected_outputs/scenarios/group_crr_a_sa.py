@@ -58,6 +58,7 @@ def _():
         apply_sme_supporting_factor,
         is_sme_eligible,
     )
+
     return (
         Decimal,
         apply_sme_supporting_factor,
@@ -129,6 +130,7 @@ def _():
     @dataclass
     class CRRScenarioResult:
         """Container for a single CRR scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -146,6 +148,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (CRRScenarioResult,)
 
 
@@ -198,12 +201,12 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_cgcb_rw):
             "country_code": cpty_a1["country_code"],
             "cqs": cqs_a1,
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a1:,.0f} × {rw_a1*100:.0f}% = £{rwa_a1:,.0f}",
+            "calculation": f"RWA = £{ead_a1:,.0f} × {rw_a1 * 100:.0f}% = £{rwa_a1:,.0f}",
         },
         regulatory_reference="CRR Art. 114",
     )
 
-    print(f"CRR-A1: EAD=£{ead_a1:,.0f}, RW={rw_a1*100:.0f}%, RWA=£{rwa_a1:,.0f}")
+    print(f"CRR-A1: EAD=£{ead_a1:,.0f}, RW={rw_a1 * 100:.0f}%, RWA=£{rwa_a1:,.0f}")
     return (result_crr_a1,)
 
 
@@ -253,12 +256,12 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_corporate_rw):
             "cqs": cqs_a2,
             "rating_status": "unrated",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a2:,.0f} × {rw_a2*100:.0f}% = £{rwa_a2:,.0f}",
+            "calculation": f"RWA = £{ead_a2:,.0f} × {rw_a2 * 100:.0f}% = £{rwa_a2:,.0f}",
         },
         regulatory_reference="CRR Art. 122",
     )
 
-    print(f"CRR-A2: EAD=£{ead_a2:,.0f}, RW={rw_a2*100:.0f}%, RWA=£{rwa_a2:,.0f}")
+    print(f"CRR-A2: EAD=£{ead_a2:,.0f}, RW={rw_a2 * 100:.0f}%, RWA=£{rwa_a2:,.0f}")
     return (result_crr_a2,)
 
 
@@ -307,12 +310,12 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_corporate_rw):
             "cqs": cqs_a3,
             "rating_value": rating_a3["rating_value"] if rating_a3 else "A",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a3:,.0f} × {rw_a3*100:.0f}% = £{rwa_a3:,.0f}",
+            "calculation": f"RWA = £{ead_a3:,.0f} × {rw_a3 * 100:.0f}% = £{rwa_a3:,.0f}",
         },
         regulatory_reference="CRR Art. 122",
     )
 
-    print(f"CRR-A3: EAD=£{ead_a3:,.0f}, RW={rw_a3*100:.0f}%, RWA=£{rwa_a3:,.0f}")
+    print(f"CRR-A3: EAD=£{ead_a3:,.0f}, RW={rw_a3 * 100:.0f}%, RWA=£{rwa_a3:,.0f}")
     return (result_crr_a3,)
 
 
@@ -364,12 +367,12 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_institution_rw
             "standard_rw": 0.50,
             "uk_rw": 0.30,
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4*100:.0f}% = £{rwa_a4:,.0f}",
+            "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4 * 100:.0f}% = £{rwa_a4:,.0f}",
         },
         regulatory_reference="CRR Art. 120-121",
     )
 
-    print(f"CRR-A4: EAD=£{ead_a4:,.0f}, RW={rw_a4*100:.0f}%, RWA=£{rwa_a4:,.0f}")
+    print(f"CRR-A4: EAD=£{ead_a4:,.0f}, RW={rw_a4 * 100:.0f}%, RWA=£{rwa_a4:,.0f}")
     return (result_crr_a4,)
 
 
@@ -442,12 +445,14 @@ def _(
             "ltv_treatment": rw_desc_a5,
             "crr_vs_basel31": "CRR 35% vs Basel 3.1 20% at 60% LTV",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a5:,.0f} × {rw_a5*100:.0f}% = £{rwa_a5:,.0f}",
+            "calculation": f"RWA = £{ead_a5:,.0f} × {rw_a5 * 100:.0f}% = £{rwa_a5:,.0f}",
         },
         regulatory_reference="CRR Art. 125",
     )
 
-    print(f"CRR-A5: EAD=£{ead_a5:,.0f}, LTV={ltv_a5*100:.0f}%, RW={rw_a5*100:.0f}%, RWA=£{rwa_a5:,.0f}")
+    print(
+        f"CRR-A5: EAD=£{ead_a5:,.0f}, LTV={ltv_a5 * 100:.0f}%, RW={rw_a5 * 100:.0f}%, RWA=£{rwa_a5:,.0f}"
+    )
     return (result_crr_a5,)
 
 
@@ -512,12 +517,14 @@ def _(
             "portion_at_75pct": 0.05 / 0.85,
             "crr_vs_basel31": "CRR ~37% (split) vs Basel 3.1 45% at 85% LTV",
             "formula": "RWA = EAD × weighted_avg_RW",
-            "calculation": f"RWA = £{ead_a6:,.0f} × {rw_a6*100:.1f}% = £{rwa_a6:,.0f}",
+            "calculation": f"RWA = £{ead_a6:,.0f} × {rw_a6 * 100:.1f}% = £{rwa_a6:,.0f}",
         },
         regulatory_reference="CRR Art. 125",
     )
 
-    print(f"CRR-A6: EAD=£{ead_a6:,.0f}, LTV={ltv_a6*100:.0f}%, RW={rw_a6*100:.1f}%, RWA=£{rwa_a6:,.0f}")
+    print(
+        f"CRR-A6: EAD=£{ead_a6:,.0f}, LTV={ltv_a6 * 100:.0f}%, RW={rw_a6 * 100:.1f}%, RWA=£{rwa_a6:,.0f}"
+    )
     return (result_crr_a6,)
 
 
@@ -570,12 +577,14 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, get_commercial_re_rw):
             "treatment": rw_desc_a7,
             "property_type": "commercial",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a7:,.0f} × {rw_a7*100:.0f}% = £{rwa_a7:,.0f}",
+            "calculation": f"RWA = £{ead_a7:,.0f} × {rw_a7 * 100:.0f}% = £{rwa_a7:,.0f}",
         },
         regulatory_reference="CRR Art. 126",
     )
 
-    print(f"CRR-A7: EAD=£{ead_a7:,.0f}, LTV={ltv_a7*100:.0f}%, RW={rw_a7*100:.0f}%, RWA=£{rwa_a7:,.0f}")
+    print(
+        f"CRR-A7: EAD=£{ead_a7:,.0f}, LTV={ltv_a7 * 100:.0f}%, RW={rw_a7 * 100:.0f}%, RWA=£{rwa_a7:,.0f}"
+    )
     return (result_crr_a7,)
 
 
@@ -634,13 +643,15 @@ def _(
             "ccf": float(ccf_a8),
             "ead_description": ead_desc_a8,
             "formula": "EAD = Nominal × CCF, then RWA = EAD × RW",
-            "ead_calculation": f"EAD = £{nominal_a8:,.0f} × {ccf_a8*100:.0f}% = £{ead_a8:,.0f}",
-            "rwa_calculation": f"RWA = £{ead_a8:,.0f} × {rw_a8*100:.0f}% = £{rwa_a8:,.0f}",
+            "ead_calculation": f"EAD = £{nominal_a8:,.0f} × {ccf_a8 * 100:.0f}% = £{ead_a8:,.0f}",
+            "rwa_calculation": f"RWA = £{ead_a8:,.0f} × {rw_a8 * 100:.0f}% = £{rwa_a8:,.0f}",
         },
         regulatory_reference="CRR Art. 111",
     )
 
-    print(f"CRR-A8: Nominal=£{nominal_a8:,.0f}, CCF={ccf_a8*100:.0f}%, EAD=£{ead_a8:,.0f}, RWA=£{rwa_a8:,.0f}")
+    print(
+        f"CRR-A8: Nominal=£{nominal_a8:,.0f}, CCF={ccf_a8 * 100:.0f}%, EAD=£{ead_a8:,.0f}, RWA=£{rwa_a8:,.0f}"
+    )
     return (result_crr_a8,)
 
 
@@ -684,12 +695,12 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_retail_rw):
         calculation_details={
             "counterparty_name": cpty_a9["counterparty_name"] if cpty_a9 else "Individual",
             "formula": "RWA = EAD × 75%",
-            "calculation": f"RWA = £{ead_a9:,.0f} × {rw_a9*100:.0f}% = £{rwa_a9:,.0f}",
+            "calculation": f"RWA = £{ead_a9:,.0f} × {rw_a9 * 100:.0f}% = £{rwa_a9:,.0f}",
         },
         regulatory_reference="CRR Art. 123",
     )
 
-    print(f"CRR-A9: EAD=£{ead_a9:,.0f}, RW={rw_a9*100:.0f}%, RWA=£{rwa_a9:,.0f}")
+    print(f"CRR-A9: EAD=£{ead_a9:,.0f}, RW={rw_a9 * 100:.0f}%, RWA=£{rwa_a9:,.0f}")
     return (result_crr_a9,)
 
 
@@ -764,12 +775,14 @@ def _(
             "sme_factor_description": sf_desc_a10,
             "crr_vs_basel31": "SME factor NOT available under Basel 3.1",
             "formula": "RWA = EAD × RW × SME_factor",
-            "calculation": f"RWA = £{ead_a10:,.0f} × {rw_a10*100:.0f}% × 0.7619 = £{rwa_after_sf_a10:,.0f}",
+            "calculation": f"RWA = £{ead_a10:,.0f} × {rw_a10 * 100:.0f}% × 0.7619 = £{rwa_after_sf_a10:,.0f}",
         },
         regulatory_reference="CRR Art. 122, Art. 501",
     )
 
-    print(f"CRR-A10: EAD=£{ead_a10:,.0f}, RW={rw_a10*100:.0f}%, SF=0.7619, RWA=£{rwa_after_sf_a10:,.0f}")
+    print(
+        f"CRR-A10: EAD=£{ead_a10:,.0f}, RW={rw_a10 * 100:.0f}%, SF=0.7619, RWA=£{rwa_after_sf_a10:,.0f}"
+    )
     return (result_crr_a10,)
 
 
@@ -844,12 +857,14 @@ def _(
             "effective_rw": float(rw_a11 * sf_a11),
             "crr_vs_basel31": "SME factor NOT available under Basel 3.1",
             "formula": "RWA = EAD × RW × SME_factor",
-            "calculation": f"RWA = £{ead_a11:,.0f} × {rw_a11*100:.0f}% × 0.7619 = £{rwa_after_sf_a11:,.0f}",
+            "calculation": f"RWA = £{ead_a11:,.0f} × {rw_a11 * 100:.0f}% × 0.7619 = £{rwa_after_sf_a11:,.0f}",
         },
         regulatory_reference="CRR Art. 123, Art. 501",
     )
 
-    print(f"CRR-A11: EAD=£{ead_a11:,.0f}, RW={rw_a11*100:.0f}%, SF=0.7619, RWA=£{rwa_after_sf_a11:,.0f}")
+    print(
+        f"CRR-A11: EAD=£{ead_a11:,.0f}, RW={rw_a11 * 100:.0f}%, SF=0.7619, RWA=£{rwa_after_sf_a11:,.0f}"
+    )
     return (result_crr_a11,)
 
 
@@ -922,12 +937,14 @@ def _(
             "sme_factor_applied": sf_applied_a12,
             "sme_factor_description": sf_desc_a12,
             "formula": "RWA = EAD × RW (no SME factor)",
-            "calculation": f"RWA = £{ead_a12:,.0f} × {rw_a12*100:.0f}% = £{rwa_after_sf_a12:,.0f}",
+            "calculation": f"RWA = £{ead_a12:,.0f} × {rw_a12 * 100:.0f}% = £{rwa_after_sf_a12:,.0f}",
         },
         regulatory_reference="CRR Art. 122",
     )
 
-    print(f"CRR-A12: EAD=£{ead_a12:,.0f}, RW={rw_a12*100:.0f}%, SF=1.0, RWA=£{rwa_after_sf_a12:,.0f}")
+    print(
+        f"CRR-A12: EAD=£{ead_a12:,.0f}, RW={rw_a12 * 100:.0f}%, SF=1.0, RWA=£{rwa_after_sf_a12:,.0f}"
+    )
     return (result_crr_a12,)
 
 
@@ -965,24 +982,35 @@ def _(
 ):
     """Compile all Group CRR-A results."""
     group_crr_a_results = [
-        result_crr_a1, result_crr_a2, result_crr_a3, result_crr_a4, result_crr_a5,
-        result_crr_a6, result_crr_a7, result_crr_a8, result_crr_a9, result_crr_a10,
-        result_crr_a11, result_crr_a12,
+        result_crr_a1,
+        result_crr_a2,
+        result_crr_a3,
+        result_crr_a4,
+        result_crr_a5,
+        result_crr_a6,
+        result_crr_a7,
+        result_crr_a8,
+        result_crr_a9,
+        result_crr_a10,
+        result_crr_a11,
+        result_crr_a12,
     ]
 
     # Create summary DataFrame
     summary_data = []
     for r in group_crr_a_results:
-        summary_data.append({
-            "Scenario": r.scenario_id,
-            "Description": r.description,
-            "EAD (£)": f"{r.ead:,.0f}",
-            "Risk Weight": f"{r.risk_weight*100:.0f}%",
-            "RWA Before SF (£)": f"{r.rwa_before_sf:,.0f}",
-            "SF": f"{r.supporting_factor:.4f}" if r.supporting_factor != 1.0 else "-",
-            "RWA After SF (£)": f"{r.rwa_after_sf:,.0f}",
-            "Reference": r.regulatory_reference,
-        })
+        summary_data.append(
+            {
+                "Scenario": r.scenario_id,
+                "Description": r.description,
+                "EAD (£)": f"{r.ead:,.0f}",
+                "Risk Weight": f"{r.risk_weight * 100:.0f}%",
+                "RWA Before SF (£)": f"{r.rwa_before_sf:,.0f}",
+                "SF": f"{r.supporting_factor:.4f}" if r.supporting_factor != 1.0 else "-",
+                "RWA After SF (£)": f"{r.rwa_after_sf:,.0f}",
+                "Reference": r.regulatory_reference,
+            }
+        )
 
     summary_df = pl.DataFrame(summary_data)
     mo.ui.table(summary_df)
@@ -992,9 +1020,11 @@ def _(
 @app.cell
 def _(group_crr_a_results):
     """Export function for use by main workbook."""
+
     def get_group_crr_a_results():
         """Return all Group CRR-A scenario results."""
         return group_crr_a_results
+
     return (get_group_crr_a_results,)
 
 

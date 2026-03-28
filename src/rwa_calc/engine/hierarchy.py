@@ -438,9 +438,9 @@ class HierarchyResolver:
                 pl.coalesce(
                     pl.col("internal_rating_date"), pl.col("parent_internal_rating_date")
                 ).alias("internal_rating_date"),
-                pl.coalesce(
-                    pl.col("internal_model_id"), pl.col("parent_internal_model_id")
-                ).alias("internal_model_id"),
+                pl.coalesce(pl.col("internal_model_id"), pl.col("parent_internal_model_id")).alias(
+                    "internal_model_id"
+                ),
                 # External fields — coalesce own → parent
                 pl.coalesce(pl.col("external_cqs"), pl.col("parent_external_cqs")).alias(
                     "external_cqs"
@@ -1441,13 +1441,11 @@ class HierarchyResolver:
         # model_id: sourced from internal_model_id (rating inheritance pipeline)
         exp_schema = set(exposures.collect_schema().names())
         if "internal_model_id" in exp_schema:
-            exposures = exposures.with_columns(
-                pl.col("internal_model_id").alias("model_id")
-            ).drop("internal_model_id")
-        elif "model_id" not in exp_schema:
-            exposures = exposures.with_columns(
-                pl.lit(None).cast(pl.String).alias("model_id")
+            exposures = exposures.with_columns(pl.col("internal_model_id").alias("model_id")).drop(
+                "internal_model_id"
             )
+        elif "model_id" not in exp_schema:
+            exposures = exposures.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
 
         return exposures, errors
 

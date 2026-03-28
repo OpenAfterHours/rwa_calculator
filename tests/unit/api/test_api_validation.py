@@ -249,8 +249,6 @@ class TestDataPathValidator:
         assert Path("counterparty/counterparties.parquet") in response.files_missing
 
 
-
-
 # =============================================================================
 # Convenience Function Tests
 # =============================================================================

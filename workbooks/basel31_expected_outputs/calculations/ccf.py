@@ -46,17 +46,14 @@ def get_ccf(ccf_category: str) -> float:
         "ccf_0": 0.00,
         "unconditionally_cancellable": 0.00,
         "uncommitted": 0.00,
-
         # 10% CCF (Basel 3.1)
         "ccf_10": 0.10,
         "retail_cancellable": 0.10,
-
         # 20% CCF
         "ccf_20": 0.20,
         "trade_lc": 0.20,
         "short_term_trade": 0.20,
         "transaction_related": 0.20,
-
         # 40% CCF
         "ccf_40": 0.40,
         "committed": 0.40,
@@ -64,14 +61,12 @@ def get_ccf(ccf_category: str) -> float:
         "undrawn_committed": 0.40,
         "nif": 0.40,
         "ruf": 0.40,
-
         # 50% CCF
         "ccf_50": 0.50,
         "performance": 0.50,
         "performance_bond": 0.50,
         "bid_bond": 0.50,
         "warranty": 0.50,
-
         # 100% CCF
         "ccf_100": 1.00,
         "direct_credit_substitute": 1.00,
@@ -164,7 +159,4 @@ def get_ccf_description(ccf_category: str) -> str:
         "forward_purchase": "100% - Forward asset purchases (CRE20.98)",
     }
 
-    return descriptions.get(
-        ccf_category,
-        f"CCF category: {ccf_category}"
-    )
+    return descriptions.get(ccf_category, f"CCF category: {ccf_category}")

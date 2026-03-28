@@ -19,21 +19,16 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
     CRMAdjustedBundle,
     ELPortfolioSummary,
-    IRBResultBundle,
     RawDataBundle,
-    SAResultBundle,
-    SlottingResultBundle,
 )
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import RATINGS_SCHEMA
-from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
@@ -176,9 +171,15 @@ class TestOutputFloor:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_firb_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_firb_config,
+            bundle,
         )
 
         assert result.floor_impact is None
@@ -202,10 +203,16 @@ class TestOutputFloor:
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
         )
 
-        result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor_b31,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, basel31_full_irb_config, bundle,
+        _run_full_pipeline(
+            hierarchy_resolver,
+            classifier,
+            crm_processor_b31,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            basel31_full_irb_config,
+            bundle,
         )
 
         # Basel 3.1 should have floor impact (may be None if no IRB results though)
@@ -269,9 +276,15 @@ class TestSummaries:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_config,
+            bundle,
         )
 
         assert result.summary_by_class is not None
@@ -331,9 +344,15 @@ class TestSummaries:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_firb_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_firb_config,
+            bundle,
         )
 
         assert result.summary_by_approach is not None
@@ -391,9 +410,15 @@ class TestSummaries:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_firb_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_firb_config,
+            bundle,
         )
 
         combined = result.results.collect()
@@ -427,9 +452,15 @@ class TestSummaries:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_firb_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_firb_config,
+            bundle,
         )
 
         # EL summary may be None if IRB calculator doesn't produce el_shortfall columns
@@ -462,9 +493,15 @@ class TestSummaries:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_config,
+            bundle,
         )
 
         # CRR with SME should have supporting factor impact
@@ -500,9 +537,15 @@ class TestErrorAccumulation:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_config,
+            bundle,
         )
 
         combined = result.results.collect()
@@ -526,9 +569,15 @@ class TestErrorAccumulation:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_config,
+            bundle,
         )
 
         combined = result.results.collect()
@@ -557,9 +606,15 @@ class TestErrorAccumulation:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_config,
+            bundle,
         )
 
         assert result.pre_crm_summary is not None
@@ -584,9 +639,15 @@ class TestErrorAccumulation:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_config,
+            bundle,
         )
 
         assert result.post_crm_summary is not None
@@ -611,9 +672,15 @@ class TestErrorAccumulation:
         )
 
         result = _run_full_pipeline(
-            hierarchy_resolver, classifier, crm_processor,
-            sa_calculator, irb_calculator, slotting_calculator,
-            aggregator, crr_config, bundle,
+            hierarchy_resolver,
+            classifier,
+            crm_processor,
+            sa_calculator,
+            irb_calculator,
+            slotting_calculator,
+            aggregator,
+            crr_config,
+            bundle,
         )
 
         # Core fields should always be present

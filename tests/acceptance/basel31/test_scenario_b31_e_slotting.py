@@ -204,9 +204,7 @@ class TestB31GroupE_FrameworkDifferences:
             if result is None:
                 continue
             approach = result.get("approach", "")
-            assert approach == "slotting", (
-                f"{ref}: Should use slotting approach, got {approach}"
-            )
+            assert approach == "slotting", f"{ref}: Should use slotting approach, got {approach}"
 
     def test_b31_e_hvcre_higher_than_non_hvcre_strong(
         self,
@@ -294,7 +292,18 @@ class TestB31GroupE_ParameterizedValidation:
         """Verify risk weights are valid Basel 3.1 slotting values."""
         # All valid Basel 3.1 slotting risk weights
         valid_rws = {
-            0.50, 0.70, 0.80, 0.90, 0.95, 1.00, 1.15, 1.20, 1.40, 2.50, 3.50, 0.00,
+            0.50,
+            0.70,
+            0.80,
+            0.90,
+            0.95,
+            1.00,
+            1.15,
+            1.20,
+            1.40,
+            2.50,
+            3.50,
+            0.00,
         }
         for scenario in b31_e_scenarios:
             rw = scenario["risk_weight"]

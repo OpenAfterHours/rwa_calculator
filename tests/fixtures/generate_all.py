@@ -132,7 +132,10 @@ def _generate_ratings(output_dir: Path) -> list[tuple[str, int]]:
     sys.path.insert(0, str(output_dir))
     try:
         from ratings import create_ratings, save_ratings
-        from specialised_lending import create_specialised_lending_data, save_specialised_lending_data
+        from specialised_lending import (
+            create_specialised_lending_data,
+            save_specialised_lending_data,
+        )
 
         files = []
         for name, create_fn, save_fn in [
@@ -282,9 +285,7 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
 
     # Load all parquet files
     try:
-        counterparties = pl.read_parquet(
-            fixtures_dir / "counterparty" / "counterparties.parquet"
-        )
+        counterparties = pl.read_parquet(fixtures_dir / "counterparty" / "counterparties.parquet")
         loans = pl.read_parquet(fixtures_dir / "exposures" / "loans.parquet")
         facilities = pl.read_parquet(fixtures_dir / "exposures" / "facilities.parquet")
         contingents = pl.read_parquet(fixtures_dir / "exposures" / "contingents.parquet")
@@ -437,16 +438,12 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
             # Collect non-null model_ids from ratings
             rating_model_ids: set[str] = set()
             if "model_id" in ratings.columns:
-                non_null = ratings.filter(pl.col("model_id").is_not_null())[
-                    "model_id"
-                ].to_list()
+                non_null = ratings.filter(pl.col("model_id").is_not_null())["model_id"].to_list()
                 rating_model_ids.update(non_null)
 
             missing_model_ids = rating_model_ids - valid_model_ids
             if missing_model_ids:
-                errors.append(
-                    f"Ratings reference missing model_ids: {missing_model_ids}"
-                )
+                errors.append(f"Ratings reference missing model_ids: {missing_model_ids}")
             else:
                 print(
                     f"[OK] All rating model_id references valid "

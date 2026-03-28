@@ -95,7 +95,7 @@ def _(project_root):
     # Load SA scenarios
     sa_spec = importlib.util.spec_from_file_location(
         "group_crr_a_sa",
-        project_root / "workbooks" / "crr_expected_outputs" / "scenarios" / "group_crr_a_sa.py"
+        project_root / "workbooks" / "crr_expected_outputs" / "scenarios" / "group_crr_a_sa.py",
     )
     if sa_spec and sa_spec.loader:
         group_crr_a_sa = importlib.util.module_from_spec(sa_spec)
@@ -103,7 +103,7 @@ def _(project_root):
     # Load F-IRB scenarios
     firb_spec = importlib.util.spec_from_file_location(
         "group_crr_b_firb",
-        project_root / "workbooks" / "crr_expected_outputs" / "scenarios" / "group_crr_b_firb.py"
+        project_root / "workbooks" / "crr_expected_outputs" / "scenarios" / "group_crr_b_firb.py",
     )
     if firb_spec and firb_spec.loader:
         group_crr_b_firb = importlib.util.module_from_spec(firb_spec)
@@ -141,7 +141,12 @@ def _():
     # For now, provide structure for expected output format
 
     crr_a_expected = [
-        {"scenario_id": "CRR-A1", "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK", "rw": 0.00, "sf": 1.0},
+        {
+            "scenario_id": "CRR-A1",
+            "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK",
+            "rw": 0.00,
+            "sf": 1.0,
+        },
         {"scenario_id": "CRR-A2", "exposure_class": "CORPORATE", "rw": 1.00, "sf": 1.0},
         {"scenario_id": "CRR-A3", "exposure_class": "CORPORATE", "rw": 0.50, "sf": 1.0},
         {"scenario_id": "CRR-A4", "exposure_class": "INSTITUTION", "rw": 0.30, "sf": 1.0},
@@ -187,9 +192,24 @@ def _():
     crr_b_expected = [
         {"scenario_id": "CRR-B1", "exposure_class": "CORPORATE", "approach": "F-IRB", "sf": 1.0},
         {"scenario_id": "CRR-B2", "exposure_class": "CORPORATE", "approach": "F-IRB", "sf": 1.0},
-        {"scenario_id": "CRR-B3", "exposure_class": "CORPORATE_SUBORDINATED", "approach": "F-IRB", "sf": 1.0},
-        {"scenario_id": "CRR-B4", "exposure_class": "CORPORATE_SECURED", "approach": "F-IRB", "sf": 1.0},
-        {"scenario_id": "CRR-B5", "exposure_class": "CORPORATE_SME", "approach": "F-IRB", "sf": 0.7619},
+        {
+            "scenario_id": "CRR-B3",
+            "exposure_class": "CORPORATE_SUBORDINATED",
+            "approach": "F-IRB",
+            "sf": 1.0,
+        },
+        {
+            "scenario_id": "CRR-B4",
+            "exposure_class": "CORPORATE_SECURED",
+            "approach": "F-IRB",
+            "sf": 1.0,
+        },
+        {
+            "scenario_id": "CRR-B5",
+            "exposure_class": "CORPORATE_SME",
+            "approach": "F-IRB",
+            "sf": 0.7619,
+        },
         {"scenario_id": "CRR-B6", "exposure_class": "CORPORATE", "approach": "F-IRB", "sf": 1.0},
         {"scenario_id": "CRR-B7", "exposure_class": "RETAIL_OTHER", "approach": "F-IRB", "sf": 1.0},
         {"scenario_id": "CRR-B8", "exposure_class": "CORPORATE", "approach": "F-IRB", "sf": 1.0},
@@ -281,11 +301,14 @@ def _(Decimal, datetime, json):
 
     def export_to_json(data, filepath):
         """Export data to JSON file."""
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(data, f, indent=2, default=decimal_default)
         return filepath
 
-    return (export_to_json, generate_expected_outputs,)
+    return (
+        export_to_json,
+        generate_expected_outputs,
+    )
 
 
 @app.cell
@@ -295,14 +318,14 @@ def _(generate_expected_outputs, mo):
     mo.md(f"""
     ### Framework Metadata
 
-    - **Framework:** {metadata['framework']}
-    - **Version:** {metadata['version']}
-    - **Effective Until:** {metadata['effective_until']}
-    - **Generated:** {metadata['generated_at'][:10]}
+    - **Framework:** {metadata["framework"]}
+    - **Version:** {metadata["version"]}
+    - **Effective Until:** {metadata["effective_until"]}
+    - **Generated:** {metadata["generated_at"][:10]}
 
     ### Key CRR vs Basel 3.1 Differences
 
-    {"".join([f"- {diff}" + chr(10) for diff in metadata['key_differences_from_basel31']])}
+    {"".join([f"- {diff}" + chr(10) for diff in metadata["key_differences_from_basel31"]])}
     """)
     return (metadata,)
 
@@ -312,16 +335,18 @@ def _(crr_a_expected, crr_b_expected, mo, pl):
     """Summary of all scenarios."""
     all_scenarios = crr_a_expected + crr_b_expected
 
-    summary = pl.DataFrame([
-        {
-            "Group": s["scenario_id"][:6],
-            "Scenario": s["scenario_id"],
-            "Exposure Class": s["exposure_class"],
-            "Approach": s.get("approach", "SA"),
-            "SF Applied": "Yes" if s["sf"] != 1.0 else "No",
-        }
-        for s in all_scenarios
-    ])
+    summary = pl.DataFrame(
+        [
+            {
+                "Group": s["scenario_id"][:6],
+                "Scenario": s["scenario_id"],
+                "Exposure Class": s["exposure_class"],
+                "Approach": s.get("approach", "SA"),
+                "SF Applied": "Yes" if s["sf"] != 1.0 else "No",
+            }
+            for s in all_scenarios
+        ]
+    )
 
     mo.md("### Scenario Summary")
     mo.ui.table(summary)

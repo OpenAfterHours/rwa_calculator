@@ -32,7 +32,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 VERSION_FILES = {
     "pyproject.toml": r'version = "(\d+\.\d+\.\d+)"',
     "src/rwa_calc/__init__.py": r'__version__ = "(\d+\.\d+\.\d+)"',
-    "docs/index.md": r'\| Calculator \| (\d+\.\d+\.\d+) \|',
+    "docs/index.md": r"\| Calculator \| (\d+\.\d+\.\d+) \|",
 }
 
 CHANGELOG_PATH = PROJECT_ROOT / "docs" / "appendix" / "changelog.md"
@@ -135,7 +135,9 @@ def update_changelog(new_version: str, old_version: str) -> bool:
 
     # Update version table
     table_pattern = rf"\| {re.escape(old_version)} \| [\d-]+ \| Current \|"
-    table_replacement = f"| {new_version} | {today} | Current |\n| {old_version} | {today} | Previous |"
+    table_replacement = (
+        f"| {new_version} | {today} | Current |\n| {old_version} | {today} | Previous |"
+    )
 
     if re.search(table_pattern, content):
         # Also update the old "Previous" to just "-"
@@ -296,7 +298,7 @@ Examples:
     # Remind about git
     print("\nDon't forget to commit and tag:")
     print(f"  git add -A")
-    print(f"  git commit -m \"chore: release v{new_version}\"")
+    print(f'  git commit -m "chore: release v{new_version}"')
     print(f"  git tag v{new_version}")
     print(f"  git push origin master --tags")
 

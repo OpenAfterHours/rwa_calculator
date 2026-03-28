@@ -56,6 +56,7 @@ def _():
         CRR_HAIRCUTS,
         CRR_FX_HAIRCUT,
     )
+
     return (
         CRR_FX_HAIRCUT,
         CRR_HAIRCUTS,
@@ -121,6 +122,7 @@ def _():
     @dataclass
     class CRRCRMResult:
         """Container for a single CRR CRM scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -149,6 +151,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (CRRCRMResult,)
 
 
@@ -235,7 +238,9 @@ def _(
     )
 
     print(f"CRR-D1: Exposure=£{exposure_d1:,.0f}, Collateral=£{coll_value_d1:,.0f}")
-    print(f"  Haircut={coll_haircut_d1*100:.0f}%, EAD_post=£{ead_post_d1:,.0f}, RWA=£{rwa_post_d1:,.0f}")
+    print(
+        f"  Haircut={coll_haircut_d1 * 100:.0f}%, EAD_post=£{ead_post_d1:,.0f}, RWA=£{rwa_post_d1:,.0f}"
+    )
     return (result_crr_d1,)
 
 
@@ -322,7 +327,7 @@ def _(
         regulatory_reference="CRR Art. 224",
     )
 
-    print(f"CRR-D2: Collateral=£{coll_value_d2:,.0f}, Haircut={coll_haircut_d2*100:.1f}%")
+    print(f"CRR-D2: Collateral=£{coll_value_d2:,.0f}, Haircut={coll_haircut_d2 * 100:.1f}%")
     print(f"  Adjusted=£{coll_adjusted_d2:,.0f}, RWA=£{rwa_post_d2:,.0f}")
     return (result_crr_d2,)
 
@@ -495,7 +500,7 @@ def _(
     )
 
     print(f"CRR-D4: Exposure=£{exposure_d4:,.0f}, Guarantee=£{guarantee_amount_d4:,.0f}")
-    print(f"  Borrower RW={rw_borrower_d4*100:.0f}%, Guarantor RW={rw_guarantor_d4*100:.0f}%")
+    print(f"  Borrower RW={rw_borrower_d4 * 100:.0f}%, Guarantor RW={rw_guarantor_d4 * 100:.0f}%")
     print(f"  RWA=£{rwa_post_d4:,.0f} (saving £{rwa_pre_d4 - rwa_post_d4:,.0f})")
     return (result_crr_d4,)
 
@@ -681,16 +686,18 @@ def _(
         calculation_details={
             "exposure_currency": exposure_ccy_d6,
             "collateral_currency": coll_ccy_d6,
-            "collateral_haircut": f"{coll_haircut_d6*100:.0f}%",
-            "fx_haircut": f"{fx_haircut_d6*100:.0f}%",
-            "total_haircut": f"{(coll_haircut_d6 + fx_haircut_d6)*100:.0f}%",
+            "collateral_haircut": f"{coll_haircut_d6 * 100:.0f}%",
+            "fx_haircut": f"{fx_haircut_d6 * 100:.0f}%",
+            "total_haircut": f"{(coll_haircut_d6 + fx_haircut_d6) * 100:.0f}%",
             "formula": "C_adj = C × (1 - Hc - Hfx)",
             "calculation": f"C_adj = £{coll_value_gbp_d6:,.0f} × (1 - 0% - 8%) = £{coll_adjusted_d6:,.0f}",
         },
         regulatory_reference="CRR Art. 224",
     )
 
-    print(f"CRR-D6: Collateral=£{coll_value_gbp_d6:,.0f} (EUR), FX haircut={fx_haircut_d6*100:.0f}%")
+    print(
+        f"CRR-D6: Collateral=£{coll_value_gbp_d6:,.0f} (EUR), FX haircut={fx_haircut_d6 * 100:.0f}%"
+    )
     print(f"  Adjusted=£{coll_adjusted_d6:,.0f}, RWA=£{rwa_post_d6:,.0f}")
     return (result_crr_d6,)
 
@@ -726,24 +733,30 @@ def _(
 ):
     """Compile all Group CRR-D results."""
     group_crr_d_results = [
-        result_crr_d1, result_crr_d2, result_crr_d3,
-        result_crr_d4, result_crr_d5, result_crr_d6,
+        result_crr_d1,
+        result_crr_d2,
+        result_crr_d3,
+        result_crr_d4,
+        result_crr_d5,
+        result_crr_d6,
     ]
 
     # Create summary DataFrame
     summary_data_d = []
     for r in group_crr_d_results:
-        summary_data_d.append({
-            "Scenario": r.scenario_id,
-            "CRM Type": r.crm_type,
-            "Exposure (£)": f"{r.exposure_value:,.0f}",
-            "Collateral (£)": f"{r.collateral_value:,.0f}",
-            "Haircut": f"{(r.collateral_haircut + r.fx_haircut)*100:.0f}%",
-            "Mat Adj": f"{r.maturity_adjustment:.2f}" if r.maturity_adjustment < 1.0 else "-",
-            "RWA Pre (£)": f"{r.rwa_pre_crm:,.0f}",
-            "RWA Post (£)": f"{r.rwa_post_crm:,.0f}",
-            "Reduction (£)": f"{r.rwa_reduction:,.0f}",
-        })
+        summary_data_d.append(
+            {
+                "Scenario": r.scenario_id,
+                "CRM Type": r.crm_type,
+                "Exposure (£)": f"{r.exposure_value:,.0f}",
+                "Collateral (£)": f"{r.collateral_value:,.0f}",
+                "Haircut": f"{(r.collateral_haircut + r.fx_haircut) * 100:.0f}%",
+                "Mat Adj": f"{r.maturity_adjustment:.2f}" if r.maturity_adjustment < 1.0 else "-",
+                "RWA Pre (£)": f"{r.rwa_pre_crm:,.0f}",
+                "RWA Post (£)": f"{r.rwa_post_crm:,.0f}",
+                "Reduction (£)": f"{r.rwa_reduction:,.0f}",
+            }
+        )
 
     summary_df_d = pl.DataFrame(summary_data_d)
     mo.ui.table(summary_df_d)
@@ -753,9 +766,11 @@ def _(
 @app.cell
 def _(group_crr_d_results):
     """Export function for use by main workbook."""
+
     def get_group_crr_d_results():
         """Return all Group CRR-D scenario results."""
         return group_crr_d_results
+
     return (get_group_crr_d_results,)
 
 

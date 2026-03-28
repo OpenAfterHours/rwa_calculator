@@ -22,11 +22,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
-
-XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
-    __import__("importlib").util.find_spec("xlsxwriter") is not None
-)
+from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.corep.templates import (
     C07_COLUMNS,
     C08_01_COLUMNS,
@@ -36,6 +32,9 @@ from rwa_calc.reporting.corep.templates import (
     SA_RISK_WEIGHT_BANDS,
 )
 
+XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
+    __import__("importlib").util.find_spec("xlsxwriter") is not None
+)
 
 # =============================================================================
 # FIXTURES
@@ -737,7 +736,6 @@ class TestExcelExport:
 
     def test_export_integration_via_exporter(self, tmp_path: Path) -> None:
         """COREP export works through the ResultExporter interface."""
-        from rwa_calc.api.export import ResultExporter
 
         # We can't easily create a full CalculationResponse without the
         # pipeline, but we can test the COREPGenerator directly

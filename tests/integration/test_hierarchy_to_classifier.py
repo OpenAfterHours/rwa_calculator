@@ -16,9 +16,8 @@ No mocking. LazyFrames passed between stages as in production.
 from __future__ import annotations
 
 import polars as pl
-import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.hierarchy import HierarchyResolver
@@ -100,9 +99,7 @@ class TestModelIdPropagation:
         assert undrawn_row.height >= 1
         assert undrawn_row["model_id"][0] == "MOD_CORP_03"
 
-    def test_null_model_id_when_rating_has_none(
-        self, hierarchy_resolver, classifier, crr_config
-    ):
+    def test_null_model_id_when_rating_has_none(self, hierarchy_resolver, classifier, crr_config):
         """Rating without model_id → exposure gets null model_id."""
         bundle = make_raw_data_bundle(
             counterparties=[make_counterparty()],
@@ -183,9 +180,7 @@ class TestEntityTypeClassification:
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row["exposure_class"][0] == ExposureClass.INSTITUTION.value
 
-    def test_sme_flag_from_annual_revenue(
-        self, hierarchy_resolver, classifier, crr_config
-    ):
+    def test_sme_flag_from_annual_revenue(self, hierarchy_resolver, classifier, crr_config):
         """Counterparty with annual_revenue < EUR 50m threshold → CORPORATE_SME."""
         # CRR threshold is EUR 50m, converted to GBP at ~0.8732 rate = ~43.66m GBP
         bundle = make_raw_data_bundle(
@@ -292,23 +287,17 @@ class TestFIScalarPropagation:
         The user flag is authoritative — entity_type should not gate it.
         """
         bundle = make_raw_data_bundle(
-            counterparties=[
-                make_counterparty(entity_type="corporate", apply_fi_scalar=True)
-            ],
+            counterparties=[make_counterparty(entity_type="corporate", apply_fi_scalar=True)],
         )
         df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)
 
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row["requires_fi_scalar"][0] is True
 
-    def test_fi_scalar_false_for_non_financial(
-        self, hierarchy_resolver, classifier, crr_config
-    ):
+    def test_fi_scalar_false_for_non_financial(self, hierarchy_resolver, classifier, crr_config):
         """Corporate (non-financial) with apply_fi_scalar=False → requires_fi_scalar=False."""
         bundle = make_raw_data_bundle(
-            counterparties=[
-                make_counterparty(entity_type="corporate", apply_fi_scalar=False)
-            ],
+            counterparties=[make_counterparty(entity_type="corporate", apply_fi_scalar=False)],
         )
         df = _run_pipeline(hierarchy_resolver, classifier, crr_config, bundle)
 

@@ -359,9 +359,7 @@ class SACalculator:
         _is_uk_domestic_currency = (pl.col("cp_country_code") == "GB") & (
             pl.col("currency") == "GBP"
         )
-        _is_eu_domestic_currency = build_eu_domestic_currency_expr(
-            "cp_country_code", "currency"
-        )
+        _is_eu_domestic_currency = build_eu_domestic_currency_expr("cp_country_code", "currency")
         _is_domestic_currency = _is_uk_domestic_currency | _is_eu_domestic_currency
 
         # Prepare exposures for join
@@ -431,10 +429,7 @@ class SACalculator:
             exposures = exposures.with_columns(
                 [
                     # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
-                    pl.when(
-                        _uc.str.contains("CENTRAL_GOVT", literal=True)
-                        & _is_domestic_currency
-                    )
+                    pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
                     # 1. Defaulted exposures: 150% or 100% (CRE20.88-90)
                     # Provision ratio = provision_allocated / (ead + provision_deducted)
@@ -443,8 +438,7 @@ class SACalculator:
                     .then(
                         pl.when(
                             pl.col("provision_allocated")
-                            >= b31_def_threshold
-                            * (pl.col(_ead_col) + pl.col("provision_deducted"))
+                            >= b31_def_threshold * (pl.col(_ead_col) + pl.col("provision_deducted"))
                         )
                         .then(pl.lit(b31_def_high_rw))
                         .otherwise(pl.lit(b31_def_low_rw))
@@ -547,10 +541,7 @@ class SACalculator:
             exposures = exposures.with_columns(
                 [
                     # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
-                    pl.when(
-                        _uc.str.contains("CENTRAL_GOVT", literal=True)
-                        & _is_domestic_currency
-                    )
+                    pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
                     # 1. Defaulted exposures: 100% or 150% (CRR Art. 127)
                     # Provision ratio = provision_allocated / (ead + provision_deducted)
@@ -559,8 +550,7 @@ class SACalculator:
                     .then(
                         pl.when(
                             pl.col("provision_allocated")
-                            >= crr_def_threshold
-                            * (pl.col(_ead_col) + pl.col("provision_deducted"))
+                            >= crr_def_threshold * (pl.col(_ead_col) + pl.col("provision_deducted"))
                         )
                         .then(pl.lit(crr_def_high_rw))
                         .otherwise(pl.lit(crr_def_low_rw))
@@ -713,9 +703,7 @@ class SACalculator:
         _has_country = "guarantor_country_code" in schema_now.names()
         _has_currency = "currency" in schema_now.names()
         _is_uk_domestic_guarantor = (
-            (
-                pl.col("guarantor_country_code").fill_null("") == "GB"
-            ) & (pl.col("currency") == "GBP")
+            (pl.col("guarantor_country_code").fill_null("") == "GB") & (pl.col("currency") == "GBP")
             if (_has_country and _has_currency)
             else pl.lit(False)
         )
@@ -738,9 +726,7 @@ class SACalculator:
                 pl.when(pl.col("guaranteed_portion") <= 0)
                 .then(pl.lit(None).cast(pl.Float64))
                 # Art. 114(3)/(4): Domestic sovereign → 0% regardless of CQS
-                .when(
-                    (_gec == "central_govt_central_bank") & _is_domestic_guarantor
-                )
+                .when((_gec == "central_govt_central_bank") & _is_domestic_guarantor)
                 .then(pl.lit(0.0))
                 # CGCB guarantors (sovereign, central_bank)
                 .when(_gec == "central_govt_central_bank")
@@ -1060,12 +1046,8 @@ class SACalculator:
                 "cp_scra_grade": [scra_grade],
                 "cp_is_investment_grade": [is_investment_grade],
                 "is_defaulted": [is_defaulted],
-                "provision_allocated": [
-                    float(provision_allocated) if provision_allocated else 0.0
-                ],
-                "provision_deducted": [
-                    float(provision_deducted) if provision_deducted else 0.0
-                ],
+                "provision_allocated": [float(provision_allocated) if provision_allocated else 0.0],
+                "provision_deducted": [float(provision_deducted) if provision_deducted else 0.0],
                 "currency": [currency],
                 "cp_country_code": [country_code],
             }

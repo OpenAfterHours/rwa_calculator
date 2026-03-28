@@ -49,6 +49,7 @@ def _():
     from workbooks.crr_expected_outputs.data.crr_params import (
         CRR_PD_FLOOR,
     )
+
     return (
         CRR_PD_FLOOR,
         Decimal,
@@ -110,6 +111,7 @@ def _():
     @dataclass
     class CRRAIRBResult:
         """Container for a single CRR A-IRB scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -133,6 +135,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (CRRAIRBResult,)
 
 
@@ -221,14 +224,16 @@ def _(
             "pd_floor": float(CRR_PD_FLOOR),
             "lgd_floor": "None (CRR A-IRB)",
             "lgd_internal": lgd_internal_c1,
-            "lgd_vs_firb": f"Internal {lgd_internal_c1*100:.0f}% vs F-IRB 45%",
+            "lgd_vs_firb": f"Internal {lgd_internal_c1 * 100:.0f}% vs F-IRB 45%",
             "scaling_factor": 1.06,
             "crr_vs_basel31": "No LGD floor under CRR (Basel 3.1 would floor at 25%)",
         },
         regulatory_reference="CRR Art. 143, 153",
     )
 
-    print(f"CRR-C1: EAD=£{ead_c1:,.0f}, PD={pd_floored_c1*100:.2f}%, LGD={lgd_floored_c1*100:.0f}%")
+    print(
+        f"CRR-C1: EAD=£{ead_c1:,.0f}, PD={pd_floored_c1 * 100:.2f}%, LGD={lgd_floored_c1 * 100:.0f}%"
+    )
     print(f"  RWA=£{result_dict_c1['rwa']:,.0f}")
     return (result_crr_c1,)
 
@@ -325,7 +330,9 @@ def _(
         regulatory_reference="CRR Art. 154",
     )
 
-    print(f"CRR-C2: EAD=£{ead_c2:,.0f}, PD={pd_floored_c2*100:.2f}%, LGD={lgd_floored_c2*100:.0f}%")
+    print(
+        f"CRR-C2: EAD=£{ead_c2:,.0f}, PD={pd_floored_c2 * 100:.2f}%, LGD={lgd_floored_c2 * 100:.0f}%"
+    )
     print(f"  Correlation={correlation_c2:.4f}, RWA=£{result_dict_c2['rwa']:,.0f}")
     return (result_crr_c2,)
 
@@ -424,7 +431,9 @@ def _(
         regulatory_reference="CRR Art. 153",
     )
 
-    print(f"CRR-C3: EAD=£{ead_c3:,.0f}, PD={pd_floored_c3*100:.2f}%, LGD={lgd_floored_c3*100:.0f}%")
+    print(
+        f"CRR-C3: EAD=£{ead_c3:,.0f}, PD={pd_floored_c3 * 100:.2f}%, LGD={lgd_floored_c3 * 100:.0f}%"
+    )
     print(f"  Maturity={maturity_c3}y, RWA=£{result_dict_c3['rwa']:,.0f}")
     return (result_crr_c3,)
 
@@ -451,22 +460,26 @@ def _(mo):
 def _(mo, pl, result_crr_c1, result_crr_c2, result_crr_c3):
     """Compile all Group CRR-C results."""
     group_crr_c_results = [
-        result_crr_c1, result_crr_c2, result_crr_c3,
+        result_crr_c1,
+        result_crr_c2,
+        result_crr_c3,
     ]
 
     # Create summary DataFrame
     summary_data_c = []
     for r in group_crr_c_results:
-        summary_data_c.append({
-            "Scenario": r.scenario_id,
-            "Description": r.description,
-            "Exp Class": r.exposure_class,
-            "EAD (£)": f"{r.ead:,.0f}",
-            "PD": f"{r.pd_floored*100:.2f}%",
-            "LGD (internal)": f"{r.lgd_internal*100:.0f}%",
-            "LGD (floored)": f"{r.lgd_floored*100:.0f}%",
-            "RWA (£)": f"{r.rwa:,.0f}",
-        })
+        summary_data_c.append(
+            {
+                "Scenario": r.scenario_id,
+                "Description": r.description,
+                "Exp Class": r.exposure_class,
+                "EAD (£)": f"{r.ead:,.0f}",
+                "PD": f"{r.pd_floored * 100:.2f}%",
+                "LGD (internal)": f"{r.lgd_internal * 100:.0f}%",
+                "LGD (floored)": f"{r.lgd_floored * 100:.0f}%",
+                "RWA (£)": f"{r.rwa:,.0f}",
+            }
+        )
 
     summary_df_c = pl.DataFrame(summary_data_c)
     mo.ui.table(summary_df_c)
@@ -476,9 +489,11 @@ def _(mo, pl, result_crr_c1, result_crr_c2, result_crr_c3):
 @app.cell
 def _(group_crr_c_results):
     """Export function for use by main workbook."""
+
     def get_group_crr_c_results():
         """Return all Group CRR-C scenario results."""
         return group_crr_c_results
+
     return (get_group_crr_c_results,)
 
 

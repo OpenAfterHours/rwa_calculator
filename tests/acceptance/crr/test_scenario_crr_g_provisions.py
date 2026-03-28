@@ -184,8 +184,7 @@ class TestCRRGroupG_ELShortfallExcess:
 
         assert "el_excess" in result, "el_excess column missing from IRB results"
         assert result["el_excess"] == pytest.approx(38_750.0, rel=0.01), (
-            f"CRR-G3: el_excess should be 38,750 (prov 50k - EL 11.25k), "
-            f"got {result['el_excess']}"
+            f"CRR-G3: el_excess should be 38,750 (prov 50k - EL 11.25k), got {result['el_excess']}"
         )
 
     def test_crr_g3_el_shortfall_is_zero(
@@ -199,8 +198,7 @@ class TestCRRGroupG_ELShortfallExcess:
 
         assert "el_shortfall" in result, "el_shortfall column missing from IRB results"
         assert result["el_shortfall"] == pytest.approx(0.0, abs=0.01), (
-            f"CRR-G3: el_shortfall should be 0 (provisions > EL), "
-            f"got {result['el_shortfall']}"
+            f"CRR-G3: el_shortfall should be 0 (provisions > EL), got {result['el_shortfall']}"
         )
 
 
@@ -233,9 +231,7 @@ class TestCRRGroupG_PortfolioELSummary:
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert el.total_el_excess > 0, (
-            "Portfolio should have positive el_excess from G3 exposure"
-        )
+        assert el.total_el_excess > 0, "Portfolio should have positive el_excess from G3 exposure"
 
     def test_t2_credit_cap_is_point_six_pct(self, irb_pipeline_results) -> None:
         """T2 credit cap should be 0.6% of total IRB RWA per CRR Art. 62(d)."""

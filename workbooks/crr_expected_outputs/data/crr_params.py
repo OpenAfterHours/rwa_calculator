@@ -37,31 +37,31 @@ from src.rwa_calc.config.fx_rates import (
 
 # Sovereign risk weights by Credit Quality Step (CRR Art. 114)
 CRR_CGCB_RW: dict[int | None, Decimal] = {
-    1: Decimal("0.00"),   # AAA to AA-
-    2: Decimal("0.20"),   # A+ to A-
-    3: Decimal("0.50"),   # BBB+ to BBB-
-    4: Decimal("1.00"),   # BB+ to BB-
-    5: Decimal("1.00"),   # B+ to B-
-    6: Decimal("1.50"),   # CCC+ and below
+    1: Decimal("0.00"),  # AAA to AA-
+    2: Decimal("0.20"),  # A+ to A-
+    3: Decimal("0.50"),  # BBB+ to BBB-
+    4: Decimal("1.00"),  # BB+ to BB-
+    5: Decimal("1.00"),  # B+ to B-
+    6: Decimal("1.50"),  # CCC+ and below
     None: Decimal("1.00"),  # Unrated
 }
 
 # Institution risk weights - UK deviation (CRR Art. 120-121)
 # CQS 2 gets 30% instead of standard Basel 50%
 CRR_INSTITUTION_RW_UK: dict[int | None, Decimal] = {
-    1: Decimal("0.20"),   # AAA to AA-
-    2: Decimal("0.30"),   # A+ to A- (UK deviation - 30% instead of 50%)
-    3: Decimal("0.50"),   # BBB+ to BBB-
-    4: Decimal("1.00"),   # BB+ to BB-
-    5: Decimal("1.00"),   # B+ to B-
-    6: Decimal("1.50"),   # CCC+ and below
+    1: Decimal("0.20"),  # AAA to AA-
+    2: Decimal("0.30"),  # A+ to A- (UK deviation - 30% instead of 50%)
+    3: Decimal("0.50"),  # BBB+ to BBB-
+    4: Decimal("1.00"),  # BB+ to BB-
+    5: Decimal("1.00"),  # B+ to B-
+    6: Decimal("1.50"),  # CCC+ and below
     None: Decimal("0.40"),  # Unrated - derived from sovereign CQS2
 }
 
 # Institution risk weights - standard Basel (for comparison)
 CRR_INSTITUTION_RW_STANDARD: dict[int | None, Decimal] = {
     1: Decimal("0.20"),
-    2: Decimal("0.50"),   # Standard Basel
+    2: Decimal("0.50"),  # Standard Basel
     3: Decimal("0.50"),
     4: Decimal("1.00"),
     5: Decimal("1.00"),
@@ -71,12 +71,12 @@ CRR_INSTITUTION_RW_STANDARD: dict[int | None, Decimal] = {
 
 # Corporate risk weights by CQS (CRR Art. 122)
 CRR_CORPORATE_RW: dict[int | None, Decimal] = {
-    1: Decimal("0.20"),   # AAA to AA-
-    2: Decimal("0.50"),   # A+ to A-
-    3: Decimal("1.00"),   # BBB+ to BBB-
-    4: Decimal("1.00"),   # BB+ to BB-
-    5: Decimal("1.50"),   # B+ to B-
-    6: Decimal("1.50"),   # CCC+ and below
+    1: Decimal("0.20"),  # AAA to AA-
+    2: Decimal("0.50"),  # A+ to A-
+    3: Decimal("1.00"),  # BBB+ to BBB-
+    4: Decimal("1.00"),  # BB+ to BB-
+    5: Decimal("1.50"),  # B+ to B-
+    6: Decimal("1.50"),  # CCC+ and below
     None: Decimal("1.00"),  # Unrated
 }
 
@@ -85,13 +85,13 @@ CRR_RETAIL_RW: Decimal = Decimal("0.75")
 
 # Residential mortgage risk weights (CRR Art. 125)
 # CRR uses a simple split at 80% LTV, not granular bands like Basel 3.1
-CRR_RESIDENTIAL_RW_LOW_LTV: Decimal = Decimal("0.35")   # LTV <= 80%
+CRR_RESIDENTIAL_RW_LOW_LTV: Decimal = Decimal("0.35")  # LTV <= 80%
 CRR_RESIDENTIAL_RW_HIGH_LTV: Decimal = Decimal("0.75")  # Portion above 80% LTV
 CRR_RESIDENTIAL_LTV_THRESHOLD: Decimal = Decimal("0.80")
 
 # Commercial real estate risk weights (CRR Art. 126)
-CRR_COMMERCIAL_RW_LOW_LTV: Decimal = Decimal("0.50")    # LTV <= 50% with income cover
-CRR_COMMERCIAL_RW_STANDARD: Decimal = Decimal("1.00")   # Otherwise
+CRR_COMMERCIAL_RW_LOW_LTV: Decimal = Decimal("0.50")  # LTV <= 50% with income cover
+CRR_COMMERCIAL_RW_STANDARD: Decimal = Decimal("1.00")  # Otherwise
 CRR_COMMERCIAL_LTV_THRESHOLD: Decimal = Decimal("0.50")
 
 
@@ -104,21 +104,18 @@ CRR_CCF: dict[str, Decimal] = {
     # 0% CCF - Low risk
     "low_risk": Decimal("0.00"),
     "unconditionally_cancellable": Decimal("0.00"),
-
     # 20% CCF - Medium-low risk
     "medium_low_risk": Decimal("0.20"),
     "documentary_credit": Decimal("0.20"),
     "short_term_lc": Decimal("0.20"),
     "undrawn_short_term": Decimal("0.20"),  # <= 1 year
-
     # 50% CCF - Medium risk
     "medium_risk": Decimal("0.50"),
-    "undrawn_long_term": Decimal("0.50"),   # > 1 year
+    "undrawn_long_term": Decimal("0.50"),  # > 1 year
     "performance_guarantee": Decimal("0.50"),
     "bid_bond": Decimal("0.50"),
     "nif_ruf": Decimal("0.50"),
     "standby_lc": Decimal("0.50"),
-
     # 100% CCF - Full risk
     "full_risk": Decimal("1.00"),
     "guarantee_given": Decimal("1.00"),
@@ -174,8 +171,10 @@ CRR_SME_TURNOVER_THRESHOLD_GBP: Decimal = get_crr_threshold_gbp("sme_turnover")
 # SPECIALISED LENDING SLOTTING (CRR Art. 153(5))
 # =============================================================================
 
+
 class SlottingRiskWeights(TypedDict):
     """Risk weights for slotting categories."""
+
     strong: Decimal
     good: Decimal
     satisfactory: Decimal
@@ -185,17 +184,17 @@ class SlottingRiskWeights(TypedDict):
 
 # CRR slotting risk weights (Art. 153(5)) — Non-HVCRE, remaining maturity >= 2.5yr
 CRR_SLOTTING_RW: SlottingRiskWeights = {
-    "strong": Decimal("0.70"),       # 50% if <2.5yr
-    "good": Decimal("0.90"),         # 70% if <2.5yr
+    "strong": Decimal("0.70"),  # 50% if <2.5yr
+    "good": Decimal("0.90"),  # 70% if <2.5yr
     "satisfactory": Decimal("1.15"),
     "weak": Decimal("2.50"),
-    "default": Decimal("0.00"),      # 100% provisioned
+    "default": Decimal("0.00"),  # 100% provisioned
 }
 
 # CRR HVCRE slotting risk weights (Art. 153(5)) — remaining maturity >= 2.5yr
 CRR_SLOTTING_RW_HVCRE: SlottingRiskWeights = {
-    "strong": Decimal("0.95"),       # 70% if <2.5yr
-    "good": Decimal("1.20"),         # 95% if <2.5yr
+    "strong": Decimal("0.95"),  # 70% if <2.5yr
+    "good": Decimal("1.20"),  # 95% if <2.5yr
     "satisfactory": Decimal("1.40"),
     "weak": Decimal("2.50"),
     "default": Decimal("0.00"),
@@ -210,7 +209,6 @@ CRR_HAIRCUTS: dict[str, Decimal] = {
     # Cash and gold
     "cash": Decimal("0.00"),
     "gold": Decimal("0.15"),
-
     # Government bonds by CQS and maturity
     "govt_bond_cqs1_0_1y": Decimal("0.005"),
     "govt_bond_cqs1_1_5y": Decimal("0.02"),
@@ -218,7 +216,6 @@ CRR_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
     "govt_bond_cqs2_3_1_5y": Decimal("0.03"),
     "govt_bond_cqs2_3_5y_plus": Decimal("0.06"),
-
     # Corporate bonds (CRR Art. 224: CQS 1 alone, CQS 2-3 grouped)
     "corp_bond_cqs1_0_1y": Decimal("0.01"),
     "corp_bond_cqs1_1_5y": Decimal("0.04"),
@@ -226,11 +223,9 @@ CRR_HAIRCUTS: dict[str, Decimal] = {
     "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
     "corp_bond_cqs2_3_1_5y": Decimal("0.06"),
     "corp_bond_cqs2_3_5y_plus": Decimal("0.12"),
-
     # Equity
-    "equity_main_index": Decimal("0.15"),   # Main index (e.g., FTSE 100)
-    "equity_other": Decimal("0.25"),        # Other listed equity
-
+    "equity_main_index": Decimal("0.15"),  # Main index (e.g., FTSE 100)
+    "equity_other": Decimal("0.25"),  # Other listed equity
     # Other
     "receivables": Decimal("0.20"),
     "other_physical": Decimal("0.40"),
@@ -267,8 +262,8 @@ CRR_FIRB_LGD: dict[str, Decimal] = {
 # MATURITY PARAMETERS (CRR Art. 162)
 # =============================================================================
 
-CRR_MATURITY_FLOOR: Decimal = Decimal("1.0")   # 1 year minimum
-CRR_MATURITY_CAP: Decimal = Decimal("5.0")     # 5 year maximum
+CRR_MATURITY_FLOOR: Decimal = Decimal("1.0")  # 1 year minimum
+CRR_MATURITY_CAP: Decimal = Decimal("5.0")  # 5 year maximum
 
 
 # =============================================================================

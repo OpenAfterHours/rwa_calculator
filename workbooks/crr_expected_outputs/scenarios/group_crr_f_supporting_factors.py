@@ -45,6 +45,7 @@ from workbooks.crr_expected_outputs.data.crr_params import (
 @dataclass
 class CRRSupportingFactorResult:
     """Result of a supporting factor calculation."""
+
     scenario_id: str
     scenario_group: str
     description: str
@@ -90,24 +91,26 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     factor_f1 = calculate_sme_supporting_factor(ead_f1, "GBP")
     rwa_after_f1 = rwa_before_f1 * factor_f1
 
-    results.append(CRRSupportingFactorResult(
-        scenario_id="CRR-F1",
-        scenario_group="CRR-F",
-        description=f"SME Tier 1 only - small exposure (£2m ≤ £{CRR_SME_EXPOSURE_THRESHOLD_GBP/1000000:.2f}m threshold)",
-        regulatory_framework="CRR",
-        approach="SA",
-        exposure_class="CORPORATE_SME",
-        exposure_reference="LOAN_SME_TIER1",
-        counterparty_reference="CORP_SME_SMALL",
-        ead=float(ead_f1),
-        turnover=float(turnover_f1),
-        risk_weight=float(rw_f1),
-        rwa_before_sf=float(rwa_before_f1),
-        supporting_factor=float(factor_f1),
-        rwa_after_sf=float(rwa_after_f1),
-        regulatory_reference="CRR2 Art. 501",
-        calculation_notes=f"Tier 1 only: exposure £2m ≤ £{CRR_SME_EXPOSURE_THRESHOLD_GBP/1000000:.2f}m threshold. Factor = {float(factor_f1):.4f}",
-    ))
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F1",
+            scenario_group="CRR-F",
+            description=f"SME Tier 1 only - small exposure (£2m ≤ £{CRR_SME_EXPOSURE_THRESHOLD_GBP / 1000000:.2f}m threshold)",
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="CORPORATE_SME",
+            exposure_reference="LOAN_SME_TIER1",
+            counterparty_reference="CORP_SME_SMALL",
+            ead=float(ead_f1),
+            turnover=float(turnover_f1),
+            risk_weight=float(rw_f1),
+            rwa_before_sf=float(rwa_before_f1),
+            supporting_factor=float(factor_f1),
+            rwa_after_sf=float(rwa_after_f1),
+            regulatory_reference="CRR2 Art. 501",
+            calculation_notes=f"Tier 1 only: exposure £2m ≤ £{CRR_SME_EXPOSURE_THRESHOLD_GBP / 1000000:.2f}m threshold. Factor = {float(factor_f1):.4f}",
+        )
+    )
 
     # =========================================================================
     # CRR-F2: SME Blended (Medium Exposure)
@@ -127,27 +130,29 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     tier2_f2 = (ead_f2 - threshold_gbp) * CRR_SME_SUPPORTING_FACTOR_TIER2
     # Factor: (tier1 + tier2) / ead
 
-    results.append(CRRSupportingFactorResult(
-        scenario_id="CRR-F2",
-        scenario_group="CRR-F",
-        description="SME blended tiers - medium exposure (£4m)",
-        regulatory_framework="CRR",
-        approach="SA",
-        exposure_class="CORPORATE_SME",
-        exposure_reference="LOAN_SME_TIER_BLEND",
-        counterparty_reference="CORP_SME_MEDIUM",
-        ead=float(ead_f2),
-        turnover=float(turnover_f2),
-        risk_weight=float(rw_f2),
-        rwa_before_sf=float(rwa_before_f2),
-        supporting_factor=float(factor_f2),
-        rwa_after_sf=float(rwa_after_f2),
-        regulatory_reference="CRR2 Art. 501",
-        calculation_notes=(
-            f"Blended: £{threshold_gbp/1000000:.2f}m @ 0.7619 + £{(ead_f2-threshold_gbp)/1000000:.2f}m @ 0.85. "
-            f"Effective factor = {float(factor_f2):.4f}"
-        ),
-    ))
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F2",
+            scenario_group="CRR-F",
+            description="SME blended tiers - medium exposure (£4m)",
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="CORPORATE_SME",
+            exposure_reference="LOAN_SME_TIER_BLEND",
+            counterparty_reference="CORP_SME_MEDIUM",
+            ead=float(ead_f2),
+            turnover=float(turnover_f2),
+            risk_weight=float(rw_f2),
+            rwa_before_sf=float(rwa_before_f2),
+            supporting_factor=float(factor_f2),
+            rwa_after_sf=float(rwa_after_f2),
+            regulatory_reference="CRR2 Art. 501",
+            calculation_notes=(
+                f"Blended: £{threshold_gbp / 1000000:.2f}m @ 0.7619 + £{(ead_f2 - threshold_gbp) / 1000000:.2f}m @ 0.85. "
+                f"Effective factor = {float(factor_f2):.4f}"
+            ),
+        )
+    )
 
     # =========================================================================
     # CRR-F3: SME Tier 2 Dominant (Large Exposure)
@@ -167,27 +172,29 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     tier2_f3 = tier2_amount_f3 * CRR_SME_SUPPORTING_FACTOR_TIER2
     # Factor: (tier1 + tier2) / ead
 
-    results.append(CRRSupportingFactorResult(
-        scenario_id="CRR-F3",
-        scenario_group="CRR-F",
-        description="SME Tier 2 dominant - large exposure (£10m)",
-        regulatory_framework="CRR",
-        approach="SA",
-        exposure_class="CORPORATE_SME",
-        exposure_reference="LOAN_SME_TIER2_DOM",
-        counterparty_reference="CORP_SME_LARGE",
-        ead=float(ead_f3),
-        turnover=float(turnover_f3),
-        risk_weight=float(rw_f3),
-        rwa_before_sf=float(rwa_before_f3),
-        supporting_factor=float(factor_f3),
-        rwa_after_sf=float(rwa_after_f3),
-        regulatory_reference="CRR2 Art. 501",
-        calculation_notes=(
-            f"Tier 2 dominant: £{threshold_gbp/1000000:.2f}m @ 0.7619 + £{tier2_amount_f3/1000000:.2f}m @ 0.85. "
-            f"Effective factor = {float(factor_f3):.4f}"
-        ),
-    ))
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F3",
+            scenario_group="CRR-F",
+            description="SME Tier 2 dominant - large exposure (£10m)",
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="CORPORATE_SME",
+            exposure_reference="LOAN_SME_TIER2_DOM",
+            counterparty_reference="CORP_SME_LARGE",
+            ead=float(ead_f3),
+            turnover=float(turnover_f3),
+            risk_weight=float(rw_f3),
+            rwa_before_sf=float(rwa_before_f3),
+            supporting_factor=float(factor_f3),
+            rwa_after_sf=float(rwa_after_f3),
+            regulatory_reference="CRR2 Art. 501",
+            calculation_notes=(
+                f"Tier 2 dominant: £{threshold_gbp / 1000000:.2f}m @ 0.7619 + £{tier2_amount_f3 / 1000000:.2f}m @ 0.85. "
+                f"Effective factor = {float(factor_f3):.4f}"
+            ),
+        )
+    )
 
     # =========================================================================
     # CRR-F4: SME Retail with Tiered Factor
@@ -201,27 +208,29 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     factor_f4 = calculate_sme_supporting_factor(ead_f4, "GBP")
     rwa_after_f4 = rwa_before_f4 * factor_f4
 
-    results.append(CRRSupportingFactorResult(
-        scenario_id="CRR-F4",
-        scenario_group="CRR-F",
-        description="SME retail with Tier 1 factor (£500k)",
-        regulatory_framework="CRR",
-        approach="SA",
-        exposure_class="RETAIL_SME",
-        exposure_reference="LOAN_RTL_SME_TIER1",
-        counterparty_reference="RTL_SME_SMALL",
-        ead=float(ead_f4),
-        turnover=float(turnover_f4),
-        risk_weight=float(rw_f4),
-        rwa_before_sf=float(rwa_before_f4),
-        supporting_factor=float(factor_f4),
-        rwa_after_sf=float(rwa_after_f4),
-        regulatory_reference="CRR Art. 123 + Art. 501",
-        calculation_notes=(
-            f"Retail 75% RW + Tier 1 SME factor. "
-            f"Effective RW = 75% × {float(factor_f4):.4f} = {float(rw_f4 * factor_f4) * 100:.2f}%"
-        ),
-    ))
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F4",
+            scenario_group="CRR-F",
+            description="SME retail with Tier 1 factor (£500k)",
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="RETAIL_SME",
+            exposure_reference="LOAN_RTL_SME_TIER1",
+            counterparty_reference="RTL_SME_SMALL",
+            ead=float(ead_f4),
+            turnover=float(turnover_f4),
+            risk_weight=float(rw_f4),
+            rwa_before_sf=float(rwa_before_f4),
+            supporting_factor=float(factor_f4),
+            rwa_after_sf=float(rwa_after_f4),
+            regulatory_reference="CRR Art. 123 + Art. 501",
+            calculation_notes=(
+                f"Retail 75% RW + Tier 1 SME factor. "
+                f"Effective RW = 75% × {float(factor_f4):.4f} = {float(rw_f4 * factor_f4) * 100:.2f}%"
+            ),
+        )
+    )
 
     # =========================================================================
     # CRR-F5: Infrastructure Supporting Factor
@@ -234,24 +243,26 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     factor_f5 = CRR_INFRASTRUCTURE_SUPPORTING_FACTOR
     rwa_after_f5 = rwa_before_f5 * factor_f5
 
-    results.append(CRRSupportingFactorResult(
-        scenario_id="CRR-F5",
-        scenario_group="CRR-F",
-        description="Infrastructure supporting factor (0.75)",
-        regulatory_framework="CRR",
-        approach="SA",
-        exposure_class="CORPORATE",
-        exposure_reference="LOAN_INFRA_001",
-        counterparty_reference="CORP_INFRA_001",
-        ead=float(ead_f5),
-        turnover=None,
-        risk_weight=float(rw_f5),
-        rwa_before_sf=float(rwa_before_f5),
-        supporting_factor=float(factor_f5),
-        rwa_after_sf=float(rwa_after_f5),
-        regulatory_reference="CRR Art. 501a",
-        calculation_notes="Infrastructure factor 0.75 (not tiered). NOT available under Basel 3.1.",
-    ))
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F5",
+            scenario_group="CRR-F",
+            description="Infrastructure supporting factor (0.75)",
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="CORPORATE",
+            exposure_reference="LOAN_INFRA_001",
+            counterparty_reference="CORP_INFRA_001",
+            ead=float(ead_f5),
+            turnover=None,
+            risk_weight=float(rw_f5),
+            rwa_before_sf=float(rwa_before_f5),
+            supporting_factor=float(factor_f5),
+            rwa_after_sf=float(rwa_after_f5),
+            regulatory_reference="CRR Art. 501a",
+            calculation_notes="Infrastructure factor 0.75 (not tiered). NOT available under Basel 3.1.",
+        )
+    )
 
     # =========================================================================
     # CRR-F6: Large Corporate - No Factor
@@ -266,24 +277,26 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     factor_f6 = Decimal("1.0")
     rwa_after_f6 = rwa_before_f6 * factor_f6
 
-    results.append(CRRSupportingFactorResult(
-        scenario_id="CRR-F6",
-        scenario_group="CRR-F",
-        description="Large corporate - no SME factor (turnover > £44m)",
-        regulatory_framework="CRR",
-        approach="SA",
-        exposure_class="CORPORATE",
-        exposure_reference="LOAN_CORP_LARGE",
-        counterparty_reference="CORP_LARGE_001",
-        ead=float(ead_f6),
-        turnover=float(turnover_f6),
-        risk_weight=float(rw_f6),
-        rwa_before_sf=float(rwa_before_f6),
-        supporting_factor=float(factor_f6),
-        rwa_after_sf=float(rwa_after_f6),
-        regulatory_reference="CRR Art. 501",
-        calculation_notes="Turnover £200m exceeds £44m threshold. No SME factor applies.",
-    ))
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F6",
+            scenario_group="CRR-F",
+            description="Large corporate - no SME factor (turnover > £44m)",
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="CORPORATE",
+            exposure_reference="LOAN_CORP_LARGE",
+            counterparty_reference="CORP_LARGE_001",
+            ead=float(ead_f6),
+            turnover=float(turnover_f6),
+            risk_weight=float(rw_f6),
+            rwa_before_sf=float(rwa_before_f6),
+            supporting_factor=float(factor_f6),
+            rwa_after_sf=float(rwa_after_f6),
+            regulatory_reference="CRR Art. 501",
+            calculation_notes="Turnover £200m exceeds £44m threshold. No SME factor applies.",
+        )
+    )
 
     # =========================================================================
     # CRR-F7: At Exposure Threshold Boundary
@@ -297,27 +310,29 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     factor_f7 = calculate_sme_supporting_factor(ead_f7, "GBP")
     rwa_after_f7 = rwa_before_f7 * factor_f7
 
-    results.append(CRRSupportingFactorResult(
-        scenario_id="CRR-F7",
-        scenario_group="CRR-F",
-        description=f"At exposure threshold boundary (£{ead_f7/1000000:.2f}m exactly)",
-        regulatory_framework="CRR",
-        approach="SA",
-        exposure_class="CORPORATE_SME",
-        exposure_reference="LOAN_SME_BOUNDARY",
-        counterparty_reference="CORP_SME_BOUNDARY",
-        ead=float(ead_f7),
-        turnover=float(turnover_f7),
-        risk_weight=float(rw_f7),
-        rwa_before_sf=float(rwa_before_f7),
-        supporting_factor=float(factor_f7),
-        rwa_after_sf=float(rwa_after_f7),
-        regulatory_reference="CRR2 Art. 501",
-        calculation_notes=(
-            f"At threshold: £{ead_f7/1000000:.2f}m exactly = Tier 1 only. "
-            f"Factor = {float(factor_f7):.4f}"
-        ),
-    ))
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F7",
+            scenario_group="CRR-F",
+            description=f"At exposure threshold boundary (£{ead_f7 / 1000000:.2f}m exactly)",
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="CORPORATE_SME",
+            exposure_reference="LOAN_SME_BOUNDARY",
+            counterparty_reference="CORP_SME_BOUNDARY",
+            ead=float(ead_f7),
+            turnover=float(turnover_f7),
+            risk_weight=float(rw_f7),
+            rwa_before_sf=float(rwa_before_f7),
+            supporting_factor=float(factor_f7),
+            rwa_after_sf=float(rwa_after_f7),
+            regulatory_reference="CRR2 Art. 501",
+            calculation_notes=(
+                f"At threshold: £{ead_f7 / 1000000:.2f}m exactly = Tier 1 only. "
+                f"Factor = {float(factor_f7):.4f}"
+            ),
+        )
+    )
 
     return results
 

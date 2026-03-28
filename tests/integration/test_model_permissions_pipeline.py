@@ -24,7 +24,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import RATINGS_SCHEMA
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.classifier import ExposureClassifier
@@ -120,10 +120,12 @@ class TestBasicModelResolution:
         """
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
-                counterparties=[make_counterparty(
-                    counterparty_reference="CP001",
-                    entity_type="corporate",
-                )],
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
                 loans=[make_loan(lgd=0.30)],
                 facilities=[make_facility(lgd=0.30)],
                 model_permissions=[
@@ -134,9 +136,13 @@ class TestBasicModelResolution:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AIRB",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_AIRB",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(
@@ -154,10 +160,12 @@ class TestBasicModelResolution:
         """Internal rating with FIRB model permission → FIRB approach."""
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
-                counterparties=[make_counterparty(
-                    counterparty_reference="CP001",
-                    entity_type="corporate",
-                )],
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
                 loans=[make_loan()],
                 facilities=[make_facility()],
                 model_permissions=[
@@ -168,9 +176,13 @@ class TestBasicModelResolution:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_FIRB",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_FIRB",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(
@@ -187,10 +199,12 @@ class TestBasicModelResolution:
     ):
         """Rating without model_id → SA fallback (no org IRB permissions either)."""
         bundle = make_raw_data_bundle(
-            counterparties=[make_counterparty(
-                counterparty_reference="CP001",
-                entity_type="corporate",
-            )],
+            counterparties=[
+                make_counterparty(
+                    counterparty_reference="CP001",
+                    entity_type="corporate",
+                )
+            ],
             loans=[make_loan()],
         )
 
@@ -212,10 +226,12 @@ class TestBasicModelResolution:
         """
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
-                counterparties=[make_counterparty(
-                    counterparty_reference="CP001",
-                    entity_type="corporate",
-                )],
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
                 loans=[make_loan(lgd=0.30)],
                 facilities=[make_facility(lgd=0.30)],
                 model_permissions=[
@@ -226,9 +242,13 @@ class TestBasicModelResolution:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AIRB",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_AIRB",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(
@@ -296,7 +316,9 @@ class TestModelPermissionFiltering:
             ),
             ratings=[
                 _make_internal_rating(
-                    counterparty_reference="CP_CORP", pd=0.02, model_id="MODEL_01",
+                    counterparty_reference="CP_CORP",
+                    pd=0.02,
+                    model_id="MODEL_01",
                 ),
                 _make_internal_rating(
                     counterparty_reference="CP_INST",
@@ -369,7 +391,9 @@ class TestModelPermissionFiltering:
             ),
             ratings=[
                 _make_internal_rating(
-                    counterparty_reference="CP_UK", pd=0.02, model_id="MODEL_GEO",
+                    counterparty_reference="CP_UK",
+                    pd=0.02,
+                    model_id="MODEL_GEO",
                 ),
                 _make_internal_rating(
                     counterparty_reference="CP_DE",
@@ -432,9 +456,13 @@ class TestModelPermissionFiltering:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_BOOK",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_BOOK",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(
@@ -459,10 +487,12 @@ class TestModelPermissionFiltering:
         the classifier cannot assign IRB regardless of model permissions.
         """
         bundle = make_raw_data_bundle(
-            counterparties=[make_counterparty(
-                counterparty_reference="CP001",
-                entity_type="corporate",
-            )],
+            counterparties=[
+                make_counterparty(
+                    counterparty_reference="CP001",
+                    entity_type="corporate",
+                )
+            ],
             loans=[make_loan(lgd=0.30)],
             facilities=[make_facility(lgd=0.30)],
             model_permissions=[
@@ -500,10 +530,12 @@ class TestEndToEndWithCRM:
         """Model permission → FIRB → CRM sets supervisory LGD (45% for senior)."""
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
-                counterparties=[make_counterparty(
-                    counterparty_reference="CP001",
-                    entity_type="corporate",
-                )],
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
                 loans=[make_loan(seniority="senior", lgd=None)],
                 facilities=[make_facility()],
                 model_permissions=[
@@ -514,9 +546,13 @@ class TestEndToEndWithCRM:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_FIRB",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_FIRB",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(
@@ -535,10 +571,12 @@ class TestEndToEndWithCRM:
         """Model permission → AIRB → CRM preserves modelled LGD from input."""
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
-                counterparties=[make_counterparty(
-                    counterparty_reference="CP001",
-                    entity_type="corporate",
-                )],
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
                 loans=[make_loan(lgd=0.30)],
                 facilities=[make_facility(lgd=0.30)],
                 model_permissions=[
@@ -549,9 +587,13 @@ class TestEndToEndWithCRM:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AIRB",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_AIRB",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(
@@ -623,7 +665,9 @@ class TestEndToEndWithCRM:
             ),
             ratings=[
                 _make_internal_rating(
-                    counterparty_reference="CP_AIRB", pd=0.02, model_id="MODEL_AIRB",
+                    counterparty_reference="CP_AIRB",
+                    pd=0.02,
+                    model_id="MODEL_AIRB",
                 ),
                 _make_internal_rating(
                     counterparty_reference="CP_FIRB",
@@ -653,10 +697,12 @@ class TestEndToEndWithCRM:
         """model_id present in CRM output for traceability/audit."""
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
-                counterparties=[make_counterparty(
-                    counterparty_reference="CP001",
-                    entity_type="corporate",
-                )],
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
                 loans=[make_loan()],
                 facilities=[make_facility()],
                 model_permissions=[
@@ -667,9 +713,13 @@ class TestEndToEndWithCRM:
                     ),
                 ],
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_AUDIT",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_AUDIT",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(
@@ -716,19 +766,25 @@ class TestModelPermissionsMinimalSchema:
         bundle = _bundle_with_ratings(
             replace(
                 make_raw_data_bundle(
-                    counterparties=[make_counterparty(
-                        counterparty_reference="CP001",
-                        entity_type="corporate",
-                        country_code="DE",
-                    )],
+                    counterparties=[
+                        make_counterparty(
+                            counterparty_reference="CP001",
+                            entity_type="corporate",
+                            country_code="DE",
+                        )
+                    ],
                     loans=[make_loan(book_code="LEGACY")],
                     facilities=[make_facility()],
                 ),
                 model_permissions=model_perms,
             ),
-            ratings=[_make_internal_rating(
-                counterparty_reference="CP001", pd=0.02, model_id="MODEL_MIN",
-            )],
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_MIN",
+                )
+            ],
         )
 
         crm_bundle = _run_pipeline(

@@ -823,15 +823,15 @@ class TestTableDataIntegrity:
 
     def test_investment_grade_rw(self) -> None:
         """Investment-grade corporate constant should be 65%."""
-        assert B31_CORPORATE_INVESTMENT_GRADE_RW == Decimal("0.65")
+        assert Decimal("0.65") == B31_CORPORATE_INVESTMENT_GRADE_RW
 
     def test_sme_corporate_rw(self) -> None:
         """SME corporate constant should be 85%."""
-        assert B31_CORPORATE_SME_RW == Decimal("0.85")
+        assert Decimal("0.85") == B31_CORPORATE_SME_RW
 
     def test_subordinated_debt_rw(self) -> None:
         """Subordinated debt constant should be 150%."""
-        assert B31_SUBORDINATED_DEBT_RW == Decimal("1.50")
+        assert Decimal("1.50") == B31_SUBORDINATED_DEBT_RW
 
     def test_b31_combined_cqs_table_has_all_classes(self) -> None:
         """B31 combined CQS table should include sovereign, institution, corporate."""
@@ -844,9 +844,7 @@ class TestTableDataIntegrity:
     def test_b31_combined_cqs_table_corporate_cqs3_is_75pct(self) -> None:
         """B31 combined table should have 75% for corporate CQS3 (not CRR's 100%)."""
         df = get_b31_combined_cqs_risk_weights()
-        corp_cqs3 = df.filter(
-            (pl.col("exposure_class") == "CORPORATE") & (pl.col("cqs") == 3)
-        )
+        corp_cqs3 = df.filter((pl.col("exposure_class") == "CORPORATE") & (pl.col("cqs") == 3))
         assert corp_cqs3["risk_weight"][0] == pytest.approx(0.75)
 
 
@@ -872,12 +870,12 @@ class TestB31CorporateCQS:
     @pytest.mark.parametrize(
         ("cqs", "expected_b31_rw", "expected_crr_rw"),
         [
-            (1, 0.20, 0.20),   # AAA-AA-: unchanged
-            (2, 0.50, 0.50),   # A+-A-: unchanged
-            (3, 0.75, 1.00),   # BBB: 75% vs 100%
-            (4, 1.00, 1.00),   # BB: unchanged
-            (5, 1.00, 1.50),   # B: 100% vs 150%
-            (6, 1.50, 1.50),   # CCC+: unchanged
+            (1, 0.20, 0.20),  # AAA-AA-: unchanged
+            (2, 0.50, 0.50),  # A+-A-: unchanged
+            (3, 0.75, 1.00),  # BBB: 75% vs 100%
+            (4, 1.00, 1.00),  # BB: unchanged
+            (5, 1.00, 1.50),  # B: 100% vs 150%
+            (6, 1.50, 1.50),  # CCC+: unchanged
             (None, 1.00, 1.00),  # Unrated: unchanged
         ],
         ids=["cqs1", "cqs2", "cqs3_changed", "cqs4", "cqs5_changed", "cqs6", "unrated"],
@@ -917,10 +915,16 @@ class TestB31CorporateCQS:
         """CQS 3 corporate: Basel 3.1 RWA should be 25% lower than CRR."""
         ead = Decimal("1000000")
         b31 = sa_calculator.calculate_single_exposure(
-            ead=ead, exposure_class="corporate", cqs=3, config=b31_config,
+            ead=ead,
+            exposure_class="corporate",
+            cqs=3,
+            config=b31_config,
         )
         crr = sa_calculator.calculate_single_exposure(
-            ead=ead, exposure_class="corporate", cqs=3, config=crr_config,
+            ead=ead,
+            exposure_class="corporate",
+            cqs=3,
+            config=crr_config,
         )
 
         # B31: 1M × 75% = 750k, CRR: 1M × 100% = 1M
@@ -953,9 +957,9 @@ class TestB31SCRAInstitutionWeights:
     @pytest.mark.parametrize(
         ("scra_grade", "expected_rw"),
         [
-            ("A", 0.40),   # Well-capitalised: same as CRR default
-            ("B", 0.75),   # Meets minimums: higher than CRR default
-            ("C", 1.50),   # Below minimums: much higher
+            ("A", 0.40),  # Well-capitalised: same as CRR default
+            ("B", 0.75),  # Meets minimums: higher than CRR default
+            ("C", 1.50),  # Below minimums: much higher
         ],
         ids=["grade_A", "grade_B", "grade_C"],
     )

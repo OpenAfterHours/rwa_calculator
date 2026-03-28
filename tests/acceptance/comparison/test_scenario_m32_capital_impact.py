@@ -32,7 +32,6 @@ import pytest
 
 from rwa_calc.contracts.bundles import CapitalImpactBundle
 
-
 # =============================================================================
 # M3.2 SA Comparison — Capital Impact
 # =============================================================================
@@ -41,41 +40,37 @@ from rwa_calc.contracts.bundles import CapitalImpactBundle
 class TestM32_SA_Attribution:
     """SA exposures should have no scaling or floor impact."""
 
-    def test_m32_sa_attribution_has_exposures(
-        self, sa_impact_attribution_df: pl.DataFrame
-    ) -> None:
+    def test_m32_sa_attribution_has_exposures(self, sa_impact_attribution_df: pl.DataFrame) -> None:
         """M3.2-S1: Attribution should contain at least one exposure."""
         assert sa_impact_attribution_df.height > 0
 
-    def test_m32_sa_required_columns_present(
-        self, sa_impact_attribution_df: pl.DataFrame
-    ) -> None:
+    def test_m32_sa_required_columns_present(self, sa_impact_attribution_df: pl.DataFrame) -> None:
         """M3.2-S2: Attribution must have all driver columns."""
         required = {
-            "exposure_reference", "exposure_class", "approach_applied",
-            "rwa_crr", "rwa_b31", "delta_rwa",
-            "scaling_factor_impact", "supporting_factor_impact",
-            "output_floor_impact", "methodology_impact",
+            "exposure_reference",
+            "exposure_class",
+            "approach_applied",
+            "rwa_crr",
+            "rwa_b31",
+            "delta_rwa",
+            "scaling_factor_impact",
+            "supporting_factor_impact",
+            "output_floor_impact",
+            "methodology_impact",
         }
         assert required.issubset(set(sa_impact_attribution_df.columns))
 
-    def test_m32_sa_scaling_impact_is_zero(
-        self, sa_impact_attribution_df: pl.DataFrame
-    ) -> None:
+    def test_m32_sa_scaling_impact_is_zero(self, sa_impact_attribution_df: pl.DataFrame) -> None:
         """M3.2-S3: SA exposures have no 1.06 scaling factor — impact must be 0."""
         scaling_total = sa_impact_attribution_df["scaling_factor_impact"].sum()
         assert scaling_total == pytest.approx(0.0, abs=1.0)
 
-    def test_m32_sa_floor_impact_is_zero(
-        self, sa_impact_attribution_df: pl.DataFrame
-    ) -> None:
+    def test_m32_sa_floor_impact_is_zero(self, sa_impact_attribution_df: pl.DataFrame) -> None:
         """M3.2-S4: SA exposures are not subject to the output floor."""
         floor_total = sa_impact_attribution_df["output_floor_impact"].sum()
         assert floor_total == pytest.approx(0.0, abs=1.0)
 
-    def test_m32_sa_additivity_invariant(
-        self, sa_impact_attribution_df: pl.DataFrame
-    ) -> None:
+    def test_m32_sa_additivity_invariant(self, sa_impact_attribution_df: pl.DataFrame) -> None:
         """M3.2-S5: For every SA exposure, 4 drivers must sum to delta_rwa."""
         for row in sa_impact_attribution_df.to_dicts():
             driver_sum = (
@@ -123,9 +118,7 @@ class TestM32_FIRB_Attribution:
                 f"got {total_scaling}"
             )
 
-    def test_m32_firb_additivity_invariant(
-        self, firb_impact_attribution_df: pl.DataFrame
-    ) -> None:
+    def test_m32_firb_additivity_invariant(self, firb_impact_attribution_df: pl.DataFrame) -> None:
         """M3.2-F3: For every exposure, 4 drivers must sum to delta_rwa."""
         for row in firb_impact_attribution_df.to_dicts():
             driver_sum = (
@@ -143,9 +136,7 @@ class TestM32_FIRB_Attribution:
         self, firb_impact_attribution_df: pl.DataFrame
     ) -> None:
         """M3.2-F4: Even in F-IRB comparison, SA-approach rows get zero scaling."""
-        sa_rows = firb_impact_attribution_df.filter(
-            pl.col("approach_applied") == "standardised"
-        )
+        sa_rows = firb_impact_attribution_df.filter(pl.col("approach_applied") == "standardised")
         if sa_rows.height > 0:
             total = sa_rows["scaling_factor_impact"].sum()
             assert total == pytest.approx(0.0, abs=1.0)
@@ -166,21 +157,15 @@ class TestM32_FIRB_Attribution:
 class TestM32_Waterfall:
     """Portfolio-level waterfall from CRR baseline to B31 total."""
 
-    def test_m32_waterfall_has_four_steps(
-        self, sa_impact_waterfall_df: pl.DataFrame
-    ) -> None:
+    def test_m32_waterfall_has_four_steps(self, sa_impact_waterfall_df: pl.DataFrame) -> None:
         """M3.2-W1: Waterfall should have exactly 4 driver steps."""
         assert sa_impact_waterfall_df.height == 4
 
-    def test_m32_waterfall_steps_sequential(
-        self, sa_impact_waterfall_df: pl.DataFrame
-    ) -> None:
+    def test_m32_waterfall_steps_sequential(self, sa_impact_waterfall_df: pl.DataFrame) -> None:
         """M3.2-W2: Waterfall steps should be numbered 1-4."""
         assert sa_impact_waterfall_df["step"].to_list() == [1, 2, 3, 4]
 
-    def test_m32_waterfall_has_driver_labels(
-        self, sa_impact_waterfall_df: pl.DataFrame
-    ) -> None:
+    def test_m32_waterfall_has_driver_labels(self, sa_impact_waterfall_df: pl.DataFrame) -> None:
         """M3.2-W3: Each step should have a descriptive driver label."""
         drivers = sa_impact_waterfall_df["driver"].to_list()
         assert all(len(d) > 5 for d in drivers)
@@ -205,9 +190,7 @@ class TestM32_Waterfall:
         self, firb_impact_waterfall_df: pl.DataFrame
     ) -> None:
         """M3.2-W6: Scaling factor removal step should have negative impact."""
-        scaling_row = firb_impact_waterfall_df.filter(
-            pl.col("driver").str.contains("Scaling")
-        )
+        scaling_row = firb_impact_waterfall_df.filter(pl.col("driver").str.contains("Scaling"))
         if scaling_row.height > 0:
             assert scaling_row["impact_rwa"][0] < 0
 
@@ -231,9 +214,12 @@ class TestM32_Summary:
     ) -> None:
         """M3.2-U2: Summary should contain all driver total columns."""
         required = {
-            "total_scaling_factor_impact", "total_supporting_factor_impact",
-            "total_output_floor_impact", "total_methodology_impact",
-            "total_delta_rwa", "exposure_count",
+            "total_scaling_factor_impact",
+            "total_supporting_factor_impact",
+            "total_output_floor_impact",
+            "total_methodology_impact",
+            "total_delta_rwa",
+            "exposure_count",
         }
         assert required.issubset(set(sa_impact_class_summary_df.columns))
 

@@ -52,7 +52,17 @@ def _():
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
 
-    return mo, pl, Path, load_fixtures, AIRB_LGD_FLOORS, calculate_irb_rwa, apply_lgd_floor, calculate_correlation, ScenarioResult
+    return (
+        mo,
+        pl,
+        Path,
+        load_fixtures,
+        AIRB_LGD_FLOORS,
+        calculate_irb_rwa,
+        apply_lgd_floor,
+        calculate_correlation,
+        ScenarioResult,
+    )
 
 
 @app.cell
@@ -128,8 +138,8 @@ def _(calculate_correlation, calculate_irb_rwa, ScenarioResult):
         regulatory_reference="CRE32.20",
     )
 
-    print(f"C1: PD={pd_c1*100:.2f}%, Own LGD={lgd_own_c1*100:.0f}%")
-    print(f"    RWA=£{rwa_c1:,.0f} (effective RW={rw_c1*100:.1f}%)")
+    print(f"C1: PD={pd_c1 * 100:.2f}%, Own LGD={lgd_own_c1 * 100:.0f}%")
+    print(f"    RWA=£{rwa_c1:,.0f} (effective RW={rw_c1 * 100:.1f}%)")
     return result_c1, pd_c1, lgd_own_c1, ead_c1, corr_c1, irb_result_c1, rwa_c1, rw_c1
 
 
@@ -187,9 +197,21 @@ def _(calculate_correlation, calculate_irb_rwa, apply_lgd_floor, AIRB_LGD_FLOORS
         regulatory_reference="CRE32.20",
     )
 
-    print(f"C2: Raw LGD={lgd_raw_c2*100:.0f}%, Floor={AIRB_LGD_FLOORS['unsecured']*100:.0f}%, Used={lgd_floored_c2*100:.0f}%")
-    print(f"    RWA=£{rwa_c2:,.0f} (effective RW={rw_c2*100:.1f}%)")
-    return result_c2, pd_c2, lgd_raw_c2, lgd_floored_c2, ead_c2, corr_c2, irb_result_c2, rwa_c2, rw_c2
+    print(
+        f"C2: Raw LGD={lgd_raw_c2 * 100:.0f}%, Floor={AIRB_LGD_FLOORS['unsecured'] * 100:.0f}%, Used={lgd_floored_c2 * 100:.0f}%"
+    )
+    print(f"    RWA=£{rwa_c2:,.0f} (effective RW={rw_c2 * 100:.1f}%)")
+    return (
+        result_c2,
+        pd_c2,
+        lgd_raw_c2,
+        lgd_floored_c2,
+        ead_c2,
+        corr_c2,
+        irb_result_c2,
+        rwa_c2,
+        rw_c2,
+    )
 
 
 @app.cell
@@ -243,8 +265,8 @@ def _(calculate_correlation, calculate_irb_rwa, ScenarioResult):
         regulatory_reference="CRE31.8-9",
     )
 
-    print(f"C3: PD={pd_c3*100:.2f}%, LGD={lgd_c3*100:.0f}%, R={corr_c3:.4f}")
-    print(f"    RWA=£{rwa_c3:,.0f} (effective RW={rw_c3*100:.1f}%)")
+    print(f"C3: PD={pd_c3 * 100:.2f}%, LGD={lgd_c3 * 100:.0f}%, R={corr_c3:.4f}")
+    print(f"    RWA=£{rwa_c3:,.0f} (effective RW={rw_c3 * 100:.1f}%)")
     return result_c3, pd_c3, lgd_c3, ead_c3, corr_c3, irb_result_c3, rwa_c3, rw_c3
 
 
@@ -258,13 +280,16 @@ def _(mo):
 def _(result_c1, result_c2, result_c3, pl, mo):
     group_c_results = [result_c1, result_c2, result_c3]
 
-    summary_data_c = [{
-        "Scenario": r.scenario_id,
-        "Description": r.description,
-        "EAD (£)": f"{r.ead:,.0f}",
-        "Eff. RW": f"{r.risk_weight*100:.1f}%",
-        "RWA (£)": f"{r.rwa:,.0f}",
-    } for r in group_c_results]
+    summary_data_c = [
+        {
+            "Scenario": r.scenario_id,
+            "Description": r.description,
+            "EAD (£)": f"{r.ead:,.0f}",
+            "Eff. RW": f"{r.risk_weight * 100:.1f}%",
+            "RWA (£)": f"{r.rwa:,.0f}",
+        }
+        for r in group_c_results
+    ]
 
     mo.ui.table(pl.DataFrame(summary_data_c))
     return group_c_results, summary_data_c
@@ -274,6 +299,7 @@ def _(result_c1, result_c2, result_c3, pl, mo):
 def _(group_c_results):
     def get_group_c_results():
         return group_c_results
+
     return (get_group_c_results,)
 
 

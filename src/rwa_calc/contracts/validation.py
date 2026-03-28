@@ -240,7 +240,9 @@ def validate_raw_data_bundle(
     for name, lf in frame_mapping.items():
         if name in schemas and lf is not None:
             errors = validate_schema_to_errors(
-                lf, schemas[name], context=name,
+                lf,
+                schemas[name],
+                context=name,
                 optional_columns=optional_columns_registry.get(name),
             )
             all_errors.extend(errors)

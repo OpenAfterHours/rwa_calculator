@@ -59,7 +59,21 @@ def _():
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
 
-    return mo, pl, Path, load_fixtures, get_corporate_risk_weight, get_institution_risk_weight, calculate_sa_rwa, get_collateral_haircut, calculate_adjusted_collateral_value, apply_maturity_mismatch, apply_fx_mismatch, calculate_guarantee_substitution, ScenarioResult
+    return (
+        mo,
+        pl,
+        Path,
+        load_fixtures,
+        get_corporate_risk_weight,
+        get_institution_risk_weight,
+        calculate_sa_rwa,
+        get_collateral_haircut,
+        calculate_adjusted_collateral_value,
+        apply_maturity_mismatch,
+        apply_fx_mismatch,
+        calculate_guarantee_substitution,
+        ScenarioResult,
+    )
 
 
 @app.cell
@@ -131,9 +145,20 @@ def _(get_corporate_risk_weight, calculate_sa_rwa, get_collateral_haircut, Scena
         regulatory_reference="CRE22.52",
     )
 
-    print(f"D1: Gross EAD=£{ead_gross_d1:,.0f}, Cash=£{collateral_d1:,.0f}, Haircut={haircut_d1*100:.0f}%")
+    print(
+        f"D1: Gross EAD=£{ead_gross_d1:,.0f}, Cash=£{collateral_d1:,.0f}, Haircut={haircut_d1 * 100:.0f}%"
+    )
     print(f"    Net EAD=£{ead_net_d1:,.0f}, RWA=£{rwa_d1:,.0f}")
-    return result_d1, ead_gross_d1, collateral_d1, haircut_d1, collateral_adj_d1, ead_net_d1, rw_d1, rwa_d1
+    return (
+        result_d1,
+        ead_gross_d1,
+        collateral_d1,
+        haircut_d1,
+        collateral_adj_d1,
+        ead_net_d1,
+        rw_d1,
+        rwa_d1,
+    )
 
 
 @app.cell
@@ -149,7 +174,9 @@ def _(mo):
 
 
 @app.cell
-def _(get_corporate_risk_weight, calculate_sa_rwa, calculate_adjusted_collateral_value, ScenarioResult):
+def _(
+    get_corporate_risk_weight, calculate_sa_rwa, calculate_adjusted_collateral_value, ScenarioResult
+):
     # D2: Govt bond collateral
     ead_gross_d2 = 1_000_000.0
     collateral_value_d2 = 600_000.0
@@ -188,7 +215,9 @@ def _(get_corporate_risk_weight, calculate_sa_rwa, calculate_adjusted_collateral
         regulatory_reference="CRE22.52-53",
     )
 
-    print(f"D2: Gilts=£{collateral_value_d2:,.0f}, Haircut={coll_result_d2['base_haircut']*100:.1f}%")
+    print(
+        f"D2: Gilts=£{collateral_value_d2:,.0f}, Haircut={coll_result_d2['base_haircut'] * 100:.1f}%"
+    )
     print(f"    Adjusted collateral=£{coll_result_d2['adjusted_value']:,.0f}")
     print(f"    Net EAD=£{ead_net_d2:,.0f}, RWA=£{rwa_d2:,.0f}")
     return result_d2, ead_gross_d2, collateral_value_d2, coll_result_d2, ead_net_d2, rw_d2, rwa_d2
@@ -240,10 +269,19 @@ def _(get_corporate_risk_weight, calculate_sa_rwa, get_collateral_haircut, Scena
         regulatory_reference="CRE22.52",
     )
 
-    print(f"D3: Equity=£{collateral_d3:,.0f}, Haircut={haircut_d3*100:.0f}%")
+    print(f"D3: Equity=£{collateral_d3:,.0f}, Haircut={haircut_d3 * 100:.0f}%")
     print(f"    Adjusted=£{collateral_adj_d3:,.0f}, Net EAD=£{ead_net_d3:,.0f}")
     print(f"    RWA=£{rwa_d3:,.0f}")
-    return result_d3, ead_gross_d3, collateral_d3, haircut_d3, collateral_adj_d3, ead_net_d3, rw_d3, rwa_d3
+    return (
+        result_d3,
+        ead_gross_d3,
+        collateral_d3,
+        haircut_d3,
+        collateral_adj_d3,
+        ead_net_d3,
+        rw_d3,
+        rwa_d3,
+    )
 
 
 @app.cell
@@ -259,7 +297,12 @@ def _(mo):
 
 
 @app.cell
-def _(get_corporate_risk_weight, get_institution_risk_weight, calculate_guarantee_substitution, ScenarioResult):
+def _(
+    get_corporate_risk_weight,
+    get_institution_risk_weight,
+    calculate_guarantee_substitution,
+    ScenarioResult,
+):
     # D4: Guarantee substitution
     exposure_d4 = 1_000_000.0
     guarantee_d4 = 600_000.0
@@ -295,8 +338,12 @@ def _(get_corporate_risk_weight, get_institution_risk_weight, calculate_guarante
     )
 
     print(f"D4: Exposure=£{exposure_d4:,.0f}, Guarantee=£{guarantee_d4:,.0f}")
-    print(f"    Covered RWA=£{guar_result_d4['covered_rwa']:,.0f} (at {rw_guarantor_d4*100:.0f}%)")
-    print(f"    Uncovered RWA=£{guar_result_d4['uncovered_rwa']:,.0f} (at {rw_underlying_d4*100:.0f}%)")
+    print(
+        f"    Covered RWA=£{guar_result_d4['covered_rwa']:,.0f} (at {rw_guarantor_d4 * 100:.0f}%)"
+    )
+    print(
+        f"    Uncovered RWA=£{guar_result_d4['uncovered_rwa']:,.0f} (at {rw_underlying_d4 * 100:.0f}%)"
+    )
     print(f"    Total RWA=£{guar_result_d4['total_rwa']:,.0f}")
     return result_d4, exposure_d4, guarantee_d4, rw_underlying_d4, rw_guarantor_d4, guar_result_d4
 
@@ -363,7 +410,18 @@ def _(get_corporate_risk_weight, calculate_sa_rwa, apply_maturity_mismatch, Scen
     print(f"    Adjustment factor={(mat_adj_factor):.3f}")
     print(f"    Adjusted collateral=£{collateral_adj_d5:,.0f}")
     print(f"    RWA=£{rwa_d5:,.0f}")
-    return result_d5, ead_gross_d5, collateral_d5, exp_maturity_d5, coll_maturity_d5, collateral_adj_d5, mat_adj_factor, ead_net_d5, rw_d5, rwa_d5
+    return (
+        result_d5,
+        ead_gross_d5,
+        collateral_d5,
+        exp_maturity_d5,
+        coll_maturity_d5,
+        collateral_adj_d5,
+        mat_adj_factor,
+        ead_net_d5,
+        rw_d5,
+        rwa_d5,
+    )
 
 
 @app.cell
@@ -420,9 +478,18 @@ def _(get_corporate_risk_weight, calculate_sa_rwa, apply_fx_mismatch, ScenarioRe
         regulatory_reference="CRE22.54",
     )
 
-    print(f"D6: Collateral=£{collateral_d6:,.0f} (EUR), FX haircut={fx_haircut*100:.0f}%")
+    print(f"D6: Collateral=£{collateral_d6:,.0f} (EUR), FX haircut={fx_haircut * 100:.0f}%")
     print(f"    Adjusted=£{collateral_adj_d6:,.0f}, RWA=£{rwa_d6:,.0f}")
-    return result_d6, ead_gross_d6, collateral_d6, collateral_adj_d6, fx_haircut, ead_net_d6, rw_d6, rwa_d6
+    return (
+        result_d6,
+        ead_gross_d6,
+        collateral_d6,
+        collateral_adj_d6,
+        fx_haircut,
+        ead_net_d6,
+        rw_d6,
+        rwa_d6,
+    )
 
 
 @app.cell
@@ -435,13 +502,16 @@ def _(mo):
 def _(result_d1, result_d2, result_d3, result_d4, result_d5, result_d6, pl, mo):
     group_d_results = [result_d1, result_d2, result_d3, result_d4, result_d5, result_d6]
 
-    summary_data_d = [{
-        "Scenario": r.scenario_id,
-        "Description": r.description,
-        "EAD (£)": f"{r.ead:,.0f}",
-        "RW": f"{r.risk_weight*100:.0f}%",
-        "RWA (£)": f"{r.rwa:,.0f}",
-    } for r in group_d_results]
+    summary_data_d = [
+        {
+            "Scenario": r.scenario_id,
+            "Description": r.description,
+            "EAD (£)": f"{r.ead:,.0f}",
+            "RW": f"{r.risk_weight * 100:.0f}%",
+            "RWA (£)": f"{r.rwa:,.0f}",
+        }
+        for r in group_d_results
+    ]
 
     mo.ui.table(pl.DataFrame(summary_data_d))
     return group_d_results, summary_data_d
@@ -451,6 +521,7 @@ def _(result_d1, result_d2, result_d3, result_d4, result_d5, result_d6, pl, mo):
 def _(group_d_results):
     def get_group_d_results():
         return group_d_results
+
     return (get_group_d_results,)
 
 

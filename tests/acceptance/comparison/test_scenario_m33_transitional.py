@@ -25,11 +25,8 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
-
 import polars as pl
 import pytest
-
 
 # =============================================================================
 # Configuration Fixtures
@@ -69,9 +66,7 @@ class TestM33TimelineStructure:
 
     def test_timeline_has_six_years(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-S1: Timeline should contain all 6 transitional years."""
-        assert timeline_df.height == 6, (
-            f"Expected 6 years in timeline, got {timeline_df.height}"
-        )
+        assert timeline_df.height == 6, f"Expected 6 years in timeline, got {timeline_df.height}"
 
     def test_timeline_years_correct(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-S2: Timeline years should be 2027-2032."""
@@ -83,10 +78,16 @@ class TestM33TimelineStructure:
     def test_timeline_columns_complete(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-S3: All expected columns should be present."""
         expected = {
-            "reporting_date", "year", "floor_percentage",
-            "total_rwa_pre_floor", "total_rwa_post_floor",
-            "total_floor_impact", "floor_binding_count",
-            "total_irb_exposure_count", "total_ead", "total_sa_rwa",
+            "reporting_date",
+            "year",
+            "floor_percentage",
+            "total_rwa_pre_floor",
+            "total_rwa_post_floor",
+            "total_floor_impact",
+            "floor_binding_count",
+            "total_irb_exposure_count",
+            "total_ead",
+            "total_sa_rwa",
         }
         assert expected == set(timeline_df.columns), (
             f"Missing columns: {expected - set(timeline_df.columns)}"
@@ -173,9 +174,7 @@ class TestM33MonotonicityInvariants:
                 f"to year {2027 + i} ({counts[i]})"
             )
 
-    def test_floor_percentage_times_sa_rwa_non_decreasing(
-        self, timeline_df: pl.DataFrame
-    ) -> None:
+    def test_floor_percentage_times_sa_rwa_non_decreasing(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-M3: Floor bite (floor% × SA RWA) should be non-decreasing.
 
         While total post-floor RWA can decrease year-over-year (because
@@ -184,8 +183,7 @@ class TestM33MonotonicityInvariants:
         non-decreasing since SA RWA is stable and the percentage rises.
         """
         floor_bites = [
-            row["floor_percentage"] * row["total_sa_rwa"]
-            for row in timeline_df.to_dicts()
+            row["floor_percentage"] * row["total_sa_rwa"] for row in timeline_df.to_dicts()
         ]
         for i in range(1, len(floor_bites)):
             assert floor_bites[i] >= floor_bites[i - 1] - 1.0, (
@@ -205,9 +203,7 @@ class TestM33FloorImpactStructure:
     def test_floor_impact_non_negative(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-F1: Floor impact should never be negative."""
         negative = timeline_df.filter(pl.col("total_floor_impact") < -1.0)
-        assert negative.height == 0, (
-            f"Found {negative.height} years with negative floor impact"
-        )
+        assert negative.height == 0, f"Found {negative.height} years with negative floor impact"
 
     def test_ead_consistent_across_years(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-F2: Total EAD should be consistent across years (same portfolio).
@@ -274,6 +270,4 @@ class TestM33YearlyResults:
         """M3.3-Y3: Each yearly result's main results should be collectible."""
         for year, result in transitional_schedule_bundle.yearly_results.items():
             df = result.results.collect()
-            assert isinstance(df, pl.DataFrame), (
-                f"Year {year} results failed to collect"
-            )
+            assert isinstance(df, pl.DataFrame), f"Year {year} results failed to collect"

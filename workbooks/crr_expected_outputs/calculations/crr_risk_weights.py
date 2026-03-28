@@ -44,9 +44,7 @@ def get_cgcb_rw(cqs: int | None) -> Decimal:
 
 
 def get_institution_rw(
-    cqs: int | None,
-    country: str = "GB",
-    use_uk_deviation: bool = True
+    cqs: int | None, country: str = "GB", use_uk_deviation: bool = True
 ) -> Decimal:
     """
     Get risk weight for institution (CRR Art. 120-121).
@@ -112,16 +110,12 @@ def get_residential_mortgage_rw(ltv: Decimal) -> tuple[Decimal, str]:
     portion_low = CRR_RESIDENTIAL_LTV_THRESHOLD / ltv
     portion_high = (ltv - CRR_RESIDENTIAL_LTV_THRESHOLD) / ltv
 
-    avg_rw = (CRR_RESIDENTIAL_RW_LOW_LTV * portion_low +
-              CRR_RESIDENTIAL_RW_HIGH_LTV * portion_high)
+    avg_rw = CRR_RESIDENTIAL_RW_LOW_LTV * portion_low + CRR_RESIDENTIAL_RW_HIGH_LTV * portion_high
 
     return avg_rw, f"Split RW ({ltv:.0%} LTV): {avg_rw:.1%}"
 
 
-def get_commercial_re_rw(
-    ltv: Decimal,
-    has_income_cover: bool = True
-) -> tuple[Decimal, str]:
+def get_commercial_re_rw(ltv: Decimal, has_income_cover: bool = True) -> tuple[Decimal, str]:
     """
     Get risk weight for commercial real estate (CRR Art. 126).
 
@@ -142,10 +136,7 @@ def get_commercial_re_rw(
     return CRR_COMMERCIAL_RW_STANDARD, f"100% RW (standard treatment)"
 
 
-def get_slotting_rw(
-    category: str,
-    is_hvcre: bool = False
-) -> Decimal:
+def get_slotting_rw(category: str, is_hvcre: bool = False) -> Decimal:
     """
     Get risk weight for specialised lending slotting (CRR Art. 153(5)).
 
@@ -167,9 +158,7 @@ def get_slotting_rw(
 
 
 def calculate_sa_rwa(
-    ead: Decimal,
-    risk_weight: Decimal,
-    supporting_factor: Decimal = Decimal("1.0")
+    ead: Decimal, risk_weight: Decimal, supporting_factor: Decimal = Decimal("1.0")
 ) -> Decimal:
     """
     Calculate SA RWA.

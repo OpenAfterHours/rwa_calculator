@@ -686,9 +686,7 @@ class IRBLazyFrame:
         # UK guarantor in GBP, or EU guarantor in that member state's domestic currency
         _has_country = "guarantor_country_code" in lf.collect_schema().names()
         _is_uk_domestic_guarantor = (
-            (
-                pl.col("guarantor_country_code").fill_null("") == "GB"
-            ) & (pl.col("currency") == "GBP")
+            (pl.col("guarantor_country_code").fill_null("") == "GB") & (pl.col("currency") == "GBP")
             if _has_country
             else pl.lit(False)
         )
@@ -704,9 +702,7 @@ class IRBLazyFrame:
                 pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
                 .then(pl.lit(None).cast(pl.Float64))
                 # Art. 114(3)/(4): Domestic sovereign → 0% regardless of CQS
-                .when(
-                    (_gec == "central_govt_central_bank") & _is_domestic_guarantor
-                )
+                .when((_gec == "central_govt_central_bank") & _is_domestic_guarantor)
                 .then(pl.lit(0.0))
                 # CGCB guarantors (sovereign, central_bank)
                 .when(_gec == "central_govt_central_bank")

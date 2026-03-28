@@ -16,7 +16,6 @@ import pytest
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
-    ELPortfolioSummary,
     IRBResultBundle,
     SAResultBundle,
     SlottingResultBundle,

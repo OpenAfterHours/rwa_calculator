@@ -42,10 +42,7 @@ from workbooks.crr_expected_outputs.data.crr_params import (
 )
 
 
-def is_sme_eligible(
-    turnover: Decimal | None,
-    currency: str = "GBP"
-) -> bool:
+def is_sme_eligible(turnover: Decimal | None, currency: str = "GBP") -> bool:
     """
     Check if counterparty qualifies as SME for supporting factor.
 
@@ -69,10 +66,7 @@ def is_sme_eligible(
         return turnover < CRR_SME_TURNOVER_THRESHOLD_EUR
 
 
-def calculate_sme_supporting_factor(
-    total_exposure: Decimal,
-    currency: str = "GBP"
-) -> Decimal:
+def calculate_sme_supporting_factor(total_exposure: Decimal, currency: str = "GBP") -> Decimal:
     """
     Calculate the effective SME supporting factor based on total exposure.
 
@@ -114,8 +108,8 @@ def calculate_sme_supporting_factor(
     tier2_amount = max(total_exposure - threshold, Decimal("0"))
 
     weighted_factor = (
-        tier1_amount * CRR_SME_SUPPORTING_FACTOR_TIER1 +
-        tier2_amount * CRR_SME_SUPPORTING_FACTOR_TIER2
+        tier1_amount * CRR_SME_SUPPORTING_FACTOR_TIER1
+        + tier2_amount * CRR_SME_SUPPORTING_FACTOR_TIER2
     )
 
     effective_factor = weighted_factor / total_exposure
@@ -128,7 +122,7 @@ def apply_sme_supporting_factor(
     total_exposure: Decimal,
     is_sme: bool,
     turnover: Decimal | None = None,
-    currency: str = "GBP"
+    currency: str = "GBP",
 ) -> tuple[Decimal, Decimal, bool, str]:
     """
     Apply SME supporting factor (CRR2 Art. 501).
@@ -165,10 +159,10 @@ def apply_sme_supporting_factor(
     # Get threshold for description
     if currency.upper() in ("GBP", "£"):
         threshold = CRR_SME_EXPOSURE_THRESHOLD_GBP
-        threshold_str = f"£{threshold/1000000:.1f}m"
+        threshold_str = f"£{threshold / 1000000:.1f}m"
     else:
         threshold = CRR_SME_EXPOSURE_THRESHOLD_EUR
-        threshold_str = f"€{threshold/1000000:.1f}m"
+        threshold_str = f"€{threshold / 1000000:.1f}m"
 
     # Build description
     if total_exposure <= threshold:
@@ -186,10 +180,7 @@ def apply_sme_supporting_factor(
 
 
 def apply_sme_supporting_factor_simple(
-    rwa: Decimal,
-    is_sme: bool,
-    turnover: Decimal | None = None,
-    currency: str = "GBP"
+    rwa: Decimal, is_sme: bool, turnover: Decimal | None = None, currency: str = "GBP"
 ) -> tuple[Decimal, bool, str]:
     """
     Apply SME supporting factor using simple 0.7619 factor.
@@ -221,13 +212,12 @@ def apply_sme_supporting_factor_simple(
     return (
         adjusted_rwa,
         True,
-        f"SME factor applied: {CRR_SME_SUPPORTING_FACTOR} (RWA reduced by {reduction:,.0f})"
+        f"SME factor applied: {CRR_SME_SUPPORTING_FACTOR} (RWA reduced by {reduction:,.0f})",
     )
 
 
 def apply_infrastructure_supporting_factor(
-    rwa: Decimal,
-    is_qualifying_infrastructure: bool
+    rwa: Decimal, is_qualifying_infrastructure: bool
 ) -> tuple[Decimal, bool, str]:
     """
     Apply infrastructure supporting factor (CRR Art. 501a).
@@ -257,7 +247,7 @@ def apply_infrastructure_supporting_factor(
     return (
         adjusted_rwa,
         True,
-        f"Infrastructure factor applied: {CRR_INFRASTRUCTURE_SUPPORTING_FACTOR} (RWA reduced by {reduction:,.0f})"
+        f"Infrastructure factor applied: {CRR_INFRASTRUCTURE_SUPPORTING_FACTOR} (RWA reduced by {reduction:,.0f})",
     )
 
 
@@ -266,7 +256,7 @@ def get_effective_supporting_factor(
     is_sme: bool,
     is_infrastructure: bool,
     turnover: Decimal | None = None,
-    currency: str = "GBP"
+    currency: str = "GBP",
 ) -> Decimal:
     """
     Get the effective supporting factor for an exposure.
@@ -300,10 +290,7 @@ def get_effective_supporting_factor(
 
 
 def get_combined_supporting_factor(
-    is_sme: bool,
-    is_infrastructure: bool,
-    turnover: Decimal | None = None,
-    currency: str = "GBP"
+    is_sme: bool, is_infrastructure: bool, turnover: Decimal | None = None, currency: str = "GBP"
 ) -> Decimal:
     """
     Get combined supporting factor (legacy - does not consider exposure size).

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs**: Migrate documentation from mkdocs to zensical (`zensical.toml` replaces `mkdocs.yml`)
 
 ### Fixed
+- **Docs**: Fix mermaid diagrams not rendering by adding `custom_fences` configuration for `pymdownx.superfences`
 - **Style**: Update theme color palette to orange
 
 ### Refactored

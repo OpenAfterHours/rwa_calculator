@@ -47,7 +47,7 @@
 
 | ID | Requirement | Target | Status |
 |----|-------------|--------|--------|
-| NFR-6.1 | MkDocs documentation site | Comprehensive | Met (59 pages) |
+| NFR-6.1 | Zensical documentation site | Comprehensive | Met (59 pages) |
 | NFR-6.2 | Marimo workbooks | All CRR scenarios | Met |
 | NFR-6.3 | Regulatory reference links | All calculations | Met |
 
@@ -58,5 +58,5 @@
 | Regulatory Accuracy | 100% acceptance test pass rate | Automated test suite |
 | Performance | < 2s/100K, < 20s/1M | pytest-benchmark |
 | Test Coverage | > 1,800 tests | `pytest --co -q` (1,844+ total) |
-| Documentation | All public APIs documented | MkDocs site review |
+| Documentation | All public APIs documented | Zensical site review |
 | Transition Readiness | Full Basel 3.1 before 1 Jan 2027 | B31 acceptance tests |

@@ -26,7 +26,7 @@ pip install rwa-calc[ui]
 | Extra | Description |
 |-------|-------------|
 | `ui` | Interactive web UI via Marimo |
-| `dev` | Development tools (pytest, mypy, mkdocs) |
+| `dev` | Development tools (pytest, mypy, zensical) |
 | `all` | All optional dependencies |
 
 ## Quick Start

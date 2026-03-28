@@ -221,10 +221,10 @@ uv run mypy src
 
 ```bash
 # Serve documentation locally
-uv run mkdocs serve
+uv run zensical serve
 
 # Build documentation
-uv run mkdocs build
+uv run zensical build
 ```
 
 ## Next Steps

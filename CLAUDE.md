@@ -47,7 +47,7 @@ Key topics: SA risk weights (CRE20-22), IRB approach (CRE30-36), Credit risk mit
 - **Ruff** — linter and formatter (config in `pyproject.toml`)
 - **Mypy** — static type checking
 - **Marimo** — interactive workbooks. Docs: https://docs.marimo.io/api/
-- **MkDocs** (Material theme) — project documentation site
+- **Zensical** — project documentation site
 
 ## Module Structure
 
@@ -150,7 +150,7 @@ tests/
 
 ## Documentation
 
-- **MkDocs site**: Source in `docs/`, built with `mkdocs-material`. Run locally: `uv run mkdocs serve`
+- **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`
 - **Docstrings**: All public classes and functions must have docstrings following the module docstring pattern (purpose, responsibilities, references)
 - **Changelog**: Update `docs/appendix/changelog.md` for any user-facing changes
 - **After every change**: Update relevant docs, docstrings, and changelog entry

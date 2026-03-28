@@ -7,7 +7,7 @@
 #   ./loop.sh plan 5       # Plan mode, max 5 iterations
 
 # Parse arguments
-if [ "$1" = "plan" ]; then
+if [[ "$1" = "plan" ]]; then
     # Plan mode
     MODE="plan"
     PROMPT_FILE="PROMPT_plan.md"
@@ -35,14 +35,14 @@ echo "Max:    $MAX_ITERATIONS iterations"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Verify prompt file exists
-if [ ! -f "$PROMPT_FILE" ]; then
+if [[ ! -f "$PROMPT_FILE" ]]; then
     echo "Error: $PROMPT_FILE not found"
     exit 1
 fi
 
 mkdir -p logs
 
-while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+while [[ $ITERATION -lt $MAX_ITERATIONS ]]; do
     LOGFILE="logs/${MODE}_$(date +%Y%m%d_%H%M%S)_iter${ITERATION}.jsonl"
 
     echo ""

@@ -20,12 +20,12 @@ jobs:
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PYPROJECT_VERSION=$(grep -m1 'version = ' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
           INIT_VERSION=$(grep -m1 '__version__' src/rwa_calc/__init__.py | sed 's/.*"\(.*\)".*/\1/')
-          DOC_VERSION=$(grep 'Calculator |' docs/index.md | sed 's/.*| \([0-9.]*\) |.*/\1/')
+          DOC_VERSION=$(grep 'Calculator |' docs/overview.md | sed 's/.*| \([0-9.]*\) |.*/\1/')
 
           echo "Release tag:    $TAG_VERSION"
           echo "pyproject.toml: $PYPROJECT_VERSION"
           echo "__init__.py:    $INIT_VERSION"
-          echo "docs/index.md:  $DOC_VERSION"
+          echo "docs/overview.md: $DOC_VERSION"
 
           ERRORS=0
           if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
@@ -37,7 +37,7 @@ jobs:
             ERRORS=1
           fi
           if [ "$TAG_VERSION" != "$DOC_VERSION" ]; then
-            echo "::error::Tag $TAG_VERSION != docs/index.md $DOC_VERSION"
+            echo "::error::Tag $TAG_VERSION != docs/overview.md $DOC_VERSION"
             ERRORS=1
           fi
           if [ "$ERRORS" -ne 0 ]; then

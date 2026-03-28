@@ -13,3 +13,4 @@ tests/benchmarks/data/
 .pypirc
 dist/
 logs/
+*.pdf

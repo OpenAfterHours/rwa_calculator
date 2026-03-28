@@ -771,6 +771,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "calculation_run_id": pl.String,  # Unique run identifier for audit trail
     "calculation_timestamp": pl.Datetime,  # When calculation was performed
     "exposure_reference": pl.String,  # Links to source loan/facility/contingent
+    "parent_exposure_reference": pl.String,  # Original exposure before multi-guarantor split
     "exposure_type": pl.String,  # "loan", "facility", "contingent"
     "counterparty_reference": pl.String,  # Links to counterparty
     "book_code": pl.String,  # Portfolio/book classification

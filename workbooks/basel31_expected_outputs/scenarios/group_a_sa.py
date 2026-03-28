@@ -42,6 +42,7 @@ def _():
         get_ccf,
         calculate_ead_from_contingent,
     )
+
     return (
         calculate_ead_from_contingent,
         calculate_sa_rwa,
@@ -101,6 +102,7 @@ def _():
     @dataclass
     class ScenarioResult:
         """Container for a single scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -116,6 +118,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (ScenarioResult,)
 
 
@@ -166,12 +169,12 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_cgcb_risk_weight):
             "country_code": cpty_a1["country_code"],
             "cqs": cqs_a1,
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a1:,.0f} × {rw_a1*100:.0f}% = £{rwa_a1:,.0f}",
+            "calculation": f"RWA = £{ead_a1:,.0f} × {rw_a1 * 100:.0f}% = £{rwa_a1:,.0f}",
         },
         regulatory_reference="CRE20.7",
     )
 
-    print(f"A1: EAD=£{ead_a1:,.0f}, RW={rw_a1*100:.0f}%, RWA=£{rwa_a1:,.0f}")
+    print(f"A1: EAD=£{ead_a1:,.0f}, RW={rw_a1 * 100:.0f}%, RWA=£{rwa_a1:,.0f}")
     return (result_a1,)
 
 
@@ -219,12 +222,12 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_corporate_risk_weight):
             "cqs": cqs_a2,
             "rating_status": "unrated",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a2:,.0f} × {rw_a2*100:.0f}% = £{rwa_a2:,.0f}",
+            "calculation": f"RWA = £{ead_a2:,.0f} × {rw_a2 * 100:.0f}% = £{rwa_a2:,.0f}",
         },
         regulatory_reference="CRE20.26",
     )
 
-    print(f"A2: EAD=£{ead_a2:,.0f}, RW={rw_a2*100:.0f}%, RWA=£{rwa_a2:,.0f}")
+    print(f"A2: EAD=£{ead_a2:,.0f}, RW={rw_a2 * 100:.0f}%, RWA=£{rwa_a2:,.0f}")
     return (result_a2,)
 
 
@@ -271,12 +274,12 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_corporate_risk_weight):
             "cqs": cqs_a3,
             "rating_value": rating_a3["rating_value"] if rating_a3 else "A",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a3:,.0f} × {rw_a3*100:.0f}% = £{rwa_a3:,.0f}",
+            "calculation": f"RWA = £{ead_a3:,.0f} × {rw_a3 * 100:.0f}% = £{rwa_a3:,.0f}",
         },
         regulatory_reference="CRE20.25",
     )
 
-    print(f"A3: EAD=£{ead_a3:,.0f}, RW={rw_a3*100:.0f}%, RWA=£{rwa_a3:,.0f}")
+    print(f"A3: EAD=£{ead_a3:,.0f}, RW={rw_a3 * 100:.0f}%, RWA=£{rwa_a3:,.0f}")
     return (result_a3,)
 
 
@@ -326,12 +329,12 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_institution_risk_weight):
             "basel_standard_rw": 0.50,
             "uk_rw": 0.30,
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4*100:.0f}% = £{rwa_a4:,.0f}",
+            "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4 * 100:.0f}% = £{rwa_a4:,.0f}",
         },
         regulatory_reference="CRE20.16, PRA PS9/24",
     )
 
-    print(f"A4: EAD=£{ead_a4:,.0f}, RW={rw_a4*100:.0f}%, RWA=£{rwa_a4:,.0f}")
+    print(f"A4: EAD=£{ead_a4:,.0f}, RW={rw_a4 * 100:.0f}%, RWA=£{rwa_a4:,.0f}")
     return (result_a4,)
 
 
@@ -394,12 +397,14 @@ def _(
             "property_value": ead_a5 / ltv_a5,
             "ltv_band": "≤60%",
             "formula": "RWA = EAD × RW (based on LTV band)",
-            "calculation": f"RWA = £{ead_a5:,.0f} × {rw_a5*100:.0f}% = £{rwa_a5:,.0f}",
+            "calculation": f"RWA = £{ead_a5:,.0f} × {rw_a5 * 100:.0f}% = £{rwa_a5:,.0f}",
         },
         regulatory_reference="CRE20.71",
     )
 
-    print(f"A5: EAD=£{ead_a5:,.0f}, LTV={ltv_a5*100:.0f}%, RW={rw_a5*100:.0f}%, RWA=£{rwa_a5:,.0f}")
+    print(
+        f"A5: EAD=£{ead_a5:,.0f}, LTV={ltv_a5 * 100:.0f}%, RW={rw_a5 * 100:.0f}%, RWA=£{rwa_a5:,.0f}"
+    )
     return (result_a5,)
 
 
@@ -446,12 +451,14 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_mortgage_risk_weight):
             "property_value": ead_a6 / ltv_a6,
             "ltv_band": "80% < LTV ≤ 90%",
             "formula": "RWA = EAD × RW (based on LTV band)",
-            "calculation": f"RWA = £{ead_a6:,.0f} × {rw_a6*100:.0f}% = £{rwa_a6:,.0f}",
+            "calculation": f"RWA = £{ead_a6:,.0f} × {rw_a6 * 100:.0f}% = £{rwa_a6:,.0f}",
         },
         regulatory_reference="CRE20.71",
     )
 
-    print(f"A6: EAD=£{ead_a6:,.0f}, LTV={ltv_a6*100:.0f}%, RW={rw_a6*100:.0f}%, RWA=£{rwa_a6:,.0f}")
+    print(
+        f"A6: EAD=£{ead_a6:,.0f}, LTV={ltv_a6 * 100:.0f}%, RW={rw_a6 * 100:.0f}%, RWA=£{rwa_a6:,.0f}"
+    )
     return (result_a6,)
 
 
@@ -496,12 +503,14 @@ def _(ScenarioResult, calculate_sa_rwa, get_mortgage_risk_weight):
             "ltv_band": "LTV ≤ 60%",
             "property_type": "commercial",
             "formula": "RWA = EAD × RW (based on LTV band)",
-            "calculation": f"RWA = £{ead_a7:,.0f} × {rw_a7*100:.0f}% = £{rwa_a7:,.0f}",
+            "calculation": f"RWA = £{ead_a7:,.0f} × {rw_a7 * 100:.0f}% = £{rwa_a7:,.0f}",
         },
         regulatory_reference="CRE20.83",
     )
 
-    print(f"A7: EAD=£{ead_a7:,.0f}, LTV={ltv_a7*100:.0f}%, RW={rw_a7*100:.0f}%, RWA=£{rwa_a7:,.0f}")
+    print(
+        f"A7: EAD=£{ead_a7:,.0f}, LTV={ltv_a7 * 100:.0f}%, RW={rw_a7 * 100:.0f}%, RWA=£{rwa_a7:,.0f}"
+    )
     return (result_a7,)
 
 
@@ -557,13 +566,15 @@ def _(
             "ccf_category": ccf_category_a8,
             "ccf": ead_result_a8["ccf"],
             "formula": "EAD = Nominal × CCF, then RWA = EAD × RW",
-            "ead_calculation": f"EAD = £{nominal_a8:,.0f} × {ead_result_a8['ccf']*100:.0f}% = £{ead_a8:,.0f}",
-            "rwa_calculation": f"RWA = £{ead_a8:,.0f} × {rw_a8*100:.0f}% = £{rwa_a8:,.0f}",
+            "ead_calculation": f"EAD = £{nominal_a8:,.0f} × {ead_result_a8['ccf'] * 100:.0f}% = £{ead_a8:,.0f}",
+            "rwa_calculation": f"RWA = £{ead_a8:,.0f} × {rw_a8 * 100:.0f}% = £{rwa_a8:,.0f}",
         },
         regulatory_reference="CRE20.94-96",
     )
 
-    print(f"A8: Nominal=£{nominal_a8:,.0f}, CCF={ead_result_a8['ccf']*100:.0f}%, EAD=£{ead_a8:,.0f}, RWA=£{rwa_a8:,.0f}")
+    print(
+        f"A8: Nominal=£{nominal_a8:,.0f}, CCF={ead_result_a8['ccf'] * 100:.0f}%, EAD=£{ead_a8:,.0f}, RWA=£{rwa_a8:,.0f}"
+    )
     return (result_a8,)
 
 
@@ -605,12 +616,12 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_retail_risk_weight):
         calculation_details={
             "counterparty_name": cpty_a9["counterparty_name"] if cpty_a9 else "Individual",
             "formula": "RWA = EAD × 75%",
-            "calculation": f"RWA = £{ead_a9:,.0f} × {rw_a9*100:.0f}% = £{rwa_a9:,.0f}",
+            "calculation": f"RWA = £{ead_a9:,.0f} × {rw_a9 * 100:.0f}% = £{rwa_a9:,.0f}",
         },
         regulatory_reference="CRE20.66",
     )
 
-    print(f"A9: EAD=£{ead_a9:,.0f}, RW={rw_a9*100:.0f}%, RWA=£{rwa_a9:,.0f}")
+    print(f"A9: EAD=£{ead_a9:,.0f}, RW={rw_a9 * 100:.0f}%, RWA=£{rwa_a9:,.0f}")
     return (result_a9,)
 
 
@@ -654,12 +665,12 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_retail_risk_weight):
             "sme_treatment": "retail",
             "turnover_threshold": "< £880k",
             "formula": "RWA = EAD × 75%",
-            "calculation": f"RWA = £{ead_a10:,.0f} × {rw_a10*100:.0f}% = £{rwa_a10:,.0f}",
+            "calculation": f"RWA = £{ead_a10:,.0f} × {rw_a10 * 100:.0f}% = £{rwa_a10:,.0f}",
         },
         regulatory_reference="CRE20.66",
     )
 
-    print(f"A10: EAD=£{ead_a10:,.0f}, RW={rw_a10*100:.0f}%, RWA=£{rwa_a10:,.0f}")
+    print(f"A10: EAD=£{ead_a10:,.0f}, RW={rw_a10 * 100:.0f}%, RWA=£{rwa_a10:,.0f}")
     return (result_a10,)
 
 
@@ -690,21 +701,31 @@ def _(
 ):
     """Compile all Group A results."""
     group_a_results = [
-        result_a1, result_a2, result_a3, result_a4, result_a5,
-        result_a6, result_a7, result_a8, result_a9, result_a10,
+        result_a1,
+        result_a2,
+        result_a3,
+        result_a4,
+        result_a5,
+        result_a6,
+        result_a7,
+        result_a8,
+        result_a9,
+        result_a10,
     ]
 
     # Create summary DataFrame
     summary_data = []
     for r in group_a_results:
-        summary_data.append({
-            "Scenario": r.scenario_id,
-            "Description": r.description,
-            "EAD (£)": f"{r.ead:,.0f}",
-            "Risk Weight": f"{r.risk_weight*100:.0f}%",
-            "RWA (£)": f"{r.rwa:,.0f}",
-            "Reference": r.regulatory_reference,
-        })
+        summary_data.append(
+            {
+                "Scenario": r.scenario_id,
+                "Description": r.description,
+                "EAD (£)": f"{r.ead:,.0f}",
+                "Risk Weight": f"{r.risk_weight * 100:.0f}%",
+                "RWA (£)": f"{r.rwa:,.0f}",
+                "Reference": r.regulatory_reference,
+            }
+        )
 
     summary_df = pl.DataFrame(summary_data)
     mo.ui.table(summary_df)
@@ -714,9 +735,11 @@ def _(
 @app.cell
 def _(group_a_results):
     """Export function for use by main workbook."""
+
     def get_group_a_results():
         """Return all Group A scenario results."""
         return group_a_results
+
     return
 
 

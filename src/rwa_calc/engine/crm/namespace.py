@@ -66,7 +66,9 @@ def _resolve_guarantees_multi_level(
         return guarantees
 
     exp_schema = exposures.collect_schema()
-    ead_col = "ead_after_collateral" if "ead_after_collateral" in exp_schema.names() else "ead_final"
+    ead_col = (
+        "ead_after_collateral" if "ead_after_collateral" in exp_schema.names() else "ead_final"
+    )
 
     bt_lower = pl.col("beneficiary_type").str.to_lowercase()
     direct_types = ["exposure", "loan", "contingent"]
@@ -77,9 +79,9 @@ def _resolve_guarantees_multi_level(
     has_parent_fac = "parent_facility_reference" in exp_schema.names()
     if has_parent_fac:
         facility_guarantees = guarantees.filter(bt_lower == "facility")
-        fac_exposures = exposures.filter(
-            pl.col("parent_facility_reference").is_not_null()
-        ).select("exposure_reference", "parent_facility_reference", pl.col(ead_col))
+        fac_exposures = exposures.filter(pl.col("parent_facility_reference").is_not_null()).select(
+            "exposure_reference", "parent_facility_reference", pl.col(ead_col)
+        )
 
         fac_totals = fac_exposures.group_by("parent_facility_reference").agg(
             pl.col(ead_col).sum().alias("_fac_total_ead"),
@@ -111,9 +113,7 @@ def _resolve_guarantees_multi_level(
         expanded_parts.append(expanded_fac)
 
     cp_guarantees = guarantees.filter(bt_lower == "counterparty")
-    cp_exposures = exposures.select(
-        "exposure_reference", "counterparty_reference", pl.col(ead_col)
-    )
+    cp_exposures = exposures.select("exposure_reference", "counterparty_reference", pl.col(ead_col))
     cp_totals = cp_exposures.group_by("counterparty_reference").agg(
         pl.col(ead_col).sum().alias("_cp_total_ead"),
     )

@@ -89,9 +89,7 @@ class TestM31_SA_Comparison:
         CRR Art. 114: sovereign CQS 1 = 0% RW
         Basel 3.1 CRE20.7: sovereign CQS 1 = 0% RW (unchanged)
         """
-        sov = sa_comparison_deltas_df.filter(
-            pl.col("exposure_reference") == "LOAN_SOV_UK_001"
-        )
+        sov = sa_comparison_deltas_df.filter(pl.col("exposure_reference") == "LOAN_SOV_UK_001")
         if sov.height > 0:
             assert sov["delta_rwa"][0] == pytest.approx(0.0, abs=1.0)
             assert sov["delta_risk_weight"][0] == pytest.approx(0.0, abs=0.001)
@@ -235,6 +233,4 @@ class TestM31_Summary:
     def test_exposure_count_positive(self, sa_comparison_class_summary_df):
         """Every exposure class should have at least one exposure."""
         for row in sa_comparison_class_summary_df.to_dicts():
-            assert row["exposure_count"] > 0, (
-                f"Class {row['exposure_class']} has zero exposures"
-            )
+            assert row["exposure_count"] > 0, f"Class {row['exposure_class']} has zero exposures"

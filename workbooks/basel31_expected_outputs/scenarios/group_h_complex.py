@@ -55,7 +55,17 @@ def _():
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
 
-    return mo, pl, Path, load_fixtures, get_corporate_risk_weight, calculate_sa_rwa, calculate_adjusted_collateral_value, calculate_guarantee_substitution, ScenarioResult
+    return (
+        mo,
+        pl,
+        Path,
+        load_fixtures,
+        get_corporate_risk_weight,
+        calculate_sa_rwa,
+        calculate_adjusted_collateral_value,
+        calculate_guarantee_substitution,
+        ScenarioResult,
+    )
 
 
 @app.cell
@@ -113,11 +123,13 @@ def _(fixtures, get_corporate_risk_weight, calculate_sa_rwa, ScenarioResult):
         if loan_data:
             ead = loan_data["drawn_amount"]
             rwa = calculate_sa_rwa(ead, rw_h1)
-            loans_h1.append({
-                "reference": loan_ref,
-                "ead": ead,
-                "rwa": rwa,
-            })
+            loans_h1.append(
+                {
+                    "reference": loan_ref,
+                    "ead": ead,
+                    "rwa": rwa,
+                }
+            )
             total_ead_h1 += ead
             total_rwa_h1 += rwa
 
@@ -209,7 +221,7 @@ def _(get_corporate_risk_weight, calculate_sa_rwa, ScenarioResult):
         regulatory_reference="CRR Art 122",
     )
 
-    print(f"H2: Parent CQS={parent_cqs_h2}, RW={parent_rw_h2*100:.0f}%")
+    print(f"H2: Parent CQS={parent_cqs_h2}, RW={parent_rw_h2 * 100:.0f}%")
     for exp in group_exposures_h2:
         print(f"    {exp['entity']}: EAD=£{exp['ead']:,.0f}, RWA=£{exp['rwa']:,.0f}")
     print(f"    Total RWA=£{total_rwa_h2:,.0f}")
@@ -281,7 +293,17 @@ def _(ScenarioResult):
     print(f"    SA: EAD=£{sa_ead_h3:,.0f}, RWA=£{sa_rwa_h3:,.0f}")
     print(f"    IRB: EAD=£{irb_ead_h3:,.0f}, RWA=£{irb_rwa_h3:,.0f}")
     print(f"    Total RWA=£{total_rwa_h3:,.0f}")
-    return result_h3, sa_exposures_h3, irb_exposures_h3, sa_rwa_h3, sa_ead_h3, irb_rwa_h3, irb_ead_h3, total_rwa_h3, total_ead_h3
+    return (
+        result_h3,
+        sa_exposures_h3,
+        irb_exposures_h3,
+        sa_rwa_h3,
+        sa_ead_h3,
+        irb_rwa_h3,
+        irb_ead_h3,
+        total_rwa_h3,
+        total_ead_h3,
+    )
 
 
 @app.cell
@@ -302,7 +324,7 @@ def _(
     calculate_sa_rwa,
     calculate_adjusted_collateral_value,
     calculate_guarantee_substitution,
-    ScenarioResult
+    ScenarioResult,
 ):
     # H4: Full CRM chain
     # Exposure: £30m corporate loan
@@ -369,10 +391,27 @@ def _(
     print(f"H4: Full CRM chain")
     print(f"    Gross EAD: £{ead_gross_h4:,.0f}")
     print(f"    After provision (£{provision_h4:,.0f}): £{ead_after_prov_h4:,.0f}")
-    print(f"    After collateral (adj £{coll_result_h4['adjusted_value']:,.0f}): £{ead_after_coll_h4:,.0f}")
-    print(f"    Guarantee coverage: £{guar_result_h4['covered_amount']:,.0f} at {rw_guarantor_h4*100:.0f}%")
+    print(
+        f"    After collateral (adj £{coll_result_h4['adjusted_value']:,.0f}): £{ead_after_coll_h4:,.0f}"
+    )
+    print(
+        f"    Guarantee coverage: £{guar_result_h4['covered_amount']:,.0f} at {rw_guarantor_h4 * 100:.0f}%"
+    )
     print(f"    Final RWA: £{rwa_h4:,.0f}")
-    return result_h4, ead_gross_h4, collateral_h4, guarantee_h4, provision_h4, ead_after_prov_h4, coll_result_h4, ead_after_coll_h4, rw_underlying_h4, rw_guarantor_h4, guar_result_h4, rwa_h4
+    return (
+        result_h4,
+        ead_gross_h4,
+        collateral_h4,
+        guarantee_h4,
+        provision_h4,
+        ead_after_prov_h4,
+        coll_result_h4,
+        ead_after_coll_h4,
+        rw_underlying_h4,
+        rw_guarantor_h4,
+        guar_result_h4,
+        rwa_h4,
+    )
 
 
 @app.cell
@@ -385,12 +424,15 @@ def _(mo):
 def _(result_h1, result_h2, result_h3, result_h4, pl, mo):
     group_h_results = [result_h1, result_h2, result_h3, result_h4]
 
-    summary_data_h = [{
-        "Scenario": r.scenario_id,
-        "Description": r.description,
-        "EAD (£)": f"{r.ead:,.0f}",
-        "RWA (£)": f"{r.rwa:,.0f}",
-    } for r in group_h_results]
+    summary_data_h = [
+        {
+            "Scenario": r.scenario_id,
+            "Description": r.description,
+            "EAD (£)": f"{r.ead:,.0f}",
+            "RWA (£)": f"{r.rwa:,.0f}",
+        }
+        for r in group_h_results
+    ]
 
     mo.ui.table(pl.DataFrame(summary_data_h))
     return group_h_results, summary_data_h
@@ -400,6 +442,7 @@ def _(result_h1, result_h2, result_h3, result_h4, pl, mo):
 def _(group_h_results):
     def get_group_h_results():
         return group_h_results
+
     return (get_group_h_results,)
 
 

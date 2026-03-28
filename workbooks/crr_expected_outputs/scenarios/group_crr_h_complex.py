@@ -55,6 +55,7 @@ def _():
     from workbooks.crr_expected_outputs.data.crr_params import (
         CRR_SME_SUPPORTING_FACTOR,
     )
+
     return (
         CRR_SME_SUPPORTING_FACTOR,
         Decimal,
@@ -109,6 +110,7 @@ def _():
     @dataclass
     class CRRComplexResult:
         """Container for a single CRR complex scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -125,6 +127,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (CRRComplexResult,)
 
 
@@ -197,14 +200,16 @@ def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw, rwa):
         rwa_h1 = calculate_sa_rwa(ead_h1, rw_h1)
         total_ead_h1 += ead_h1
         total_rwa_h1 += rwa_h1
-        exposure_details_h1.append({
-            "name": exp["name"],
-            "nominal": float(exp["amount"]),
-            "ccf": float(exp["ccf"]),
-            "ead": float(ead_h1),
-            "rw": float(rw_h1),
-            "rwa": float(rwa),
-        })
+        exposure_details_h1.append(
+            {
+                "name": exp["name"],
+                "nominal": float(exp["amount"]),
+                "ccf": float(exp["ccf"]),
+                "ead": float(ead_h1),
+                "rw": float(rw_h1),
+                "rwa": float(rwa),
+            }
+        )
 
     result_crr_h1 = CRRComplexResult(
         scenario_id="CRR-H1",
@@ -301,16 +306,18 @@ def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw):
         total_ead_h2 += ead
         total_rwa_h2 += rwa
 
-        exposure_details_h2.append({
-            "entity": member["entity"],
-            "role": member["role"],
-            "own_cqs": member["own_cqs"],
-            "effective_cqs": member["effective_cqs"],
-            "ead": float(ead),
-            "rw": float(rw),
-            "rwa": float(rwa),
-            "rating_source": "own" if member["own_cqs"] else "inherited",
-        })
+        exposure_details_h2.append(
+            {
+                "entity": member["entity"],
+                "role": member["role"],
+                "own_cqs": member["own_cqs"],
+                "effective_cqs": member["effective_cqs"],
+                "ead": float(ead),
+                "rw": float(rw),
+                "rwa": float(rwa),
+                "rating_source": "own" if member["own_cqs"] else "inherited",
+            }
+        )
 
     result_crr_h2 = CRRComplexResult(
         scenario_id="CRR-H2",
@@ -338,7 +345,9 @@ def _(CRRComplexResult, Decimal, calculate_sa_rwa, get_corporate_rw):
     print(f"CRR-H2: Counterparty group with {len(group_members_h2)} members")
     print(f"  Total EAD=£{total_ead_h2:,.0f}, Total RWA=£{total_rwa_h2:,.0f}")
     for e in exposure_details_h2:
-        print(f"    {e['entity']}: CQS={e['effective_cqs']}, RW={e['rw']*100:.0f}%, RWA=£{e['rwa']:,.0f}")
+        print(
+            f"    {e['entity']}: CQS={e['effective_cqs']}, RW={e['rw'] * 100:.0f}%, RWA=£{e['rwa']:,.0f}"
+        )
     return result_crr_h2, rwa
 
 
@@ -386,24 +395,26 @@ def _(
         is_sme=True,
         turnover=turnover_h3,
         currency="GBP",
-        total_exposure=ead_h3
+        total_exposure=ead_h3,
     )
 
     # Calculate effective RW
     effective_rw_h3 = float(rwa_after_sf_h3) / float(ead_h3)
 
-    exposure_details_h3 = [{
-        "entity": "SME Corporate",
-        "turnover_gbp": float(turnover_h3),
-        "sme_threshold_gbp": 44000000,
-        "is_sme": True,
-        "ead": float(ead_h3),
-        "base_rw": float(rw_h3),
-        "rwa_before_sf": float(rwa_before_sf_h3),
-        "supporting_factor": float(CRR_SME_SUPPORTING_FACTOR),
-        "rwa_after_sf": float(rwa_after_sf_h3),
-        "effective_rw": effective_rw_h3,
-    }]
+    exposure_details_h3 = [
+        {
+            "entity": "SME Corporate",
+            "turnover_gbp": float(turnover_h3),
+            "sme_threshold_gbp": 44000000,
+            "is_sme": True,
+            "ead": float(ead_h3),
+            "base_rw": float(rw_h3),
+            "rwa_before_sf": float(rwa_before_sf_h3),
+            "supporting_factor": float(CRR_SME_SUPPORTING_FACTOR),
+            "rwa_after_sf": float(rwa_after_sf_h3),
+            "effective_rw": effective_rw_h3,
+        }
+    ]
 
     result_crr_h3 = CRRComplexResult(
         scenario_id="CRR-H3",
@@ -425,7 +436,7 @@ def _(
             "is_eligible": True,
             "base_rw": "100%",
             "supporting_factor": float(CRR_SME_SUPPORTING_FACTOR),
-            "effective_rw": f"{effective_rw_h3*100:.2f}%",
+            "effective_rw": f"{effective_rw_h3 * 100:.2f}%",
             "rwa_reduction": float(rwa_before_sf_h3 - rwa_after_sf_h3),
             "note": "SME factor NOT available under Basel 3.1",
         },
@@ -436,7 +447,7 @@ def _(
     print(f"  Turnover=£{turnover_h3:,.0f}, EAD=£{ead_h3:,.0f}")
     print(f"  RWA before SF=£{rwa_before_sf_h3:,.0f}")
     print(f"  SF={CRR_SME_SUPPORTING_FACTOR}, RWA after SF=£{rwa_after_sf_h3:,.0f}")
-    print(f"  Effective RW={effective_rw_h3*100:.2f}%")
+    print(f"  Effective RW={effective_rw_h3 * 100:.2f}%")
     print(f"{sf_info}")
     return (result_crr_h3,)
 
@@ -510,37 +521,43 @@ def _(
     rwa_pre_crm_h4 = calculate_sa_rwa(gross_exp_h4, borrower_rw_h4)
     rwa_reduction_h4 = rwa_pre_crm_h4 - total_rwa_h4
 
-    exposure_details_h4 = [{
-        "step": "Gross Exposure",
-        "amount": float(gross_exp_h4),
-        "rw": float(borrower_rw_h4),
-        "rwa": float(rwa_pre_crm_h4),
-        "description": "Pre-CRM",
-    }, {
-        "step": "After Provision",
-        "amount": float(exp_after_prov_h4),
-        "rw": None,
-        "rwa": None,
-        "description": f"Less £{provision_h4:,.0f} provision",
-    }, {
-        "step": "After Cash Collateral",
-        "amount": float(exp_after_cash_h4),
-        "rw": None,
-        "rwa": None,
-        "description": f"Less £{cash_adjusted_h4:,.0f} cash",
-    }, {
-        "step": "Guaranteed Portion",
-        "amount": float(guaranteed_portion_h4),
-        "rw": float(guarantor_rw_h4),
-        "rwa": float(rwa_guaranteed_h4),
-        "description": "Bank guarantee (30% RW)",
-    }, {
-        "step": "Non-Guaranteed Portion",
-        "amount": float(non_guaranteed_h4),
-        "rw": float(borrower_rw_h4),
-        "rwa": float(rwa_non_guaranteed_h4),
-        "description": "Borrower risk (100% RW)",
-    }]
+    exposure_details_h4 = [
+        {
+            "step": "Gross Exposure",
+            "amount": float(gross_exp_h4),
+            "rw": float(borrower_rw_h4),
+            "rwa": float(rwa_pre_crm_h4),
+            "description": "Pre-CRM",
+        },
+        {
+            "step": "After Provision",
+            "amount": float(exp_after_prov_h4),
+            "rw": None,
+            "rwa": None,
+            "description": f"Less £{provision_h4:,.0f} provision",
+        },
+        {
+            "step": "After Cash Collateral",
+            "amount": float(exp_after_cash_h4),
+            "rw": None,
+            "rwa": None,
+            "description": f"Less £{cash_adjusted_h4:,.0f} cash",
+        },
+        {
+            "step": "Guaranteed Portion",
+            "amount": float(guaranteed_portion_h4),
+            "rw": float(guarantor_rw_h4),
+            "rwa": float(rwa_guaranteed_h4),
+            "description": "Bank guarantee (30% RW)",
+        },
+        {
+            "step": "Non-Guaranteed Portion",
+            "amount": float(non_guaranteed_h4),
+            "rw": float(borrower_rw_h4),
+            "rwa": float(rwa_non_guaranteed_h4),
+            "description": "Borrower risk (100% RW)",
+        },
+    ]
 
     result_crr_h4 = CRRComplexResult(
         scenario_id="CRR-H4",
@@ -574,10 +591,14 @@ def _(
 
     print(f"CRR-H4: Full CRM Chain")
     print(f"  Gross=£{gross_exp_h4:,.0f}")
-    print(f"  Provision=£{provision_h4:,.0f}, Cash=£{cash_coll_h4:,.0f}, Guarantee=£{guarantee_amount_h4:,.0f}")
+    print(
+        f"  Provision=£{provision_h4:,.0f}, Cash=£{cash_coll_h4:,.0f}, Guarantee=£{guarantee_amount_h4:,.0f}"
+    )
     print(f"  RWA pre-CRM=£{rwa_pre_crm_h4:,.0f}")
     print(f"  RWA post-CRM=£{total_rwa_h4:,.0f}")
-    print(f"  Reduction=£{rwa_reduction_h4:,.0f} ({float(rwa_reduction_h4/rwa_pre_crm_h4*100):.1f}%)")
+    print(
+        f"  Reduction=£{rwa_reduction_h4:,.0f} ({float(rwa_reduction_h4 / rwa_pre_crm_h4 * 100):.1f}%)"
+    )
     return (result_crr_h4,)
 
 
@@ -615,20 +636,25 @@ def _(mo):
 def _(mo, pl, result_crr_h1, result_crr_h2, result_crr_h3, result_crr_h4):
     """Compile all Group CRR-H results."""
     group_crr_h_results = [
-        result_crr_h1, result_crr_h2, result_crr_h3, result_crr_h4,
+        result_crr_h1,
+        result_crr_h2,
+        result_crr_h3,
+        result_crr_h4,
     ]
 
     # Create summary DataFrame
     summary_data_h = []
     for r in group_crr_h_results:
-        summary_data_h.append({
-            "Scenario": r.scenario_id,
-            "Description": r.description[:40] + "...",
-            "Exposures": r.num_exposures,
-            "Total EAD (£)": f"{r.total_ead:,.0f}",
-            "Total RWA (£)": f"{r.total_rwa:,.0f}",
-            "Features": ", ".join(r.features_tested[:2]),
-        })
+        summary_data_h.append(
+            {
+                "Scenario": r.scenario_id,
+                "Description": r.description[:40] + "...",
+                "Exposures": r.num_exposures,
+                "Total EAD (£)": f"{r.total_ead:,.0f}",
+                "Total RWA (£)": f"{r.total_rwa:,.0f}",
+                "Features": ", ".join(r.features_tested[:2]),
+            }
+        )
 
     summary_df_h = pl.DataFrame(summary_data_h)
     mo.ui.table(summary_df_h)
@@ -638,9 +664,11 @@ def _(mo, pl, result_crr_h1, result_crr_h2, result_crr_h3, result_crr_h4):
 @app.cell
 def _(group_crr_h_results):
     """Export function for use by main workbook."""
+
     def get_group_crr_h_results():
         """Return all Group CRR-H scenario results."""
         return group_crr_h_results
+
     return
 
 

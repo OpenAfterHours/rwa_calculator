@@ -156,12 +156,20 @@ class TestBasel31EquityHaircuts:
         assert BASEL31_COLLATERAL_HAIRCUTS["equity_other"] == Decimal("0.35")
 
     def test_lookup_equity_haircut_crr(self) -> None:
-        assert lookup_collateral_haircut("equity", is_main_index=True, is_basel_3_1=False) == Decimal("0.15")
-        assert lookup_collateral_haircut("equity", is_main_index=False, is_basel_3_1=False) == Decimal("0.25")
+        assert lookup_collateral_haircut(
+            "equity", is_main_index=True, is_basel_3_1=False
+        ) == Decimal("0.15")
+        assert lookup_collateral_haircut(
+            "equity", is_main_index=False, is_basel_3_1=False
+        ) == Decimal("0.25")
 
     def test_lookup_equity_haircut_b31(self) -> None:
-        assert lookup_collateral_haircut("equity", is_main_index=True, is_basel_3_1=True) == Decimal("0.25")
-        assert lookup_collateral_haircut("equity", is_main_index=False, is_basel_3_1=True) == Decimal("0.35")
+        assert lookup_collateral_haircut(
+            "equity", is_main_index=True, is_basel_3_1=True
+        ) == Decimal("0.25")
+        assert lookup_collateral_haircut(
+            "equity", is_main_index=False, is_basel_3_1=True
+        ) == Decimal("0.35")
 
 
 class TestBasel31BondHaircuts:
@@ -169,49 +177,77 @@ class TestBasel31BondHaircuts:
 
     def test_govt_bond_cqs1_short_same_both_frameworks(self) -> None:
         """Government bond CQS 1, 0-1y: 0.5% under both."""
-        crr = lookup_collateral_haircut("govt_bond", cqs=1, residual_maturity_years=0.5, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("govt_bond", cqs=1, residual_maturity_years=0.5, is_basel_3_1=True)
+        crr = lookup_collateral_haircut(
+            "govt_bond", cqs=1, residual_maturity_years=0.5, is_basel_3_1=False
+        )
+        b31 = lookup_collateral_haircut(
+            "govt_bond", cqs=1, residual_maturity_years=0.5, is_basel_3_1=True
+        )
         assert crr == Decimal("0.005")
         assert b31 == Decimal("0.005")
 
     def test_sovereign_cqs2_3_10y_plus_increases(self) -> None:
         """Sovereign CQS 2-3, 10y+: CRR 6% → Basel 3.1 12%."""
-        crr = lookup_collateral_haircut("govt_bond", cqs=2, residual_maturity_years=15.0, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("govt_bond", cqs=2, residual_maturity_years=15.0, is_basel_3_1=True)
+        crr = lookup_collateral_haircut(
+            "govt_bond", cqs=2, residual_maturity_years=15.0, is_basel_3_1=False
+        )
+        b31 = lookup_collateral_haircut(
+            "govt_bond", cqs=2, residual_maturity_years=15.0, is_basel_3_1=True
+        )
         assert crr == Decimal("0.06")
         assert b31 == Decimal("0.12")
 
     def test_corp_bond_cqs1_long_dated_increases(self) -> None:
         """Corporate CQS 1 long-dated: CRR 8% >5yr, B31 3-5y 6%, 5-10y 10%, 10y+ 12%."""
         # 3-5y: CRR uses 1-5y band (4%), B31 uses 3-5y band (6%)
-        crr = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=True)
+        crr = lookup_collateral_haircut(
+            "corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=False
+        )
+        b31 = lookup_collateral_haircut(
+            "corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=True
+        )
         assert crr == Decimal("0.04")
         assert b31 == Decimal("0.06")
 
         # 5-10y: CRR uses 5y+ band (8%), B31 uses 5-10y band (10%)
-        crr = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=True)
+        crr = lookup_collateral_haircut(
+            "corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=False
+        )
+        b31 = lookup_collateral_haircut(
+            "corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=True
+        )
         assert crr == Decimal("0.08")
         assert b31 == Decimal("0.10")
 
         # 10y+: CRR uses 5y+ band (8%), B31 uses 10y+ band (12%)
-        crr = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=True)
+        crr = lookup_collateral_haircut(
+            "corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=False
+        )
+        b31 = lookup_collateral_haircut(
+            "corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=True
+        )
         assert crr == Decimal("0.08")
         assert b31 == Decimal("0.12")
 
     def test_corp_bond_cqs2_3_long_dated_increases(self) -> None:
         """Corporate CQS 2-3 long-dated: CRR 12% >5yr, B31 5-10y/10y+ both 15%."""
         # CQS 2, 5-10y: CRR uses 5y+ band (12%), B31 uses 5-10y band (15%)
-        crr = lookup_collateral_haircut("corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=True)
+        crr = lookup_collateral_haircut(
+            "corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=False
+        )
+        b31 = lookup_collateral_haircut(
+            "corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=True
+        )
         assert crr == Decimal("0.12")
         assert b31 == Decimal("0.15")
 
         # CQS 3, 5-10y: CRR uses 5y+ band (12%), B31 uses 5-10y band (15%)
-        crr = lookup_collateral_haircut("corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=False)
-        b31 = lookup_collateral_haircut("corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=True)
+        crr = lookup_collateral_haircut(
+            "corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=False
+        )
+        b31 = lookup_collateral_haircut(
+            "corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=True
+        )
         assert crr == Decimal("0.12")
         assert b31 == Decimal("0.15")
 
@@ -321,19 +357,23 @@ class TestHaircutCalculatorFrameworkBranching:
         # CQS 2 is in CQS 2-3 group: 5-10y band = 15% under Basel 3.1
         assert result.collateral_haircut == Decimal("0.15")
 
-    def test_apply_haircuts_uses_config_framework(self, crr_config: CalculationConfig, b31_config: CalculationConfig) -> None:
+    def test_apply_haircuts_uses_config_framework(
+        self, crr_config: CalculationConfig, b31_config: CalculationConfig
+    ) -> None:
         """apply_haircuts produces different maturity bands based on config."""
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["C1"],
-            "collateral_type": ["govt_bond"],
-            "market_value": [100_000.0],
-            "currency": ["GBP"],
-            "exposure_currency": ["GBP"],
-            "residual_maturity_years": [7.0],
-            "issuer_cqs": [2],
-            "issuer_type": ["sovereign"],
-            "is_eligible_financial_collateral": [True],
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["C1"],
+                "collateral_type": ["govt_bond"],
+                "market_value": [100_000.0],
+                "currency": ["GBP"],
+                "exposure_currency": ["GBP"],
+                "residual_maturity_years": [7.0],
+                "issuer_cqs": [2],
+                "issuer_type": ["sovereign"],
+                "is_eligible_financial_collateral": [True],
+            }
+        )
 
         crr_calc = HaircutCalculator(is_basel_3_1=False)
         crr_result = crr_calc.apply_haircuts(collateral, crr_config).collect()
@@ -361,16 +401,18 @@ class TestCRMProcessorFIRBLGDBranching:
     def test_crr_processor_uses_45pct_senior_unsecured(self, crr_config: CalculationConfig) -> None:
         """CRR processor applies 45% LGD for senior unsecured F-IRB."""
         processor = CRMProcessor(is_basel_3_1=False)
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "counterparty_reference": ["CP1"],
-            "approach": [ApproachType.FIRB.value],
-            "ead_gross": [1_000_000.0],
-            "lgd_pre_crm": [0.45],
-            "seniority": ["senior"],
-            "parent_facility_reference": [None],
-            "currency": ["GBP"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "counterparty_reference": ["CP1"],
+                "approach": [ApproachType.FIRB.value],
+                "ead_gross": [1_000_000.0],
+                "lgd_pre_crm": [0.45],
+                "seniority": ["senior"],
+                "parent_facility_reference": [None],
+                "currency": ["GBP"],
+            }
+        )
 
         result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
         assert result["lgd_post_crm"][0] == pytest.approx(0.45)
@@ -378,16 +420,18 @@ class TestCRMProcessorFIRBLGDBranching:
     def test_b31_processor_uses_40pct_senior_unsecured(self, b31_config: CalculationConfig) -> None:
         """Basel 3.1 processor applies 40% LGD for senior unsecured F-IRB."""
         processor = CRMProcessor(is_basel_3_1=True)
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "counterparty_reference": ["CP1"],
-            "approach": [ApproachType.FIRB.value],
-            "ead_gross": [1_000_000.0],
-            "lgd_pre_crm": [0.40],
-            "seniority": ["senior"],
-            "parent_facility_reference": [None],
-            "currency": ["GBP"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "counterparty_reference": ["CP1"],
+                "approach": [ApproachType.FIRB.value],
+                "ead_gross": [1_000_000.0],
+                "lgd_pre_crm": [0.40],
+                "seniority": ["senior"],
+                "parent_facility_reference": [None],
+                "currency": ["GBP"],
+            }
+        )
 
         result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
         assert result["lgd_post_crm"][0] == pytest.approx(0.40)
@@ -396,16 +440,18 @@ class TestCRMProcessorFIRBLGDBranching:
         """Subordinated LGD = 75% under both CRR and Basel 3.1."""
         for is_b31 in [False, True]:
             processor = CRMProcessor(is_basel_3_1=is_b31)
-            exposures = pl.LazyFrame({
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.75],
-                "seniority": ["subordinated"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-            })
+            exposures = pl.LazyFrame(
+                {
+                    "exposure_reference": ["E1"],
+                    "counterparty_reference": ["CP1"],
+                    "approach": [ApproachType.FIRB.value],
+                    "ead_gross": [1_000_000.0],
+                    "lgd_pre_crm": [0.75],
+                    "seniority": ["subordinated"],
+                    "parent_facility_reference": [None],
+                    "currency": ["GBP"],
+                }
+            )
 
             result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
             assert result["lgd_post_crm"][0] == pytest.approx(0.75), (
@@ -416,16 +462,18 @@ class TestCRMProcessorFIRBLGDBranching:
         """A-IRB exposures keep their modelled LGD under both frameworks."""
         for is_b31 in [False, True]:
             processor = CRMProcessor(is_basel_3_1=is_b31)
-            exposures = pl.LazyFrame({
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.AIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.32],
-                "seniority": ["senior"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-            })
+            exposures = pl.LazyFrame(
+                {
+                    "exposure_reference": ["E1"],
+                    "counterparty_reference": ["CP1"],
+                    "approach": [ApproachType.AIRB.value],
+                    "ead_gross": [1_000_000.0],
+                    "lgd_pre_crm": [0.32],
+                    "seniority": ["senior"],
+                    "parent_facility_reference": [None],
+                    "currency": ["GBP"],
+                }
+            )
 
             result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
             assert result["lgd_post_crm"][0] == pytest.approx(0.32)
@@ -434,28 +482,32 @@ class TestCRMProcessorFIRBLGDBranching:
         """Without seniority column, F-IRB defaults to senior unsecured LGD."""
         # CRR: 45%
         crr = CRMProcessor(is_basel_3_1=False)
-        exp_crr = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "counterparty_reference": ["CP1"],
-            "approach": [ApproachType.FIRB.value],
-            "ead_gross": [1_000_000.0],
-            "lgd_pre_crm": [0.45],
-            "parent_facility_reference": [None],
-            "currency": ["GBP"],
-        })
+        exp_crr = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "counterparty_reference": ["CP1"],
+                "approach": [ApproachType.FIRB.value],
+                "ead_gross": [1_000_000.0],
+                "lgd_pre_crm": [0.45],
+                "parent_facility_reference": [None],
+                "currency": ["GBP"],
+            }
+        )
         result_crr = crr._apply_firb_supervisory_lgd_no_collateral(exp_crr).collect()
         assert result_crr["lgd_post_crm"][0] == pytest.approx(0.45)
 
         # Basel 3.1: 40%
         b31 = CRMProcessor(is_basel_3_1=True)
-        exp_b31 = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "counterparty_reference": ["CP1"],
-            "approach": [ApproachType.FIRB.value],
-            "ead_gross": [1_000_000.0],
-            "lgd_pre_crm": [0.40],
-            "parent_facility_reference": [None],
-            "currency": ["GBP"],
-        })
+        exp_b31 = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "counterparty_reference": ["CP1"],
+                "approach": [ApproachType.FIRB.value],
+                "ead_gross": [1_000_000.0],
+                "lgd_pre_crm": [0.40],
+                "parent_facility_reference": [None],
+                "currency": ["GBP"],
+            }
+        )
         result_b31 = b31._apply_firb_supervisory_lgd_no_collateral(exp_b31).collect()
         assert result_b31["lgd_post_crm"][0] == pytest.approx(0.40)

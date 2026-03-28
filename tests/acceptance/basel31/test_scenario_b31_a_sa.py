@@ -328,9 +328,7 @@ class TestB31GroupA_ParameterizedValidation:
         for scenario in b31_a_scenarios:
             rw = scenario["risk_weight"]
             if rw is not None:
-                assert 0.0 <= rw <= 2.5, (
-                    f"Scenario {scenario['scenario_id']} has invalid RW: {rw}"
-                )
+                assert 0.0 <= rw <= 2.5, f"Scenario {scenario['scenario_id']} has invalid RW: {rw}"
 
     def test_b31_a_no_supporting_factors(
         self,

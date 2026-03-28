@@ -361,9 +361,7 @@ class ParquetLoader:
         return RawDataBundle(
             facilities=self._load_parquet(self.config.facilities_file, FACILITY_SCHEMA),
             loans=self._load_parquet(self.config.loans_file, LOAN_SCHEMA),
-            counterparties=self._load_parquet(
-                self.config.counterparties_file, COUNTERPARTY_SCHEMA
-            ),
+            counterparties=self._load_parquet(self.config.counterparties_file, COUNTERPARTY_SCHEMA),
             facility_mappings=self._load_parquet(
                 self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
             ),
@@ -533,9 +531,7 @@ class CSVLoader:
         return RawDataBundle(
             facilities=self._load_csv(self.config.facilities_file, FACILITY_SCHEMA),
             loans=self._load_csv(self.config.loans_file, LOAN_SCHEMA),
-            counterparties=self._load_csv(
-                self.config.counterparties_file, COUNTERPARTY_SCHEMA
-            ),
+            counterparties=self._load_csv(self.config.counterparties_file, COUNTERPARTY_SCHEMA),
             facility_mappings=self._load_csv(
                 self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
             ),

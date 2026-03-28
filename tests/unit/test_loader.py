@@ -614,9 +614,7 @@ class TestHeaderNormalization:
                 counterparties_file=Path("counterparty/counterparties.parquet")
             ),
         )
-        result = loader._load_parquet(
-            loader.config.counterparties_file
-        ).collect()
+        result = loader._load_parquet(loader.config.counterparties_file).collect()
 
         assert "counterparty_id" in result.columns
         assert "counterparty_type" in result.columns
@@ -665,9 +663,7 @@ class TestHeaderNormalization:
 
         loader = CSVLoader(
             tmp_path,
-            config=DataSourceConfig(
-                counterparties_file=Path("counterparty/counterparties.csv")
-            ),
+            config=DataSourceConfig(counterparties_file=Path("counterparty/counterparties.csv")),
         )
         result = loader._load_csv(loader.config.counterparties_file).collect()
 

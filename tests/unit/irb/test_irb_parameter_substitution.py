@@ -67,9 +67,7 @@ def _compute_expected_irb_rw(
 class TestParameterSubstitutionMethod:
     """Tests for Basel 3.1 PD parameter substitution."""
 
-    def test_irb_guarantor_uses_parameter_substitution(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_irb_guarantor_uses_parameter_substitution(self, b31_config: CalculationConfig) -> None:
         """IRB guarantor under Basel 3.1 should use PD parameter substitution.
 
         The guaranteed portion RWA uses the guarantor's PD (0.005) and F-IRB
@@ -159,9 +157,7 @@ class TestParameterSubstitutionMethod:
         assert result["rwa"][0] == pytest.approx(0.0)
         assert result["guarantor_rw"][0] == pytest.approx(0.0)
 
-    def test_crr_always_uses_sa_rw_substitution(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_crr_always_uses_sa_rw_substitution(self, crr_config: CalculationConfig) -> None:
         """CRR should always use SA RW substitution, even for IRB guarantors."""
         ead = 1_000_000.0
         borrower_rw = 0.80  # Higher than guarantor's SA RW (20%) → beneficial
@@ -240,18 +236,14 @@ class TestParameterSubstitutionMethod:
         expected_rwa = (unguaranteed / ead) * borrower_rwa + guaranteed * expected_guarantor_rw
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-4)
 
-    def test_non_beneficial_parameter_sub_not_applied(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_non_beneficial_parameter_sub_not_applied(self, b31_config: CalculationConfig) -> None:
         """If guarantor's IRB RW >= borrower's RW, guarantee should not be applied."""
         # Set guarantor PD high enough that IRB RW exceeds borrower's
         guarantor_pd = 0.10  # High PD
         firb_lgd = 0.40
         maturity = 2.5
 
-        guarantor_rw = _compute_expected_irb_rw(
-            pd=guarantor_pd, lgd=firb_lgd, maturity=maturity
-        )
+        guarantor_rw = _compute_expected_irb_rw(pd=guarantor_pd, lgd=firb_lgd, maturity=maturity)
 
         # Borrower has lower RW than guarantor would
         borrower_rw = max(0.01, guarantor_rw - 0.10)  # Ensure lower than guarantor
@@ -289,9 +281,7 @@ class TestParameterSubstitutionMethod:
 class TestParameterSubstitutionExpectedLoss:
     """Tests for expected loss handling under parameter substitution."""
 
-    def test_irb_guarantor_el_uses_substituted_pd(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_irb_guarantor_el_uses_substituted_pd(self, b31_config: CalculationConfig) -> None:
         """IRB guarantor EL should use guarantor_pd × firb_lgd for guaranteed portion."""
         guarantor_pd = 0.005
         firb_lgd = 0.40
@@ -331,9 +321,7 @@ class TestParameterSubstitutionExpectedLoss:
         expected_el = unguaranteed_el + guaranteed_el
         assert result["expected_loss"][0] == pytest.approx(expected_el, rel=1e-4)
 
-    def test_sa_guarantor_el_zeroes_guaranteed_portion(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_sa_guarantor_el_zeroes_guaranteed_portion(self, b31_config: CalculationConfig) -> None:
         """SA guarantor under Basel 3.1: guaranteed portion has no EL (SA has no EL)."""
         ead = 1_000_000.0
         guaranteed = 600_000.0
@@ -417,9 +405,7 @@ class TestParametricIRBRiskWeightExpr:
 class TestMixedGuarantorApproaches:
     """Tests for mixed SA/IRB guarantor scenarios."""
 
-    def test_no_guarantor_pd_falls_back_to_sa_rw(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_no_guarantor_pd_falls_back_to_sa_rw(self, b31_config: CalculationConfig) -> None:
         """IRB guarantor without PD data falls back to SA RW substitution."""
         ead = 1_000_000.0
         borrower_rwa = 500_000.0

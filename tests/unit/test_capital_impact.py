@@ -123,7 +123,9 @@ class TestAdditivityInvariant:
         # CRR: rwa_final = 530_000 (includes 1.06 scaling + 0.7619 SME factor)
         # rwa_pre_factor = 695_850 (before supporting factor, includes 1.06)
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["foundation_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["foundation_irb"],
             rwa_finals=[530_000.0],
             rwa_pre_factors=[695_850.0],
             supporting_factors=[0.7619],
@@ -153,7 +155,9 @@ class TestAdditivityInvariant:
         # CRR: rwa_final = 76_190 (with 0.7619 SME factor)
         # rwa_pre_factor = 100_000 (before supporting factor)
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[76_190.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[0.7619],
@@ -216,13 +220,16 @@ class TestScalingFactorImpact:
     def test_irb_scaling_impact_is_negative(self) -> None:
         """Removing 1.06x reduces RWA, so impact should be negative."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["foundation_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["foundation_irb"],
             rwa_finals=[1_060_000.0],
             rwa_pre_factors=[1_060_000.0],
             supporting_factors=[1.0],
         )
         b31 = _make_b31_results(
-            ["EXP001"], rwa_finals=[1_000_000.0],
+            ["EXP001"],
+            rwa_finals=[1_000_000.0],
             rwa_pre_floors=[1_000_000.0],
         )
         comparison = _make_comparison(crr, b31)
@@ -238,7 +245,9 @@ class TestScalingFactorImpact:
     def test_sa_scaling_impact_is_zero(self) -> None:
         """SA exposures have no scaling factor — impact should be 0."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],
@@ -253,13 +262,16 @@ class TestScalingFactorImpact:
     def test_advanced_irb_also_gets_scaling_impact(self) -> None:
         """A-IRB exposures should also have scaling factor decomposed."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["advanced_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["advanced_irb"],
             rwa_finals=[530_000.0],
             rwa_pre_factors=[530_000.0],
             supporting_factors=[1.0],
         )
         b31 = _make_b31_results(
-            ["EXP001"], rwa_finals=[500_000.0],
+            ["EXP001"],
+            rwa_finals=[500_000.0],
             rwa_pre_floors=[500_000.0],
         )
         comparison = _make_comparison(crr, b31)
@@ -282,13 +294,16 @@ class TestSupportingFactorImpact:
         # CRR: rwa_pre_factor = 1_060_000 (with 1.06 scaling, before factor)
         # CRR: rwa_final = 1_060_000 * 0.7619 = 807_614
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["foundation_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["foundation_irb"],
             rwa_finals=[807_614.0],
             rwa_pre_factors=[1_060_000.0],
             supporting_factors=[0.7619],
         )
         b31 = _make_b31_results(
-            ["EXP001"], rwa_finals=[1_000_000.0],
+            ["EXP001"],
+            rwa_finals=[1_000_000.0],
             rwa_pre_floors=[1_000_000.0],
         )
         comparison = _make_comparison(crr, b31)
@@ -304,7 +319,9 @@ class TestSupportingFactorImpact:
     def test_sa_sme_supporting_factor_impact(self) -> None:
         """SA SME: supporting impact = rwa_pre_factor - rwa_final (no scaling)."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[76_190.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[0.7619],
@@ -323,7 +340,9 @@ class TestSupportingFactorImpact:
     def test_no_supporting_factor_means_zero_impact(self) -> None:
         """When supporting factor is 1.0 (not applied), impact should be 0."""
         crr = _make_crr_results(
-            ["EXP001"], ["institution"], ["SA"],
+            ["EXP001"],
+            ["institution"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],
@@ -347,7 +366,9 @@ class TestOutputFloorImpact:
     def test_floor_binding_produces_positive_impact(self) -> None:
         """When the floor binds, floor_impact should be positive."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["foundation_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["foundation_irb"],
             rwa_finals=[400_000.0],
             rwa_pre_factors=[400_000.0],
             supporting_factors=[1.0],
@@ -372,7 +393,9 @@ class TestOutputFloorImpact:
     def test_floor_not_binding_zero_impact(self) -> None:
         """When floor doesn't bind, floor impact should be 0."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["foundation_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["foundation_irb"],
             rwa_finals=[400_000.0],
             rwa_pre_factors=[400_000.0],
             supporting_factors=[1.0],
@@ -395,7 +418,9 @@ class TestOutputFloorImpact:
     def test_sa_exposure_has_no_floor_impact(self) -> None:
         """SA exposures are never subject to the output floor."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],
@@ -419,7 +444,9 @@ class TestMethodologyImpact:
     def test_sa_methodology_captures_rw_changes(self) -> None:
         """For SA with no supporting factor, all delta goes to methodology."""
         crr = _make_crr_results(
-            ["EXP001"], ["institution"], ["SA"],
+            ["EXP001"],
+            ["institution"],
+            ["SA"],
             rwa_finals=[200_000.0],
             rwa_pre_factors=[200_000.0],
             supporting_factors=[1.0],
@@ -440,7 +467,9 @@ class TestMethodologyImpact:
         """IRB methodology captures PD/LGD floor effects as residual."""
         # CRR: rwa_final = 530_000, rwa_pre_factor = 530_000 (no supporting factor)
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["foundation_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["foundation_irb"],
             rwa_finals=[530_000.0],
             rwa_pre_factors=[530_000.0],
             supporting_factors=[1.0],
@@ -480,7 +509,9 @@ class TestPortfolioWaterfall:
     def test_waterfall_has_four_steps(self) -> None:
         """Waterfall should have exactly 4 driver steps."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],
@@ -497,7 +528,8 @@ class TestPortfolioWaterfall:
     def test_waterfall_cumulative_ends_at_b31_rwa(self) -> None:
         """The final cumulative value should equal total B31 RWA."""
         crr = _make_crr_results(
-            ["SA1", "IRB1"], ["corporate", "corporate"],
+            ["SA1", "IRB1"],
+            ["corporate", "corporate"],
             ["SA", "foundation_irb"],
             rwa_finals=[100_000.0, 530_000.0],
             rwa_pre_factors=[100_000.0, 530_000.0],
@@ -520,7 +552,9 @@ class TestPortfolioWaterfall:
     def test_waterfall_driver_labels_present(self) -> None:
         """Each waterfall step should have a descriptive driver label."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],
@@ -549,7 +583,8 @@ class TestSummaryAggregation:
     def test_summary_by_class_groups_correctly(self) -> None:
         """Each exposure class should have aggregated driver totals."""
         crr = _make_crr_results(
-            ["EXP001", "EXP002"], ["corporate", "institution"],
+            ["EXP001", "EXP002"],
+            ["corporate", "institution"],
             ["SA", "SA"],
             rwa_finals=[100_000.0, 200_000.0],
             rwa_pre_factors=[100_000.0, 200_000.0],
@@ -575,7 +610,8 @@ class TestSummaryAggregation:
     def test_summary_by_approach_groups_correctly(self) -> None:
         """Each approach should have aggregated driver totals."""
         crr = _make_crr_results(
-            ["SA1", "IRB1"], ["corporate", "corporate"],
+            ["SA1", "IRB1"],
+            ["corporate", "corporate"],
             ["SA", "foundation_irb"],
             rwa_finals=[100_000.0, 530_000.0],
             rwa_pre_factors=[100_000.0, 530_000.0],
@@ -639,7 +675,9 @@ class TestEdgeCases:
     def test_zero_delta_all_drivers_zero(self) -> None:
         """When CRR == B31, all drivers should be zero."""
         crr = _make_crr_results(
-            ["EXP001"], ["central_govt_central_bank"], ["SA"],
+            ["EXP001"],
+            ["central_govt_central_bank"],
+            ["SA"],
             rwa_finals=[0.0],
             rwa_pre_factors=[0.0],
             supporting_factors=[1.0],
@@ -659,15 +697,17 @@ class TestEdgeCases:
     def test_no_rwa_pre_factor_column_defaults_to_rwa_final(self) -> None:
         """When rwa_pre_factor is missing, supporting impact should be 0."""
         crr = AggregatedResultBundle(
-            results=pl.LazyFrame({
-                "exposure_reference": ["EXP001"],
-                "exposure_class": ["corporate"],
-                "approach_applied": ["SA"],
-                "ead_final": [1_000_000.0],
-                "risk_weight": [1.0],
-                "rwa_final": [100_000.0],
-                # No rwa_pre_factor, no supporting_factor columns
-            }),
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "exposure_class": ["corporate"],
+                    "approach_applied": ["SA"],
+                    "ead_final": [1_000_000.0],
+                    "risk_weight": [1.0],
+                    "rwa_final": [100_000.0],
+                    # No rwa_pre_factor, no supporting_factor columns
+                }
+            ),
             errors=[],
         )
         b31 = _make_b31_results(["EXP001"], rwa_finals=[85_000.0])
@@ -684,7 +724,9 @@ class TestEdgeCases:
     def test_no_floor_impact_data_means_zero_floor_impact(self) -> None:
         """When floor_impact LazyFrame is None, floor impact should be 0."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["foundation_irb"],
+            ["EXP001"],
+            ["corporate"],
+            ["foundation_irb"],
             rwa_finals=[530_000.0],
             rwa_pre_factors=[530_000.0],
             supporting_factors=[1.0],
@@ -713,7 +755,9 @@ class TestCapitalImpactAnalyzer:
     def test_analyze_returns_capital_impact_bundle(self) -> None:
         """analyze() should return a CapitalImpactBundle with all fields."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],
@@ -732,7 +776,9 @@ class TestCapitalImpactAnalyzer:
     def test_bundle_is_frozen(self) -> None:
         """CapitalImpactBundle should be immutable."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],
@@ -748,7 +794,9 @@ class TestCapitalImpactAnalyzer:
     def test_errors_propagated_from_comparison(self) -> None:
         """Errors from the comparison bundle should propagate."""
         crr = _make_crr_results(
-            ["EXP001"], ["corporate"], ["SA"],
+            ["EXP001"],
+            ["corporate"],
+            ["SA"],
             rwa_finals=[100_000.0],
             rwa_pre_factors=[100_000.0],
             supporting_factors=[1.0],

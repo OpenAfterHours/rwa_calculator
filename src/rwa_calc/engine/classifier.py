@@ -258,9 +258,7 @@ class ExposureClassifier:
 
         # CCP fields (CRR Art. 300-311, CRE54.14-15)
         if "is_ccp_client_cleared" in cp_col_names:
-            select_cols.append(
-                pl.col("is_ccp_client_cleared").alias("cp_is_ccp_client_cleared")
-            )
+            select_cols.append(pl.col("is_ccp_client_cleared").alias("cp_is_ccp_client_cleared"))
 
         cp_cols = counterparties.select(select_cols)
 
@@ -320,11 +318,17 @@ class ExposureClassifier:
         return exposures.with_columns(
             [
                 # --- Exposure class mappings (SL table overrides entity_type) ---
-                pl.when(sl_override).then(sl_class).otherwise(pl.col("_sa_class"))
+                pl.when(sl_override)
+                .then(sl_class)
+                .otherwise(pl.col("_sa_class"))
                 .alias("exposure_class_sa"),
-                pl.when(sl_override).then(sl_class).otherwise(pl.col("_irb_class"))
+                pl.when(sl_override)
+                .then(sl_class)
+                .otherwise(pl.col("_irb_class"))
                 .alias("exposure_class_irb"),
-                pl.when(sl_override).then(sl_class).otherwise(pl.col("_sa_class"))
+                pl.when(sl_override)
+                .then(sl_class)
+                .otherwise(pl.col("_sa_class"))
                 .alias("exposure_class"),
                 # --- Mortgage flag ---
                 self._build_is_mortgage_expr(schema_names),
@@ -718,9 +722,8 @@ class ExposureClassifier:
         # Art. 114(3)/(4): EU domestic sovereign exposures must use SA
         # to receive the 0% RW — forced to standardised regardless of IRB permissions.
         _is_eu_domestic_sovereign = (
-            (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-            & build_eu_domestic_currency_expr("cp_country_code", "currency")
-        )
+            pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
+        ) & build_eu_domestic_currency_expr("cp_country_code", "currency")
 
         # --- Approach expression ---
         # CCP exposures must always use SA (CRR Art. 300-311, CRE54)

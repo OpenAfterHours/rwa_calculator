@@ -244,9 +244,7 @@ class TestSchemaConformance:
         missing = required - cp_cols
         assert not missing, f"Loaded counterparties missing hierarchy columns: {missing}"
 
-    def test_loaded_facilities_have_mapping_columns(
-        self, hierarchy_resolver, crr_config, tmp_path
-    ):
+    def test_loaded_facilities_have_mapping_columns(self, hierarchy_resolver, crr_config, tmp_path):
         """Loaded facilities have facility_reference and counterparty_reference for mapping."""
         ds_config = _write_minimal_dataset(tmp_path)
         loader = ParquetLoader(tmp_path, config=ds_config)
@@ -299,18 +297,24 @@ class TestDataIntegrity:
             facility_reference="FAC_CHILD",
             counterparty_reference="CHILD",
         )
-        fm_df = _make_facility_mappings_df([
-            {
-                "parent_facility_reference": "FAC_CHILD",
-                "child_reference": "LN_CHILD",
-                "child_type": "loan",
-            }
-        ])
+        fm_df = _make_facility_mappings_df(
+            [
+                {
+                    "parent_facility_reference": "FAC_CHILD",
+                    "child_reference": "LN_CHILD",
+                    "child_type": "loan",
+                }
+            ]
+        )
 
-        org_df = pl.DataFrame([{
-            "parent_counterparty_reference": "PARENT",
-            "child_counterparty_reference": "CHILD",
-        }])
+        org_df = pl.DataFrame(
+            [
+                {
+                    "parent_counterparty_reference": "PARENT",
+                    "child_counterparty_reference": "CHILD",
+                }
+            ]
+        )
         org_cast = []
         for col_name, col_type in ORG_MAPPING_SCHEMA.items():
             if col_name in org_df.columns:
@@ -335,9 +339,7 @@ class TestDataIntegrity:
         parent_mappings = resolved.counterparty_lookup.parent_mappings.collect()
         assert parent_mappings.height >= 1
 
-    def test_lending_group_totals_aggregated(
-        self, hierarchy_resolver, crr_config, tmp_path
-    ):
+    def test_lending_group_totals_aggregated(self, hierarchy_resolver, crr_config, tmp_path):
         """Lending group with two counterparties → aggregated exposure totals."""
         cp1 = _make_counterparty_df(
             counterparty_reference="CP_A",
@@ -373,25 +375,29 @@ class TestDataIntegrity:
         )
         fac_df = pl.concat([fac1, fac2])
 
-        fm_df = _make_facility_mappings_df([
-            {
-                "parent_facility_reference": "FAC_A",
-                "child_reference": "LN_A",
-                "child_type": "loan",
-            },
-            {
-                "parent_facility_reference": "FAC_B",
-                "child_reference": "LN_B",
-                "child_type": "loan",
-            },
-        ])
+        fm_df = _make_facility_mappings_df(
+            [
+                {
+                    "parent_facility_reference": "FAC_A",
+                    "child_reference": "LN_A",
+                    "child_type": "loan",
+                },
+                {
+                    "parent_facility_reference": "FAC_B",
+                    "child_reference": "LN_B",
+                    "child_type": "loan",
+                },
+            ]
+        )
 
-        lm_df = _make_lending_mappings_df([
-            {
-                "parent_counterparty_reference": "CP_A",
-                "child_counterparty_reference": "CP_B",
-            },
-        ])
+        lm_df = _make_lending_mappings_df(
+            [
+                {
+                    "parent_counterparty_reference": "CP_A",
+                    "child_counterparty_reference": "CP_B",
+                },
+            ]
+        )
 
         ds_config = _write_minimal_dataset(
             tmp_path,
@@ -452,9 +458,7 @@ class TestEdgeCases:
         exposures = resolved.exposures.collect()
         assert exposures.height >= 1
 
-    def test_minimal_dataset_loads_and_resolves(
-        self, hierarchy_resolver, crr_config, tmp_path
-    ):
+    def test_minimal_dataset_loads_and_resolves(self, hierarchy_resolver, crr_config, tmp_path):
         """Just counterparties + loans + facility → valid hierarchy resolution."""
         ds_config = _write_minimal_dataset(tmp_path)
         loader = ParquetLoader(tmp_path, config=ds_config)

@@ -1995,7 +1995,8 @@ class TestModelPermissions:
             },
         ).lazy()
         exposures, cps = _make_exposure_with_model_id(
-            country_code="DE", book_code="LEGACY",
+            country_code="DE",
+            book_code="LEGACY",
         )
         bundle = create_resolved_bundle(exposures, cps, model_permissions=model_perms)
         result = classifier.classify(bundle, crr_config)
@@ -2129,9 +2130,7 @@ class TestSlottingColumnsNullForNonSL:
             }
         ).lazy()
 
-        bundle = create_resolved_bundle(
-            exposures, counterparties, specialised_lending=sl_data
-        )
+        bundle = create_resolved_bundle(exposures, counterparties, specialised_lending=sl_data)
         result = classifier.classify(bundle, crr_config)
         df = result.all_exposures.collect()
 

@@ -58,7 +58,19 @@ def _():
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
 
-    return mo, pl, Path, project_root, load_fixtures, FIRB_LGD, PD_FLOORS, calculate_irb_rwa, apply_pd_floor, calculate_correlation, ScenarioResult
+    return (
+        mo,
+        pl,
+        Path,
+        project_root,
+        load_fixtures,
+        FIRB_LGD,
+        PD_FLOORS,
+        calculate_irb_rwa,
+        apply_pd_floor,
+        calculate_correlation,
+        ScenarioResult,
+    )
 
 
 @app.cell
@@ -132,9 +144,9 @@ def _(calculate_correlation, calculate_irb_rwa, FIRB_LGD, ScenarioResult):
         regulatory_reference="CRE31-32",
     )
 
-    print(f"B1: PD={pd_b1*100:.2f}%, LGD={lgd_b1*100:.0f}%, R={corr_b1:.4f}")
+    print(f"B1: PD={pd_b1 * 100:.2f}%, LGD={lgd_b1 * 100:.0f}%, R={corr_b1:.4f}")
     print(f"    K={irb_result_b1['k']:.6f}, MA={irb_result_b1['maturity_adjustment']:.4f}")
-    print(f"    RWA=£{rwa_b1:,.0f} (effective RW={rw_b1*100:.1f}%)")
+    print(f"    RWA=£{rwa_b1:,.0f} (effective RW={rw_b1 * 100:.1f}%)")
     return result_b1, pd_b1, lgd_b1, ead_b1, maturity_b1, corr_b1, irb_result_b1, rwa_b1, rw_b1
 
 
@@ -195,9 +207,20 @@ def _(calculate_correlation, calculate_irb_rwa, ScenarioResult):
         regulatory_reference="CRE32.9-12",
     )
 
-    print(f"B2: Collateral=£{collateral_b2:,.0f}, Blended LGD={lgd_b2*100:.1f}%")
-    print(f"    RWA=£{rwa_b2:,.0f} (effective RW={rw_b2*100:.1f}%)")
-    return result_b2, pd_b2, ead_b2, collateral_b2, covered_portion, lgd_b2, corr_b2, irb_result_b2, rwa_b2, rw_b2
+    print(f"B2: Collateral=£{collateral_b2:,.0f}, Blended LGD={lgd_b2 * 100:.1f}%")
+    print(f"    RWA=£{rwa_b2:,.0f} (effective RW={rw_b2 * 100:.1f}%)")
+    return (
+        result_b2,
+        pd_b2,
+        ead_b2,
+        collateral_b2,
+        covered_portion,
+        lgd_b2,
+        corr_b2,
+        irb_result_b2,
+        rwa_b2,
+        rw_b2,
+    )
 
 
 @app.cell
@@ -256,9 +279,22 @@ def _(calculate_correlation, calculate_irb_rwa, FIRB_LGD, ScenarioResult):
         regulatory_reference="CRE32.9-12",
     )
 
-    print(f"B3: Property=£{property_value_b3:,.0f}, LTV={ltv_b3*100:.0f}%, LGD={lgd_b3*100:.0f}%")
-    print(f"    RWA=£{rwa_b3:,.0f} (effective RW={rw_b3*100:.1f}%)")
-    return result_b3, pd_b3, ead_b3, property_value_b3, ltv_b3, lgd_b3, corr_b3, irb_result_b3, rwa_b3, rw_b3
+    print(
+        f"B3: Property=£{property_value_b3:,.0f}, LTV={ltv_b3 * 100:.0f}%, LGD={lgd_b3 * 100:.0f}%"
+    )
+    print(f"    RWA=£{rwa_b3:,.0f} (effective RW={rw_b3 * 100:.1f}%)")
+    return (
+        result_b3,
+        pd_b3,
+        ead_b3,
+        property_value_b3,
+        ltv_b3,
+        lgd_b3,
+        corr_b3,
+        irb_result_b3,
+        rwa_b3,
+        rw_b3,
+    )
 
 
 @app.cell
@@ -313,8 +349,8 @@ def _(calculate_correlation, calculate_irb_rwa, ScenarioResult):
         regulatory_reference="CRE31.8",
     )
 
-    print(f"B4: PD={pd_b4*100:.2f}%, LGD={lgd_b4*100:.0f}%, R={corr_b4:.2f} (fixed)")
-    print(f"    RWA=£{rwa_b4:,.0f} (effective RW={rw_b4*100:.1f}%)")
+    print(f"B4: PD={pd_b4 * 100:.2f}%, LGD={lgd_b4 * 100:.0f}%, R={corr_b4:.2f} (fixed)")
+    print(f"    RWA=£{rwa_b4:,.0f} (effective RW={rw_b4 * 100:.1f}%)")
     return result_b4, pd_b4, lgd_b4, ead_b4, corr_b4, irb_result_b4, rwa_b4, rw_b4
 
 
@@ -369,8 +405,8 @@ def _(calculate_correlation, calculate_irb_rwa, ScenarioResult):
         regulatory_reference="CRE31.9",
     )
 
-    print(f"B5: PD={pd_b5*100:.2f}%, LGD={lgd_b5*100:.0f}%, R={corr_b5:.2f} (fixed)")
-    print(f"    RWA=£{rwa_b5:,.0f} (effective RW={rw_b5*100:.1f}%)")
+    print(f"B5: PD={pd_b5 * 100:.2f}%, LGD={lgd_b5 * 100:.0f}%, R={corr_b5:.2f} (fixed)")
+    print(f"    RWA=£{rwa_b5:,.0f} (effective RW={rw_b5 * 100:.1f}%)")
     return result_b5, pd_b5, lgd_b5, ead_b5, corr_b5, irb_result_b5, rwa_b5, rw_b5
 
 
@@ -430,9 +466,21 @@ def _(calculate_correlation, calculate_irb_rwa, apply_pd_floor, PD_FLOORS, Scena
         regulatory_reference="CRE31.6",
     )
 
-    print(f"B6: Raw PD={pd_raw_b6*100:.3f}%, Floor={PD_FLOORS['CORPORATE']*100:.2f}%, Used PD={pd_floored_b6*100:.2f}%")
-    print(f"    RWA=£{rwa_b6:,.0f} (effective RW={rw_b6*100:.1f}%)")
-    return result_b6, pd_raw_b6, pd_floored_b6, lgd_b6, ead_b6, corr_b6, irb_result_b6, rwa_b6, rw_b6
+    print(
+        f"B6: Raw PD={pd_raw_b6 * 100:.3f}%, Floor={PD_FLOORS['CORPORATE'] * 100:.2f}%, Used PD={pd_floored_b6 * 100:.2f}%"
+    )
+    print(f"    RWA=£{rwa_b6:,.0f} (effective RW={rw_b6 * 100:.1f}%)")
+    return (
+        result_b6,
+        pd_raw_b6,
+        pd_floored_b6,
+        lgd_b6,
+        ead_b6,
+        corr_b6,
+        irb_result_b6,
+        rwa_b6,
+        rw_b6,
+    )
 
 
 @app.cell
@@ -450,13 +498,15 @@ def _(result_b1, result_b2, result_b3, result_b4, result_b5, result_b6, pl, mo):
 
     summary_data_b = []
     for r in group_b_results:
-        summary_data_b.append({
-            "Scenario": r.scenario_id,
-            "Description": r.description,
-            "EAD (£)": f"{r.ead:,.0f}",
-            "Eff. RW": f"{r.risk_weight*100:.1f}%",
-            "RWA (£)": f"{r.rwa:,.0f}",
-        })
+        summary_data_b.append(
+            {
+                "Scenario": r.scenario_id,
+                "Description": r.description,
+                "EAD (£)": f"{r.ead:,.0f}",
+                "Eff. RW": f"{r.risk_weight * 100:.1f}%",
+                "RWA (£)": f"{r.rwa:,.0f}",
+            }
+        )
 
     summary_df_b = pl.DataFrame(summary_data_b)
     mo.ui.table(summary_df_b)
@@ -467,6 +517,7 @@ def _(result_b1, result_b2, result_b3, result_b4, result_b5, result_b6, pl, mo):
 def _(group_b_results):
     def get_group_b_results():
         return group_b_results
+
     return (get_group_b_results,)
 
 

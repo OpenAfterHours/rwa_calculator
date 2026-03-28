@@ -184,9 +184,7 @@ class TestB31GroupC_FrameworkDifferences:
             if result is None:
                 continue
             approach = result.get("approach", "")
-            assert approach == "advanced_irb", (
-                f"{ref}: Should use A-IRB approach, got {approach}"
-            )
+            assert approach == "advanced_irb", f"{ref}: Should use A-IRB approach, got {approach}"
 
     def test_b31_c_lgd_floor_applied_to_retail(
         self,
@@ -264,9 +262,7 @@ class TestB31GroupC_FrameworkDifferences:
             if result is None:
                 continue
             is_airb = result.get("is_airb")
-            assert is_airb is True, (
-                f"{ref}: is_airb should be True for A-IRB, got {is_airb}"
-            )
+            assert is_airb is True, f"{ref}: is_airb should be True for A-IRB, got {is_airb}"
 
 
 class TestB31GroupC_ParameterizedValidation:
@@ -307,9 +303,7 @@ class TestB31GroupC_ParameterizedValidation:
             lgd = scenario["lgd"]
             assert lgd is not None, f"Scenario {scenario['scenario_id']} missing LGD"
             # Own estimates should be between 0 and 1
-            assert 0 < lgd < 1, (
-                f"Scenario {scenario['scenario_id']}: LGD {lgd} out of range"
-            )
+            assert 0 < lgd < 1, f"Scenario {scenario['scenario_id']}: LGD {lgd} out of range"
 
     def test_b31_c_rwa_positive(
         self,

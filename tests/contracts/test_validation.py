@@ -183,7 +183,10 @@ class TestValidateSchemaToErrors:
         }
 
         errors = validate_schema_to_errors(
-            lf, expected, context="test", optional_columns={"country_codes"},
+            lf,
+            expected,
+            context="test",
+            optional_columns={"country_codes"},
         )
 
         assert len(errors) == 0
@@ -198,7 +201,10 @@ class TestValidateSchemaToErrors:
         }
 
         errors = validate_schema_to_errors(
-            lf, expected, context="test", optional_columns={"country_codes"},
+            lf,
+            expected,
+            context="test",
+            optional_columns={"country_codes"},
         )
 
         assert len(errors) == 1

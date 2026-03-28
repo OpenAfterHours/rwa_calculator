@@ -16,10 +16,7 @@ if str(project_root) not in sys.path:
 from workbooks.crr_expected_outputs.data.crr_params import CRR_CCF
 
 
-def get_ccf(
-    commitment_type: str,
-    original_maturity_years: float | None = None
-) -> Decimal:
+def get_ccf(commitment_type: str, original_maturity_years: float | None = None) -> Decimal:
     """
     Get CCF for off-balance sheet item (CRR Art. 111).
 
@@ -45,13 +42,11 @@ def get_ccf(
         # 0% CCF
         "unconditionally_cancellable": "low_risk",
         "revocable": "low_risk",
-
         # 20% CCF
         "documentary_lc": "documentary_credit",
         "short_term_lc": "short_term_lc",
         "trade_lc": "documentary_credit",
         "undrawn_revolver_short": "undrawn_short_term",
-
         # 50% CCF
         "undrawn_revolver_long": "undrawn_long_term",
         "committed_undrawn": "undrawn_long_term",
@@ -62,7 +57,6 @@ def get_ccf(
         "nif": "nif_ruf",
         "ruf": "nif_ruf",
         "standby_letter_of_credit": "standby_lc",
-
         # 100% CCF
         "guarantee": "guarantee_given",
         "financial_guarantee": "guarantee_given",
@@ -87,9 +81,7 @@ def get_ccf(
 
 
 def calculate_ead_off_balance_sheet(
-    nominal_amount: Decimal,
-    commitment_type: str,
-    original_maturity_years: float | None = None
+    nominal_amount: Decimal, commitment_type: str, original_maturity_years: float | None = None
 ) -> tuple[Decimal, Decimal, str]:
     """
     Calculate EAD for off-balance sheet item (CRR Art. 111).

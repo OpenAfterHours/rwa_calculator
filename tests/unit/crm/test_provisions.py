@@ -312,9 +312,7 @@ class TestNegativeInterestAmount:
         row1 = result.filter(pl.col("exposure_reference") == "EXP001")
         row2 = result.filter(pl.col("exposure_reference") == "EXP002")
 
-        total_prov = (
-            row1["provision_allocated"][0] + row2["provision_allocated"][0]
-        )
+        total_prov = row1["provision_allocated"][0] + row2["provision_allocated"][0]
         assert total_prov == pytest.approx(10_000.0)
         # EXP001 gets less than half (200/450)
         assert row1["provision_allocated"][0] == pytest.approx(

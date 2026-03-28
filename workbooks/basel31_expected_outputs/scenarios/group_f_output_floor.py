@@ -50,7 +50,15 @@ def _():
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
 
-    return mo, pl, Path, load_fixtures, OUTPUT_FLOOR_PERCENTAGE, OUTPUT_FLOOR_TRANSITIONAL, ScenarioResult
+    return (
+        mo,
+        pl,
+        Path,
+        load_fixtures,
+        OUTPUT_FLOOR_PERCENTAGE,
+        OUTPUT_FLOOR_TRANSITIONAL,
+        ScenarioResult,
+    )
 
 
 @app.cell
@@ -62,17 +70,17 @@ def _(mo, OUTPUT_FLOOR_PERCENTAGE, OUTPUT_FLOOR_TRANSITIONAL):
 
     **Formula:** Final RWA = max(IRB RWA, Floor % × SA RWA)
 
-    **Floor at full implementation:** {OUTPUT_FLOOR_PERCENTAGE*100:.1f}%
+    **Floor at full implementation:** {OUTPUT_FLOOR_PERCENTAGE * 100:.1f}%
 
     **Transitional schedule:**
     | Year | Floor |
     |------|-------|
-    | 2027 | {OUTPUT_FLOOR_TRANSITIONAL[2027]*100:.0f}% |
-    | 2028 | {OUTPUT_FLOOR_TRANSITIONAL[2028]*100:.0f}% |
-    | 2029 | {OUTPUT_FLOOR_TRANSITIONAL[2029]*100:.0f}% |
-    | 2030 | {OUTPUT_FLOOR_TRANSITIONAL[2030]*100:.0f}% |
-    | 2031 | {OUTPUT_FLOOR_TRANSITIONAL[2031]*100:.0f}% |
-    | 2032+ | {OUTPUT_FLOOR_TRANSITIONAL[2032]*100:.1f}% |
+    | 2027 | {OUTPUT_FLOOR_TRANSITIONAL[2027] * 100:.0f}% |
+    | 2028 | {OUTPUT_FLOOR_TRANSITIONAL[2028] * 100:.0f}% |
+    | 2029 | {OUTPUT_FLOOR_TRANSITIONAL[2029] * 100:.0f}% |
+    | 2030 | {OUTPUT_FLOOR_TRANSITIONAL[2030] * 100:.0f}% |
+    | 2031 | {OUTPUT_FLOOR_TRANSITIONAL[2031] * 100:.0f}% |
+    | 2032+ | {OUTPUT_FLOOR_TRANSITIONAL[2032] * 100:.1f}% |
     """)
     return
 
@@ -129,9 +137,9 @@ def _(OUTPUT_FLOOR_PERCENTAGE, ScenarioResult):
         regulatory_reference="CRE99",
     )
 
-    print(f"F1: IRB RWA=£{rwa_irb_f1/1e6:.1f}m, SA RWA=£{rwa_sa_f1/1e6:.1f}m")
-    print(f"    Floor={OUTPUT_FLOOR_PERCENTAGE*100:.1f}% × SA = £{floor_f1/1e6:.1f}m")
-    print(f"    Final RWA=£{rwa_final_f1/1e6:.1f}m (floor binding: {floor_binding_f1})")
+    print(f"F1: IRB RWA=£{rwa_irb_f1 / 1e6:.1f}m, SA RWA=£{rwa_sa_f1 / 1e6:.1f}m")
+    print(f"    Floor={OUTPUT_FLOOR_PERCENTAGE * 100:.1f}% × SA = £{floor_f1 / 1e6:.1f}m")
+    print(f"    Final RWA=£{rwa_final_f1 / 1e6:.1f}m (floor binding: {floor_binding_f1})")
     return result_f1, rwa_irb_f1, rwa_sa_f1, floor_f1, rwa_final_f1, floor_binding_f1
 
 
@@ -181,9 +189,9 @@ def _(OUTPUT_FLOOR_PERCENTAGE, ScenarioResult):
         regulatory_reference="CRE99",
     )
 
-    print(f"F2: IRB RWA=£{rwa_irb_f2/1e6:.1f}m, SA RWA=£{rwa_sa_f2/1e6:.1f}m")
-    print(f"    Floor={OUTPUT_FLOOR_PERCENTAGE*100:.1f}% × SA = £{floor_f2/1e6:.1f}m")
-    print(f"    Final RWA=£{rwa_final_f2/1e6:.1f}m (floor binding: {floor_binding_f2})")
+    print(f"F2: IRB RWA=£{rwa_irb_f2 / 1e6:.1f}m, SA RWA=£{rwa_sa_f2 / 1e6:.1f}m")
+    print(f"    Floor={OUTPUT_FLOOR_PERCENTAGE * 100:.1f}% × SA = £{floor_f2 / 1e6:.1f}m")
+    print(f"    Final RWA=£{rwa_final_f2 / 1e6:.1f}m (floor binding: {floor_binding_f2})")
     return result_f2, rwa_irb_f2, rwa_sa_f2, floor_f2, rwa_final_f2, floor_binding_f2
 
 
@@ -235,10 +243,19 @@ def _(OUTPUT_FLOOR_TRANSITIONAL, ScenarioResult):
         regulatory_reference="CRE99, PRA PS9/24",
     )
 
-    print(f"F3 ({year_f3}): IRB=£{rwa_irb_f3/1e6:.1f}m, SA=£{rwa_sa_f3/1e6:.1f}m")
-    print(f"    Transitional floor={floor_pct_f3*100:.0f}% × SA = £{floor_f3/1e6:.1f}m")
-    print(f"    Final RWA=£{rwa_final_f3/1e6:.1f}m")
-    return result_f3, rwa_irb_f3, rwa_sa_f3, year_f3, floor_pct_f3, floor_f3, rwa_final_f3, floor_binding_f3
+    print(f"F3 ({year_f3}): IRB=£{rwa_irb_f3 / 1e6:.1f}m, SA=£{rwa_sa_f3 / 1e6:.1f}m")
+    print(f"    Transitional floor={floor_pct_f3 * 100:.0f}% × SA = £{floor_f3 / 1e6:.1f}m")
+    print(f"    Final RWA=£{rwa_final_f3 / 1e6:.1f}m")
+    return (
+        result_f3,
+        rwa_irb_f3,
+        rwa_sa_f3,
+        year_f3,
+        floor_pct_f3,
+        floor_f3,
+        rwa_final_f3,
+        floor_binding_f3,
+    )
 
 
 @app.cell
@@ -251,15 +268,18 @@ def _(mo):
 def _(result_f1, result_f2, result_f3, pl, mo):
     group_f_results = [result_f1, result_f2, result_f3]
 
-    summary_data_f = [{
-        "Scenario": r.scenario_id,
-        "Description": r.description,
-        "IRB RWA": f"£{r.calculation_details['rwa_irb']/1e6:.1f}m",
-        "SA RWA": f"£{r.calculation_details['rwa_sa_equivalent']/1e6:.1f}m",
-        "Floor %": f"{r.calculation_details['floor_percentage']*100:.1f}%",
-        "Final RWA": f"£{r.rwa/1e6:.1f}m",
-        "Binding": r.calculation_details['is_floor_binding'],
-    } for r in group_f_results]
+    summary_data_f = [
+        {
+            "Scenario": r.scenario_id,
+            "Description": r.description,
+            "IRB RWA": f"£{r.calculation_details['rwa_irb'] / 1e6:.1f}m",
+            "SA RWA": f"£{r.calculation_details['rwa_sa_equivalent'] / 1e6:.1f}m",
+            "Floor %": f"{r.calculation_details['floor_percentage'] * 100:.1f}%",
+            "Final RWA": f"£{r.rwa / 1e6:.1f}m",
+            "Binding": r.calculation_details["is_floor_binding"],
+        }
+        for r in group_f_results
+    ]
 
     mo.ui.table(pl.DataFrame(summary_data_f))
     return group_f_results, summary_data_f
@@ -269,6 +289,7 @@ def _(result_f1, result_f2, result_f3, pl, mo):
 def _(group_f_results):
     def get_group_f_results():
         return group_f_results
+
     return (get_group_f_results,)
 
 

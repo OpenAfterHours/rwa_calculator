@@ -228,12 +228,8 @@ class TestApproachSpecificCRM:
                     make_loan(loan_reference="LN_INST", counterparty_reference="CP_INST"),
                 ],
                 facilities=[
-                    make_facility(
-                        facility_reference="FAC_CORP", counterparty_reference="CP_CORP"
-                    ),
-                    make_facility(
-                        facility_reference="FAC_INST", counterparty_reference="CP_INST"
-                    ),
+                    make_facility(facility_reference="FAC_CORP", counterparty_reference="CP_CORP"),
+                    make_facility(facility_reference="FAC_INST", counterparty_reference="CP_INST"),
                 ],
             ),
             # Only corporate has internal rating -> gets FIRB
@@ -518,12 +514,8 @@ class TestApproachSplit:
                     make_loan(loan_reference="LN_INST", counterparty_reference="CP_INST"),
                 ],
                 facilities=[
-                    make_facility(
-                        facility_reference="FAC_CORP", counterparty_reference="CP_CORP"
-                    ),
-                    make_facility(
-                        facility_reference="FAC_INST", counterparty_reference="CP_INST"
-                    ),
+                    make_facility(facility_reference="FAC_CORP", counterparty_reference="CP_CORP"),
+                    make_facility(facility_reference="FAC_INST", counterparty_reference="CP_INST"),
                 ],
             ),
             # Corporate gets internal rating -> FIRB; institution has none -> SA

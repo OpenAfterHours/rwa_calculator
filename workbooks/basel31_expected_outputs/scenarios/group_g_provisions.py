@@ -55,7 +55,18 @@ def _():
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
 
-    return mo, pl, Path, load_fixtures, get_corporate_risk_weight, calculate_sa_rwa, calculate_irb_rwa, calculate_expected_loss, calculate_correlation, ScenarioResult
+    return (
+        mo,
+        pl,
+        Path,
+        load_fixtures,
+        get_corporate_risk_weight,
+        calculate_sa_rwa,
+        calculate_irb_rwa,
+        calculate_expected_loss,
+        calculate_correlation,
+        ScenarioResult,
+    )
 
 
 @app.cell
@@ -193,11 +204,23 @@ def _(calculate_irb_rwa, calculate_expected_loss, calculate_correlation, Scenari
         regulatory_reference="CRE35.1-3",
     )
 
-    print(f"G2: EL = {pd_g2*100:.1f}% × {lgd_g2*100:.0f}% × £{ead_g2:,.0f} = £{el_g2:,.0f}")
+    print(f"G2: EL = {pd_g2 * 100:.1f}% × {lgd_g2 * 100:.0f}% × £{ead_g2:,.0f} = £{el_g2:,.0f}")
     print(f"    Provision=£{provision_g2:,.0f}")
     print(f"    EL shortfall=£{el_shortfall_g2:,.0f}, EL excess=£{el_excess_g2:,.0f}")
     print(f"    RWA=£{rwa_g2:,.0f}")
-    return result_g2, ead_g2, pd_g2, lgd_g2, provision_g2, el_g2, el_shortfall_g2, el_excess_g2, corr_g2, irb_result_g2, rwa_g2
+    return (
+        result_g2,
+        ead_g2,
+        pd_g2,
+        lgd_g2,
+        provision_g2,
+        el_g2,
+        el_shortfall_g2,
+        el_excess_g2,
+        corr_g2,
+        irb_result_g2,
+        rwa_g2,
+    )
 
 
 @app.cell
@@ -256,11 +279,23 @@ def _(ScenarioResult):
         regulatory_reference="CRE35.4",
     )
 
-    print(f"G3 (defaulted): Best estimate EL = £{ead_g3:,.0f} × {lgd_best_estimate_g3*100:.0f}% = £{el_g3:,.0f}")
+    print(
+        f"G3 (defaulted): Best estimate EL = £{ead_g3:,.0f} × {lgd_best_estimate_g3 * 100:.0f}% = £{el_g3:,.0f}"
+    )
     print(f"    Stage 3 provision=£{provision_g3:,.0f}")
     print(f"    EL shortfall=£{el_shortfall_g3:,.0f} (deducted from CET1)")
     print(f"    RWA=£{rwa_g3:,.0f}")
-    return result_g3, ead_g3, pd_g3, lgd_best_estimate_g3, provision_g3, el_g3, el_shortfall_g3, el_excess_g3, rwa_g3
+    return (
+        result_g3,
+        ead_g3,
+        pd_g3,
+        lgd_best_estimate_g3,
+        provision_g3,
+        el_g3,
+        el_shortfall_g3,
+        el_excess_g3,
+        rwa_g3,
+    )
 
 
 @app.cell
@@ -273,12 +308,15 @@ def _(mo):
 def _(result_g1, result_g2, result_g3, pl, mo):
     group_g_results = [result_g1, result_g2, result_g3]
 
-    summary_data_g = [{
-        "Scenario": r.scenario_id,
-        "Description": r.description,
-        "EAD (£)": f"{r.ead:,.0f}",
-        "RWA (£)": f"{r.rwa:,.0f}",
-    } for r in group_g_results]
+    summary_data_g = [
+        {
+            "Scenario": r.scenario_id,
+            "Description": r.description,
+            "EAD (£)": f"{r.ead:,.0f}",
+            "RWA (£)": f"{r.rwa:,.0f}",
+        }
+        for r in group_g_results
+    ]
 
     mo.ui.table(pl.DataFrame(summary_data_g))
     return group_g_results, summary_data_g
@@ -288,6 +326,7 @@ def _(result_g1, result_g2, result_g3, pl, mo):
 def _(group_g_results):
     def get_group_g_results():
         return group_g_results
+
     return (get_group_g_results,)
 
 

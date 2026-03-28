@@ -43,43 +43,33 @@ class FixtureData:
 
     def get_counterparty(self, reference: str) -> dict | None:
         """Get a single counterparty by reference."""
-        result = self.counterparties.filter(
-            pl.col("counterparty_reference") == reference
-        ).collect()
+        result = self.counterparties.filter(pl.col("counterparty_reference") == reference).collect()
         if result.height == 0:
             return None
         return result.row(0, named=True)
 
     def get_loan(self, reference: str) -> dict | None:
         """Get a single loan by reference."""
-        result = self.loans.filter(
-            pl.col("loan_reference") == reference
-        ).collect()
+        result = self.loans.filter(pl.col("loan_reference") == reference).collect()
         if result.height == 0:
             return None
         return result.row(0, named=True)
 
     def get_facility(self, reference: str) -> dict | None:
         """Get a single facility by reference."""
-        result = self.facilities.filter(
-            pl.col("facility_reference") == reference
-        ).collect()
+        result = self.facilities.filter(pl.col("facility_reference") == reference).collect()
         if result.height == 0:
             return None
         return result.row(0, named=True)
 
     def get_contingent(self, reference: str) -> dict | None:
         """Get a single contingent exposure by reference."""
-        result = self.contingents.filter(
-            pl.col("contingent_reference") == reference
-        ).collect()
+        result = self.contingents.filter(pl.col("contingent_reference") == reference).collect()
         if result.height == 0:
             return None
         return result.row(0, named=True)
 
-    def get_collateral_for_beneficiary(
-        self, beneficiary_reference: str
-    ) -> list[dict]:
+    def get_collateral_for_beneficiary(self, beneficiary_reference: str) -> list[dict]:
         """Get all collateral linked to a specific beneficiary."""
         result = self.collateral.filter(
             pl.col("beneficiary_reference") == beneficiary_reference
@@ -88,9 +78,7 @@ class FixtureData:
             return []
         return result.to_dicts()
 
-    def get_guarantee_for_beneficiary(
-        self, beneficiary_reference: str
-    ) -> list[dict]:
+    def get_guarantee_for_beneficiary(self, beneficiary_reference: str) -> list[dict]:
         """Get all guarantees linked to a specific beneficiary."""
         result = self.guarantees.filter(
             pl.col("beneficiary_reference") == beneficiary_reference
@@ -99,9 +87,7 @@ class FixtureData:
             return []
         return result.to_dicts()
 
-    def get_provision_for_beneficiary(
-        self, beneficiary_reference: str
-    ) -> list[dict]:
+    def get_provision_for_beneficiary(self, beneficiary_reference: str) -> list[dict]:
         """Get all provisions linked to a specific beneficiary."""
         result = self.provisions.filter(
             pl.col("beneficiary_reference") == beneficiary_reference
@@ -113,8 +99,7 @@ class FixtureData:
     def get_rating(self, counterparty_reference: str) -> dict | None:
         """Get the most recent external rating for a counterparty."""
         result = (
-            self.ratings
-            .filter(pl.col("counterparty_reference") == counterparty_reference)
+            self.ratings.filter(pl.col("counterparty_reference") == counterparty_reference)
             .filter(pl.col("rating_type") == "external")
             .sort("rating_date", descending=True)
             .collect()
@@ -131,8 +116,7 @@ class FixtureData:
         as a secondary sort key for deterministic ordering.
         """
         result = (
-            self.ratings
-            .filter(pl.col("counterparty_reference") == counterparty_reference)
+            self.ratings.filter(pl.col("counterparty_reference") == counterparty_reference)
             .filter(pl.col("rating_type") == "internal")
             .sort(["rating_date", "rating_reference"], descending=[True, True])
             .collect()
@@ -140,7 +124,6 @@ class FixtureData:
         if result.height == 0:
             return None
         return result.row(0, named=True)
-
 
 
 def get_fixture_path() -> Path:
@@ -177,25 +160,20 @@ def load_fixtures() -> FixtureData:
     return FixtureData(
         # Counterparties
         counterparties=pl.scan_parquet(fixture_path / "counterparty" / "counterparties.parquet"),
-
         # Exposures
         facilities=pl.scan_parquet(fixture_path / "exposures" / "facilities.parquet"),
         loans=pl.scan_parquet(fixture_path / "exposures" / "loans.parquet"),
         contingents=pl.scan_parquet(fixture_path / "exposures" / "contingents.parquet"),
         facility_mappings=pl.scan_parquet(fixture_path / "exposures" / "facility_mapping.parquet"),
-
         # Credit risk mitigation
         collateral=pl.scan_parquet(fixture_path / "collateral" / "collateral.parquet"),
         guarantees=pl.scan_parquet(fixture_path / "guarantee" / "guarantee.parquet"),
         provisions=pl.scan_parquet(fixture_path / "provision" / "provision.parquet"),
-
         # Ratings
         ratings=pl.scan_parquet(fixture_path / "ratings" / "ratings.parquet"),
-
         # Mappings
         lending_mappings=pl.scan_parquet(fixture_path / "mapping" / "lending_mapping.parquet"),
         org_mappings=_load_optional_parquet(fixture_path / "mapping" / "org_mapping.parquet"),
-
         # Specialised lending metadata
         specialised_lending=_load_optional_parquet(
             fixture_path / "ratings" / "specialised_lending.parquet"
@@ -215,22 +193,22 @@ def load_fixtures_eager() -> dict[str, pl.DataFrame]:
     return {
         # Counterparties
         "counterparties": pl.read_parquet(fixture_path / "counterparty" / "counterparties.parquet"),
-
         # Exposures
         "facilities": pl.read_parquet(fixture_path / "exposures" / "facilities.parquet"),
         "loans": pl.read_parquet(fixture_path / "exposures" / "loans.parquet"),
         "contingents": pl.read_parquet(fixture_path / "exposures" / "contingents.parquet"),
-        "facility_mappings": pl.read_parquet(fixture_path / "exposures" / "facility_mapping.parquet"),
-
+        "facility_mappings": pl.read_parquet(
+            fixture_path / "exposures" / "facility_mapping.parquet"
+        ),
         # Credit risk mitigation
         "collateral": pl.read_parquet(fixture_path / "collateral" / "collateral.parquet"),
         "guarantees": pl.read_parquet(fixture_path / "guarantee" / "guarantee.parquet"),
         "provisions": pl.read_parquet(fixture_path / "provision" / "provision.parquet"),
-
         # Ratings
         "ratings": pl.read_parquet(fixture_path / "ratings" / "ratings.parquet"),
-
         # Mappings
         "lending_mappings": pl.read_parquet(fixture_path / "mapping" / "lending_mapping.parquet"),
-        "org_mappings": _load_optional_parquet_eager(fixture_path / "mapping" / "org_mapping.parquet"),
+        "org_mappings": _load_optional_parquet_eager(
+            fixture_path / "mapping" / "org_mapping.parquet"
+        ),
     }

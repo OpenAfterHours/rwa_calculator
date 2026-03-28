@@ -126,7 +126,7 @@ def _(get_slotting_risk_weight, calculate_sa_rwa, ScenarioResult):
         regulatory_reference="CRE33.5",
     )
 
-    print(f"E1: PF Strong, EAD=£{ead_e1:,.0f}, RW={rw_e1*100:.0f}%, RWA=£{rwa_e1:,.0f}")
+    print(f"E1: PF Strong, EAD=£{ead_e1:,.0f}, RW={rw_e1 * 100:.0f}%, RWA=£{rwa_e1:,.0f}")
     return result_e1, ead_e1, category_e1, maturity_e1, rw_e1, rwa_e1
 
 
@@ -172,7 +172,7 @@ def _(get_slotting_risk_weight, calculate_sa_rwa, ScenarioResult):
         regulatory_reference="CRE33.5",
     )
 
-    print(f"E2: PF Good, EAD=£{ead_e2:,.0f}, RW={rw_e2*100:.0f}%, RWA=£{rwa_e2:,.0f}")
+    print(f"E2: PF Good, EAD=£{ead_e2:,.0f}, RW={rw_e2 * 100:.0f}%, RWA=£{rwa_e2:,.0f}")
     return result_e2, ead_e2, category_e2, maturity_e2, rw_e2, rwa_e2
 
 
@@ -218,7 +218,7 @@ def _(get_slotting_risk_weight, calculate_sa_rwa, ScenarioResult):
         regulatory_reference="CRE33.5",
     )
 
-    print(f"E3: IPRE Satisfactory, EAD=£{ead_e3:,.0f}, RW={rw_e3*100:.0f}%, RWA=£{rwa_e3:,.0f}")
+    print(f"E3: IPRE Satisfactory, EAD=£{ead_e3:,.0f}, RW={rw_e3 * 100:.0f}%, RWA=£{rwa_e3:,.0f}")
     return result_e3, ead_e3, category_e3, maturity_e3, rw_e3, rwa_e3
 
 
@@ -266,7 +266,7 @@ def _(get_slotting_risk_weight, calculate_sa_rwa, ScenarioResult):
         regulatory_reference="CRE33.5-6",
     )
 
-    print(f"E4: HVCRE Good, EAD=£{ead_e4:,.0f}, RW={rw_e4*100:.1f}%, RWA=£{rwa_e4:,.0f}")
+    print(f"E4: HVCRE Good, EAD=£{ead_e4:,.0f}, RW={rw_e4 * 100:.1f}%, RWA=£{rwa_e4:,.0f}")
     return result_e4, ead_e4, category_e4, maturity_e4, rw_e4, rwa_e4
 
 
@@ -280,13 +280,16 @@ def _(mo):
 def _(result_e1, result_e2, result_e3, result_e4, pl, mo):
     group_e_results = [result_e1, result_e2, result_e3, result_e4]
 
-    summary_data_e = [{
-        "Scenario": r.scenario_id,
-        "Description": r.description,
-        "EAD (£)": f"{r.ead:,.0f}",
-        "RW": f"{r.risk_weight*100:.1f}%",
-        "RWA (£)": f"{r.rwa:,.0f}",
-    } for r in group_e_results]
+    summary_data_e = [
+        {
+            "Scenario": r.scenario_id,
+            "Description": r.description,
+            "EAD (£)": f"{r.ead:,.0f}",
+            "RW": f"{r.risk_weight * 100:.1f}%",
+            "RWA (£)": f"{r.rwa:,.0f}",
+        }
+        for r in group_e_results
+    ]
 
     mo.ui.table(pl.DataFrame(summary_data_e))
     return group_e_results, summary_data_e
@@ -296,6 +299,7 @@ def _(result_e1, result_e2, result_e3, result_e4, pl, mo):
 def _(group_e_results):
     def get_group_e_results():
         return group_e_results
+
     return (get_group_e_results,)
 
 

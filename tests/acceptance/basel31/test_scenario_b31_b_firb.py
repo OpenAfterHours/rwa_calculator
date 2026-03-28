@@ -313,8 +313,12 @@ class TestB31GroupB_FrameworkDifferences:
         """Verify F-IRB exposures use Basel 3.1 supervisory LGD values."""
         # Senior unsecured should be 40% under Basel 3.1
         senior_refs = [
-            "LOAN_CORP_UK_001", "LOAN_CORP_UK_005", "LOAN_COLL_001",
-            "LOAN_CORP_SME_001", "LOAN_CORP_UK_002", "LOAN_LONG_MAT_001",
+            "LOAN_CORP_UK_001",
+            "LOAN_CORP_UK_005",
+            "LOAN_COLL_001",
+            "LOAN_CORP_SME_001",
+            "LOAN_CORP_UK_002",
+            "LOAN_LONG_MAT_001",
         ]
         for ref in senior_refs:
             result = get_result_for_exposure(firb_results_df, ref)

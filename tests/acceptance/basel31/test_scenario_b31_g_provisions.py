@@ -243,9 +243,7 @@ class TestB31GroupG_FrameworkDifferences:
         sa_result = get_result_for_exposure(pipeline_results_df, "LOAN_PROV_G1")
         if sa_result is not None:
             sf = sa_result.get("supporting_factor", 1.0)
-            assert sf == pytest.approx(1.0, abs=0.0001), (
-                f"B31-G1: SF should be 1.0, got {sf}"
-            )
+            assert sf == pytest.approx(1.0, abs=0.0001), f"B31-G1: SF should be 1.0, got {sf}"
         # Check IRB exposures
         for ref in ["LOAN_PROV_G2", "LOAN_PROV_G3"]:
             result = get_result_for_exposure(firb_results_df, ref)
@@ -339,8 +337,7 @@ class TestB31GroupG_ELShortfallExcess:
 
         assert "el_excess" in result, "el_excess column missing from IRB results"
         assert result["el_excess"] == pytest.approx(40_000.0, rel=0.01), (
-            f"B31-G3: el_excess should be 40,000 (prov 50k - EL 10k), "
-            f"got {result['el_excess']}"
+            f"B31-G3: el_excess should be 40,000 (prov 50k - EL 10k), got {result['el_excess']}"
         )
 
     def test_b31_g3_el_shortfall_is_zero(
@@ -354,8 +351,7 @@ class TestB31GroupG_ELShortfallExcess:
 
         assert "el_shortfall" in result, "el_shortfall column missing from IRB results"
         assert result["el_shortfall"] == pytest.approx(0.0, abs=0.01), (
-            f"B31-G3: el_shortfall should be 0 (provisions > EL), "
-            f"got {result['el_shortfall']}"
+            f"B31-G3: el_shortfall should be 0 (provisions > EL), got {result['el_shortfall']}"
         )
 
     def test_b31_g2_shortfall_lower_than_crr(
@@ -450,9 +446,7 @@ class TestB31GroupG_ParameterizedValidation:
         """Verify B31-G2 and G3 (EL shortfall/excess) use F-IRB approach."""
         for scenario_id in ["B31-G2", "B31-G3"]:
             scenario = expected_outputs_dict[scenario_id]
-            assert scenario["approach"] == "F-IRB", (
-                f"{scenario_id} should use F-IRB approach"
-            )
+            assert scenario["approach"] == "F-IRB", f"{scenario_id} should use F-IRB approach"
 
     def test_b31_g_irb_scenarios_have_expected_loss(
         self,
@@ -461,9 +455,7 @@ class TestB31GroupG_ParameterizedValidation:
         """Verify IRB provision scenarios have expected loss calculated."""
         for scenario_id in ["B31-G2", "B31-G3"]:
             scenario = expected_outputs_dict[scenario_id]
-            assert scenario["expected_loss"] is not None, (
-                f"{scenario_id} should have expected loss"
-            )
+            assert scenario["expected_loss"] is not None, f"{scenario_id} should have expected loss"
             assert scenario["expected_loss"] > 0, (
                 f"{scenario_id} should have positive expected loss"
             )
@@ -486,9 +478,7 @@ class TestB31GroupG_ParameterizedValidation:
         """Verify all B31-G scenarios have SF=1.0 (disabled under Basel 3.1)."""
         for scenario in b31_g_scenarios:
             sf = scenario["supporting_factor"]
-            assert sf == 1.0, (
-                f"Scenario {scenario['scenario_id']}: SF should be 1.0, got {sf}"
-            )
+            assert sf == 1.0, f"Scenario {scenario['scenario_id']}: SF should be 1.0, got {sf}"
             assert scenario["rwa_before_sf"] == pytest.approx(
                 scenario["rwa_after_sf"], rel=0.001
             ), (

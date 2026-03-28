@@ -205,27 +205,35 @@ class TestBuildTimelineLazyframe:
         df = timeline.collect()
         assert df.height == 0
         expected_cols = {
-            "reporting_date", "year", "floor_percentage",
-            "total_rwa_pre_floor", "total_rwa_post_floor",
-            "total_floor_impact", "floor_binding_count",
-            "total_irb_exposure_count", "total_ead", "total_sa_rwa",
+            "reporting_date",
+            "year",
+            "floor_percentage",
+            "total_rwa_pre_floor",
+            "total_rwa_post_floor",
+            "total_floor_impact",
+            "floor_binding_count",
+            "total_irb_exposure_count",
+            "total_ead",
+            "total_sa_rwa",
         }
         assert expected_cols == set(df.columns)
 
     def test_single_row(self):
         """Single row should produce valid timeline."""
-        rows = [{
-            "reporting_date": date(2027, 6, 30),
-            "year": 2027,
-            "floor_percentage": 0.50,
-            "total_rwa_pre_floor": 100_000.0,
-            "total_rwa_post_floor": 120_000.0,
-            "total_floor_impact": 20_000.0,
-            "floor_binding_count": 5,
-            "total_irb_exposure_count": 10,
-            "total_ead": 500_000.0,
-            "total_sa_rwa": 200_000.0,
-        }]
+        rows = [
+            {
+                "reporting_date": date(2027, 6, 30),
+                "year": 2027,
+                "floor_percentage": 0.50,
+                "total_rwa_pre_floor": 100_000.0,
+                "total_rwa_post_floor": 120_000.0,
+                "total_floor_impact": 20_000.0,
+                "floor_binding_count": 5,
+                "total_irb_exposure_count": 10,
+                "total_ead": 500_000.0,
+                "total_sa_rwa": 200_000.0,
+            }
+        ]
         timeline = _build_timeline_lazyframe(rows)
         df = timeline.collect()
         assert df.height == 1
@@ -236,18 +244,28 @@ class TestBuildTimelineLazyframe:
         """Multiple rows should appear in the LazyFrame in order."""
         rows = [
             {
-                "reporting_date": date(2027, 6, 30), "year": 2027,
-                "floor_percentage": 0.50, "total_rwa_pre_floor": 0.0,
-                "total_rwa_post_floor": 0.0, "total_floor_impact": 0.0,
-                "floor_binding_count": 0, "total_irb_exposure_count": 0,
-                "total_ead": 0.0, "total_sa_rwa": 0.0,
+                "reporting_date": date(2027, 6, 30),
+                "year": 2027,
+                "floor_percentage": 0.50,
+                "total_rwa_pre_floor": 0.0,
+                "total_rwa_post_floor": 0.0,
+                "total_floor_impact": 0.0,
+                "floor_binding_count": 0,
+                "total_irb_exposure_count": 0,
+                "total_ead": 0.0,
+                "total_sa_rwa": 0.0,
             },
             {
-                "reporting_date": date(2032, 6, 30), "year": 2032,
-                "floor_percentage": 0.725, "total_rwa_pre_floor": 0.0,
-                "total_rwa_post_floor": 0.0, "total_floor_impact": 0.0,
-                "floor_binding_count": 0, "total_irb_exposure_count": 0,
-                "total_ead": 0.0, "total_sa_rwa": 0.0,
+                "reporting_date": date(2032, 6, 30),
+                "year": 2032,
+                "floor_percentage": 0.725,
+                "total_rwa_pre_floor": 0.0,
+                "total_rwa_post_floor": 0.0,
+                "total_floor_impact": 0.0,
+                "floor_binding_count": 0,
+                "total_irb_exposure_count": 0,
+                "total_ead": 0.0,
+                "total_sa_rwa": 0.0,
             },
         ]
         timeline = _build_timeline_lazyframe(rows)
@@ -257,18 +275,20 @@ class TestBuildTimelineLazyframe:
 
     def test_column_types(self):
         """Timeline columns should have correct Polars types."""
-        rows = [{
-            "reporting_date": date(2027, 6, 30),
-            "year": 2027,
-            "floor_percentage": 0.50,
-            "total_rwa_pre_floor": 0.0,
-            "total_rwa_post_floor": 0.0,
-            "total_floor_impact": 0.0,
-            "floor_binding_count": 0,
-            "total_irb_exposure_count": 0,
-            "total_ead": 0.0,
-            "total_sa_rwa": 0.0,
-        }]
+        rows = [
+            {
+                "reporting_date": date(2027, 6, 30),
+                "year": 2027,
+                "floor_percentage": 0.50,
+                "total_rwa_pre_floor": 0.0,
+                "total_rwa_post_floor": 0.0,
+                "total_floor_impact": 0.0,
+                "floor_binding_count": 0,
+                "total_irb_exposure_count": 0,
+                "total_ead": 0.0,
+                "total_sa_rwa": 0.0,
+            }
+        ]
         timeline = _build_timeline_lazyframe(rows)
         schema = timeline.collect_schema()
         assert schema["reporting_date"] == pl.Date
@@ -335,10 +355,16 @@ class TestTransitionalScheduleRunner:
         )
         df = result.timeline.collect()
         expected_cols = {
-            "reporting_date", "year", "floor_percentage",
-            "total_rwa_pre_floor", "total_rwa_post_floor",
-            "total_floor_impact", "floor_binding_count",
-            "total_irb_exposure_count", "total_ead", "total_sa_rwa",
+            "reporting_date",
+            "year",
+            "floor_percentage",
+            "total_rwa_pre_floor",
+            "total_rwa_post_floor",
+            "total_floor_impact",
+            "floor_binding_count",
+            "total_irb_exposure_count",
+            "total_ead",
+            "total_sa_rwa",
         }
         assert expected_cols == set(df.columns)
 

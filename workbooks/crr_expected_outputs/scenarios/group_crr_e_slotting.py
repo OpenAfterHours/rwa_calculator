@@ -46,6 +46,7 @@ def _():
         CRR_SLOTTING_RW,
         CRR_SLOTTING_RW_HVCRE,
     )
+
     return (
         CRR_SLOTTING_RW,
         CRR_SLOTTING_RW_HVCRE,
@@ -110,10 +111,7 @@ def _():
     """Helper functions for slotting calculations."""
     from decimal import Decimal
 
-    def get_slotting_rw(
-        category: str,
-        is_hvcre: bool = False
-    ) -> Decimal:
+    def get_slotting_rw(category: str, is_hvcre: bool = False) -> Decimal:
         """
         Get CRR slotting risk weight for specialised lending (>=2.5yr maturity).
 
@@ -149,9 +147,7 @@ def _():
         return weights.get(category.lower(), Decimal("1.15"))
 
     def calculate_slotting_rwa(
-        ead: Decimal,
-        category: str,
-        is_hvcre: bool = False
+        ead: Decimal, category: str, is_hvcre: bool = False
     ) -> tuple[Decimal, Decimal]:
         """
         Calculate RWA using slotting approach.
@@ -168,7 +164,10 @@ def _():
         rwa = ead * rw
         return rw, rwa
 
-    return (calculate_slotting_rwa, get_slotting_rw,)
+    return (
+        calculate_slotting_rwa,
+        get_slotting_rw,
+    )
 
 
 @app.cell
@@ -180,6 +179,7 @@ def _():
     @dataclass
     class CRRSlottingResult:
         """Container for a single CRR slotting scenario calculation result."""
+
         scenario_id: str
         scenario_group: str
         description: str
@@ -198,6 +198,7 @@ def _():
 
         def to_dict(self) -> dict[str, Any]:
             return asdict(self)
+
     return (CRRSlottingResult,)
 
 
@@ -262,7 +263,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
     )
 
     print(f"CRR-E1: Project Finance (Strong)")
-    print(f"  EAD=£{ead_e1:,.0f}, RW={rw_e1*100:.0f}%, RWA=£{rwa_e1:,.0f}")
+    print(f"  EAD=£{ead_e1:,.0f}, RW={rw_e1 * 100:.0f}%, RWA=£{rwa_e1:,.0f}")
     return (result_crr_e1,)
 
 
@@ -314,13 +315,13 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
             "crr_rw": "90% (>=2.5yr), 70% (<2.5yr)",
             "basel31_rw": "90% operational",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_e2:,.0f} × {rw_e2*100:.0f}% = £{rwa_e2:,.0f}",
+            "calculation": f"RWA = £{ead_e2:,.0f} × {rw_e2 * 100:.0f}% = £{rwa_e2:,.0f}",
         },
         regulatory_reference="CRR Art. 153(5)",
     )
 
     print(f"CRR-E2: Project Finance (Good)")
-    print(f"  EAD=£{ead_e2:,.0f}, RW={rw_e2*100:.0f}%, RWA=£{rwa_e2:,.0f}")
+    print(f"  EAD=£{ead_e2:,.0f}, RW={rw_e2 * 100:.0f}%, RWA=£{rwa_e2:,.0f}")
     return (result_crr_e2,)
 
 
@@ -384,7 +385,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
     )
 
     print(f"CRR-E3: IPRE (Weak)")
-    print(f"  EAD=£{ead_e3:,.0f}, RW={rw_e3*100:.0f}%, RWA=£{rwa_e3:,.0f}")
+    print(f"  EAD=£{ead_e3:,.0f}, RW={rw_e3 * 100:.0f}%, RWA=£{rwa_e3:,.0f}")
     return (result_crr_e3,)
 
 
@@ -440,14 +441,14 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
             "crr_rw": "95% (>=2.5yr), 70% (<2.5yr)",
             "basel31_rw": "95% (HVCRE Strong)",
             "formula": "RWA = EAD × RW",
-            "calculation": f"RWA = £{ead_e4:,.0f} × {rw_e4*100:.0f}% = £{rwa_e4:,.0f}",
+            "calculation": f"RWA = £{ead_e4:,.0f} × {rw_e4 * 100:.0f}% = £{rwa_e4:,.0f}",
             "note": "CRR HVCRE has higher weights than non-HVCRE",
         },
         regulatory_reference="CRR Art. 153(5)",
     )
 
     print(f"CRR-E4: HVCRE (Strong)")
-    print(f"  EAD=£{ead_e4:,.0f}, RW={rw_e4*100:.0f}%, RWA=£{rwa_e4:,.0f}")
+    print(f"  EAD=£{ead_e4:,.0f}, RW={rw_e4 * 100:.0f}%, RWA=£{rwa_e4:,.0f}")
     return (result_crr_e4,)
 
 
@@ -481,21 +482,26 @@ def _(mo):
 def _(mo, pl, result_crr_e1, result_crr_e2, result_crr_e3, result_crr_e4):
     """Compile all Group CRR-E results."""
     group_crr_e_results = [
-        result_crr_e1, result_crr_e2, result_crr_e3, result_crr_e4,
+        result_crr_e1,
+        result_crr_e2,
+        result_crr_e3,
+        result_crr_e4,
     ]
 
     # Create summary DataFrame
     summary_data_e = []
     for r in group_crr_e_results:
-        summary_data_e.append({
-            "Scenario": r.scenario_id,
-            "Lending Type": r.lending_type,
-            "Category": r.slotting_category,
-            "HVCRE": "Yes" if r.is_hvcre else "No",
-            "EAD (£)": f"{r.ead:,.0f}",
-            "RW": f"{r.risk_weight*100:.0f}%",
-            "RWA (£)": f"{r.rwa:,.0f}",
-        })
+        summary_data_e.append(
+            {
+                "Scenario": r.scenario_id,
+                "Lending Type": r.lending_type,
+                "Category": r.slotting_category,
+                "HVCRE": "Yes" if r.is_hvcre else "No",
+                "EAD (£)": f"{r.ead:,.0f}",
+                "RW": f"{r.risk_weight * 100:.0f}%",
+                "RWA (£)": f"{r.rwa:,.0f}",
+            }
+        )
 
     summary_df_e = pl.DataFrame(summary_data_e)
     mo.ui.table(summary_df_e)
@@ -505,9 +511,11 @@ def _(mo, pl, result_crr_e1, result_crr_e2, result_crr_e3, result_crr_e4):
 @app.cell
 def _(group_crr_e_results):
     """Export function for use by main workbook."""
+
     def get_group_crr_e_results():
         """Return all Group CRR-E scenario results."""
         return group_crr_e_results
+
     return (get_group_crr_e_results,)
 
 

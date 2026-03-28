@@ -146,6 +146,178 @@ def _resolve_guarantees_multi_level(
     return pl.concat(expanded_parts, how="diagonal")
 
 
+def _apply_guarantee_splits(
+    guarantees: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+    ead_col: str = "ead_after_collateral",
+) -> pl.LazyFrame:
+    """
+    Split exposures with multiple guarantors into per-guarantor sub-rows.
+
+    For each exposure with N guarantors (N > 1), produces N+1 rows:
+    - N guarantor sub-rows, each with that guarantor's covered amount
+    - 1 remainder sub-row for the uncovered portion
+
+    Single-guarantor exposures keep the existing aggregation behavior.
+
+    Args:
+        guarantees: Exposure-level guarantees (after multi-level resolution)
+        exposures: Exposures with ead column and parent_exposure_reference
+        ead_col: Name of the EAD column
+
+    Returns:
+        Exposures with guarantee portions set, potentially with additional rows
+    """
+    guar_schema = guarantees.collect_schema()
+    guar_cols = guar_schema.names()
+
+    # Pre-aggregate by (beneficiary_reference, guarantor) so that multiple
+    # protections from the same guarantor are summed before splitting.
+    agg_exprs: list[pl.Expr] = [
+        pl.col("amount_covered").sum().alias("amount_covered"),
+    ]
+    if "percentage_covered" in guar_cols:
+        agg_exprs.append(pl.col("percentage_covered").first().alias("percentage_covered"))
+
+    guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
+
+    guar_schema = guarantees.collect_schema()
+    guar_cols = guar_schema.names()
+
+    guar_select = ["beneficiary_reference", "amount_covered", "guarantor"]
+    if "percentage_covered" in guar_cols:
+        guar_select.append("percentage_covered")
+
+    # Count distinct guarantors per exposure
+    guarantee_counts = guarantees.group_by("beneficiary_reference").agg(
+        pl.len().alias("guarantee_count"),
+    )
+
+    exposures_with_counts = exposures.join(
+        guarantee_counts,
+        left_on="exposure_reference",
+        right_on="beneficiary_reference",
+        how="left",
+    ).with_columns(pl.col("guarantee_count").fill_null(0))
+
+    # --- Path 1: No guarantees ---
+    no_guarantee = exposures_with_counts.filter(pl.col("guarantee_count") == 0).with_columns(
+        pl.lit(0.0).alias("guaranteed_portion"),
+        pl.col(ead_col).alias("unguaranteed_portion"),
+        pl.lit(None).cast(pl.String).alias("guarantor_reference"),
+        pl.lit(0.0).alias("guarantee_amount"),
+    )
+
+    # --- Path 2: Single guarantor ---
+    single_guar_exposures = exposures_with_counts.filter(pl.col("guarantee_count") == 1)
+    single = (
+        single_guar_exposures.join(
+            guarantees.select(guar_select),
+            left_on="exposure_reference",
+            right_on="beneficiary_reference",
+            how="inner",
+        )
+        .with_columns(
+            pl.col("amount_covered").fill_null(0.0).alias("guarantee_amount"),
+            pl.col("guarantor").alias("guarantor_reference"),
+        )
+        .with_columns(
+            pl.min_horizontal("guarantee_amount", ead_col).alias("guaranteed_portion"),
+        )
+        .with_columns(
+            (pl.col(ead_col) - pl.col("guaranteed_portion")).alias("unguaranteed_portion"),
+        )
+    )
+
+    # --- Path 3: Multiple guarantors — row splitting ---
+    multi_guar_exposures = exposures_with_counts.filter(pl.col("guarantee_count") > 1)
+    multi_joined = multi_guar_exposures.join(
+        guarantees.select(guar_select),
+        left_on="exposure_reference",
+        right_on="beneficiary_reference",
+        how="inner",
+    ).with_columns(
+        pl.col("amount_covered").fill_null(0.0).alias("_guar_amount"),
+    )
+
+    # Cap total coverage to EAD
+    multi_joined = (
+        multi_joined.with_columns(
+            pl.col("_guar_amount").sum().over("parent_exposure_reference").alias("_total_coverage"),
+        )
+        .with_columns(
+            pl.min_horizontal(
+                pl.lit(1.0),
+                pl.col(ead_col) / pl.col("_total_coverage"),
+            ).alias("_scale"),
+        )
+        .with_columns(
+            (pl.col("_guar_amount") * pl.col("_scale")).alias("_effective_amount"),
+        )
+        .with_columns(
+            pl.col("_effective_amount")
+            .sum()
+            .over("parent_exposure_reference")
+            .alias("_total_effective"),
+        )
+    )
+
+    guarantor_sub_rows = multi_joined.with_columns(
+        pl.col("_effective_amount").alias("guaranteed_portion"),
+        pl.lit(0.0).alias("unguaranteed_portion"),
+        pl.col("_effective_amount").alias(ead_col),
+        pl.col("_effective_amount").alias("guarantee_amount"),
+        pl.col("guarantor").alias("guarantor_reference"),
+        pl.concat_str(
+            [pl.col("parent_exposure_reference"), pl.lit("__G_"), pl.col("guarantor")],
+        ).alias("exposure_reference"),
+    )
+
+    remainder_sub_rows = (
+        multi_joined.sort("parent_exposure_reference", "guarantor")
+        .group_by("parent_exposure_reference", maintain_order=True)
+        .first()
+    ).with_columns(
+        pl.lit(0.0).alias("guaranteed_portion"),
+        (pl.col(ead_col) - pl.col("_total_effective")).alias("unguaranteed_portion"),
+        (pl.col(ead_col) - pl.col("_total_effective")).alias(ead_col),
+        pl.lit(0.0).alias("guarantee_amount"),
+        pl.lit(None).cast(pl.String).alias("guarantor_reference"),
+        pl.concat_str(
+            [pl.col("parent_exposure_reference"), pl.lit("__REM")],
+        ).alias("exposure_reference"),
+    )
+
+    # Drop transient columns
+    transient = [
+        "_guar_amount",
+        "_total_coverage",
+        "_scale",
+        "_effective_amount",
+        "_total_effective",
+        "amount_covered",
+    ]
+    if "percentage_covered" in guar_cols:
+        transient.append("percentage_covered")
+
+    def _drop_existing(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:
+        schema = lf.collect_schema()
+        to_drop = [c for c in cols if c in schema.names()]
+        return lf.drop(to_drop) if to_drop else lf
+
+    guarantor_sub_rows = _drop_existing(guarantor_sub_rows, transient)
+    remainder_sub_rows = _drop_existing(remainder_sub_rows, transient)
+    single = _drop_existing(
+        single,
+        ["amount_covered"] + (["percentage_covered"] if "percentage_covered" in guar_cols else []),
+    )
+
+    return pl.concat(
+        [no_guarantee, single, guarantor_sub_rows, remainder_sub_rows],
+        how="diagonal_relaxed",
+    )
+
+
 # =============================================================================
 # LAZYFRAME NAMESPACE
 # =============================================================================
@@ -655,51 +827,18 @@ class CRMLazyFrame:
         # Expand facility/counterparty-level guarantees to exposure-level
         guarantees = _resolve_guarantees_multi_level(guarantees, self._lf)
 
-        # Aggregate guarantees by beneficiary
-        guarantees_by_exposure = guarantees.group_by("beneficiary_reference").agg(
-            [
-                pl.col("amount_covered").sum().alias("total_guarantee_amount"),
-                pl.col("guarantor").first().alias("primary_guarantor"),
-                pl.len().alias("guarantee_count"),
-            ]
-        )
-
-        # Join guarantees to exposures
-        lf = self._lf.join(
-            guarantees_by_exposure,
-            left_on="exposure_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        )
-
-        # Fill nulls
-        lf = lf.with_columns(
-            [
-                pl.col("total_guarantee_amount").fill_null(0.0).alias("guarantee_amount"),
-                pl.col("primary_guarantor").alias("guarantor_reference"),
-            ]
-        )
-
-        # Calculate guaranteed vs unguaranteed portions
+        # Determine EAD column
         ead_col = (
             "ead_after_collateral" if "ead_after_collateral" in schema.names() else "ead_final"
         )
 
-        lf = lf.with_columns(
-            [
-                # Guaranteed amount (capped at EAD)
-                pl.min_horizontal(pl.col("guarantee_amount"), pl.col(ead_col)).alias(
-                    "guaranteed_portion"
-                ),
-            ]
+        # Add parent_exposure_reference for traceability
+        exposures = self._lf.with_columns(
+            pl.col("exposure_reference").alias("parent_exposure_reference"),
         )
 
-        lf = lf.with_columns(
-            [
-                # Unguaranteed portion
-                (pl.col(ead_col) - pl.col("guaranteed_portion")).alias("unguaranteed_portion"),
-            ]
-        )
+        # Split multi-guarantor exposures into sub-rows
+        lf = _apply_guarantee_splits(guarantees, exposures, ead_col)
 
         # Look up guarantor's entity type, country code, and CQS
         cp_schema = counterparty_lookup.collect_schema()

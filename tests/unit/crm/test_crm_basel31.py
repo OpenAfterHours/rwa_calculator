@@ -34,6 +34,11 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.data.tables.crr_firb_lgd import (
+    BASEL31_FIRB_SUPERVISORY_LGD,
+    FIRB_SUPERVISORY_LGD,
+    lookup_firb_lgd,
+)
 from rwa_calc.data.tables.crr_haircuts import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
@@ -41,15 +46,9 @@ from rwa_calc.data.tables.crr_haircuts import (
     get_maturity_band,
     lookup_collateral_haircut,
 )
-from rwa_calc.data.tables.crr_firb_lgd import (
-    BASEL31_FIRB_SUPERVISORY_LGD,
-    FIRB_SUPERVISORY_LGD,
-    lookup_firb_lgd,
-)
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.processor import CRMProcessor
-
 
 # =============================================================================
 # Fixtures

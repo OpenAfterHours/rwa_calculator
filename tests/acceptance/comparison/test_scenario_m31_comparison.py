@@ -27,9 +27,6 @@ import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle, ComparisonBundle
 
-from .conftest import get_delta_for_exposure
-
-
 # =============================================================================
 # M31-SA: SA-Only Comparison Tests
 # =============================================================================

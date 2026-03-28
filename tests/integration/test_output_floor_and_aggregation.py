@@ -19,21 +19,16 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
     CRMAdjustedBundle,
     ELPortfolioSummary,
-    IRBResultBundle,
     RawDataBundle,
-    SAResultBundle,
-    SlottingResultBundle,
 )
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import RATINGS_SCHEMA
-from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
@@ -208,7 +203,7 @@ class TestOutputFloor:
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
         )
 
-        result = _run_full_pipeline(
+        _run_full_pipeline(
             hierarchy_resolver,
             classifier,
             crm_processor_b31,

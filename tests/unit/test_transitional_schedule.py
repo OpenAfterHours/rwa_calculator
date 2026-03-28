@@ -28,14 +28,13 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle, TransitionalScheduleBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import IRBPermissions
 from rwa_calc.engine.comparison import (
+    _TRANSITIONAL_REPORTING_DATES,
     TransitionalScheduleRunner,
     _build_timeline_lazyframe,
     _extract_floor_metrics,
-    _TRANSITIONAL_REPORTING_DATES,
 )
-
 
 # =============================================================================
 # Test Fixtures
@@ -391,7 +390,7 @@ class TestTransitionalScheduleRunner:
             reporting_dates=dates,
         )
         df = result.timeline.collect()
-        pct_by_year = dict(zip(df["year"].to_list(), df["floor_percentage"].to_list()))
+        pct_by_year = dict(zip(df["year"].to_list(), df["floor_percentage"].to_list(), strict=True))
         assert pct_by_year[2027] == pytest.approx(0.50)
         assert pct_by_year[2030] == pytest.approx(0.65)
         assert pct_by_year[2032] == pytest.approx(0.725)

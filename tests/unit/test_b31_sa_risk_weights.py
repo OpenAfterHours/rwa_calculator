@@ -823,15 +823,15 @@ class TestTableDataIntegrity:
 
     def test_investment_grade_rw(self) -> None:
         """Investment-grade corporate constant should be 65%."""
-        assert B31_CORPORATE_INVESTMENT_GRADE_RW == Decimal("0.65")
+        assert Decimal("0.65") == B31_CORPORATE_INVESTMENT_GRADE_RW
 
     def test_sme_corporate_rw(self) -> None:
         """SME corporate constant should be 85%."""
-        assert B31_CORPORATE_SME_RW == Decimal("0.85")
+        assert Decimal("0.85") == B31_CORPORATE_SME_RW
 
     def test_subordinated_debt_rw(self) -> None:
         """Subordinated debt constant should be 150%."""
-        assert B31_SUBORDINATED_DEBT_RW == Decimal("1.50")
+        assert Decimal("1.50") == B31_SUBORDINATED_DEBT_RW
 
     def test_b31_combined_cqs_table_has_all_classes(self) -> None:
         """B31 combined CQS table should include sovereign, institution, corporate."""

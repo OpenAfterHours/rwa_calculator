@@ -16,9 +16,8 @@ No mocking. LazyFrames passed between stages as in production.
 from __future__ import annotations
 
 import polars as pl
-import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.hierarchy import HierarchyResolver

@@ -23,7 +23,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle, ComparisonBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.comparison import (
     DualFrameworkRunner,
     _compute_exposure_deltas,
@@ -31,7 +31,6 @@ from rwa_calc.engine.comparison import (
     _compute_summary_by_class,
     _validate_configs,
 )
-
 
 # =============================================================================
 # Test Fixtures

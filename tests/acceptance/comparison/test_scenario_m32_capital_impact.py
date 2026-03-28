@@ -32,7 +32,6 @@ import pytest
 
 from rwa_calc.contracts.bundles import CapitalImpactBundle
 
-
 # =============================================================================
 # M3.2 SA Comparison — Capital Impact
 # =============================================================================

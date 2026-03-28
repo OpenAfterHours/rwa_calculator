@@ -16,8 +16,6 @@ Regulatory References:
 - PRA PS9/24: Transitional schedule: 50% (2027), 55% (2028), ..., 72.5% (2032+)
 """
 
-from typing import Any
-
 import polars as pl
 import pytest
 from tests.acceptance.basel31.conftest import (

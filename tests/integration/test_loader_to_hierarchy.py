@@ -22,9 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
-import pytest
 
-from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import (
     COUNTERPARTY_SCHEMA,
     FACILITY_MAPPING_SCHEMA,
@@ -33,7 +31,6 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     ORG_MAPPING_SCHEMA,
 )
-from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.loader import DataSourceConfig, ParquetLoader
 
 # =============================================================================

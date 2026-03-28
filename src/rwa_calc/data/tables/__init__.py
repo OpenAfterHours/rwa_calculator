@@ -48,11 +48,6 @@ from .crr_haircuts import (
     FX_HAIRCUT,
     get_haircut_table,
 )
-from .eu_sovereign import (
-    EU_COUNTRY_DOMESTIC_CURRENCY,
-    EU_MEMBER_STATES,
-    build_eu_domestic_currency_expr,
-)
 from .crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
@@ -67,6 +62,11 @@ from .crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
     get_slotting_table,
+)
+from .eu_sovereign import (
+    EU_COUNTRY_DOMESTIC_CURRENCY,
+    EU_MEMBER_STATES,
+    build_eu_domestic_currency_expr,
 )
 
 __all__ = [

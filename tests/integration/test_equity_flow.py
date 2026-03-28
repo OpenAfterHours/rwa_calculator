@@ -18,17 +18,14 @@ Components wired: Classifier → EquityCalculator → OutputAggregator
 
 from __future__ import annotations
 
-from datetime import date
-
 import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
     CRMAdjustedBundle,
-    EquityResultBundle,
     SAResultBundle,
 )
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
@@ -470,7 +467,9 @@ class TestEquityPipelinePassThrough:
         assert result.approach == "sa"
 
         # Check risk weights by reference
-        rw_by_ref = dict(zip(df["exposure_reference"].to_list(), df["risk_weight"].to_list()))
+        rw_by_ref = dict(
+            zip(df["exposure_reference"].to_list(), df["risk_weight"].to_list(), strict=True)
+        )
         assert rw_by_ref["EQ_LIST"] == pytest.approx(1.00)
         assert rw_by_ref["EQ_SPEC"] == pytest.approx(4.00)
         assert rw_by_ref["EQ_UNLIST"] == pytest.approx(2.50)

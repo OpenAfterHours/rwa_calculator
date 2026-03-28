@@ -7,13 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **CI**: Add version consistency validation step to publish workflow
+- **CI**: Add step to generate test fixtures in CI pipeline
+- **CI**: Replace mypy with ty for type checking
+- **Docs**: Migrate documentation from mkdocs to zensical (`zensical.toml` replaces `mkdocs.yml`)
+
+### Fixed
+- **Style**: Update theme color palette to orange
+
+### Refactored
+- Improve risk weight dictionary creation in test helpers
+- Clean up code formatting and assertions in tests
+
+---
+
+
+## [0.1.45] - 2026-03-27
+
+### Added
+
+#### CCP Guarantor Risk Weight Support (CRR Art. 306 / CRE54.14-15)
+CCP guarantors now receive the prescribed QCCP risk weight (2% proprietary / 4% client-cleared) instead of being treated as generic unrated institutions (40% RW). The guarantee substitution when/then chain in both the SA calculator and IRB namespace checks `guarantor_entity_type == "ccp"` before the institution/MDB branch, applying `QCCP_PROPRIETARY_RW` (2%) or `QCCP_CLIENT_CLEARED_RW` (4%) based on `guarantor_is_ccp_client_cleared`.
+
+- CRM processor and namespace propagate `is_ccp_client_cleared` from guarantor counterparty data
+- Entity type normalization (`.str.to_lowercase()`) applied to guarantor entity type joins
+
+---
+
+## [0.1.44] - 2026-03-25
+
 ### Added
 
 #### Article 114(4) EU domestic currency 0% risk weight for EU sovereigns
 EU member state central government and central bank exposures denominated in that member state's domestic currency now receive 0% risk weight regardless of CQS, per CRR Art. 114(4). Covers all 27 EU member states: eurozone members (EUR) and non-euro members in their national currencies (PLN, SEK, CZK, DKK, HUF, BGN, RON). EU domestic sovereign exposures are also forced to the Standardised Approach, preventing internal models from overriding the regulatory 0% treatment. Applies to both direct exposures and guarantor risk weight substitution (SA and IRB).
 
+- `is_ccp_client_cleared` field added to data generators
+
+### Fixed
+- CCP exposures now forced to SA approach with correct risk weights (was falling through to generic corporate treatment)
+
+---
+
+## [0.1.43] - 2026-03-24
+
+### Fixed
+
+#### Guarantee application expanded to facility and counterparty levels
+Guarantee application previously only matched at direct (loan/exposure/contingent) level. Guarantees linked at facility or counterparty level were silently ignored. Now supports multi-level beneficiary matching: direct, facility (pro-rata across facility's exposures), and counterparty (pro-rata across all counterparty exposures).
+
+---
+
+## [0.1.42] - 2026-03-22
+
+### Fixed
+
+#### Slotting maturity not derived from `maturity_date`
+The `is_short_maturity` flag for CRR Art. 153(5) specialised lending was never calculated from exposure `maturity_date`. It defaulted to `False`, causing all exposures to receive the >= 2.5yr risk weights regardless of actual remaining maturity. Strong category exposures with <2.5yr maturity now correctly receive 50% RW (was 70%), Good receives 70% (was 90%), HVCRE Strong receives 70% (was 95%), and HVCRE Good receives 95% (was 120%).
+
+- `prepare_columns()` now accepts `CalculationConfig` and derives `is_short_maturity` from `maturity_date` and `reporting_date`
+- Extracted `exact_fractional_years_expr` to shared `engine/utils.py` (reused by IRB and slotting)
+- Added `remaining_maturity_years` column to slotting audit trail
+- Added CRR-E5 through CRR-E8 acceptance scenarios for short-maturity slotting
+
+#### UK govt guarantee exposure marked "not beneficial" for non-sovereign entity types
+Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g., `contains("SOVEREIGN")`), which only matched `sovereign` but not `central_bank`, `bank`, `company`, or `mdb`. These entity types produced `null` guarantor RW, causing beneficial guarantees to be incorrectly skipped. The lookup now uses `guarantor_exposure_class` (derived from the existing `ENTITY_TYPE_TO_SA_CLASS` mapping), ensuring all valid entity types resolve to the correct SA risk weight. Also adds Art. 114(3) domestic sovereign treatment: UK CGCB guarantors in GBP receive 0% RW regardless of CQS. Both SA calculator and IRB namespace are fixed. CRM processor and namespace now propagate `guarantor_country_code` from counterparty data.
+
+---
+
+## [0.1.41] - 2026-03-22
+
+### Added
+
 #### Article 114(3) domestic currency 0% risk weight for UK sovereign
 UK central government and central bank exposures denominated in GBP now receive 0% risk weight regardless of CQS, per CRR Art. 114(3). Previously, 0% was only assigned via CQS 1 external rating lookup. The override applies in both CRR and Basel 3.1 SA risk weight chains. Foreign-currency UK sovereign exposures continue to use the standard CQS-based risk weight table.
+
+---
+
+## [0.1.40] - 2026-03-22
 
 ### Changed
 
@@ -26,86 +97,47 @@ Specialised lending metadata (`sl_type`, `slotting_category`, `is_hvcre`) is now
 
 ### Fixed
 
-#### CCP guarantor risk weight substitution applied 40% instead of 2%/4%
-CCP guarantors were treated as generic unrated institutions (40% RW) instead of receiving the prescribed QCCP risk weight (2% proprietary / 4% client-cleared) per CRR Art. 306 / CRE54.14-15. The guarantee substitution when/then chain in both the SA calculator and IRB namespace now checks `guarantor_entity_type == "ccp"` before the institution/MDB branch, applying `QCCP_PROPRIETARY_RW` (2%) or `QCCP_CLIENT_CLEARED_RW` (4%) based on `guarantor_is_ccp_client_cleared`. CRM processor and namespace now propagate `is_ccp_client_cleared` from guarantor counterparty data. Entity type normalization (`.str.to_lowercase()`) also applied to guarantor entity type joins, matching the fix for primary counterparties.
-
-#### UK govt guarantee exposure marked "not beneficial" for non-sovereign entity types
-Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g., `contains("SOVEREIGN")`), which only matched `sovereign` but not `central_bank`, `bank`, `company`, or `mdb`. These entity types produced `null` guarantor RW, causing beneficial guarantees to be incorrectly skipped. The lookup now uses `guarantor_exposure_class` (derived from the existing `ENTITY_TYPE_TO_SA_CLASS` mapping), ensuring all valid entity types resolve to the correct SA risk weight. Also adds Art. 114(3) domestic sovereign treatment: UK CGCB guarantors in GBP receive 0% RW regardless of CQS. Both SA calculator and IRB namespace are fixed. CRM processor and namespace now propagate `guarantor_country_code` from counterparty data.
-#### Slotting maturity not derived from `maturity_date`
-The `is_short_maturity` flag for CRR Art. 153(5) specialised lending was never calculated from exposure `maturity_date`. It defaulted to `False`, causing all exposures to receive the >= 2.5yr risk weights regardless of actual remaining maturity. Strong category exposures with <2.5yr maturity now correctly receive 50% RW (was 70%), Good receives 70% (was 90%), HVCRE Strong receives 70% (was 95%), and HVCRE Good receives 95% (was 120%).
-
-- `prepare_columns()` now accepts `CalculationConfig` and derives `is_short_maturity` from `maturity_date` and `reporting_date`
-- Extracted `exact_fractional_years_expr` to shared `engine/utils.py` (reused by IRB and slotting)
-- Added `remaining_maturity_years` column to slotting audit trail
-- Added CRR-E5 through CRR-E8 acceptance scenarios for short-maturity slotting
-
 #### FI scalar (`apply_fi_scalar`) not applied to IRB correlation
 The `apply_fi_scalar` counterparty flag was gated on `is_financial_sector_entity`, which required the `entity_type` to be an institution-like value. Counterparties with `entity_type="corporate"` and `apply_fi_scalar=True` silently received no 1.25x correlation multiplier. The classifier now derives `requires_fi_scalar` directly from the user-supplied `apply_fi_scalar` flag.
 
 **Removed dead code**: `FINANCIAL_SECTOR_ENTITY_TYPES`, `is_financial_sector_entity`, and `is_large_financial_sector_entity` — set in the classifier but never consumed by any calculation engine.
 
-#### Model permissions optional columns
-`country_codes` and `excluded_book_codes` columns in `model_permissions` input are now truly optional. When these columns are absent from the input file, they are treated as null for all rows (all geographies permitted, no book code exclusions). Previously, omitting these columns caused a `ColumnNotFoundError`.
-
----
-
-
-
-
-
-
-
-
-## [0.1.45] - 2026-03-27
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.44] - 2026-03-25
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.43] - 2026-03-24
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.42] - 2026-03-22
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.41] - 2026-03-22
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.40] - 2026-03-22
-
-### Changed
-- Version bump for PyPI release
-
 ---
 
 ## [0.1.39] - 2026-03-21
 
+### Fixed
+- SME managed-as-retail 75% RW now correctly gated on EUR 1m turnover threshold check (was applying 75% RW without verifying threshold)
+
 ### Changed
-- Version bump for PyPI release
+- Documentation aligned with current codebase state
 
 ---
 
-## [0.1.38] - 2026-03-19
+## [0.1.38] - 2026-03-20
+
+### Fixed
+- Null `slotting_category` and `sl_type` for non-slotting exposures (was leaving stale values from classification)
+- Defaulted exposure treatment for SA risk weights now correctly implemented
+- Case-insensitive column value validation (lowercase valid values set before comparison)
+- `country_codes` and `excluded_book_codes` columns in `model_permissions` input are now truly optional — when absent, treated as null (all geographies permitted, no book code exclusions). Previously caused `ColumnNotFoundError`
+- Documentation aligned with code schemas across 13 files
+
+---
+
+
+
+
+
+
+## [0.1.37] - 2026-03-17
+
+### Fixed
+- Validation error messages now correctly convert file paths to string (was raising `TypeError` for `Path` objects)
+
+---
+
+## [0.1.36] - 2026-03-15
 
 ### Changed
 
@@ -117,8 +149,119 @@ The `apply_fi_scalar` counterparty flag was gated on `is_financial_sector_entity
 - **Updated**: Rating inheritance pipeline carries `internal_model_id` through coalesce (own → parent)
 - **Updated**: `_unify_exposures()` sources `model_id` from rating inheritance instead of counterparty join
 - **Updated**: Fixture generators, integration tests, benchmark data generators, and documentation
+- Counterparty data handling consolidated
+
+---
+
+## [0.1.35] - 2026-03-11
 
 ### Added
+
+#### Integration Test Infrastructure
+Comprehensive integration test suite covering the full pipeline from loader to output:
+
+- **Phase 1**: Hierarchy → Classifier flow tests
+- **Phase 2**: Classifier → CRM and CRM → Calculators flow tests
+- **Phase 3**: Loader → Hierarchy, model permissions, and output floor tests
+- **Phase 4**: Equity flow integration tests
+- Integration test strategy document and shared infrastructure
+
+### Changed
+- `model_id` added to counterparty-level schema (subsequently moved to ratings in 0.1.36)
+
+---
+
+## [0.1.34] - 2026-03-10
+
+### Added
+
+#### Model-Level IRB Permissions
+Per-model IRB approach gating replaces the org-wide `IRBPermissions` config when a `model_permissions` input file is provided:
+
+- **New schema**: `MODEL_PERMISSIONS_SCHEMA` with `model_id`, `exposure_class`, `approach`, `country_codes`, `excluded_book_codes`
+- **New column**: `model_id` on `FACILITY_SCHEMA`, `LOAN_SCHEMA`, `CONTINGENTS_SCHEMA` — links exposures to their IRB model
+- **Classifier**: `_resolve_model_permissions()` joins exposures with model permissions, filters by geography and book code, gates approach on both permission and data availability (AIRB requires `internal_pd` + `lgd`; FIRB requires only `internal_pd`)
+- **Backward compatible**: When no `model_permissions` file is present, org-wide `IRBPermissions` fallback applies
+- **Validation**: `model_permissions` included in `validate_raw_data_bundle()` and `validate_bundle_values()` for schema and value validation
+- `model_permissions` fixtures and `model_id` added to exposure generators
+- API documentation updated
+- 10 unit tests covering AIRB/FIRB gating, geography filters, book code exclusions, and backward compatibility
+
+#### Rename `is_regulated` → `apply_fi_scalar`
+Simplified FI scalar control on `COUNTERPARTY_SCHEMA`:
+
+- **Schema**: `is_regulated` renamed to `apply_fi_scalar` — direct user-controlled flag replacing the intermediate boolean
+- **Classifier**: `requires_fi_scalar` now derives from `is_financial_sector_entity AND cp_apply_fi_scalar` (simpler than the previous two-condition inference from `is_regulated`)
+- **Documentation**: All references updated across input schemas, architecture, and classification docs
+
+---
+
+## [0.1.33] - 2026-03-09
+
+### Added
+
+#### Dual Per-Type Rating Resolution
+Rating inheritance now resolves best internal and best external rating per counterparty independently. CQS is an external-only concept; internal ratings carry PD values without internal CQS.
+
+- Per-type columns: `internal_pd`, `internal_rating_value`, `external_cqs`, `external_rating_value`
+- Per-type inheritance: own internal → parent internal, own external → parent external (independent chains)
+- Removed internal CQS references throughout the codebase
+
+### Changed
+- Enhanced netting facility handling in loan data
+
+---
+
+## [0.1.32] - 2026-03-08
+
+### Added
+- `netting_facility_reference` field added to `LOAN_SCHEMA` and loan data for explicit netting group assignment
+
+---
+
+## [0.1.31] - 2026-03-07
+
+### Added
+- Enhanced netting logic for facility siblings (pro-rata allocation within netting groups)
+- `interest_for_ead` function in CCF module to handle negative interest values
+
+---
+
+## [0.1.30] - 2026-03-06
+
+### Added
+
+#### Basel 3.1 Engine
+Full Basel 3.1 framework implementation alongside existing CRR support:
+
+- **Revised SA risk weight tables** (CRE20.7-26) with LTV-band risk weights for residential and commercial real estate
+- **Basel 3.1 supervisory haircuts** and F-IRB LGD framework dispatch
+- **Output floor**: SA-equivalent RWA calculation on all IRB rows with phase-in schedule
+- **Basel 3.1 acceptance tests**: B31-B (F-IRB), B31-C (A-IRB), B31-D (CRM), B31-E (slotting), B31-G (provisions), B31-H (complex scenarios) — 116 tests total
+- **IRB**: A-IRB LGD floors gated on `is_airb` column (CRE30.41)
+- **IRB**: QRRE transactor/revolver PD floor distinction (CRR Art. 147(5), CRE30.55)
+
+#### Dual-Framework Comparison and Analysis
+- **M3.1**: CRR vs Basel 3.1 side-by-side comparison with per-exposure RWA delta
+- **M3.2**: Capital impact analysis with driver attribution
+- **M3.3**: Transitional floor schedule modelling with year-by-year phase-in
+- **M3.4**: Enhanced Marimo workbook for interactive impact analysis
+
+#### EL Shortfall/Excess (CRR Art. 158-159)
+Expected loss shortfall/excess computation for IRB portfolios, with portfolio-level Tier 2 credit cap per CRR Art. 62(d).
+
+#### COREP Template Generation (FR-4.6 / M4.1)
+Regulatory reporting templates for CRR firms following EBA/PRA COREP structure (Regulation (EU) 2021/451):
+
+- **C 07.00** — SA credit risk: original exposure, SA EAD, RWA by exposure class, plus risk weight band breakdown
+- **C 08.01** — IRB totals: original exposure, IRB EAD, RWA, expected loss, weighted-average PD/LGD/maturity by exposure class
+- **C 08.02** — IRB PD grade breakdown: obligor-grade-level detail with standard PD bands and exposure-weighted averages
+- `COREPGenerator` class with `generate()` and `export_to_excel()` methods
+- `ResultExporter.export_to_corep()` for multi-sheet Excel export
+- `CalculationResponse.to_corep()` convenience method
+
+#### Programmatic Export API (FR-4.7)
+Export calculation results to Parquet, CSV, and Excel formats programmatically.
 
 #### On-Balance Sheet Netting (CRR Article 195)
 Support for on-balance sheet netting of mutual claims when a legally enforceable netting agreement exists:
@@ -129,55 +272,47 @@ Support for on-balance sheet netting of mutual claims when a legally enforceable
 - **SA**: EAD reduced by netting pool (cash = 0% haircut)
 - **F-IRB**: LGD reduced via cash collateral path (0% LGD)
 - **FX mismatch**: 8% haircut applied when currencies differ
-- **Backward compatible**: Optional column; existing data unaffected
 
 #### Service API Documentation
 Restructured user-facing documentation to promote the high-level Service API (`quick_calculate`, `RWAService`) as the primary entry point:
 
-- **Quick Start** rewritten with 3-tier progression: `quick_calculate` one-liner, `RWAService` with more control, full example with validation/export. Pipeline API moved to "Advanced" section.
-- **Getting Started index** now shows `quick_calculate` as the quick example instead of `create_pipeline`
-- **API Reference index** features Service API as first module, with `quick_calculate` as the main entry point
-- **New page: `docs/api/service.md`** — complete Service API reference covering `quick_calculate`, `RWAService`, `CalculationRequest`/`CalculationResponse`, `SummaryStatistics`, `APIError`, `PerformanceMetrics`, `ResultExporter`, and usage examples
-- **mkdocs nav** updated with Service API as first item under API Reference
+- **Quick Start** rewritten with 3-tier progression: `quick_calculate` one-liner, `RWAService` with more control, full example with validation/export
+- **New page: `docs/api/service.md`** — complete Service API reference
+- **API Reference index** features Service API as first module
 
-#### COREP Template Generation (FR-4.6 / M4.1)
-Regulatory reporting templates for CRR firms following EBA/PRA COREP structure (Regulation (EU) 2021/451):
+#### Basel 3.1 Parameter Substitution for IRB Guarantors (CRE22.70-85)
+IRB guarantee substitution parameters updated for Basel 3.1 framework.
 
-- **C 07.00** — SA credit risk: original exposure, SA EAD, RWA by exposure class, plus risk weight band breakdown
-- **C 08.01** — IRB totals: original exposure, IRB EAD, RWA, expected loss, weighted-average PD/LGD/maturity by exposure class
-- **C 08.02** — IRB PD grade breakdown: obligor-grade-level detail with standard PD bands and exposure-weighted averages
+#### CI/CD Pipeline
+GitHub Actions workflow with lint, typecheck, and test jobs.
 
-**New modules:**
-- `src/rwa_calc/reporting/corep/generator.py` — `COREPGenerator` class with `generate()` and `export_to_excel()` methods
-- `src/rwa_calc/reporting/corep/templates.py` — Template structure definitions with EBA DPM row/column references
-- `src/rwa_calc/reporting/__init__.py` — Public API: `COREPGenerator`, `COREPTemplateBundle`
-
-**Integration:**
-- `ResultExporter.export_to_corep()` for multi-sheet Excel export
-- `CalculationResponse.to_corep()` convenience method
-- 48 unit tests + 4 conditional (xlsxwriter)
-
-#### Model-Level IRB Permissions
-Per-model IRB approach gating replaces the org-wide `IRBPermissions` config when a `model_permissions` input file is provided:
-
-- **New schema**: `MODEL_PERMISSIONS_SCHEMA` with `model_id`, `exposure_class`, `approach`, `country_codes`, `excluded_book_codes`
-- **New column**: `model_id` on `FACILITY_SCHEMA`, `LOAN_SCHEMA`, `CONTINGENTS_SCHEMA` — links exposures to their IRB model
-- **Classifier**: `_resolve_model_permissions()` joins exposures with model permissions, filters by geography and book code, gates approach on both permission and data availability (AIRB requires `internal_pd` + `lgd`; FIRB requires only `internal_pd`)
-- **Backward compatible**: When no `model_permissions` file is present, org-wide `IRBPermissions` fallback applies
-- **Validation**: `model_permissions` included in `validate_raw_data_bundle()` and `validate_bundle_values()` for schema and value validation
-- 10 unit tests covering AIRB/FIRB gating, geography filters, book code exclusions, and backward compatibility
-
-#### Rename `is_regulated` → `apply_fi_scalar`
-Simplified FI scalar control on `COUNTERPARTY_SCHEMA`:
-
-- **Schema**: `is_regulated` renamed to `apply_fi_scalar` — direct user-controlled flag replacing the intermediate boolean
-- **Classifier**: `requires_fi_scalar` now derives from `is_financial_sector_entity AND cp_apply_fi_scalar` (simpler than the previous two-condition inference from `is_regulated`)
-- **Documentation**: All references updated across input schemas, architecture, and classification docs
+### Changed
+- Replaced `Enum` with `StrEnum` and `IntEnum` throughout the codebase
+- Centralised data source configuration with `DataSourceRegistry` replacing `RequiredFiles`
+- Introduced `BaseRequest` class to reduce duplication in request models
+- Error factory functions updated to support `Path` types alongside `str`
+- Tests migrated to use `Path` for file paths
 
 ### Fixed
-- Benchmark data generators now include all schema columns (`is_buy_to_let` for loans/facilities, `interest` for loans, `bs_type` for contingents, `pledge_percentage` for collateral, `is_qrre_transactor` for facilities)
-- Benchmark tests updated for current API: `_unify_exposures` signature (added `facilities` arg), `CRMProcessor.get_crm_adjusted_bundle` (replaces removed `process` method)
-- Protocol test stubs updated to include `calculate_branch` method for SA and IRB calculators
+- Corporate bond haircut CQS grouping corrected per CRR Art. 224
+- PD floors and transitional schedule corrected to PRA PS9/24
+- Output floor `sa_rwa` computation fixed for acceptance tests
+- Benchmark data generators now include all schema columns (`is_buy_to_let`, `interest`, `bs_type`, `pledge_percentage`, `is_qrre_transactor`)
+- Benchmark tests updated for current API: `_unify_exposures` signature (added `facilities` arg), `CRMProcessor.get_crm_adjusted_bundle`
+- Protocol test stubs updated to include `calculate_branch` method
+
+---
+
+## [0.1.29] - 2026-02-28
+
+### Added
+- F-IRB acceptance tests and expected outputs (CRR-B1 through B7)
+
+### Changed
+- Pipeline refactored to single-pass calculation for unified frame (filter-process-merge pattern)
+- Classifier exposure classification logic optimized
+- Hierarchy collateral allocation logic simplified
+- RWA calculations simplified with filter-process-merge approach
 
 ### Performance
 - Pipeline optimizations: pre-computed classifier intermediates, deferred audit string, slimmed counterparty join, eliminated unnecessary `collect_schema()` calls
@@ -185,81 +320,16 @@ Simplified FI scalar control on `COUNTERPARTY_SCHEMA`:
 
 ---
 
-
-
-
-
-
-
-
-
-## [0.1.37] - 2026-03-17
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.36] - 2026-03-15
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.35] - 2026-03-11
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.34] - 2026-03-10
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.33] - 2026-03-09
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.32] - 2026-03-08
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.31] - 2026-03-07
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.30] - 2026-03-06
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.29] - 2026-03-02
-
-### Changed
-- Version bump for PyPI release
-
----
-
 ## [0.1.28] - 2026-02-24
 
-### Changed
-- Version bump for PyPI release
+### Added
+- Benchmarking module for RWA Calculator performance testing
+
+### Performance
+- Optimized aggregation data collection and processing
+- Optimized hierarchy graph traversal methods
+- Optimized exposure enrichment methods
+- Optimized pledge resolution and validation in pipeline
 
 ---
 
@@ -722,12 +792,6 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 - Improved code readability with chainable method calls
 - Test count increased from 635 to 826 (139 namespace tests + 14 FX converter tests + 38 other tests)
 
-### Planned
-- Basel 3.1 full implementation
-- Differentiated PD floors
-- A-IRB LGD floors
-- Revised SA real estate risk weights
-
 ## [0.1.2] - 2025-01-24
 
 ### Added
@@ -856,24 +920,24 @@ The calculator now provides comprehensive Polars namespace extensions for fluent
 | Version | Date | Status |
 |---------|------|--------|
 | 0.1.45 | 2026-03-27 | Current |
-| 0.1.44 | 2026-03-27 | Previous |
-| 0.1.43 | 2026-03-25 | - |
-| 0.1.42 | 2026-03-24 | - |
+| 0.1.44 | 2026-03-25 | - |
+| 0.1.43 | 2026-03-24 | - |
+| 0.1.42 | 2026-03-22 | - |
 | 0.1.41 | 2026-03-22 | - |
 | 0.1.40 | 2026-03-22 | - |
-| 0.1.39 | 2026-03-22 | - |
-| 0.1.38 | 2026-03-21 | - |
+| 0.1.39 | 2026-03-21 | - |
+| 0.1.38 | 2026-03-20 | - |
 | 0.1.37 | 2026-03-17 | - |
-| 0.1.36 | 2026-03-17 | - |
-| 0.1.35 | 2026-03-15 | - |
-| 0.1.34 | 2026-03-11 | - |
-| 0.1.33 | 2026-03-10 | - |
-| 0.1.32 | 2026-03-09 | - |
-| 0.1.31 | 2026-03-08 | - |
-| 0.1.30 | 2026-03-07 | - |
-| 0.1.29 | 2026-03-06 | - |
-| 0.1.28 | 2026-03-02 | - |
-| 0.1.27 | 2026-02-24 | - |
+| 0.1.36 | 2026-03-15 | - |
+| 0.1.35 | 2026-03-11 | - |
+| 0.1.34 | 2026-03-10 | - |
+| 0.1.33 | 2026-03-09 | - |
+| 0.1.32 | 2026-03-08 | - |
+| 0.1.31 | 2026-03-07 | - |
+| 0.1.30 | 2026-03-06 | - |
+| 0.1.29 | 2026-02-28 | - |
+| 0.1.28 | 2026-02-24 | - |
+| 0.1.27 | 2026-02-22 | - |
 | 0.1.26 | 2026-02-21 | - |
 | 0.1.25 | 2026-02-20 | - |
 | 0.1.24 | 2026-02-19 | - |

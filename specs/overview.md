@@ -62,9 +62,6 @@ Market Risk (FRTB), Operational Risk, CVA Risk, Securitisation, Large Exposures,
 | Language | Python | 3.13+ |
 | DataFrame Engine | Polars | 1.0+ |
 | Statistical Functions | polars-normal-stats | 0.2+ |
-| SQL Engine | DuckDB | 0.9+ |
-| Data Validation | Pydantic | 2.0+ |
-| Serialisation | PyArrow | 14.0+ |
 | Excel Export | fastexcel | 0.19+ |
 | Web UI | Marimo | — |
 | Documentation | Zensical | — |

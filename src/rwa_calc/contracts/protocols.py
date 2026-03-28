@@ -53,7 +53,7 @@ class LoaderProtocol(Protocol):
 
     Implementations may load from:
     - Files (CSV, Parquet, JSON)
-    - Databases (DuckDB, PostgreSQL)
+    - Databases (PostgreSQL)
     - APIs or message queues
     """
 

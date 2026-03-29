@@ -39,6 +39,7 @@ from rwa_calc.data.tables.crr_risk_weights import QCCP_CLIENT_CLEARED_RW, QCCP_P
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
+    _double_default_multiplier_expr,
     _lgd_floor_expression,
     _lgd_floor_expression_with_collateral,
     _parametric_irb_risk_weight_expr,
@@ -752,7 +753,7 @@ class IRBLazyFrame:
         """
         Apply guarantee substitution for IRB exposures with unfunded credit protection.
 
-        Two methods depending on framework and guarantor approach:
+        Three methods depending on framework and guarantor approach:
 
         1. **SA risk weight substitution** (CRR Art. 215-217, Basel 3.1 SA guarantors):
            Guaranteed portion uses guarantor's SA risk weight.
@@ -761,9 +762,14 @@ class IRBLazyFrame:
            Guaranteed portion recalculated using guarantor's PD and F-IRB supervisory
            LGD through the full IRB formula (K × 12.5 × scaling × MA).
 
+        3. **Double default** (CRR Art. 153(3), 202-203, CRR only):
+           K_dd = K_obligor × (0.15 + 160 × PD_guarantor). Requires A-IRB permission,
+           corporate underlying, and eligible guarantor with internal PD. Provides
+           lower capital charge than substitution for high-quality guarantors.
+
         The final RWA blends:
         - Unguaranteed portion: borrower's IRB RWA (pro-rated)
-        - Guaranteed portion: guarantor's equivalent RWA (SA RW or IRB parameter sub)
+        - Guaranteed portion: guarantor's equivalent RWA (method-dependent)
 
         Args:
             config: Calculation configuration
@@ -961,6 +967,95 @@ class IRBLazyFrame:
         # Determine EAD column
         ead_col = "ead_final" if "ead_final" in cols else "ead"
 
+        # --- Double default treatment (CRR Art. 153(3), 202-203) ---
+        # Alternative to substitution: K_dd = K_obligor × (0.15 + 160 × PD_g)
+        # Eligibility: CRR only, A-IRB, corporate underlying, eligible guarantor with PD
+        use_double_default = config.is_crr and config.enable_double_default and has_guarantor_pd
+        if use_double_default:
+            # Eligibility conditions per Art. 202:
+            # (a) Underlying is corporate (not sovereign, institution, retail, equity, SL)
+            _exp_class_upper = (
+                pl.col("exposure_class").cast(pl.String).fill_null("").str.to_uppercase()
+            )
+            _is_corporate_underlying = _exp_class_upper.str.contains("CORPORATE")
+
+            # (b) Guarantor is institution, central govt, or rated corporate (CQS ≤ 2)
+            _guarantor_ec = pl.col("guarantor_exposure_class").fill_null("")
+            _is_eligible_guarantor_type = _guarantor_ec.is_in(
+                ["institution", "mdb", "central_govt_central_bank"]
+            ) | (
+                _guarantor_ec.is_in(["corporate", "corporate_sme"])
+                & (pl.col("guarantor_cqs").fill_null(99) <= 2)
+            )
+
+            # (c) Guarantor has internal PD
+            _has_guarantor_pd = pl.col("guarantor_pd").is_not_null()
+
+            # (d) Firm uses A-IRB (own LGD estimates) — check is_airb column
+            _is_airb = (
+                pl.col("is_airb").fill_null(False)
+                if "is_airb" in cols
+                else pl.lit(False)
+            )
+
+            # Combined eligibility
+            _is_dd_eligible = (
+                (pl.col("guaranteed_portion").fill_null(0) > 0)
+                & _is_corporate_underlying
+                & _is_eligible_guarantor_type
+                & _has_guarantor_pd
+                & _is_airb
+            )
+
+            # Floor guarantor PD
+            pd_floor_expr_dd = _pd_floor_expression(config, has_transactor_col=False)
+            guarantor_pd_floored_dd = pl.max_horizontal(
+                pl.col("guarantor_pd"), pd_floor_expr_dd
+            )
+
+            # Double default multiplier: (0.15 + 160 × PD_g)
+            dd_multiplier = _double_default_multiplier_expr(guarantor_pd_floored_dd)
+
+            # RW_dd = RW_obligor × multiplier (risk_weight_irb_original already = K × 12.5 × s × MA)
+            rw_dd = pl.col("risk_weight_irb_original") * dd_multiplier
+
+            # Floor: RW_dd cannot be lower than direct exposure to guarantor (Basel II para 286)
+            rw_dd_floored = pl.max_horizontal(rw_dd, pl.col("guarantor_rw"))
+
+            lf = lf.with_columns(
+                [
+                    _is_dd_eligible.alias("is_double_default_eligible"),
+                    # Override guarantor_rw with DD RW when eligible and better than substitution
+                    pl.when(_is_dd_eligible & (rw_dd_floored < pl.col("guarantor_rw")))
+                    .then(rw_dd_floored)
+                    .otherwise(pl.col("guarantor_rw"))
+                    .alias("guarantor_rw"),
+                    # Track DD-specific columns
+                    pl.when(_is_dd_eligible)
+                    .then(pl.col("guaranteed_portion"))
+                    .otherwise(pl.lit(0.0))
+                    .alias("double_default_unfunded_protection"),
+                    pl.when(_is_dd_eligible)
+                    .then(pl.col("lgd_floored") if "lgd_floored" in cols else pl.col("lgd"))
+                    .otherwise(pl.lit(None).cast(pl.Float64))
+                    .alias("irb_lgd_double_default"),
+                    # Track DD method
+                    pl.when(_is_dd_eligible & (rw_dd_floored < pl.col("guarantor_rw")))
+                    .then(pl.lit(True))
+                    .otherwise(pl.col("_is_pd_substitution") if use_parameter_substitution else pl.lit(False))
+                    .alias("_is_dd_applied"),
+                ]
+            )
+        else:
+            lf = lf.with_columns(
+                [
+                    pl.lit(False).alias("is_double_default_eligible"),
+                    pl.lit(0.0).alias("double_default_unfunded_protection"),
+                    pl.lit(None).cast(pl.Float64).alias("irb_lgd_double_default"),
+                    pl.lit(False).alias("_is_dd_applied"),
+                ]
+            )
+
         # Check if guarantee is beneficial (guarantor RW < borrower IRB RW)
         # Non-beneficial guarantees should NOT be applied per CRR Art. 213
         lf = lf.with_columns(
@@ -1046,7 +1141,8 @@ class IRBLazyFrame:
                     ]
                 )
             else:
-                # CRR: SA guarantors only — no EL for guaranteed portion
+                # CRR: SA guarantors → reduce EL for guaranteed portion
+                # Double default exposures retain full obligor EL (DD modifies K, not EL)
                 lf = lf.with_columns(
                     [
                         pl.when(
@@ -1075,11 +1171,15 @@ class IRBLazyFrame:
                 .then(pl.lit("NO_GUARANTEE"))
                 .when(~pl.col("is_guarantee_beneficial"))
                 .then(pl.lit("GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"))
+                .when(pl.col("_is_dd_applied"))
+                .then(pl.lit("DOUBLE_DEFAULT"))
                 .when(pl.col("_is_pd_substitution"))
                 .then(pl.lit("PD_PARAMETER_SUBSTITUTION"))
                 .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
                 .alias("guarantee_status"),
-                pl.when(is_beneficial_guaranteed & pl.col("_is_pd_substitution"))
+                pl.when(is_beneficial_guaranteed & pl.col("_is_dd_applied"))
+                .then(pl.lit("DOUBLE_DEFAULT"))
+                .when(is_beneficial_guaranteed & pl.col("_is_pd_substitution"))
                 .then(pl.lit("PD_PARAMETER_SUBSTITUTION"))
                 .when(is_beneficial_guaranteed)
                 .then(pl.lit("SA_RW_SUBSTITUTION"))
@@ -1094,7 +1194,7 @@ class IRBLazyFrame:
         )
 
         # Drop internal tracking columns
-        lf = lf.drop("_is_pd_substitution", "guarantor_rw_sa")
+        lf = lf.drop("_is_pd_substitution", "_is_dd_applied", "guarantor_rw_sa")
 
         return lf
 

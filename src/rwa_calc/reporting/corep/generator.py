@@ -1402,8 +1402,8 @@ def _compute_c08_values(
     # 0210: Receivables
     values["0210"] = _col_sum_eager(data, cols, "collateral_receivables_value")
 
-    # 0220: Double default (CRR only) — Phase 3E
-    values["0220"] = None
+    # 0220: Double default unfunded protection (CRR only) — Art. 153(3), 202-203
+    values["0220"] = _col_sum_eager(data, cols, "double_default_unfunded_protection")
 
     # --- Parameters ---
     # 0230: Exposure-weighted average LGD (%)

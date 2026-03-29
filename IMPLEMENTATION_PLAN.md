@@ -46,6 +46,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 3B: Credit derivatives | **DONE** | protection_type field added to guarantee schema. CRM processor carries type through pipeline. C 07.00 col 0060, C 08.01 cols 0050/0160/0310 wired. 8 new tests. |
 | 3C: CRM substitution flows | **DONE** | Completed as part of Task 2H. Full cross-class outflow/inflow computation in _compute_substitution_flows(). Sub-row inflow allocation deferred (total row only). |
 | 3F: Post-model adjustments | **DONE** | PostModelAdjustmentConfig added. IRB namespace apply_post_model_adjustments() method. Mortgage RW floor, general PMA, unrecognised exposure adjustments. COREP cols 0251-0254, 0280-0282 wired. 28 new tests (18 IRB + 10 COREP). |
+| 3E: Double default (CRR) | **DONE** | K_dd = K_obligor × (0.15 + 160 × PD_g). CRR Art. 153(3), 202-203. Eligibility: A-IRB + corporate + eligible guarantor. COREP col 0220 wired. 29 new tests (24 IRB + 5 COREP). |
 | 3J: Currency mismatch multiplier | **DONE** | 1.5x RW multiplier for retail/RE when exposure currency ≠ borrower income currency. Basel 3.1 only. COREP row 0380 wired. 13 new tests (8 SA + 5 COREP). |
 
 ---
@@ -647,6 +648,21 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 **Complexity**: Medium-high. New IRB formula variant and eligibility logic.
 
 **Verify**: `uv run pytest tests/unit/test_irb_formulas.py tests/unit/test_corep.py -v`
+
+**Implementation notes (completed)**:
+- `_double_default_multiplier_expr()` added to `formulas.py`: returns `0.15 + 160 × PD_g` as Polars expression. `calculate_double_default_k()` scalar wrapper for testing.
+- `enable_double_default: bool` added to `CalculationConfig`. CRR factory accepts optional parameter (default False). Basel 3.1 always False.
+- 3 new columns in `CALCULATION_OUTPUT_SCHEMA`: `is_double_default_eligible`, `double_default_unfunded_protection`, `irb_lgd_double_default`.
+- Eligibility logic in `apply_guarantee_substitution()` (namespace.py): CRR + A-IRB + corporate underlying + eligible guarantor type (institution/MDB/sovereign, or corporate with CQS ≤ 2) + guarantor has internal PD.
+- DD RW = `risk_weight_irb_original × (0.15 + 160 × PD_g)`, floored at guarantor's direct RW (Basel II para 286).
+- DD overrides `guarantor_rw` when DD RW < substitution RW, producing lower blended RWA.
+- `guarantee_status` / `guarantee_method_used` track "DOUBLE_DEFAULT" as a third method alongside SA_RW_SUBSTITUTION and PD_PARAMETER_SUBSTITUTION.
+- Non-DD-eligible or DD-disabled: `is_double_default_eligible=False`, `double_default_unfunded_protection=0.0`.
+- COREP col 0220 wired to `double_default_unfunded_protection.sum()`. Basel 3.1 excludes col 0220 via column ref filtering.
+- Art. 204/216 derivative-specific DD eligibility conditions deferred — current implementation uses same criteria for guarantees and credit derivatives.
+- 24 new IRB tests in `test_irb_double_default.py`: formula unit tests (4), eligibility tests (11), RWA impact tests (6), status tracking tests (3).
+- 5 new COREP tests in `TestDoubleDefaultCOREP`: col 0220 population, zero when no DD, B3.1 absence, institution class, unfunded subset of guarantees.
+- Total: 247 COREP tests pass (3 Excel skipped), 1987 unit/contract tests pass (3 pre-existing fixture failures).
 
 ---
 

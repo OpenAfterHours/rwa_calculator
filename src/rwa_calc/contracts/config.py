@@ -557,6 +557,7 @@ class CalculationConfig:
     irb_permissions: IRBPermissions = field(default_factory=IRBPermissions.sa_only)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
+    enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
     collect_engine: PolarsEngine = "streaming"  # Default to streaming for memory efficiency
 
     @property
@@ -579,6 +580,7 @@ class CalculationConfig:
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
+        enable_double_default: bool = False,
         collect_engine: PolarsEngine = "streaming",
     ) -> CalculationConfig:
         """
@@ -592,11 +594,13 @@ class CalculationConfig:
         - No output floor
         - No post-model adjustments
         - 1.06 scaling factor for IRB K
+        - Optional double default treatment (Art. 153(3), 202-203)
 
         Args:
             reporting_date: As-of date for calculation
             irb_permissions: IRB approach permissions (optional)
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
+            enable_double_default: Enable double default treatment for eligible guarantees
             collect_engine: Polars engine for .collect() - 'streaming' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -616,6 +620,7 @@ class CalculationConfig:
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
             scaling_factor=Decimal("1.06"),
             eur_gbp_rate=eur_gbp_rate,
+            enable_double_default=enable_double_default,
             collect_engine=collect_engine,
         )
 

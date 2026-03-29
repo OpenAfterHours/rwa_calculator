@@ -29,6 +29,7 @@ dependencies = [
     "polars-normal-stats>=0.2.0",  # Required for IRB statistical functions
     "fastexcel>=0.19.0",
     "xlsxwriter>=3.1.0",
+    "zensical>=0.0.30",
 ]
 
 [project.scripts]

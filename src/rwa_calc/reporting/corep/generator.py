@@ -1443,9 +1443,11 @@ def _compute_c08_values(
         values["0250"] = None
 
     # --- RWEA ---
-    # 0251-0254: Post-model adjustments (B3.1) — Phase 3F
-    for ref in ("0251", "0252", "0253", "0254"):
-        values[ref] = None
+    # 0251-0254: Post-model adjustments (B3.1) — Task 3F
+    values["0251"] = _col_sum_eager(data, cols, "rwa_pre_adjustments")
+    values["0252"] = _col_sum_eager(data, cols, "post_model_adjustment_rwa")
+    values["0253"] = _col_sum_eager(data, cols, "mortgage_rw_floor_adjustment")
+    values["0254"] = _col_sum_eager(data, cols, "unrecognised_exposure_adjustment")
 
     # 0255: RWEA pre supporting factors (CRR only)
     rwa_pre = _col_sum_eager(data, cols, "rwa_before_sme_factor")
@@ -1498,12 +1500,14 @@ def _compute_c08_values(
     values["0276"] = _col_sum_eager(data, cols, sa_rwa_col) if sa_rwa_col else None
 
     # --- Memorandum ---
-    # 0280: Expected loss amount
-    values["0280"] = _col_sum_eager(data, cols, "irb_expected_loss")
+    # 0280: Expected loss amount (pre post-model adjustments for B3.1)
+    el_raw = _col_sum_eager(data, cols, "irb_expected_loss")
+    el_pre = _col_sum_eager(data, cols, "el_pre_adjustment")
+    values["0280"] = el_pre if el_pre is not None else el_raw
 
-    # 0281-0282: EL adjustments (B3.1) — Phase 3F
-    values["0281"] = None
-    values["0282"] = None
+    # 0281-0282: EL adjustments (B3.1) — Task 3F
+    values["0281"] = _col_sum_eager(data, cols, "post_model_adjustment_el")
+    values["0282"] = _col_sum_eager(data, cols, "el_after_adjustment")
 
     # 0290: (-) Value adjustments and provisions
     prov = _safe_sum_eager(

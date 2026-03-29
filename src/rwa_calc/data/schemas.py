@@ -157,6 +157,8 @@ COUNTERPARTY_SCHEMA = {
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
     # CCP fields (CRR Art. 300-311, CRE54.14-15)
     "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
+    # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
+    "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income source
 }
 
 COLLATERAL_SCHEMA = {
@@ -197,6 +199,7 @@ GUARANTEE_SCHEMA = {
     "percentage_covered": pl.Float64,
     "beneficiary_type": pl.String,
     "beneficiary_reference": pl.String,
+    "protection_type": pl.String,  # "guarantee" or "credit_derivative" (CDS/CLN/TRS)
 }
 
 PROVISION_SCHEMA = {
@@ -229,6 +232,7 @@ RATINGS_SCHEMA = {
 SPECIALISED_LENDING_SCHEMA = {
     "counterparty_reference": pl.String,  # Links to counterparty (all exposures inherit SL treatment)
     "sl_type": pl.String,  # project_finance, object_finance, commodities_finance, ipre, hvcre
+    "project_phase": pl.String,  # pre_operational, operational, high_quality_operational (project_finance only)
     "slotting_category": pl.String,  # strong, good, satisfactory, weak, default
     "is_hvcre": pl.Boolean,  # High-volatility commercial real estate (higher RW)
     # Supervisory risk weights by category (CRE33.5):
@@ -439,6 +443,8 @@ VALID_SL_TYPES = {
     "hvcre",
 }
 
+VALID_PROJECT_PHASES = {"pre_operational", "operational", "high_quality_operational"}
+
 VALID_SLOTTING_CATEGORIES = {"strong", "good", "satisfactory", "weak", "default"}
 
 VALID_EQUITY_TYPES = {
@@ -455,6 +461,8 @@ VALID_EQUITY_TYPES = {
 }
 
 VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent"}
+
+VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_BS_TYPES = {"ONB", "OFB"}
 
@@ -495,12 +503,14 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "specialised_lending": {
         "sl_type": VALID_SL_TYPES,
         "slotting_category": VALID_SLOTTING_CATEGORIES,
+        "project_phase": VALID_PROJECT_PHASES,
     },
     "equity_exposures": {
         "equity_type": VALID_EQUITY_TYPES,
     },
     "guarantees": {
         "beneficiary_type": VALID_BENEFICIARY_TYPES,
+        "protection_type": VALID_PROTECTION_TYPES,
     },
     "facility_mappings": {
         "child_type": VALID_CHILD_TYPES,
@@ -847,6 +857,13 @@ CALCULATION_OUTPUT_SCHEMA = {
     "fx_haircut_applied": pl.Float64,  # FX mismatch haircut (8% or 0%)
     "maturity_mismatch_adjustment": pl.Float64,  # Adjustment for maturity mismatch
     "collateral_adjusted_value": pl.Float64,  # Net collateral value after haircuts
+    "on_bs_netting_amount": pl.Float64,  # On-balance sheet netting benefit (CRR Art. 195)
+    # Per-type collateral tracking for COREP C 08.01 (cols 0170-0210)
+    "collateral_financial_value": pl.Float64,  # Eligible financial collateral adj value
+    "collateral_re_value": pl.Float64,  # Real estate collateral adj value
+    "collateral_receivables_value": pl.Float64,  # Receivables collateral adj value
+    "collateral_other_physical_value": pl.Float64,  # Other physical collateral adj value
+    "collateral_cash_value": pl.Float64,  # Cash/deposit collateral adj value (subset of financial)
     # -------------------------------------------------------------------------
     # CRM - GUARANTEE IMPACT (Substitution approach)
     # -------------------------------------------------------------------------
@@ -878,6 +895,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "risk_weight_irb_original": pl.Float64,  # IRB RW before guarantee substitution
     "guarantee_method_used": pl.String,  # "SA_RW_SUBSTITUTION", "PD_SUBSTITUTION", or "NO_GUARANTEE"
     "guarantee_status": pl.String,  # Detailed status including non-beneficial flag
+    "protection_type": pl.String,  # "guarantee" or "credit_derivative" — unfunded protection type
     # -------------------------------------------------------------------------
     # CRM - PROVISION IMPACT
     # -------------------------------------------------------------------------
@@ -922,10 +940,13 @@ CALCULATION_OUTPUT_SCHEMA = {
     # SPECIALISED LENDING / EQUITY (Alternative approaches)
     # -------------------------------------------------------------------------
     "sl_type": pl.String,  # SL category if applicable
+    "sl_project_phase": pl.String,  # pre_operational/operational/high_quality_operational
     "sl_slotting_category": pl.String,  # strong/good/satisfactory/weak/default
     "sl_risk_weight": pl.Float64,  # Slotting RW
     "equity_type": pl.String,  # Equity category if applicable
     "equity_risk_weight": pl.Float64,  # Equity RW
+    "equity_transitional_approach": pl.String,  # "sa_transitional" or "irb_transitional" (B3.1)
+    "equity_higher_risk": pl.Boolean,  # True if 400%+ RW (speculative, venture capital)
     # -------------------------------------------------------------------------
     # REAL ESTATE SPECIFIC
     # -------------------------------------------------------------------------
@@ -934,6 +955,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "ltv_band": pl.String,  # LTV band for RW lookup
     "is_income_producing": pl.Boolean,  # CRE income flag
     "is_adc": pl.Boolean,  # ADC exposure flag
+    "materially_dependent_on_property": pl.Boolean,  # Cash-flow dependency on property (B3.1)
     "mortgage_risk_weight": pl.Float64,  # LTV-based RW
     # -------------------------------------------------------------------------
     # FINAL RWA CALCULATION
@@ -946,6 +968,27 @@ CALCULATION_OUTPUT_SCHEMA = {
     "floor_impact": pl.Float64,  # Additional RWA from floor
     "final_rwa": pl.Float64,  # max(rwa_before_floor, output_floor_rwa)
     "risk_weight_effective": pl.Float64,  # final_rwa / final_ead (implied RW)
+    # -------------------------------------------------------------------------
+    # CURRENCY MISMATCH (Basel 3.1 Art. 123B / CRE20.93)
+    # -------------------------------------------------------------------------
+    "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income
+    "currency_mismatch_multiplier_applied": pl.Boolean,  # True if 1.5x RW multiplier applied
+    # -------------------------------------------------------------------------
+    # POST-MODEL ADJUSTMENTS (Basel 3.1 PRA PS9/24 Art. 153(5A), 154(4A), 158(6A))
+    # -------------------------------------------------------------------------
+    "rwa_pre_adjustments": pl.Float64,  # RWEA before post-model adjustments
+    "post_model_adjustment_rwa": pl.Float64,  # General PMA add-on to RWEA
+    "mortgage_rw_floor_adjustment": pl.Float64,  # RWEA increase from mortgage RW floor
+    "unrecognised_exposure_adjustment": pl.Float64,  # RWEA increase for unrecognised exposures
+    "el_pre_adjustment": pl.Float64,  # EL before post-model adjustments
+    "post_model_adjustment_el": pl.Float64,  # General PMA add-on to EL
+    "el_after_adjustment": pl.Float64,  # EL after post-model adjustments
+    # -------------------------------------------------------------------------
+    # DOUBLE DEFAULT (CRR Art. 153(3), 202-203 — CRR only)
+    # -------------------------------------------------------------------------
+    "is_double_default_eligible": pl.Boolean,  # Whether exposure qualifies for DD treatment
+    "double_default_unfunded_protection": pl.Float64,  # Guaranteed portion under DD → COREP 0220
+    "irb_lgd_double_default": pl.Float64,  # LGD used in DD calculation (= obligor LGD)
     # -------------------------------------------------------------------------
     # EXPECTED LOSS (IRB comparison to provisions)
     # -------------------------------------------------------------------------

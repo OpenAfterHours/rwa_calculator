@@ -260,6 +260,12 @@ class ExposureClassifier:
         if "is_ccp_client_cleared" in cp_col_names:
             select_cols.append(pl.col("is_ccp_client_cleared").alias("cp_is_ccp_client_cleared"))
 
+        # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
+        if "borrower_income_currency" in cp_col_names:
+            select_cols.append(
+                pl.col("borrower_income_currency").alias("cp_borrower_income_currency")
+            )
+
         cp_cols = counterparties.select(select_cols)
 
         return exposures.join(

@@ -276,6 +276,60 @@ class OutputFloorConfig:
 
 
 @dataclass(frozen=True)
+class PostModelAdjustmentConfig:
+    """
+    Post-model adjustment configuration for Basel 3.1 IRB.
+
+    PRA PS9/24 Art. 153(5A), 154(4A), 158(6A) require firms to apply
+    post-model adjustments (PMAs) to IRB model outputs for known deficiencies.
+    These adjustments increase RWEA and EL to compensate for model limitations.
+
+    Components:
+    - General PMAs: Firm-level scalar applied to modelled RWEA/EL (supervisory add-on)
+    - Mortgage RW floor: Minimum risk weight for residential mortgage IRB exposures
+    - Unrecognised exposure adjustment: Scalar for exposures not fully captured by model
+
+    CRR has no post-model adjustment framework.
+    """
+
+    enabled: bool = False
+    pma_rwa_scalar: Decimal = Decimal("0.0")  # Additive % of base RWEA (e.g., 0.05 = 5%)
+    pma_el_scalar: Decimal = Decimal("0.0")  # Additive % of base EL
+    mortgage_rw_floor: Decimal = Decimal("0.0")  # Min RW for residential mortgages (e.g., 0.15)
+    unrecognised_exposure_scalar: Decimal = Decimal("0.0")  # Additive % of base RWEA
+
+    @classmethod
+    def crr(cls) -> PostModelAdjustmentConfig:
+        """CRR: No post-model adjustments."""
+        return cls(enabled=False)
+
+    @classmethod
+    def basel_3_1(
+        cls,
+        pma_rwa_scalar: Decimal = Decimal("0.0"),
+        pma_el_scalar: Decimal = Decimal("0.0"),
+        mortgage_rw_floor: Decimal = Decimal("0.15"),
+        unrecognised_exposure_scalar: Decimal = Decimal("0.0"),
+    ) -> PostModelAdjustmentConfig:
+        """
+        Basel 3.1 post-model adjustment configuration.
+
+        Args:
+            pma_rwa_scalar: General PMA as fraction of base RWEA (default 0%)
+            pma_el_scalar: General PMA as fraction of base EL (default 0%)
+            mortgage_rw_floor: Minimum RW for residential mortgages (default 15%)
+            unrecognised_exposure_scalar: Unrecognised exposure add-on (default 0%)
+        """
+        return cls(
+            enabled=True,
+            pma_rwa_scalar=pma_rwa_scalar,
+            pma_el_scalar=pma_el_scalar,
+            mortgage_rw_floor=mortgage_rw_floor,
+            unrecognised_exposure_scalar=unrecognised_exposure_scalar,
+        )
+
+
+@dataclass(frozen=True)
 class RetailThresholds:
     """
     Thresholds for retail exposure classification.
@@ -480,6 +534,7 @@ class CalculationConfig:
         lgd_floors: LGD floor configuration (A-IRB)
         supporting_factors: SME/infrastructure factors
         output_floor: Output floor configuration
+        post_model_adjustments: Post-model adjustments (Basel 3.1 only)
         retail_thresholds: Retail classification thresholds
         irb_permissions: IRB approach permissions
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
@@ -495,10 +550,14 @@ class CalculationConfig:
     lgd_floors: LGDFloors = field(default_factory=LGDFloors.crr)
     supporting_factors: SupportingFactors = field(default_factory=SupportingFactors.crr)
     output_floor: OutputFloorConfig = field(default_factory=OutputFloorConfig.crr)
+    post_model_adjustments: PostModelAdjustmentConfig = field(
+        default_factory=PostModelAdjustmentConfig.crr
+    )
     retail_thresholds: RetailThresholds = field(default_factory=RetailThresholds.crr)
     irb_permissions: IRBPermissions = field(default_factory=IRBPermissions.sa_only)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
+    enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
     collect_engine: PolarsEngine = "streaming"  # Default to streaming for memory efficiency
 
     @property
@@ -521,6 +580,7 @@ class CalculationConfig:
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
+        enable_double_default: bool = False,
         collect_engine: PolarsEngine = "streaming",
     ) -> CalculationConfig:
         """
@@ -532,12 +592,15 @@ class CalculationConfig:
         - SME supporting factor (0.7619/0.85)
         - Infrastructure supporting factor (0.75)
         - No output floor
+        - No post-model adjustments
         - 1.06 scaling factor for IRB K
+        - Optional double default treatment (Art. 153(3), 202-203)
 
         Args:
             reporting_date: As-of date for calculation
             irb_permissions: IRB approach permissions (optional)
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
+            enable_double_default: Enable double default treatment for eligible guarantees
             collect_engine: Polars engine for .collect() - 'streaming' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -552,10 +615,12 @@ class CalculationConfig:
             lgd_floors=LGDFloors.crr(),
             supporting_factors=SupportingFactors.crr(),
             output_floor=OutputFloorConfig.crr(),
+            post_model_adjustments=PostModelAdjustmentConfig.crr(),
             retail_thresholds=RetailThresholds.crr(eur_gbp_rate=eur_gbp_rate),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
             scaling_factor=Decimal("1.06"),
             eur_gbp_rate=eur_gbp_rate,
+            enable_double_default=enable_double_default,
             collect_engine=collect_engine,
         )
 
@@ -564,6 +629,7 @@ class CalculationConfig:
         cls,
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
+        post_model_adjustments: PostModelAdjustmentConfig | None = None,
         collect_engine: PolarsEngine = "streaming",
     ) -> CalculationConfig:
         """
@@ -575,10 +641,13 @@ class CalculationConfig:
         - No supporting factors (SME/infrastructure)
         - Output floor (72.5%, transitional)
         - 1.06 scaling factor removed (PRA PS1/26 confirms)
+        - Post-model adjustments (mortgage RW floor, PMAs)
+        - 1.06 scaling factor removed (PRA CP16/22 confirms)
 
         Args:
             reporting_date: As-of date for calculation
             irb_permissions: IRB approach permissions (optional)
+            post_model_adjustments: PMA configuration (optional, defaults to B3.1)
             collect_engine: Polars engine for .collect() - 'streaming' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -593,6 +662,9 @@ class CalculationConfig:
             lgd_floors=LGDFloors.basel_3_1(),
             supporting_factors=SupportingFactors.basel_3_1(),
             output_floor=OutputFloorConfig.basel_3_1(),
+            post_model_adjustments=(
+                post_model_adjustments or PostModelAdjustmentConfig.basel_3_1()
+            ),
             retail_thresholds=RetailThresholds.basel_3_1(),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)

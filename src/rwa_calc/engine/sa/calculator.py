@@ -171,6 +171,9 @@ class SACalculator:
         # Step 2: Apply guarantee substitution (blended risk weight)
         exposures = self._apply_guarantee_substitution(exposures, config)
 
+        # Step 2b: Apply currency mismatch multiplier (Basel 3.1 Art. 123B)
+        exposures = self._apply_currency_mismatch_multiplier(exposures, config)
+
         # Step 3: Calculate pre-factor RWA
         exposures = self._calculate_rwa(exposures)
 
@@ -219,6 +222,9 @@ class SACalculator:
 
         # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
         exposures = self._apply_guarantee_substitution(exposures, config)
+
+        # Step 3a: Currency mismatch multiplier (Basel 3.1 Art. 123B)
+        exposures = self._apply_currency_mismatch_multiplier(exposures, config)
 
         # Step 3b: Store SA-equivalent RWA for ALL rows before IRB calculator
         # overwrites risk_weight. The output floor needs: floor_rwa = floor_pct × sa_rwa.
@@ -272,6 +278,9 @@ class SACalculator:
 
         # Step 3: Guarantee substitution
         exposures = self._apply_guarantee_substitution(exposures, config)
+
+        # Step 3b: Currency mismatch multiplier (Basel 3.1 Art. 123B)
+        exposures = self._apply_currency_mismatch_multiplier(exposures, config)
 
         # Step 4: Calculate pre-factor RWA (all rows are SA — no guard needed)
         schema = exposures.collect_schema()
@@ -846,6 +855,75 @@ class SACalculator:
 
         return exposures
 
+    def _apply_currency_mismatch_multiplier(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply 1.5x RW multiplier for retail/RE currency mismatch (Basel 3.1 only).
+
+        When the exposure currency differs from the borrower's income currency,
+        a 1.5x multiplier is applied to the risk weight for retail and real estate
+        exposure classes.
+
+        Basel 3.1 Art. 123B / CRE20.93.
+
+        Args:
+            exposures: Exposures with risk_weight and currency columns
+            config: Calculation configuration
+
+        Returns:
+            Exposures with currency mismatch multiplier applied where applicable
+        """
+        if not config.is_basel_3_1:
+            return exposures
+
+        schema = exposures.collect_schema()
+        cols = schema.names()
+
+        # Need both exposure currency and borrower income currency
+        income_col = (
+            "cp_borrower_income_currency"
+            if "cp_borrower_income_currency" in cols
+            else "borrower_income_currency"
+            if "borrower_income_currency" in cols
+            else None
+        )
+        if income_col is None or "currency" not in cols:
+            return exposures
+
+        _uc = pl.col("_upper_class") if "_upper_class" in cols else (
+            pl.col("exposure_class").fill_null("").str.to_uppercase()
+        )
+
+        is_retail_or_re = (
+            _uc.str.contains("RETAIL", literal=True)
+            | _uc.str.contains("MORTGAGE", literal=True)
+            | _uc.str.contains("RESIDENTIAL", literal=True)
+            | _uc.str.contains("COMMERCIAL", literal=True)
+            | _uc.str.contains("CRE", literal=True)
+        )
+
+        has_mismatch = (
+            pl.col(income_col).is_not_null()
+            & (pl.col(income_col) != pl.col("currency"))
+        )
+
+        mismatch_applies = is_retail_or_re & has_mismatch
+
+        exposures = exposures.with_columns(
+            [
+                pl.when(mismatch_applies)
+                .then(pl.col("risk_weight") * 1.5)
+                .otherwise(pl.col("risk_weight"))
+                .alias("risk_weight"),
+                mismatch_applies.alias("currency_mismatch_multiplier_applied"),
+            ]
+        )
+
+        return exposures
+
     def _calculate_rwa(
         self,
         exposures: pl.LazyFrame,
@@ -989,6 +1067,7 @@ class SACalculator:
         provision_deducted: Decimal | None = None,
         currency: str | None = None,
         country_code: str | None = None,
+        borrower_income_currency: str | None = None,
         config: CalculationConfig | None = None,
     ) -> dict:
         """
@@ -1014,6 +1093,7 @@ class SACalculator:
             provision_deducted: Total provisions deducted from EAD
             currency: Exposure denomination currency (ISO, e.g. "GBP") for Art. 114(3)
             country_code: Counterparty country (ISO, e.g. "GB") for Art. 114(3)
+            borrower_income_currency: ISO currency of borrower's income (Basel 3.1 Art. 123B)
             config: Calculation configuration (defaults to CRR)
 
         Returns:
@@ -1050,11 +1130,13 @@ class SACalculator:
                 "provision_deducted": [float(provision_deducted) if provision_deducted else 0.0],
                 "currency": [currency],
                 "cp_country_code": [country_code],
+                "borrower_income_currency": [borrower_income_currency],
             }
         ).lazy()
 
         # Apply risk weights
         df = self._apply_risk_weights(df, config)
+        df = self._apply_currency_mismatch_multiplier(df, config)
         df = self._calculate_rwa(df)
         df = self._apply_supporting_factors(df, config)
 

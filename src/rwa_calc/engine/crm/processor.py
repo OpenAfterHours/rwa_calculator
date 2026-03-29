@@ -274,6 +274,30 @@ def _resolve_pledge_from_joined(collateral: pl.LazyFrame) -> pl.LazyFrame:
     return collateral.drop("_beneficiary_ead")
 
 
+def _join_netting_amounts(
+    exposures: pl.LazyFrame, netting_collateral: pl.LazyFrame
+) -> pl.LazyFrame:
+    """
+    Join per-exposure on-BS netting amounts from synthetic netting collateral.
+
+    The netting collateral has one row per beneficiary exposure with market_value
+    equal to the pro-rata netting pool allocation. Sum by beneficiary_reference
+    (an exposure may match multiple pools) and join back as on_bs_netting_amount.
+    """
+    netting_by_exposure = netting_collateral.group_by("beneficiary_reference").agg(
+        pl.col("market_value").sum().alias("on_bs_netting_amount"),
+    )
+    exposures = exposures.join(
+        netting_by_exposure,
+        left_on="exposure_reference",
+        right_on="beneficiary_reference",
+        how="left",
+    ).with_columns(
+        pl.col("on_bs_netting_amount").fill_null(0.0),
+    )
+    return exposures
+
+
 @dataclass
 class CRMError:
     """Error encountered during CRM processing."""
@@ -382,12 +406,18 @@ class CRMProcessor:
         netting_collateral = self._generate_netting_collateral(exposures)
         collateral: pl.LazyFrame | None = data.collateral
         if netting_collateral is not None:
+            # Track per-exposure netting amount for COREP col 0035
+            exposures = _join_netting_amounts(exposures, netting_collateral)
             if collateral is not None and has_required_columns(
                 collateral, self.COLLATERAL_REQUIRED_COLUMNS
             ):
                 collateral = pl.concat([collateral, netting_collateral], how="diagonal")
             else:
                 collateral = netting_collateral
+        else:
+            exposures = exposures.with_columns(
+                pl.lit(0.0).alias("on_bs_netting_amount")
+            )
 
         # Step 4: Apply collateral (if available and valid)
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
@@ -483,12 +513,18 @@ class CRMProcessor:
         netting_collateral = self._generate_netting_collateral(exposures)
         collateral: pl.LazyFrame | None = data.collateral
         if netting_collateral is not None:
+            # Track per-exposure netting amount for COREP col 0035
+            exposures = _join_netting_amounts(exposures, netting_collateral)
             if collateral is not None and has_required_columns(
                 collateral, self.COLLATERAL_REQUIRED_COLUMNS
             ):
                 collateral = pl.concat([collateral, netting_collateral], how="diagonal")
             else:
                 collateral = netting_collateral
+        else:
+            exposures = exposures.with_columns(
+                pl.lit(0.0).alias("on_bs_netting_amount")
+            )
 
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
@@ -610,6 +646,8 @@ class CRMProcessor:
                 pl.col("ccf").alias("ccf_unguaranteed"),
                 pl.lit(0.0).alias("guarantee_ratio"),
                 pl.lit("").alias("guarantor_approach"),
+                # Unfunded protection type (guarantee vs credit_derivative)
+                pl.lit(None).cast(pl.String).alias("protection_type"),
             ]
         )
 
@@ -914,6 +952,17 @@ class CRMProcessor:
                 ]
             )
 
+        # Legacy path: set per-type collateral values to 0.0 (not available)
+        exposures = exposures.with_columns(
+            [
+                pl.lit(0.0).alias("collateral_financial_value"),
+                pl.lit(0.0).alias("collateral_cash_value"),
+                pl.lit(0.0).alias("collateral_re_value"),
+                pl.lit(0.0).alias("collateral_receivables_value"),
+                pl.lit(0.0).alias("collateral_other_physical_value"),
+            ]
+        )
+
         # Apply collateral effect based on approach
         exposures = exposures.with_columns(
             [
@@ -1033,6 +1082,19 @@ class CRMProcessor:
                 .otherwise(pl.lit(1.0))
                 .alias("overcollateralisation_ratio"),
                 coll_type_lower.is_in(_financial_types).alias("is_financial_collateral_type"),
+                # Per-type category for COREP collateral breakdown (C 08.01 cols 0170-0210)
+                pl.when(coll_type_lower.is_in(["cash", "deposit"]))
+                .then(pl.lit("cash"))
+                .when(coll_type_lower.is_in(_financial_types))
+                .then(pl.lit("financial"))
+                .when(coll_type_lower.is_in(_receivable_types))
+                .then(pl.lit("receivables"))
+                .when(coll_type_lower.is_in(_real_estate_types))
+                .then(pl.lit("real_estate"))
+                .when(coll_type_lower.is_in(_other_physical_types))
+                .then(pl.lit("other_physical"))
+                .otherwise(pl.lit("other"))
+                .alias("_coll_category"),
                 pl.coalesce(
                     pl.col("value_after_maturity_adj")
                     if "value_after_maturity_adj" in collateral_schema.names()
@@ -1089,11 +1151,35 @@ class CRMProcessor:
                     .sum()
                     .alias("_wn"),
                     pl.col("adjusted_value").filter(~is_fin).sum().alias("_rn"),
+                    # Per-type collateral values for COREP
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "financial")
+                    .sum()
+                    .alias("_adj_fin"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "cash")
+                    .sum()
+                    .alias("_adj_cash"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "real_estate")
+                    .sum()
+                    .alias("_adj_re"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "receivables")
+                    .sum()
+                    .alias("_adj_rec"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "other_physical")
+                    .sum()
+                    .alias("_adj_oth"),
                 ]
             )
         )
 
-        _agg = ["_cv", "_mv", "_ef", "_wf", "_en", "_wn", "_rn"]
+        _agg = [
+            "_cv", "_mv", "_ef", "_wf", "_en", "_wn", "_rn",
+            "_adj_fin", "_adj_cash", "_adj_re", "_adj_rec", "_adj_oth",
+        ]
 
         # Split the small aggregated result for per-level joins
         coll_direct = (
@@ -1187,6 +1273,11 @@ class CRMProcessor:
             [
                 _sum3("_cv").alias("collateral_adjusted_value"),
                 _sum3("_mv").alias("collateral_market_value"),
+                _sum3("_adj_fin").alias("collateral_financial_value"),
+                _sum3("_adj_cash").alias("collateral_cash_value"),
+                _sum3("_adj_re").alias("collateral_re_value"),
+                _sum3("_adj_rec").alias("collateral_receivables_value"),
+                _sum3("_adj_oth").alias("collateral_other_physical_value"),
                 _sum3("_ef").alias("_eff_fin_a"),
                 _sum3("_wf").alias("_wlgd_fin_a"),
                 _sum3("_en").alias("_eff_nf_a"),
@@ -2304,6 +2395,8 @@ class CRMProcessor:
             agg_exprs.append(pl.col("percentage_covered").first().alias("percentage_covered"))
         if "guarantee_reference" in guar_cols:
             agg_exprs.append(pl.col("guarantee_reference").first().alias("guarantee_reference"))
+        if "protection_type" in guar_cols:
+            agg_exprs.append(pl.col("protection_type").first().alias("protection_type"))
 
         guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
 
@@ -2317,6 +2410,8 @@ class CRMProcessor:
             guar_select.append("percentage_covered")
         if "guarantee_reference" in guar_cols:
             guar_select.append("guarantee_reference")
+        if "protection_type" in guar_cols:
+            guar_select.append("protection_type")
 
         # Count distinct guarantors per exposure
         guarantee_counts = guarantees.group_by("beneficiary_reference").agg(
@@ -2337,6 +2432,7 @@ class CRMProcessor:
             pl.col("ead_after_collateral").alias("unguaranteed_portion"),
             pl.lit(None).cast(pl.String).alias("guarantor_reference"),
             pl.lit(0.0).alias("guarantee_amount"),
+            pl.lit(None).cast(pl.String).alias("protection_type"),
         )
 
         # --- Path 2: Single guarantor (backward compatible, no split) ---
@@ -2462,6 +2558,7 @@ class CRMProcessor:
             ),
             pl.lit(0.0).alias("guarantee_amount"),
             pl.lit(None).cast(pl.String).alias("guarantor_reference"),
+            pl.lit(None).cast(pl.String).alias("protection_type"),
             pl.concat_str(
                 [pl.col("parent_exposure_reference"), pl.lit("__REM")],
             ).alias("exposure_reference"),
@@ -2520,6 +2617,18 @@ class CRMProcessor:
         Returns:
             Exposures with guarantee effects applied
         """
+        # Default protection_type to "guarantee" if not provided (backward compatibility)
+        guar_input_schema = guarantees.collect_schema()
+        if "protection_type" not in guar_input_schema.names():
+            guarantees = guarantees.with_columns(
+                pl.lit("guarantee").alias("protection_type"),
+            )
+        else:
+            # Fill nulls with "guarantee" (default for legacy data)
+            guarantees = guarantees.with_columns(
+                pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
+            )
+
         # Expand facility/counterparty-level guarantees to exposure-level
         guarantees = self._resolve_guarantees_multi_level(guarantees, exposures)
 
@@ -3119,6 +3228,7 @@ class CRMProcessor:
                 pl.col("ccf_unguaranteed"),
                 pl.col("guarantee_ratio"),
                 pl.col("guarantor_approach"),
+                pl.col("protection_type"),
             ]
         )
 

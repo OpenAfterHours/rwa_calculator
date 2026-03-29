@@ -169,7 +169,7 @@ class RWAService:
             {
                 "id": "BASEL_3_1",
                 "name": "Basel 3.1",
-                "description": "PRA PS9/24 UK implementation - effective from Jan 2027",
+                "description": "PRA PS1/26 UK implementation - effective from Jan 2027",
             },
         ]
 

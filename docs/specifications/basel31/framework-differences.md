@@ -2,7 +2,7 @@
 
 Key differences from CRR including output floor, PD/LGD floors, and removal of supporting factors.
 
-**Regulatory Reference:** PRA PS9/24
+**Regulatory Reference:** PRA PS1/26
 
 ---
 
@@ -17,10 +17,10 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 | RWA Scaling Factor | 1.06 | Removed | — |
 | SME Supporting Factor | 0.7619 / 0.85 | Removed | CRR Art. 501 |
 | Infrastructure Factor | 0.75 | Removed | CRR Art. 501a |
-| Output Floor | None | 72.5% of SA | PRA PS9/24 |
+| Output Floor | None | 72.5% of SA | PRA PS1/26 |
 | PD Floor | 0.03% (all classes) | Differentiated | CRE30.55 |
 | A-IRB LGD Floors | None | Yes (by collateral type) | CRE30.41 |
-| Slotting Risk Weights | Maturity-differentiated | HVCRE + PF pre-op differentiated | PRA PS9/24 |
+| Slotting Risk Weights | Maturity-differentiated | HVCRE + PF pre-op differentiated | PRA PS1/26 |
 
 ## Differentiated PD Floors (Basel 3.1)
 
@@ -45,7 +45,7 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 | Residential real estate | 5%* |
 | Other physical | 15%* |
 
-*Values reflect PRA implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%). Verify against PRA PS1/26 final rules.
+*Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
 ## F-IRB Supervisory LGD (CRE32)
 
@@ -123,7 +123,7 @@ The 1.25x correlation multiplier applies to exposures to **financial institution
 
 This multiplier is already implemented via the `requires_fi_scalar` flag in the classifier and `_polars_correlation_expr()` in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.
 
-Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS9/24.
+Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26.
 
 ## A-IRB CCF Floor (CRE32.27)
 

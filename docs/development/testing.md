@@ -191,7 +191,7 @@ End-to-end tests that run fixture data through the full production pipeline and 
 
 | File | Tests | Covers |
 |------|------:|--------|
-| `test_scenario_b31_a_sa.py` | 14 | SA risk weights (PRA PS9/24) |
+| `test_scenario_b31_a_sa.py` | 14 | SA risk weights (PRA PS1/26) |
 | `test_scenario_b31_b_firb.py` | 16 | Foundation IRB |
 | `test_scenario_b31_c_airb.py` | 13 | Advanced IRB |
 | `test_scenario_b31_d_crm.py` | 15 | Credit Risk Mitigation |

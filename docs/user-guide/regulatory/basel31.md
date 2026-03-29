@@ -1,13 +1,13 @@
 # Basel 3.1
 
-**Basel 3.1** represents a significant overhaul of credit risk capital requirements, implemented in the UK through PRA PS9/24. It becomes effective on **1 January 2027**.
+**Basel 3.1** represents a significant overhaul of credit risk capital requirements, implemented in the UK through PRA PS1/26. It becomes effective on **1 January 2027**.
 
 ## Legal Basis
 
 | Document | Reference |
 |----------|-----------|
-| Primary Policy | PRA PS9/24 (Near-Final Rules) |
-| Consultation | PRA CP16/22 |
+| Primary Policy | PRA PS1/26 (Final Rules) |
+| Consultation | PRA CP16/22 (superseded) |
 | Basel Standards | BCBS CRE20-CRE99 |
 
 ## Key Changes from CRR
@@ -90,7 +90,7 @@ New minimum LGD values for Advanced IRB:
 | Secured - Residential Real Estate | 5%* |
 | Secured - Other Physical | 15%* |
 
-*Values reflect PRA implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%). Verify against PRA PS1/26 final rules.
+*Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
 ### 6. F-IRB Supervisory LGD Changes (CRE32)
 
@@ -300,7 +300,7 @@ gantt
     title Basel 3.1 Implementation Timeline
     dateFormat  YYYY-MM-DD
     section Milestones
-    PRA PS9/24 Published     :done,    2024-09-01, 2024-09-30
+    PRA PS1/26 Published     :done,    2024-09-01, 2024-09-30
     Industry Preparation     :active,  2025-01-01, 2026-12-31
     Basel 3.1 Go-Live        :         2027-01-01, 2027-01-01
     section Output Floor

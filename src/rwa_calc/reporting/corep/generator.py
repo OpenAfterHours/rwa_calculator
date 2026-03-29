@@ -17,7 +17,7 @@ all the data; this module reshapes it into the fixed template layout.
 References:
 - Regulation (EU) 2021/451, Annex I/II
 - CRR Art. 111-134 (SA), Art. 142-191 (IRB)
-- PRA CP16/22 Chapter 12 (Basel 3.1 reporting amendments)
+- PRA PS1/26 (Basel 3.1 reporting amendments)
 """
 
 from __future__ import annotations

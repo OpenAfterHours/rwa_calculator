@@ -9,7 +9,7 @@ Usage:
 
 Features:
     - CRR (Basel 3.0) reference tables
-    - Basel 3.1 (PRA PS9/24) reference tables
+    - Basel 3.1 (PRA PS1/26) reference tables
     - Risk weight tables
     - Supporting factor details
     - IRB parameters
@@ -46,7 +46,7 @@ def _(mo):
             mo.md("---"),
             mo.md("""
 **Quick Links**
-- [PRA PS9/24](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
+- [PRA PS1/26](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement)
 - [UK CRR](https://www.legislation.gov.uk/eur/2013/575/contents)
 - [BCBS Framework](https://www.bis.org/basel_framework/)
             """),
@@ -109,7 +109,7 @@ def _(framework_tabs, mo, pl):
 ### Regulatory Sources
 
 - **UK CRR**: [legislation.gov.uk](https://www.legislation.gov.uk/eur/2013/575/contents)
-- **PRA PS9/24**: [Bank of England](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
+- **PRA PS1/26**: [Bank of England](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement)
 - **BCBS Framework**: [bis.org](https://www.bis.org/basel_framework/)
         """)
         )
@@ -171,7 +171,7 @@ Exposures to SMEs qualify for a reduction in capital requirements:
     elif framework_tabs.value == "basel31":
         mo.output.replace(
             mo.md("""
-## Basel 3.1 Framework (PRA PS9/24)
+## Basel 3.1 Framework (PRA PS1/26)
 
 ### Key Changes from CRR
 

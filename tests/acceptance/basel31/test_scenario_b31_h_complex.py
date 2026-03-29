@@ -3,7 +3,7 @@ Basel 3.1 Group H: Complex/Combined Scenarios Acceptance Tests.
 
 These tests validate that the production RWA calculator correctly handles
 complex scenarios involving facility hierarchies and SME treatment under
-the Basel 3.1 framework (PRA PS9/24).
+the Basel 3.1 framework (PRA PS1/26).
 
 Key Basel 3.1 Differences for Complex Scenarios:
 - Facility aggregation: unchanged mechanism (same EAD aggregation)
@@ -29,7 +29,7 @@ Regulatory References:
 - CRE20.47-49: Basel 3.1 SME corporate risk weight (85%)
 - CRR Art. 111, 113: Facility hierarchy and exposure aggregation
 - CRR Art. 501: SME supporting factor (removed under Basel 3.1)
-- PRA PS9/24: UK implementation, removal of supporting factors
+- PRA PS1/26: UK implementation, removal of supporting factors
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ class TestB31GroupH_FrameworkDifferences:
     ) -> None:
         """Verify SME supporting factor is removed (SF=1.0) under Basel 3.1.
 
-        PRA PS9/24 removes CRR Art. 501 SME supporting factor.
+        PRA PS1/26 removes CRR Art. 501 SME supporting factor.
         """
         result = get_result_for_exposure(pipeline_results_df, "LOAN_SME_CHAIN")
         if result is None:

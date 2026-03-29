@@ -16,7 +16,7 @@ A measure of how closely the value of an asset moves with systematic risk factor
 The international regulatory framework for banks implemented through CRR in the UK. Effective until December 2026.
 
 ### Basel 3.1
-The revised Basel framework implemented through PRA PS9/24, effective from January 2027. Introduces output floors, removes supporting factors.
+The revised Basel framework implemented through PRA PS1/26, effective from January 2027. Introduces output floors, removes supporting factors.
 
 ### BCBS
 Basel Committee on Banking Supervision. The international body that develops banking standards.
@@ -230,5 +230,5 @@ Losses above expected levels, covered by regulatory capital. UL = RWA × 8%.
 | **EAD (off-BS)** | `Drawn + Undrawn x CCF` | CRR Art. 111, 166 |
 | **Effectively Secured** | `Adjusted Collateral Value / Overcollateralisation Ratio` | CRR Art. 230 |
 | **Maturity Mismatch** | `(t - 0.25) / (T - 0.25)` | CRR Art. 238 |
-| **Output Floor** | `max(RWA_IRB, floor% x RWA_SA)` | PRA PS9/24 |
+| **Output Floor** | `max(RWA_IRB, floor% x RWA_SA)` | PRA PS1/26 |
 | **SME SF (Blended)** | `[min(E,T) x 0.7619 + max(E-T,0) x 0.85] / E` | CRR Art. 501 |

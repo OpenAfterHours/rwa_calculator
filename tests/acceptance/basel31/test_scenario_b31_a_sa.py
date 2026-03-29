@@ -20,7 +20,7 @@ Regulatory References:
 - CRE20.65: Retail risk weight 75% (unchanged)
 - CRE20.73: Residential RE whole-loan LTV bands (7 bands: 20%-70%)
 - CRE20.86: Income-producing commercial RE LTV bands (3 bands: 70%/90%/110%)
-- PRA PS9/24: Removal of SME and infrastructure supporting factors
+- PRA PS1/26: Removal of SME and infrastructure supporting factors
 """
 
 from typing import Any
@@ -247,7 +247,7 @@ class TestB31GroupA_StandardisedApproach:
         Input: £500,000 loan to retail SME
         Expected: RWA = £375,000 (75% RW × 1.0 SF)
         Rationale: Under CRR, this exposure had SF=0.7619 yielding RWA=£285,713.
-            Under Basel 3.1, supporting factors are removed (PRA PS9/24),
+            Under Basel 3.1, supporting factors are removed (PRA PS1/26),
             so the same exposure produces RWA=£375,000 — a 31% increase.
         """
         expected = expected_outputs_dict["B31-A9"]

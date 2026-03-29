@@ -88,7 +88,7 @@ avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 
 ### General Residential (CRE20.73)
 
-Whole-loan approach (PRA PS9/24):
+Whole-loan approach (PRA PS1/26):
 
 | LTV Band | Risk Weight |
 |----------|-------------|

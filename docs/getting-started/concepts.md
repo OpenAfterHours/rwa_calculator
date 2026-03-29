@@ -34,7 +34,7 @@ Key features:
 
 ### Basel 3.1
 
-**Basel 3.1** (implemented via PRA PS9/24) introduces enhanced risk sensitivity and removes certain capital relief mechanisms. Effective from 1 January 2027.
+**Basel 3.1** (implemented via PRA PS1/26) introduces enhanced risk sensitivity and removes certain capital relief mechanisms. Effective from 1 January 2027.
 
 Key features:
 - Removal of 1.06 scaling factor

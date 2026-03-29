@@ -676,6 +676,6 @@ print(result.row_count)   # Total rows across all sheets
 | Regulation (EU) 2021/451, Annex II | CRR COREP reporting instructions |
 | CRR Art. 112-134 | SA exposure classes and risk weights |
 | CRR Art. 142-191 | IRB exposure classes and capital requirements |
-| PRA PS9/24 | Basel 3.1 near-final rules |
+| PRA PS1/26 | Basel 3.1 final rules |
 | PRA PS1/26 Annex I | Basel 3.1 OF template layouts |
 | PRA PS1/26 Annex II | Basel 3.1 OF reporting instructions |

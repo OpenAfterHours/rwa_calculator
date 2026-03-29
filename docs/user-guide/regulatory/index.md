@@ -9,7 +9,7 @@ UK credit risk capital requirements are based on international Basel standards, 
 | Framework | Status | Effective Period | Primary Regulation |
 |-----------|--------|------------------|-------------------|
 | **CRR (Basel 3.0)** | Active | Until 31 Dec 2026 | UK CRR, PRA Rulebook |
-| **Basel 3.1** | Planned | From 1 Jan 2027 | PRA PS9/24 |
+| **Basel 3.1** | Planned | From 1 Jan 2027 | PRA PS1/26 |
 
 ## Regulatory Hierarchy
 
@@ -18,7 +18,7 @@ graph TD
     A[Basel Committee] --> B[Basel 3.0 Standards]
     A --> C[Basel 3.1 Standards]
     B --> D[EU CRR/CRD IV]
-    C --> E[PRA PS9/24]
+    C --> E[PRA PS1/26]
     D --> F[UK CRR Onshored]
     F --> G[Current UK Rules]
     E --> H[Future UK Rules]
@@ -40,8 +40,9 @@ graph TD
 
 | Document | Description | Link |
 |----------|-------------|------|
-| PRA PS9/24 | Basel 3.1 implementation near-final rules | [bankofengland.co.uk](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2) |
-| PRA CP16/22 | Basel 3.1 consultation paper | [bankofengland.co.uk](https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards) |
+| PRA PS1/26 | Basel 3.1 final rules | [bankofengland.co.uk](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement) |
+| PS1/26 Appendix 1 | Basel 3.1 regulations | [bankofengland.co.uk](https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf) |
+| PS1/26 Appendix 17 | Basel 3.1 template guidance | [bankofengland.co.uk](https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app17.pdf) |
 | BCBS CRE Standards | Basel Committee credit risk standards | [bis.org](https://www.bis.org/basel_framework/standard/CRE.htm) |
 
 ## Framework Selection

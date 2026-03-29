@@ -11,7 +11,7 @@ these need to be converted to GBP. This module provides:
 The EUR amounts are the regulatory source of truth. GBP equivalents are
 calculated at runtime using the configured rate.
 
-Note: Basel 3.1 (UK implementation via PRA PS9/24) specifies thresholds
+Note: Basel 3.1 (UK implementation via PRA PS1/26) specifies thresholds
 directly in GBP, so this conversion is not needed for Basel 3.1 calculations.
 
 Usage:

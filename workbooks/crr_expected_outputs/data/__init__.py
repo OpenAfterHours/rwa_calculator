@@ -1,7 +1,7 @@
 """Data loaders and CRR regulatory parameters for RWA calculations.
 
 This module contains CRR (EU 575/2013) specific parameters as onshored
-into UK law. For Basel 3.1 parameters (PRA PS9/24), see
+into UK law. For Basel 3.1 parameters (PRA PS1/26), see
 workbooks/basel31_expected_outputs/data/.
 """
 

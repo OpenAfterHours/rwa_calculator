@@ -495,7 +495,7 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 
 #### Task 3F: Post-model adjustments (Basel 3.1 only)
 
-**Goal**: Add post-model adjustment columns for IRB RWEA and EL (PRA PS9/24, Art. 153(5A), 154(4A), 158(6A)).
+**Goal**: Add post-model adjustment columns for IRB RWEA and EL (PRA PS1/26, Art. 153(5A), 154(4A), 158(6A)).
 
 **COREP cols**: OF 08.01: 0251-0254 (RWEA), 0281-0282 (EL).
 

@@ -5,7 +5,7 @@ Provides common test configuration and helper utilities for validating
 Basel 3.1 RWA calculations against expected outputs.
 
 Why these tests matter:
-    Basel 3.1 (PRA PS9/24, effective 1 Jan 2027) introduces material changes
+    Basel 3.1 (PRA PS1/26, effective 1 Jan 2027) introduces material changes
     to credit risk capital requirements. These acceptance tests verify that the
     calculator correctly implements the revised framework, catching regressions
     and ensuring regulatory compliance across SA risk weights, IRB parameters,

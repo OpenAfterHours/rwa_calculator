@@ -88,7 +88,7 @@ LGD is the percentage of exposure lost after recoveries.
 | Secured by CRE/RRE | 35% | 20% |
 | Secured by Other Collateral | 40% | 25% |
 
-**A-IRB LGD Floors (Basel 3.1 only, PRA PS9/24):**
+**A-IRB LGD Floors (Basel 3.1 only, PRA PS1/26):**
 
 | Collateral Type | LGD Floor |
 |-----------------|-----------|

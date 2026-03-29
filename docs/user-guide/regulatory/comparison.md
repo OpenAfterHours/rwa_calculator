@@ -81,7 +81,7 @@ This page provides a comprehensive comparison between CRR (Basel 3.0) and Basel 
 | Residential RE | None | 5%* |
 | Other Physical | None | 15%* |
 
-*Values reflect PRA implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%). Verify against PRA PS1/26 final rules.
+*Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
 ### F-IRB Supervisory LGD
 
@@ -382,7 +382,7 @@ Basel 3.1:
 
 | Date | Event |
 |------|-------|
-| Sep 2024 | PRA PS9/24 published |
+| Sep 2024 | PRA PS1/26 published |
 | 2025-2026 | Parallel running recommended |
 | 1 Jan 2027 | Basel 3.1 effective |
 | 2027-2032 | Output floor phase-in |

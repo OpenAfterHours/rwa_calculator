@@ -16,7 +16,7 @@ This calculator supports both current and forthcoming UK regulatory frameworks:
 | Framework | Status | Effective Date |
 |-----------|--------|----------------|
 | **CRR (Basel 3.0)** | Active | Until 31 December 2026 |
-| **Basel 3.1 (PRA PS9/24)** | Planned | From 1 January 2027 |
+| **Basel 3.1 (PRA PS1/26)** | Planned | From 1 January 2027 |
 
 The system provides accurate, auditable RWA calculations across all major exposure classes using both the Standardised Approach (SA) and Internal Ratings-Based (IRB) approaches.
 
@@ -152,7 +152,7 @@ This implementation follows:
 
 - **PRA Rulebook** - CRR Firms rules
 - **UK CRR** - EU 575/2013 as onshored
-- **PRA PS9/24** - Basel 3.1 implementation policy statement
+- **PRA PS1/26** - Basel 3.1 implementation policy statement
 - **BCBS CRE Standards** - Basel Committee credit risk standards
 
 See the [Regulatory References](appendix/regulatory-references.md) appendix for complete documentation links.

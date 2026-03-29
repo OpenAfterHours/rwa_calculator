@@ -8,7 +8,7 @@ Generates EBA/PRA COREP templates from RWA calculation results:
 
 References:
 - Regulation (EU) 2021/451 (ITS on Supervisory Reporting), Annexes I/II
-- PRA CP16/22 Chapter 12 (Basel 3.1 reporting amendments)
+- PRA PS1/26 (Basel 3.1 reporting amendments)
 - CRR Art. 111-134 (SA), Art. 142-191 (IRB)
 """
 

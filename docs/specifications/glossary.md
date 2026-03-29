@@ -4,7 +4,7 @@
 |------|------------|
 | **RWA** | Risk-Weighted Assets — credit exposures multiplied by risk weights to determine capital requirements |
 | **CRR** | Capital Requirements Regulation (EU 575/2013 as onshored into UK law) — current Basel 3.0 implementation |
-| **Basel 3.1** | BCBS finalisation of Basel III reforms, implemented in UK via PRA PS9/24, effective 1 Jan 2027 |
+| **Basel 3.1** | BCBS finalisation of Basel III reforms, implemented in UK via PRA PS1/26, effective 1 Jan 2027 |
 | **SA** | Standardised Approach — risk weights assigned by exposure class and external rating |
 | **F-IRB** | Foundation Internal Ratings-Based — firm provides PD, regulator sets LGD/CCF |
 | **A-IRB** | Advanced Internal Ratings-Based — firm provides PD, LGD, EAD, CCF |

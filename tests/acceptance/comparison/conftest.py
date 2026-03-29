@@ -6,7 +6,7 @@ frameworks on the same fixture data, plus the DualFrameworkRunner
 comparison results.
 
 Why these tests matter:
-    During the Basel 3.1 transition (PRA PS9/24, 1 Jan 2027), firms must
+    During the Basel 3.1 transition (PRA PS1/26, 1 Jan 2027), firms must
     quantify the capital impact of moving from CRR to Basel 3.1. These
     acceptance tests validate that the DualFrameworkRunner correctly
     identifies and quantifies the differences between frameworks.

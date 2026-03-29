@@ -21,7 +21,7 @@
 | Art. 501 | SME supporting factor (tiered) | Done |
 | Art. 501a | Infrastructure supporting factor | Done |
 
-## Basel 3.1 (PRA PS9/24) — Upcoming UK Rules
+## Basel 3.1 (PRA PS1/26) — Upcoming UK Rules
 
 | BCBS Standard | Topic | Status |
 |---------------|-------|--------|
@@ -83,6 +83,7 @@
 |-----------|-----|
 | PRA Rulebook (CRR firms) | https://www.prarulebook.co.uk/pra-rules/crr-firms |
 | UK CRR (EU 575/2013) | https://www.legislation.gov.uk/eur/2013/575/contents |
-| PRA PS9/24 (Basel 3.1) | https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2 |
+| PRA PS1/26 (Basel 3.1) | https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement |
 | BCBS CRE Standards | https://www.bis.org/basel_framework/standard/CRE.htm |
-| PRA CP16/22 | https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards |
+| PS1/26 Appendix 1 | https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf |
+| PS1/26 Appendix 17 | https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app17.pdf |

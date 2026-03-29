@@ -31,7 +31,7 @@ class RegulatoryFramework(StrEnum):
 
     BASEL_3_1 = "BASEL_3_1"
     """
-    PRA PS9/24 UK implementation of Basel 3.1.
+    PRA PS1/26 UK implementation of Basel 3.1.
 
     Effective from 1 January 2027.
     Key features: Output floor, LGD floors, differentiated PD floors.

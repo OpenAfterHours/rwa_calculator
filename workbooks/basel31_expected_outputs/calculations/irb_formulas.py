@@ -2,7 +2,7 @@
 IRB (Internal Ratings-Based) formula calculations for Basel 3.1.
 
 This module wraps the shared IRB formulas with Basel 3.1 specific defaults
-(PD floors, LGD floors per PRA PS9/24 / CRE31-32).
+(PD floors, LGD floors per PRA PS1/26 / CRE31-32).
 
 For the core IRB formula (which is the same for CRR and Basel 3.1),
 see workbooks/shared/irb_formulas.py.
@@ -46,7 +46,7 @@ def apply_pd_floor(pd: float, exposure_class: str) -> float:
     Returns:
         Floored PD
 
-    Basel 3.1 PD Floors (CRE30.55, PRA PS9/24):
+    Basel 3.1 PD Floors (CRE30.55, PRA PS1/26):
         - Corporate/Sovereign/Institution: 0.05%
         - Retail (non-QRRE): 0.05%
         - QRRE: 0.10%

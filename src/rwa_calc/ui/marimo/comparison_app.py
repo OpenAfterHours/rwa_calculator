@@ -9,7 +9,7 @@ Pipeline position:
     from engine/comparison.py to produce ComparisonBundle, CapitalImpactBundle,
     TransitionalScheduleBundle.
 
-Why: During the Basel 3.1 transition (PRA PS9/24, effective 1 Jan 2027),
+Why: During the Basel 3.1 transition (PRA PS1/26, effective 1 Jan 2027),
 firms must quantify the capital impact of moving from CRR to Basel 3.1
 and model the transitional output floor phase-in from 50% (2027) to 72.5%
 (2032+). This workbook provides interactive analysis of those impacts,
@@ -29,7 +29,7 @@ Features:
     - Export comparison results to CSV
 
 References:
-    - PRA PS9/24 Ch.12: Output floor transitional period
+    - PRA PS1/26 Ch.12: Output floor transitional period
     - CRR Art. 92: Own funds requirements
     - CRR Art. 501/501a: SME/infrastructure supporting factors
 """
@@ -75,7 +75,7 @@ def _(mo):
             mo.md("---"),
             mo.md("""
 **Quick Links**
-- [PRA PS9/24](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
+- [PRA PS1/26](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement)
 - [UK CRR](https://www.legislation.gov.uk/eur/2013/575/contents)
 - [BCBS Framework](https://www.bis.org/basel_framework/)
             """),
@@ -612,7 +612,7 @@ def _(mo, pl, schedule_bundle):
                     [
                         mo.md("## Transitional Output Floor Schedule (2027-2032)"),
                         mo.md(
-                            "PRA PS9/24 phases in the output floor from 50% (2027) to 72.5% "
+                            "PRA PS1/26 phases in the output floor from 50% (2027) to 72.5% "
                             "(2032+). The table shows total RWA pre- and post-floor for each "
                             "transitional year, including floor impact and how many IRB "
                             "exposures become floor-constrained."

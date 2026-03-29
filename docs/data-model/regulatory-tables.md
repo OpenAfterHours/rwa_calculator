@@ -287,7 +287,7 @@ HVCRE has **higher** risk weights than standard specialised lending.
 | Secured — Commercial RE | 35% |
 | Secured — Other physical | 40% |
 
-### Basel 3.1 Values (PRA PS9/24)
+### Basel 3.1 Values (PRA PS1/26)
 
 | Exposure Type | LGD | Change |
 |---------------|-----|--------|

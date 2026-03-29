@@ -2,7 +2,7 @@
 Standardised Approach (SA) risk weight calculations.
 
 Provides lookup functions for SA risk weights by exposure class,
-following CRE20 and UK PRA PS9/24 deviations.
+following CRE20 and UK PRA PS1/26 deviations.
 """
 
 from typing import Literal
@@ -60,7 +60,7 @@ def get_institution_risk_weight(
     Returns:
         Risk weight as decimal
 
-    Reference: CRE20.16, PRA PS9/24 (UK deviation for CQS2)
+    Reference: CRE20.16, PRA PS1/26 (UK deviation for CQS2)
     """
     lookup = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS
     if cqs is None or cqs == 0:

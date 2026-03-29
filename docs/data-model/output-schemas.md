@@ -340,7 +340,7 @@ from the output data alone.
 | `crr_pd_floor` | `Float64` | 0.03% single floor |
 | `crr_airb_lgd_floor_applied` | `Boolean` | Always `False` under CRR |
 
-### Basel 3.1 (PRA PS9/24) additions
+### Basel 3.1 (PRA PS1/26) additions
 
 **Source**: `BASEL31_OUTPUT_SCHEMA_ADDITIONS` in `data/schemas.py`
 

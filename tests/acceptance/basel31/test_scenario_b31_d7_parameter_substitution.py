@@ -27,7 +27,7 @@ Key Basel 3.1 parameter substitution rules:
 Regulatory References:
 - CRE22.70-85: Unfunded credit protection methods
 - CRE32.9: F-IRB supervisory LGD (unsecured senior = 40% under Basel 3.1)
-- PRA PS9/24 Chapter 4: Credit risk mitigation
+- PRA PS1/26 Chapter 4: Credit risk mitigation
 """
 
 from __future__ import annotations

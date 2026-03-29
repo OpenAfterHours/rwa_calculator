@@ -1,7 +1,7 @@
 """
 This module contains all the schemas for all data inputs for the rwa_calc.
 
-Supports both UK CRR (Basel 3.0, until Dec 2026) and PRA PS9/24 (Basel 3.1, from Jan 2027).
+Supports both UK CRR (Basel 3.0, until Dec 2026) and PRA PS1/26 (Basel 3.1, from Jan 2027).
 
 Also defines COLUMN_VALUE_CONSTRAINTS — valid value sets for categorical columns,
 used by validate_bundle_values to catch invalid input values early.
@@ -224,7 +224,7 @@ RATINGS_SCHEMA = {
     "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
 }
 
-# Specialised Lending exposures - slotting approach (CRE33.1-8, PS9/24 Ch.5)
+# Specialised Lending exposures - slotting approach (CRE33.1-8, PS1/26 Ch.5)
 # These are corporate exposures with specific risk characteristics requiring separate treatment
 SPECIALISED_LENDING_SCHEMA = {
     "counterparty_reference": pl.String,  # Links to counterparty (all exposures inherit SL treatment)
@@ -237,7 +237,7 @@ SPECIALISED_LENDING_SCHEMA = {
 }
 
 # Equity exposures - must use SA under Basel 3.1 (CRE20.58-62, CRR Art 133)
-# IRB approaches for equity withdrawn under PRA PS9/24
+# IRB approaches for equity withdrawn under PRA PS1/26
 EQUITY_EXPOSURE_SCHEMA = {
     "exposure_reference": pl.String,
     "counterparty_reference": pl.String,
@@ -999,12 +999,12 @@ CRR_OUTPUT_SCHEMA_ADDITIONS = {
     "crr_airb_lgd_floor_applied": pl.Boolean,  # Always False under CRR
 }
 
-# Basel 3.1 (PRA PS9/24) specific output fields
+# Basel 3.1 (PRA PS1/26) specific output fields
 # These fields track Basel 3.1-specific treatments
 BASEL31_OUTPUT_SCHEMA_ADDITIONS = {
     "regulatory_framework": pl.String,  # "BASEL_3_1"
     "b31_effective_date": pl.Date,  # 1 January 2027
-    # Output floor (CRE99.1-8, PS9/24 Ch.12)
+    # Output floor (CRE99.1-8, PS1/26 Ch.12)
     "output_floor_applicable": pl.Boolean,  # Whether floor applies to this exposure
     "output_floor_percentage": pl.Float64,  # 72.5% (fully phased in)
     "rwa_irb_unrestricted": pl.Float64,  # IRB RWA before floor
@@ -1015,11 +1015,11 @@ BASEL31_OUTPUT_SCHEMA_ADDITIONS = {
     # LTV bands for real estate (CRE20.71-87)
     "b31_ltv_band": pl.String,  # "0-50%", "50-60%", "60-70%", etc.
     "b31_ltv_band_rw": pl.Float64,  # Risk weight for LTV band (20%-70%)
-    # Differentiated PD floors (CRE30.55, PS9/24 Ch.5)
+    # Differentiated PD floors (CRE30.55, PS1/26 Ch.5)
     "b31_pd_floor_class": pl.String,  # Exposure class for PD floor
     "b31_pd_floor_value": pl.Float64,  # 0.03% (corp), 0.05% (retail), 0.10% (QRRE)
     "b31_pd_floor_binding": pl.Boolean,  # Whether PD floor was binding
-    # A-IRB LGD floors (CRE30.41, PS9/24 Ch.5)
+    # A-IRB LGD floors (CRE30.41, PS1/26 Ch.5)
     "b31_lgd_floor_class": pl.String,  # Classification for LGD floor
     "b31_lgd_floor_value": pl.Float64,  # 0%, 5%, 10%, 15%, 25% depending on collateral
     "b31_lgd_floor_binding": pl.Boolean,  # Whether LGD floor was binding

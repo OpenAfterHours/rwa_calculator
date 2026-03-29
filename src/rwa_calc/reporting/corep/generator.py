@@ -661,6 +661,16 @@ def _filter_sme(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     return data.clear()
 
 
+def _filter_lfse(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame | None:
+    """Filter to large financial sector entity exposures.
+
+    Returns None if apply_fi_scalar column is not available (cannot determine LFSE).
+    """
+    if "apply_fi_scalar" in cols:
+        return data.filter(pl.col("apply_fi_scalar") == True)  # noqa: E712
+    return None
+
+
 def _filter_on_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     """Filter to on-balance-sheet exposures."""
     if "bs_type" in cols:
@@ -784,8 +794,28 @@ def _compute_c07_values(
     values["0150"] = None
 
     # --- CCF Breakdown --- Phase 2C
-    for ref in ("0160", "0170", "0171", "0180", "0190"):
-        values[ref] = None
+    # Off-BS exposures grouped by ccf_applied into COREP CCF buckets.
+    # CRR: 0%→0160, 20%→0170, 50%→0180, 100%→0190
+    # B3.1: 10%→0160, 20%→0170, 40%→0171, 50%→0180, 100%→0190
+    if "ccf_applied" in cols:
+        off_bs = _filter_off_bs(data, cols) if "bs_type" in cols else data
+        is_b31 = "0171" in ref_set
+        ccf_map: dict[float, str] = (
+            {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
+            if is_b31
+            else {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0190"}
+        )
+        # Initialise all CCF columns to 0
+        for ref in ("0160", "0170", "0171", "0180", "0190"):
+            values[ref] = 0.0
+        if len(off_bs) > 0 and ead_col in cols:
+            for ccf_val, col_ref in ccf_map.items():
+                bucket = off_bs.filter(pl.col("ccf_applied").round(4) == round(ccf_val, 4))
+                if len(bucket) > 0:
+                    values[col_ref] = float(bucket[ead_col].fill_null(0.0).sum())
+    else:
+        for ref in ("0160", "0170", "0171", "0180", "0190"):
+            values[ref] = None
 
     # --- Final ---
     # 0200: Exposure value (EAD)
@@ -884,7 +914,12 @@ def _compute_c08_values(
     values["0020"] = _safe_sum_eager(data, cols, "drawn_amount", "undrawn_amount")
 
     # 0030: Of which: large financial sector entities — Phase 2F
-    values["0030"] = None
+    lfse_data = _filter_lfse(data, cols)
+    if lfse_data is not None and len(lfse_data) > 0:
+        values["0030"] = _safe_sum_eager(lfse_data, set(lfse_data.columns),
+                                         "drawn_amount", "undrawn_amount")
+    else:
+        values["0030"] = 0.0 if "apply_fi_scalar" in cols else None
 
     # 0035: (-) On-BS netting (B3.1 only) — Phase 3D
     values["0035"] = None
@@ -919,7 +954,10 @@ def _compute_c08_values(
     values["0130"] = None
 
     # 0140: Of which: LFSE — Phase 2F
-    values["0140"] = None
+    if lfse_data is not None and len(lfse_data) > 0:
+        values["0140"] = _col_sum_eager(lfse_data, set(lfse_data.columns), ead_col)
+    else:
+        values["0140"] = 0.0 if "apply_fi_scalar" in cols else None
 
     # --- CRM in LGD estimates (0150-0210) --- Phase 3A/3B
     for ref in (
@@ -942,8 +980,20 @@ def _compute_c08_values(
     else:
         values["0230"] = None
 
-    # 0240: LGD for LFSE — Phase 2F
-    values["0240"] = None
+    # 0240: EAD-weighted average LGD for LFSE — Phase 2F
+    if lfse_data is not None and len(lfse_data) > 0:
+        lfse_cols = set(lfse_data.columns)
+        lfse_lgd_col = _pick(lfse_cols, "irb_lgd_floored", "irb_lgd_original")
+        lfse_ead_sum = float(lfse_data[ead_col].fill_null(0.0).sum()) if ead_col in lfse_cols else 0.0
+        if lfse_lgd_col is not None and lfse_ead_sum > 0:
+            lgd_x_ead = float(
+                (lfse_data[lfse_lgd_col].fill_null(0.0) * lfse_data[ead_col].fill_null(0.0)).sum()
+            )
+            values["0240"] = lgd_x_ead / lfse_ead_sum
+        else:
+            values["0240"] = None
+    else:
+        values["0240"] = 0.0 if "apply_fi_scalar" in cols else None
 
     # 0250: Exposure-weighted average maturity (DAYS, not years)
     if "irb_maturity_m" in cols and ead_sum > 0:
@@ -998,12 +1048,18 @@ def _compute_c08_values(
     else:
         values["0265"] = 0.0
 
-    # 0270: Of which: LFSE — Phase 2F
-    values["0270"] = None
+    # 0270: Of which: LFSE RWEA — Phase 2F
+    if lfse_data is not None and len(lfse_data) > 0:
+        values["0270"] = _col_sum_eager(lfse_data, set(lfse_data.columns), rwa_col)
+    else:
+        values["0270"] = 0.0 if "apply_fi_scalar" in cols else None
 
     # 0275-0276: Output floor (B3.1) — Phase 2D
-    values["0275"] = None
-    values["0276"] = None
+    # 0275: Non-modelled (SA-equivalent) exposure value
+    values["0275"] = _col_sum_eager(data, cols, ead_col)
+    # 0276: Non-modelled (SA-equivalent) RWEA
+    sa_rwa_col = _pick(cols, "sa_equivalent_rwa", "rwa_sa_equivalent", "sa_rwa")
+    values["0276"] = _col_sum_eager(data, cols, sa_rwa_col) if sa_rwa_col else None
 
     # --- Memorandum ---
     # 0280: Expected loss amount

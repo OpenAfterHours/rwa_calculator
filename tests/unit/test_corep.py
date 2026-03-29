@@ -271,6 +271,58 @@ def _irb_results_with_phase2_cols() -> pl.LazyFrame:
     )
 
 
+def _sa_results_with_ccf() -> pl.LazyFrame:
+    """SA results with off-BS exposures and CCF values for Phase 2C testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_ON_1", "SA_OFF_0", "SA_OFF_20", "SA_OFF_50", "SA_OFF_100",
+            ],
+            "approach_applied": ["standardised"] * 5,
+            "exposure_class": ["corporate"] * 5,
+            "drawn_amount": [5000.0, 0.0, 0.0, 0.0, 0.0],
+            "undrawn_amount": [0.0, 1000.0, 2000.0, 3000.0, 500.0],
+            "ead_final": [5000.0, 0.0, 400.0, 1500.0, 500.0],
+            "rwa_final": [5000.0, 0.0, 400.0, 1500.0, 500.0],
+            "risk_weight": [1.0, 1.0, 1.0, 1.0, 1.0],
+            "scra_provision_amount": [0.0, 0.0, 0.0, 0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0, 0.0],
+            "sa_cqs": [3, 3, 3, 3, 3],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
+            "bs_type": ["ONB", "OFB", "OFB", "OFB", "OFB"],
+            "ccf_applied": [None, 0.0, 0.2, 0.5, 1.0],
+        }
+    )
+
+
+def _irb_results_with_output_floor() -> pl.LazyFrame:
+    """IRB results with output floor columns for Phase 2D testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2", "IRB_INST_1"],
+            "approach_applied": [
+                "foundation_irb", "foundation_irb", "foundation_irb",
+            ],
+            "exposure_class": ["corporate", "corporate", "institution"],
+            "drawn_amount": [5000.0, 3000.0, 2000.0],
+            "undrawn_amount": [1000.0, 0.0, 0.0],
+            "ead_final": [5500.0, 3000.0, 2000.0],
+            "rwa_final": [3850.0, 1800.0, 600.0],
+            "risk_weight": [0.70, 0.60, 0.30],
+            "irb_pd_floored": [0.005, 0.01, 0.002],
+            "irb_lgd_floored": [0.45, 0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0, 1.5],
+            "irb_expected_loss": [12.375, 13.5, 1.8],
+            "irb_capital_k": [0.056, 0.048, 0.024],
+            "provision_held": [15.0, 10.0, 3.0],
+            "scra_provision_amount": [10.0, 5.0, 2.0],
+            "gcra_provision_amount": [5.0, 5.0, 1.0],
+            "counterparty_reference": ["CP_X", "CP_Y", "CP_W"],
+            "sa_equivalent_rwa": [5500.0, 3000.0, 400.0],
+        }
+    )
+
+
 def _combined_results() -> pl.LazyFrame:
     """Combined SA + IRB results for full template generation."""
     sa = _sa_results().collect()
@@ -1608,6 +1660,218 @@ class TestOfWhichDetailRows:
         inst = _get_total_row(bundle.c08_01["institution"])
         assert inst["0125"][0] == pytest.approx(0.0)
         assert inst["0265"][0] == pytest.approx(0.0)
+
+
+# =============================================================================
+# PHASE 2C — CCF BREAKDOWN (COLS 0160-0190)
+# =============================================================================
+
+
+class TestCCFBreakdown:
+    """Tests for off-BS CCF breakdown columns 0160-0190."""
+
+    def test_c07_ccf_columns_populated(self) -> None:
+        """CCF breakdown columns are populated when ccf_applied is available."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_ccf())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        # 0% CCF: EAD=0, 20% CCF: EAD=400, 50% CCF: EAD=1500, 100% CCF: EAD=500
+        assert corp["0160"][0] == pytest.approx(0.0)  # 0% bucket
+        assert corp["0170"][0] == pytest.approx(400.0)  # 20% bucket
+        assert corp["0180"][0] == pytest.approx(1500.0)  # 50% bucket
+        assert corp["0190"][0] == pytest.approx(500.0)  # 100% bucket
+
+    def test_c07_ccf_sum_equals_off_bs_ead(self) -> None:
+        """Sum of CCF columns = total off-BS EAD."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_ccf())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        ccf_sum = (
+            (corp["0160"][0] or 0.0)
+            + (corp["0170"][0] or 0.0)
+            + (corp["0180"][0] or 0.0)
+            + (corp["0190"][0] or 0.0)
+        )
+        # Off-BS EAD: 0+400+1500+500=2400
+        assert ccf_sum == pytest.approx(2400.0)
+
+    def test_c07_ccf_null_without_column(self) -> None:
+        """CCF columns are null when ccf_applied not in data."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        assert corp["0160"][0] is None
+        assert corp["0170"][0] is None
+
+    def test_b31_ccf_includes_40pct_bucket(self) -> None:
+        """Basel 3.1 has 0171 (40% CCF) column; 0160 maps to 10% CCF."""
+        # Create B3.1 data with 10% and 40% CCF values
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["SA_OFF_10", "SA_OFF_40"],
+                "approach_applied": ["standardised", "standardised"],
+                "exposure_class": ["corporate", "corporate"],
+                "drawn_amount": [0.0, 0.0],
+                "undrawn_amount": [1000.0, 2000.0],
+                "ead_final": [100.0, 800.0],
+                "rwa_final": [100.0, 800.0],
+                "risk_weight": [1.0, 1.0],
+                "sa_cqs": [3, 3],
+                "counterparty_reference": ["CP_A", "CP_B"],
+                "bs_type": ["OFB", "OFB"],
+                "ccf_applied": [0.1, 0.4],
+            }
+        )
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        assert "0171" in corp.columns
+        assert corp["0160"][0] == pytest.approx(100.0)  # 10% bucket
+        assert corp["0171"][0] == pytest.approx(800.0)  # 40% bucket
+
+    def test_c07_ccf_on_rw_section_rows(self) -> None:
+        """CCF breakdown also works within risk weight section rows."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_ccf())
+
+        corp = bundle.c07_00["corporate"]
+        rw_100 = corp.filter(pl.col("row_name") == "100%")
+        if len(rw_100) > 0:
+            # All exposures are RW=100%, so RW section should match total CCF
+            assert rw_100["0170"][0] == pytest.approx(400.0)
+
+
+# =============================================================================
+# PHASE 2D — OUTPUT FLOOR (B3.1 COLS 0275/0276)
+# =============================================================================
+
+
+class TestOutputFloor:
+    """Tests for Basel 3.1 output floor columns 0275/0276."""
+
+    def test_b31_output_floor_columns_present(self) -> None:
+        """Cols 0275/0276 present in Basel 3.1 C 08.01 output."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_output_floor(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        assert "0275" in corp.columns
+        assert "0276" in corp.columns
+
+    def test_b31_output_floor_exposure_value(self) -> None:
+        """Col 0275 (SA-equiv exposure) = sum of EAD for the class."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_output_floor(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        # Corporate: EAD 5500+3000=8500
+        assert corp["0275"][0] == pytest.approx(8500.0)
+
+    def test_b31_output_floor_sa_rwa(self) -> None:
+        """Col 0276 (SA-equiv RWEA) = sum of sa_equivalent_rwa."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_output_floor(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        # Corporate: sa_equivalent_rwa 5500+3000=8500
+        assert corp["0276"][0] == pytest.approx(8500.0)
+
+    def test_crr_output_floor_columns_absent(self) -> None:
+        """Cols 0275/0276 are not in CRR C 08.01 output."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_output_floor(), framework="CRR"
+        )
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        assert "0275" not in corp.columns
+        assert "0276" not in corp.columns
+
+    def test_b31_output_floor_null_without_sa_rwa(self) -> None:
+        """Col 0276 is null when sa_equivalent_rwa not in data."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        assert corp["0276"][0] is None
+
+
+# =============================================================================
+# PHASE 2F — LFSE SUB-COLUMNS (COLS 0030, 0140, 0240, 0270)
+# =============================================================================
+
+
+class TestLFSESubColumns:
+    """Tests for C 08.01 large financial sector entity sub-columns."""
+
+    def test_c0801_lfse_original_exposure(self) -> None:
+        """Col 0030 (LFSE original exposure) populated from apply_fi_scalar."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
+
+        # Institution has apply_fi_scalar=True: drawn=2000, undrawn=0
+        inst = _get_total_row(bundle.c08_01["institution"])
+        assert inst["0030"][0] == pytest.approx(2000.0)
+
+    def test_c0801_lfse_ead(self) -> None:
+        """Col 0140 (LFSE EAD) populated from apply_fi_scalar."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
+
+        inst = _get_total_row(bundle.c08_01["institution"])
+        # Institution: ead_final=2000, apply_fi_scalar=True
+        assert inst["0140"][0] == pytest.approx(2000.0)
+
+    def test_c0801_lfse_lgd(self) -> None:
+        """Col 0240 (LFSE LGD) = EAD-weighted avg LGD for LFSE exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
+
+        inst = _get_total_row(bundle.c08_01["institution"])
+        # Institution LFSE: single exposure with LGD=0.45
+        assert inst["0240"][0] == pytest.approx(0.45)
+
+    def test_c0801_lfse_rwea(self) -> None:
+        """Col 0270 (LFSE RWEA) populated from apply_fi_scalar."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
+
+        inst = _get_total_row(bundle.c08_01["institution"])
+        # Institution: rwa_final=600, apply_fi_scalar=True
+        assert inst["0270"][0] == pytest.approx(600.0)
+
+    def test_c0801_lfse_zero_when_no_lfse_in_class(self) -> None:
+        """LFSE cols are 0.0 when no exposures have apply_fi_scalar=True."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
+
+        # Corporate has no LFSE exposures (all apply_fi_scalar=False)
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        assert corp["0030"][0] == pytest.approx(0.0)
+        assert corp["0140"][0] == pytest.approx(0.0)
+        assert corp["0270"][0] == pytest.approx(0.0)
+
+    def test_c0801_lfse_null_without_column(self) -> None:
+        """LFSE cols are null when apply_fi_scalar not in data."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results())  # no apply_fi_scalar
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        assert corp["0030"][0] is None
+        assert corp["0140"][0] is None
+        assert corp["0270"][0] is None
 
 
 # =============================================================================

@@ -32,7 +32,10 @@ The COREP generator was built against an incorrect understanding of the template
 | 1C: Tests + Excel export | **DONE** | Tests rewritten for new dict-based API. 134 COREP tests pass (3 Excel skipped). Excel export updated for per-class sheets. |
 | 2A: Supporting factors | **DONE** | Cols 0215-0217 (C 07.00) and 0255-0257 (C 08.01) wired to rwa_before_sme_factor, sme/infra benefit computed. CRR only. |
 | 2B: Exposure type rows | **DONE** | Section 2 rows 0070 (on-BS) and 0080 (off-BS) populated from bs_type column for C 07.00 and C 08.01. |
+| 2C: CCF breakdown | **DONE** | Cols 0160-0190 populated from ccf_applied. CRR: 0%/20%/50%/100%. B3.1: 10%/20%/40%/50%/100% (inc. col 0171). Off-BS grouping. |
+| 2D: Output floor | **DONE** | Cols 0275 (EAD) and 0276 (sa_equivalent_rwa) populated for B3.1 C 08.01. CRR excluded by column filtering. |
 | 2E: ECAI unrated split | **DONE** | Col 0235 (unrated RWEA) already computed in Phase 1; verified with tests. Rated + unrated = total. |
+| 2F: LFSE sub-columns | **DONE** | Cols 0030/0140/0240/0270 populated from apply_fi_scalar. Weighted avg LGD for LFSE. Zero when no LFSE in class. |
 | 2G: "Of which" rows | **DONE** | C 07.00 rows 0015 (defaulted) and 0020 (SME) populated. C 08.01 cols 0125/0265 (defaulted EAD/RWEA) populated. |
 
 ---
@@ -322,6 +325,13 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "ccf_breakdown"`
 
+**Implementation notes (completed)**:
+- Off-BS exposures filtered by `bs_type == "OFB"`, grouped by `ccf_applied` into COREP CCF buckets.
+- CRR mapping: 0.0→0160, 0.2→0170, 0.5→0180, 1.0→0190. B3.1 mapping: 0.1→0160, 0.2→0170, 0.4→0171, 0.5→0180, 1.0→0190.
+- Framework detection via `"0171" in column_refs` (B3.1 has 40% CCF column, CRR doesn't).
+- Value reported: `ead_final` sum for off-BS exposures in each CCF bucket.
+- 5 new tests in `TestCCFBreakdown` class.
+
 ---
 
 #### Task 2D: Add output floor columns (Basel 3.1 only)
@@ -338,6 +348,13 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 - Only populate when `framework == "BASEL_3_1"`
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "output_floor"`
+
+**Implementation notes (completed)**:
+- Col 0275 = `ead_final.sum()` (SA-equivalent exposure value — same EAD used under SA).
+- Col 0276 = `sa_equivalent_rwa.sum()` (from pipeline `sa_equivalent_rwa` column).
+- CRR automatically excluded by column ref filtering (0275/0276 only in B3.1 column set).
+- 0276 is null when `sa_equivalent_rwa` not available in pipeline data.
+- 5 new tests in `TestOutputFloor` class.
 
 ---
 
@@ -374,6 +391,15 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 - 0270: RWEA where LFSE
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "lfse"`
+
+**Implementation notes (completed)**:
+- `_filter_lfse()` helper: uses `apply_fi_scalar == True` to identify LFSE counterparties.
+- Col 0030: original exposure (drawn + undrawn) for LFSE. Col 0140: EAD for LFSE.
+- Col 0240: EAD-weighted average LGD for LFSE (uses `irb_lgd_floored`).
+- Col 0270: RWEA for LFSE.
+- All four cols = 0.0 when `apply_fi_scalar` exists but no LFSE in class; None when column absent.
+- 6 new tests in `TestLFSESubColumns` class.
+- Total: 171 COREP tests pass (3 Excel skipped), 1963 unit/contract/integration tests pass (3 pre-existing fixture failures).
 
 ---
 

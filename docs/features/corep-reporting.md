@@ -348,17 +348,17 @@ flowchart TD
     The SA exposure class to row mapping used by the calculator's COREP generator:
 
     ```python
-    --8<-- "src/rwa_calc/reporting/corep/templates.py:52:66"
+    --8<-- "src/rwa_calc/reporting/corep/templates.py:72:87"
     ```
 
 ??? example "Column Definitions — Source Code"
     ```python
-    --8<-- "src/rwa_calc/reporting/corep/templates.py:69:79"
+    --8<-- "src/rwa_calc/reporting/corep/templates.py:109:138"
     ```
 
 ??? example "Risk Weight Band Definitions — Source Code"
     ```python
-    --8<-- "src/rwa_calc/reporting/corep/templates.py:83:98"
+    --8<-- "src/rwa_calc/reporting/corep/templates.py:376:392"
     ```
 
 ---
@@ -548,12 +548,12 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
 
 ???+ example "IRB Row Mapping — Source Code"
     ```python
-    --8<-- "src/rwa_calc/reporting/corep/templates.py:107:116"
+    --8<-- "src/rwa_calc/reporting/corep/templates.py:91:101"
     ```
 
 ??? example "Column Definitions — Source Code"
     ```python
-    --8<-- "src/rwa_calc/reporting/corep/templates.py:119:131"
+    --8<-- "src/rwa_calc/reporting/corep/templates.py:676:689"
     ```
 
 ---
@@ -605,7 +605,7 @@ an obligor grade identifier column.
     The calculator groups obligor grades into standardised PD bands for aggregation:
 
     ```python
-    --8<-- "src/rwa_calc/reporting/corep/templates.py:140:149"
+    --8<-- "src/rwa_calc/reporting/corep/templates.py:630:641"
     ```
 
 ---

@@ -2,6 +2,7 @@
 Unit tests for COREP template generation.
 
 Tests the COREPGenerator against synthetic exposure data to verify:
+- Template definitions: CRR and Basel 3.1 column/row section structures
 - C 07.00 (SA): Correct aggregation by exposure class, CRM deductions, RWA
 - C 08.01 (IRB): Exposure-weighted PD/LGD/maturity, EAD, RWA, EL totals
 - C 08.02 (IRB PD grades): PD band assignment and per-band aggregation
@@ -24,12 +25,27 @@ import pytest
 
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.corep.templates import (
+    B31_C07_COLUMNS,
+    B31_C08_COLUMNS,
+    B31_IRB_ROW_SECTIONS,
+    B31_SA_RISK_WEIGHT_BANDS,
+    B31_SA_ROW_SECTIONS,
     C07_COLUMNS,
     C08_01_COLUMNS,
+    CRR_C07_COLUMNS,
+    CRR_C08_COLUMNS,
+    CRR_IRB_ROW_SECTIONS,
+    CRR_SA_ROW_SECTIONS,
     IRB_EXPOSURE_CLASS_ROWS,
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
     SA_RISK_WEIGHT_BANDS,
+    RowSection,
+    get_c07_columns,
+    get_c08_columns,
+    get_irb_row_sections,
+    get_sa_risk_weight_bands,
+    get_sa_row_sections,
 )
 
 XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
@@ -148,7 +164,7 @@ def _combined_results() -> pl.LazyFrame:
 
 
 # =============================================================================
-# TEMPLATE DEFINITIONS
+# TEMPLATE DEFINITIONS — CRR AND BASEL 3.1
 # =============================================================================
 
 
@@ -163,6 +179,7 @@ class TestTemplateDefinitions:
         assert "central_govt_central_bank" in SA_EXPOSURE_CLASS_ROWS
         assert "defaulted" in SA_EXPOSURE_CLASS_ROWS
         assert "equity" in SA_EXPOSURE_CLASS_ROWS
+        assert "international_org" in SA_EXPOSURE_CLASS_ROWS
 
     def test_irb_exposure_class_rows_cover_irb_classes(self) -> None:
         """All IRB exposure classes have a COREP row mapping."""
@@ -206,6 +223,504 @@ class TestTemplateDefinitions:
 
         irb_refs = [ref for ref, _ in IRB_EXPOSURE_CLASS_ROWS.values()]
         assert len(irb_refs) == len(set(irb_refs))
+
+
+class TestCRRC07ColumnDefinitions:
+    """Tests for CRR C 07.00 column definitions (correct 4-digit refs)."""
+
+    def test_crr_c07_has_24_data_columns(self) -> None:
+        """CRR C 07.00 has 27 columns covering full SA waterfall."""
+        # 27 columns: 0010, 0030, 0040, 0050-0100, 0110-0150, 0160-0190, 0200-0240
+        assert len(CRR_C07_COLUMNS) == 27
+
+    def test_crr_c07_uses_4_digit_refs(self) -> None:
+        """All CRR C 07.00 column refs are 4 digits."""
+        for col in CRR_C07_COLUMNS:
+            assert len(col.ref) == 4, f"Ref {col.ref} is not 4 digits"
+            assert col.ref.isdigit(), f"Ref {col.ref} is not numeric"
+
+    def test_crr_c07_refs_unique(self) -> None:
+        """Column refs are unique."""
+        refs = [col.ref for col in CRR_C07_COLUMNS]
+        assert len(refs) == len(set(refs))
+
+    def test_crr_c07_starts_with_original_exposure(self) -> None:
+        """First column is original exposure (0010)."""
+        assert CRR_C07_COLUMNS[0].ref == "0010"
+        assert "Original exposure" in CRR_C07_COLUMNS[0].name
+
+    def test_crr_c07_ends_with_ecai_derived(self) -> None:
+        """Last column is ECAI credit assessment derived from central govt (0240)."""
+        assert CRR_C07_COLUMNS[-1].ref == "0240"
+
+    def test_crr_c07_has_supporting_factor_columns(self) -> None:
+        """CRR includes supporting factor columns (0215-0217)."""
+        refs = {col.ref for col in CRR_C07_COLUMNS}
+        assert "0215" in refs  # RWEA pre supporting factors
+        assert "0216" in refs  # SME supporting factor
+        assert "0217" in refs  # Infrastructure supporting factor
+
+    def test_crr_c07_ccf_buckets(self) -> None:
+        """CRR CCF buckets are 0%, 20%, 50%, 100%."""
+        ccf_cols = [col for col in CRR_C07_COLUMNS if col.group == "CCF Breakdown"]
+        assert len(ccf_cols) == 4
+        assert ccf_cols[0].name == "Off-BS by CCF: 0%"
+        assert ccf_cols[1].name == "Off-BS by CCF: 20%"
+        assert ccf_cols[2].name == "Off-BS by CCF: 50%"
+        assert ccf_cols[3].name == "Off-BS by CCF: 100%"
+
+    def test_crr_c07_all_columns_have_groups(self) -> None:
+        """Every CRR C 07.00 column has a logical group assigned."""
+        for col in CRR_C07_COLUMNS:
+            assert col.group, f"Column {col.ref} has no group"
+
+
+class TestB31C07ColumnDefinitions:
+    """Tests for Basel 3.1 OF 07.00 column definitions."""
+
+    def test_b31_c07_has_correct_column_count(self) -> None:
+        """B3.1 OF 07.00 has 27 columns (adds 3, removes 3 vs CRR)."""
+        assert len(B31_C07_COLUMNS) == 27
+
+    def test_b31_c07_uses_4_digit_refs(self) -> None:
+        """All B3.1 OF 07.00 column refs are 4 digits."""
+        for col in B31_C07_COLUMNS:
+            assert len(col.ref) == 4, f"Ref {col.ref} is not 4 digits"
+
+    def test_b31_c07_has_on_bs_netting(self) -> None:
+        """B3.1 adds on-balance sheet netting column (0035)."""
+        refs = {col.ref for col in B31_C07_COLUMNS}
+        assert "0035" in refs
+
+    def test_b31_c07_has_40pct_ccf(self) -> None:
+        """B3.1 adds 40% CCF bucket (0171)."""
+        refs = {col.ref for col in B31_C07_COLUMNS}
+        assert "0171" in refs
+
+    def test_b31_c07_has_unrated_ecai(self) -> None:
+        """B3.1 adds unrated ECAI column (0235)."""
+        refs = {col.ref for col in B31_C07_COLUMNS}
+        assert "0235" in refs
+
+    def test_b31_c07_no_supporting_factors(self) -> None:
+        """B3.1 removes supporting factor columns (0215-0217)."""
+        refs = {col.ref for col in B31_C07_COLUMNS}
+        assert "0215" not in refs
+        assert "0216" not in refs
+        assert "0217" not in refs
+
+    def test_b31_c07_ccf_10pct_replaces_0pct(self) -> None:
+        """B3.1 changes 0% CCF to 10%."""
+        col_0160 = next(c for c in B31_C07_COLUMNS if c.ref == "0160")
+        assert "10%" in col_0160.name
+
+    def test_b31_c07_ccf_buckets(self) -> None:
+        """B3.1 CCF buckets are 10%, 20%, 40%, 50%, 100%."""
+        ccf_cols = [col for col in B31_C07_COLUMNS if col.group == "CCF Breakdown"]
+        assert len(ccf_cols) == 5
+        assert "10%" in ccf_cols[0].name
+        assert "20%" in ccf_cols[1].name
+        assert "40%" in ccf_cols[2].name
+        assert "50%" in ccf_cols[3].name
+        assert "100%" in ccf_cols[4].name
+
+
+class TestSARowSections:
+    """Tests for SA row section definitions (C 07.00 / OF 07.00)."""
+
+    def test_crr_sa_has_5_sections(self) -> None:
+        """CRR C 07.00 has 5 row sections."""
+        assert len(CRR_SA_ROW_SECTIONS) == 5
+
+    def test_crr_sa_section_names(self) -> None:
+        """CRR C 07.00 sections have correct names."""
+        names = [s.name for s in CRR_SA_ROW_SECTIONS]
+        assert "Total Exposures" in names
+        assert "Breakdown by Exposure Types" in names
+        assert "Breakdown by Risk Weights" in names
+        assert "Breakdown by CIU Approach" in names
+        assert "Memorandum Items" in names
+
+    def test_crr_sa_total_section_starts_with_0010(self) -> None:
+        """Section 1 starts with TOTAL EXPOSURES row 0010."""
+        total_section = CRR_SA_ROW_SECTIONS[0]
+        assert total_section.rows[0].ref == "0010"
+        assert "TOTAL" in total_section.rows[0].name
+
+    def test_crr_sa_total_section_has_of_which_rows(self) -> None:
+        """Section 1 has 'of which' rows (0015-0060)."""
+        total_section = CRR_SA_ROW_SECTIONS[0]
+        refs = [r.ref for r in total_section.rows]
+        assert "0015" in refs  # Defaulted
+        assert "0020" in refs  # SME
+        assert "0030" in refs  # SME factor
+        assert "0035" in refs  # Infra factor
+
+    def test_crr_sa_rw_section_has_15_rows(self) -> None:
+        """CRR RW section has 15 rows (0%-1250% + Other)."""
+        rw_section = CRR_SA_ROW_SECTIONS[2]
+        assert rw_section.name == "Breakdown by Risk Weights"
+        assert len(rw_section.rows) == 15
+
+    def test_crr_sa_rw_section_row_refs_ascending(self) -> None:
+        """RW section row refs are in ascending order."""
+        rw_section = CRR_SA_ROW_SECTIONS[2]
+        refs = [r.ref for r in rw_section.rows]
+        assert refs == sorted(refs)
+
+    def test_crr_sa_memorandum_has_4_rows(self) -> None:
+        """CRR memorandum section has 4 rows."""
+        memo_section = CRR_SA_ROW_SECTIONS[4]
+        assert memo_section.name == "Memorandum Items"
+        assert len(memo_section.rows) == 4
+
+    def test_crr_sa_all_row_refs_unique(self) -> None:
+        """All row refs across all CRR SA sections are unique."""
+        all_refs = [r.ref for s in CRR_SA_ROW_SECTIONS for r in s.rows]
+        assert len(all_refs) == len(set(all_refs))
+
+    def test_b31_sa_has_5_sections(self) -> None:
+        """B3.1 OF 07.00 has 5 row sections."""
+        assert len(B31_SA_ROW_SECTIONS) == 5
+
+    def test_b31_sa_rw_section_has_28_rows(self) -> None:
+        """B3.1 RW section has 28 rows (29 weights including Other)."""
+        rw_section = B31_SA_ROW_SECTIONS[2]
+        assert rw_section.name == "Breakdown by Risk Weights"
+        assert len(rw_section.rows) == 28
+
+    def test_b31_sa_has_specialised_lending_rows(self) -> None:
+        """B3.1 Section 1 includes specialised lending detail rows."""
+        total_section = B31_SA_ROW_SECTIONS[0]
+        refs = [r.ref for r in total_section.rows]
+        assert "0021" in refs  # Object finance
+        assert "0022" in refs  # Commodities
+        assert "0023" in refs  # Project finance
+        assert "0024" in refs  # Pre-operational
+        assert "0025" in refs  # Operational
+        assert "0026" in refs  # High quality operational
+
+    def test_b31_sa_has_re_detail_rows(self) -> None:
+        """B3.1 Section 1 includes real estate detail rows."""
+        total_section = B31_SA_ROW_SECTIONS[0]
+        refs = [r.ref for r in total_section.rows]
+        assert "0330" in refs  # Regulatory residential RE
+        assert "0340" in refs  # Regulatory commercial RE
+        assert "0360" in refs  # ADC
+
+    def test_b31_sa_no_supporting_factor_rows(self) -> None:
+        """B3.1 removes supporting factor rows (0030, 0035 as 'of which')."""
+        total_section = B31_SA_ROW_SECTIONS[0]
+        refs = [r.ref for r in total_section.rows]
+        # 0030 (SME supporting factor) should not be present
+        assert "0030" not in refs
+        # 0035 (infrastructure supporting factor) should not be present
+        assert "0035" not in refs
+
+    def test_b31_sa_has_400pct_rw(self) -> None:
+        """B3.1 adds 400% RW row (0261), replaces 370%."""
+        rw_section = B31_SA_ROW_SECTIONS[2]
+        refs = [r.ref for r in rw_section.rows]
+        assert "0261" in refs  # 400%
+        assert "0260" not in refs  # 370% removed
+
+    def test_b31_sa_memorandum_has_equity_transitional(self) -> None:
+        """B3.1 memorandum includes equity transitional rows."""
+        memo_section = B31_SA_ROW_SECTIONS[4]
+        refs = [r.ref for r in memo_section.rows]
+        assert "0371" in refs
+        assert "0372" in refs
+        assert "0373" in refs
+        assert "0374" in refs
+
+    def test_b31_sa_memorandum_has_currency_mismatch(self) -> None:
+        """B3.1 memorandum includes currency mismatch row."""
+        memo_section = B31_SA_ROW_SECTIONS[4]
+        refs = [r.ref for r in memo_section.rows]
+        assert "0380" in refs
+
+    def test_b31_sa_all_row_refs_unique(self) -> None:
+        """All row refs across all B3.1 SA sections are unique."""
+        all_refs = [r.ref for s in B31_SA_ROW_SECTIONS for r in s.rows]
+        assert len(all_refs) == len(set(all_refs))
+
+
+class TestCRRC08ColumnDefinitions:
+    """Tests for CRR C 08.01 column definitions."""
+
+    def test_crr_c08_has_correct_column_count(self) -> None:
+        """CRR C 08.01 has 37 columns."""
+        assert len(CRR_C08_COLUMNS) == 37
+
+    def test_crr_c08_uses_4_digit_refs(self) -> None:
+        """All CRR C 08.01 column refs are 4 digits."""
+        for col in CRR_C08_COLUMNS:
+            assert len(col.ref) == 4, f"Ref {col.ref} is not 4 digits"
+
+    def test_crr_c08_starts_with_pd(self) -> None:
+        """First column is PD (0010)."""
+        assert CRR_C08_COLUMNS[0].ref == "0010"
+        assert "PD" in CRR_C08_COLUMNS[0].name
+
+    def test_crr_c08_has_double_default(self) -> None:
+        """CRR includes double default column (0220)."""
+        refs = {col.ref for col in CRR_C08_COLUMNS}
+        assert "0220" in refs
+
+    def test_crr_c08_has_supporting_factors(self) -> None:
+        """CRR includes supporting factor columns (0255-0257)."""
+        refs = {col.ref for col in CRR_C08_COLUMNS}
+        assert "0255" in refs
+        assert "0256" in refs
+        assert "0257" in refs
+
+    def test_crr_c08_maturity_in_days(self) -> None:
+        """CRR C 08.01 maturity column specifies days."""
+        col_0250 = next(c for c in CRR_C08_COLUMNS if c.ref == "0250")
+        assert "days" in col_0250.name.lower()
+
+    def test_crr_c08_refs_unique(self) -> None:
+        """Column refs are unique."""
+        refs = [col.ref for col in CRR_C08_COLUMNS]
+        assert len(refs) == len(set(refs))
+
+
+class TestB31C08ColumnDefinitions:
+    """Tests for Basel 3.1 OF 08.01 column definitions."""
+
+    def test_b31_c08_no_pd_column(self) -> None:
+        """B3.1 removes PD column from totals (only in OF 08.02)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0010" not in refs
+
+    def test_b31_c08_no_double_default(self) -> None:
+        """B3.1 removes double default column (0220)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0220" not in refs
+
+    def test_b31_c08_no_supporting_factors(self) -> None:
+        """B3.1 removes supporting factor columns (0255-0257)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0255" not in refs
+        assert "0256" not in refs
+        assert "0257" not in refs
+
+    def test_b31_c08_has_on_bs_netting(self) -> None:
+        """B3.1 adds on-BS netting (0035)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0035" in refs
+
+    def test_b31_c08_has_slotting_fccm(self) -> None:
+        """B3.1 adds slotting FCCM columns (0101-0104)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0101" in refs
+        assert "0102" in refs
+        assert "0103" in refs
+        assert "0104" in refs
+
+    def test_b31_c08_has_defaulted_breakdowns(self) -> None:
+        """B3.1 adds 'of which: defaulted' columns (0125, 0265)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0125" in refs
+        assert "0265" in refs
+
+    def test_b31_c08_has_post_model_adjustments(self) -> None:
+        """B3.1 adds post-model adjustment columns (0251-0254)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0251" in refs
+        assert "0252" in refs
+        assert "0253" in refs
+        assert "0254" in refs
+
+    def test_b31_c08_has_output_floor(self) -> None:
+        """B3.1 adds output floor columns (0275-0276)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0275" in refs
+        assert "0276" in refs
+
+    def test_b31_c08_has_el_adjustments(self) -> None:
+        """B3.1 adds EL post-model adjustment columns (0281-0282)."""
+        refs = {col.ref for col in B31_C08_COLUMNS}
+        assert "0281" in refs
+        assert "0282" in refs
+
+    def test_b31_c08_refs_unique(self) -> None:
+        """Column refs are unique."""
+        refs = [col.ref for col in B31_C08_COLUMNS]
+        assert len(refs) == len(set(refs))
+
+
+class TestIRBRowSections:
+    """Tests for IRB row section definitions (C 08.01 / OF 08.01)."""
+
+    def test_crr_irb_has_3_sections(self) -> None:
+        """CRR C 08.01 has 3 row sections."""
+        assert len(CRR_IRB_ROW_SECTIONS) == 3
+
+    def test_crr_irb_section_names(self) -> None:
+        """CRR C 08.01 sections have correct names."""
+        names = [s.name for s in CRR_IRB_ROW_SECTIONS]
+        assert "Total and Supporting Factors" in names
+        assert "Breakdown by Exposure Types" in names
+        assert "Calculation Approaches" in names
+
+    def test_crr_irb_total_starts_with_0010(self) -> None:
+        """Section 1 starts with TOTAL EXPOSURES row 0010."""
+        total_section = CRR_IRB_ROW_SECTIONS[0]
+        assert total_section.rows[0].ref == "0010"
+
+    def test_crr_irb_has_supporting_factor_rows(self) -> None:
+        """CRR has SME and infra supporting factor rows."""
+        total_section = CRR_IRB_ROW_SECTIONS[0]
+        refs = [r.ref for r in total_section.rows]
+        assert "0015" in refs
+        assert "0016" in refs
+
+    def test_crr_irb_has_alt_re_treatment(self) -> None:
+        """CRR has alternative RE treatment row (0160)."""
+        calc_section = CRR_IRB_ROW_SECTIONS[2]
+        refs = [r.ref for r in calc_section.rows]
+        assert "0160" in refs
+
+    def test_crr_irb_all_refs_unique(self) -> None:
+        """All CRR IRB row refs are unique."""
+        all_refs = [r.ref for s in CRR_IRB_ROW_SECTIONS for r in s.rows]
+        assert len(all_refs) == len(set(all_refs))
+
+    def test_b31_irb_has_3_sections(self) -> None:
+        """B3.1 OF 08.01 has 3 row sections."""
+        assert len(B31_IRB_ROW_SECTIONS) == 3
+
+    def test_b31_irb_no_supporting_factor_rows(self) -> None:
+        """B3.1 removes supporting factor rows."""
+        total_section = B31_IRB_ROW_SECTIONS[0]
+        refs = [r.ref for r in total_section.rows]
+        assert "0015" not in refs
+        assert "0016" not in refs
+
+    def test_b31_irb_has_revolving_commitments(self) -> None:
+        """B3.1 adds revolving loan commitments row."""
+        total_section = B31_IRB_ROW_SECTIONS[0]
+        refs = [r.ref for r in total_section.rows]
+        assert "0017" in refs
+
+    def test_b31_irb_has_ccf_breakdown_rows(self) -> None:
+        """B3.1 adds off-BS CCF breakdown rows (0031-0035)."""
+        exp_section = B31_IRB_ROW_SECTIONS[1]
+        refs = [r.ref for r in exp_section.rows]
+        assert "0031" in refs
+        assert "0032" in refs
+        assert "0033" in refs
+        assert "0034" in refs
+        assert "0035" in refs
+
+    def test_b31_irb_no_alt_re_treatment(self) -> None:
+        """B3.1 removes alternative RE treatment row."""
+        calc_section = B31_IRB_ROW_SECTIONS[2]
+        refs = [r.ref for r in calc_section.rows]
+        assert "0160" not in refs
+
+    def test_b31_irb_has_purchased_receivables(self) -> None:
+        """B3.1 adds purchased receivables row (0175)."""
+        calc_section = B31_IRB_ROW_SECTIONS[2]
+        refs = [r.ref for r in calc_section.rows]
+        assert "0175" in refs
+
+    def test_b31_irb_has_ecai_rows(self) -> None:
+        """B3.1 adds corporates without ECAI / investment grade rows."""
+        calc_section = B31_IRB_ROW_SECTIONS[2]
+        refs = [r.ref for r in calc_section.rows]
+        assert "0190" in refs
+        assert "0200" in refs
+
+    def test_b31_irb_all_refs_unique(self) -> None:
+        """All B3.1 IRB row refs are unique."""
+        all_refs = [r.ref for s in B31_IRB_ROW_SECTIONS for r in s.rows]
+        assert len(all_refs) == len(set(all_refs))
+
+
+class TestB31SAWeightBands:
+    """Tests for Basel 3.1 risk weight bands."""
+
+    def test_b31_rw_bands_ascending(self) -> None:
+        """B3.1 RW bands are in ascending order."""
+        rw_values = [rw for rw, _ in B31_SA_RISK_WEIGHT_BANDS]
+        assert rw_values == sorted(rw_values)
+
+    def test_b31_rw_bands_has_27_entries(self) -> None:
+        """B3.1 has 27 RW band entries."""
+        assert len(B31_SA_RISK_WEIGHT_BANDS) == 27
+
+    def test_b31_rw_bands_has_new_weights(self) -> None:
+        """B3.1 includes new granular weights (15%, 25%, 30%, etc.)."""
+        rw_dict = dict(B31_SA_RISK_WEIGHT_BANDS)
+        assert 0.15 in rw_dict
+        assert 0.25 in rw_dict
+        assert 0.30 in rw_dict
+        assert 0.40 in rw_dict
+        assert 0.45 in rw_dict
+        assert 0.60 in rw_dict
+        assert 0.65 in rw_dict
+
+    def test_b31_rw_bands_has_400pct(self) -> None:
+        """B3.1 has 400% RW (replaces 370%)."""
+        rw_dict = dict(B31_SA_RISK_WEIGHT_BANDS)
+        assert 4.00 in rw_dict
+        assert 3.70 not in rw_dict
+
+
+class TestFrameworkHelpers:
+    """Tests for framework-aware helper functions."""
+
+    def test_get_c07_columns_crr(self) -> None:
+        """get_c07_columns returns CRR columns by default."""
+        cols = get_c07_columns("CRR")
+        assert cols is CRR_C07_COLUMNS
+
+    def test_get_c07_columns_b31(self) -> None:
+        """get_c07_columns returns B3.1 columns for BASEL_3_1."""
+        cols = get_c07_columns("BASEL_3_1")
+        assert cols is B31_C07_COLUMNS
+
+    def test_get_c08_columns_crr(self) -> None:
+        """get_c08_columns returns CRR columns by default."""
+        cols = get_c08_columns("CRR")
+        assert cols is CRR_C08_COLUMNS
+
+    def test_get_c08_columns_b31(self) -> None:
+        """get_c08_columns returns B3.1 columns for BASEL_3_1."""
+        cols = get_c08_columns("BASEL_3_1")
+        assert cols is B31_C08_COLUMNS
+
+    def test_get_sa_row_sections_crr(self) -> None:
+        """get_sa_row_sections returns CRR sections by default."""
+        sections = get_sa_row_sections("CRR")
+        assert sections is CRR_SA_ROW_SECTIONS
+
+    def test_get_sa_row_sections_b31(self) -> None:
+        """get_sa_row_sections returns B3.1 sections for BASEL_3_1."""
+        sections = get_sa_row_sections("BASEL_3_1")
+        assert sections is B31_SA_ROW_SECTIONS
+
+    def test_get_irb_row_sections_crr(self) -> None:
+        """get_irb_row_sections returns CRR sections by default."""
+        sections = get_irb_row_sections("CRR")
+        assert sections is CRR_IRB_ROW_SECTIONS
+
+    def test_get_irb_row_sections_b31(self) -> None:
+        """get_irb_row_sections returns B3.1 sections for BASEL_3_1."""
+        sections = get_irb_row_sections("BASEL_3_1")
+        assert sections is B31_IRB_ROW_SECTIONS
+
+    def test_get_sa_risk_weight_bands_crr(self) -> None:
+        """get_sa_risk_weight_bands returns CRR bands by default."""
+        bands = get_sa_risk_weight_bands("CRR")
+        assert bands is SA_RISK_WEIGHT_BANDS
+
+    def test_get_sa_risk_weight_bands_b31(self) -> None:
+        """get_sa_risk_weight_bands returns B3.1 bands for BASEL_3_1."""
+        bands = get_sa_risk_weight_bands("BASEL_3_1")
+        assert bands is B31_SA_RISK_WEIGHT_BANDS
 
 
 # =============================================================================

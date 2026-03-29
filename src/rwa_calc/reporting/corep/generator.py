@@ -277,13 +277,63 @@ class COREPGenerator:
                 rows.append(
                     {"row_ref": row_def.ref, "row_name": row_def.name, **values}
                 )
+            elif row_def.ref == "0015":
+                # Row 0015: of which: Defaulted exposures
+                subset = _filter_defaulted(class_data, cols)
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref == "0020":
+                # Row 0020: of which: SME
+                subset = _filter_sme(class_data, cols)
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
-                # "of which" rows — Phase 2 features, null for now
+                # Other "of which" rows — Phase 3 features, null for now
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Section 2: Breakdown by Exposure Types — Phase 2B, null for now
+        # Section 2: Breakdown by Exposure Types
         for row_def in row_sections[1].rows:
-            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            if row_def.ref == "0070":
+                # On balance sheet exposures
+                subset = _filter_on_bs(class_data, cols)
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref == "0080":
+                # Off balance sheet exposures
+                subset = _filter_off_bs(class_data, cols)
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            else:
+                # CCR rows (0090-0130) — not implemented
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         # Section 3: Breakdown by Risk Weights
         rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
@@ -387,9 +437,35 @@ class COREPGenerator:
             else:
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Section 2: Breakdown by Exposure Types — Phase 2B, null
+        # Section 2: Breakdown by Exposure Types
         for row_def in row_sections[1].rows:
-            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            if row_def.ref == "0020":
+                # On balance sheet items
+                subset = _filter_on_bs(class_data, cols)
+                if len(subset) > 0:
+                    values = _compute_c08_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref == "0030":
+                # Off balance sheet items
+                subset = _filter_off_bs(class_data, cols)
+                if len(subset) > 0:
+                    values = _compute_c08_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            else:
+                # CCR/other rows — not implemented
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         # Section 3: Calculation Approaches — null for now
         for row_def in row_sections[2].rows:
@@ -565,6 +641,44 @@ def _filter_by_irb_approach(
     )
 
 
+def _filter_defaulted(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to defaulted exposures using available columns."""
+    if "default_status" in cols:
+        return data.filter(pl.col("default_status") == True)  # noqa: E712
+    if "exposure_class" in cols:
+        return data.filter(pl.col("exposure_class") == "defaulted")
+    if "irb_pd_floored" in cols:
+        return data.filter(pl.col("irb_pd_floored") >= 1.0)
+    return data.clear()
+
+
+def _filter_sme(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to SME exposures using available columns."""
+    if "sme_supporting_factor_eligible" in cols:
+        return data.filter(pl.col("sme_supporting_factor_eligible") == True)  # noqa: E712
+    if "exposure_class" in cols:
+        return data.filter(pl.col("exposure_class").str.contains("sme"))
+    return data.clear()
+
+
+def _filter_on_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to on-balance-sheet exposures."""
+    if "bs_type" in cols:
+        return data.filter(pl.col("bs_type") == "ONB")
+    if "exposure_type" in cols:
+        return data.filter(pl.col("exposure_type") == "loan")
+    return data.clear()
+
+
+def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to off-balance-sheet exposures."""
+    if "bs_type" in cols:
+        return data.filter(pl.col("bs_type") == "OFB")
+    if "exposure_type" in cols:
+        return data.filter(pl.col("exposure_type").is_in(["facility", "contingent"]))
+    return data.clear()
+
+
 def _null_row(
     row_ref: str, row_name: str, column_refs: list[str]
 ) -> dict[str, object]:
@@ -684,14 +798,33 @@ def _compute_c07_values(
     values["0211"] = None
 
     # --- RWEA ---
-    # 0215: RWEA pre supporting factors (CRR only) — Phase 2A
-    values["0215"] = None
+    # 0215: RWEA pre supporting factors (CRR only)
+    rwa_pre = _col_sum_eager(data, cols, "rwa_before_sme_factor")
+    values["0215"] = rwa_pre if rwa_pre is not None else _col_sum_eager(data, cols, rwa_col)
 
-    # 0216: (-) SME supporting factor adjustment (CRR only) — Phase 2A
-    values["0216"] = None
+    # 0216: (-) SME supporting factor adjustment (CRR only)
+    if "sme_supporting_factor_applied" in cols and "rwa_before_sme_factor" in cols:
+        sme_data = data.filter(pl.col("sme_supporting_factor_applied") == True)  # noqa: E712
+        if len(sme_data) > 0:
+            pre = float(sme_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            post = float(sme_data[rwa_col].fill_null(0.0).sum())
+            values["0216"] = pre - post
+        else:
+            values["0216"] = 0.0
+    else:
+        values["0216"] = None
 
-    # 0217: (-) Infrastructure supporting factor adjustment (CRR only) — Phase 2A
-    values["0217"] = None
+    # 0217: (-) Infrastructure supporting factor adjustment (CRR only)
+    if "infrastructure_factor_applied" in cols and "rwa_before_sme_factor" in cols:
+        infra_data = data.filter(pl.col("infrastructure_factor_applied") == True)  # noqa: E712
+        if len(infra_data) > 0:
+            pre = float(infra_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            post = float(infra_data[rwa_col].fill_null(0.0).sum())
+            values["0217"] = pre - post
+        else:
+            values["0217"] = 0.0
+    else:
+        values["0217"] = None
 
     # 0220: RWEA (after supporting factors for CRR, plain for B3.1)
     values["0220"] = _col_sum_eager(data, cols, rwa_col)
@@ -775,8 +908,12 @@ def _compute_c08_values(
     # 0120: Of which: off balance sheet — Phase 2B
     values["0120"] = None
 
-    # 0125: Of which: defaulted (B3.1) — Phase 2G
-    values["0125"] = None
+    # 0125: Of which: defaulted (B3.1)
+    defaulted = _filter_defaulted(data, cols)
+    if len(defaulted) > 0:
+        values["0125"] = _col_sum_eager(defaulted, set(defaulted.columns), ead_col)
+    else:
+        values["0125"] = 0.0
 
     # 0130: Of which: arising from CCR — Phase 3K
     values["0130"] = None
@@ -824,15 +961,42 @@ def _compute_c08_values(
     for ref in ("0251", "0252", "0253", "0254"):
         values[ref] = None
 
-    # 0255-0257: Supporting factors (CRR) — Phase 2A
-    for ref in ("0255", "0256", "0257"):
-        values[ref] = None
+    # 0255: RWEA pre supporting factors (CRR only)
+    rwa_pre = _col_sum_eager(data, cols, "rwa_before_sme_factor")
+    values["0255"] = rwa_pre if rwa_pre is not None else _col_sum_eager(data, cols, rwa_col)
+
+    # 0256: (-) SME supporting factor adjustment (CRR only)
+    if "sme_supporting_factor_applied" in cols and "rwa_before_sme_factor" in cols:
+        sme_data = data.filter(pl.col("sme_supporting_factor_applied") == True)  # noqa: E712
+        if len(sme_data) > 0:
+            pre = float(sme_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            post = float(sme_data[rwa_col].fill_null(0.0).sum())
+            values["0256"] = pre - post
+        else:
+            values["0256"] = 0.0
+    else:
+        values["0256"] = None
+
+    # 0257: (-) Infrastructure supporting factor adjustment (CRR only)
+    if "infrastructure_factor_applied" in cols and "rwa_before_sme_factor" in cols:
+        infra_data = data.filter(pl.col("infrastructure_factor_applied") == True)  # noqa: E712
+        if len(infra_data) > 0:
+            pre = float(infra_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            post = float(infra_data[rwa_col].fill_null(0.0).sum())
+            values["0257"] = pre - post
+        else:
+            values["0257"] = 0.0
+    else:
+        values["0257"] = None
 
     # 0260: RWEA total
     values["0260"] = _col_sum_eager(data, cols, rwa_col)
 
-    # 0265: Of which: defaulted (B3.1) — Phase 2G
-    values["0265"] = None
+    # 0265: Of which: defaulted RWEA (B3.1)
+    if len(defaulted) > 0:
+        values["0265"] = _col_sum_eager(defaulted, set(defaulted.columns), rwa_col)
+    else:
+        values["0265"] = 0.0
 
     # 0270: Of which: LFSE — Phase 2F
     values["0270"] = None

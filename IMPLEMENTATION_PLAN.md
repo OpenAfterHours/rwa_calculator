@@ -30,6 +30,10 @@ The COREP generator was built against an incorrect understanding of the template
 | 1A: Template definitions | **DONE** | CRR + B3.1 columns, row sections, risk weight bands all defined. Backward-compatible aliases kept for generator. 130 tests pass. |
 | 1B: Generator rewrite | **DONE** | Per-exposure-class output, 5-section row structure, 4-digit column refs, framework awareness, maturity in days. |
 | 1C: Tests + Excel export | **DONE** | Tests rewritten for new dict-based API. 134 COREP tests pass (3 Excel skipped). Excel export updated for per-class sheets. |
+| 2A: Supporting factors | **DONE** | Cols 0215-0217 (C 07.00) and 0255-0257 (C 08.01) wired to rwa_before_sme_factor, sme/infra benefit computed. CRR only. |
+| 2B: Exposure type rows | **DONE** | Section 2 rows 0070 (on-BS) and 0080 (off-BS) populated from bs_type column for C 07.00 and C 08.01. |
+| 2E: ECAI unrated split | **DONE** | Col 0235 (unrated RWEA) already computed in Phase 1; verified with tests. Rated + unrated = total. |
+| 2G: "Of which" rows | **DONE** | C 07.00 rows 0015 (defaulted) and 0020 (SME) populated. C 08.01 cols 0125/0265 (defaulted EAD/RWEA) populated. |
 
 ---
 
@@ -272,6 +276,13 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "supporting_factor"`
 
+**Implementation notes (completed)**:
+- `rwa_before_sme_factor` used for pre-factor RWEA (0215/0255), falls back to `rwa_final` if not available.
+- SME benefit (0216/0256) = `rwa_before_sme_factor - rwa_final` where `sme_supporting_factor_applied == True`.
+- Infrastructure benefit (0217/0257) = same pattern with `infrastructure_factor_applied`.
+- Columns filtered out for Basel 3.1 by existing framework column selection.
+- 5 new tests in `TestSupportingFactors` class.
+
 ---
 
 #### Task 2B: Add exposure type row breakdown (Section 2)
@@ -288,6 +299,14 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 - Rows 0090-0130 (CCR): leave as zero/null (CCR not implemented)
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "exposure_type"`
+
+**Implementation notes (completed)**:
+- `_filter_on_bs()` and `_filter_off_bs()` helpers filter on `bs_type` ("ONB"/"OFB"), falling back to `exposure_type` if `bs_type` not available.
+- C 07.00 Section 2: row 0070 (on-BS) and 0080 (off-BS) populated with full column computation.
+- C 08.01 Section 2: row 0020 (on-BS) and 0030 (off-BS) populated similarly.
+- CCR rows (0090-0130) remain null — CCR not implemented.
+- On-BS + off-BS = total verified in tests.
+- 6 new tests in `TestExposureTypeRows` class.
 
 ---
 
@@ -334,6 +353,10 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "ecai"`
 
+**Implementation notes (completed)**:
+- Col 0235 was already computed in Phase 1 generator (`sa_cqs.is_null()` filter).
+- Added 3 tests in `TestECAIUnratedSplit`: column present in B3.1, unrated value correct, rated + unrated = total.
+
 ---
 
 #### Task 2F: Add large financial sector entity sub-columns
@@ -369,6 +392,14 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 - OF 08.01 col 0265: `rwa_final.sum()` where defaulted
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "of_which"`
+
+**Implementation notes (completed)**:
+- `_filter_defaulted()` helper: uses `default_status`, falls back to `exposure_class == "defaulted"`, then `irb_pd_floored >= 1.0`.
+- `_filter_sme()` helper: uses `sme_supporting_factor_eligible`, falls back to `exposure_class.str.contains("sme")`.
+- C 07.00 Section 1 row 0015 (defaulted) and 0020 (SME) populated with full column computation.
+- C 08.01 cols 0125 (defaulted EAD) and 0265 (defaulted RWEA) populated.
+- 7 new tests in `TestOfWhichDetailRows` class.
+- Total: 155 COREP tests pass (3 Excel skipped), 1720 unit tests pass (3 pre-existing fixture failures).
 
 ---
 

@@ -154,6 +154,123 @@ def _irb_results() -> pl.LazyFrame:
     )
 
 
+def _sa_results_with_phase2_cols() -> pl.LazyFrame:
+    """SA results with Phase 2 columns: bs_type, supporting factors, default_status."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_CORP_1",
+                "SA_CORP_2",
+                "SA_CORP_3",
+                "SA_INST_1",
+                "SA_RETAIL_1",
+                "SA_RETAIL_2",
+                "SA_SOVN_1",
+                "SA_DEF_1",
+            ],
+            "approach_applied": ["standardised"] * 8,
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "corporate_sme",
+                "institution",
+                "retail_other",
+                "retail_other",
+                "central_govt_central_bank",
+                "corporate",
+            ],
+            "drawn_amount": [1000.0, 2000.0, 500.0, 3000.0, 200.0, 300.0, 5000.0, 800.0],
+            "undrawn_amount": [500.0, 0.0, 100.0, 0.0, 50.0, 0.0, 0.0, 0.0],
+            "ead_final": [1200.0, 2000.0, 550.0, 3000.0, 225.0, 300.0, 5000.0, 800.0],
+            "rwa_final": [1140.0, 1900.0, 467.5, 600.0, 168.75, 225.0, 0.0, 1200.0],
+            "risk_weight": [1.00, 1.00, 0.85, 0.20, 0.75, 0.75, 0.00, 1.50],
+            "scra_provision_amount": [10.0, 20.0, 5.0, 0.0, 2.0, 3.0, 0.0, 5.0],
+            "gcra_provision_amount": [5.0, 10.0, 2.5, 15.0, 1.0, 1.5, 0.0, 3.0],
+            "collateral_adjusted_value": [100.0, 0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "guaranteed_portion": [0.0, 500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "sa_cqs": [3, 0, 0, 2, 0, 0, 1, None],
+            "counterparty_reference": [
+                "CP_A", "CP_B", "CP_C", "CP_D", "CP_E", "CP_F", "CP_G", "CP_H",
+            ],
+            # Phase 2 columns
+            "bs_type": ["ONB", "ONB", "ONB", "ONB", "ONB", "ONB", "ONB", "ONB"],
+            "default_status": [False, False, False, False, False, False, False, True],
+            "sme_supporting_factor_eligible": [
+                False, False, True, False, False, False, False, False,
+            ],
+            "sme_supporting_factor_applied": [
+                False, False, True, False, False, False, False, False,
+            ],
+            "infrastructure_factor_applied": [
+                True, False, False, False, False, False, False, False,
+            ],
+            "rwa_before_sme_factor": [
+                1200.0, 2000.0, 550.0, 600.0, 168.75, 225.0, 0.0, 1200.0,
+            ],
+        }
+    )
+
+
+def _sa_results_with_bs_split() -> pl.LazyFrame:
+    """SA results with on-BS and off-BS exposures for Section 2 testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SA_ON_1", "SA_ON_2", "SA_OFF_1"],
+            "approach_applied": ["standardised"] * 3,
+            "exposure_class": ["corporate", "corporate", "corporate"],
+            "drawn_amount": [1000.0, 2000.0, 0.0],
+            "undrawn_amount": [0.0, 0.0, 500.0],
+            "ead_final": [1000.0, 2000.0, 400.0],
+            "rwa_final": [1000.0, 2000.0, 400.0],
+            "risk_weight": [1.0, 1.0, 1.0],
+            "scra_provision_amount": [10.0, 20.0, 5.0],
+            "gcra_provision_amount": [5.0, 10.0, 2.5],
+            "sa_cqs": [3, 3, 3],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C"],
+            "bs_type": ["ONB", "ONB", "OFB"],
+        }
+    )
+
+
+def _irb_results_with_phase2_cols() -> pl.LazyFrame:
+    """IRB results with Phase 2 columns for defaulted/LFSE testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "IRB_CORP_1", "IRB_CORP_2", "IRB_SME_1",
+                "IRB_INST_1", "IRB_RETAIL_1", "IRB_DEF_1",
+            ],
+            "approach_applied": [
+                "foundation_irb", "foundation_irb", "foundation_irb",
+                "foundation_irb", "advanced_irb", "foundation_irb",
+            ],
+            "exposure_class": [
+                "corporate", "corporate", "corporate_sme",
+                "institution", "retail_mortgage", "corporate",
+            ],
+            "drawn_amount": [5000.0, 3000.0, 1000.0, 2000.0, 4000.0, 600.0],
+            "undrawn_amount": [1000.0, 0.0, 500.0, 0.0, 0.0, 0.0],
+            "ead_final": [5500.0, 3000.0, 1200.0, 2000.0, 4000.0, 600.0],
+            "rwa_final": [3850.0, 1800.0, 780.0, 600.0, 1200.0, 900.0],
+            "risk_weight": [0.70, 0.60, 0.65, 0.30, 0.30, 1.50],
+            "irb_pd_floored": [0.005, 0.01, 0.02, 0.002, 0.003, 1.0],
+            "irb_lgd_floored": [0.45, 0.45, 0.45, 0.45, 0.15, 0.45],
+            "irb_maturity_m": [2.5, 3.0, 2.5, 1.5, 20.0, 2.5],
+            "irb_expected_loss": [12.375, 13.5, 10.8, 1.8, 1.8, 270.0],
+            "irb_capital_k": [0.056, 0.048, 0.052, 0.024, 0.024, 0.12],
+            "provision_held": [15.0, 10.0, 8.0, 3.0, 2.5, 50.0],
+            "el_shortfall": [0.0, 3.5, 2.8, 0.0, 0.0, 0.0],
+            "el_excess": [2.625, 0.0, 0.0, 1.2, 0.7, 0.0],
+            "scra_provision_amount": [10.0, 5.0, 3.0, 2.0, 1.0, 10.0],
+            "gcra_provision_amount": [5.0, 5.0, 5.0, 1.0, 1.5, 5.0],
+            "counterparty_reference": ["CP_X", "CP_Y", "CP_Z", "CP_W", "CP_V", "CP_DEF"],
+            "default_status": [False, False, False, False, False, True],
+            "bs_type": ["ONB", "ONB", "ONB", "ONB", "ONB", "ONB"],
+            "apply_fi_scalar": [False, False, False, True, False, False],
+        }
+    )
+
+
 def _combined_results() -> pl.LazyFrame:
     """Combined SA + IRB results for full template generation."""
     sa = _sa_results().collect()
@@ -1237,6 +1354,260 @@ class TestExcelExport:
         if isinstance(sheets, dict):
             first_sheet = next(iter(sheets.values()))
             assert len(first_sheet) > 0
+
+
+# =============================================================================
+# PHASE 2A — SUPPORTING FACTOR COLUMNS (CRR ONLY)
+# =============================================================================
+
+
+class TestSupportingFactors:
+    """Tests for CRR supporting factor columns 0215-0217 (C 07.00) and 0255-0257 (C 08.01)."""
+
+    def test_c07_supporting_factor_pre_rwea(self) -> None:
+        """Col 0215 (RWEA pre factors) is populated from rwa_before_sme_factor."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        # corporate has 3 exposures: rwa_before_sme_factor = 1200+2000+1200 = 4400
+        assert corp["0215"][0] == pytest.approx(4400.0)
+
+    def test_c07_sme_factor_benefit(self) -> None:
+        """Col 0216 (SME factor benefit) = pre - post for SME-eligible exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+
+        sme = _get_total_row(bundle.c07_00["corporate_sme"])
+        # corporate_sme: rwa_before_sme_factor=550, rwa_final=467.5, benefit = 82.5
+        assert sme["0216"][0] == pytest.approx(82.5)
+
+    def test_c07_infra_factor_benefit(self) -> None:
+        """Col 0217 (infrastructure factor benefit) computed for eligible exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        # SA_CORP_1 has infra_factor_applied=True: pre=1200, post=1140, benefit=60
+        assert corp["0217"][0] == pytest.approx(60.0)
+
+    def test_c07_supporting_factors_not_in_b31(self) -> None:
+        """Supporting factor columns (0215-0217) absent from Basel 3.1 output."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_phase2_cols(), framework="BASEL_3_1"
+        )
+
+        corp = list(bundle.c07_00.values())[0]
+        assert "0215" not in corp.columns
+        assert "0216" not in corp.columns
+        assert "0217" not in corp.columns
+
+    def test_c07_rwea_relationship(self) -> None:
+        """Col 0220 = 0215 - 0216 - 0217 (RWEA after factors)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+
+        sme = _get_total_row(bundle.c07_00["corporate_sme"])
+        pre = sme["0215"][0]
+        sme_benefit = sme["0216"][0]
+        post = sme["0220"][0]
+        # pre - sme_benefit = post (no infra for SME class)
+        assert post == pytest.approx(pre - sme_benefit)
+
+
+# =============================================================================
+# PHASE 2B — EXPOSURE TYPE ROWS (SECTION 2)
+# =============================================================================
+
+
+class TestExposureTypeRows:
+    """Tests for Section 2 exposure type breakdown (on-BS vs off-BS)."""
+
+    def test_c07_on_bs_row_populated(self) -> None:
+        """Row 0070 (on-BS) aggregates on-balance-sheet exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_bs_split())
+
+        corp = bundle.c07_00["corporate"]
+        on_bs = corp.filter(pl.col("row_ref") == "0070")
+        # 2 on-BS: EAD 1000+2000=3000
+        assert on_bs["0200"][0] == pytest.approx(3000.0)
+
+    def test_c07_off_bs_row_populated(self) -> None:
+        """Row 0080 (off-BS) aggregates off-balance-sheet exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_bs_split())
+
+        corp = bundle.c07_00["corporate"]
+        off_bs = corp.filter(pl.col("row_ref") == "0080")
+        # 1 off-BS: EAD 400
+        assert off_bs["0200"][0] == pytest.approx(400.0)
+
+    def test_c07_on_plus_off_equals_total(self) -> None:
+        """On-BS EAD + off-BS EAD = total EAD."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_bs_split())
+
+        corp = bundle.c07_00["corporate"]
+        total_ead = _get_total_row(corp)["0200"][0]
+        on_bs_ead = corp.filter(pl.col("row_ref") == "0070")["0200"][0]
+        off_bs_ead = corp.filter(pl.col("row_ref") == "0080")["0200"][0]
+        assert on_bs_ead + off_bs_ead == pytest.approx(total_ead)
+
+    def test_c07_ccr_rows_null(self) -> None:
+        """CCR rows (0090-0130) remain null — CCR not implemented."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_bs_split())
+
+        corp = bundle.c07_00["corporate"]
+        for ref in ("0090", "0100", "0110", "0120", "0130"):
+            row = corp.filter(pl.col("row_ref") == ref)
+            if len(row) > 0:
+                assert row["0200"][0] is None
+
+    def test_c0801_on_bs_row_populated(self) -> None:
+        """C 08.01 row 0020 (on-BS) is populated when bs_type available."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
+
+        corp = bundle.c08_01["corporate"]
+        on_bs = corp.filter(pl.col("row_ref") == "0020")
+        # All IRB corp are ONB: EAD 5500+3000+600=9100
+        assert on_bs["0110"][0] == pytest.approx(9100.0)
+
+    def test_c07_section2_null_without_bs_type(self) -> None:
+        """Section 2 rows are null when bs_type column is missing."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results())  # no bs_type col
+
+        corp = bundle.c07_00["corporate"]
+        on_bs = corp.filter(pl.col("row_ref") == "0070")
+        assert on_bs["0200"][0] is None
+
+
+# =============================================================================
+# PHASE 2E — ECAI UNRATED SPLIT (B3.1 COL 0235)
+# =============================================================================
+
+
+class TestECAIUnratedSplit:
+    """Tests for Basel 3.1 ECAI unrated split column 0235."""
+
+    def test_b31_ecai_unrated_column_present(self) -> None:
+        """Col 0235 (without ECAI) present in Basel 3.1 output."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_phase2_cols(), framework="BASEL_3_1"
+        )
+
+        corp = list(bundle.c07_00.values())[0]
+        assert "0235" in corp.columns
+
+    def test_b31_unrated_exposure_in_0235(self) -> None:
+        """Unrated exposure (sa_cqs=null) RWA goes to col 0235."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_phase2_cols(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        # SA_DEF_1 has sa_cqs=None, rwa_final=1200 -> goes to 0235
+        assert corp["0235"][0] == pytest.approx(1200.0)
+
+    def test_b31_rated_plus_unrated_equals_total(self) -> None:
+        """Col 0230 (rated) + col 0235 (unrated) = col 0220 (total RWEA)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_phase2_cols(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        rated = corp["0230"][0]
+        unrated = corp["0235"][0]
+        total = corp["0220"][0]
+        assert rated + unrated == pytest.approx(total)
+
+
+# =============================================================================
+# PHASE 2G — "OF WHICH" DETAIL ROWS (DEFAULTED, SME)
+# =============================================================================
+
+
+class TestOfWhichDetailRows:
+    """Tests for C 07.00 'of which' detail rows 0015 (defaulted) and 0020 (SME)."""
+
+    def test_c07_defaulted_row_populated(self) -> None:
+        """Row 0015 (defaulted) is populated when default_status column exists."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+
+        corp = bundle.c07_00["corporate"]
+        defaulted = corp.filter(pl.col("row_ref") == "0015")
+        # SA_DEF_1: EAD=800, default_status=True
+        assert defaulted["0200"][0] == pytest.approx(800.0)
+
+    def test_c07_defaulted_row_rwea(self) -> None:
+        """Row 0015 RWEA matches defaulted exposures only."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+
+        corp = bundle.c07_00["corporate"]
+        defaulted = corp.filter(pl.col("row_ref") == "0015")
+        # SA_DEF_1: rwa_final=1200
+        assert defaulted["0220"][0] == pytest.approx(1200.0)
+
+    def test_c07_sme_row_populated(self) -> None:
+        """Row 0020 (SME) is populated when sme columns exist."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+
+        sme = bundle.c07_00["corporate_sme"]
+        sme_row = sme.filter(pl.col("row_ref") == "0020")
+        # corporate_sme has sme_supporting_factor_eligible=True, EAD=550
+        assert sme_row["0200"][0] == pytest.approx(550.0)
+
+    def test_c07_defaulted_row_null_without_flag(self) -> None:
+        """Row 0015 is null when no defaulted identification columns exist."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results())  # no default_status
+
+        corp = bundle.c07_00["corporate"]
+        defaulted = corp.filter(pl.col("row_ref") == "0015")
+        assert defaulted["0200"][0] is None
+
+    def test_c0801_defaulted_ead_col_0125(self) -> None:
+        """C 08.01 col 0125 (defaulted EAD) populated from default_status."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_phase2_cols(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        # IRB_DEF_1: EAD=600, default_status=True
+        assert corp["0125"][0] == pytest.approx(600.0)
+
+    def test_c0801_defaulted_rwea_col_0265(self) -> None:
+        """C 08.01 col 0265 (defaulted RWEA) populated from default_status."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_phase2_cols(), framework="BASEL_3_1"
+        )
+
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        # IRB_DEF_1: rwa_final=900, default_status=True
+        assert corp["0265"][0] == pytest.approx(900.0)
+
+    def test_c0801_defaulted_zero_when_none_defaulted(self) -> None:
+        """C 08.01 cols 0125/0265 are 0.0 when no exposures are defaulted."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_phase2_cols(), framework="BASEL_3_1"
+        )
+
+        inst = _get_total_row(bundle.c08_01["institution"])
+        assert inst["0125"][0] == pytest.approx(0.0)
+        assert inst["0265"][0] == pytest.approx(0.0)
 
 
 # =============================================================================

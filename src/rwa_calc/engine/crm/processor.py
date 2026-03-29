@@ -274,6 +274,30 @@ def _resolve_pledge_from_joined(collateral: pl.LazyFrame) -> pl.LazyFrame:
     return collateral.drop("_beneficiary_ead")
 
 
+def _join_netting_amounts(
+    exposures: pl.LazyFrame, netting_collateral: pl.LazyFrame
+) -> pl.LazyFrame:
+    """
+    Join per-exposure on-BS netting amounts from synthetic netting collateral.
+
+    The netting collateral has one row per beneficiary exposure with market_value
+    equal to the pro-rata netting pool allocation. Sum by beneficiary_reference
+    (an exposure may match multiple pools) and join back as on_bs_netting_amount.
+    """
+    netting_by_exposure = netting_collateral.group_by("beneficiary_reference").agg(
+        pl.col("market_value").sum().alias("on_bs_netting_amount"),
+    )
+    exposures = exposures.join(
+        netting_by_exposure,
+        left_on="exposure_reference",
+        right_on="beneficiary_reference",
+        how="left",
+    ).with_columns(
+        pl.col("on_bs_netting_amount").fill_null(0.0),
+    )
+    return exposures
+
+
 @dataclass
 class CRMError:
     """Error encountered during CRM processing."""
@@ -382,12 +406,18 @@ class CRMProcessor:
         netting_collateral = self._generate_netting_collateral(exposures)
         collateral: pl.LazyFrame | None = data.collateral
         if netting_collateral is not None:
+            # Track per-exposure netting amount for COREP col 0035
+            exposures = _join_netting_amounts(exposures, netting_collateral)
             if collateral is not None and has_required_columns(
                 collateral, self.COLLATERAL_REQUIRED_COLUMNS
             ):
                 collateral = pl.concat([collateral, netting_collateral], how="diagonal")
             else:
                 collateral = netting_collateral
+        else:
+            exposures = exposures.with_columns(
+                pl.lit(0.0).alias("on_bs_netting_amount")
+            )
 
         # Step 4: Apply collateral (if available and valid)
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
@@ -483,12 +513,18 @@ class CRMProcessor:
         netting_collateral = self._generate_netting_collateral(exposures)
         collateral: pl.LazyFrame | None = data.collateral
         if netting_collateral is not None:
+            # Track per-exposure netting amount for COREP col 0035
+            exposures = _join_netting_amounts(exposures, netting_collateral)
             if collateral is not None and has_required_columns(
                 collateral, self.COLLATERAL_REQUIRED_COLUMNS
             ):
                 collateral = pl.concat([collateral, netting_collateral], how="diagonal")
             else:
                 collateral = netting_collateral
+        else:
+            exposures = exposures.with_columns(
+                pl.lit(0.0).alias("on_bs_netting_amount")
+            )
 
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)

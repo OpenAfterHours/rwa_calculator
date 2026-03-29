@@ -5,17 +5,18 @@ Pipeline position:
     CalculationResponse -> COREPGenerator -> COREPTemplateBundle -> Excel
 
 Key responsibilities:
-- Transform exposure-level results into COREP-formatted DataFrames
-- Generate C 07.00 (SA), C 08.01 (IRB totals), C 08.02 (IRB PD grades)
-- Aggregate by exposure class with correct CRM split logic
-- Compute exposure-weighted averages for IRB parameters
+- Generate per-exposure-class COREP template DataFrames with row sections
+- Populate COREP columns from pipeline calculation results using 4-digit refs
+- Support both CRR and Basel 3.1 framework variants
+- Export to Excel with per-class sheet structure
 
 Why: COREP templates are the regulatory reporting format mandated by
-the PRA for quarterly capital adequacy returns. The calculator has
-all the data; this module reshapes it into the fixed template layout.
+the PRA for quarterly capital adequacy returns. Each template is submitted
+once per exposure class with a fixed multi-section row structure. This module
+reshapes exposure-level results into that fixed layout.
 
 References:
-- Regulation (EU) 2021/451, Annex I/II
+- Regulation (EU) 2021/451, Annex I/II (CRR templates)
 - CRR Art. 111-134 (SA), Art. 142-191 (IRB)
 - PRA PS1/26 (Basel 3.1 reporting amendments)
 """
@@ -33,7 +34,12 @@ from rwa_calc.reporting.corep.templates import (
     IRB_EXPOSURE_CLASS_ROWS,
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
-    SA_RISK_WEIGHT_BANDS,
+    get_c07_columns,
+    get_c08_02_columns,
+    get_c08_columns,
+    get_irb_row_sections,
+    get_sa_risk_weight_bands,
+    get_sa_row_sections,
 )
 
 if TYPE_CHECKING:
@@ -50,25 +56,24 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class COREPTemplateBundle:
+    """Bundle of generated COREP template DataFrames.
+
+    Each template is a dict keyed by exposure class value, where each value
+    is a DataFrame with row sections and 4-digit COREP column references.
+
+    C 07.00 (SA): One DataFrame per SA exposure class, with 5 row sections.
+    C 08.01 (IRB): One DataFrame per IRB exposure class, with 3 row sections.
+    C 08.02 (IRB by PD grade): One DataFrame per IRB exposure class.
+
+    Why: COREP templates are submitted per exposure class to the regulator.
+    Each class gets a fixed row structure (totals, exposure types, risk weights,
+    CIU approach, memorandum) and fixed column structure (the credit risk
+    waterfall from original exposure through CRM to final RWEA).
     """
-    Bundle of generated COREP template DataFrames.
 
-    Each attribute is an eager DataFrame representing one filled-in
-    COREP template, ready for Excel rendering.
-
-    Attributes:
-        c07_00: C 07.00 — CR SA (one row per SA exposure class)
-        c08_01: C 08.01 — CR IRB totals (one row per IRB exposure class)
-        c08_02: C 08.02 — CR IRB by PD grade (rows = class x PD band)
-        c07_rw_breakdown: C 07.00 risk weight breakdown (exposure by RW band)
-        framework: Regulatory framework used ("CRR" or "BASEL_3_1")
-        errors: Any issues encountered during generation
-    """
-
-    c07_00: pl.DataFrame
-    c08_01: pl.DataFrame
-    c08_02: pl.DataFrame
-    c07_rw_breakdown: pl.DataFrame
+    c07_00: dict[str, pl.DataFrame]
+    c08_01: dict[str, pl.DataFrame]
+    c08_02: dict[str, pl.DataFrame]
     framework: str = "CRR"
     errors: list[str] = field(default_factory=list)
 
@@ -79,12 +84,11 @@ class COREPTemplateBundle:
 
 
 class COREPGenerator:
-    """
-    Generates COREP credit risk templates from RWA calculation results.
+    """Generates COREP credit risk templates from RWA calculation results.
 
-    Reads from the CalculationResponse's cached parquet files and produces
-    COREP-formatted DataFrames for C 07.00 (SA), C 08.01 (IRB totals),
-    and C 08.02 (IRB PD grade breakdown).
+    Produces per-exposure-class DataFrames for C 07.00 (SA), C 08.01 (IRB totals),
+    and C 08.02 (IRB PD grade breakdown) with correct 4-digit COREP column
+    references and multi-section row structure.
 
     Usage:
         generator = COREPGenerator()
@@ -93,15 +97,7 @@ class COREPGenerator:
     """
 
     def generate(self, response: CalculationResponse) -> COREPTemplateBundle:
-        """
-        Generate all COREP templates from a CalculationResponse.
-
-        Args:
-            response: CalculationResponse with cached parquet results
-
-        Returns:
-            COREPTemplateBundle with all three templates
-        """
+        """Generate all COREP templates from a CalculationResponse."""
         results_lf = response.scan_results()
         return self.generate_from_lazyframe(results_lf, framework=response.framework)
 
@@ -111,31 +107,32 @@ class COREPGenerator:
         *,
         framework: str = "CRR",
     ) -> COREPTemplateBundle:
-        """
-        Generate all COREP templates from a results LazyFrame.
+        """Generate all COREP templates from a results LazyFrame.
 
-        This is the primary entry point for direct pipeline integration
-        (bypassing CalculationResponse). Useful for testing.
+        Primary entry point for direct pipeline integration. Produces
+        per-exposure-class DataFrames with correct row sections and
+        4-digit COREP column references.
 
         Args:
             results: Combined results LazyFrame with all approaches
             framework: Regulatory framework ("CRR" or "BASEL_3_1")
-
-        Returns:
-            COREPTemplateBundle with all three templates
         """
         errors: list[str] = []
+        cols = _available_columns(results)
 
-        c07 = self._generate_c07(results, errors)
-        c07_rw = self._generate_c07_rw_breakdown(results, errors)
-        c08_01 = self._generate_c08_01(results, errors)
-        c08_02 = self._generate_c08_02(results, errors)
+        # SA templates (C 07.00)
+        sa_data = _filter_by_approach(results, "standardised", cols)
+        c07_00 = self._generate_all_c07(sa_data, cols, framework, errors)
+
+        # IRB templates (C 08.01, C 08.02)
+        irb_data = _filter_by_irb_approach(results, cols)
+        c08_01 = self._generate_all_c08_01(irb_data, cols, framework, errors)
+        c08_02 = self._generate_all_c08_02(irb_data, cols, framework, errors)
 
         return COREPTemplateBundle(
-            c07_00=c07,
+            c07_00=c07_00,
             c08_01=c08_01,
             c08_02=c08_02,
-            c07_rw_breakdown=c07_rw,
             framework=framework,
             errors=errors,
         )
@@ -145,28 +142,21 @@ class COREPGenerator:
         bundle: COREPTemplateBundle,
         output_path: Path,
     ) -> ExportResult:
-        """
-        Write COREP templates to a multi-sheet Excel workbook.
+        """Write COREP templates to a multi-sheet Excel workbook.
 
-        Creates sheets: "C 07.00", "C 07.00 RW Breakdown",
-        "C 08.01", "C 08.02".
-
-        Args:
-            bundle: COREPTemplateBundle with generated templates
-            output_path: Path for the .xlsx output file
-
-        Returns:
-            ExportResult with written file path and row count
-
-        Raises:
-            ModuleNotFoundError: If xlsxwriter is not installed
+        Creates one sheet per exposure class per template type:
+        - "C 07.00 - Corporate", "C 07.00 - Institution", etc.
+        - "C 08.01 - Corporate", etc.
+        - "C 08.02 - Corporate", etc.
         """
         from rwa_calc.api.export import ExportResult
 
         try:
             import xlsxwriter  # noqa: F401
         except ModuleNotFoundError:
-            msg = "COREP Excel export requires 'xlsxwriter'. Install with: uv add xlsxwriter"
+            msg = (
+                "COREP Excel export requires 'xlsxwriter'. Install with: uv add xlsxwriter"
+            )
             raise ModuleNotFoundError(msg) from None
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -176,41 +166,15 @@ class COREPGenerator:
 
         workbook = xw.Workbook(str(output_path))
         try:
-            # C 07.00 — SA credit risk
-            if len(bundle.c07_00) > 0:
-                bundle.c07_00.write_excel(
-                    workbook=workbook,
-                    worksheet="C 07.00",
-                    autofit=True,
-                )
-                total_rows += len(bundle.c07_00)
-
-            # C 07.00 RW Breakdown
-            if len(bundle.c07_rw_breakdown) > 0:
-                bundle.c07_rw_breakdown.write_excel(
-                    workbook=workbook,
-                    worksheet="C 07.00 RW Breakdown",
-                    autofit=True,
-                )
-                total_rows += len(bundle.c07_rw_breakdown)
-
-            # C 08.01 — IRB totals
-            if len(bundle.c08_01) > 0:
-                bundle.c08_01.write_excel(
-                    workbook=workbook,
-                    worksheet="C 08.01",
-                    autofit=True,
-                )
-                total_rows += len(bundle.c08_01)
-
-            # C 08.02 — IRB PD grade breakdown
-            if len(bundle.c08_02) > 0:
-                bundle.c08_02.write_excel(
-                    workbook=workbook,
-                    worksheet="C 08.02",
-                    autofit=True,
-                )
-                total_rows += len(bundle.c08_02)
+            total_rows += self._write_template_sheets(
+                workbook, bundle.c07_00, "C 07.00", SA_EXPOSURE_CLASS_ROWS
+            )
+            total_rows += self._write_template_sheets(
+                workbook, bundle.c08_01, "C 08.01", IRB_EXPOSURE_CLASS_ROWS
+            )
+            total_rows += self._write_template_sheets(
+                workbook, bundle.c08_02, "C 08.02", IRB_EXPOSURE_CLASS_ROWS
+            )
         finally:
             workbook.close()
 
@@ -222,441 +186,340 @@ class COREPGenerator:
             row_count=total_rows,
         )
 
+    @staticmethod
+    def _write_template_sheets(
+        workbook: object,
+        templates: dict[str, pl.DataFrame],
+        prefix: str,
+        class_names: dict[str, tuple[str, str]],
+    ) -> int:
+        """Write per-class DataFrames as Excel sheets. Returns total rows written."""
+        total = 0
+        for ec, df in sorted(templates.items()):
+            if len(df) > 0:
+                display = class_names.get(ec, (None, ec))[1]
+                sheet = f"{prefix} - {display}"[:31]  # Excel 31-char limit
+                df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
+                total += len(df)
+        return total
+
     # =========================================================================
-    # C 07.00 — CR SA
+    # C 07.00 — SA Credit Risk (per exposure class)
     # =========================================================================
 
-    def _generate_c07(
+    def _generate_all_c07(
         self,
-        results: pl.LazyFrame,
+        sa_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
         errors: list[str],
-    ) -> pl.DataFrame:
-        """
-        Generate C 07.00 SA credit risk template.
-
-        One row per SA exposure class with key aggregate measures:
-        original exposure, provisions, net exposure, CRM adjustments,
-        adjusted exposure, and RWA.
-        """
-        cols = _available_columns(results)
-
-        # Filter to SA approach only
-        sa = _filter_by_approach(results, "standardised", cols)
-
-        # Resolve column names with fallbacks
+    ) -> dict[str, pl.DataFrame]:
+        """Generate C 07.00 DataFrames for all SA exposure classes."""
+        ec_col = _pick(cols, "exposure_class")
         ead_col = _pick(cols, "ead_final", "final_ead", "ead")
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
 
-        if ead_col is None or rwa_col is None:
-            errors.append("C07: Missing EAD or RWA columns in results")
-            return _empty_c07()
+        if ec_col is None or ead_col is None or rwa_col is None:
+            if ead_col is None or rwa_col is None:
+                errors.append("C07: Missing EAD or RWA columns in results")
+            if ec_col is None:
+                errors.append("C07: Missing exposure_class column")
+            return {}
 
-        # Build aggregation expressions
-        agg_exprs: list[pl.Expr] = [
-            # 010: Original exposure pre conversion factors
-            _sum_cols_agg(cols, "drawn_amount", "undrawn_amount").alias("original_exposure_010"),
-            # 020: Value adjustments and provisions
-            _sum_cols_agg(cols, "scra_provision_amount", "gcra_provision_amount").alias(
-                "provisions_020"
-            ),
-            # 070: Exposure value post CCF (EAD)
-            pl.col(ead_col).sum().alias("exposure_value_070"),
-            # 080: Risk weighted exposure amount
-            pl.col(rwa_col).sum().alias("rwea_080"),
-            # Exposure count
-            pl.len().alias("exposure_count"),
-        ]
+        sa_df = sa_data.collect()
+        if len(sa_df) == 0:
+            return {}
 
-        # 040: Funded CRM (collateral)
-        if "collateral_adjusted_value" in cols:
-            agg_exprs.append(pl.col("collateral_adjusted_value").sum().alias("funded_crm_040"))
+        data_cols = set(sa_df.columns)
+        classes = sa_df[ec_col].unique().sort().to_list()
+        result: dict[str, pl.DataFrame] = {}
 
-        # 050: Unfunded CRM (guarantees)
-        if "guaranteed_portion" in cols:
-            agg_exprs.append(pl.col("guaranteed_portion").sum().alias("unfunded_crm_050"))
-
-        # 090: With ECAI credit assessment
-        if "sa_cqs" in cols:
-            agg_exprs.append(
-                pl.col(rwa_col)
-                .filter(pl.col("sa_cqs").is_not_null() & (pl.col("sa_cqs") > 0))
-                .sum()
-                .alias("rwea_ecai_090")
+        for ec in classes:
+            class_df = sa_df.filter(pl.col(ec_col) == ec)
+            template_df = self._generate_c07_for_class(
+                class_df, data_cols, ead_col, rwa_col, framework
             )
+            result[ec] = template_df
 
-        # Group by exposure class
-        ec_col = _pick(cols, "exposure_class")
-        if ec_col is None:
-            errors.append("C07: Missing exposure_class column")
-            return _empty_c07()
+        return result
 
-        agg_df = sa.group_by(ec_col).agg(agg_exprs).collect()
-
-        if len(agg_df) == 0:
-            return _empty_c07()
-
-        # Compute derived columns, handling optional CRM columns
-        agg_cols = set(agg_df.columns)
-        funded = (
-            pl.col("funded_crm_040").fill_null(0.0) if "funded_crm_040" in agg_cols else pl.lit(0.0)
-        )
-        unfunded = (
-            pl.col("unfunded_crm_050").fill_null(0.0)
-            if "unfunded_crm_050" in agg_cols
-            else pl.lit(0.0)
-        )
-
-        agg_df = agg_df.with_columns(
-            # 030: Net exposure = original - provisions
-            (pl.col("original_exposure_010") - pl.col("provisions_020").fill_null(0.0)).alias(
-                "net_exposure_030"
-            ),
-            # 060: Net exposure after CRM
-            (
-                pl.col("original_exposure_010")
-                - pl.col("provisions_020").fill_null(0.0)
-                - funded
-                - unfunded
-            ).alias("net_after_crm_060"),
-        )
-
-        # Map to COREP row structure
-        return _map_to_corep_rows(agg_df, ec_col, SA_EXPOSURE_CLASS_ROWS, template="C 07.00")
-
-    # =========================================================================
-    # C 07.00 — Risk Weight Breakdown
-    # =========================================================================
-
-    def _generate_c07_rw_breakdown(
+    def _generate_c07_for_class(
         self,
-        results: pl.LazyFrame,
-        errors: list[str],
+        class_data: pl.DataFrame,
+        cols: set[str],
+        ead_col: str,
+        rwa_col: str,
+        framework: str,
     ) -> pl.DataFrame:
-        """
-        Generate C 07.00 risk weight band breakdown.
+        """Generate a C 07.00 DataFrame for a single SA exposure class.
 
-        Pivots SA exposure value by risk weight into the standard
-        regulatory bands (0%, 20%, 35%, 50%, 75%, 100%, 150%, 250%).
+        Builds all 5 row sections:
+        1. Total Exposures (row 0010 + "of which" detail rows)
+        2. Breakdown by Exposure Types (on-BS, off-BS, CCR)
+        3. Breakdown by Risk Weights (one row per RW band)
+        4. Breakdown by CIU Approach
+        5. Memorandum Items
         """
-        cols = _available_columns(results)
-        sa = _filter_by_approach(results, "standardised", cols)
+        column_defs = get_c07_columns(framework)
+        column_refs = [c.ref for c in column_defs]
+        row_sections = get_sa_row_sections(framework)
+        rw_bands = get_sa_risk_weight_bands(framework)
 
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+        rows: list[dict[str, object]] = []
+
+        # Section 1: Total Exposures
+        for row_def in row_sections[0].rows:
+            if row_def.ref == "0010":
+                # Row 0010: aggregate ALL class data
+                values = _compute_c07_values(
+                    class_data, cols, ead_col, rwa_col, column_refs
+                )
+                rows.append(
+                    {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                )
+            else:
+                # "of which" rows — Phase 2 features, null for now
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+
+        # Section 2: Breakdown by Exposure Types — Phase 2B, null for now
+        for row_def in row_sections[1].rows:
+            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+
+        # Section 3: Breakdown by Risk Weights
         rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
-        ec_col = _pick(cols, "exposure_class")
-
-        if ead_col is None or rw_col is None or ec_col is None:
-            errors.append("C07 RW: Missing EAD, risk_weight, or exposure_class columns")
-            return pl.DataFrame()
-
-        # Assign each exposure to a risk weight band
-        band_expr = pl.lit("Other")
-        for rw_value, label in reversed(SA_RISK_WEIGHT_BANDS):
-            band_expr = (
-                pl.when(pl.col(rw_col).round(4) == round(rw_value, 4))
-                .then(pl.lit(label))
-                .otherwise(band_expr)
-            )
-
-        sa_banded = sa.with_columns(band_expr.alias("rw_band"))
-
-        # Pivot: rows = exposure class, columns = risk weight bands
-        pivot_df = (
-            sa_banded.group_by([ec_col, "rw_band"])
-            .agg(pl.col(ead_col).sum().alias("exposure_value"))
-            .collect()
-            .pivot(on="rw_band", index=ec_col, values="exposure_value")
-            .fill_null(0.0)
+        rw_row_data = _compute_rw_section_rows(
+            class_data, cols, ead_col, rwa_col, column_refs, rw_bands, rw_col
         )
+        for row_def in row_sections[2].rows:
+            if row_def.name in rw_row_data:
+                values = rw_row_data[row_def.name]
+                rows.append(
+                    {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                )
+            else:
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Ensure all standard RW band columns exist
-        all_band_labels = [label for _, label in SA_RISK_WEIGHT_BANDS] + ["Other"]
-        for label in all_band_labels:
-            if label not in pivot_df.columns:
-                pivot_df = pivot_df.with_columns(pl.lit(0.0).alias(label))
+        # Section 4: Breakdown by CIU Approach — not implemented, null
+        for row_def in row_sections[3].rows:
+            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Reorder columns: exposure_class first, then bands in order
-        ordered_cols = [ec_col] + [label for _, label in SA_RISK_WEIGHT_BANDS] + ["Other"]
-        existing_ordered = [c for c in ordered_cols if c in pivot_df.columns]
-        pivot_df = pivot_df.select(existing_ordered)
+        # Section 5: Memorandum Items — Phase 2+ features, null for now
+        for row_def in row_sections[4].rows:
+            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Map to COREP rows
-        return _map_to_corep_rows(pivot_df, ec_col, SA_EXPOSURE_CLASS_ROWS, template="C 07.00 RW")
+        schema: dict[str, pl.DataType] = {
+            "row_ref": pl.String,
+            "row_name": pl.String,
+        }
+        schema.update({ref: pl.Float64 for ref in column_refs})
+        return pl.DataFrame(rows, schema=schema)
 
     # =========================================================================
-    # C 08.01 — CR IRB Totals
+    # C 08.01 — IRB Totals (per exposure class)
     # =========================================================================
 
-    def _generate_c08_01(
+    def _generate_all_c08_01(
         self,
-        results: pl.LazyFrame,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
         errors: list[str],
-    ) -> pl.DataFrame:
-        """
-        Generate C 08.01 IRB totals template.
-
-        One row per IRB exposure class with exposure-weighted averages
-        for PD, LGD, maturity, plus totals for EAD, RWA, and EL.
-        """
-        cols = _available_columns(results)
-
-        # Filter to IRB approaches (F-IRB and A-IRB)
-        irb = _filter_by_irb_approach(results, cols)
-
+    ) -> dict[str, pl.DataFrame]:
+        """Generate C 08.01 DataFrames for all IRB exposure classes."""
+        ec_col = _pick(cols, "exposure_class")
         ead_col = _pick(cols, "ead_final", "final_ead", "ead")
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
-        ec_col = _pick(cols, "exposure_class")
 
-        if ead_col is None or rwa_col is None or ec_col is None:
-            errors.append("C08.01: Missing EAD, RWA, or exposure_class columns")
-            return _empty_c08_01()
+        if ec_col is None or ead_col is None or rwa_col is None:
+            if ead_col is None or rwa_col is None:
+                errors.append("C08.01: Missing EAD or RWA columns")
+            if ec_col is None:
+                errors.append("C08.01: Missing exposure_class column")
+            return {}
 
-        # Build aggregation expressions
-        agg_exprs: list[pl.Expr] = [
-            # 020: Original exposure
-            _sum_cols_agg(cols, "drawn_amount", "undrawn_amount").alias("original_exposure_020"),
-            # 030: Provisions
-            _sum_cols_agg(cols, "scra_provision_amount", "gcra_provision_amount").alias(
-                "provisions_030"
-            ),
-            # 040: EAD
-            pl.col(ead_col).sum().alias("ead_040"),
-            # 070: RWEA
-            pl.col(rwa_col).sum().alias("rwea_070"),
-            # 100: Number of obligors
-            pl.len().alias("exposure_count"),
-        ]
+        irb_df = irb_data.collect()
+        if len(irb_df) == 0:
+            return {}
 
-        # 010: Exposure-weighted average PD
-        if "irb_pd_floored" in cols:
-            agg_exprs.extend(
-                [
-                    (pl.col("irb_pd_floored") * pl.col(ead_col)).sum().alias("_pd_x_ead"),
-                ]
+        data_cols = set(irb_df.columns)
+        classes = irb_df[ec_col].unique().sort().to_list()
+        result: dict[str, pl.DataFrame] = {}
+
+        for ec in classes:
+            class_df = irb_df.filter(pl.col(ec_col) == ec)
+            template_df = self._generate_c08_01_for_class(
+                class_df, data_cols, ead_col, rwa_col, framework
             )
+            result[ec] = template_df
 
-        # 050: Exposure-weighted average LGD
-        lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
-        if lgd_col is not None:
-            agg_exprs.append(
-                (pl.col(lgd_col) * pl.col(ead_col)).sum().alias("_lgd_x_ead"),
-            )
+        return result
 
-        # 060: Exposure-weighted average maturity
-        if "irb_maturity_m" in cols:
-            agg_exprs.append(
-                (pl.col("irb_maturity_m") * pl.col(ead_col)).sum().alias("_m_x_ead"),
-            )
-
-        # 080: Expected loss
-        if "irb_expected_loss" in cols:
-            agg_exprs.append(pl.col("irb_expected_loss").sum().alias("el_080"))
-
-        # 090: Provisions allocated
-        if "provision_held" in cols:
-            agg_exprs.append(pl.col("provision_held").sum().alias("provisions_allocated_090"))
-
-        # 110: EL shortfall / excess
-        if "el_shortfall" in cols:
-            agg_exprs.append(pl.col("el_shortfall").sum().alias("_el_shortfall"))
-        if "el_excess" in cols:
-            agg_exprs.append(pl.col("el_excess").sum().alias("_el_excess"))
-
-        # Obligor count (distinct counterparties)
-        if "counterparty_reference" in cols:
-            agg_exprs.append(pl.col("counterparty_reference").n_unique().alias("obligor_count_100"))
-
-        # Group by exposure class
-        agg_df = irb.group_by(ec_col).agg(agg_exprs).collect()
-
-        # Compute weighted averages
-        derived_cols: list[pl.Expr] = []
-        total_ead = pl.col("ead_040")
-
-        if "_pd_x_ead" in agg_df.columns:
-            derived_cols.append(
-                pl.when(total_ead > 0)
-                .then(pl.col("_pd_x_ead") / total_ead)
-                .otherwise(0.0)
-                .alias("weighted_pd_010")
-            )
-
-        if "_lgd_x_ead" in agg_df.columns:
-            derived_cols.append(
-                pl.when(total_ead > 0)
-                .then(pl.col("_lgd_x_ead") / total_ead)
-                .otherwise(0.0)
-                .alias("weighted_lgd_050")
-            )
-
-        if "_m_x_ead" in agg_df.columns:
-            derived_cols.append(
-                pl.when(total_ead > 0)
-                .then(pl.col("_m_x_ead") / total_ead)
-                .otherwise(0.0)
-                .alias("weighted_maturity_060")
-            )
-
-        if "_el_shortfall" in agg_df.columns and "_el_excess" in agg_df.columns:
-            derived_cols.append(
-                (pl.col("_el_excess") - pl.col("_el_shortfall")).alias("el_net_110")
-            )
-        elif "_el_shortfall" in agg_df.columns:
-            derived_cols.append((-pl.col("_el_shortfall")).alias("el_net_110"))
-        elif "_el_excess" in agg_df.columns:
-            derived_cols.append(pl.col("_el_excess").alias("el_net_110"))
-
-        if derived_cols:
-            agg_df = agg_df.with_columns(derived_cols)
-
-        # Drop intermediate columns
-        drop_cols = [c for c in agg_df.columns if c.startswith("_")]
-        if drop_cols:
-            agg_df = agg_df.drop(drop_cols)
-
-        # Map to COREP rows
-        return _map_to_corep_rows(agg_df, ec_col, IRB_EXPOSURE_CLASS_ROWS, template="C 08.01")
-
-    # =========================================================================
-    # C 08.02 — CR IRB by PD Grade
-    # =========================================================================
-
-    def _generate_c08_02(
+    def _generate_c08_01_for_class(
         self,
-        results: pl.LazyFrame,
-        errors: list[str],
+        class_data: pl.DataFrame,
+        cols: set[str],
+        ead_col: str,
+        rwa_col: str,
+        framework: str,
     ) -> pl.DataFrame:
+        """Generate a C 08.01 DataFrame for a single IRB exposure class.
+
+        Builds 3 row sections:
+        1. Total (+ supporting factors for CRR)
+        2. Breakdown by Exposure Types
+        3. Calculation Approaches
         """
-        Generate C 08.02 IRB PD grade breakdown template.
+        column_defs = get_c08_columns(framework)
+        column_refs = [c.ref for c in column_defs]
+        row_sections = get_irb_row_sections(framework)
 
-        Rows = exposure class x PD band. Same columns as C 08.01
-        but disaggregated by obligor PD grade for granular reporting.
-        """
-        cols = _available_columns(results)
+        rows: list[dict[str, object]] = []
 
-        irb = _filter_by_irb_approach(results, cols)
+        # Section 1: Total
+        for row_def in row_sections[0].rows:
+            if row_def.ref == "0010":
+                values = _compute_c08_values(
+                    class_data, cols, ead_col, rwa_col, column_refs
+                )
+                rows.append(
+                    {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                )
+            else:
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
+        # Section 2: Breakdown by Exposure Types — Phase 2B, null
+        for row_def in row_sections[1].rows:
+            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+
+        # Section 3: Calculation Approaches — null for now
+        for row_def in row_sections[2].rows:
+            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+
+        schema: dict[str, pl.DataType] = {
+            "row_ref": pl.String,
+            "row_name": pl.String,
+        }
+        schema.update({ref: pl.Float64 for ref in column_refs})
+        return pl.DataFrame(rows, schema=schema)
+
+    # =========================================================================
+    # C 08.02 — IRB PD Grade Breakdown (per exposure class)
+    # =========================================================================
+
+    def _generate_all_c08_02(
+        self,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> dict[str, pl.DataFrame]:
+        """Generate C 08.02 DataFrames for all IRB exposure classes."""
+        ec_col = _pick(cols, "exposure_class")
         ead_col = _pick(cols, "ead_final", "final_ead", "ead")
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
-        ec_col = _pick(cols, "exposure_class")
         pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
 
-        if ead_col is None or rwa_col is None or ec_col is None:
+        if ec_col is None or ead_col is None or rwa_col is None:
             errors.append("C08.02: Missing required columns")
-            return pl.DataFrame()
+            return {}
 
         if pd_col is None:
-            errors.append("C08.02: No PD column available — skipping PD grade breakdown")
-            return pl.DataFrame()
+            errors.append(
+                "C08.02: No PD column available — skipping PD grade breakdown"
+            )
+            return {}
+
+        irb_df = irb_data.collect()
+        if len(irb_df) == 0:
+            return {}
+
+        data_cols = set(irb_df.columns)
+        classes = irb_df[ec_col].unique().sort().to_list()
+        result: dict[str, pl.DataFrame] = {}
+
+        for ec in classes:
+            class_df = irb_df.filter(pl.col(ec_col) == ec)
+            template_df = self._generate_c08_02_for_class(
+                class_df, data_cols, ead_col, rwa_col, pd_col, framework
+            )
+            result[ec] = template_df
+
+        return result
+
+    def _generate_c08_02_for_class(
+        self,
+        class_data: pl.DataFrame,
+        cols: set[str],
+        ead_col: str,
+        rwa_col: str,
+        pd_col: str,
+        framework: str,
+    ) -> pl.DataFrame:
+        """Generate a C 08.02 DataFrame for a single IRB exposure class.
+
+        Rows = PD bands. Each row has the same columns as C 08.01 plus
+        an obligor grade identifier (col 0005) and PD (col 0010 for B3.1).
+        """
+        column_defs = get_c08_02_columns(framework)
+        column_refs = [c.ref for c in column_defs]
 
         # Assign PD bands
         band_expr = pl.lit("Unassigned")
         for lower, upper, label in reversed(PD_BANDS):
             band_expr = (
-                pl.when((pl.col(pd_col) >= lower) & (pl.col(pd_col) < upper))
+                pl.when(
+                    (pl.col(pd_col) >= lower) & (pl.col(pd_col) < upper)
+                )
                 .then(pl.lit(label))
                 .otherwise(band_expr)
             )
 
-        irb_banded = irb.with_columns(band_expr.alias("pd_band"))
+        banded = class_data.with_columns(band_expr.alias("_pd_band"))
 
-        # Build aggregation expressions (same as C 08.01)
-        agg_exprs: list[pl.Expr] = [
-            _sum_cols_agg(cols, "drawn_amount", "undrawn_amount").alias("original_exposure_020"),
-            pl.col(ead_col).sum().alias("ead_040"),
-            pl.col(rwa_col).sum().alias("rwea_070"),
-            pl.len().alias("exposure_count"),
-        ]
+        # Build one row per PD band
+        rows: list[dict[str, object]] = []
+        band_labels = [label for _, _, label in PD_BANDS]
 
-        # Weighted PD
-        agg_exprs.append(
-            (pl.col(pd_col) * pl.col(ead_col)).sum().alias("_pd_x_ead"),
-        )
+        for label in band_labels:
+            band_data = banded.filter(pl.col("_pd_band") == label).drop("_pd_band")
+            if len(band_data) == 0:
+                continue
 
-        # Weighted LGD
-        lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
-        if lgd_col is not None:
-            agg_exprs.append(
-                (pl.col(lgd_col) * pl.col(ead_col)).sum().alias("_lgd_x_ead"),
+            # Compute C 08.01-equivalent values for this band
+            values = _compute_c08_values(
+                band_data, cols, ead_col, rwa_col, column_refs
+            )
+            # Col 0005: obligor grade identifier = the PD band label
+            values["0005"] = label
+            rows.append(
+                {"row_ref": label, "row_name": label, **values}
             )
 
-        # Weighted maturity
-        if "irb_maturity_m" in cols:
-            agg_exprs.append(
-                (pl.col("irb_maturity_m") * pl.col(ead_col)).sum().alias("_m_x_ead"),
+        # Handle unassigned
+        unassigned = banded.filter(pl.col("_pd_band") == "Unassigned").drop("_pd_band")
+        if len(unassigned) > 0:
+            values = _compute_c08_values(
+                unassigned, cols, ead_col, rwa_col, column_refs
+            )
+            values["0005"] = "Unassigned"
+            rows.append(
+                {"row_ref": "Unassigned", "row_name": "Unassigned", **values}
             )
 
-        # Expected loss
-        if "irb_expected_loss" in cols:
-            agg_exprs.append(pl.col("irb_expected_loss").sum().alias("el_080"))
+        if not rows:
+            schema: dict[str, pl.DataType] = {
+                "row_ref": pl.String,
+                "row_name": pl.String,
+            }
+            schema.update({ref: pl.Float64 for ref in column_refs})
+            return pl.DataFrame(schema=schema)
 
-        # Obligor count
-        if "counterparty_reference" in cols:
-            agg_exprs.append(pl.col("counterparty_reference").n_unique().alias("obligor_count_100"))
+        # Infer schema from column defs — 0005 is String, rest are Float64
+        schema = {"row_ref": pl.String, "row_name": pl.String}
+        for ref in column_refs:
+            schema[ref] = pl.String if ref == "0005" else pl.Float64
 
-        # Group by exposure class AND PD band
-        agg_df = irb_banded.group_by([ec_col, "pd_band"]).agg(agg_exprs).collect()
-
-        # Compute weighted averages
-        derived_cols: list[pl.Expr] = []
-        total_ead = pl.col("ead_040")
-
-        derived_cols.append(
-            pl.when(total_ead > 0)
-            .then(pl.col("_pd_x_ead") / total_ead)
-            .otherwise(0.0)
-            .alias("weighted_pd_010")
-        )
-
-        if "_lgd_x_ead" in agg_df.columns:
-            derived_cols.append(
-                pl.when(total_ead > 0)
-                .then(pl.col("_lgd_x_ead") / total_ead)
-                .otherwise(0.0)
-                .alias("weighted_lgd_050")
-            )
-
-        if "_m_x_ead" in agg_df.columns:
-            derived_cols.append(
-                pl.when(total_ead > 0)
-                .then(pl.col("_m_x_ead") / total_ead)
-                .otherwise(0.0)
-                .alias("weighted_maturity_060")
-            )
-
-        if derived_cols:
-            agg_df = agg_df.with_columns(derived_cols)
-
-        # Drop intermediate columns
-        drop_cols = [c for c in agg_df.columns if c.startswith("_")]
-        if drop_cols:
-            agg_df = agg_df.drop(drop_cols)
-
-        # Sort by exposure class then PD band order
-        band_labels = [label for _, _, label in PD_BANDS] + ["Unassigned"]
-        band_order = {label: i for i, label in enumerate(band_labels)}
-
-        agg_df = agg_df.with_columns(
-            pl.col("pd_band")
-            .replace_strict(band_order, default=len(band_labels))
-            .alias("_sort_order")
-        )
-        agg_df = agg_df.sort([ec_col, "_sort_order"]).drop("_sort_order")
-
-        # Map exposure class to COREP row references
-        row_map = {v: ref for v, (ref, _) in IRB_EXPOSURE_CLASS_ROWS.items()}
-        name_map = {v: name for v, (_, name) in IRB_EXPOSURE_CLASS_ROWS.items()}
-
-        agg_df = agg_df.with_columns(
-            [
-                pl.col(ec_col).replace_strict(row_map, default="9999").alias("row_ref"),
-                pl.col(ec_col)
-                .replace_strict(name_map, default=pl.col(ec_col))
-                .alias("exposure_class_name"),
-            ]
-        )
-
-        return agg_df
+        return pl.DataFrame(rows, schema=schema)
 
 
 # =============================================================================
@@ -675,25 +538,6 @@ def _pick(cols: set[str], *candidates: str) -> str | None:
         if c in cols:
             return c
     return None
-
-
-def _sum_cols_agg(cols: set[str], *col_names: str) -> pl.Expr:
-    """
-    Sum multiple columns and aggregate for group_by context.
-
-    Computes (col_a + col_b + ...).sum() for use inside .agg().
-    Missing columns are skipped; returns pl.lit(0.0) if none exist.
-    """
-    present = [c for c in col_names if c in cols]
-    if not present:
-        return pl.lit(0.0)
-    if len(present) == 1:
-        return pl.col(present[0]).fill_null(0.0).sum()
-    # Sum multiple columns per-row then aggregate
-    row_sum = pl.col(present[0]).fill_null(0.0)
-    for c in present[1:]:
-        row_sum = row_sum + pl.col(c).fill_null(0.0)
-    return row_sum.sum()
 
 
 def _filter_by_approach(
@@ -721,108 +565,348 @@ def _filter_by_irb_approach(
     )
 
 
-def _map_to_corep_rows(
-    df: pl.DataFrame,
-    ec_col: str,
-    row_mapping: dict[str, tuple[str, str]],
-    *,
-    template: str,
-) -> pl.DataFrame:
+def _null_row(
+    row_ref: str, row_name: str, column_refs: list[str]
+) -> dict[str, object]:
+    """Build a row dict with null values for all COREP columns."""
+    row: dict[str, object] = {"row_ref": row_ref, "row_name": row_name}
+    for ref in column_refs:
+        row[ref] = None
+    return row
+
+
+def _safe_sum_eager(
+    data: pl.DataFrame, cols: set[str], *col_names: str
+) -> float:
+    """Sum multiple columns from an eager DataFrame. Missing columns skipped."""
+    total = 0.0
+    for c in col_names:
+        if c in cols:
+            total += float(data[c].fill_null(0.0).sum())
+    return total
+
+
+def _col_sum_eager(
+    data: pl.DataFrame, cols: set[str], col_name: str | None
+) -> float | None:
+    """Sum a single column from an eager DataFrame."""
+    if col_name is None or col_name not in cols:
+        return None
+    return float(data[col_name].fill_null(0.0).sum())
+
+
+def _compute_c07_values(
+    data: pl.DataFrame,
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
+    column_refs: list[str],
+) -> dict[str, float | None]:
+    """Compute C 07.00 column values from a data subset.
+
+    Maps pipeline columns to 4-digit COREP column refs. Columns without
+    a pipeline source are set to None (to be populated in Phase 2/3).
     """
-    Map exposure class values to COREP row references and names.
+    if len(data) == 0:
+        return {ref: None for ref in column_refs}
 
-    Adds row_ref and exposure_class_name columns, computes a total row,
-    and sorts by row reference.
-    """
-    if len(df) == 0:
-        return df
+    ref_set = set(column_refs)
+    values: dict[str, float | None] = {}
 
-    # Map to COREP references
-    row_ref_map = {v: ref for v, (ref, _) in row_mapping.items()}
-    name_map = {v: name for v, (_, name) in row_mapping.items()}
+    # --- Exposure ---
+    # 0010: Original exposure pre conversion factors
+    values["0010"] = _safe_sum_eager(data, cols, "drawn_amount", "undrawn_amount")
 
-    df = df.with_columns(
-        [
-            pl.col(ec_col).replace_strict(row_ref_map, default="9999").alias("row_ref"),
-            pl.col(ec_col)
-            .replace_strict(name_map, default=pl.col(ec_col))
-            .alias("exposure_class_name"),
-        ]
+    # 0030: (-) Value adjustments and provisions
+    values["0030"] = _safe_sum_eager(
+        data, cols, "scra_provision_amount", "gcra_provision_amount"
     )
 
-    # Compute total row
-    numeric_cols = [
-        c
-        for c in df.columns
-        if c not in {ec_col, "row_ref", "exposure_class_name"}
-        and df[c].dtype in (pl.Float64, pl.Int64, pl.UInt32, pl.Int32, pl.Float32)
-    ]
+    # 0035: (-) On-balance sheet netting (B3.1 only) — Phase 3D
+    values["0035"] = None
 
-    if numeric_cols:
-        total_values: dict[str, object] = {
-            ec_col: "TOTAL",
-            "row_ref": "0000",
-            "exposure_class_name": "Total",
-        }
-        for col_name in numeric_cols:
-            # For weighted averages (PD, LGD, maturity), the total row
-            # should be re-computed from the EAD-weighted components, not
-            # summed. But since we dropped the intermediates, we sum the
-            # absolute measures and leave weighted averages as None.
-            if col_name.startswith("weighted_"):
-                total_values[col_name] = None
-            else:
-                total_values[col_name] = df[col_name].sum()
+    # 0040: Exposure net of value adjustments (and netting for B3.1)
+    v_0010 = values["0010"] or 0.0
+    v_0030 = values["0030"] or 0.0
+    v_0035 = values.get("0035") or 0.0
+    values["0040"] = v_0010 - v_0030 - v_0035
 
-        total_row = pl.DataFrame(
-            [total_values],
-            schema={c: df[c].dtype for c in df.columns},
+    # --- CRM Substitution: Unfunded ---
+    # 0050: (-) Guarantees
+    values["0050"] = _col_sum_eager(data, cols, "guaranteed_portion")
+
+    # 0060: (-) Credit derivatives — Phase 3B
+    values["0060"] = None
+
+    # --- CRM Substitution: Funded ---
+    # 0070: (-) Financial collateral: Simple method — Phase 3A
+    values["0070"] = None
+
+    # 0080: (-) Other funded credit protection — Phase 3A
+    values["0080"] = None
+
+    # --- CRM Substitution flows ---
+    # 0090: (-) Substitution outflows — Phase 2H/3C
+    values["0090"] = None
+
+    # 0100: Substitution inflows — Phase 2H/3C
+    values["0100"] = None
+
+    # --- Post-CRM ---
+    # 0110: Net exposure after CRM substitution pre CCFs
+    values["0110"] = None  # Depends on substitution flows
+
+    # --- Financial Collateral Comprehensive ---
+    # 0120: Volatility adjustment to exposure — Phase 3A
+    values["0120"] = None
+
+    # 0130: (-) Financial collateral: adjusted value (Cvam)
+    values["0130"] = _col_sum_eager(data, cols, "collateral_adjusted_value")
+
+    # 0140: (-) Of which: volatility and maturity adjustments
+    values["0140"] = None
+
+    # 0150: Fully adjusted exposure value (E*)
+    values["0150"] = None
+
+    # --- CCF Breakdown --- Phase 2C
+    for ref in ("0160", "0170", "0171", "0180", "0190"):
+        values[ref] = None
+
+    # --- Final ---
+    # 0200: Exposure value (EAD)
+    values["0200"] = _col_sum_eager(data, cols, ead_col)
+
+    # 0210: Of which: arising from CCR — Phase 3K
+    values["0210"] = None
+
+    # 0211: Of which: CCR excl CCP — Phase 3K
+    values["0211"] = None
+
+    # --- RWEA ---
+    # 0215: RWEA pre supporting factors (CRR only) — Phase 2A
+    values["0215"] = None
+
+    # 0216: (-) SME supporting factor adjustment (CRR only) — Phase 2A
+    values["0216"] = None
+
+    # 0217: (-) Infrastructure supporting factor adjustment (CRR only) — Phase 2A
+    values["0217"] = None
+
+    # 0220: RWEA (after supporting factors for CRR, plain for B3.1)
+    values["0220"] = _col_sum_eager(data, cols, rwa_col)
+
+    # 0230: Of which: with ECAI credit assessment
+    if "sa_cqs" in cols and rwa_col in cols:
+        ecai_data = data.filter(pl.col("sa_cqs").is_not_null())
+        values["0230"] = float(ecai_data[rwa_col].fill_null(0.0).sum())
+    else:
+        values["0230"] = None
+
+    # 0235: Of which: without ECAI credit assessment (B3.1 only) — Phase 2E
+    if "sa_cqs" in cols and rwa_col in cols:
+        no_ecai = data.filter(pl.col("sa_cqs").is_null())
+        values["0235"] = float(no_ecai[rwa_col].fill_null(0.0).sum())
+    else:
+        values["0235"] = None
+
+    # 0240: Of which: credit assessment derived from central govt
+    values["0240"] = None
+
+    # Filter to only refs present in this framework's column set
+    return {ref: values.get(ref) for ref in column_refs if ref in values}
+
+
+def _compute_c08_values(
+    data: pl.DataFrame,
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
+    column_refs: list[str],
+) -> dict[str, float | None]:
+    """Compute C 08.01/08.02 column values from a data subset.
+
+    Maps pipeline columns to 4-digit COREP column refs. Weighted averages
+    are computed for PD, LGD, and maturity. Maturity is converted from
+    years to days (COREP col 0250 requires days).
+    """
+    if len(data) == 0:
+        return {ref: None for ref in column_refs}
+
+    values: dict[str, float | None] = {}
+    ead_sum = float(data[ead_col].fill_null(0.0).sum()) if ead_col in cols else 0.0
+
+    # --- Internal Rating ---
+    # 0010: PD assigned (EAD-weighted average)
+    if "irb_pd_floored" in cols and ead_sum > 0:
+        pd_x_ead = float(
+            (data["irb_pd_floored"].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
         )
-        df = pl.concat([total_row, df], how="diagonal_relaxed")
+        values["0010"] = pd_x_ead / ead_sum
+    else:
+        values["0010"] = None
 
-    # Sort by row reference
-    df = df.sort("row_ref")
+    # --- Exposure ---
+    # 0020: Original exposure pre conversion factors
+    values["0020"] = _safe_sum_eager(data, cols, "drawn_amount", "undrawn_amount")
 
-    # Reorder: row_ref, exposure_class_name first, then rest
-    ordered = ["row_ref", "exposure_class_name"] + [
-        c for c in df.columns if c not in {"row_ref", "exposure_class_name"}
-    ]
-    return df.select(ordered)
+    # 0030: Of which: large financial sector entities — Phase 2F
+    values["0030"] = None
 
+    # 0035: (-) On-BS netting (B3.1 only) — Phase 3D
+    values["0035"] = None
 
-def _empty_c07() -> pl.DataFrame:
-    """Return an empty C 07.00 DataFrame with correct schema."""
-    return pl.DataFrame(
-        schema={
-            "row_ref": pl.String,
-            "exposure_class_name": pl.String,
-            "exposure_class": pl.String,
-            "original_exposure_010": pl.Float64,
-            "provisions_020": pl.Float64,
-            "net_exposure_030": pl.Float64,
-            "funded_crm_040": pl.Float64,
-            "unfunded_crm_050": pl.Float64,
-            "net_after_crm_060": pl.Float64,
-            "exposure_value_070": pl.Float64,
-            "rwea_080": pl.Float64,
-        }
+    # --- CRM Substitution (0040-0080) --- not wired yet
+    for ref in ("0040", "0050", "0060", "0070", "0080"):
+        values[ref] = None
+
+    # --- Post-CRM ---
+    values["0090"] = None  # Exposure after CRM substitution pre CCFs
+    values["0100"] = None  # Of which: off balance sheet
+
+    # --- Slotting FCCM (B3.1 only, 0101-0104) --- Phase 3A
+    for ref in ("0101", "0102", "0103", "0104"):
+        values[ref] = None
+
+    # --- Exposure Value ---
+    # 0110: Exposure value (EAD)
+    values["0110"] = _col_sum_eager(data, cols, ead_col)
+
+    # 0120: Of which: off balance sheet — Phase 2B
+    values["0120"] = None
+
+    # 0125: Of which: defaulted (B3.1) — Phase 2G
+    values["0125"] = None
+
+    # 0130: Of which: arising from CCR — Phase 3K
+    values["0130"] = None
+
+    # 0140: Of which: LFSE — Phase 2F
+    values["0140"] = None
+
+    # --- CRM in LGD estimates (0150-0210) --- Phase 3A/3B
+    for ref in (
+        "0150", "0160", "0170", "0171", "0172", "0173",
+        "0180", "0190", "0200", "0210",
+    ):
+        values[ref] = None
+
+    # 0220: Double default (CRR only) — Phase 3E
+    values["0220"] = None
+
+    # --- Parameters ---
+    # 0230: Exposure-weighted average LGD (%)
+    lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
+    if lgd_col is not None and ead_sum > 0:
+        lgd_x_ead = float(
+            (data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
+        )
+        values["0230"] = lgd_x_ead / ead_sum
+    else:
+        values["0230"] = None
+
+    # 0240: LGD for LFSE — Phase 2F
+    values["0240"] = None
+
+    # 0250: Exposure-weighted average maturity (DAYS, not years)
+    if "irb_maturity_m" in cols and ead_sum > 0:
+        m_x_ead = float(
+            (
+                data["irb_maturity_m"].fill_null(0.0) * data[ead_col].fill_null(0.0)
+            ).sum()
+        )
+        values["0250"] = (m_x_ead / ead_sum) * 365.0  # Convert years to days
+    else:
+        values["0250"] = None
+
+    # --- RWEA ---
+    # 0251-0254: Post-model adjustments (B3.1) — Phase 3F
+    for ref in ("0251", "0252", "0253", "0254"):
+        values[ref] = None
+
+    # 0255-0257: Supporting factors (CRR) — Phase 2A
+    for ref in ("0255", "0256", "0257"):
+        values[ref] = None
+
+    # 0260: RWEA total
+    values["0260"] = _col_sum_eager(data, cols, rwa_col)
+
+    # 0265: Of which: defaulted (B3.1) — Phase 2G
+    values["0265"] = None
+
+    # 0270: Of which: LFSE — Phase 2F
+    values["0270"] = None
+
+    # 0275-0276: Output floor (B3.1) — Phase 2D
+    values["0275"] = None
+    values["0276"] = None
+
+    # --- Memorandum ---
+    # 0280: Expected loss amount
+    values["0280"] = _col_sum_eager(data, cols, "irb_expected_loss")
+
+    # 0281-0282: EL adjustments (B3.1) — Phase 3F
+    values["0281"] = None
+    values["0282"] = None
+
+    # 0290: (-) Value adjustments and provisions
+    prov = _safe_sum_eager(
+        data, cols, "scra_provision_amount", "gcra_provision_amount"
     )
+    if prov == 0.0:
+        # Fall back to provision_held
+        held = _col_sum_eager(data, cols, "provision_held")
+        values["0290"] = held if held is not None else prov
+    else:
+        values["0290"] = prov
+
+    # 0300: Number of obligors
+    if "counterparty_reference" in cols:
+        values["0300"] = float(data["counterparty_reference"].n_unique())
+    else:
+        values["0300"] = float(len(data))
+
+    # 0310: Pre-credit derivatives RWEA — Phase 3B
+    values["0310"] = None
+
+    # Filter to only refs in this framework's column set
+    return {ref: values.get(ref) for ref in column_refs if ref in values}
 
 
-def _empty_c08_01() -> pl.DataFrame:
-    """Return an empty C 08.01 DataFrame with correct schema."""
-    return pl.DataFrame(
-        schema={
-            "row_ref": pl.String,
-            "exposure_class_name": pl.String,
-            "exposure_class": pl.String,
-            "weighted_pd_010": pl.Float64,
-            "original_exposure_020": pl.Float64,
-            "provisions_030": pl.Float64,
-            "ead_040": pl.Float64,
-            "weighted_lgd_050": pl.Float64,
-            "weighted_maturity_060": pl.Float64,
-            "rwea_070": pl.Float64,
-            "el_080": pl.Float64,
-        }
-    )
+def _compute_rw_section_rows(
+    class_data: pl.DataFrame,
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
+    column_refs: list[str],
+    rw_bands: list[tuple[float, str]],
+    rw_col: str | None,
+) -> dict[str, dict[str, float | None]]:
+    """Compute C 07.00 column values for each risk weight band.
+
+    Returns a dict mapping band label (e.g., "100%") to column values.
+    Exposures not matching any standard band go to "Other risk weights".
+    """
+    if rw_col is None or rw_col not in cols or len(class_data) == 0:
+        return {}
+
+    # Assign risk weight bands
+    band_expr = pl.lit("Other risk weights")
+    for rw_value, label in reversed(rw_bands):
+        band_expr = (
+            pl.when(pl.col(rw_col).round(4) == round(rw_value, 4))
+            .then(pl.lit(label))
+            .otherwise(band_expr)
+        )
+
+    banded = class_data.with_columns(band_expr.alias("_rw_band"))
+
+    result: dict[str, dict[str, float | None]] = {}
+    for label in banded["_rw_band"].unique().to_list():
+        band_data = banded.filter(pl.col("_rw_band") == label).drop("_rw_band")
+        if len(band_data) > 0:
+            result[label] = _compute_c07_values(
+                band_data, cols, ead_col, rwa_col, column_refs
+            )
+
+    return result

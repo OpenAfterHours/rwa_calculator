@@ -23,6 +23,16 @@ The COREP generator was built against an incorrect understanding of the template
 
 ---
 
+## Completion Status
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 1A: Template definitions | **DONE** | CRR + B3.1 columns, row sections, risk weight bands all defined. Backward-compatible aliases kept for generator. 130 tests pass. |
+| 1B: Generator rewrite | Pending | Next priority |
+| 1C: Tests + Excel export | Pending | Depends on 1B |
+
+---
+
 ## Task List
 
 Tasks are ordered by dependency. Each task is self-contained: it modifies a focused set of files, has clear acceptance criteria, and leaves the test suite passing. Tasks within the same phase can be parallelised unless noted otherwise.
@@ -106,6 +116,14 @@ Phase 1 tasks are tightly coupled — they form an atomic rewrite of the templat
 - `uv run pytest tests/unit/test_corep.py::TestTemplateDefinitions -v` passes (update these tests first to validate new definitions)
 - `uv run ruff check src/rwa_calc/reporting/corep/templates.py`
 - `uv run mypy src/rwa_calc/reporting/corep/templates.py`
+- **Completed**: 126 COREP tests pass (130 collected, 4 Excel skipped). All 1691 unit tests pass.
+
+**Implementation notes**:
+- `international_org` was added to `SA_EXPOSURE_CLASS_ROWS` (was missing from the original plan).
+- CRR C 07.00 has 27 columns (not 24 as originally stated — plan was missing 0211, 0215, 0216).
+- CRR C 08.01 has 37 columns (not 33 as originally stated).
+- B3.1 OF 07.00 has 27 columns (not 22 as originally stated).
+- 3 pre-existing test failures from missing fixture parquet files (test_hierarchy, test_loader) are unrelated to COREP work.
 
 ---
 

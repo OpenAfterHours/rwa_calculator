@@ -792,8 +792,8 @@ class TestTableDataIntegrity:
 
     def test_residential_general_loan_split_constants(self) -> None:
         """General residential uses loan-splitting with 20% secured RW at 55%."""
-        assert B31_RESIDENTIAL_GENERAL_SECURED_RW == Decimal("0.20")
-        assert B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO == Decimal("0.55")
+        assert Decimal("0.20") == B31_RESIDENTIAL_GENERAL_SECURED_RW
+        assert Decimal("0.55") == B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO
 
     def test_residential_income_bands_cover_full_range(self) -> None:
         """Income-producing residential bands should cover 0% to infinity."""

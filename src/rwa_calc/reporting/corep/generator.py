@@ -307,8 +307,44 @@ class COREPGenerator:
                     )
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref in ("0021", "0022", "0023"):
+                # Specialised lending "of which" rows (B3.1 rows 0021-0023)
+                sl_type_map = {
+                    "0021": "object_finance",
+                    "0022": "commodities_finance",
+                    "0023": "project_finance",
+                }
+                subset = _filter_sl_type(class_data, cols, sl_type_map[row_def.ref])
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref in ("0024", "0025", "0026"):
+                # Project finance phase "of which" rows (B3.1 rows 0024-0026)
+                phase_map = {
+                    "0024": "pre_operational",
+                    "0025": "operational",
+                    "0026": "high_quality_operational",
+                }
+                subset = _filter_project_phase(
+                    class_data, cols, phase_map[row_def.ref]
+                )
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
-                # Other "of which" rows — Phase 3 features, null for now
+                # Other "of which" rows — Phase 3 features (RE, equity), null for now
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         # Section 2: Breakdown by Exposure Types
@@ -699,6 +735,27 @@ def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     if "exposure_type" in cols:
         return data.filter(pl.col("exposure_type").is_in(["facility", "contingent"]))
     return data.clear()
+
+
+def _filter_sl_type(
+    data: pl.DataFrame, cols: set[str], sl_type: str
+) -> pl.DataFrame:
+    """Filter to exposures with a given specialised lending type."""
+    if "sl_type" not in cols:
+        return data.clear()
+    return data.filter(pl.col("sl_type") == sl_type)
+
+
+def _filter_project_phase(
+    data: pl.DataFrame, cols: set[str], phase: str
+) -> pl.DataFrame:
+    """Filter to project finance exposures in a given phase."""
+    if "sl_type" not in cols or "sl_project_phase" not in cols:
+        return data.clear()
+    return data.filter(
+        (pl.col("sl_type") == "project_finance")
+        & (pl.col("sl_project_phase") == phase)
+    )
 
 
 def _null_row(

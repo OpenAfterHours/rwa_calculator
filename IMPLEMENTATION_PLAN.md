@@ -42,6 +42,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 3G: SL detail rows | **DONE** | Rows 0021-0026 wired for B3.1 OF 07.00. project_phase added to schema. 9 new tests. |
 | 3H: RE detail rows | **DONE** | Rows 0330-0344, 0360 wired for B3.1 OF 07.00. materially_dependent_on_property added. 0350-0354 deferred. 9 new tests. |
 | 3I: Equity transitional | **DONE** | Rows 0371-0374 wired for B3.1 OF 07.00 memorandum. equity_transitional_approach added. 6 new tests. |
+| 3A: Collateral method split | **DONE** | Per-type collateral tracking in CRM processor. C 07.00 cols 0070/0080/0120/0140/0150. C 08.01 cols 0150-0210 (type breakdown). 8 new tests. |
 
 ---
 
@@ -507,6 +508,17 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 - 0210: receivables
 
 **Verify**: `uv run pytest tests/unit/test_crm_collateral.py tests/unit/test_corep.py -v`
+
+**Implementation notes (completed)**:
+- 5 new per-type collateral columns added to CALCULATION_OUTPUT_SCHEMA: `collateral_financial_value`, `collateral_re_value`, `collateral_receivables_value`, `collateral_other_physical_value`, `collateral_cash_value`.
+- CRM processor's `_apply_collateral_unified()` extended: `_coll_category` classification (cash/financial/real_estate/receivables/other_physical), 5 per-type agg expressions in group_by, 3-level join propagation, final combine via `_sum3()`.
+- Legacy (non-unified) path sets all 5 new columns to 0.0.
+- C 07.00: col 0070=0.0 (comprehensive method used, simple method not implemented), col 0080=non-financial collateral sum, col 0120=0.0 (He=0 for loans), col 0140=market_value-adjusted_value, col 0150=max(0, net_after_crm - Cvam).
+- C 08.01: col 0060=non-financial collateral, col 0150=guaranteed_portion, cols 0170-0173=0.0 (sub-types not tracked), col 0180=financial collateral, col 0190=RE, col 0200=other physical, col 0210=receivables.
+- `_sum_cols_eager()` helper added for multi-column aggregation.
+- Simple method (CRR Art. 222) deferred — current implementation uses comprehensive method. Col 0070 set to 0.0 as placeholder.
+- 8 new tests in `TestCollateralMethodSplit` class.
+- Total: 219 COREP tests pass (3 Excel skipped), 1887 unit/contract/integration tests pass.
 
 ---
 

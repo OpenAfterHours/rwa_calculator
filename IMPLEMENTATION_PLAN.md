@@ -39,6 +39,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 2G: "Of which" rows | **DONE** | C 07.00 rows 0015 (defaulted) and 0020 (SME) populated. C 08.01 cols 0125/0265 (defaulted EAD/RWEA) populated. |
 | 2H: CRM substitution flows | **DONE** | C 07.00 cols 0090/0100/0110. C 08.01 cols 0040/0070/0080/0090. Pre-computed per-class inflows; outflows from subset. |
 | 3D: On-BS netting | **DONE** | Col 0035 wired for B3.1 (C 07.00 + C 08.01). CRM processor tracks netting amounts. 7 new tests. |
+| 3G: SL detail rows | **DONE** | Rows 0021-0026 wired for B3.1 OF 07.00. project_phase added to schema. 9 new tests. |
 
 ---
 
@@ -665,6 +666,17 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 **Complexity**: Low.
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "specialised_lending"`
+
+**Implementation notes (completed)**:
+- `project_phase` added to `SPECIALISED_LENDING_SCHEMA` (input). `sl_project_phase` added to `CALCULATION_OUTPUT_SCHEMA`.
+- `VALID_PROJECT_PHASES` validation set added: pre_operational, operational, high_quality_operational.
+- `_filter_sl_type()` helper: filters by `sl_type` column value.
+- `_filter_project_phase()` helper: filters by `sl_type == "project_finance"` AND `sl_project_phase` match.
+- Generator Section 1 handler: rows 0021-0023 filter by SL type, rows 0024-0026 filter by project phase.
+- Rows correctly absent under CRR (not in CRR row sections).
+- Phase rows sum to total PF verified: 0024 + 0025 + 0026 = 0023.
+- 9 new tests in `TestSpecialisedLendingRows` class.
+- Total: 196 COREP tests pass (3 Excel skipped).
 
 ---
 

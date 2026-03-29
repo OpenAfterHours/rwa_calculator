@@ -229,6 +229,7 @@ RATINGS_SCHEMA = {
 SPECIALISED_LENDING_SCHEMA = {
     "counterparty_reference": pl.String,  # Links to counterparty (all exposures inherit SL treatment)
     "sl_type": pl.String,  # project_finance, object_finance, commodities_finance, ipre, hvcre
+    "project_phase": pl.String,  # pre_operational, operational, high_quality_operational (project_finance only)
     "slotting_category": pl.String,  # strong, good, satisfactory, weak, default
     "is_hvcre": pl.Boolean,  # High-volatility commercial real estate (higher RW)
     # Supervisory risk weights by category (CRE33.5):
@@ -439,6 +440,8 @@ VALID_SL_TYPES = {
     "hvcre",
 }
 
+VALID_PROJECT_PHASES = {"pre_operational", "operational", "high_quality_operational"}
+
 VALID_SLOTTING_CATEGORIES = {"strong", "good", "satisfactory", "weak", "default"}
 
 VALID_EQUITY_TYPES = {
@@ -495,6 +498,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "specialised_lending": {
         "sl_type": VALID_SL_TYPES,
         "slotting_category": VALID_SLOTTING_CATEGORIES,
+        "project_phase": VALID_PROJECT_PHASES,
     },
     "equity_exposures": {
         "equity_type": VALID_EQUITY_TYPES,
@@ -923,6 +927,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     # SPECIALISED LENDING / EQUITY (Alternative approaches)
     # -------------------------------------------------------------------------
     "sl_type": pl.String,  # SL category if applicable
+    "sl_project_phase": pl.String,  # pre_operational/operational/high_quality_operational
     "sl_slotting_category": pl.String,  # strong/good/satisfactory/weak/default
     "sl_risk_weight": pl.Float64,  # Slotting RW
     "equity_type": pl.String,  # Equity category if applicable

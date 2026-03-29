@@ -2285,3 +2285,155 @@ class TestOnBSNetting:
         bundle = gen.generate_from_lazyframe(_sa_results(), framework="BASEL_3_1")
         corp = _get_total_row(bundle.c07_00["corporate"])
         assert corp["0035"][0] is None
+
+
+# =============================================================================
+# Fixtures for specialised lending detail rows (Task 3G)
+# =============================================================================
+
+
+def _sa_results_with_sl() -> pl.LazyFrame:
+    """SA results with specialised lending types and project phases for Task 3G."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_CORP_1", "SA_SL_OF_1", "SA_SL_CF_1",
+                "SA_SL_PF_PRE_1", "SA_SL_PF_OP_1", "SA_SL_PF_HQ_1",
+            ],
+            "approach_applied": ["standardised"] * 6,
+            "exposure_class": ["corporate"] * 6,
+            "drawn_amount": [1000.0, 500.0, 300.0, 200.0, 400.0, 600.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "ead_final": [1000.0, 500.0, 300.0, 200.0, 400.0, 600.0],
+            "rwa_final": [1000.0, 500.0, 300.0, 260.0, 400.0, 360.0],
+            "risk_weight": [1.00, 1.00, 1.00, 1.30, 1.00, 0.60],
+            "scra_provision_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "collateral_adjusted_value": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "guaranteed_portion": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "sa_cqs": [3, None, None, None, None, None],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E", "CP_F"],
+            # SL type: None for non-SL, specific type for SL exposures
+            "sl_type": [
+                None, "object_finance", "commodities_finance",
+                "project_finance", "project_finance", "project_finance",
+            ],
+            # Project phase: only for project_finance exposures
+            "sl_project_phase": [
+                None, None, None,
+                "pre_operational", "operational", "high_quality_operational",
+            ],
+        }
+    )
+
+
+class TestSpecialisedLendingRows:
+    """Task 3G: Specialised lending detail rows (B3.1 OF 07.00 rows 0021-0026).
+
+    Why: Basel 3.1 requires separate reporting of object finance, commodities
+    finance, and project finance (with phase breakdown) within each exposure
+    class. These "of which" rows enable supervisors to monitor concentration
+    in specialised lending sub-types.
+    """
+
+    def test_object_finance_row_populated(self) -> None:
+        """Row 0021 shows object finance exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0021 = corp.filter(pl.col("row_ref") == "0021")
+        assert len(row_0021) == 1
+        # SA_SL_OF_1: ead_final=500
+        assert row_0021["0200"][0] == pytest.approx(500.0)
+
+    def test_commodities_finance_row_populated(self) -> None:
+        """Row 0022 shows commodities finance exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0022 = corp.filter(pl.col("row_ref") == "0022")
+        assert len(row_0022) == 1
+        # SA_SL_CF_1: ead_final=300
+        assert row_0022["0200"][0] == pytest.approx(300.0)
+
+    def test_project_finance_row_is_total(self) -> None:
+        """Row 0023 shows total project finance (all phases)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0023 = corp.filter(pl.col("row_ref") == "0023")
+        assert len(row_0023) == 1
+        # 3 PF exposures: 200 + 400 + 600 = 1200
+        assert row_0023["0200"][0] == pytest.approx(1200.0)
+
+    def test_project_finance_pre_operational(self) -> None:
+        """Row 0024 shows pre-operational project finance."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0024 = corp.filter(pl.col("row_ref") == "0024")
+        assert len(row_0024) == 1
+        assert row_0024["0200"][0] == pytest.approx(200.0)
+
+    def test_project_finance_operational(self) -> None:
+        """Row 0025 shows operational project finance."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0025 = corp.filter(pl.col("row_ref") == "0025")
+        assert len(row_0025) == 1
+        assert row_0025["0200"][0] == pytest.approx(400.0)
+
+    def test_project_finance_hq_operational(self) -> None:
+        """Row 0026 shows high quality operational project finance."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0026 = corp.filter(pl.col("row_ref") == "0026")
+        assert len(row_0026) == 1
+        assert row_0026["0200"][0] == pytest.approx(600.0)
+
+    def test_sl_rows_absent_crr(self) -> None:
+        """SL detail rows don't exist under CRR (no rows 0021-0026)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        sl_rows = corp.filter(pl.col("row_ref").is_in(["0021", "0022", "0023", "0024", "0025", "0026"]))
+        assert len(sl_rows) == 0
+
+    def test_sl_rows_null_without_sl_data(self) -> None:
+        """Without sl_type column, SL rows are null."""
+        gen = COREPGenerator()
+        # _sa_results() has no sl_type column
+        bundle = gen.generate_from_lazyframe(_sa_results(), framework="BASEL_3_1")
+        corp = bundle.c07_00["corporate"]
+        row_0021 = corp.filter(pl.col("row_ref") == "0021")
+        assert len(row_0021) == 1
+        assert row_0021["0200"][0] is None
+
+    def test_phase_sum_equals_total_pf(self) -> None:
+        """Sum of phase rows (0024-0026) equals total project finance row (0023)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_sl(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        total_pf = corp.filter(pl.col("row_ref") == "0023")["0200"][0]
+        pre_op = corp.filter(pl.col("row_ref") == "0024")["0200"][0]
+        op = corp.filter(pl.col("row_ref") == "0025")["0200"][0]
+        hq_op = corp.filter(pl.col("row_ref") == "0026")["0200"][0]
+        assert total_pf == pytest.approx(pre_op + op + hq_op)

@@ -1514,7 +1514,7 @@ def _compute_c08_values(
     prov = _safe_sum_eager(
         data, cols, "scra_provision_amount", "gcra_provision_amount"
     )
-    if prov == 0.0:
+    if abs(prov) < 1e-9:
         # Fall back to provision_held
         held = _col_sum_eager(data, cols, "provision_held")
         values["0290"] = held if held is not None else prov

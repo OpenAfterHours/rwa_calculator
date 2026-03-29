@@ -1,439 +1,168 @@
-# Implementation Plan — Integration Test Strategy
-
-## Status: Phase 4 Complete
-
-Fill gaps in stage-to-stage integration testing. Target: 8 new files, ~100 tests. Phases 1-4 complete with ~100 tests across 8 files.
-
-### Completed
-- **Phase 1 — Infrastructure + P1** (2026-03-11)
-  - `tests/integration/conftest.py` — shared builders (`make_counterparty`, `make_loan`, `make_facility`, `make_contingent`, `make_model_permission`, `make_raw_data_bundle`), config fixtures (CRR, Basel 3.1, with IRB variants), component fixtures
-  - `tests/integration/test_hierarchy_to_classifier.py` — 18 tests across 5 test classes: model_id propagation (5), entity type classification (4), default status (2), FI scalar (2), column completeness (2), parent-child hierarchy (3)
-  - `tests/integration/__init__.py` — package marker
-  - **Learnings**: facility_mappings auto-generation must NOT include self-referencing `child_type=facility` entries for standalone facilities, as the hierarchy resolver's `_build_facility_root_lookup` anti-join excludes them from undrawn exposure generation
-
-- **Phase 2 — P2 Classifier→CRM and CRM→Calculators** (2026-03-11)
-  - `tests/integration/conftest.py` — added CRM processor fixtures (`crm_processor`, `crm_processor_b31`), calculator fixtures (`sa_calculator`, `irb_calculator`, `slotting_calculator`)
-  - `tests/integration/test_classifier_to_crm.py` — 14 tests across 4 test classes: approach-specific CRM (5), provision handling (3), CCF conversion (3), approach split correctness (3)
-  - `tests/integration/test_crm_to_calculators.py` — 15 tests across 4 test classes: SA branch (4), IRB branch (5), slotting branch (3), split correctness (3)
-  - **Learnings**:
-    - IRB approach assignment requires `internal_pd` from the ratings table — counterparties without internal ratings fall back to SA regardless of IRBPermissions config
-    - To test AIRB vs FIRB: with `full_irb` config, counterparties with modelled `lgd` on loans get AIRB; without `lgd` they get FIRB
-    - `_bundle_with_ratings()` helper needed to inject ratings into frozen `RawDataBundle` (uses `dataclasses.replace` or manual reconstruction)
-    - CRM processor has two mid-pipeline `.collect().lazy()` barriers to prevent Polars optimizer segfaults from deep plan trees
-    - CRR IRB scaling factor is 1.06; Basel 3.1 is 1.0 — verified via `scaling_factor` column in IRB output
-
-- **Phase 3 — P3+P4 Loader→Hierarchy, Model Permissions, Output Floor** (2026-03-11)
-  - `tests/integration/conftest.py` — added `aggregator` fixture (OutputAggregator)
-  - `tests/integration/test_loader_to_hierarchy.py` — 8 tests across 3 test classes: schema conformance (3), data integrity (3), edge cases (2)
-  - `tests/integration/test_model_permissions_pipeline.py` — 12 tests across 3 test classes: basic model resolution (4), filtering (4), end-to-end with CRM (4)
-  - `tests/integration/test_output_floor_and_aggregation.py` — 15 tests across 3 test classes: output floor (5), summaries (5), error accumulation (5)
-  - **Bug fix**: `OutputAggregator._compute_el_portfolio_summary()` now falls back to `rwa` column when `rwa_post_factor` and `rwa_final` are missing — previously crashed when called with raw calculator output
-  - **Learnings**:
-    - Lending mappings use `parent_counterparty_reference`/`child_counterparty_reference` — parent is the group head, child is the member
-    - When model_permissions exist in the bundle, counterparties without a matching model_id fall to SA regardless of org-level IRB config
-    - `_compute_el_portfolio_summary()` receives raw calculator output (with `rwa` column), not pipeline-standardized output (with `rwa_final`) — fixed to handle all column name variants
-    - ParquetLoader requires explicit `DataSourceConfig` with file paths when testing — `DataSourceConfig.from_registry()` uses the DataSourceRegistry which needs standard file names
-
-- **Phase 4 — P5 Equity Flow** (2026-03-11)
-  - `tests/integration/conftest.py` — added `make_equity_exposure()` builder, `equity_exposures` parameter on `make_raw_data_bundle()`, `equity_calculator` fixture (EquityCalculator), imported `EQUITY_EXPOSURE_SCHEMA`
-  - `tests/integration/test_equity_flow.py` — 13 tests across 4 test classes: approach selection (3), risk weights (5), aggregation (3), pipeline pass-through (2)
-  - **Learnings**:
-    - `CRMAdjustedBundle` requires an `exposures` field in addition to `sa_exposures`/`irb_exposures` — use empty LazyFrame for direct calculator tests
-    - The aggregator's bundle-based method is `aggregate_with_audit()`, not `aggregate()` which takes raw LazyFrames
-    - CRM processor's bundle-based method is `get_crm_adjusted_bundle()`, not `apply_crm()` which returns `LazyFrameResult`
-    - Under Basel 3.1, IRB for equity is removed (CRE20.58-62) — all equity forced to SA regardless of IRB permissions
-    - Equity exposures pass through hierarchy, classifier, and CRM completely untouched — no CRM adjustments applied
-
----
-
-## Current State
-
-### Existing Test Coverage
-| Layer | Files | Tests | Coverage |
-|---|---|---|---|
-| Unit | ~35 files | ~1,509 | Individual functions/methods in isolation |
-| Acceptance | ~15 files | ~275 | Full pipeline with golden-file comparison |
-| Contract | ~5 files | ~123 | Schema conformance and protocol adherence |
-| Integration | 8 files | ~100 | Pre/post-CRM reporting + hierarchy→classifier + classifier→CRM + CRM→calculators + loader→hierarchy + model permissions + output floor & aggregation + equity flow |
-| Benchmark | ~1 file | ~27 | Performance regressions |
-
-### Gap Analysis
-Acceptance tests verify end-to-end correctness but cannot isolate which handoff broke when they fail. Unit tests mock adjacent stages. The missing layer is **stage-to-stage integration tests** that wire exactly two real components together and verify the data contract between them.
-
-### Pipeline Architecture (for reference)
-```
-RawDataBundle
-  → Loader
-    → HierarchyResolver         ← test_loader_to_hierarchy
-      → Classifier              ← test_hierarchy_to_classifier
-        → CRMProcessor          ← test_classifier_to_crm
-          → SA/IRB/Slotting     ← test_crm_to_calculators
-            → OutputAggregator  ← test_output_floor_and_aggregation
-```
-Plus cross-cutting: `test_model_permissions_pipeline`, `test_equity_flow`.
-
----
-
-## Shared Infrastructure
-
-### File: `tests/integration/conftest.py`
-
-Shared data builders, config factories, and component fixtures used by all integration test files.
-
-#### Config Factories
-```python
-@pytest.fixture
-def crr_config() -> CalculationConfig:
-    return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-
-@pytest.fixture
-def crr_firb_config() -> CalculationConfig:
-    return CalculationConfig.crr(
-        reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
-    )
-
-@pytest.fixture
-def crr_full_irb_config() -> CalculationConfig:
-    return CalculationConfig.crr(
-        reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
-    )
-
-@pytest.fixture
-def basel31_config() -> CalculationConfig:
-    return CalculationConfig.basel_3_1(reporting_date=date(2028, 1, 15))
-
-@pytest.fixture
-def basel31_full_irb_config() -> CalculationConfig:
-    return CalculationConfig.basel_3_1(
-        reporting_date=date(2028, 1, 15),
-        irb_permissions=IRBPermissions.full_irb(),
-    )
-```
-
-#### Data Builders
-Builder functions that create minimal valid data for each schema. Each builder returns a `pl.LazyFrame` with all required columns populated with sensible defaults, overridable via kwargs.
-
-```python
-def make_counterparty(**overrides) -> dict:
-    """Single counterparty row with defaults."""
-
-def make_loan(**overrides) -> dict:
-    """Single loan row with defaults."""
-
-def make_facility(**overrides) -> dict:
-    """Single facility row with defaults."""
-
-def make_contingent(**overrides) -> dict:
-    """Single contingent row with defaults."""
-
-def make_model_permission(**overrides) -> dict:
-    """Single model permission row with defaults."""
-
-def make_raw_data_bundle(
-    counterparties: list[dict] | None = None,
-    loans: list[dict] | None = None,
-    facilities: list[dict] | None = None,
-    contingents: list[dict] | None = None,
-    model_permissions: list[dict] | None = None,
-    ...
-) -> RawDataBundle:
-    """Build a RawDataBundle from row dicts, applying schema defaults."""
-```
-
-#### Component Fixtures
-```python
-@pytest.fixture
-def hierarchy_resolver() -> HierarchyResolver:
-    return HierarchyResolver()
-
-@pytest.fixture
-def classifier() -> Classifier:
-    return Classifier()
-
-@pytest.fixture
-def crm_processor() -> CRMProcessor:
-    return CRMProcessor()
-
-@pytest.fixture
-def sa_calculator() -> SACalculator:
-    return SACalculator()
-
-@pytest.fixture
-def irb_calculator() -> IRBCalculator:
-    return IRBCalculator()
-
-@pytest.fixture
-def slotting_calculator() -> SlottingCalculator:
-    return SlottingCalculator()
-
-@pytest.fixture
-def aggregator() -> OutputAggregator:
-    return OutputAggregator()
-```
-
----
-
-## Priority 1: Hierarchy → Classifier
-
-### File: `tests/integration/test_hierarchy_to_classifier.py`
-
-**Why P1**: This is where model_id propagation was just fixed. Validates that counterparty-level attributes (model_id, ratings, entity_type) flow correctly through hierarchy resolution into classification.
-
-**Components wired**: `HierarchyResolver` → `Classifier`
-
-#### Test Cases (~18 tests)
-
-**model_id propagation (5 tests)**
-1. `test_model_id_propagates_from_counterparty_to_loan` — counterparty has model_id, loan gets it after unification
-2. `test_model_id_propagates_from_counterparty_to_contingent` — same for contingent exposures
-3. `test_model_id_propagates_from_counterparty_to_facility_undrawn` — same for facility undrawn
-4. `test_null_model_id_when_counterparty_has_none` — counterparty without model_id → exposure gets null model_id
-5. `test_model_id_not_on_exposure_input` — model_id on loan schema is ignored (only counterparty model_id flows)
-
-**Rating inheritance → classification (5 tests)**
-6. `test_internal_pd_from_rating_inheritance_enables_irb` — counterparty with internal_pd → classifier assigns IRB
-7. `test_external_cqs_only_falls_to_sa` — counterparty with external rating but no internal PD → SA
-8. `test_parent_rating_inherited_when_own_missing` — child counterparty inherits parent's rating → classifier uses inherited rating
-9. `test_dual_rating_resolution_independent_chains` — internal and external ratings resolve independently through hierarchy
-10. `test_unrated_counterparty_gets_unrated_sa_weight` — no rating at all → SA with unrated weight
-
-**Entity type → exposure class (4 tests)**
-11. `test_corporate_entity_type_classifies_as_corporate` — entity_type="corporate" → ExposureClass.CORPORATE
-12. `test_institution_entity_type_classifies_as_institution` — entity_type="institution" → ExposureClass.INSTITUTION
-13. `test_sme_flag_from_annual_revenue` — counterparty annual_revenue < EUR 50m → CORPORATE_SME
-14. `test_retail_reclassification_from_managed_as_retail` — is_managed_as_retail + aggregated exposure < threshold → retail class
-
-**Column completeness (4 tests)**
-15. `test_hierarchy_output_has_all_columns_classifier_expects` — schema contract check
-16. `test_default_status_propagates_to_classifier` — defaulted counterparty → classifier marks as defaulted
-17. `test_apply_fi_scalar_propagates` — apply_fi_scalar flag flows through hierarchy to classifier
-18. `test_multiple_exposures_same_counterparty_get_same_classification` — consistency check
-
----
-
-## Priority 2: Classifier → CRM
-
-### File: `tests/integration/test_classifier_to_crm.py`
-
-**Why P2**: Classification determines approach, which controls CRM behaviour (different CCFs, LGD treatment for SA vs IRB).
-
-**Components wired**: `Classifier` → `CRMProcessor`
-
-#### Test Cases (~14 tests)
-
-**Approach-specific CRM (5 tests)**
-1. `test_sa_classified_exposure_gets_sa_ccf` — SA exposure → regulatory CCF applied
-2. `test_firb_classified_exposure_gets_supervisory_lgd` — FIRB → LGD set by seniority (45%/75%)
-3. `test_airb_classified_exposure_keeps_modelled_lgd` — AIRB → modelled LGD preserved
-4. `test_slotting_classified_exposure_passes_through_crm` — slotting → CRM preserves fields
-5. `test_mixed_approaches_in_single_portfolio` — portfolio with SA + IRB + slotting → each gets correct treatment
-
-**Provision handling (3 tests)**
-6. `test_sa_provisions_deducted_from_ead` — SA: provision_on_drawn subtracted before CCF
-7. `test_irb_provisions_not_deducted` — IRB: provision_deducted=0 (feeds EL shortfall instead)
-8. `test_provision_amounts_match_approach` — verify correct provision columns per approach
-
-**CCF conversion (3 tests)**
-9. `test_contingent_gets_ccf_from_risk_type` — off-balance sheet contingent → CCF by risk_type
-10. `test_facility_undrawn_gets_ccf` — facility undrawn amount → CCF applied
-11. `test_drawn_loan_has_no_ccf` — on-balance sheet drawn loan → no CCF conversion
-
-**Cross-approach guarantee (3 tests)**
-12. `test_irb_exposure_with_sa_guarantor_gets_sa_ccf_on_guaranteed_portion` — cross-approach CCF substitution
-13. `test_guaranteed_portion_uses_guarantor_risk_weight` — guarantee substitution effect
-14. `test_unguaranteed_portion_keeps_original_treatment` — remaining portion unaffected
-
----
-
-## Priority 2: CRM → Calculators
-
-### File: `tests/integration/test_crm_to_calculators.py`
-
-**Why P2**: CRM output drives all three calculator branches. Verifies the split-once architecture works correctly.
-
-**Components wired**: `CRMProcessor` → `SACalculator` / `IRBCalculator` / `SlottingCalculator`
-
-#### Test Cases (~15 tests)
-
-**SA branch (4 tests)**
-1. `test_sa_exposure_gets_risk_weight_from_cqs` — CQS-based risk weight lookup
-2. `test_sa_rwa_equals_ead_times_rw` — RWA = EAD × RW
-3. `test_sa_supporting_factor_applied_crr` — CRR: SME factor reduces RWA
-4. `test_sa_no_supporting_factor_basel31` — Basel 3.1: no supporting factor
-
-**IRB branch (5 tests)**
-5. `test_irb_firb_uses_supervisory_lgd` — FIRB: 45% LGD for senior unsecured
-6. `test_irb_airb_uses_modelled_lgd` — AIRB: LGD from input data
-7. `test_irb_pd_floor_applied` — PD floored at regulatory minimum
-8. `test_irb_expected_loss_calculated` — EL = PD × LGD × EAD
-9. `test_irb_scaling_factor_crr_only` — CRR: 1.06× scaling; Basel 3.1: 1.0×
-
-**Slotting branch (3 tests)**
-10. `test_slotting_category_determines_risk_weight` — Strong/Good/Satisfactory/Weak/Default → RW
-11. `test_slotting_hvcre_gets_higher_weights` — HVCRE flag → higher risk weights
-12. `test_slotting_maturity_adjustment_crr` — CRR: <2.5yr vs >=2.5yr weight difference
-
-**Split correctness (3 tests)**
-13. `test_all_exposures_assigned_to_exactly_one_branch` — no duplicates, no gaps
-14. `test_collect_all_parallel_results_match_sequential` — parallel vs sequential produce identical results
-15. `test_branch_results_combine_to_total_exposure_count` — SA + IRB + slotting = total
-
----
-
-## Priority 3: Loader → Hierarchy
-
-### File: `tests/integration/test_loader_to_hierarchy.py`
-
-**Why P3**: Validates that loaded data (parquet/CSV) produces correct hierarchy resolution. Lower priority because acceptance tests cover this path end-to-end.
-
-**Components wired**: `Loader` → `HierarchyResolver`
-
-#### Test Cases (~8 tests)
-
-**Schema conformance (3 tests)**
-1. `test_loaded_counterparties_have_all_hierarchy_columns` — loader output matches hierarchy input contract
-2. `test_loaded_facilities_have_mapping_columns` — facility_reference, counterparty_reference present
-3. `test_loaded_loans_have_counterparty_reference` — loan → counterparty linkage
-
-**Data integrity (3 tests)**
-4. `test_parent_child_mappings_resolve_hierarchy` — org_mappings → correct parent_reference
-5. `test_lending_group_totals_aggregated` — lending group EAD sums correctly
-6. `test_fx_conversion_applied_before_hierarchy` — multi-currency → base_currency conversion
-
-**Edge cases (2 tests)**
-7. `test_empty_optional_tables_produce_valid_bundle` — no contingents/collateral/guarantees → still valid
-8. `test_minimal_dataset_loads_and_resolves` — just counterparties + loans → valid hierarchy
-
----
-
-## Priority 4: Model Permissions Pipeline
-
-### File: `tests/integration/test_model_permissions_pipeline.py`
-
-**Why P4**: Cross-cutting feature spanning hierarchy → classifier → CRM → calculators. Validates end-to-end model permission resolution without full acceptance test overhead.
-
-**Components wired**: `HierarchyResolver` → `Classifier` → `CRMProcessor` (3 stages)
-
-#### Test Cases (~12 tests)
-
-**Basic model resolution (4 tests)**
-1. `test_model_airb_permission_routes_to_airb` — model with airb_permitted=True → AIRB approach
-2. `test_model_firb_permission_routes_to_firb` — model with firb_permitted=True, airb_permitted=False → FIRB
-3. `test_no_model_permission_falls_to_sa` — counterparty without model_id → SA fallback
-4. `test_model_permission_overrides_org_wide_irb` — org has FIRB, model has AIRB → exposure gets AIRB
-
-**Filtering (4 tests)**
-5. `test_model_permission_filters_by_exposure_class` — permission for corporate only → institution falls to SA
-6. `test_model_permission_filters_by_geography` — UK-only permission → non-UK falls to SA
-7. `test_model_permission_excludes_book_code` — excluded book_code → SA treatment
-8. `test_model_airb_requires_internal_pd` — AIRB permission but no internal_pd → falls to SA
-
-**End-to-end with CRM (4 tests)**
-9. `test_model_firb_exposure_gets_supervisory_lgd` — model permission → FIRB → CRM sets supervisory LGD
-10. `test_model_airb_exposure_keeps_modelled_lgd` — model permission → AIRB → CRM preserves LGD
-11. `test_mixed_model_and_org_permissions_in_portfolio` — some exposures model-permissioned, others org-permissioned
-12. `test_model_id_in_output_for_audit` — model_id present in CRM output for traceability
-
----
-
-## Priority 4: Output Floor & Aggregation
-
-### File: `tests/integration/test_output_floor_and_aggregation.py`
-
-**Why P4**: Output floor is Basel 3.1 only and involves SA-equivalent RWA calculation on all rows. Existing integration test covers CRM reporting but not floor mechanics.
-
-**Components wired**: `SACalculator` + `IRBCalculator` + `SlottingCalculator` → `OutputAggregator`
-
-#### Test Cases (~15 tests)
-
-**Output floor (5 tests)**
-1. `test_floor_not_applied_crr` — CRR: no output floor
-2. `test_floor_binding_when_irb_rwa_below_threshold` — IRB RWA < 72.5% × SA RWA → floor binds
-3. `test_floor_not_binding_when_irb_rwa_above_threshold` — IRB RWA ≥ 72.5% × SA RWA → no floor
-4. `test_transitional_floor_percentage_by_date` — 2027: 50%, 2028: 55%, ... 2032: 72.5%
-5. `test_floor_impact_tracked_in_result` — floor_impact field shows additional RWA from floor
-
-**Summaries (5 tests)**
-6. `test_summary_by_class_sums_correctly` — EAD/RWA by exposure class sum to totals
-7. `test_summary_by_approach_splits_sa_irb_slotting` — approach-level summary correct
-8. `test_combined_results_include_all_approaches` — concat of SA + IRB + slotting = total count
-9. `test_el_summary_computed_for_irb` — EL shortfall/excess and T2 credit cap
-10. `test_supporting_factor_impact_crr_only` — CRR: SME/infra factor impact reported
-
-**Error accumulation (5 tests)**
-11. `test_errors_from_all_stages_accumulated` — errors from SA + IRB collected in final result
-12. `test_warnings_do_not_prevent_success` — warnings present but success=True
-13. `test_critical_errors_mark_failure` — critical error → success=False
-14. `test_error_codes_preserved_through_aggregation` — DQ/CL/SA/IRB codes intact
-15. `test_empty_irb_bundle_produces_valid_result` — SA-only portfolio → no IRB bundle → valid aggregation
-
----
-
-## Priority 5: Equity Flow
-
-### File: `tests/integration/test_equity_flow.py`
-
-**Why P5**: Equity is a separate path outside the main unified frame. Lower priority because it's simpler and less interconnected.
-
-**Components wired**: `Classifier` → `EquityCalculator` → `OutputAggregator`
-
-#### Test Cases (~10 tests)
-
-**Approach selection (3 tests)**
-1. `test_equity_sa_approach_when_sa_only` — SA config → Article 133 weights
-2. `test_equity_irb_simple_when_irb_permitted` — IRB config → Article 155 weights
-3. `test_equity_approach_in_output` — approach field correctly set in result
-
-**Risk weights (4 tests)**
-4. `test_listed_equity_100_percent` — listed equity → 100% RW (Art. 133)
-5. `test_venture_capital_400_percent` — VC equity → 400% RW (Art. 133)
-6. `test_irb_simple_listed_190_percent` — listed equity IRB → 190% (Art. 155)
-7. `test_irb_simple_private_290_percent` — private equity IRB → 290% (Art. 155)
-
-**Aggregation (3 tests)**
-8. `test_equity_results_in_aggregated_output` — equity bundle merged into final result
-9. `test_equity_separate_from_unified_frame` — equity not in SA/IRB/slotting branches
-10. `test_equity_summary_by_approach` — equity has own row in approach summary
-
----
-
-## Implementation Sequence
-
-### Phase 1 — Infrastructure + P1 ✓ DONE
-1. `tests/integration/conftest.py` — shared builders, fixtures, config factories ✓
-2. `tests/integration/test_hierarchy_to_classifier.py` — 18 tests ✓
-
-### Phase 2 — P2 ✓ DONE
-3. `tests/integration/test_classifier_to_crm.py` — 14 tests ✓
-4. `tests/integration/test_crm_to_calculators.py` — 15 tests ✓
-
-### Phase 3 — P3+P4 ✓ DONE
-5. `tests/integration/test_loader_to_hierarchy.py` — 8 tests ✓
-6. `tests/integration/test_model_permissions_pipeline.py` — 12 tests ✓
-7. `tests/integration/test_output_floor_and_aggregation.py` — 15 tests ✓
-
-### Phase 4 — P5 ✓ DONE
-8. `tests/integration/test_equity_flow.py` — 13 tests ✓
-
----
-
-## Guiding Principles
-
-1. **No mocking adjacent stages** — Wire real components. The whole point is verifying the handoff.
-2. **Minimal data** — Each test creates the smallest dataset that exercises the behaviour. Use `make_*` builders.
-3. **One handoff per file** — Each file tests exactly one stage boundary (except model_permissions which is cross-cutting).
-4. **Don't duplicate acceptance tests** — Integration tests verify column contracts and data flow, not regulatory correctness. Leave golden-file assertions to acceptance tests.
-5. **LazyFrame boundaries** — Pass LazyFrames between stages (as the real pipeline does). Only `.collect()` in assertions.
-6. **AAA pattern** — Every test has clear Arrange / Act / Assert sections.
-7. **Descriptive test names** — `test_<what_happens>` format.
-
----
-
-## Known Risks
-
-- **Data builder complexity**: Building minimal valid `RawDataBundle` requires many columns with correct types. The `make_raw_data_bundle()` builder must handle schema defaults carefully.
-- **Hierarchy resolver test data**: Facility mappings need `child_type`/`node_type` handling (3-case pattern). Builders must support all variants.
-- **CRM processor state**: CRM has an internal collect barrier. Integration tests must account for materialisation points.
-- **Test runtime**: Wiring real components is slower than unit tests. Keep datasets small (~5-10 rows per test) to stay under 1s per test.
+# COREP Generator Gap Analysis: Current Implementation vs Actual Template Structures
+
+## Context
+
+After reviewing the actual COREP templates from the EBA/PRA reference documents against the current generator implementation, there are significant structural and content gaps. The documentation has been corrected; now the code needs to follow.
+
+## Gap Summary
+
+### 1. Fundamental Structural Issue: Template Orientation
+
+**Current**: The generator treats exposure class as a **row dimension** — it produces one DataFrame with one row per exposure class (e.g., corporate, institution, retail) plus a total row.
+
+**Actual**: Each COREP template is submitted **once per exposure class**. The exposure class is a filter/selector. Within each submission, rows are: totals, "of which" breakdowns, exposure type breakdown (on-BS/off-BS/CCR), risk weight breakdown, and memorandum items.
+
+**Impact**: The current output shape is fundamentally different from what a regulatory submission requires. The risk weight breakdown (currently a separate `c07_rw_breakdown` template) is actually **Section 3 within C 07.00**, not a separate template.
+
+### 2. Column Reference Numbering
+
+**Current `C07_COLUMNS`** uses refs: 010, 020, 030, 040, 050, 060, 070, 080, 090
+**Actual C 07.00** uses refs: 0010, 0030, 0040, 0050, 0060, 0070, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 0150, 0160, 0170, 0180, 0190, 0200, 0210, 0211, 0215, 0216, 0217, 0220, 0230, 0240
+
+The current column refs don't match any actual COREP column refs, and the column meanings are simplified/wrong:
+- Current "040: Funded CRM (collateral)" ≠ Actual 0040 "Exposure net of value adjustments"
+- Current "050: Unfunded CRM (guarantees)" ≠ Actual 0050 "(-) Guarantees"
+- Current "070: Exposure value post CCF" ≠ Actual 0070 "(-) Financial collateral: Simple method"
+
+**Current `C08_01_COLUMNS`** uses refs: 010, 020, 030, 040, 050, 060, 070, 080, 090, 100, 110
+**Actual C 08.01** uses refs: 0010, 0020, 0030, 0040, 0050, 0060, 0070, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 0150-0210, 0220, 0230, 0240, 0250, 0255, 0256, 0257, 0260, 0270, 0280, 0290, 0300, 0310
+
+### 3. Missing Columns — Populatable from Existing Pipeline Data
+
+These COREP columns can be populated using data the pipeline already produces:
+
+**C 07.00:**
+| COREP Col | Name | Pipeline Source |
+|-----------|------|-----------------|
+| 0010 | Original exposure | `drawn_amount + undrawn_amount` (already done, wrong ref) |
+| 0030 | (-) Provisions | `scra_provision_amount + gcra_provision_amount` (already done, wrong ref) |
+| 0040 | Net exposure | Derived: 0010 - 0030 (already done, wrong ref) |
+| 0050 | (-) Guarantees | `guaranteed_portion` (available, mapped as "050" currently) |
+| 0110 | Net after CRM substitution | Derivable from pre/post CRM columns |
+| 0150 | Fully adjusted exposure (E*) | `ead_final` (pre-CCF value not separately tracked — gap) |
+| 0200 | Exposure value | `ead_final` (mapped as "070" currently) |
+| 0215 | RWEA pre supporting factors | `rwa_pre_factor` or `rwa_before_floor` (available) |
+| 0216 | (-) SME supporting factor adj | `sme_supporting_factor` * RWA (available, not used) |
+| 0217 | (-) Infrastructure factor adj | `infra_supporting_factor` * RWA (available, not used) |
+| 0220 | RWEA after supporting factors | `rwa_final` (mapped as "080" currently) |
+| 0230 | Of which: with ECAI | Filter on `sa_cqs` (already done, wrong ref) |
+
+**Row sections populatable:**
+| Section | Pipeline Source |
+|---------|-----------------|
+| Total (row 0010) | Sum all |
+| Exposure types (0070/0080) | `exposure_type` = "loan" → on-BS, "contingent"/"facility" → off-BS |
+| Risk weight breakdown (0140-0280) | `risk_weight` column — pivot by band (currently separate template) |
+| CCF breakdown (0160-0190) | `ccf_applied` column — group by CCF bucket |
+
+**C 08.01:**
+| COREP Col | Name | Pipeline Source |
+|-----------|------|-----------------|
+| 0010 | PD assigned | `irb_pd_floored` (already done, wrong ref) |
+| 0020 | Original exposure | `drawn_amount + undrawn_amount` (already done) |
+| 0110 | Exposure value | `ead_final` (already done) |
+| 0180 | Eligible financial collateral | `collateral_adjusted_value` (available, not split by type) |
+| 0230 | Weighted avg LGD | `irb_lgd_floored` (already done) |
+| 0250 | Weighted avg maturity (days) | `irb_maturity_m` × 365 (currently in years, template wants days) |
+| 0255 | RWEA pre supporting factors | `rwa_pre_factor` (available, not used) |
+| 0256 | (-) SME factor adj | Derivable from supporting factor columns |
+| 0257 | (-) Infrastructure factor adj | Derivable |
+| 0260 | RWEA after supporting factors | `rwa_final` (already done) |
+| 0280 | Expected loss | `irb_expected_loss` (already done) |
+| 0290 | (-) Provisions | `provision_held` (already done) |
+| 0300 | Number of obligors | `counterparty_reference.n_unique()` (already done) |
+
+### 4. Missing Columns — NOT Available in Pipeline (Require New Features)
+
+These COREP columns require data the pipeline does not currently produce:
+
+**C 07.00:**
+| COREP Col | Name | What's Missing |
+|-----------|------|----------------|
+| 0060 | (-) Credit derivatives | CRM doesn't track credit derivatives separately |
+| 0070 | (-) Financial collateral: Simple method | Collateral not split by CRM method (simple vs comprehensive) |
+| 0080 | (-) Other funded credit protection | Not split from financial collateral |
+| 0090/0100 | CRM substitution out/inflows | Not tracked as separate flows |
+| 0120 | Volatility adjustment to exposure | FCCM intermediate values not preserved |
+| 0130/0140 | (-) Cvam / vol+mat adjustments | FCCM intermediate values not preserved |
+| 0210/0211 | Of which: CCR / CCR excl CCP | CCR module not implemented |
+
+**C 08.01:**
+| COREP Col | Name | What's Missing |
+|-----------|------|----------------|
+| 0030 | Of which: large financial sector entities | Entity classification not implemented |
+| 0050 | (-) Credit derivatives | Not tracked separately |
+| 0060 | (-) Other funded credit protection | Not split |
+| 0150-0210 | CRM in LGD estimates (detailed collateral) | Collateral not broken down by type in output |
+| 0220 | Double default treatment | Not implemented |
+| 0240 | Avg LGD for large financial entities | Entity classification not implemented |
+| 0310 | Pre-credit derivatives RWEA | Credit derivatives not tracked |
+
+**Basel 3.1 specific:**
+| COREP Col | Name | What's Missing |
+|-----------|------|----------------|
+| 0035 | On-balance sheet netting | Not tracked |
+| 0251-0254 | Post-model adjustments | Not implemented |
+| 0275-0276 | Output floor SA-equivalent | `sa_equivalent_rwa` exists but not wired to COREP |
+| 0281-0282 | Post-model EL adjustments | Not implemented |
+
+### 5. C 08.02 Structural Issue
+
+**Current**: Groups into 8 pre-defined PD bands (0%-0.15%, 0.15%-0.25%, etc.)
+**Actual**: Template has dynamic rows — one per firm-specific internal rating grade/pool, ordered by PD. No pre-defined bands.
+
+The current PD banding approach is a reasonable simplification for reporting purposes (firms may aggregate into bands), but doesn't match the actual template structure which expects individual obligor grades.
+
+### 6. Maturity Unit Mismatch
+
+**Current**: `irb_maturity_m` is in **years** and the generator uses it directly.
+**Actual**: COREP column 0250 requires "Exposure-weighted average maturity value (**days**)".
+
+## Recommended Approach
+
+### Phase 1: Structural Corrections (templates.py + generator.py)
+
+1. **Fix column references** to match actual COREP numbering (0010, 0030, 0040... not 010, 020, 030)
+2. **Restructure C 07.00 output** to be per-exposure-class with row sections:
+   - Section 1: Total row (0010) + "of which" breakdowns (0015, 0020, etc.)
+   - Section 2: Exposure type breakdown rows (0070 on-BS, 0080 off-BS)
+   - Section 3: Risk weight breakdown rows (0140-0280) — merge current `c07_rw_breakdown` into main template
+   - Section 5: Memorandum items (0290-0320)
+3. **Remove `c07_rw_breakdown`** as separate template — it becomes Section 3 of C 07.00
+4. **Fix C 08.01 maturity** to output in days (× 365)
+5. **Add framework-aware column sets** — CRR columns (with supporting factors) vs Basel 3.1 columns (with output floor)
+
+### Phase 2: Populate Available Columns
+
+1. **Add supporting factor columns** to C 07.00 and C 08.01 (0215-0217 / 0255-0257) for CRR
+2. **Add exposure type row breakdown** (on-BS/off-BS) using `exposure_type` column
+3. **Add CCF breakdown rows** (0160-0190) using `ccf_applied`
+4. **Add output floor columns** (0275-0276) for Basel 3.1 using existing `sa_equivalent_rwa`
+5. **Wire up pre/post CRM columns** for CRM substitution reporting
+
+### Phase 3: Future Pipeline Enhancements (Out of Scope Now)
+
+Document as backlog items:
+- Credit derivatives tracking in CRM
+- Financial collateral simple vs comprehensive method split
+- FCCM intermediate values (volatility adj, Cvam)
+- CRM substitution flow tracking (outflows/inflows)
+- Large financial sector entity classification
+- Double default treatment
+- Post-model adjustments (Basel 3.1)
+- CCR module integration
+
+## Key Files to Modify
+
+- `src/rwa_calc/reporting/corep/templates.py` — Fix column refs, add row section definitions, add framework-specific columns
+- `src/rwa_calc/reporting/corep/generator.py` — Restructure to per-exposure-class output with row sections
+- `src/rwa_calc/reporting/corep/__init__.py` — Update exports if bundle structure changes
+- `src/rwa_calc/contracts/bundles.py` — Update COREPTemplateBundle if structure changes
+- `tests/unit/test_corep.py` — Rewrite tests for new structure
+
+## Verification
+
+- Run existing tests: `uv run pytest tests/unit/test_corep.py -v`
+- Verify column refs match actual COREP numbering
+- Verify Excel export produces sheets matching actual template structure
+- Compare output against reference Excel templates in `docs/assets/`

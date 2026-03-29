@@ -38,6 +38,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 2F: LFSE sub-columns | **DONE** | Cols 0030/0140/0240/0270 populated from apply_fi_scalar. Weighted avg LGD for LFSE. Zero when no LFSE in class. |
 | 2G: "Of which" rows | **DONE** | C 07.00 rows 0015 (defaulted) and 0020 (SME) populated. C 08.01 cols 0125/0265 (defaulted EAD/RWEA) populated. |
 | 2H: CRM substitution flows | **DONE** | C 07.00 cols 0090/0100/0110. C 08.01 cols 0040/0070/0080/0090. Pre-computed per-class inflows; outflows from subset. |
+| 3D: On-BS netting | **DONE** | Col 0035 wired for B3.1 (C 07.00 + C 08.01). CRM processor tracks netting amounts. 7 new tests. |
 
 ---
 
@@ -572,6 +573,16 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 **Complexity**: Low. Input-driven column, straightforward waterfall insertion.
 
 **Verify**: `uv run pytest tests/unit/test_crm_processor.py tests/unit/test_corep.py -v`
+
+**Implementation notes (completed)**:
+- `on_bs_netting_amount` added to `CALCULATION_OUTPUT_SCHEMA` in schemas.py.
+- `_join_netting_amounts()` helper in CRM processor extracts per-exposure netting amounts from synthetic netting collateral (market_value aggregated by beneficiary_reference).
+- Both `get_crm_adjusted_bundle()` and `get_crm_unified_bundle()` now track netting amounts: joined from netting collateral when present, initialized to 0.0 when no netting applies.
+- COREP generator wires `on_bs_netting_amount` to col 0035 in both `_compute_c07_values()` and `_compute_c08_values()`.
+- Col 0035 correctly filtered out for CRR (not in CRR column refs). Present for Basel 3.1.
+- Col 0040 formula includes netting: `0010 - 0030 - 0035`.
+- 7 new tests in `TestOnBSNetting` class: B3.1 population, CRR absence, formula verification, zero-netting class, missing column handling.
+- Total: 187 COREP tests pass (3 Excel skipped), 1979 unit/contract/integration tests pass (3 pre-existing fixture failures).
 
 ---
 

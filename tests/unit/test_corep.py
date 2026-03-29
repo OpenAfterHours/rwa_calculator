@@ -2147,3 +2147,141 @@ class TestSubstitutionFlows:
 
         expected = v_0020 - v_0040 - v_0070 + v_0080
         assert v_0090 == pytest.approx(expected)
+
+
+# =============================================================================
+# Fixtures for on-BS netting (Task 3D)
+# =============================================================================
+
+
+def _sa_results_with_netting() -> pl.LazyFrame:
+    """SA results with on_bs_netting_amount for Task 3D testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_CORP_1", "SA_CORP_2", "SA_INST_1", "SA_RETAIL_1",
+            ],
+            "approach_applied": ["standardised"] * 4,
+            "exposure_class": ["corporate", "corporate", "institution", "retail_other"],
+            "drawn_amount": [1000.0, 2000.0, 3000.0, 500.0],
+            "undrawn_amount": [500.0, 0.0, 0.0, 100.0],
+            "ead_final": [1200.0, 2000.0, 3000.0, 550.0],
+            "rwa_final": [1200.0, 2000.0, 600.0, 412.5],
+            "risk_weight": [1.00, 1.00, 0.20, 0.75],
+            "scra_provision_amount": [10.0, 20.0, 0.0, 5.0],
+            "gcra_provision_amount": [5.0, 10.0, 15.0, 2.0],
+            "collateral_adjusted_value": [0.0, 0.0, 0.0, 0.0],
+            "guaranteed_portion": [0.0, 0.0, 0.0, 0.0],
+            "sa_cqs": [3, None, 2, None],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_D", "CP_E"],
+            # Netting amounts: CORP_1 has 150 netting, INST_1 has 200
+            "on_bs_netting_amount": [150.0, 0.0, 200.0, 0.0],
+        }
+    )
+
+
+def _irb_results_with_netting() -> pl.LazyFrame:
+    """IRB results with on_bs_netting_amount for Task 3D testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2", "IRB_INST_1"],
+            "approach_applied": ["foundation_irb", "foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate", "institution"],
+            "drawn_amount": [5000.0, 3000.0, 2000.0],
+            "undrawn_amount": [1000.0, 0.0, 0.0],
+            "ead_final": [5500.0, 3000.0, 2000.0],
+            "rwa_final": [3850.0, 1800.0, 600.0],
+            "risk_weight": [0.70, 0.60, 0.30],
+            "irb_pd_floored": [0.005, 0.01, 0.002],
+            "irb_lgd_floored": [0.45, 0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0, 1.5],
+            "irb_expected_loss": [12.375, 13.5, 1.8],
+            "irb_capital_k": [0.056, 0.048, 0.024],
+            "provision_held": [15.0, 10.0, 3.0],
+            "el_shortfall": [0.0, 3.5, 0.0],
+            "el_excess": [2.625, 0.0, 1.2],
+            "scra_provision_amount": [10.0, 5.0, 2.0],
+            "gcra_provision_amount": [5.0, 5.0, 1.0],
+            "counterparty_reference": ["CP_X", "CP_Y", "CP_W"],
+            # Netting amounts: CORP_1 has 300 netting
+            "on_bs_netting_amount": [300.0, 0.0, 0.0],
+        }
+    )
+
+
+class TestOnBSNetting:
+    """Task 3D: On-balance-sheet netting (COREP col 0035).
+
+    Why: Basel 3.1 introduces col 0035 to separately report on-BS netting
+    within the EAD waterfall: Original (0010) - Provisions (0030) - Netting
+    (0035) = Net exposure (0040). Without this, the netting benefit is
+    invisible in COREP reporting.
+    """
+
+    def test_c07_col_0035_populated_b31(self) -> None:
+        """Col 0035 shows summed on_bs_netting_amount for Basel 3.1."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_netting(), framework="BASEL_3_1"
+        )
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        # SA_CORP_1 has 150 netting, SA_CORP_2 has 0 → total 150
+        assert corp["0035"][0] == pytest.approx(150.0)
+
+    def test_c07_col_0035_absent_crr(self) -> None:
+        """Col 0035 doesn't exist under CRR (no on-BS netting column)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_netting(), framework="CRR"
+        )
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        assert "0035" not in corp.columns
+
+    def test_c07_col_0040_includes_netting_b31(self) -> None:
+        """Col 0040 = 0010 - 0030 - 0035 (netting deducted from net exposure)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_netting(), framework="BASEL_3_1"
+        )
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        v_0010 = corp["0010"][0]
+        v_0030 = corp["0030"][0]
+        v_0035 = corp["0035"][0]
+        v_0040 = corp["0040"][0]
+        assert v_0040 == pytest.approx(v_0010 - v_0030 - v_0035)
+
+    def test_c07_zero_netting_class(self) -> None:
+        """Class with no netting exposures reports 0 for col 0035."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_netting(), framework="BASEL_3_1"
+        )
+        retail = _get_total_row(bundle.c07_00["retail_other"])
+        assert retail["0035"][0] == pytest.approx(0.0)
+
+    def test_c08_col_0035_populated_b31(self) -> None:
+        """C 08.01 col 0035 shows summed on_bs_netting_amount for Basel 3.1."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_netting(), framework="BASEL_3_1"
+        )
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        # IRB_CORP_1 has 300 netting, IRB_CORP_2 has 0 → total 300
+        assert corp["0035"][0] == pytest.approx(300.0)
+
+    def test_c08_col_0035_absent_crr(self) -> None:
+        """C 08.01 col 0035 doesn't exist under CRR."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_netting(), framework="CRR"
+        )
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        assert "0035" not in corp.columns
+
+    def test_c07_netting_without_column(self) -> None:
+        """Without on_bs_netting_amount in data, col 0035 is None."""
+        gen = COREPGenerator()
+        # _sa_results() does not have on_bs_netting_amount
+        bundle = gen.generate_from_lazyframe(_sa_results(), framework="BASEL_3_1")
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        assert corp["0035"][0] is None

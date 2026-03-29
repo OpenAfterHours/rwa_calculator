@@ -847,6 +847,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "fx_haircut_applied": pl.Float64,  # FX mismatch haircut (8% or 0%)
     "maturity_mismatch_adjustment": pl.Float64,  # Adjustment for maturity mismatch
     "collateral_adjusted_value": pl.Float64,  # Net collateral value after haircuts
+    "on_bs_netting_amount": pl.Float64,  # On-balance sheet netting benefit (CRR Art. 195)
     # -------------------------------------------------------------------------
     # CRM - GUARANTEE IMPACT (Substitution approach)
     # -------------------------------------------------------------------------

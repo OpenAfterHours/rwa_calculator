@@ -840,8 +840,8 @@ def _compute_c07_values(
         data, cols, "scra_provision_amount", "gcra_provision_amount"
     )
 
-    # 0035: (-) On-balance sheet netting (B3.1 only) — Phase 3D
-    values["0035"] = None
+    # 0035: (-) On-balance sheet netting (B3.1 col 0035, CRR Art. 195)
+    values["0035"] = _col_sum_eager(data, cols, "on_bs_netting_amount")
 
     # 0040: Exposure net of value adjustments (and netting for B3.1)
     v_0010 = values["0010"] or 0.0
@@ -1030,8 +1030,8 @@ def _compute_c08_values(
     else:
         values["0030"] = 0.0 if "apply_fi_scalar" in cols else None
 
-    # 0035: (-) On-BS netting (B3.1 only) — Phase 3D
-    values["0035"] = None
+    # 0035: (-) On-BS netting (B3.1 col 0035, CRR Art. 195)
+    values["0035"] = _col_sum_eager(data, cols, "on_bs_netting_amount")
 
     # --- CRM Substitution ---
     # 0040: (-) Guarantees

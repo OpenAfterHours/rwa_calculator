@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Docs**: Remove completed development roadmap (`docs/plans/roadmap.md`) to reduce maintenance burden
+
 ### Changed
 - **CI**: Add version consistency validation step to publish workflow
 - **CI**: Add step to generate test fixtures in CI pipeline

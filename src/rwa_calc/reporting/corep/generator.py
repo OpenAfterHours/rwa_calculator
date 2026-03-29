@@ -408,9 +408,25 @@ class COREPGenerator:
         for row_def in row_sections[3].rows:
             rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Section 5: Memorandum Items — Phase 2+ features, null for now
+        # Section 5: Memorandum Items
         for row_def in row_sections[4].rows:
-            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            if row_def.ref in _EQUITY_TRANSITIONAL_FILTERS:
+                eq_filter = _EQUITY_TRANSITIONAL_FILTERS[row_def.ref]
+                subset = _filter_equity_transitional(
+                    class_data, cols, **eq_filter
+                )
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            else:
+                # Other memorandum rows (0300, 0320, 0380) — not yet implemented
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         schema: dict[str, pl.DataType] = {
             "row_ref": pl.String,
@@ -684,6 +700,17 @@ _RE_ROW_FILTERS: dict[str, dict[str, object]] = {
 # regulatory_re_category field is added to distinguish regulatory vs other RE.
 
 # =============================================================================
+# EQUITY TRANSITIONAL ROW CONFIGURATION (Basel 3.1 OF 07.00 rows 0371-0374)
+# =============================================================================
+
+_EQUITY_TRANSITIONAL_FILTERS: dict[str, dict[str, object]] = {
+    "0371": {"approach": "sa_transitional", "higher_risk": True},
+    "0372": {"approach": "sa_transitional", "higher_risk": False},
+    "0373": {"approach": "irb_transitional", "higher_risk": True},
+    "0374": {"approach": "irb_transitional", "higher_risk": False},
+}
+
+# =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
 
@@ -772,6 +799,32 @@ def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     if "exposure_type" in cols:
         return data.filter(pl.col("exposure_type").is_in(["facility", "contingent"]))
     return data.clear()
+
+
+def _filter_equity_transitional(
+    data: pl.DataFrame,
+    cols: set[str],
+    *,
+    approach: str,
+    higher_risk: bool,
+) -> pl.DataFrame:
+    """Filter to equity exposures under a transitional approach.
+
+    Args:
+        approach: "sa_transitional" or "irb_transitional"
+        higher_risk: True for 400%+ RW (speculative/venture capital)
+    """
+    if "equity_transitional_approach" not in cols:
+        return data.clear()
+
+    result = data.filter(pl.col("equity_transitional_approach") == approach)
+
+    if "equity_higher_risk" in cols:
+        result = result.filter(pl.col("equity_higher_risk") == higher_risk)
+    elif higher_risk:
+        return data.clear()
+
+    return result
 
 
 def _filter_sl_type(

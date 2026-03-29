@@ -2611,3 +2611,114 @@ class TestRealEstateRows:
         not_dep = re_res.filter(pl.col("row_ref") == "0331")["0200"][0]
         dep = re_res.filter(pl.col("row_ref") == "0332")["0200"][0]
         assert total == pytest.approx(not_dep + dep)
+
+
+# =============================================================================
+# Fixtures for equity transitional rows (Task 3I)
+# =============================================================================
+
+
+def _sa_results_with_equity_transitional() -> pl.LazyFrame:
+    """SA results with equity transitional columns for Task 3I testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_EQ_HR_1", "SA_EQ_OTHER_1", "SA_IRB_HR_1",
+                "SA_IRB_OTHER_1", "SA_CORP_1",
+            ],
+            "approach_applied": ["standardised"] * 5,
+            "exposure_class": ["equity"] * 4 + ["corporate"],
+            "drawn_amount": [100.0, 200.0, 150.0, 300.0, 1000.0],
+            "undrawn_amount": [0.0] * 5,
+            "ead_final": [100.0, 200.0, 150.0, 300.0, 1000.0],
+            "rwa_final": [400.0, 500.0, 600.0, 750.0, 1000.0],
+            "risk_weight": [4.00, 2.50, 4.00, 2.50, 1.00],
+            "scra_provision_amount": [0.0] * 5,
+            "gcra_provision_amount": [0.0] * 5,
+            "collateral_adjusted_value": [0.0] * 5,
+            "guaranteed_portion": [0.0] * 5,
+            "sa_cqs": [None] * 5,
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
+            "equity_transitional_approach": [
+                "sa_transitional", "sa_transitional",
+                "irb_transitional", "irb_transitional", None,
+            ],
+            "equity_higher_risk": [True, False, True, False, None],
+        }
+    )
+
+
+class TestEquityTransitionalRows:
+    """Task 3I: Equity transitional provisions (B3.1 OF 07.00 rows 0371-0374).
+
+    Why: Basel 3.1 removes equity IRB treatment and transitions all equity to
+    SA. Rows 0371-0374 report the transitional equity exposures split by
+    approach (SA/IRB transitional) and risk level (higher risk vs other).
+    """
+
+    def test_sa_higher_risk_row(self) -> None:
+        """Row 0371: SA transitional, higher risk."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_equity_transitional(), framework="BASEL_3_1"
+        )
+        eq = bundle.c07_00["equity"]
+        row = eq.filter(pl.col("row_ref") == "0371")
+        assert len(row) == 1
+        assert row["0200"][0] == pytest.approx(100.0)
+
+    def test_sa_other_equity_row(self) -> None:
+        """Row 0372: SA transitional, other equity."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_equity_transitional(), framework="BASEL_3_1"
+        )
+        eq = bundle.c07_00["equity"]
+        row = eq.filter(pl.col("row_ref") == "0372")
+        assert len(row) == 1
+        assert row["0200"][0] == pytest.approx(200.0)
+
+    def test_irb_higher_risk_row(self) -> None:
+        """Row 0373: IRB transitional, higher risk."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_equity_transitional(), framework="BASEL_3_1"
+        )
+        eq = bundle.c07_00["equity"]
+        row = eq.filter(pl.col("row_ref") == "0373")
+        assert len(row) == 1
+        assert row["0200"][0] == pytest.approx(150.0)
+
+    def test_irb_other_equity_row(self) -> None:
+        """Row 0374: IRB transitional, other equity."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_equity_transitional(), framework="BASEL_3_1"
+        )
+        eq = bundle.c07_00["equity"]
+        row = eq.filter(pl.col("row_ref") == "0374")
+        assert len(row) == 1
+        assert row["0200"][0] == pytest.approx(300.0)
+
+    def test_equity_rows_absent_crr(self) -> None:
+        """Equity transitional rows don't exist under CRR."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_equity_transitional(), framework="CRR"
+        )
+        eq = bundle.c07_00.get("equity")
+        if eq is not None:
+            eq_rows = eq.filter(
+                pl.col("row_ref").is_in(["0371", "0372", "0373", "0374"])
+            )
+            assert len(eq_rows) == 0
+
+    def test_equity_rows_null_without_column(self) -> None:
+        """Without equity_transitional_approach, equity rows are null."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results(), framework="BASEL_3_1")
+        corp = bundle.c07_00.get("corporate")
+        if corp is not None:
+            row = corp.filter(pl.col("row_ref") == "0371")
+            if len(row) > 0:
+                assert row["0200"][0] is None

@@ -232,12 +232,16 @@ class COREPGenerator:
 
         data_cols = set(sa_df.columns)
         classes = sa_df[ec_col].unique().sort().to_list()
-        result: dict[str, pl.DataFrame] = {}
 
+        # Pre-compute CRM substitution flows (inflows require full dataset)
+        sub_flows = _compute_substitution_flows(sa_df, data_cols, ec_col)
+
+        result: dict[str, pl.DataFrame] = {}
         for ec in classes:
             class_df = sa_df.filter(pl.col(ec_col) == ec)
+            inflow = sub_flows.get(ec, {}).get("inflow", 0.0)
             template_df = self._generate_c07_for_class(
-                class_df, data_cols, ead_col, rwa_col, framework
+                class_df, data_cols, ead_col, rwa_col, framework, inflow
             )
             result[ec] = template_df
 
@@ -250,6 +254,7 @@ class COREPGenerator:
         ead_col: str,
         rwa_col: str,
         framework: str,
+        substitution_inflow: float = 0.0,
     ) -> pl.DataFrame:
         """Generate a C 07.00 DataFrame for a single SA exposure class.
 
@@ -270,9 +275,10 @@ class COREPGenerator:
         # Section 1: Total Exposures
         for row_def in row_sections[0].rows:
             if row_def.ref == "0010":
-                # Row 0010: aggregate ALL class data
+                # Row 0010: aggregate ALL class data (with class-level inflows)
                 values = _compute_c07_values(
-                    class_data, cols, ead_col, rwa_col, column_refs
+                    class_data, cols, ead_col, rwa_col, column_refs,
+                    substitution_inflow=substitution_inflow,
                 )
                 rows.append(
                     {"row_ref": row_def.ref, "row_name": row_def.name, **values}
@@ -393,12 +399,16 @@ class COREPGenerator:
 
         data_cols = set(irb_df.columns)
         classes = irb_df[ec_col].unique().sort().to_list()
-        result: dict[str, pl.DataFrame] = {}
 
+        # Pre-compute CRM substitution flows (inflows require full dataset)
+        sub_flows = _compute_substitution_flows(irb_df, data_cols, ec_col)
+
+        result: dict[str, pl.DataFrame] = {}
         for ec in classes:
             class_df = irb_df.filter(pl.col(ec_col) == ec)
+            inflow = sub_flows.get(ec, {}).get("inflow", 0.0)
             template_df = self._generate_c08_01_for_class(
-                class_df, data_cols, ead_col, rwa_col, framework
+                class_df, data_cols, ead_col, rwa_col, framework, inflow
             )
             result[ec] = template_df
 
@@ -411,6 +421,7 @@ class COREPGenerator:
         ead_col: str,
         rwa_col: str,
         framework: str,
+        substitution_inflow: float = 0.0,
     ) -> pl.DataFrame:
         """Generate a C 08.01 DataFrame for a single IRB exposure class.
 
@@ -429,7 +440,8 @@ class COREPGenerator:
         for row_def in row_sections[0].rows:
             if row_def.ref == "0010":
                 values = _compute_c08_values(
-                    class_data, cols, ead_col, rwa_col, column_refs
+                    class_data, cols, ead_col, rwa_col, column_refs,
+                    substitution_inflow=substitution_inflow,
                 )
                 rows.append(
                     {"row_ref": row_def.ref, "row_name": row_def.name, **values}
@@ -719,17 +731,99 @@ def _col_sum_eager(
     return float(data[col_name].fill_null(0.0).sum())
 
 
+def _compute_substitution_flows(
+    full_df: pl.DataFrame,
+    cols: set[str],
+    ec_col: str,
+) -> dict[str, dict[str, float]]:
+    """Pre-compute CRM substitution outflows and inflows per exposure class.
+
+    Outflow from class X: sum of guaranteed_portion where exposure_class == X
+    but post_crm_exposure_class_guaranteed != X (leaving this class).
+
+    Inflow to class X: sum of guaranteed_portion where
+    post_crm_exposure_class_guaranteed == X but exposure_class != X
+    (arriving from other classes).
+
+    Returns dict mapping class name to {"outflow": float, "inflow": float}.
+    """
+    pre_col = _pick(cols, "pre_crm_exposure_class")
+    post_col = _pick(cols, "post_crm_exposure_class_guaranteed")
+    gp_col = _pick(cols, "guaranteed_portion")
+
+    if pre_col is None or post_col is None or gp_col is None:
+        return {}
+
+    # Only consider rows where substitution actually occurs
+    migrated = full_df.filter(
+        (pl.col(gp_col) > 0) & (pl.col(pre_col) != pl.col(post_col))
+    )
+    if len(migrated) == 0:
+        return {}
+
+    result: dict[str, dict[str, float]] = {}
+
+    # Outflows: grouped by pre_crm class (exposure leaving)
+    outflows = migrated.group_by(pre_col).agg(
+        pl.col(gp_col).sum().alias("outflow")
+    )
+    for row in outflows.iter_rows(named=True):
+        ec = row[pre_col]
+        result.setdefault(ec, {"outflow": 0.0, "inflow": 0.0})
+        result[ec]["outflow"] = float(row["outflow"])
+
+    # Inflows: grouped by post_crm class (exposure arriving)
+    inflows = migrated.group_by(post_col).agg(
+        pl.col(gp_col).sum().alias("inflow")
+    )
+    for row in inflows.iter_rows(named=True):
+        ec = row[post_col]
+        result.setdefault(ec, {"outflow": 0.0, "inflow": 0.0})
+        result[ec]["inflow"] = float(row["inflow"])
+
+    return result
+
+
+def _compute_substitution_outflow(data: pl.DataFrame, cols: set[str]) -> float:
+    """Compute substitution outflow from a data subset.
+
+    Returns the sum of guaranteed_portion for rows where the guaranteed
+    portion migrates to a different exposure class (pre != post).
+    """
+    pre_col = _pick(cols, "pre_crm_exposure_class")
+    post_col = _pick(cols, "post_crm_exposure_class_guaranteed")
+    gp_col = _pick(cols, "guaranteed_portion")
+
+    if pre_col is None or post_col is None or gp_col is None:
+        return 0.0
+
+    migrated = data.filter(
+        (pl.col(gp_col) > 0) & (pl.col(pre_col) != pl.col(post_col))
+    )
+    if len(migrated) == 0:
+        return 0.0
+
+    return float(migrated[gp_col].fill_null(0.0).sum())
+
+
 def _compute_c07_values(
     data: pl.DataFrame,
     cols: set[str],
     ead_col: str,
     rwa_col: str,
     column_refs: list[str],
+    *,
+    substitution_inflow: float = 0.0,
 ) -> dict[str, float | None]:
     """Compute C 07.00 column values from a data subset.
 
     Maps pipeline columns to 4-digit COREP column refs. Columns without
     a pipeline source are set to None (to be populated in Phase 2/3).
+
+    Args:
+        substitution_inflow: Pre-computed inflow of guaranteed_portion from
+            other exposure classes into this class. Only meaningful for the
+            total row (0010); sub-rows pass 0.
     """
     if len(data) == 0:
         return {ref: None for ref in column_refs}
@@ -770,15 +864,23 @@ def _compute_c07_values(
     values["0080"] = None
 
     # --- CRM Substitution flows ---
-    # 0090: (-) Substitution outflows — Phase 2H/3C
-    values["0090"] = None
+    # 0090: (-) Substitution outflows — guaranteed portion leaving this class
+    values["0090"] = _compute_substitution_outflow(data, cols)
 
-    # 0100: Substitution inflows — Phase 2H/3C
-    values["0100"] = None
+    # 0100: Substitution inflows — guaranteed portion arriving from other classes
+    values["0100"] = substitution_inflow if substitution_inflow else 0.0
 
     # --- Post-CRM ---
     # 0110: Net exposure after CRM substitution pre CCFs
-    values["0110"] = None  # Depends on substitution flows
+    # Formula: 0040 - 0050 - 0060 - 0070 - 0080 - 0090 + 0100
+    v_0040 = values.get("0040") or 0.0
+    v_0050 = values.get("0050") or 0.0
+    v_0060 = values.get("0060") or 0.0  # Credit derivatives — Phase 3B
+    v_0070 = values.get("0070") or 0.0  # Fin collateral simple — Phase 3A
+    v_0080 = values.get("0080") or 0.0  # Other funded protection — Phase 3A
+    v_0090 = values.get("0090") or 0.0
+    v_0100 = values.get("0100") or 0.0
+    values["0110"] = v_0040 - v_0050 - v_0060 - v_0070 - v_0080 - v_0090 + v_0100
 
     # --- Financial Collateral Comprehensive ---
     # 0120: Volatility adjustment to exposure — Phase 3A
@@ -886,12 +988,19 @@ def _compute_c08_values(
     ead_col: str,
     rwa_col: str,
     column_refs: list[str],
+    *,
+    substitution_inflow: float = 0.0,
 ) -> dict[str, float | None]:
     """Compute C 08.01/08.02 column values from a data subset.
 
     Maps pipeline columns to 4-digit COREP column refs. Weighted averages
     are computed for PD, LGD, and maturity. Maturity is converted from
     years to days (COREP col 0250 requires days).
+
+    Args:
+        substitution_inflow: Pre-computed inflow of guaranteed_portion from
+            other exposure classes into this class. Only meaningful for the
+            total row (0010); sub-rows pass 0.
     """
     if len(data) == 0:
         return {ref: None for ref in column_refs}
@@ -924,13 +1033,41 @@ def _compute_c08_values(
     # 0035: (-) On-BS netting (B3.1 only) — Phase 3D
     values["0035"] = None
 
-    # --- CRM Substitution (0040-0080) --- not wired yet
-    for ref in ("0040", "0050", "0060", "0070", "0080"):
-        values[ref] = None
+    # --- CRM Substitution ---
+    # 0040: (-) Guarantees
+    values["0040"] = _col_sum_eager(data, cols, "guaranteed_portion")
+
+    # 0050: (-) Credit derivatives — Phase 3B
+    values["0050"] = None
+
+    # 0060: (-) Other funded credit protection — Phase 3A
+    values["0060"] = None
+
+    # 0070: (-) Substitution outflows — guaranteed portion leaving this class
+    values["0070"] = _compute_substitution_outflow(data, cols)
+
+    # 0080: Substitution inflows — guaranteed portion arriving from other classes
+    values["0080"] = substitution_inflow if substitution_inflow else 0.0
 
     # --- Post-CRM ---
-    values["0090"] = None  # Exposure after CRM substitution pre CCFs
-    values["0100"] = None  # Of which: off balance sheet
+    # 0090: Exposure after CRM substitution pre CCFs
+    # Formula: 0020 - 0040 - 0050 - 0060 - 0070 + 0080
+    v_c08_0020 = values.get("0020") or 0.0
+    v_c08_0040 = values.get("0040") or 0.0
+    v_c08_0050 = values.get("0050") or 0.0
+    v_c08_0060 = values.get("0060") or 0.0
+    v_c08_0070 = values.get("0070") or 0.0
+    v_c08_0080 = values.get("0080") or 0.0
+    values["0090"] = (
+        v_c08_0020 - v_c08_0040 - v_c08_0050 - v_c08_0060 - v_c08_0070 + v_c08_0080
+    )
+
+    # 0100: Of which: off balance sheet
+    off_bs = _filter_off_bs(data, cols)
+    if len(off_bs) > 0:
+        values["0100"] = _col_sum_eager(off_bs, set(off_bs.columns), ead_col)
+    else:
+        values["0100"] = 0.0
 
     # --- Slotting FCCM (B3.1 only, 0101-0104) --- Phase 3A
     for ref in ("0101", "0102", "0103", "0104"):

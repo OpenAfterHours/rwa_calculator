@@ -37,6 +37,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 2E: ECAI unrated split | **DONE** | Col 0235 (unrated RWEA) already computed in Phase 1; verified with tests. Rated + unrated = total. |
 | 2F: LFSE sub-columns | **DONE** | Cols 0030/0140/0240/0270 populated from apply_fi_scalar. Weighted avg LGD for LFSE. Zero when no LFSE in class. |
 | 2G: "Of which" rows | **DONE** | C 07.00 rows 0015 (defaulted) and 0020 (SME) populated. C 08.01 cols 0125/0265 (defaulted EAD/RWEA) populated. |
+| 2H: CRM substitution flows | **DONE** | C 07.00 cols 0090/0100/0110. C 08.01 cols 0040/0070/0080/0090. Pre-computed per-class inflows; outflows from subset. |
 
 ---
 
@@ -444,6 +445,19 @@ Each Phase 2 task is independent and can run in any order or in parallel. Each a
 - 0110: col 0040 - col 0090 + col 0100
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "substitution"`
+
+**Implementation notes (completed)**:
+- `_compute_substitution_flows()` helper pre-computes per-class outflows and inflows from the full collected DataFrame before per-class generation.
+- Outflows: sum of `guaranteed_portion` where `pre_crm_exposure_class == class` and `post_crm_exposure_class_guaranteed != class`.
+- Inflows: sum of `guaranteed_portion` where `post_crm_exposure_class_guaranteed == class` and `pre_crm_exposure_class != class`.
+- `_compute_substitution_outflow()` computes outflow from any data subset (works for total row, sub-rows).
+- Inflows pre-computed at class level, passed to total row only (sub-rows get 0 — full breakdown deferred to Task 3C).
+- C 07.00 col 0110 formula: `0040 - 0050 - 0060 - 0070 - 0080 - 0090 + 0100` (Phase 3 cols default to 0).
+- C 08.01 col 0040 (guarantees) now wired to `guaranteed_portion.sum()`.
+- C 08.01 col 0090 formula: `0020 - 0040 - 0050 - 0060 - 0070 + 0080`.
+- C 08.01 col 0100 (of which: off balance sheet) now wired to off-BS EAD sum.
+- 9 new tests in `TestSubstitutionFlows` class.
+- Total: 180 COREP tests pass (3 Excel skipped), 1870 unit/contract tests pass (3 pre-existing fixture failures).
 
 ---
 

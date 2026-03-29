@@ -852,6 +852,12 @@ CALCULATION_OUTPUT_SCHEMA = {
     "maturity_mismatch_adjustment": pl.Float64,  # Adjustment for maturity mismatch
     "collateral_adjusted_value": pl.Float64,  # Net collateral value after haircuts
     "on_bs_netting_amount": pl.Float64,  # On-balance sheet netting benefit (CRR Art. 195)
+    # Per-type collateral tracking for COREP C 08.01 (cols 0170-0210)
+    "collateral_financial_value": pl.Float64,  # Eligible financial collateral adj value
+    "collateral_re_value": pl.Float64,  # Real estate collateral adj value
+    "collateral_receivables_value": pl.Float64,  # Receivables collateral adj value
+    "collateral_other_physical_value": pl.Float64,  # Other physical collateral adj value
+    "collateral_cash_value": pl.Float64,  # Cash/deposit collateral adj value (subset of financial)
     # -------------------------------------------------------------------------
     # CRM - GUARANTEE IMPACT (Substitution approach)
     # -------------------------------------------------------------------------

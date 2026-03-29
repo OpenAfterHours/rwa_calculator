@@ -2722,3 +2722,190 @@ class TestEquityTransitionalRows:
             row = corp.filter(pl.col("row_ref") == "0371")
             if len(row) > 0:
                 assert row["0200"][0] is None
+
+
+# =============================================================================
+# COLLATERAL METHOD SPLIT — Task 3A
+# =============================================================================
+
+
+def _sa_results_with_collateral_split() -> pl.LazyFrame:
+    """SA results with per-type collateral columns for collateral method split tests."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SA_CORP_1", "SA_CORP_2", "SA_INST_1"],
+            "approach_applied": ["standardised"] * 3,
+            "exposure_class": ["corporate", "corporate", "institution"],
+            "drawn_amount": [1000.0, 2000.0, 3000.0],
+            "undrawn_amount": [0.0, 0.0, 0.0],
+            "ead_final": [1000.0, 2000.0, 3000.0],
+            "rwa_final": [1000.0, 2000.0, 600.0],
+            "risk_weight": [1.0, 1.0, 0.2],
+            "scra_provision_amount": [10.0, 20.0, 0.0],
+            "gcra_provision_amount": [5.0, 10.0, 15.0],
+            "sa_cqs": [3, 0, 2],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_D"],
+            # Collateral columns
+            "collateral_adjusted_value": [150.0, 0.0, 200.0],
+            "collateral_market_value": [180.0, 0.0, 250.0],
+            "collateral_financial_value": [100.0, 0.0, 200.0],
+            "collateral_cash_value": [50.0, 0.0, 100.0],
+            "collateral_re_value": [30.0, 0.0, 0.0],
+            "collateral_receivables_value": [10.0, 0.0, 0.0],
+            "collateral_other_physical_value": [10.0, 0.0, 0.0],
+            "guaranteed_portion": [0.0, 500.0, 0.0],
+        }
+    )
+
+
+def _irb_results_with_collateral_split() -> pl.LazyFrame:
+    """IRB results with per-type collateral columns for collateral method split tests."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "drawn_amount": [5000.0, 3000.0],
+            "undrawn_amount": [1000.0, 0.0],
+            "ead_final": [5500.0, 3000.0],
+            "rwa_final": [3850.0, 1800.0],
+            "risk_weight": [0.70, 0.60],
+            "irb_pd_floored": [0.005, 0.01],
+            "irb_lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0],
+            "irb_expected_loss": [12.375, 13.5],
+            "irb_capital_k": [0.056, 0.048],
+            "provision_held": [15.0, 10.0],
+            "el_shortfall": [0.0, 3.5],
+            "el_excess": [2.625, 0.0],
+            "scra_provision_amount": [10.0, 5.0],
+            "gcra_provision_amount": [5.0, 5.0],
+            "counterparty_reference": ["CP_X", "CP_Y"],
+            # Collateral columns
+            "collateral_financial_value": [200.0, 0.0],
+            "collateral_cash_value": [80.0, 0.0],
+            "collateral_re_value": [150.0, 100.0],
+            "collateral_receivables_value": [50.0, 0.0],
+            "collateral_other_physical_value": [30.0, 20.0],
+            "guaranteed_portion": [0.0, 500.0],
+        }
+    )
+
+
+class TestCollateralMethodSplit:
+    """Tests for Task 3A: collateral method split for COREP reporting."""
+
+    def test_c07_comprehensive_method_columns(self) -> None:
+        """C 07.00 cols 0070=0.0, 0080 populated, 0120=0.0 for SA with collateral."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+
+        # 0070: Simple method not used → 0.0
+        assert total["0070"][0] == pytest.approx(0.0)
+        # 0080: Other funded = RE + receivables + other_physical = 30+10+10 = 50
+        assert total["0080"][0] == pytest.approx(50.0)
+        # 0120: He = 0 for loans
+        assert total["0120"][0] == pytest.approx(0.0)
+
+    def test_c07_vol_mat_adjustment(self) -> None:
+        """C 07.00 col 0140 = market_value - adjusted_value."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+
+        # Corporate: market_value=180, adjusted_value=150 → vol/mat adj = 30
+        assert total["0140"][0] == pytest.approx(30.0)
+
+    def test_c07_fully_adjusted_exposure(self) -> None:
+        """C 07.00 col 0150 = max(0, 0110 - 0130)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+
+        # 0110 = net after CRM substitution
+        v_0110 = total["0110"][0]
+        # 0130 = collateral adjusted value = 150
+        v_0130 = total["0130"][0]
+        # 0150 = max(0, 0110 - 0130)
+        expected = max(0.0, v_0110 - v_0130)
+        assert total["0150"][0] == pytest.approx(expected)
+
+    def test_c08_collateral_type_breakdown(self) -> None:
+        """C 08.01 cols 0180/0190/0200/0210 populated from per-type collateral values."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+
+        # 0180: Financial collateral = 200 + 0 = 200
+        assert total["0180"][0] == pytest.approx(200.0)
+        # 0190: Real estate = 150 + 100 = 250
+        assert total["0190"][0] == pytest.approx(250.0)
+        # 0200: Other physical = 30 + 20 = 50
+        assert total["0200"][0] == pytest.approx(50.0)
+        # 0210: Receivables = 50 + 0 = 50
+        assert total["0210"][0] == pytest.approx(50.0)
+
+    def test_c08_other_funded_protection(self) -> None:
+        """C 08.01 cols 0170-0173 are 0.0 (catch-all types not tracked)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+
+        assert total["0170"][0] == pytest.approx(0.0)
+        assert total["0171"][0] == pytest.approx(0.0)
+        assert total["0172"][0] == pytest.approx(0.0)
+        assert total["0173"][0] == pytest.approx(0.0)
+
+    def test_c08_guarantees_unfunded(self) -> None:
+        """C 08.01 col 0150 = guaranteed_portion sum."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+
+        # guaranteed_portion = 0 + 500 = 500
+        assert total["0150"][0] == pytest.approx(500.0)
+
+    def test_c08_other_funded_for_irb(self) -> None:
+        """C 08.01 col 0060 = non-financial collateral total."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+
+        # 0060 = RE + receivables + other_physical = (150+100) + (50+0) + (30+20) = 350
+        assert total["0060"][0] == pytest.approx(350.0)
+
+    def test_no_collateral_class(self) -> None:
+        """Columns are 0.0 when no collateral in class (institution has no non-fin)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_collateral_split(), framework="BASEL_3_1"
+        )
+        inst = bundle.c07_00["institution"]
+        total = inst.filter(pl.col("row_ref") == "0010")
+
+        # Institution has no non-financial collateral
+        assert total["0080"][0] == pytest.approx(0.0)
+        # But has financial collateral
+        assert total["0130"][0] == pytest.approx(200.0)

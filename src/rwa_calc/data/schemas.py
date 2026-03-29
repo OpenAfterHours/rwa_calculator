@@ -932,6 +932,8 @@ CALCULATION_OUTPUT_SCHEMA = {
     "sl_risk_weight": pl.Float64,  # Slotting RW
     "equity_type": pl.String,  # Equity category if applicable
     "equity_risk_weight": pl.Float64,  # Equity RW
+    "equity_transitional_approach": pl.String,  # "sa_transitional" or "irb_transitional" (B3.1)
+    "equity_higher_risk": pl.Boolean,  # True if 400%+ RW (speculative, venture capital)
     # -------------------------------------------------------------------------
     # REAL ESTATE SPECIFIC
     # -------------------------------------------------------------------------

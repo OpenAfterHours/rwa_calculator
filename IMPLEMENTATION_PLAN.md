@@ -41,6 +41,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 3D: On-BS netting | **DONE** | Col 0035 wired for B3.1 (C 07.00 + C 08.01). CRM processor tracks netting amounts. 7 new tests. |
 | 3G: SL detail rows | **DONE** | Rows 0021-0026 wired for B3.1 OF 07.00. project_phase added to schema. 9 new tests. |
 | 3H: RE detail rows | **DONE** | Rows 0330-0344, 0360 wired for B3.1 OF 07.00. materially_dependent_on_property added. 0350-0354 deferred. 9 new tests. |
+| 3I: Equity transitional | **DONE** | Rows 0371-0374 wired for B3.1 OF 07.00 memorandum. equity_transitional_approach added. 6 new tests. |
 
 ---
 
@@ -740,6 +741,14 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 **Complexity**: Low.
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "equity_transitional"`
+
+**Implementation notes (completed)**:
+- `equity_transitional_approach` and `equity_higher_risk` added to `CALCULATION_OUTPUT_SCHEMA`.
+- `_EQUITY_TRANSITIONAL_FILTERS` config maps rows 0371-0374 to approach/higher_risk combinations.
+- `_filter_equity_transitional()` helper filters by approach and higher_risk flag.
+- Generator Section 5 handler wires rows with filter or falls back to null for other memorandum rows (0300, 0320, 0380).
+- 6 new tests in `TestEquityTransitionalRows`: all 4 rows populated, CRR absence, missing column handling.
+- Total: 211 COREP tests pass (3 Excel skipped).
 
 ---
 

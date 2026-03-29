@@ -157,6 +157,8 @@ COUNTERPARTY_SCHEMA = {
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
     # CCP fields (CRR Art. 300-311, CRE54.14-15)
     "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
+    # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
+    "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income source
 }
 
 COLLATERAL_SCHEMA = {
@@ -966,6 +968,11 @@ CALCULATION_OUTPUT_SCHEMA = {
     "floor_impact": pl.Float64,  # Additional RWA from floor
     "final_rwa": pl.Float64,  # max(rwa_before_floor, output_floor_rwa)
     "risk_weight_effective": pl.Float64,  # final_rwa / final_ead (implied RW)
+    # -------------------------------------------------------------------------
+    # CURRENCY MISMATCH (Basel 3.1 Art. 123B / CRE20.93)
+    # -------------------------------------------------------------------------
+    "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income
+    "currency_mismatch_multiplier_applied": pl.Boolean,  # True if 1.5x RW multiplier applied
     # -------------------------------------------------------------------------
     # EXPECTED LOSS (IRB comparison to provisions)
     # -------------------------------------------------------------------------

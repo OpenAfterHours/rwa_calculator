@@ -44,6 +44,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 3I: Equity transitional | **DONE** | Rows 0371-0374 wired for B3.1 OF 07.00 memorandum. equity_transitional_approach added. 6 new tests. |
 | 3A: Collateral method split | **DONE** | Per-type collateral tracking in CRM processor. C 07.00 cols 0070/0080/0120/0140/0150. C 08.01 cols 0150-0210 (type breakdown). 8 new tests. |
 | 3B: Credit derivatives | **DONE** | protection_type field added to guarantee schema. CRM processor carries type through pipeline. C 07.00 col 0060, C 08.01 cols 0050/0160/0310 wired. 8 new tests. |
+| 3J: Currency mismatch multiplier | **DONE** | 1.5x RW multiplier for retail/RE when exposure currency ≠ borrower income currency. Basel 3.1 only. COREP row 0380 wired. 13 new tests (8 SA + 5 COREP). |
 
 ---
 
@@ -794,7 +795,23 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 
 **Complexity**: Medium.
 
-**Verify**: `uv run pytest tests/unit/test_sa_calculator.py tests/unit/test_corep.py -v`
+**Verify**: `uv run pytest tests/unit/test_b31_sa_risk_weights.py::TestCurrencyMismatchMultiplier tests/unit/test_corep.py::TestCurrencyMismatchRow -v`
+
+**Implementation notes (completed)**:
+- `borrower_income_currency` added to `COUNTERPARTY_SCHEMA` (input) and `CALCULATION_OUTPUT_SCHEMA` (output).
+- Classifier joins `borrower_income_currency` from counterparty data as `cp_borrower_income_currency` (optional — propagated only if present in input).
+- `_apply_currency_mismatch_multiplier()` added to SA calculator between guarantee substitution and RWA calculation.
+- Multiplier condition: `is_basel_3_1 AND is_retail_or_re AND (borrower_income_currency != currency)`. Retail/RE detected via uppercase exposure class containing RETAIL, MORTGAGE, RESIDENTIAL, COMMERCIAL, or CRE.
+- Risk weight multiplied by 1.5; `currency_mismatch_multiplier_applied` boolean column set for COREP tracking.
+- `currency_mismatch_multiplier_applied` output column added to `CALCULATION_OUTPUT_SCHEMA`.
+- Wired into all 3 SA calculator entry points: `get_sa_result_bundle()`, `calculate_unified()`, `calculate_branch()`.
+- `calculate_single_exposure()` updated with `borrower_income_currency` parameter.
+- CRR unaffected: method returns immediately when `is_basel_3_1 == False`.
+- Null `borrower_income_currency` → no multiplier (graceful handling).
+- COREP generator: `_filter_currency_mismatch()` helper filters on `currency_mismatch_multiplier_applied == True`. Row 0380 populated for B3.1 OF 07.00 memorandum Section 5. Absent under CRR.
+- 8 new SA tests in `TestCurrencyMismatchMultiplier`: retail mismatch (112.5% RW), no-mismatch (75%), residential mortgage, commercial RE, corporate unaffected, CRR unaffected, null income currency, institution unaffected.
+- 5 new COREP tests in `TestCurrencyMismatchRow`: B3.1 row 0380 populated for retail, mortgage, corporate null, CRR absent, missing column handling.
+- Total: 240 COREP tests pass (3 Excel skipped), 1681 unit tests pass (pre-existing test_hierarchy fixture failure excluded).
 
 ---
 

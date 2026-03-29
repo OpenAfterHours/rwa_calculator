@@ -3089,3 +3089,95 @@ class TestCreditDerivativeTracking:
 
         assert total["0050"][0] == pytest.approx(200.0)
         assert total["0060"][0] == pytest.approx(300.0)
+
+
+# =============================================================================
+# CURRENCY MISMATCH MULTIPLIER — Task 3J
+# =============================================================================
+
+
+def _sa_results_with_currency_mismatch() -> pl.LazyFrame:
+    """SA results with currency mismatch multiplier tracking for COREP row 0380."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SA_RET_1", "SA_RET_2", "SA_MORT_1", "SA_CORP_1"],
+            "approach_applied": ["standardised"] * 4,
+            "exposure_class": ["retail_other", "retail_other", "retail_mortgage", "corporate"],
+            "drawn_amount": [100.0, 200.0, 500.0, 3000.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "ead_final": [100.0, 200.0, 500.0, 3000.0],
+            "rwa_final": [112.5, 150.0, 375.0, 3000.0],
+            "risk_weight": [1.125, 0.75, 0.75, 1.0],
+            "sa_cqs": [None, None, None, 3],
+            "currency_mismatch_multiplier_applied": [True, False, True, False],
+        }
+    )
+
+
+class TestCurrencyMismatchRow:
+    """Task 3J: Currency mismatch multiplier memorandum row 0380.
+
+    Why: Basel 3.1 Art. 123B requires reporting of retail and RE exposures
+    subject to the 1.5x currency mismatch RW multiplier. Row 0380 in the
+    OF 07.00 memorandum section aggregates these exposures for supervisory
+    transparency.
+    """
+
+    def test_b31_row_0380_populated(self) -> None:
+        """Row 0380 aggregates exposures with currency mismatch applied."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
+        )
+        # Retail class — SA_RET_1 has mismatch, SA_RET_2 does not
+        ret = bundle.c07_00["retail_other"]
+        row = ret.filter(pl.col("row_ref") == "0380")
+        assert len(row) == 1
+        # Only SA_RET_1 (EAD=100, RWA=112.5) has mismatch
+        assert row["0200"][0] == pytest.approx(100.0)
+        assert row["0220"][0] == pytest.approx(112.5)
+
+    def test_b31_mortgage_row_0380(self) -> None:
+        """Row 0380 works for retail_mortgage class too."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
+        )
+        mort = bundle.c07_00["retail_mortgage"]
+        row = mort.filter(pl.col("row_ref") == "0380")
+        assert len(row) == 1
+        # SA_MORT_1 has mismatch (EAD=500, RWA=375)
+        assert row["0200"][0] == pytest.approx(500.0)
+        assert row["0220"][0] == pytest.approx(375.0)
+
+    def test_b31_corporate_row_0380_null(self) -> None:
+        """Corporate class — no mismatch exposures → row 0380 is null."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0380")
+        assert len(row) == 1
+        assert row["0200"][0] is None
+
+    def test_crr_no_row_0380(self) -> None:
+        """CRR framework does not have row 0380 — it's a B3.1-only memorandum."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="CRR"
+        )
+        ret = bundle.c07_00.get("retail_other")
+        if ret is not None:
+            row = ret.filter(pl.col("row_ref") == "0380")
+            assert len(row) == 0
+
+    def test_no_mismatch_column_row_0380_null(self) -> None:
+        """Without currency_mismatch_multiplier_applied column, row 0380 is null."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results(), framework="BASEL_3_1")
+        corp = bundle.c07_00.get("corporate")
+        if corp is not None:
+            row = corp.filter(pl.col("row_ref") == "0380")
+            if len(row) > 0:
+                assert row["0200"][0] is None

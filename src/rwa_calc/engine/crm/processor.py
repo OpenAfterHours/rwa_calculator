@@ -950,6 +950,17 @@ class CRMProcessor:
                 ]
             )
 
+        # Legacy path: set per-type collateral values to 0.0 (not available)
+        exposures = exposures.with_columns(
+            [
+                pl.lit(0.0).alias("collateral_financial_value"),
+                pl.lit(0.0).alias("collateral_cash_value"),
+                pl.lit(0.0).alias("collateral_re_value"),
+                pl.lit(0.0).alias("collateral_receivables_value"),
+                pl.lit(0.0).alias("collateral_other_physical_value"),
+            ]
+        )
+
         # Apply collateral effect based on approach
         exposures = exposures.with_columns(
             [
@@ -1069,6 +1080,19 @@ class CRMProcessor:
                 .otherwise(pl.lit(1.0))
                 .alias("overcollateralisation_ratio"),
                 coll_type_lower.is_in(_financial_types).alias("is_financial_collateral_type"),
+                # Per-type category for COREP collateral breakdown (C 08.01 cols 0170-0210)
+                pl.when(coll_type_lower.is_in(["cash", "deposit"]))
+                .then(pl.lit("cash"))
+                .when(coll_type_lower.is_in(_financial_types))
+                .then(pl.lit("financial"))
+                .when(coll_type_lower.is_in(_receivable_types))
+                .then(pl.lit("receivables"))
+                .when(coll_type_lower.is_in(_real_estate_types))
+                .then(pl.lit("real_estate"))
+                .when(coll_type_lower.is_in(_other_physical_types))
+                .then(pl.lit("other_physical"))
+                .otherwise(pl.lit("other"))
+                .alias("_coll_category"),
                 pl.coalesce(
                     pl.col("value_after_maturity_adj")
                     if "value_after_maturity_adj" in collateral_schema.names()
@@ -1125,11 +1149,35 @@ class CRMProcessor:
                     .sum()
                     .alias("_wn"),
                     pl.col("adjusted_value").filter(~is_fin).sum().alias("_rn"),
+                    # Per-type collateral values for COREP
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "financial")
+                    .sum()
+                    .alias("_adj_fin"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "cash")
+                    .sum()
+                    .alias("_adj_cash"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "real_estate")
+                    .sum()
+                    .alias("_adj_re"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "receivables")
+                    .sum()
+                    .alias("_adj_rec"),
+                    pl.col("adjusted_value")
+                    .filter(pl.col("_coll_category") == "other_physical")
+                    .sum()
+                    .alias("_adj_oth"),
                 ]
             )
         )
 
-        _agg = ["_cv", "_mv", "_ef", "_wf", "_en", "_wn", "_rn"]
+        _agg = [
+            "_cv", "_mv", "_ef", "_wf", "_en", "_wn", "_rn",
+            "_adj_fin", "_adj_cash", "_adj_re", "_adj_rec", "_adj_oth",
+        ]
 
         # Split the small aggregated result for per-level joins
         coll_direct = (
@@ -1223,6 +1271,11 @@ class CRMProcessor:
             [
                 _sum3("_cv").alias("collateral_adjusted_value"),
                 _sum3("_mv").alias("collateral_market_value"),
+                _sum3("_adj_fin").alias("collateral_financial_value"),
+                _sum3("_adj_cash").alias("collateral_cash_value"),
+                _sum3("_adj_re").alias("collateral_re_value"),
+                _sum3("_adj_rec").alias("collateral_receivables_value"),
+                _sum3("_adj_oth").alias("collateral_other_physical_value"),
                 _sum3("_ef").alias("_eff_fin_a"),
                 _sum3("_wf").alias("_wlgd_fin_a"),
                 _sum3("_en").alias("_eff_nf_a"),

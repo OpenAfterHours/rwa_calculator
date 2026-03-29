@@ -927,6 +927,16 @@ def _col_sum_eager(
     return float(data[col_name].fill_null(0.0).sum())
 
 
+def _sum_cols_eager(data: pl.DataFrame, cols: set[str], *col_names: str) -> float:
+    """Sum multiple collateral-type columns, treating missing columns as 0."""
+    total = 0.0
+    for c in col_names:
+        v = _col_sum_eager(data, cols, c)
+        if v is not None:
+            total += v
+    return total
+
+
 def _compute_substitution_flows(
     full_df: pl.DataFrame,
     cols: set[str],
@@ -1053,11 +1063,16 @@ def _compute_c07_values(
     values["0060"] = None
 
     # --- CRM Substitution: Funded ---
-    # 0070: (-) Financial collateral: Simple method — Phase 3A
-    values["0070"] = None
+    # 0070: (-) Financial collateral: Simple method
+    # Comprehensive method is used; simple method not implemented → always 0
+    values["0070"] = 0.0
 
-    # 0080: (-) Other funded credit protection — Phase 3A
-    values["0080"] = None
+    # 0080: (-) Other funded credit protection (non-financial collateral)
+    values["0080"] = _sum_cols_eager(
+        data, cols,
+        "collateral_re_value", "collateral_receivables_value",
+        "collateral_other_physical_value",
+    )
 
     # --- CRM Substitution flows ---
     # 0090: (-) Substitution outflows — guaranteed portion leaving this class
@@ -1079,17 +1094,24 @@ def _compute_c07_values(
     values["0110"] = v_0040 - v_0050 - v_0060 - v_0070 - v_0080 - v_0090 + v_0100
 
     # --- Financial Collateral Comprehensive ---
-    # 0120: Volatility adjustment to exposure — Phase 3A
-    values["0120"] = None
+    # 0120: Volatility adjustment to exposure (He)
+    # He = 0 for loan exposures; only non-zero for repo-style transactions
+    values["0120"] = 0.0
 
     # 0130: (-) Financial collateral: adjusted value (Cvam)
     values["0130"] = _col_sum_eager(data, cols, "collateral_adjusted_value")
 
     # 0140: (-) Of which: volatility and maturity adjustments
-    values["0140"] = None
+    # The vol+mat adjustment = market_value - adjusted_value
+    v_mv = _col_sum_eager(data, cols, "collateral_market_value")
+    v_cv = values["0130"] or 0.0
+    values["0140"] = (v_mv - v_cv) if v_mv is not None else None
 
     # 0150: Fully adjusted exposure value (E*)
-    values["0150"] = None
+    # E* = max(0, col_0110 - col_0130) under comprehensive method (He=0 for loans)
+    v_0110 = values.get("0110") or 0.0
+    v_0130 = values.get("0130") or 0.0
+    values["0150"] = max(0.0, v_0110 - v_0130)
 
     # --- CCF Breakdown --- Phase 2C
     # Off-BS exposures grouped by ccf_applied into COREP CCF buckets.
@@ -1236,8 +1258,12 @@ def _compute_c08_values(
     # 0050: (-) Credit derivatives — Phase 3B
     values["0050"] = None
 
-    # 0060: (-) Other funded credit protection — Phase 3A
-    values["0060"] = None
+    # 0060: (-) Other funded credit protection (non-financial collateral)
+    values["0060"] = _sum_cols_eager(
+        data, cols,
+        "collateral_re_value", "collateral_receivables_value",
+        "collateral_other_physical_value",
+    )
 
     # 0070: (-) Substitution outflows — guaranteed portion leaving this class
     values["0070"] = _compute_substitution_outflow(data, cols)
@@ -1292,12 +1318,30 @@ def _compute_c08_values(
     else:
         values["0140"] = 0.0 if "apply_fi_scalar" in cols else None
 
-    # --- CRM in LGD estimates (0150-0210) --- Phase 3A/3B
-    for ref in (
-        "0150", "0160", "0170", "0171", "0172", "0173",
-        "0180", "0190", "0200", "0210",
-    ):
-        values[ref] = None
+    # --- CRM in LGD estimates (0150-0210) ---
+    # 0150: Unfunded credit protection: Guarantees
+    values["0150"] = _col_sum_eager(data, cols, "guaranteed_portion")
+
+    # 0160: Unfunded credit protection: Credit derivatives — Phase 3B
+    values["0160"] = None
+
+    # 0170: Other funded credit protection (catch-all not in 0180-0210)
+    values["0170"] = 0.0
+    # 0171: Of which: cash on deposit (with third-party institutions)
+    values["0171"] = 0.0
+    # 0172: Of which: life insurance policies pledged
+    values["0172"] = 0.0
+    # 0173: Of which: instruments held by third party
+    values["0173"] = 0.0
+
+    # 0180: Eligible financial collateral
+    values["0180"] = _col_sum_eager(data, cols, "collateral_financial_value")
+    # 0190: Real estate collateral
+    values["0190"] = _col_sum_eager(data, cols, "collateral_re_value")
+    # 0200: Other physical collateral
+    values["0200"] = _col_sum_eager(data, cols, "collateral_other_physical_value")
+    # 0210: Receivables
+    values["0210"] = _col_sum_eager(data, cols, "collateral_receivables_value")
 
     # 0220: Double default (CRR only) — Phase 3E
     values["0220"] = None

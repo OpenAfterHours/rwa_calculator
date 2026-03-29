@@ -342,6 +342,5 @@ The majority of fixture data has been completed, enabling 71 of 74 acceptance te
 
 ## Related Documentation
 
-- [Development Roadmap](roadmap.md) - Current status and phase tracking
 - [Testing Guide](../development/testing.md) - How to run tests
 - [Framework Comparison](../user-guide/regulatory/comparison.md) - CRR vs Basel 3.1 differences

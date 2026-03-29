@@ -206,7 +206,6 @@ nav = [
   ]},
   { "Plans" = [
     "plans/index.md",
-    { "Development Roadmap" = "plans/roadmap.md" },
     { "Implementation Plan" = "plans/implementation-plan.md" },
   ]},
   { "Appendix" = [

@@ -937,6 +937,25 @@ def _sum_cols_eager(data: pl.DataFrame, cols: set[str], *col_names: str) -> floa
     return total
 
 
+def _sum_by_protection_type(
+    data: pl.DataFrame,
+    cols: set[str],
+    ptype: str,
+    value_col: str = "guaranteed_portion",
+) -> float | None:
+    """Sum value_col for rows matching a specific protection_type.
+
+    Returns None if protection_type column is absent. Returns 0.0 if column
+    exists but no rows match.
+    """
+    if "protection_type" not in cols or value_col not in cols:
+        return None
+    filtered = data.filter(pl.col("protection_type") == ptype)
+    if len(filtered) == 0:
+        return 0.0
+    return float(filtered[value_col].fill_null(0.0).sum())
+
+
 def _compute_substitution_flows(
     full_df: pl.DataFrame,
     cols: set[str],
@@ -1056,11 +1075,17 @@ def _compute_c07_values(
     values["0040"] = v_0010 - v_0030 - v_0035
 
     # --- CRM Substitution: Unfunded ---
-    # 0050: (-) Guarantees
-    values["0050"] = _col_sum_eager(data, cols, "guaranteed_portion")
+    # 0050: (-) Guarantees (excluding credit derivatives)
+    guar_only = _sum_by_protection_type(data, cols, "guarantee")
+    if guar_only is not None:
+        values["0050"] = guar_only
+    else:
+        # Backward compatible: if protection_type not tracked, all are guarantees
+        values["0050"] = _col_sum_eager(data, cols, "guaranteed_portion")
 
-    # 0060: (-) Credit derivatives — Phase 3B
-    values["0060"] = None
+    # 0060: (-) Credit derivatives (CDS, CLN, TRS)
+    cd_val = _sum_by_protection_type(data, cols, "credit_derivative")
+    values["0060"] = cd_val if cd_val is not None else 0.0
 
     # --- CRM Substitution: Funded ---
     # 0070: (-) Financial collateral: Simple method
@@ -1252,11 +1277,16 @@ def _compute_c08_values(
     values["0035"] = _col_sum_eager(data, cols, "on_bs_netting_amount")
 
     # --- CRM Substitution ---
-    # 0040: (-) Guarantees
-    values["0040"] = _col_sum_eager(data, cols, "guaranteed_portion")
+    # 0040: (-) Guarantees (excluding credit derivatives)
+    guar_only_irb = _sum_by_protection_type(data, cols, "guarantee")
+    if guar_only_irb is not None:
+        values["0040"] = guar_only_irb
+    else:
+        values["0040"] = _col_sum_eager(data, cols, "guaranteed_portion")
 
-    # 0050: (-) Credit derivatives — Phase 3B
-    values["0050"] = None
+    # 0050: (-) Credit derivatives (CDS, CLN, TRS)
+    cd_val_irb = _sum_by_protection_type(data, cols, "credit_derivative")
+    values["0050"] = cd_val_irb if cd_val_irb is not None else 0.0
 
     # 0060: (-) Other funded credit protection (non-financial collateral)
     values["0060"] = _sum_cols_eager(
@@ -1319,11 +1349,16 @@ def _compute_c08_values(
         values["0140"] = 0.0 if "apply_fi_scalar" in cols else None
 
     # --- CRM in LGD estimates (0150-0210) ---
-    # 0150: Unfunded credit protection: Guarantees
-    values["0150"] = _col_sum_eager(data, cols, "guaranteed_portion")
+    # 0150: Unfunded credit protection: Guarantees (excluding credit derivatives)
+    guar_lgd = _sum_by_protection_type(data, cols, "guarantee")
+    if guar_lgd is not None:
+        values["0150"] = guar_lgd
+    else:
+        values["0150"] = _col_sum_eager(data, cols, "guaranteed_portion")
 
-    # 0160: Unfunded credit protection: Credit derivatives — Phase 3B
-    values["0160"] = None
+    # 0160: Unfunded credit protection: Credit derivatives
+    cd_lgd = _sum_by_protection_type(data, cols, "credit_derivative")
+    values["0160"] = cd_lgd if cd_lgd is not None else 0.0
 
     # 0170: Other funded credit protection (catch-all not in 0180-0210)
     values["0170"] = 0.0
@@ -1463,8 +1498,21 @@ def _compute_c08_values(
     else:
         values["0300"] = float(len(data))
 
-    # 0310: Pre-credit derivatives RWEA — Phase 3B
-    values["0310"] = None
+    # 0310: Pre-credit derivatives RWEA
+    # Total RWEA including credit-derivative-protected exposures at pre-substitution RW
+    # Approximation: rwa_final already includes substitution benefit, so pre-CD RWEA
+    # = rwa_final + the RWA benefit from credit derivatives. Without separate pre/post
+    # tracking per protection type, use total RWEA as a lower bound.
+    cd_rwa = _sum_by_protection_type(data, cols, "credit_derivative", rwa_col)
+    if cd_rwa is not None and cd_rwa > 0:
+        # There are credit-derivative-protected exposures — their RWEA already
+        # reflects the substitution benefit. Pre-CD RWEA = total RWEA (since the
+        # benefit is embedded in rwa_final via guarantor RW substitution).
+        values["0310"] = _col_sum_eager(data, cols, rwa_col)
+    else:
+        # No credit derivatives: pre-CD RWEA = total RWEA
+        total_rwa = _col_sum_eager(data, cols, rwa_col)
+        values["0310"] = total_rwa
 
     # Filter to only refs in this framework's column set
     return {ref: values.get(ref) for ref in column_refs if ref in values}

@@ -197,6 +197,7 @@ GUARANTEE_SCHEMA = {
     "percentage_covered": pl.Float64,
     "beneficiary_type": pl.String,
     "beneficiary_reference": pl.String,
+    "protection_type": pl.String,  # "guarantee" or "credit_derivative" (CDS/CLN/TRS)
 }
 
 PROVISION_SCHEMA = {
@@ -459,6 +460,8 @@ VALID_EQUITY_TYPES = {
 
 VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent"}
 
+VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
+
 VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
@@ -505,6 +508,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "guarantees": {
         "beneficiary_type": VALID_BENEFICIARY_TYPES,
+        "protection_type": VALID_PROTECTION_TYPES,
     },
     "facility_mappings": {
         "child_type": VALID_CHILD_TYPES,
@@ -889,6 +893,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "risk_weight_irb_original": pl.Float64,  # IRB RW before guarantee substitution
     "guarantee_method_used": pl.String,  # "SA_RW_SUBSTITUTION", "PD_SUBSTITUTION", or "NO_GUARANTEE"
     "guarantee_status": pl.String,  # Detailed status including non-beneficial flag
+    "protection_type": pl.String,  # "guarantee" or "credit_derivative" — unfunded protection type
     # -------------------------------------------------------------------------
     # CRM - PROVISION IMPACT
     # -------------------------------------------------------------------------

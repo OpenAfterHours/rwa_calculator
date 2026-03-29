@@ -646,6 +646,8 @@ class CRMProcessor:
                 pl.col("ccf").alias("ccf_unguaranteed"),
                 pl.lit(0.0).alias("guarantee_ratio"),
                 pl.lit("").alias("guarantor_approach"),
+                # Unfunded protection type (guarantee vs credit_derivative)
+                pl.lit(None).cast(pl.String).alias("protection_type"),
             ]
         )
 
@@ -2393,6 +2395,8 @@ class CRMProcessor:
             agg_exprs.append(pl.col("percentage_covered").first().alias("percentage_covered"))
         if "guarantee_reference" in guar_cols:
             agg_exprs.append(pl.col("guarantee_reference").first().alias("guarantee_reference"))
+        if "protection_type" in guar_cols:
+            agg_exprs.append(pl.col("protection_type").first().alias("protection_type"))
 
         guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
 
@@ -2406,6 +2410,8 @@ class CRMProcessor:
             guar_select.append("percentage_covered")
         if "guarantee_reference" in guar_cols:
             guar_select.append("guarantee_reference")
+        if "protection_type" in guar_cols:
+            guar_select.append("protection_type")
 
         # Count distinct guarantors per exposure
         guarantee_counts = guarantees.group_by("beneficiary_reference").agg(
@@ -2426,6 +2432,7 @@ class CRMProcessor:
             pl.col("ead_after_collateral").alias("unguaranteed_portion"),
             pl.lit(None).cast(pl.String).alias("guarantor_reference"),
             pl.lit(0.0).alias("guarantee_amount"),
+            pl.lit(None).cast(pl.String).alias("protection_type"),
         )
 
         # --- Path 2: Single guarantor (backward compatible, no split) ---
@@ -2551,6 +2558,7 @@ class CRMProcessor:
             ),
             pl.lit(0.0).alias("guarantee_amount"),
             pl.lit(None).cast(pl.String).alias("guarantor_reference"),
+            pl.lit(None).cast(pl.String).alias("protection_type"),
             pl.concat_str(
                 [pl.col("parent_exposure_reference"), pl.lit("__REM")],
             ).alias("exposure_reference"),
@@ -2609,6 +2617,18 @@ class CRMProcessor:
         Returns:
             Exposures with guarantee effects applied
         """
+        # Default protection_type to "guarantee" if not provided (backward compatibility)
+        guar_input_schema = guarantees.collect_schema()
+        if "protection_type" not in guar_input_schema.names():
+            guarantees = guarantees.with_columns(
+                pl.lit("guarantee").alias("protection_type"),
+            )
+        else:
+            # Fill nulls with "guarantee" (default for legacy data)
+            guarantees = guarantees.with_columns(
+                pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
+            )
+
         # Expand facility/counterparty-level guarantees to exposure-level
         guarantees = self._resolve_guarantees_multi_level(guarantees, exposures)
 
@@ -3208,6 +3228,7 @@ class CRMProcessor:
                 pl.col("ccf_unguaranteed"),
                 pl.col("guarantee_ratio"),
                 pl.col("guarantor_approach"),
+                pl.col("protection_type"),
             ]
         )
 

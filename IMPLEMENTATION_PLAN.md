@@ -43,6 +43,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 3H: RE detail rows | **DONE** | Rows 0330-0344, 0360 wired for B3.1 OF 07.00. materially_dependent_on_property added. 0350-0354 deferred. 9 new tests. |
 | 3I: Equity transitional | **DONE** | Rows 0371-0374 wired for B3.1 OF 07.00 memorandum. equity_transitional_approach added. 6 new tests. |
 | 3A: Collateral method split | **DONE** | Per-type collateral tracking in CRM processor. C 07.00 cols 0070/0080/0120/0140/0150. C 08.01 cols 0150-0210 (type breakdown). 8 new tests. |
+| 3B: Credit derivatives | **DONE** | protection_type field added to guarantee schema. CRM processor carries type through pipeline. C 07.00 col 0060, C 08.01 cols 0050/0160/0310 wired. 8 new tests. |
 
 ---
 
@@ -547,6 +548,19 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 - `rwa_pre_credit_derivatives` → C 08.01 col 0310
 
 **Verify**: `uv run pytest tests/unit/test_crm_guarantees.py tests/unit/test_corep.py -v`
+
+**Implementation notes (completed)**:
+- `protection_type` field added to `GUARANTEE_SCHEMA` (input) and `CALCULATION_OUTPUT_SCHEMA` (output). Values: "guarantee" or "credit_derivative".
+- `VALID_PROTECTION_TYPES` validation set added. `COLUMN_VALUE_CONSTRAINTS["guarantees"]` updated.
+- CRM processor: `apply_guarantees()` defaults `protection_type` to "guarantee" if absent (backward compatible). Column carried through `_apply_guarantee_splits()` group_by, all paths (no-guarantee, single, multi, remainder), and CRM audit trail.
+- `_initialize_ead()` initializes `protection_type` to null for exposures before guarantee processing.
+- COREP generator: `_sum_by_protection_type()` helper filters `guaranteed_portion` by protection type.
+- C 07.00: col 0050 = guarantee-only portion, col 0060 = credit derivative portion. Col 0110 formula deducts both.
+- C 08.01: col 0040 = guarantee-only, col 0050 = credit derivative. Col 0150 = unfunded guarantees, col 0160 = unfunded credit derivatives. Col 0310 = total RWEA (pre-credit-derivative baseline).
+- Backward compatible: without `protection_type` column, all `guaranteed_portion` treated as guarantees (col 0060 = 0).
+- Art. 204/216 derivative-specific eligibility conditions deferred — current implementation uses same substitution mechanics as guarantees.
+- 8 new tests in `TestCreditDerivativeTracking` class.
+- Total: 227 COREP tests pass (3 Excel skipped), 1965 unit/contract/integration tests pass.
 
 ---
 

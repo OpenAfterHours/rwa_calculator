@@ -33,10 +33,10 @@ A tiered discount applied to RWA for qualifying SME exposures.
 For exposures that span both tiers:
 
 ```
-SF = [min(E, threshold) x 0.7619 + max(E - threshold, 0) x 0.85] / E
+SF = [min(D, threshold) x 0.7619 + max(D - threshold, 0) x 0.85] / D
 ```
 
-Where `E` is the total aggregated exposure and `threshold` is EUR 2.5m (or GBP equivalent).
+Where `D` is the on-balance-sheet amount (`max(0, drawn_amount) + interest`) aggregated at counterparty level, and `threshold` is EUR 2.5m (or GBP equivalent).
 
 ## Infrastructure Supporting Factor (CRR Art. 501a)
 

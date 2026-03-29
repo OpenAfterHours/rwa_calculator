@@ -116,7 +116,9 @@ Compare with CRR slotting weights in the [Slotting Approach](../crr/slotting-app
 ## Financial Institution Correlation Multiplier (CRE31.5)
 
 The 1.25x correlation multiplier applies to exposures to **financial institutions** only (not non-financial corporates):
-- Regulated financial institutions with total assets >= USD 100bn (CRR Art. 153(2): EUR 70bn threshold)
+- Regulated financial institutions with total assets above the applicable threshold:
+  - **CRR**: EUR 70bn (Art. 153(2))
+  - **BCBS/Basel 3.1**: USD 100bn (CRE31.5)
 - Unregulated financial institutions regardless of size
 
 This multiplier is already implemented via the `requires_fi_scalar` flag in the classifier and `_polars_correlation_expr()` in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.

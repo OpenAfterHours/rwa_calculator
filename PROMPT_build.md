@@ -16,5 +16,5 @@
 99999999999. For any bugs you notice, resolve them or document them in @IMPLEMENTATION_PLAN.md using a subagent even if it is unrelated to the current piece of work.
 999999999999. Implement functionality completely. Placeholders and stubs waste efforts and time redoing the same work.
 9999999999999. When @IMPLEMENTATION_PLAN.md becomes large periodically clean out the items that are completed from the file using a subagent.
-99999999999999. If you find inconsistencies in `specs/*` then use an Opus 4.6 subagent with 'ultrathink' requested to update them.
+99999999999999. If you find inconsistencies in `docs/specifications/*` then use an Opus 4.6 subagent with 'ultrathink' requested to update them.
 999999999999999. IMPORTANT: Keep @AGENTS.md operational only — status updates and progress notes belong in `IMPLEMENTATION_PLAN.md`. A bloated AGENTS.md pollutes every future loop's context.

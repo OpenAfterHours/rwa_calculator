@@ -41,8 +41,8 @@ Collateral haircuts, overcollateralisation, FX mismatch, maturity mismatch, and 
 
 | CQS | 0-1 year | 1-5 years | 5+ years |
 |-----|----------|-----------|----------|
-| 1-2 | 1% | 4% | 6% |
-| 3 | 2% | 6% | 8% |
+| 1 | 1% | 4% | 8% |
+| 2-3 | 2% | 6% | 12% |
 
 ### Equity
 
@@ -101,12 +101,12 @@ When collateral maturity is shorter than exposure maturity:
 adjustment_factor = (t - 0.25) / (T - 0.25)
 ```
 
-Where `t` = residual collateral maturity, `T` = 5 years.
+Where `t` = residual collateral maturity (years), `T` = min(residual exposure maturity, 5) years.
 
 **No adjustment** when:
 
-- Collateral residual maturity ≥ 5 years, or
-- Exposure residual maturity ≤ 3 months
+- Collateral residual maturity ≥ exposure residual maturity (no mismatch), or
+- Collateral residual maturity < 3 months (protection disallowed — collateral value zeroed)
 
 ## Multi-Level Collateral Allocation
 

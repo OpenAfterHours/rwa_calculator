@@ -100,9 +100,9 @@ Risk weights by equity type (listed, unlisted, strategic holdings).
 
 ### IRB Simple (CRR Art. 155)
 
-- Listed equity: 190%
-- Unlisted equity: 290%
-- Other equity: 370%
+- Exchange-traded / listed equity: 290%
+- Private equity (diversified): 190%
+- All other equity (unlisted, speculative, etc.): 370%
 
 ### Basel 3.1
 

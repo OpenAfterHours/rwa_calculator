@@ -150,6 +150,7 @@ tests/
 ## Documentation
 
 - **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`
+- **Specifications**: Single source of truth is `docs/specifications/`. Do not create a separate `specs/` directory.
 - **Docstrings**: All public classes and functions must have docstrings following the module docstring pattern (purpose, responsibilities, references)
 - **Changelog**: Update `docs/appendix/changelog.md` for any user-facing changes
 - **After every change**: Update relevant docs, docstrings, and changelog entry

@@ -77,6 +77,57 @@ RWA_final = max(RWA_IRB, floor_percentage x RWA_SA)
 | 2031 | 70.0% |
 | 2032+ | 72.5% |
 
+### Output Floor Adjustment (OF-ADJ)
+
+The full output floor formula from PRA PS1/26 Art. 92 is:
+
+```
+TREA = max(U-TREA, x × S-TREA + OF-ADJ)
+```
+
+Where:
+
+- **U-TREA** = un-floored total risk exposure (using internal models where permitted)
+- **S-TREA** = standardised total risk exposure (recalculated using SA only)
+- **x** = floor percentage (see transitional schedule above)
+- **OF-ADJ** = adjustment for the difference between IRB expected loss provisions treatment
+  and SA general credit risk adjustments
+
+OF-ADJ reconciles the different treatment of provisions: under IRB, expected loss shortfall
+adds to capital requirements while under SA, general credit risk adjustments reduce
+risk exposure. Without this adjustment, the floor comparison would not be on a like-for-like
+basis.
+
+## Supervisory Haircut Comparison
+
+### CRR Haircuts (3 maturity bands)
+
+| Collateral Type | 0-1y | 1-5y | 5y+ |
+|-----------------|------|------|-----|
+| Govt bonds CQS 1 | 0.5% | 2% | 4% |
+| Govt bonds CQS 2-3 | 1% | 3% | 6% |
+| Corp bonds CQS 1 | 1% | 4% | 8% |
+| Corp bonds CQS 2-3 | 2% | 6% | 12% |
+| Main index equities | 15% | — | — |
+| Other equities | 25% | — | — |
+| Gold | 15% | — | — |
+| Cash | 0% | — | — |
+
+### Basel 3.1 Haircuts (5 maturity bands)
+
+| Collateral Type | 0-1y | 1-3y | 3-5y | 5-10y | 10y+ |
+|-----------------|------|------|------|-------|------|
+| Govt bonds CQS 1 | 0.5% | 2% | 2% | 4% | 4% |
+| Govt bonds CQS 2-3 | 1% | 3% | 4% | 6% | **12%** |
+| Corp bonds CQS 1 | 1% | 4% | 6% | **10%** | **12%** |
+| Corp bonds CQS 2-3 | 2% | 6% | 8% | **15%** | **15%** |
+| Main index equities | **25%** | — | — | — | — |
+| Other equities | **35%** | — | — | — | — |
+| Gold | 15% | — | — | — | — |
+| Cash | 0% | — | — | — | — |
+
+Currency mismatch haircut remains 8% under both frameworks (CRR Art. 224 / CRE22.54).
+
 ## Slotting Risk Weights (Basel 3.1)
 
 Basel 3.1 (BCBS CRE33) introduces three distinct slotting weight tables:
@@ -111,6 +162,20 @@ Basel 3.1 (BCBS CRE33) introduces three distinct slotting weight tables:
 | Weak | 250% |
 | Default | 0% (EL) |
 
+### Slotting Subgrades
+
+Basel 3.1 allows residual maturity-based differentiation within the Strong and Good
+categories using subgrades:
+
+| Category | Subgrade A (< 2.5yr residual) | Subgrade B (≥ 2.5yr residual) |
+|----------|-------------------------------|-------------------------------|
+| Strong A / Strong B | 50% / 70% (PF Operational) | 70% / 70% |
+| Good C / Good D | 70% / 90% (PF Operational) | 90% / 90% |
+
+IPRE "Strong A" requires specific criteria: low LTV, adequate tenant income, and no ADC
+characteristics. These subgrades provide finer risk differentiation within the broader
+slotting categories.
+
 Compare with CRR slotting weights in the [Slotting Approach](../specifications/crr/slotting-approach.md) specification.
 
 ## Financial Institution Correlation Multiplier (CRE31.5)
@@ -128,6 +193,20 @@ Note: There is no separate "large corporate" correlation multiplier for non-fina
 ## A-IRB CCF Floor (CRE32.27)
 
 A-IRB own-estimate CCFs must be at least **50% of the SA CCF** for the same item type.
+
+## IRB Maturity Calculation Changes
+
+Basel 3.1 refines the IRB effective maturity (M) calculation (PRA PS1/26 Art. 162):
+
+| Aspect | CRR | Basel 3.1 |
+|--------|-----|-----------|
+| Cash-flow schedule | Weighted average of cash flows | Same: `M = max(1, min(Σ(t×CF_t)/Σ(CF_t), 5))` |
+| Revolving exposures | Repayment date of current drawing | **Maximum contractual termination date** |
+| Floor | 1 year | 1 year |
+| Cap | 5 years | 5 years |
+
+The revolving maturity change is significant — it typically increases M for revolving
+facilities, leading to higher maturity adjustments and therefore higher capital.
 
 ## Configuration
 

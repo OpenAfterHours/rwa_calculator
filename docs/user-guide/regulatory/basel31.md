@@ -157,10 +157,25 @@ Acquisition, Development and Construction exposures receive a **150%** risk weig
 
 #### Retail Exposures
 
-| Type | CRR | Basel 3.1 |
-|------|-----|-----------|
-| QRRE | 75% | 75% |
-| Retail Other | 75% | 75% |
+| Type | CRR | Basel 3.1 | Change |
+|------|-----|-----------|--------|
+| Regulatory Retail QRRE | 75% | 75% | — |
+| Regulatory Retail Transactor | 75% | **45%** | -30pp |
+| Payroll / Pension Loans | 75% | **35%** | -40pp |
+| Retail Other | 75% | 75% | — |
+
+Transactor status requires full repayment of outstanding balance each billing cycle.
+Payroll/pension loans are a new category for loans repaid directly from salary or pension.
+
+#### Currency Mismatch Multiplier
+
+!!! warning "Not Yet Implemented"
+    The currency mismatch risk weight multiplier is not yet implemented in the calculator.
+
+For unhedged retail and residential real estate exposures where the lending currency differs from the
+borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/26 Art. 123A / CRE20.76).
+The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral haircut
+used in CRM (CRR Art. 224).
 
 #### Defaulted Exposures
 
@@ -231,37 +246,98 @@ Standardised Credit Risk Assessment Approach (SCRA):
 | Instrument Type | Risk Weight |
 |-----------------|-------------|
 | Subordinated debt instruments | 150% |
-| Equity-like instruments | 250% |
+
+### Equity Exposures
+
+Basel 3.1 significantly increases equity risk weights and removes IRB for equity (SA only).
+
+| Equity Type | Risk Weight (Fully Phased) |
+|-------------|---------------------------|
+| Standard listed equities | **250%** |
+| Higher-risk equities (unlisted, < 5 years) | **400%** |
+| Speculative / venture capital | **400%** |
+
+**Transitional phase-in schedule:**
+
+| Year | Standard | Higher-Risk |
+|------|----------|-------------|
+| 2027 | 130% | 160% |
+| 2028 | 160% | 220% |
+| 2029 | 190% | 280% |
+| 2030+ | 250% | 400% |
+
+Under CRR, standard equities receive 100%, with some categories at 250% or 400%.
+The phase-in allows firms to gradually adjust to the higher capital requirements.
 
 ## IRB Restrictions
 
-Basel 3.1 restricts IRB usage for certain exposures:
+Basel 3.1 restricts IRB usage for certain exposures. A-IRB (own-LGD estimates)
+is removed for financial sector entities and large corporates:
 
 | Exposure Type | Allowed Approaches |
 |---------------|-------------------|
 | Large Corporate (Revenue > £500m) | SA or F-IRB only |
+| Financial Sector Entities | SA or F-IRB only |
 | Bank/Institution | SA or F-IRB only |
 | Equity | SA only |
 | Specialised Lending (no PD) | SA or Slotting only |
+
+**IRB 10% RW floor for UK residential mortgages (PRA-specific):**
+Non-defaulted retail exposures secured by UK residential property must have a minimum risk weight
+of **10%** under IRB, regardless of model output. This is applied as a post-model adjustment.
 
 ## CRM Changes
 
 ### Haircuts
 
-Supervisory haircuts are recalibrated:
+Supervisory haircuts are recalibrated under Basel 3.1 (CRE22.52-53), with significant increases
+for equities and long-dated bonds. Maturity bands expand from 3 (CRR) to 5 (Basel 3.1).
 
-| Collateral Type | CRR Haircut | Basel 3.1 Haircut |
-|-----------------|-------------|-------------------|
-| Main index equities | 15% | 15% |
-| Other listed equities | 25% | 25% |
-| Gold | 15% | 15% |
-| Cash | 0% | 0% |
+**Key changes:**
+
+| Collateral Type | CRR Haircut | Basel 3.1 Haircut | Change |
+|-----------------|-------------|-------------------|--------|
+| Main index equities | 15% | **25%** | +10pp |
+| Other listed equities | 25% | **35%** | +10pp |
+| Gold | 15% | 15% | — |
+| Cash | 0% | 0% | — |
+| Govt bonds CQS 2-3 (10y+) | 6% | **12%** | +6pp |
+| Corp bonds CQS 1 (5-10y) | 8% | **10%** | +2pp |
+| Corp bonds CQS 1 (10y+) | 8% | **12%** | +4pp |
+| Corp bonds CQS 2-3 (5-10y) | 12% | **15%** | +3pp |
+| Corp bonds CQS 2-3 (10y+) | 12% | **15%** | +3pp |
+
+**Maturity band expansion:** CRR uses 3 bands (0-1y, 1-5y, 5y+). Basel 3.1 splits the longer
+bands into 5: 0-1y, 1-3y, 3-5y, 5-10y, 10y+. Short-dated haircuts (0-1y) are unchanged.
+
+### CRM Method Taxonomy
+
+Basel 3.1 restructures CRM methods with clearer names and applicability:
+
+| Method | Applies To | Replaces |
+|--------|-----------|----------|
+| Financial Collateral Simple Method | SA only | CRR Art. 222 |
+| Financial Collateral Comprehensive Method | SA + IRB | CRR Art. 223 |
+| Foundation Collateral Method | F-IRB | Scattered CRR IRB collateral provisions |
+| Parameter Substitution Method | F-IRB (unfunded) | CRR Art. 236 |
+| LGD Adjustment Method | A-IRB (unfunded) | CRR Art. 183 |
+
+**Foundation Collateral Method overcollateralisation thresholds (Art. 230):**
+
+| Collateral Type | Overcollateralisation Ratio | Minimum EAD Coverage |
+|-----------------|----------------------------|---------------------|
+| Financial | 1.0x | None |
+| Receivables | 1.25x | None |
+| Residential / Commercial RE | 1.4x | 30% |
+| Other physical | 1.4x | 30% |
 
 ### Guarantee Recognition
 
 - Unfunded credit protection maintained
 - G-10 sovereign guarantees: 0% RW
 - Covered bond issuer guarantees: Enhanced treatment
+- **New requirement:** Unfunded credit protection must include "change of control" provisions
+  (transitional relief for pre-2027 contracts until June 2028)
 
 ## Specialised Lending
 
@@ -275,6 +351,26 @@ Slotting remains available with updated risk weights:
 | Commodities Finance | 70% | 90% | 115% | 250% | 0% (EL) |
 | IPRE | 70% | 90% | 115% | 250% | 0% (EL) |
 | HVCRE | 95% | 120% | 140% | 250% | 0% (EL) |
+
+### SA Specialised Lending (Art. 122A-122B)
+
+!!! warning "Not Yet Implemented"
+    SA specialised lending risk weights under Art. 122A-122B are described here for regulatory
+    completeness but are not yet implemented in the calculator. The SA calculator currently assigns
+    corporate risk weights to specialised lending exposures.
+
+Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from slotting:
+
+| Specialised Lending Type | Risk Weight |
+|--------------------------|-------------|
+| Object Finance | 100% |
+| Commodities Finance | 100% |
+| Project Finance (pre-operational) | **130%** |
+| Project Finance (operational) | 100% |
+| Project Finance (high-quality operational) | **80%** |
+
+High-quality operational project finance requires: low LTV, strong revenue predictability,
+contractual protections, and adequate refinancing capacity.
 
 ## Configuration Example
 

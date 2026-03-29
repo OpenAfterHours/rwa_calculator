@@ -130,19 +130,32 @@ Standardised Approach risk weights are recalibrated:
 
 #### Real Estate Exposures
 
-New LTV-based risk weights for real estate:
+New risk weight approaches for real estate:
 
-**Residential Real Estate (Regulatory RRE):**
+**General Residential Real Estate — Loan-Splitting (PRA Art. 124F):**
 
-| LTV | Whole Loan RW | Income-Producing RW |
-|-----|---------------|---------------------|
-| ≤ 50% | 20% | 30% |
-| 50-60% | 25% | 35% |
-| 60-70% | 30% | 45% |
-| 70-80% | 40% | 60% |
-| 80-90% | 50% | 75% |
-| 90-100% | 70% | 105% |
-| > 100% | Counterparty RW | Counterparty RW |
+The PRA adopted loan-splitting for general residential (not income-dependent):
+
+- Secured portion (up to **55% of property value**) → **20%** risk weight
+- Residual → **counterparty risk weight** (75% for individuals per Art. 124L,
+  85% for non-retail SME, or the unsecured corporate RW)
+
+!!! note "PRA vs BCBS"
+    The BCBS standard (CRE20.73) offers both whole-loan and loan-splitting approaches.
+    The PRA mandated loan-splitting. This produces continuous risk weights that increase
+    with LTV rather than discrete bands.
+
+**Income-Producing Residential Real Estate — Whole-Loan (PRA Art. 124G, Table 6B):**
+
+| LTV | Income-Producing RW |
+|-----|---------------------|
+| ≤ 50% | 30% |
+| 50-60% | 35% |
+| 60-70% | 40% |
+| 70-80% | 50% |
+| 80-90% | 60% |
+| 90-100% | 75% |
+| > 100% | 105% |
 
 **Commercial Real Estate:**
 

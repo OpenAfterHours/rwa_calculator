@@ -38,8 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs**: Remove completed development roadmap (`docs/plans/roadmap.md`) to reduce maintenance burden
 
 ### Fixed
+- **Regulatory**: Replace incorrect BCBS whole-loan LTV-band approach for general residential RE with PRA-mandated loan-splitting (Art. 124F) — secured portion (up to 55% of property value) at 20%, residual at counterparty RW
+- **Regulatory**: Fix income-producing residential RE 60-70% LTV band risk weight from 45% to 40% per PRA Table 6B (Art. 124G)
 - **Docs**: Fix incorrect Basel 3.1 haircut table in `basel31.md` — equity haircuts are 25%/35% (not 15%/25%), long-dated bond haircuts also increased
 - **Docs**: Fix defaulted exposure comparison table to show residential RE flat 100% under Basel 3.1
+- **Docs**: Fix residential RE tables to describe PRA loan-splitting instead of BCBS whole-loan table
 - **Docs**: Fix mermaid diagrams not rendering by adding `custom_fences` configuration for `pymdownx.superfences`
 - **Style**: Update theme color palette to orange
 

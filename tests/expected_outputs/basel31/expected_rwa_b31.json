@@ -159,7 +159,7 @@
     {
       "scenario_id": "B31-A5",
       "scenario_group": "B31-A",
-      "description": "Residential mortgage 60% LTV — 25% RW (was CRR 35%)",
+      "description": "Residential mortgage 60% LTV — ~24.6% RW via loan-splitting (was CRR 35%)",
       "regulatory_framework": "Basel 3.1",
       "approach": "SA",
       "exposure_class": "RETAIL_MORTGAGE",
@@ -172,18 +172,18 @@
       "cqs": null,
       "ltv": 0.6,
       "turnover": null,
-      "risk_weight": 0.25,
-      "rwa_before_sf": 125000.0,
+      "risk_weight": 0.245833,
+      "rwa_before_sf": 122916.67,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 125000.0,
+      "rwa_after_sf": 122916.67,
       "expected_loss": null,
-      "regulatory_reference": "CRE20.73 Table 15",
-      "calculation_notes": "General residential RE whole-loan approach. LTV 60% → band >50%-60% → 25% RW. Was 35% under CRR."
+      "regulatory_reference": "PRA PS1/26 Art. 124F",
+      "calculation_notes": "General residential RE loan-splitting. Secured = min(1, 0.55/0.60) = 91.67% at 20%, residual at 75% (Art. 124L). Was 35% under CRR."
     },
     {
       "scenario_id": "B31-A6",
       "scenario_group": "B31-A",
-      "description": "Residential mortgage 85% LTV — 40% RW (was CRR 37.35% split)",
+      "description": "Residential mortgage 85% LTV — ~39.4% RW via loan-splitting (was CRR 37.35% split)",
       "regulatory_framework": "Basel 3.1",
       "approach": "SA",
       "exposure_class": "RETAIL_MORTGAGE",
@@ -196,13 +196,13 @@
       "cqs": null,
       "ltv": 0.85,
       "turnover": null,
-      "risk_weight": 0.4,
-      "rwa_before_sf": 340000.0,
+      "risk_weight": 0.394118,
+      "rwa_before_sf": 335000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 340000.0,
+      "rwa_after_sf": 335000.0,
       "expected_loss": null,
-      "regulatory_reference": "CRE20.73 Table 15",
-      "calculation_notes": "General residential RE whole-loan approach. LTV 85% → band >80%-90% → 40% RW. Was split 35%/75% under CRR."
+      "regulatory_reference": "PRA PS1/26 Art. 124F",
+      "calculation_notes": "General residential RE loan-splitting. Secured = min(1, 0.55/0.85) = 64.71% at 20%, residual at 75% (Art. 124L). Was split 35%/75% under CRR."
     },
     {
       "scenario_id": "B31-A7",

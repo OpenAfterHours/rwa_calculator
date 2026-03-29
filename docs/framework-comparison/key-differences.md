@@ -251,15 +251,28 @@ risk weight.
 
 ### Residential Real Estate
 
-| LTV | CRR | Basel 3.1 (Whole Loan) | Basel 3.1 (Income-Producing) |
-|-----|-----|------------------------|------------------------------|
-| ≤ 50% | 35% | **20%** | **30%** |
-| 50-60% | 35% | **25%** | **35%** |
-| 60-70% | 35% | **30%** | **45%** |
-| 70-80% | 35% | **40%** | **60%** |
-| 80-90% | 75% | **50%** | **75%** |
-| 90-100% | 75% | **70%** | **105%** |
-| > 100% | Cpty RW | Cpty RW | Cpty RW |
+**General (not cash-flow dependent) — PRA Art. 124F: Loan-Splitting**
+
+The PRA adopted loan-splitting (not the BCBS whole-loan LTV-band table):
+
+| Component | CRR | Basel 3.1 (Art. 124F) |
+|-----------|-----|----------------------|
+| Secured portion (up to 55% of property value) | 35% (flat up to 80% LTV) | **20%** |
+| Residual portion | 75% (or counterparty RW) | **Counterparty RW** (75% for individuals per Art. 124L) |
+
+Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875 + 75%×0.3125 = **37.2%** (vs CRR 35%).
+
+**Income-producing (cash-flow dependent) — PRA Art. 124G, Table 6B: Whole-Loan**
+
+| LTV | CRR | Basel 3.1 |
+|-----|-----|-----------|
+| ≤ 50% | 35% | **30%** |
+| 50-60% | 35% | **35%** |
+| 60-70% | 35% | **40%** |
+| 70-80% | 35% | **50%** |
+| 80-90% | 75% | **60%** |
+| 90-100% | 75% | **75%** |
+| > 100% | Cpty RW | **105%** |
 
 ### Commercial Real Estate
 

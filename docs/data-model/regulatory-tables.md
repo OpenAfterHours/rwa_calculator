@@ -97,33 +97,30 @@ Under CRR, residential mortgages use a split treatment based on 80% LTV threshol
 
 **Source**: `COMMERCIAL_RE_PARAMS` in `data/tables/crr_risk_weights.py`
 
-### Basel 3.1 Residential Real Estate (CRE20.73-82)
+### Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 
-#### General (whole-loan approach)
+#### General — Loan-Splitting (Art. 124F)
 
-| LTV | Risk Weight |
-|-----|------------|
-| ≤ 50% | 20% |
-| 50–60% | 25% |
-| 60–70% | 25% |
-| 70–80% | 30% |
-| 80–90% | 40% |
-| 90–100% | 50% |
-| > 100% | 70% |
+The PRA adopted loan-splitting (not the BCBS whole-loan table) for general residential:
 
-#### Income-producing (CRE20.82)
+- Secured portion (up to **55% of property value**) → **20%** risk weight
+- Residual → **counterparty risk weight** (75% for individuals per Art. 124L)
+
+**Source**: `B31_RESIDENTIAL_GENERAL_SECURED_RW`, `B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO` in `data/tables/b31_risk_weights.py`
+
+#### Income-producing — Whole-Loan (Art. 124G, Table 6B)
 
 | LTV | Risk Weight |
 |-----|------------|
 | ≤ 50% | 30% |
 | 50–60% | 35% |
-| 60–70% | 45% |
+| 60–70% | 40% |
 | 70–80% | 50% |
 | 80–90% | 60% |
 | 90–100% | 75% |
 | > 100% | 105% |
 
-**Source**: `B31_RESIDENTIAL_GENERAL_LTV_BANDS`, `B31_RESIDENTIAL_INCOME_LTV_BANDS` in `data/tables/b31_risk_weights.py`
+**Source**: `B31_RESIDENTIAL_INCOME_LTV_BANDS` in `data/tables/b31_risk_weights.py`
 
 ### Basel 3.1 Commercial Real Estate (CRE20.86)
 

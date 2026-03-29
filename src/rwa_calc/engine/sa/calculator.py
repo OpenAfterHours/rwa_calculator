@@ -29,7 +29,7 @@ References:
 - CRE20.22-26: Basel 3.1 revised corporate CQS risk weights
 - CRE20.47-49: Basel 3.1 subordinated debt, investment-grade, SME corporate
 - CRE20.88-90: Basel 3.1 defaulted exposure risk weights
-- CRE20.73: Basel 3.1 residential RE (general) whole-loan LTV bands
+- PRA Art. 124F: Basel 3.1 residential RE (general) loan-splitting
 - CRE20.82: Basel 3.1 residential RE (income-producing) LTV bands
 - CRE20.85: Basel 3.1 commercial RE (general) preferential treatment
 - CRE20.86: Basel 3.1 commercial RE (income-producing) LTV bands
@@ -464,12 +464,12 @@ class SACalculator:
                     # 4. ADC: 150% or 100% pre-sold (CRE20.87-88)
                     .when(pl.col("is_adc").fill_null(False))
                     .then(b31_adc_rw_expr())
-                    # 2. Residential mortgage: LTV-band (CRE20.73/82)
+                    # 2. Residential mortgage: loan-split (Art. 124F) / LTV-band (Art. 124G)
                     .when(
                         _uc.str.contains("MORTGAGE", literal=True)
                         | _uc.str.contains("RESIDENTIAL", literal=True)
                     )
-                    .then(b31_residential_rw_expr())
+                    .then(b31_residential_rw_expr("_cqs_risk_weight"))
                     # 3. Commercial RE: LTV-band or min() (CRE20.85/86)
                     .when(
                         _uc.str.contains("COMMERCIAL", literal=True)

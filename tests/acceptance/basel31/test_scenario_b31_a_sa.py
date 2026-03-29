@@ -137,20 +137,20 @@ class TestB31GroupA_StandardisedApproach:
             result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="B31-A4"
         )
 
-    def test_b31_a5_residential_mortgage_60pct_ltv_25pct_rw(
+    def test_b31_a5_residential_mortgage_60pct_ltv_loan_split(
         self,
         sa_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-A5: Residential mortgage 60% LTV gets 25% RW (was CRR 35%).
+        B31-A5: Residential mortgage 60% LTV gets ~24.6% RW (was CRR 35%).
 
         Input: £500,000 mortgage at 60% LTV (general, not income-producing)
-        Expected: RWA = £125,000 (25% RW per CRE20.73 Table 15)
-        Rationale: Basel 3.1 replaces the CRR binary 35%/75% split with
-            granular LTV-band risk weights. At 60% LTV, the whole-loan
-            approach assigns 25% (band >50%-60%), a significant reduction
-            from the CRR 35% flat rate.
+        Expected: RWA = £122,917 (~24.58% RW per PRA PS1/26 Art. 124F)
+        Rationale: Basel 3.1 uses loan-splitting for general residential.
+            Secured portion = min(1, 0.55/0.60) = 91.67% at 20% RW.
+            Residual = 8.33% at 75% counterparty RW (Art. 124L).
+            Weighted RW = 0.20 × 0.9167 + 0.75 × 0.0833 ≈ 24.58%.
         """
         expected = expected_outputs_dict["B31-A5"]
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_RTL_MTG_001")
@@ -163,19 +163,18 @@ class TestB31GroupA_StandardisedApproach:
             result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="B31-A5"
         )
 
-    def test_b31_a6_residential_mortgage_85pct_ltv_40pct_rw(
+    def test_b31_a6_residential_mortgage_85pct_ltv_loan_split(
         self,
         sa_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-A6: Residential mortgage 85% LTV gets 40% RW (was CRR ~37.35% split).
+        B31-A6: Residential mortgage 85% LTV gets ~39.4% RW (was CRR ~37.35% split).
 
         Input: £850,000 mortgage at 85% LTV (general, not income-producing)
-        Expected: RWA = £340,000 (40% RW per CRE20.73 Table 15)
-        Rationale: Under CRR, 85% LTV got split treatment (35% up to 80%,
-            75% on excess), yielding ~37.35% blended. Basel 3.1 whole-loan
-            approach assigns a flat 40% from the >80%-90% LTV band.
+        Expected: RWA = £335,000 (~39.41% RW per PRA PS1/26 Art. 124F)
+        Rationale: Loan-splitting: secured = min(1, 0.55/0.85) = 64.71% at 20%.
+            Residual = 35.29% at 75% counterparty RW. Weighted ≈ 39.41%.
         """
         expected = expected_outputs_dict["B31-A6"]
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_RTL_MTG_002")

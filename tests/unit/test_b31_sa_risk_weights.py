@@ -24,7 +24,7 @@ References:
 - CRE20.16-21: Institution ECRA/SCRA risk weights
 - CRE20.22-26: Revised corporate CQS risk weights
 - CRE20.47-49: Subordinated debt, investment-grade, SME corporate
-- CRE20.73: Residential RE (general) whole-loan LTV bands
+- PRA Art. 124F: Residential RE (general) loan-splitting approach
 - CRE20.82: Residential RE (income-producing) LTV bands
 - CRE20.85: Commercial RE (general) preferential treatment
 - CRE20.86: Commercial RE (income-producing) LTV bands
@@ -49,7 +49,8 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_RISK_WEIGHTS,
     B31_CORPORATE_SME_RW,
-    B31_RESIDENTIAL_GENERAL_LTV_BANDS,
+    B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO,
+    B31_RESIDENTIAL_GENERAL_SECURED_RW,
     B31_RESIDENTIAL_INCOME_LTV_BANDS,
     B31_SCRA_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
@@ -83,60 +84,67 @@ def crr_config() -> CalculationConfig:
 
 
 # =============================================================================
-# RESIDENTIAL RE — GENERAL (CRE20.73)
+# RESIDENTIAL RE — GENERAL (PRA PS1/26 Art. 124F)
 # =============================================================================
+
+
+def _expected_loan_split_rw(
+    ltv: float, cp_rw: float = 0.75, secured_rw: float = 0.20, max_ratio: float = 0.55
+) -> float:
+    """Compute expected loan-splitting RW for a general residential exposure."""
+    secured_share = min(1.0, max_ratio / ltv)
+    return secured_rw * secured_share + cp_rw * (1.0 - secured_share)
 
 
 class TestB31ResidentialGeneral:
     """Basel 3.1 residential RE risk weights — general (not income-producing).
 
-    Whole-loan approach (CRE20.73): risk weight applied to entire exposure
-    based on LTV band. Seven bands from 20% to 70%.
+    PRA PS1/26 Art. 124F: loan-splitting approach — 20% on portion up to 55% of
+    property value, counterparty risk weight (75% for individuals per Art. 124L)
+    on the residual.
     """
 
     @pytest.mark.parametrize(
         ("ltv", "expected_rw"),
         [
-            (Decimal("0.30"), Decimal("0.20")),  # LTV 30% → 20%
-            (Decimal("0.50"), Decimal("0.20")),  # LTV 50% (boundary) → 20%
-            (Decimal("0.55"), Decimal("0.25")),  # LTV 55% → 25%
-            (Decimal("0.60"), Decimal("0.25")),  # LTV 60% (boundary) → 25%
-            (Decimal("0.65"), Decimal("0.25")),  # LTV 65% → 25%
-            (Decimal("0.70"), Decimal("0.25")),  # LTV 70% (boundary) → 25%
-            (Decimal("0.75"), Decimal("0.30")),  # LTV 75% → 30%
-            (Decimal("0.80"), Decimal("0.30")),  # LTV 80% (boundary) → 30%
-            (Decimal("0.85"), Decimal("0.40")),  # LTV 85% → 40%
-            (Decimal("0.90"), Decimal("0.40")),  # LTV 90% (boundary) → 40%
-            (Decimal("0.95"), Decimal("0.50")),  # LTV 95% → 50%
-            (Decimal("1.00"), Decimal("0.50")),  # LTV 100% (boundary) → 50%
-            (Decimal("1.10"), Decimal("0.70")),  # LTV 110% → 70%
-            (Decimal("1.50"), Decimal("0.70")),  # LTV 150% → 70%
+            # LTV ≤ 55%: entire exposure secured → flat 20%
+            (Decimal("0.30"), 0.20),
+            (Decimal("0.50"), 0.20),
+            (Decimal("0.55"), 0.20),
+            # LTV > 55%: weighted average of 20% (secured) and 75% (residual)
+            (Decimal("0.60"), _expected_loan_split_rw(0.60)),
+            (Decimal("0.65"), _expected_loan_split_rw(0.65)),
+            (Decimal("0.70"), _expected_loan_split_rw(0.70)),
+            (Decimal("0.80"), _expected_loan_split_rw(0.80)),
+            (Decimal("0.85"), _expected_loan_split_rw(0.85)),
+            (Decimal("0.90"), _expected_loan_split_rw(0.90)),
+            (Decimal("1.00"), _expected_loan_split_rw(1.00)),
+            (Decimal("1.10"), _expected_loan_split_rw(1.10)),
+            (Decimal("1.50"), _expected_loan_split_rw(1.50)),
         ],
         ids=[
-            "ltv_30pct",
-            "ltv_50pct_boundary",
-            "ltv_55pct",
-            "ltv_60pct_boundary",
+            "ltv_30pct_all_secured",
+            "ltv_50pct_all_secured",
+            "ltv_55pct_boundary_all_secured",
+            "ltv_60pct",
             "ltv_65pct",
-            "ltv_70pct_boundary",
-            "ltv_75pct",
-            "ltv_80pct_boundary",
+            "ltv_70pct",
+            "ltv_80pct",
             "ltv_85pct",
-            "ltv_90pct_boundary",
-            "ltv_95pct",
-            "ltv_100pct_boundary",
+            "ltv_90pct",
+            "ltv_100pct",
             "ltv_110pct",
             "ltv_150pct",
         ],
     )
-    def test_ltv_band_risk_weight(
+    def test_loan_split_risk_weight(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
         ltv: Decimal,
-        expected_rw: Decimal,
+        expected_rw: float,
     ) -> None:
-        """Each LTV band maps to the correct risk weight under Basel 3.1."""
+        """Loan-splitting produces correct weighted-average RW per Art. 124F."""
         result = sa_calculator.calculate_single_exposure(
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
@@ -144,14 +152,14 @@ class TestB31ResidentialGeneral:
             config=b31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(expected_rw)
+        assert float(result["risk_weight"]) == pytest.approx(expected_rw, abs=1e-4)
 
-    def test_null_ltv_defaults_to_highest_band(
+    def test_null_ltv_defaults_to_full_counterparty_rw(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Null LTV should default to 1.0 (fill_null) → 50% band."""
+        """Null LTV defaults to 1.0: secured_share = 55%, residual = 45%."""
         result = sa_calculator.calculate_single_exposure(
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
@@ -159,8 +167,10 @@ class TestB31ResidentialGeneral:
             config=b31_config,
         )
 
-        # fill_null(1.0) → LTV=1.0 → 90-100% band → 50%
-        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+        # fill_null(1.0) → LTV=1.0 → secured_share = 55/100 = 0.55
+        # RW = 0.20 × 0.55 + 0.75 × 0.45 = 0.4475
+        expected = _expected_loan_split_rw(1.0)
+        assert float(result["risk_weight"]) == pytest.approx(expected, abs=1e-4)
 
     def test_rwa_calculation(
         self,
@@ -168,15 +178,17 @@ class TestB31ResidentialGeneral:
         b31_config: CalculationConfig,
     ) -> None:
         """RWA = EAD × RW for a Basel 3.1 residential mortgage."""
+        ltv = 0.65
+        expected_rw = _expected_loan_split_rw(ltv)
         result = sa_calculator.calculate_single_exposure(
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
-            ltv=Decimal("0.65"),  # 60-70% band → 25%
+            ltv=Decimal("0.65"),
             config=b31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.25"))
-        assert result["rwa"] == pytest.approx(Decimal("100000"))  # 400k × 25%
+        assert float(result["risk_weight"]) == pytest.approx(expected_rw, abs=1e-4)
+        assert float(result["rwa"]) == pytest.approx(400000 * expected_rw, abs=1.0)
 
 
 # =============================================================================
@@ -197,7 +209,7 @@ class TestB31ResidentialIncomeProducing:
             (Decimal("0.30"), Decimal("0.30")),  # LTV 30% → 30%
             (Decimal("0.50"), Decimal("0.30")),  # LTV 50% (boundary) → 30%
             (Decimal("0.55"), Decimal("0.35")),  # LTV 55% → 35%
-            (Decimal("0.65"), Decimal("0.45")),  # LTV 65% → 45%
+            (Decimal("0.65"), Decimal("0.40")),  # LTV 65% → 40% (PRA Table 6B)
             (Decimal("0.75"), Decimal("0.50")),  # LTV 75% → 50%
             (Decimal("0.85"), Decimal("0.60")),  # LTV 85% → 60%
             (Decimal("0.95"), Decimal("0.75")),  # LTV 95% → 75%
@@ -523,12 +535,18 @@ class TestB31ADCExposures:
 class TestScalarLookups:
     """Tests for convenience scalar lookup functions."""
 
-    def test_residential_general_lookup(self) -> None:
-        """Scalar lookup matches LTV band table."""
-        for band in B31_RESIDENTIAL_GENERAL_LTV_BANDS:
-            ltv = band["ltv_lower"] + Decimal("0.01") if band["ltv_lower"] > 0 else Decimal("0.10")
-            rw, desc = lookup_b31_residential_rw(ltv, is_income_producing=False)
-            assert rw == band["risk_weight"], f"LTV {ltv}: expected {band['risk_weight']}, got {rw}"
+    def test_residential_general_lookup_loan_split(self) -> None:
+        """Scalar lookup uses loan-splitting for general residential."""
+        # LTV ≤ 55%: fully secured → 20%
+        rw, desc = lookup_b31_residential_rw(Decimal("0.50"), is_income_producing=False)
+        assert rw == Decimal("0.20")
+        assert "loan-split" in desc
+
+        # LTV 80%: weighted average of 20% (secured @ 55/80) and 75% (residual)
+        rw, _ = lookup_b31_residential_rw(Decimal("0.80"), is_income_producing=False)
+        secured_share = Decimal("0.55") / Decimal("0.80")
+        expected = Decimal("0.20") * secured_share + Decimal("0.75") * (1 - secured_share)
+        assert rw == pytest.approx(expected)
 
     def test_residential_income_lookup(self) -> None:
         """Scalar lookup for income-producing residential matches table."""
@@ -725,7 +743,7 @@ class TestCRRvsBasel31Comparison:
         crr_config: CalculationConfig,
         b31_config: CalculationConfig,
     ) -> None:
-        """At 110% LTV, Basel 3.1 (70%) is higher than CRR split (~43%)."""
+        """At 110% LTV, Basel 3.1 loan-split is higher than CRR split (~46%)."""
         crr_result = sa_calculator.calculate_single_exposure(
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
@@ -741,8 +759,9 @@ class TestCRRvsBasel31Comparison:
         )
 
         # CRR split: (0.80/1.10)*0.35 + (0.30/1.10)*0.75 ≈ 0.459
-        # B31: 70% flat
-        assert float(b31_result["risk_weight"]) == pytest.approx(0.70)
+        # B31 loan-split: 0.20 × (0.55/1.10) + 0.75 × (0.55/1.10) ≈ 0.475
+        expected_b31 = _expected_loan_split_rw(1.10)
+        assert float(b31_result["risk_weight"]) == pytest.approx(expected_b31, abs=1e-4)
         assert b31_result["rwa"] > crr_result["rwa"]
 
     def test_supporting_factors_disabled_b31(
@@ -771,34 +790,29 @@ class TestCRRvsBasel31Comparison:
 class TestTableDataIntegrity:
     """Verify Basel 3.1 risk weight table data is consistent and complete."""
 
-    def test_residential_general_bands_cover_full_range(self) -> None:
-        """Residential general bands should cover 0% to infinity."""
-        assert B31_RESIDENTIAL_GENERAL_LTV_BANDS[0]["ltv_lower"] == Decimal("0.00")
-        assert B31_RESIDENTIAL_GENERAL_LTV_BANDS[-1]["ltv_upper"] == Decimal("999.0")
+    def test_residential_general_loan_split_constants(self) -> None:
+        """General residential uses loan-splitting with 20% secured RW at 55%."""
+        assert B31_RESIDENTIAL_GENERAL_SECURED_RW == Decimal("0.20")
+        assert B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO == Decimal("0.55")
 
-    def test_residential_general_bands_contiguous(self) -> None:
-        """Each band's lower bound should equal the previous band's upper bound."""
-        bands = B31_RESIDENTIAL_GENERAL_LTV_BANDS
+    def test_residential_income_bands_cover_full_range(self) -> None:
+        """Income-producing residential bands should cover 0% to infinity."""
+        assert B31_RESIDENTIAL_INCOME_LTV_BANDS[0]["ltv_lower"] == Decimal("0.00")
+        assert B31_RESIDENTIAL_INCOME_LTV_BANDS[-1]["ltv_upper"] == Decimal("999.0")
+
+    def test_residential_income_bands_contiguous(self) -> None:
+        """Each income band's lower bound should equal the previous band's upper bound."""
+        bands = B31_RESIDENTIAL_INCOME_LTV_BANDS
         for i in range(1, len(bands)):
             assert bands[i]["ltv_lower"] == bands[i - 1]["ltv_upper"]
-
-    def test_residential_income_bands_higher_rw(self) -> None:
-        """Income-producing RWs should be ≥ general RWs at each LTV band."""
-        for gen, inc in zip(
-            B31_RESIDENTIAL_GENERAL_LTV_BANDS,
-            B31_RESIDENTIAL_INCOME_LTV_BANDS,
-            strict=True,
-        ):
-            assert inc["risk_weight"] >= gen["risk_weight"]
 
     def test_adc_risk_weights(self) -> None:
         """ADC risk weight constants should be correct."""
         assert Decimal("1.50") == B31_ADC_RISK_WEIGHT
         assert Decimal("1.00") == B31_ADC_PRESOLD_RISK_WEIGHT
 
-    def test_seven_residential_bands(self) -> None:
-        """Should have exactly 7 LTV bands for residential RE."""
-        assert len(B31_RESIDENTIAL_GENERAL_LTV_BANDS) == 7
+    def test_seven_income_residential_bands(self) -> None:
+        """Should have exactly 7 LTV bands for income-producing residential RE."""
         assert len(B31_RESIDENTIAL_INCOME_LTV_BANDS) == 7
 
     def test_three_commercial_income_bands(self) -> None:

@@ -557,6 +557,141 @@ class IRBLazyFrame:
         return lf
 
     # =========================================================================
+    # POST-MODEL ADJUSTMENTS (Basel 3.1)
+    # =========================================================================
+
+    def apply_post_model_adjustments(self, config: CalculationConfig) -> pl.LazyFrame:
+        """
+        Apply post-model adjustments to IRB RWEA and EL (Basel 3.1 only).
+
+        PRA PS9/24 Art. 153(5A), 154(4A), 158(6A) require firms to apply
+        adjustments for known model deficiencies. Three RWEA components:
+
+        1. General PMA: scalar add-on to base RWEA (supervisory requirement)
+        2. Mortgage RW floor: min risk weight for residential mortgage exposures
+        3. Unrecognised exposure: scalar for model coverage gaps
+
+        EL adjustment mirrors the general PMA scalar.
+
+        Under CRR, no adjustments are applied (returns frame unchanged).
+
+        Produces columns:
+            rwa_pre_adjustments: RWEA before any PMAs
+            post_model_adjustment_rwa: General PMA RWEA add-on
+            mortgage_rw_floor_adjustment: RWEA increase from mortgage floor
+            unrecognised_exposure_adjustment: RWEA increase for unrecognised exposures
+            el_pre_adjustment: EL before PMAs
+            post_model_adjustment_el: General PMA EL add-on
+            el_after_adjustment: EL after all PMAs
+
+        Args:
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with post-model adjustment columns
+        """
+        pma_config = config.post_model_adjustments
+
+        if not pma_config.enabled:
+            # CRR or disabled: add zero-valued columns for schema consistency
+            return self._lf.with_columns(
+                [
+                    pl.col("rwa").alias("rwa_pre_adjustments"),
+                    pl.lit(0.0).alias("post_model_adjustment_rwa"),
+                    pl.lit(0.0).alias("mortgage_rw_floor_adjustment"),
+                    pl.lit(0.0).alias("unrecognised_exposure_adjustment"),
+                    pl.col("expected_loss").alias("el_pre_adjustment"),
+                    pl.lit(0.0).alias("post_model_adjustment_el"),
+                    pl.col("expected_loss").alias("el_after_adjustment"),
+                ]
+            )
+
+        schema = self._lf.collect_schema()
+        cols = schema.names()
+
+        pma_rwa_scalar = float(pma_config.pma_rwa_scalar)
+        pma_el_scalar = float(pma_config.pma_el_scalar)
+        mortgage_rw_floor = float(pma_config.mortgage_rw_floor)
+        unrecognised_scalar = float(pma_config.unrecognised_exposure_scalar)
+
+        # Mortgage RW floor: applies to residential mortgage IRB exposures
+        # Adjustment = max(0, floor_rw - modelled_rw) × EAD × 12.5
+        is_mortgage = (
+            pl.col("exposure_class")
+            .cast(pl.String)
+            .fill_null("")
+            .str.to_uppercase()
+            .str.contains("MORTGAGE|RESIDENTIAL")
+        )
+
+        rw_col = "risk_weight" if "risk_weight" in cols else None
+        if rw_col and mortgage_rw_floor > 0:
+            # Floor adjustment: excess of floor RW over modelled RW, converted to RWEA
+            floor_rw_increase = pl.max_horizontal(
+                pl.lit(0.0),
+                pl.lit(mortgage_rw_floor) - pl.col(rw_col),
+            )
+            mortgage_adj_expr = (
+                pl.when(is_mortgage)
+                .then(floor_rw_increase * pl.col("ead_final"))
+                .otherwise(pl.lit(0.0))
+            )
+        else:
+            mortgage_adj_expr = pl.lit(0.0)
+
+        # General PMA and unrecognised exposure: scalar add-ons to base RWEA
+        general_pma_expr = pl.col("rwa") * pma_rwa_scalar
+        unrecognised_expr = pl.col("rwa") * unrecognised_scalar
+
+        # EL adjustment
+        el_col = "expected_loss" if "expected_loss" in cols else None
+        if el_col:
+            el_pma_expr = pl.col(el_col) * pma_el_scalar
+        else:
+            el_pma_expr = pl.lit(0.0)
+
+        lf = self._lf.with_columns(
+            [
+                # Record pre-adjustment values
+                pl.col("rwa").alias("rwa_pre_adjustments"),
+                # RWEA adjustments
+                general_pma_expr.alias("post_model_adjustment_rwa"),
+                mortgage_adj_expr.alias("mortgage_rw_floor_adjustment"),
+                unrecognised_expr.alias("unrecognised_exposure_adjustment"),
+            ]
+        )
+
+        # Apply adjustments to RWA
+        lf = lf.with_columns(
+            (
+                pl.col("rwa")
+                + pl.col("post_model_adjustment_rwa")
+                + pl.col("mortgage_rw_floor_adjustment")
+                + pl.col("unrecognised_exposure_adjustment")
+            ).alias("rwa")
+        )
+
+        # EL adjustments
+        if el_col:
+            lf = lf.with_columns(
+                [
+                    pl.col(el_col).alias("el_pre_adjustment"),
+                    el_pma_expr.alias("post_model_adjustment_el"),
+                    (pl.col(el_col) + el_pma_expr).alias("el_after_adjustment"),
+                ]
+            )
+        else:
+            lf = lf.with_columns(
+                [
+                    pl.lit(0.0).alias("el_pre_adjustment"),
+                    pl.lit(0.0).alias("post_model_adjustment_el"),
+                    pl.lit(0.0).alias("el_after_adjustment"),
+                ]
+            )
+
+        return lf
+
+    # =========================================================================
     # EL SHORTFALL / EXCESS
     # =========================================================================
 

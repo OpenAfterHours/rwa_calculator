@@ -44,6 +44,8 @@ The COREP generator was built against an incorrect understanding of the template
 | 3I: Equity transitional | **DONE** | Rows 0371-0374 wired for B3.1 OF 07.00 memorandum. equity_transitional_approach added. 6 new tests. |
 | 3A: Collateral method split | **DONE** | Per-type collateral tracking in CRM processor. C 07.00 cols 0070/0080/0120/0140/0150. C 08.01 cols 0150-0210 (type breakdown). 8 new tests. |
 | 3B: Credit derivatives | **DONE** | protection_type field added to guarantee schema. CRM processor carries type through pipeline. C 07.00 col 0060, C 08.01 cols 0050/0160/0310 wired. 8 new tests. |
+| 3C: CRM substitution flows | **DONE** | Completed as part of Task 2H. Full cross-class outflow/inflow computation in _compute_substitution_flows(). Sub-row inflow allocation deferred (total row only). |
+| 3F: Post-model adjustments | **DONE** | PostModelAdjustmentConfig added. IRB namespace apply_post_model_adjustments() method. Mortgage RW floor, general PMA, unrecognised exposure adjustments. COREP cols 0251-0254, 0280-0282 wired. 28 new tests (18 IRB + 10 COREP). |
 | 3J: Currency mismatch multiplier | **DONE** | 1.5x RW multiplier for retail/RE when exposure currency ≠ borrower income currency. Basel 3.1 only. COREP row 0380 wired. 13 new tests (8 SA + 5 COREP). |
 
 ---
@@ -586,6 +588,12 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "substitution_flow"`
 
+**Implementation notes (completed)**:
+- Completed as part of Task 2H. `_compute_substitution_flows()` pre-computes per-class outflows/inflows. `_compute_substitution_outflow()` computes from data subsets.
+- C 07.00 cols 0090/0100 and C 08.01 cols 0070/0080 fully wired.
+- Sub-row inflow allocation (e.g., defaulted/SME sub-rows) deferred — only total row receives inflows.
+- 9 tests in `TestSubstitutionFlows` cover outflow, inflow, zero-flow, net exposure for both C 07.00 and C 08.01.
+
 ---
 
 #### Task 3D: On-balance-sheet netting (Basel 3.1 col 0035)
@@ -667,6 +675,21 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 **Complexity**: Medium. Config-driven adjustments applied in IRB calculator.
 
 **Verify**: `uv run pytest tests/unit/test_irb_calculator.py tests/unit/test_corep.py -v`
+
+**Implementation notes (completed)**:
+- `PostModelAdjustmentConfig` added to `contracts/config.py` with `pma_rwa_scalar`, `pma_el_scalar`, `mortgage_rw_floor`, `unrecognised_exposure_scalar` parameters. Factory methods for CRR (disabled) and Basel 3.1 (enabled, 15% mortgage floor default).
+- `CalculationConfig.basel_3_1()` factory accepts optional `post_model_adjustments` parameter.
+- 7 new output columns in `CALCULATION_OUTPUT_SCHEMA`: `rwa_pre_adjustments`, `post_model_adjustment_rwa`, `mortgage_rw_floor_adjustment`, `unrecognised_exposure_adjustment`, `el_pre_adjustment`, `post_model_adjustment_el`, `el_after_adjustment`.
+- `apply_post_model_adjustments()` added to IRB namespace (`engine/irb/namespace.py`). Runs after `apply_all_formulas()` and before `compute_el_shortfall_excess()` in all 3 calculator entry points.
+- Mortgage RW floor: applies to exposure classes matching MORTGAGE|RESIDENTIAL. Adjustment = max(0, floor - modelled_rw) × EAD. Non-mortgage classes unaffected.
+- General PMA and unrecognised exposure: scalar × base_rwa. All three RWEA adjustments stack additively.
+- EL adjustment: scalar × base_el. Pre/post values tracked for COREP waterfall.
+- CRR: method returns immediately with zero-valued PMA columns (schema consistency).
+- COREP generator: cols 0251-0254 wired to sum of respective output columns. Col 0280 uses `el_pre_adjustment` (falls back to `irb_expected_loss`). Cols 0281-0282 wired to `post_model_adjustment_el` and `el_after_adjustment`.
+- CRR correctly excluded from PMA columns by column ref filtering (0251-0254, 0281-0282 only in B3.1).
+- 18 new IRB tests in `test_irb_post_model_adjustments.py`: CRR passthrough, B3.1 general PMA, mortgage floor binding/non-binding, corporate unaffected, unrecognised exposure, combined adjustments, EL adjustment, zero scalars, config factory tests.
+- 10 new COREP tests in `TestPostModelAdjustments` class: cols 0251-0254 values, cols 0280-0282 values, CRR absence, missing column handling, corporate zero mortgage floor.
+- Total: 252 COREP tests pass (3 Excel skipped), 2060 unit/contract/integration tests pass (3 pre-existing fixture failures).
 
 ---
 

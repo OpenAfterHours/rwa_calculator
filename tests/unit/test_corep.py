@@ -3181,3 +3181,161 @@ class TestCurrencyMismatchRow:
             row = corp.filter(pl.col("row_ref") == "0380")
             if len(row) > 0:
                 assert row["0200"][0] is None
+
+
+# =============================================================================
+# POST-MODEL ADJUSTMENTS — Task 3F
+# =============================================================================
+
+
+def _irb_results_with_pma() -> pl.LazyFrame:
+    """IRB results with post-model adjustment columns for C 08.01 testing.
+
+    Why: Basel 3.1 requires reporting of IRB RWEA waterfall including
+    pre-adjustment RWEA, general PMAs, mortgage RW floor, and unrecognised
+    exposure adjustments. This fixture simulates pipeline output after the
+    IRB calculator has applied post-model adjustments.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2", "IRB_MTG_1"],
+            "approach_applied": ["foundation_irb", "foundation_irb", "advanced_irb"],
+            "exposure_class": ["corporate", "corporate", "retail_mortgage"],
+            "drawn_amount": [5000.0, 3000.0, 4000.0],
+            "undrawn_amount": [1000.0, 0.0, 0.0],
+            "ead_final": [5500.0, 3000.0, 4000.0],
+            "rwa_final": [4050.0, 1920.0, 1400.0],
+            "risk_weight": [0.70, 0.60, 0.30],
+            "irb_pd_floored": [0.005, 0.01, 0.003],
+            "irb_lgd_floored": [0.45, 0.45, 0.15],
+            "irb_maturity_m": [2.5, 3.0, 20.0],
+            "irb_expected_loss": [12.375, 13.5, 1.8],
+            "irb_capital_k": [0.056, 0.048, 0.024],
+            "scra_provision_amount": [10.0, 5.0, 1.0],
+            "gcra_provision_amount": [5.0, 5.0, 1.5],
+            "counterparty_reference": ["CP_X", "CP_Y", "CP_V"],
+            # Post-model adjustment columns (from IRB calculator)
+            "rwa_pre_adjustments": [3850.0, 1800.0, 1200.0],
+            "post_model_adjustment_rwa": [192.5, 90.0, 60.0],
+            "mortgage_rw_floor_adjustment": [0.0, 0.0, 100.0],
+            "unrecognised_exposure_adjustment": [7.7, 30.0, 40.0],
+            # EL adjustments
+            "el_pre_adjustment": [12.375, 13.5, 1.8],
+            "post_model_adjustment_el": [0.62, 0.675, 0.09],
+            "el_after_adjustment": [12.995, 14.175, 1.89],
+        }
+    )
+
+
+class TestPostModelAdjustments:
+    """Task 3F: Post-model adjustments (Basel 3.1 OF 08.01 cols 0251-0254, 0280-0282).
+
+    Why: PRA PS9/24 Art. 153(5A), 154(4A), 158(6A) require firms to report
+    the RWEA waterfall showing the impact of post-model adjustments on IRB
+    results. These columns enable supervisors to assess whether PMAs are
+    adequate and whether modelled risk weights adequately capture risk.
+    """
+
+    def test_b31_col_0251_rwa_pre_adjustments(self) -> None:
+        """Col 0251: RWEA pre adjustments equals sum of rwa_pre_adjustments."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0251"][0] == pytest.approx(3850.0 + 1800.0)
+
+    def test_b31_col_0252_general_pma(self) -> None:
+        """Col 0252: General PMA equals sum of post_model_adjustment_rwa."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0252"][0] == pytest.approx(192.5 + 90.0)
+
+    def test_b31_col_0253_mortgage_floor(self) -> None:
+        """Col 0253: Mortgage RW floor adjustment for mortgage class."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        mtg = bundle.c08_01.get("retail_mortgage")
+        if mtg is not None:
+            total = mtg.filter(pl.col("row_ref") == "0010")
+            assert total["0253"][0] == pytest.approx(100.0)
+
+    def test_b31_col_0254_unrecognised(self) -> None:
+        """Col 0254: Unrecognised exposure adjustment."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0254"][0] == pytest.approx(7.7 + 30.0)
+
+    def test_b31_col_0280_el_pre_adjustment(self) -> None:
+        """Col 0280: EL pre-adjustment equals sum of el_pre_adjustment."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0280"][0] == pytest.approx(12.375 + 13.5)
+
+    def test_b31_col_0281_el_pma(self) -> None:
+        """Col 0281: EL PMA equals sum of post_model_adjustment_el."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0281"][0] == pytest.approx(0.62 + 0.675)
+
+    def test_b31_col_0282_el_after_adjustment(self) -> None:
+        """Col 0282: EL after adjustment equals sum of el_after_adjustment."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0282"][0] == pytest.approx(12.995 + 14.175)
+
+    def test_crr_no_pma_columns(self) -> None:
+        """CRR framework does not have PMA columns 0251-0254."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="CRR"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert "0251" not in total.columns
+        assert "0252" not in total.columns
+        assert "0253" not in total.columns
+        assert "0254" not in total.columns
+
+    def test_without_pma_columns_returns_none(self) -> None:
+        """Without PMA columns in pipeline data, COREP cols are None."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results(), framework="BASEL_3_1")
+        corp = bundle.c08_01.get("corporate")
+        if corp is not None:
+            total = corp.filter(pl.col("row_ref") == "0010")
+            if "0251" in total.columns:
+                assert total["0251"][0] is None
+
+    def test_corporate_zero_mortgage_floor(self) -> None:
+        """Corporate class should have zero mortgage floor adjustment."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_pma(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0253"][0] == pytest.approx(0.0)

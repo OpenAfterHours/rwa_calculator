@@ -974,6 +974,16 @@ CALCULATION_OUTPUT_SCHEMA = {
     "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income
     "currency_mismatch_multiplier_applied": pl.Boolean,  # True if 1.5x RW multiplier applied
     # -------------------------------------------------------------------------
+    # POST-MODEL ADJUSTMENTS (Basel 3.1 PRA PS9/24 Art. 153(5A), 154(4A), 158(6A))
+    # -------------------------------------------------------------------------
+    "rwa_pre_adjustments": pl.Float64,  # RWEA before post-model adjustments
+    "post_model_adjustment_rwa": pl.Float64,  # General PMA add-on to RWEA
+    "mortgage_rw_floor_adjustment": pl.Float64,  # RWEA increase from mortgage RW floor
+    "unrecognised_exposure_adjustment": pl.Float64,  # RWEA increase for unrecognised exposures
+    "el_pre_adjustment": pl.Float64,  # EL before post-model adjustments
+    "post_model_adjustment_el": pl.Float64,  # General PMA add-on to EL
+    "el_after_adjustment": pl.Float64,  # EL after post-model adjustments
+    # -------------------------------------------------------------------------
     # EXPECTED LOSS (IRB comparison to provisions)
     # -------------------------------------------------------------------------
     "irb_expected_loss": pl.Float64,  # PD × LGD × EAD

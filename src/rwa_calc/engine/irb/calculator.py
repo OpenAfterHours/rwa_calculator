@@ -15,6 +15,7 @@ Key responsibilities:
 - Apply maturity adjustment
 - Apply 1.06 scaling factor (CRR only)
 - Calculate RWA = K × 12.5 × [1.06] × EAD × MA
+- Apply post-model adjustments (Basel 3.1: mortgage RW floor, PMAs)
 - Calculate expected loss for provision comparison
 
 References:
@@ -146,6 +147,7 @@ class IRBCalculator:
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
+            .irb.apply_post_model_adjustments(config)
             .irb.compute_el_shortfall_excess()
             .irb.apply_guarantee_substitution(config)
         )
@@ -193,6 +195,7 @@ class IRBCalculator:
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
+            .irb.apply_post_model_adjustments(config)
             .irb.compute_el_shortfall_excess()
             .irb.apply_guarantee_substitution(config)
         )
@@ -226,6 +229,7 @@ class IRBCalculator:
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
+            .irb.apply_post_model_adjustments(config)
             .irb.compute_el_shortfall_excess()
             .irb.apply_guarantee_substitution(config)
         )

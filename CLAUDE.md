@@ -29,9 +29,10 @@ Refer to these resources for RWA regulation context (PRA takes priority over BCB
 - https://www.legislation.gov.uk/eur/2013/575/contents
 
 #### Basel 3.1 implementation
-- PRA PS9/24 — UK-specific rules: https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2
+- New regulations PS1/26 Appendix 1: https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf
+- PRA PS1/26  — UK-specific rules: https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement
+- Template guidance: https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app17.pdf
 - BCBS CRE standards — underlying methodology: https://www.bis.org/basel_framework/standard/CRE.htm?tldate=20260111
-- PRA CP16/22 — implementation consultation: https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards
 
 PDFs of the above are in the `ref_docs/` folder.
 

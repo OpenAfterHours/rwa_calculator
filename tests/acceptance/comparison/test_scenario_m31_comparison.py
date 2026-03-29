@@ -16,7 +16,7 @@ Test groups:
     M31-Summary: Aggregated summary views
 
 References:
-    - PRA PS9/24: Basel 3.1 implementation
+    - PRA PS1/26: Basel 3.1 implementation
     - CRR Art. 92: Own funds requirements
 """
 

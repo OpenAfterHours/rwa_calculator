@@ -1,6 +1,6 @@
 # RWA Calculator — Project Instructions
 
-Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS9/24. Python 3.13+, Polars-based, protocol-driven pipeline architecture.
+Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS1/26. Python 3.13+, Polars-based, protocol-driven pipeline architecture.
 
 ## Architecture
 

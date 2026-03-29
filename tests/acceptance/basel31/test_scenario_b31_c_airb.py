@@ -2,7 +2,7 @@
 Basel 3.1 Group C: Advanced IRB (A-IRB) Acceptance Tests.
 
 These tests validate that the production RWA calculator produces correct
-outputs for A-IRB exposures under the Basel 3.1 framework (PRA PS9/24).
+outputs for A-IRB exposures under the Basel 3.1 framework (PRA PS1/26).
 
 Key Basel 3.1 A-IRB Changes from CRR:
 - LGD floors introduced: 25% unsecured corporate, 5% residential RE,
@@ -27,7 +27,7 @@ Regulatory References:
 - CRE31-32: IRB risk weight formula
 - CRE31.8-9: Retail A-IRB (no maturity adjustment)
 - CRE33: Specialised lending approach selection
-- PRA PS9/24: UK implementation, removal of scaling factor
+- PRA PS1/26: UK implementation, removal of scaling factor
 """
 
 from __future__ import annotations

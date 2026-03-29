@@ -3,7 +3,7 @@ Regulatory lookup tables for RWA calculations.
 
 This module provides static lookup tables as Polars DataFrames for efficient
 joins in the calculation pipeline. Tables are defined per CRR (EU 575/2013)
-as onshored into UK law, plus Basel 3.1 (PRA PS9/24) tables.
+as onshored into UK law, plus Basel 3.1 (PRA PS1/26) tables.
 
 Modules:
     crr_risk_weights: SA risk weights by exposure class and CQS

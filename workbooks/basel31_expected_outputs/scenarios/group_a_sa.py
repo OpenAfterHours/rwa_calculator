@@ -73,7 +73,7 @@ def _(mo):
     - CRE20.71-73: Residential mortgage risk weights (LTV-based)
     - CRE20.83-85: Commercial real estate risk weights
     - CRE20.93-98: Credit conversion factors
-    - PRA PS9/24: UK deviation for institution CQS2 (30% instead of 50%)
+    - PRA PS1/26: UK deviation for institution CQS2 (30% instead of 50%)
     """)
     return
 
@@ -292,7 +292,7 @@ def _(mo):
 
     **Input:** £1m loan to UK bank with CQS 2 rating
     **Expected:** 30% RW, £300k RWA (UK deviation from Basel 50%)
-    **Reference:** CRE20.16, PRA PS9/24 Ch.3
+    **Reference:** CRE20.16, PRA PS1/26 Ch.3
     """)
     return
 
@@ -331,7 +331,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_institution_risk_weight):
             "formula": "RWA = EAD × RW",
             "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4 * 100:.0f}% = £{rwa_a4:,.0f}",
         },
-        regulatory_reference="CRE20.16, PRA PS9/24",
+        regulatory_reference="CRE20.16, PRA PS1/26",
     )
 
     print(f"A4: EAD=£{ead_a4:,.0f}, RW={rw_a4 * 100:.0f}%, RWA=£{rwa_a4:,.0f}")

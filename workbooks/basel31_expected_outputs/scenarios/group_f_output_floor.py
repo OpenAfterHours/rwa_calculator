@@ -214,7 +214,7 @@ def _(OUTPUT_FLOOR_TRANSITIONAL, ScenarioResult):
     rwa_sa_f3 = 100_000_000.0
     year_f3 = 2027
 
-    floor_pct_f3 = OUTPUT_FLOOR_TRANSITIONAL[year_f3]  # 50% (first year under PRA PS9/24)
+    floor_pct_f3 = OUTPUT_FLOOR_TRANSITIONAL[year_f3]  # 50% (first year under PRA PS1/26)
     floor_f3 = floor_pct_f3 * rwa_sa_f3
     rwa_final_f3 = max(rwa_irb_f3, floor_f3)
     floor_binding_f3 = floor_f3 > rwa_irb_f3
@@ -240,7 +240,7 @@ def _(OUTPUT_FLOOR_TRANSITIONAL, ScenarioResult):
             "is_floor_binding": floor_binding_f3,
             "transitional_schedule": OUTPUT_FLOOR_TRANSITIONAL,
         },
-        regulatory_reference="CRE99, PRA PS9/24",
+        regulatory_reference="CRE99, PRA PS1/26",
     )
 
     print(f"F3 ({year_f3}): IRB=£{rwa_irb_f3 / 1e6:.1f}m, SA=£{rwa_sa_f3 / 1e6:.1f}m")

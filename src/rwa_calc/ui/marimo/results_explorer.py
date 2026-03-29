@@ -52,7 +52,7 @@ def _(mo):
             mo.md("---"),
             mo.md("""
 **Quick Links**
-- [PRA PS9/24](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
+- [PRA PS1/26](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement)
 - [UK CRR](https://www.legislation.gov.uk/eur/2013/575/contents)
 - [BCBS Framework](https://www.bis.org/basel_framework/)
             """),

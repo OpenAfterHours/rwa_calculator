@@ -12,8 +12,8 @@ Why these tests matter:
     materially incorrect capital numbers.
 
 Regulatory References:
-- PRA PS9/24: Output floor rule: RWA_final = max(RWA_IRB, floor% × RWA_SA)
-- PRA PS9/24: Transitional schedule: 50% (2027), 55% (2028), ..., 72.5% (2032+)
+- PRA PS1/26: Output floor rule: RWA_final = max(RWA_IRB, floor% × RWA_SA)
+- PRA PS1/26: Transitional schedule: 50% (2027), 55% (2028), ..., 72.5% (2032+)
 """
 
 import polars as pl

@@ -3,7 +3,7 @@
 **Supporting Factors** are capital relief mechanisms under CRR that reduce RWA for qualifying exposures. These factors are **removed** under Basel 3.1.
 
 !!! warning "Basel 3.1 Impact"
-    Both the SME Supporting Factor and Infrastructure Factor are withdrawn from 1 January 2027 under Basel 3.1 (PRA PS9/24).
+    Both the SME Supporting Factor and Infrastructure Factor are withdrawn from 1 January 2027 under Basel 3.1 (PRA PS1/26).
 
 ## SME Supporting Factor
 

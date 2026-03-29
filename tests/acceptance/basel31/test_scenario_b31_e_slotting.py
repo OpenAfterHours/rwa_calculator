@@ -3,7 +3,7 @@ Basel 3.1 Group E: Specialised Lending (Slotting) Acceptance Tests.
 
 These tests validate that the production RWA calculator produces correct
 outputs for specialised lending exposures using the slotting approach
-under the Basel 3.1 framework (PRA PS9/24).
+under the Basel 3.1 framework (PRA PS1/26).
 
 Key Basel 3.1 Slotting Changes from CRR:
 - Table structure: operational/pre-operational split replaces maturity split
@@ -24,7 +24,7 @@ Why these tests matter:
 Regulatory References:
 - CRE33.5: Slotting risk weight tables
 - CRE33.6: HVCRE multiplier treatment
-- PRA PS9/24: UK implementation
+- PRA PS1/26: UK implementation
 """
 
 from __future__ import annotations

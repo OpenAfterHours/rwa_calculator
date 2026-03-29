@@ -2,14 +2,14 @@
 Regulatory parameters for RWA calculations.
 
 Contains all lookup tables and constants required for SA and IRB RWA calculations
-per CRE20-36 (Basel III), CRR, and UK PRA PS9/24 deviations.
+per CRE20-36 (Basel III), CRR, and UK PRA PS1/26 deviations.
 
 References:
 - CRE20: SA risk weights
 - CRE21: SA credit risk mitigation
 - CRE22: CRM haircuts and eligibility
 - CRE30-36: IRB approach
-- PRA PS9/24: UK Basel 3.1 implementation
+- PRA PS1/26: UK Basel 3.1 implementation
 """
 
 from typing import TypedDict
@@ -42,7 +42,7 @@ INSTITUTION_RISK_WEIGHTS: dict[int, float] = {
     0: 0.40,  # Unrated (SCRA Grade A)
 }
 
-# Institution risk weights - UK deviation (PRA PS9/24)
+# Institution risk weights - UK deviation (PRA PS1/26)
 # CQS 2 gets 30% instead of 50%
 INSTITUTION_RISK_WEIGHTS_UK: dict[int, float] = {
     1: 0.20,  # AAA to AA-
@@ -128,7 +128,7 @@ HVCRE_MULTIPLIER: float = 1.25  # 25% higher than standard slotting
 # IRB PARAMETERS
 # =============================================================================
 
-# PD floors by exposure class (Basel 3.1 - CRE30.55, PRA PS9/24 Ch.5)
+# PD floors by exposure class (Basel 3.1 - CRE30.55, PRA PS1/26 Ch.5)
 PD_FLOORS: dict[str, float] = {
     "CORPORATE": 0.0005,  # 0.05% = 5 basis points
     "CORPORATE_SME": 0.0005,  # 0.05%
@@ -360,7 +360,7 @@ MATURITY_CAP: float = 5.0  # 5 year maximum (for corporate)
 # Output floor percentage (CRE99)
 OUTPUT_FLOOR_PERCENTAGE: float = 0.725  # 72.5% of SA equivalent at full implementation
 
-# Transitional floor schedule (PRA PS9/24 — UK starts 2027, not BCBS 2025)
+# Transitional floor schedule (PRA PS1/26 — UK starts 2027, not BCBS 2025)
 OUTPUT_FLOOR_TRANSITIONAL: dict[int, float] = {
     2027: 0.50,  # 50% from 1 Jan 2027
     2028: 0.55,  # 55% from 1 Jan 2028

@@ -2,13 +2,13 @@
 Basel 3.1 Group B: Foundation IRB (F-IRB) Acceptance Tests.
 
 These tests validate that the production RWA calculator produces correct
-outputs for F-IRB exposures under the Basel 3.1 framework (PRA PS9/24).
+outputs for F-IRB exposures under the Basel 3.1 framework (PRA PS1/26).
 
 Key Basel 3.1 F-IRB Changes from CRR:
 - Senior unsecured LGD: 40% (was 45%, CRE32.9)
 - PD floor: 0.05% corporate (was 0.03%, CRE30.55)
 - Scaling factor: removed (1.0 instead of 1.06)
-- SME supporting factor: removed (was 0.7619/0.85, PRA PS9/24)
+- SME supporting factor: removed (was 0.7619/0.85, PRA PS1/26)
 - Subordinated LGD: unchanged at 75%
 - Maturity adjustment: unchanged [1Y, 5Y]
 
@@ -26,7 +26,7 @@ Regulatory References:
 - CRE30.55: Differentiated PD floors (0.05% corporate)
 - CRE31-32: IRB risk weight formula
 - CRE32.9-12: Revised F-IRB supervisory LGD values
-- PRA PS9/24: UK implementation, removal of scaling/supporting factors
+- PRA PS1/26: UK implementation, removal of scaling/supporting factors
 """
 
 from __future__ import annotations
@@ -202,7 +202,7 @@ class TestB31GroupB_FoundationIRB:
                   higher than CRR post-SF because 0.7619 SF is removed.
 
         This test validates the critical policy change: SME supporting factor
-        removal under PRA PS9/24. Banks lose the 0.7619 multiplier that
+        removal under PRA PS1/26. Banks lose the 0.7619 multiplier that
         significantly reduced SME capital requirements under CRR Art. 501.
         """
         expected = expected_outputs_dict["B31-B5"]

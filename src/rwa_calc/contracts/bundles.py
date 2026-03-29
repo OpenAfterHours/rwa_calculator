@@ -399,7 +399,7 @@ class TransitionalScheduleBundle:
     Runs the same portfolio through Basel 3.1 for each transitional year
     (2027-2032) to show how the output floor progressively tightens.
 
-    Why: PRA PS9/24 phases in the output floor from 50% (2027) to 72.5%
+    Why: PRA PS1/26 phases in the output floor from 50% (2027) to 72.5%
     (2032+). Firms need to model the year-by-year capital trajectory to
     plan for the increasing floor bite. This bundle provides the timeline
     data needed for capital planning and M3.4 Marimo visualisation.

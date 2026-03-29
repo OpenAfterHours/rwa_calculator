@@ -467,13 +467,13 @@ class TestOutputFloor:
 # =============================================================================
 # Output Floor Transitional Phase-In Tests (M2.6)
 #
-# PS9/24 Ch.12 requires the output floor to phase in from 50% (2027) to
+# PS1/26 Ch.12 requires the output floor to phase in from 50% (2027) to
 # 72.5% (2032). These tests verify each transitional year and edge cases.
 # =============================================================================
 
 
 class TestOutputFloorTransitionalPhaseIn:
-    """Parametrized tests sweeping the full PRA PS9/24 transitional schedule.
+    """Parametrized tests sweeping the full PRA PS1/26 transitional schedule.
 
     The output floor phases in over 6 years:
         2027: 50%  |  2028: 55%  |  2029: 60%
@@ -571,7 +571,7 @@ class TestOutputFloorTransitionalPhaseIn:
     ) -> None:
         """Before the transitional period (pre-2027), no floor should apply.
 
-        PS9/24 effective date is 1 Jan 2027 — any earlier reporting date
+        PS1/26 effective date is 1 Jan 2027 — any earlier reporting date
         should not have an output floor binding, even under Basel 3.1 config.
         """
         sa, irb = _floor_data

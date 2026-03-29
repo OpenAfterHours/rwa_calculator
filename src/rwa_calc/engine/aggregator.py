@@ -17,7 +17,7 @@ Key responsibilities:
 
 References:
 - CRE99.1-8: Output floor (Basel 3.1)
-- PS9/24 Ch.12: PRA output floor implementation
+- PS1/26 Ch.12: PRA output floor implementation
 - CRR Art. 501: SME supporting factor
 - CRR Art. 501a: Infrastructure supporting factor
 """

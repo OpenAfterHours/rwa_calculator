@@ -214,7 +214,7 @@ schedule = runner.run(
 
 | Reference | Topic |
 |-----------|-------|
-| PRA PS9/24 | UK Basel 3.1 implementation (output floor schedule) |
+| PRA PS1/26 | UK Basel 3.1 implementation (output floor schedule) |
 | CRR Art. 153(1) | 1.06 scaling factor (removed by Basel 3.1) |
 | CRR Art. 501, 501a | SME and infrastructure supporting factors (removed by Basel 3.1) |
 | BCBS CRE30–36 | IRB approach revisions including PD/LGD floors |

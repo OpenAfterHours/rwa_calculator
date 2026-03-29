@@ -1,6 +1,6 @@
 """Data loaders and Basel 3.1 regulatory parameters for RWA calculations.
 
-This module contains Basel 3.1 specific parameters (PRA PS9/24).
+This module contains Basel 3.1 specific parameters (PRA PS1/26).
 For CRR (Basel 3.0) parameters, see workbooks/crr_expected_outputs/data/.
 """
 

@@ -3,7 +3,7 @@ Unit tests for TransitionalScheduleRunner (M3.3).
 
 Tests the transitional floor schedule modelling including:
 - Timeline structure and column completeness
-- Floor percentage progression (50% → 72.5%) matches PRA PS9/24
+- Floor percentage progression (50% → 72.5%) matches PRA PS1/26
 - Monotonically increasing floor impact as percentage rises
 - Custom reporting dates support
 - Edge cases (empty data, single date)
@@ -17,7 +17,7 @@ Why these tests matter:
     capital trajectory forecasts, potentially leading to capital shortfalls.
 
 References:
-- PRA PS9/24 Ch.12: Output floor transitional schedule
+- PRA PS1/26 Ch.12: Output floor transitional schedule
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ class TestTransitionalDates:
     """Tests for the default transitional reporting dates."""
 
     def test_six_transitional_years(self):
-        """PRA PS9/24 defines 6 transitional years (2027-2032)."""
+        """PRA PS1/26 defines 6 transitional years (2027-2032)."""
         assert len(_TRANSITIONAL_REPORTING_DATES) == 6
 
     def test_dates_are_mid_year(self):
@@ -381,7 +381,7 @@ class TestTransitionalScheduleRunner:
         assert isinstance(result.yearly_results[2027], AggregatedResultBundle)
 
     def test_runner_floor_percentage_matches_schedule(self, irb_permissions):
-        """Floor percentage in timeline should match PRA PS9/24 schedule."""
+        """Floor percentage in timeline should match PRA PS1/26 schedule."""
         runner = TransitionalScheduleRunner()
         dates = [date(2027, 6, 30), date(2030, 6, 30), date(2032, 6, 30)]
         result = runner.run(

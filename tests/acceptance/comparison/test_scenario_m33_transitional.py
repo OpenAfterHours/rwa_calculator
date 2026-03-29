@@ -5,7 +5,7 @@ These tests validate that the TransitionalScheduleRunner correctly models
 the output floor phase-in across 2027-2032 using real fixture data.
 
 Why these tests matter:
-    The PRA PS9/24 output floor phases in from 50% (2027) to 72.5% (2032+).
+    The PRA PS1/26 output floor phases in from 50% (2027) to 72.5% (2032+).
     This progressive tightening means a portfolio that is not floor-constrained
     in 2027 may become floor-constrained by 2030. Firms need accurate year-by-year
     modelling to plan capital buffers and identify which exposure classes become
@@ -19,7 +19,7 @@ Why these tests matter:
     5. Total RWA (post-floor) never decreases year-over-year
 
 References:
-- PRA PS9/24 Ch.12: Output floor transitional schedule
+- PRA PS1/26 Ch.12: Output floor transitional schedule
 - CRE99.1-8: Output floor mechanics
 """
 
@@ -100,7 +100,7 @@ class TestM33TimelineStructure:
 
 
 class TestM33FloorPercentages:
-    """Verify floor percentages match the PRA PS9/24 transitional schedule."""
+    """Verify floor percentages match the PRA PS1/26 transitional schedule."""
 
     def test_2027_floor_50_pct(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-P1: 2027 floor should be 50%."""

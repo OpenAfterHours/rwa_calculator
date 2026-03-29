@@ -22,7 +22,7 @@ Python 3.11+ enum classes).
 class RegulatoryFramework(StrEnum):
     CRR = "CRR"             # Capital Requirements Regulation (EU 575/2013) — Basel 3.0
                              # Effective until 31 December 2026
-    BASEL_3_1 = "BASEL_3_1"  # PRA PS9/24 UK implementation of Basel 3.1
+    BASEL_3_1 = "BASEL_3_1"  # PRA PS1/26 UK implementation of Basel 3.1
                              # Effective from 1 January 2027
 ```
 

@@ -20,8 +20,8 @@ This page provides links to key regulatory documents and resources.
 
 | Document | Description | Link |
 |----------|-------------|------|
-| PRA PS9/24 | Basel 3.1 Near-Final Rules (Part 2) | [bankofengland.co.uk](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2) |
-| PRA CP16/22 | Basel 3.1 Consultation Paper | [bankofengland.co.uk](https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards) |
+| PRA PS1/26 | Basel 3.1 Final Rules | [bankofengland.co.uk](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement) |
+| PRA CP16/22 (superseded) | Basel 3.1 Consultation Paper | [bankofengland.co.uk](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement) |
 
 ## Basel Committee Standards
 
@@ -100,8 +100,8 @@ The `ref_docs/` directory contains PDF copies of key regulatory documents:
 
 | File | Document |
 |------|----------|
-| `pra_ps9_24.pdf` | PRA PS9/24 |
-| `pra_cp16_22.pdf` | PRA CP16/22 |
+| `ps126app1.pdf` | PRA PS1/26 Appendix 1 (Regulations) |
+| `ps126app17.pdf` | PRA PS1/26 Appendix 17 (Template Guidance) |
 | `bcbs_cre.pdf` | BCBS CRE Standards |
 | `uk_crr.pdf` | UK CRR Extract |
 

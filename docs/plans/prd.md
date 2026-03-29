@@ -15,7 +15,7 @@
 
 ## 1. Executive Summary
 
-The RWA Calculator is a Python-based regulatory capital engine that computes Risk-Weighted Assets (RWA) for credit risk under the UK implementation of the Basel framework. It supports both the current CRR regime (Basel 3.0, effective until 31 Dec 2026) and the forthcoming Basel 3.1 rules (PRA PS9/24, effective 1 Jan 2027) from a single codebase.
+The RWA Calculator is a Python-based regulatory capital engine that computes Risk-Weighted Assets (RWA) for credit risk under the UK implementation of the Basel framework. It supports both the current CRR regime (Basel 3.0, effective until 31 Dec 2026) and the forthcoming Basel 3.1 rules (PRA PS1/26, effective 1 Jan 2027) from a single codebase.
 
 The product targets UK-regulated banks, building societies, and risk technology teams who need a transparent, auditable, and performant RWA calculation engine — whether for production use, parallel runs, regulatory impact analysis, or educational purposes.
 
@@ -25,7 +25,7 @@ The product targets UK-regulated banks, building societies, and risk technology 
 
 ### Industry Challenge
 
-UK credit institutions face a major regulatory transition: migrating from CRR (EU 575/2013 as onshored) to Basel 3.1 (PRA PS9/24) by 1 January 2027. This affects every firm's capital adequacy calculation. Key pain points include:
+UK credit institutions face a major regulatory transition: migrating from CRR (EU 575/2013 as onshored) to Basel 3.1 (PRA PS1/26) by 1 January 2027. This affects every firm's capital adequacy calculation. Key pain points include:
 
 - **Dual-regime operation**: Firms must run CRR and Basel 3.1 in parallel during the transition period to assess capital impact, yet most internal systems are hardwired to a single framework.
 - **Opacity of vendor solutions**: Commercial RWA engines are black-box systems with limited auditability, making it difficult for risk teams to validate results, explain calculations to regulators, or perform what-if analysis.
@@ -66,7 +66,7 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 | Area | Description                                                                                                                                        |
 |------|----------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Credit Risk RWA** | Standardised Approach (SA), Foundation IRB (F-IRB), Advanced IRB (A-IRB), Specialised Lending (Slotting), Equity                                   |
-| **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS9/24)                                                                                                   |
+| **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS1/26)                                                                                                   |
 | **Credit Risk Mitigation** | Collateral (9 types with supervisory haircuts), guarantees (substitution approach), provisions (drawn-first SA deduction, IRB EL shortfall/excess) |
 | **Supporting Factors** | CRR SME tiered factor (0.7619/0.85), infrastructure factor (0.75)                                                                                  |
 | **Output Floor** | Basel 3.1 output floor with transitional phase-in schedule (50%–72.5%, 2027–2032)                                                                  |
@@ -354,7 +354,7 @@ Input Data (Parquet/CSV/DataFrames)
 | Art. 501 | SME supporting factor (tiered) | Done |
 | Art. 501a | Infrastructure supporting factor | Done |
 
-### Basel 3.1 (PRA PS9/24) — Upcoming UK Rules
+### Basel 3.1 (PRA PS1/26) — Upcoming UK Rules
 
 | BCBS Standard | Topic | Status |
 |---------------|-------|--------|
@@ -465,7 +465,7 @@ Input Data (Parquet/CSV/DataFrames)
 |------|------------|
 | **RWA** | Risk-Weighted Assets — credit exposures multiplied by risk weights to determine capital requirements |
 | **CRR** | Capital Requirements Regulation (EU 575/2013 as onshored into UK law) — current Basel 3.0 implementation |
-| **Basel 3.1** | BCBS finalisation of Basel III reforms, implemented in UK via PRA PS9/24, effective 1 Jan 2027 |
+| **Basel 3.1** | BCBS finalisation of Basel III reforms, implemented in UK via PRA PS1/26, effective 1 Jan 2027 |
 | **SA** | Standardised Approach — risk weights assigned by exposure class and external rating |
 | **F-IRB** | Foundation Internal Ratings-Based — firm provides PD, regulator sets LGD/CCF |
 | **A-IRB** | Advanced Internal Ratings-Based — firm provides PD, LGD, EAD, CCF |
@@ -514,6 +514,6 @@ Input Data (Parquet/CSV/DataFrames)
 |-----------|-----|
 | PRA Rulebook (CRR firms) | https://www.prarulebook.co.uk/pra-rules/crr-firms |
 | UK CRR (EU 575/2013) | https://www.legislation.gov.uk/eur/2013/575/contents |
-| PRA PS9/24 (Basel 3.1) | https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2 |
+| PRA PS1/26 (Basel 3.1) | https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement |
 | BCBS CRE Standards | https://www.bis.org/basel_framework/standard/CRE.htm |
-| PRA CP16/22 | https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards |
+| PS1/26 Appendix 1 | https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf |

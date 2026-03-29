@@ -13,13 +13,13 @@ Key responsibilities:
 - Model the transitional output floor schedule across 2027-2032 (M3.3)
 - Accumulate errors from all pipeline runs
 
-Why: During the Basel 3.1 transition (PRA PS9/24, effective 1 Jan 2027),
+Why: During the Basel 3.1 transition (PRA PS1/26, effective 1 Jan 2027),
 firms must quantify the capital impact of moving from CRR to Basel 3.1.
 The output floor phases in from 50% (2027) to 72.5% (2032+), so firms need
 year-by-year modelling to plan for the increasing floor bite.
 
 References:
-- PRA PS9/24 Ch.12: Output floor transitional period
+- PRA PS1/26 Ch.12: Output floor transitional period
 - CRR Art. 92: Own funds requirements (capital ratios)
 - CRR Art. 501/501a: SME and infrastructure supporting factors
 
@@ -223,7 +223,7 @@ class CapitalImpactAnalyzer:
 # Transitional Floor Schedule (M3.3)
 # =============================================================================
 
-# PRA PS9/24 transitional dates: 1 Jan of each year, with mid-year reporting
+# PRA PS1/26 transitional dates: 1 Jan of each year, with mid-year reporting
 _TRANSITIONAL_REPORTING_DATES = [
     date(2027, 6, 30),  # Year 1: 50%
     date(2028, 6, 30),  # Year 2: 55%
@@ -243,7 +243,7 @@ class TransitionalScheduleRunner:
     year-by-year timeline. This enables capital planning for the
     increasing floor bite.
 
-    Why: PRA PS9/24 phases in the output floor gradually (50% in 2027
+    Why: PRA PS1/26 phases in the output floor gradually (50% in 2027
     to 72.5% in 2032+). A portfolio that is not floor-constrained in 2027
     may become floor-constrained as the percentage rises. Modelling this
     trajectory is essential for forward-looking capital management.

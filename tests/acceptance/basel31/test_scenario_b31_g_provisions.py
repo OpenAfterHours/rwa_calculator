@@ -3,7 +3,7 @@ Basel 3.1 Group G: Provisions & Impairments Acceptance Tests.
 
 These tests validate that the production RWA calculator correctly handles
 provisions under SA and EL shortfall/excess under F-IRB when running with
-Basel 3.1 configuration (PRA PS9/24).
+Basel 3.1 configuration (PRA PS1/26).
 
 Key Basel 3.1 Differences for Provision Treatment:
 - SA provision deduction: unchanged (SCRA reduces EAD before CCF)

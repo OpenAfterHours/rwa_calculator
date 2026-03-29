@@ -35,7 +35,7 @@ FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
     "other_physical": Decimal("0.40"),  # 40% for other physical
 }
 
-# Basel 3.1 revised supervisory LGD values (CRE32.9-12, PRA PS9/24)
+# Basel 3.1 revised supervisory LGD values (CRE32.9-12, PRA PS1/26)
 # Key changes from CRR: senior 45%→40%, receivables 35%→20%, RE 35%→20%,
 # other physical 40%→25%
 BASEL31_FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {

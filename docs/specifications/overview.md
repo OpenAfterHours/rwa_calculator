@@ -11,13 +11,13 @@
 
 ## Executive Summary
 
-The RWA Calculator is a Python-based regulatory capital engine that computes Risk-Weighted Assets (RWA) for credit risk under the UK implementation of the Basel framework. It supports both the current CRR regime (Basel 3.0, effective until 31 Dec 2026) and the forthcoming Basel 3.1 rules (PRA PS9/24, effective 1 Jan 2027) from a single codebase.
+The RWA Calculator is a Python-based regulatory capital engine that computes Risk-Weighted Assets (RWA) for credit risk under the UK implementation of the Basel framework. It supports both the current CRR regime (Basel 3.0, effective until 31 Dec 2026) and the forthcoming Basel 3.1 rules (PRA PS1/26, effective 1 Jan 2027) from a single codebase.
 
 The product targets UK-regulated banks, building societies, and risk technology teams who need a transparent, auditable, and performant RWA calculation engine — whether for production use, parallel runs, regulatory impact analysis, or educational purposes.
 
 ## Problem Statement
 
-UK credit institutions face a major regulatory transition: migrating from CRR (EU 575/2013 as onshored) to Basel 3.1 (PRA PS9/24) by 1 January 2027. Key pain points:
+UK credit institutions face a major regulatory transition: migrating from CRR (EU 575/2013 as onshored) to Basel 3.1 (PRA PS1/26) by 1 January 2027. Key pain points:
 
 - **Dual-regime operation**: Firms must run CRR and Basel 3.1 in parallel during the transition period
 - **Opacity of vendor solutions**: Commercial RWA engines are black-box systems with limited auditability
@@ -42,7 +42,7 @@ UK credit institutions face a major regulatory transition: migrating from CRR (E
 | Area | Description |
 |------|-------------|
 | **Credit Risk RWA** | SA, F-IRB, A-IRB, Slotting, Equity |
-| **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS9/24) |
+| **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS1/26) |
 | **Credit Risk Mitigation** | Collateral (9 types), guarantees (substitution), provisions (drawn-first SA, EL shortfall IRB) |
 | **Supporting Factors** | CRR SME tiered factor (0.7619/0.85), infrastructure factor (0.75) |
 | **Output Floor** | Basel 3.1 output floor with transitional phase-in (50%–72.5%, 2027–2032) |

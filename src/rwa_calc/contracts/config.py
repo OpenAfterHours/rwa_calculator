@@ -39,7 +39,7 @@ class PDFloors:
     PD floor values by exposure class.
 
     Under CRR: Single floor of 0.03% for all exposures (Art. 163)
-    Under Basel 3.1: Differentiated floors (CRE30.55, PS9/24 Ch.5)
+    Under Basel 3.1: Differentiated floors (CRE30.55, PS1/26 Ch.5)
         - Corporate: 0.05%
         - Retail non-QRRE: 0.05%
         - Retail QRRE transactors: 0.03%
@@ -101,7 +101,7 @@ class LGDFloors:
     """
     LGD floor values by collateral type for A-IRB.
 
-    Only applicable under Basel 3.1 (CRE30.41, PS9/24 Ch.5).
+    Only applicable under Basel 3.1 (CRE30.41, PS1/26 Ch.5).
     CRR has no LGD floors for A-IRB.
 
     All values expressed as decimals (e.g., 0.25 = 25%)
@@ -213,7 +213,7 @@ class OutputFloorConfig:
     """
     Output floor configuration for Basel 3.1.
 
-    The output floor (CRE99.1-8, PS9/24 Ch.12) requires IRB RWAs
+    The output floor (CRE99.1-8, PS1/26 Ch.12) requires IRB RWAs
     to be at least 72.5% of the equivalent SA RWAs.
 
     Not applicable under CRR.
@@ -229,7 +229,7 @@ class OutputFloorConfig:
         """Get the applicable floor percentage for a given date.
 
         Returns 0% if floor is disabled or the calculation date precedes the
-        transitional start date (PS9/24: 1 Jan 2027 for UK firms).
+        transitional start date (PS1/26: 1 Jan 2027 for UK firms).
         """
         if not self.enabled:
             return Decimal("0.0")
@@ -257,7 +257,7 @@ class OutputFloorConfig:
     @classmethod
     def basel_3_1(cls) -> OutputFloorConfig:
         """Basel 3.1 output floor configuration with transitional period."""
-        # PRA PS9/24 transitional schedule
+        # PRA PS1/26 transitional schedule
         transitional_schedule = {
             date(2027, 1, 1): Decimal("0.50"),  # 50%
             date(2028, 1, 1): Decimal("0.55"),  # 55%
@@ -567,14 +567,14 @@ class CalculationConfig:
         collect_engine: PolarsEngine = "streaming",
     ) -> CalculationConfig:
         """
-        Create Basel 3.1 (PRA PS9/24) configuration.
+        Create Basel 3.1 (PRA PS1/26) configuration.
 
         Basel 3.1 characteristics:
         - Differentiated PD floors by exposure class
         - LGD floors for A-IRB by collateral type
         - No supporting factors (SME/infrastructure)
         - Output floor (72.5%, transitional)
-        - 1.06 scaling factor removed (PRA CP16/22 confirms)
+        - 1.06 scaling factor removed (PRA PS1/26 confirms)
 
         Args:
             reporting_date: As-of date for calculation
@@ -595,7 +595,7 @@ class CalculationConfig:
             output_floor=OutputFloorConfig.basel_3_1(),
             retail_thresholds=RetailThresholds.basel_3_1(),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
-            scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA CP16/22)
+            scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             collect_engine=collect_engine,
         )

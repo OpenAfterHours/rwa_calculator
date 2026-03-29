@@ -82,7 +82,7 @@ This calculator supports two regulatory regimes:
 | Regime | Effective Period | UK Implementation | Status |
 |--------|------------------|-------------------|--------|
 | **CRR (Basel 3.0)** | Until 31 December 2026 | UK CRR (EU 575/2013 as onshored) | **Active** |
-| **Basel 3.1** | From 1 January 2027 | PRA PS9/24 | **Active Development** |
+| **Basel 3.1** | From 1 January 2027 | PRA PS1/26 | **Active Development** |
 
 A configuration toggle allows switching between calculation modes for:
 - Current regulatory reporting under UK CRR
@@ -154,6 +154,7 @@ uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m" -o "addo
 - [UK CRR - Regulation (EU) No 575/2013 as onshored](https://www.legislation.gov.uk/eur/2013/575/contents)
 
 ### Basel 3.1 Implementation (January 2027)
-- [PRA PS9/24 - Implementation of the Basel 3.1 standards](https://www.bankofengland.co.uk/prudential-regulation/publication/2024/september/implementation-of-the-basel-3-1-standards-near-final-policy-statement-part-2)
-- [PRA CP16/22 - Implementation of Basel 3.1 Standards](https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards)
+- [PRA PS1/26 - Basel 3.1 Final Rules](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement)
+- [PS1/26 Appendix 1 - Regulations](https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf)
+- [PS1/26 Appendix 17 - Template Guidance](https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app17.pdf)
 - [Basel Committee - CRE: Calculation of RWA for credit risk](https://www.bis.org/basel_framework/chapter/CRE/20.htm)

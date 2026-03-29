@@ -7,14 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-- **Docs**: Remove completed development roadmap (`docs/plans/roadmap.md`) to reduce maintenance burden
-
 ### Changed
+- **Regulatory**: Update all Basel 3.1 references from PRA PS9/24 (near-final) to PRA PS1/26 (final rules) across source code, documentation, tests, and workbooks
+- **Regulatory**: Replace old PS9/24 and CP16/22 URLs with PS1/26 final rules links (policy statement, Appendix 1, Appendix 17)
+- **Regulatory**: Mark CP16/22 consultation paper as superseded where retained for historical context
 - **CI**: Add version consistency validation step to publish workflow
 - **CI**: Add step to generate test fixtures in CI pipeline
 - **CI**: Replace mypy with ty for type checking
 - **Docs**: Migrate documentation from mkdocs to zensical (`zensical.toml` replaces `mkdocs.yml`)
+
+### Removed
+- **Docs**: Remove completed development roadmap (`docs/plans/roadmap.md`) to reduce maintenance burden
 
 ### Fixed
 - **Docs**: Fix mermaid diagrams not rendering by adding `custom_fences` configuration for `pymdownx.superfences`
@@ -315,7 +318,7 @@ GitHub Actions workflow with lint, typecheck, and test jobs.
 
 ### Fixed
 - Corporate bond haircut CQS grouping corrected per CRR Art. 224
-- PD floors and transitional schedule corrected to PRA PS9/24
+- PD floors and transitional schedule corrected to PRA PS1/26
 - Output floor `sa_rwa` computation fixed for acceptance tests
 - Benchmark data generators now include all schema columns (`is_buy_to_let`, `interest`, `bs_type`, `pledge_percentage`, `is_qrre_transactor`)
 - Benchmark tests updated for current API: `_unify_exposures` signature (added `facilities` arg), `CRMProcessor.get_crm_adjusted_bundle`

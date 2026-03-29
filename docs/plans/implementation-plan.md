@@ -13,7 +13,7 @@ The implementation follows a **test-first approach** with phases:
 
 **Regulatory Framework Prioritisation**:
 1. **Phase A: CRR (Basel 3.0)** - Current UK implementation (effective until 31 Dec 2026)
-2. **Phase B: Basel 3.1** - Future UK implementation (effective from 1 Jan 2027 per PRA PS9/24)
+2. **Phase B: Basel 3.1** - Future UK implementation (effective from 1 Jan 2027 per PRA PS1/26)
 
 ---
 
@@ -144,7 +144,7 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 
 ## Basel 3.1 Acceptance Test Scenarios
 
-These scenarios test the Basel 3.1 implementation per PRA PS9/24, effective 1 Jan 2027.
+These scenarios test the Basel 3.1 implementation per PRA PS1/26, effective 1 Jan 2027.
 
 ### Scenario Group B31-A: Standardised Approach (SA)
 
@@ -164,7 +164,7 @@ These scenarios test the Basel 3.1 implementation per PRA PS9/24, effective 1 Ja
 |----|-------------|------------|--------------|-------|
 | B31-F1 | Floor binding | IRB=£50m, SA=£100m | £72.5m | 72.5% floor |
 | B31-F2 | Floor not binding | IRB=£80m, SA=£100m | £80m | IRB > floor |
-| B31-F3 | Transitional 2027 | Year 2027, 50% floor | Phased floor | PRA PS9/24 |
+| B31-F3 | Transitional 2027 | Year 2027, 50% floor | Phased floor | PRA PS1/26 |
 
 **Output Floor Phase-In:**
 

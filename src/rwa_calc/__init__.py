@@ -2,7 +2,7 @@
 UK Credit Risk RWA Calculator.
 
 A high-performance Risk-Weighted Assets (RWA) calculator for UK credit risk,
-supporting both CRR (Basel 3.0) and Basel 3.1 (PRA PS9/24) frameworks.
+supporting both CRR (Basel 3.0) and Basel 3.1 (PRA PS1/26) frameworks.
 
 Basic usage:
     >>> from datetime import date

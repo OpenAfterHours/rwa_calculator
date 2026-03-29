@@ -22,7 +22,7 @@ Why these tests matter:
 References:
     - CRR Art. 153(1): 1.06 scaling factor for IRB
     - CRR Art. 501/501a: SME and infrastructure supporting factors
-    - PRA PS9/24 Ch.12: Output floor
+    - PRA PS1/26 Ch.12: Output floor
 """
 
 from __future__ import annotations

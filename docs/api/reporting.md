@@ -30,7 +30,8 @@ def generate_from_lazyframe(
 
 - `results` — LazyFrame containing exposure-level calculation results. The generator is
   resilient to column naming variations (e.g., `ead_final` or `final_ead` or `ead`).
-- `framework` — `"CRR"` or `"BASEL_3_1"`. Stored in the output bundle for reference.
+- `framework` — `"CRR"` or `"BASEL_3_1"`. Determines which template variant to generate
+  (C prefix for CRR, OF prefix for Basel 3.1) and which columns/rows to include.
 
 **Approach filtering:** SA templates filter on `approach_applied == "standardised"`;
 IRB templates filter on `approach_applied in ("foundation_irb", "advanced_irb", "slotting")`.
@@ -58,7 +59,8 @@ def export_to_excel(
 ) -> ExportResult:
 ```
 
-Creates 4 sheets: `"C 07.00"`, `"C 07.00 RW Breakdown"`, `"C 08.01"`, `"C 08.02"`.
+Creates sheets per template per exposure class (e.g., `"C 07.00 - Corporate"`,
+`"C 08.01 - Corporate"`, `"C 08.02 - Corporate"`).
 
 Requires `xlsxwriter` — raises `ModuleNotFoundError` with install instructions if missing.
 Creates parent directories automatically.
@@ -72,13 +74,23 @@ Frozen dataclass containing all generated templates.
 ```python
 @dataclass(frozen=True)
 class COREPTemplateBundle:
-    c07_00: pl.DataFrame           # C 07.00 — SA credit risk
-    c08_01: pl.DataFrame           # C 08.01 — IRB totals
-    c08_02: pl.DataFrame           # C 08.02 — IRB by PD grade
-    c07_rw_breakdown: pl.DataFrame # C 07.00 risk weight breakdown
-    framework: str = "CRR"         # "CRR" or "BASEL_3_1"
+    c07_00: pl.DataFrame     # C 07.00 / OF 07.00 — SA credit risk
+    c08_01: pl.DataFrame     # C 08.01 / OF 08.01 — IRB totals
+    c08_02: pl.DataFrame     # C 08.02 / OF 08.02 — IRB by obligor grade
+    framework: str = "CRR"   # "CRR" or "BASEL_3_1"
     errors: list[str] = field(default_factory=list)
 ```
+
+!!! note "Implementation status"
+    The generator is being reworked to match the actual EBA/PRA template structures.
+    See [COREP Reporting](../features/corep-reporting.md) for the correct template
+    structures and `IMPLEMENTATION_PLAN.md` for the phased rework plan. Key changes:
+
+    - Templates are per-exposure-class submissions (not one-row-per-class)
+    - Column refs use 4-digit COREP numbering (0010-0240 for C 07.00, 0010-0310 for C 08.01)
+    - C 07.00 has 24 columns (CRR) / 22 columns (Basel 3.1), not 9
+    - C 08.01 has 33 columns (CRR) / 40+ columns (Basel 3.1), not 11
+    - Risk weight breakdown is Section 3 within C 07.00, not a separate template
 
 ## Template Constants
 
@@ -100,7 +112,7 @@ class COREPRow:
 ```python
 @dataclass(frozen=True)
 class COREPColumn:
-    ref: str   # Column reference (e.g., "010")
+    ref: str   # Column reference (e.g., "0010")
     name: str  # Display name
 ```
 
@@ -108,13 +120,15 @@ class COREPColumn:
 
 | Constant | Purpose |
 |----------|---------|
-| `SA_EXPOSURE_CLASS_ROWS` | Maps `ExposureClass.value` → `(row_ref, display_name)` for C 07.00 |
-| `IRB_EXPOSURE_CLASS_ROWS` | Maps `ExposureClass.value` → `(row_ref, display_name)` for C 08.01/C 08.02 |
-| `C07_COLUMNS` | 9 column definitions for C 07.00 |
-| `C08_01_COLUMNS` | 11 column definitions for C 08.01 |
-| `C08_02_COLUMNS` | Same as `C08_01_COLUMNS` |
-| `SA_RISK_WEIGHT_BANDS` | 14 standard risk weight bands for C 07.00 breakdown |
-| `PD_BANDS` | 8 PD bands for C 08.02 (contiguous, covering 0%–100%) |
+| `SA_EXPOSURE_CLASS_ROWS` | Maps `ExposureClass.value` → `(row_ref, display_name)` — used as filter values for per-class template generation |
+| `IRB_EXPOSURE_CLASS_ROWS` | Maps `ExposureClass.value` → `(row_ref, display_name)` — filter values for C 08.01/C 08.02 |
+| `CRR_C07_COLUMNS` | 24 column definitions for CRR C 07.00 (refs 0010-0240) |
+| `B31_C07_COLUMNS` | 22 column definitions for Basel 3.1 OF 07.00 |
+| `CRR_C08_COLUMNS` | 33 column definitions for CRR C 08.01 (refs 0010-0310) |
+| `B31_C08_COLUMNS` | 40+ column definitions for Basel 3.1 OF 08.01 |
+| `SA_RISK_WEIGHT_BANDS` | 15 CRR risk weight bands (0%-1250% + Other) |
+| `B31_SA_RISK_WEIGHT_BANDS` | 29 Basel 3.1 risk weight bands |
+| `PD_BANDS` | 8 PD bands for C 08.02 aggregation (contiguous, 0%-100%) |
 
 ## Import Paths
 
@@ -126,8 +140,8 @@ from rwa_calc.reporting import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     SA_EXPOSURE_CLASS_ROWS,
     IRB_EXPOSURE_CLASS_ROWS,
-    C07_COLUMNS,
-    C08_01_COLUMNS,
+    CRR_C07_COLUMNS,
+    CRR_C08_COLUMNS,
     PD_BANDS,
     SA_RISK_WEIGHT_BANDS,
 )

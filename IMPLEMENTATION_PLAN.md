@@ -1,168 +1,683 @@
-# COREP Generator Gap Analysis: Current Implementation vs Actual Template Structures
+# COREP Template Generator — Implementation Plan
 
 ## Context
 
-After reviewing the actual COREP templates from the EBA/PRA reference documents against the current generator implementation, there are significant structural and content gaps. The documentation has been corrected; now the code needs to follow.
+The COREP generator was built against an incorrect understanding of the template structures. After reviewing the actual EBA/PRA reference templates (Regulation (EU) 2021/451 Annex I and PRA PS1/26 Annex I), plus the reporting instructions (Annex II for both frameworks), the generator needs substantial rework.
 
-## Gap Summary
+**Reference documents** (in `docs/assets/`):
 
-### 1. Fundamental Structural Issue: Template Orientation
+- `corep-own-funds.xlsx` — CRR template layouts (sheets "7", "8.1", "8.2")
+- `annex-ii-instructions-for-reporting-on-own-funds.pdf` — CRR column instructions (270pp)
+- `annex-i-of-07-00-credit-risk-sa-reporting-template.xlsx` — Basel 3.1 OF 07.00 layout
+- `annex-ii-reporting-instructions.pdf` — Basel 3.1 column instructions (322pp)
 
-**Current**: The generator treats exposure class as a **row dimension** — it produces one DataFrame with one row per exposure class (e.g., corporate, institution, retail) plus a total row.
+**Key structural problems**:
 
-**Actual**: Each COREP template is submitted **once per exposure class**. The exposure class is a filter/selector. Within each submission, rows are: totals, "of which" breakdowns, exposure type breakdown (on-BS/off-BS/CCR), risk weight breakdown, and memorandum items.
+1. Generator treats exposure class as a row dimension (one row per class). Actual template is one submission per exposure class with 5 internal row sections.
+2. Column refs (010-090) don't match actual COREP refs (0010-0240). Column meanings are wrong.
+3. Risk weight breakdown is Section 3 within C 07.00, not a separate template.
+4. C 08.01 maturity is in years; COREP requires days.
+5. C 08.02 uses pre-defined PD bands; actual template uses dynamic firm-specific obligor grades.
+6. Many populatable columns in the pipeline are not wired to the generator.
+7. Several COREP columns require pipeline features that don't exist yet.
 
-**Impact**: The current output shape is fundamentally different from what a regulatory submission requires. The risk weight breakdown (currently a separate `c07_rw_breakdown` template) is actually **Section 3 within C 07.00**, not a separate template.
+---
 
-### 2. Column Reference Numbering
+## Task List
 
-**Current `C07_COLUMNS`** uses refs: 010, 020, 030, 040, 050, 060, 070, 080, 090
-**Actual C 07.00** uses refs: 0010, 0030, 0040, 0050, 0060, 0070, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 0150, 0160, 0170, 0180, 0190, 0200, 0210, 0211, 0215, 0216, 0217, 0220, 0230, 0240
+Tasks are ordered by dependency. Each task is self-contained: it modifies a focused set of files, has clear acceptance criteria, and leaves the test suite passing. Tasks within the same phase can be parallelised unless noted otherwise.
 
-The current column refs don't match any actual COREP column refs, and the column meanings are simplified/wrong:
-- Current "040: Funded CRM (collateral)" ≠ Actual 0040 "Exposure net of value adjustments"
-- Current "050: Unfunded CRM (guarantees)" ≠ Actual 0050 "(-) Guarantees"
-- Current "070: Exposure value post CCF" ≠ Actual 0070 "(-) Financial collateral: Simple method"
+### Phase 1: Structural Rewrite
 
-**Current `C08_01_COLUMNS`** uses refs: 010, 020, 030, 040, 050, 060, 070, 080, 090, 100, 110
-**Actual C 08.01** uses refs: 0010, 0020, 0030, 0040, 0050, 0060, 0070, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 0150-0210, 0220, 0230, 0240, 0250, 0255, 0256, 0257, 0260, 0270, 0280, 0290, 0300, 0310
+Phase 1 tasks are tightly coupled — they form an atomic rewrite of the template definitions, generator, bundle, tests, and export. Tasks 1A-1C must be done in order.
 
-### 3. Missing Columns — Populatable from Existing Pipeline Data
+---
 
-These COREP columns can be populated using data the pipeline already produces:
+#### Task 1A: Rewrite template definitions with correct COREP structure
 
-**C 07.00:**
-| COREP Col | Name | Pipeline Source |
-|-----------|------|-----------------|
-| 0010 | Original exposure | `drawn_amount + undrawn_amount` (already done, wrong ref) |
-| 0030 | (-) Provisions | `scra_provision_amount + gcra_provision_amount` (already done, wrong ref) |
-| 0040 | Net exposure | Derived: 0010 - 0030 (already done, wrong ref) |
-| 0050 | (-) Guarantees | `guaranteed_portion` (available, mapped as "050" currently) |
-| 0110 | Net after CRM substitution | Derivable from pre/post CRM columns |
-| 0150 | Fully adjusted exposure (E*) | `ead_final` (pre-CCF value not separately tracked — gap) |
-| 0200 | Exposure value | `ead_final` (mapped as "070" currently) |
-| 0215 | RWEA pre supporting factors | `rwa_pre_factor` or `rwa_before_floor` (available) |
-| 0216 | (-) SME supporting factor adj | `sme_supporting_factor` * RWA (available, not used) |
-| 0217 | (-) Infrastructure factor adj | `infra_supporting_factor` * RWA (available, not used) |
-| 0220 | RWEA after supporting factors | `rwa_final` (mapped as "080" currently) |
-| 0230 | Of which: with ECAI | Filter on `sa_cqs` (already done, wrong ref) |
+**Goal**: Replace incorrect column/row definitions in `templates.py` with the actual COREP structure from the reference documents.
 
-**Row sections populatable:**
-| Section | Pipeline Source |
-|---------|-----------------|
-| Total (row 0010) | Sum all |
-| Exposure types (0070/0080) | `exposure_type` = "loan" → on-BS, "contingent"/"facility" → off-BS |
-| Risk weight breakdown (0140-0280) | `risk_weight` column — pivot by band (currently separate template) |
-| CCF breakdown (0160-0190) | `ccf_applied` column — group by CCF bucket |
+**Files to modify**:
+- `src/rwa_calc/reporting/corep/templates.py`
 
-**C 08.01:**
-| COREP Col | Name | Pipeline Source |
-|-----------|------|-----------------|
-| 0010 | PD assigned | `irb_pd_floored` (already done, wrong ref) |
-| 0020 | Original exposure | `drawn_amount + undrawn_amount` (already done) |
-| 0110 | Exposure value | `ead_final` (already done) |
-| 0180 | Eligible financial collateral | `collateral_adjusted_value` (available, not split by type) |
-| 0230 | Weighted avg LGD | `irb_lgd_floored` (already done) |
-| 0250 | Weighted avg maturity (days) | `irb_maturity_m` × 365 (currently in years, template wants days) |
-| 0255 | RWEA pre supporting factors | `rwa_pre_factor` (available, not used) |
-| 0256 | (-) SME factor adj | Derivable from supporting factor columns |
-| 0257 | (-) Infrastructure factor adj | Derivable |
-| 0260 | RWEA after supporting factors | `rwa_final` (already done) |
-| 0280 | Expected loss | `irb_expected_loss` (already done) |
-| 0290 | (-) Provisions | `provision_held` (already done) |
-| 0300 | Number of obligors | `counterparty_reference.n_unique()` (already done) |
+**What to do**:
 
-### 4. Missing Columns — NOT Available in Pipeline (Require New Features)
+1. Replace `C07_COLUMNS` (9 cols, refs 010-090) with `CRR_C07_COLUMNS` — the actual 24 CRR C 07.00 columns with correct 4-digit refs:
+   - 0010: Original exposure pre conversion factors
+   - 0030: (-) Value adjustments and provisions
+   - 0040: Exposure net of value adjustments and provisions
+   - 0050: (-) Guarantees
+   - 0060: (-) Credit derivatives
+   - 0070: (-) Financial collateral: Simple method
+   - 0080: (-) Other funded credit protection
+   - 0090: (-) Substitution outflows
+   - 0100: Substitution inflows (+)
+   - 0110: Net exposure after CRM substitution pre CCFs
+   - 0120: Volatility adjustment to exposure
+   - 0130: (-) Financial collateral: adjusted value (Cvam)
+   - 0140: (-) Of which: volatility and maturity adjustments
+   - 0150: Fully adjusted exposure value (E*)
+   - 0160: Off-BS by CCF: 0%
+   - 0170: Off-BS by CCF: 20%
+   - 0180: Off-BS by CCF: 50%
+   - 0190: Off-BS by CCF: 100%
+   - 0200: Exposure value
+   - 0210: Of which: arising from CCR
+   - 0211: Of which: CCR excl CCP
+   - 0215: RWEA pre supporting factors
+   - 0216: (-) SME supporting factor adjustment
+   - 0217: (-) Infrastructure supporting factor adjustment
+   - 0220: RWEA after supporting factors
+   - 0230: Of which: with ECAI credit assessment
+   - 0240: Of which: credit assessment derived from central govt
 
-These COREP columns require data the pipeline does not currently produce:
+2. Add `B31_C07_COLUMNS` for Basel 3.1 OF 07.00:
+   - Adds: 0035 (on-BS netting), 0171 (40% CCF)
+   - Changes: 0160 → 10% CCF (was 0%)
+   - Removes: 0215-0217 (supporting factors)
+   - Adds: 0235 (without ECAI)
 
-**C 07.00:**
-| COREP Col | Name | What's Missing |
-|-----------|------|----------------|
-| 0060 | (-) Credit derivatives | CRM doesn't track credit derivatives separately |
-| 0070 | (-) Financial collateral: Simple method | Collateral not split by CRM method (simple vs comprehensive) |
-| 0080 | (-) Other funded credit protection | Not split from financial collateral |
-| 0090/0100 | CRM substitution out/inflows | Not tracked as separate flows |
-| 0120 | Volatility adjustment to exposure | FCCM intermediate values not preserved |
-| 0130/0140 | (-) Cvam / vol+mat adjustments | FCCM intermediate values not preserved |
-| 0210/0211 | Of which: CCR / CCR excl CCP | CCR module not implemented |
+3. Replace `C08_01_COLUMNS` (11 cols, refs 010-110) with `CRR_C08_COLUMNS` — the actual 33 CRR C 08.01 columns (0010-0310). See reference doc sheet "8.1" for full list.
 
-**C 08.01:**
-| COREP Col | Name | What's Missing |
-|-----------|------|----------------|
-| 0030 | Of which: large financial sector entities | Entity classification not implemented |
-| 0050 | (-) Credit derivatives | Not tracked separately |
-| 0060 | (-) Other funded credit protection | Not split |
-| 0150-0210 | CRM in LGD estimates (detailed collateral) | Collateral not broken down by type in output |
-| 0220 | Double default treatment | Not implemented |
-| 0240 | Avg LGD for large financial entities | Entity classification not implemented |
-| 0310 | Pre-credit derivatives RWEA | Credit derivatives not tracked |
+4. Add `B31_C08_COLUMNS` for Basel 3.1 OF 08.01:
+   - Removes: 0010 (PD — moved to OF 08.02 only), 0220 (double default), 0255-0257 (supporting factors)
+   - Adds: 0035, 0101-0104 (slotting FCCM), 0125/0265 (of which: defaulted), 0251-0254 (post-model adj), 0275-0276 (output floor), 0281-0282 (EL adj)
 
-**Basel 3.1 specific:**
-| COREP Col | Name | What's Missing |
-|-----------|------|----------------|
-| 0035 | On-balance sheet netting | Not tracked |
-| 0251-0254 | Post-model adjustments | Not implemented |
-| 0275-0276 | Output floor SA-equivalent | `sa_equivalent_rwa` exists but not wired to COREP |
-| 0281-0282 | Post-model EL adjustments | Not implemented |
+5. Replace `SA_EXPOSURE_CLASS_ROWS` with `SA_ROW_SECTIONS` — a structure defining the 5 row sections within each C 07.00:
+   - Section 1: Total (0010) + "of which" (0015, 0020, 0030, 0035, 0040, 0050, 0060)
+   - Section 2: Exposure types (0070, 0080, 0090-0130)
+   - Section 3: Risk weights (0140-0280)
+   - Section 4: CIU approach (0281-0283)
+   - Section 5: Memorandum (0290-0320)
 
-### 5. C 08.02 Structural Issue
+6. Add `B31_SA_ROW_SECTIONS` for Basel 3.1 with additional rows (0021-0026 specialised lending, 0330-0360 RE detail, 0261 400% RW, 0371-0380 memorandum).
 
-**Current**: Groups into 8 pre-defined PD bands (0%-0.15%, 0.15%-0.25%, etc.)
-**Actual**: Template has dynamic rows — one per firm-specific internal rating grade/pool, ordered by PD. No pre-defined bands.
+7. Replace `IRB_EXPOSURE_CLASS_ROWS` with `IRB_ROW_SECTIONS` for C 08.01 row structure.
 
-The current PD banding approach is a reasonable simplification for reporting purposes (firms may aggregate into bands), but doesn't match the actual template structure which expects individual obligor grades.
+8. Add `B31_IRB_ROW_SECTIONS` for OF 08.01 with additional rows (0017, 0031-0035, 0175, 0190, 0200).
 
-### 6. Maturity Unit Mismatch
+9. Keep `SA_EXPOSURE_CLASS_ROWS` and `IRB_EXPOSURE_CLASS_ROWS` as lookup dicts (still needed by generator for filtering), but update docstrings to clarify they're filter values, not row definitions.
 
-**Current**: `irb_maturity_m` is in **years** and the generator uses it directly.
-**Actual**: COREP column 0250 requires "Exposure-weighted average maturity value (**days**)".
+10. Keep `PD_BANDS` for C 08.02 aggregation convenience, add docstring noting actual template uses firm-specific grades.
 
-## Recommended Approach
+11. Keep `SA_RISK_WEIGHT_BANDS` but add `B31_SA_RISK_WEIGHT_BANDS` with the 29 Basel 3.1 bands.
 
-### Phase 1: Structural Corrections (templates.py + generator.py)
+**Acceptance criteria**:
+- `uv run pytest tests/unit/test_corep.py::TestTemplateDefinitions -v` passes (update these tests first to validate new definitions)
+- `uv run ruff check src/rwa_calc/reporting/corep/templates.py`
+- `uv run mypy src/rwa_calc/reporting/corep/templates.py`
 
-1. **Fix column references** to match actual COREP numbering (0010, 0030, 0040... not 010, 020, 030)
-2. **Restructure C 07.00 output** to be per-exposure-class with row sections:
-   - Section 1: Total row (0010) + "of which" breakdowns (0015, 0020, etc.)
-   - Section 2: Exposure type breakdown rows (0070 on-BS, 0080 off-BS)
-   - Section 3: Risk weight breakdown rows (0140-0280) — merge current `c07_rw_breakdown` into main template
-   - Section 5: Memorandum items (0290-0320)
-3. **Remove `c07_rw_breakdown`** as separate template — it becomes Section 3 of C 07.00
-4. **Fix C 08.01 maturity** to output in days (× 365)
-5. **Add framework-aware column sets** — CRR columns (with supporting factors) vs Basel 3.1 columns (with output floor)
+---
 
-### Phase 2: Populate Available Columns
+#### Task 1B: Rewrite generator for per-exposure-class output with row sections
 
-1. **Add supporting factor columns** to C 07.00 and C 08.01 (0215-0217 / 0255-0257) for CRR
-2. **Add exposure type row breakdown** (on-BS/off-BS) using `exposure_type` column
-3. **Add CCF breakdown rows** (0160-0190) using `ccf_applied`
-4. **Add output floor columns** (0275-0276) for Basel 3.1 using existing `sa_equivalent_rwa`
-5. **Wire up pre/post CRM columns** for CRM substitution reporting
+**Goal**: Restructure the generator to produce per-exposure-class DataFrames with the correct 5-section row structure for C 07.00 and 3-section structure for C 08.01.
 
-### Phase 3: Future Pipeline Enhancements (Out of Scope Now)
+**Files to modify**:
+- `src/rwa_calc/reporting/corep/generator.py`
+- `src/rwa_calc/reporting/corep/__init__.py` (if exports change)
 
-Document as backlog items:
-- Credit derivatives tracking in CRM
-- Financial collateral simple vs comprehensive method split
-- FCCM intermediate values (volatility adj, Cvam)
-- CRM substitution flow tracking (outflows/inflows)
-- Large financial sector entity classification
-- Double default treatment
-- Post-model adjustments (Basel 3.1)
-- CCR module integration
+**What to do**:
 
-## Key Files to Modify
+1. Restructure `_generate_c07()` to:
+   - Accept an exposure class filter parameter
+   - Produce a DataFrame with all 5 row sections for that class
+   - Row 0010 (Total): aggregate all exposures for that class
+   - "Of which" rows (0015-0060): conditional filters on the class data (defaulted, SME, etc.)
+   - Section 2 (0070/0080): group by `bs_type` or `exposure_type`
+   - Section 3 (0140-0280): group by `risk_weight` into bands
+   - Section 5 (0290-0320): filter memorandum conditions
+   - Use 4-digit column refs from Task 1A definitions
 
-- `src/rwa_calc/reporting/corep/templates.py` — Fix column refs, add row section definitions, add framework-specific columns
-- `src/rwa_calc/reporting/corep/generator.py` — Restructure to per-exposure-class output with row sections
-- `src/rwa_calc/reporting/corep/__init__.py` — Update exports if bundle structure changes
-- `src/rwa_calc/contracts/bundles.py` — Update COREPTemplateBundle if structure changes
-- `tests/unit/test_corep.py` — Rewrite tests for new structure
+2. Remove `_generate_c07_rw_breakdown()` entirely — it's now Section 3 of C 07.00.
 
-## Verification
+3. Restructure `_generate_c08_01()` similarly:
+   - Per-exposure-class with row sections
+   - Fix maturity: multiply `irb_maturity_m` by 365 for col 0250 (days, not years)
+   - Use correct column refs
 
-- Run existing tests: `uv run pytest tests/unit/test_corep.py -v`
-- Verify column refs match actual COREP numbering
-- Verify Excel export produces sheets matching actual template structure
-- Compare output against reference Excel templates in `docs/assets/`
+4. Update `_generate_c08_02()`:
+   - Keep PD banding but use correct column refs
+   - Each band row gets an obligor grade identifier (col 0005)
+
+5. Update `generate_from_lazyframe()` to:
+   - Get distinct exposure classes
+   - Generate per-class templates
+   - Return updated bundle structure
+
+6. Update `COREPTemplateBundle`:
+   - Replace `c07_00: pl.DataFrame` with `c07_00: dict[str, pl.DataFrame]` (keyed by exposure class), or a single DataFrame with `sa_exposure_class` partition column
+   - Remove `c07_rw_breakdown` field
+   - Similarly for `c08_01`, `c08_02`
+
+7. Add framework-awareness: when `framework == "CRR"` use CRR columns/rows, when `"BASEL_3_1"` use B31 versions.
+
+8. Update `_empty_c07()` and `_empty_c08_01()` schemas to match new column refs.
+
+9. Populate columns from existing pipeline data where possible:
+   - 0010: `drawn_amount + undrawn_amount`
+   - 0030: `scra_provision_amount + gcra_provision_amount`
+   - 0040: 0010 - 0030
+   - 0050: `guaranteed_portion`
+   - 0200: `ead_final`
+   - 0220: `rwa_final`
+   - 0230: `rwa_final` where `sa_cqs.is_not_null()`
+   - Columns without pipeline source: set to `null` with a comment (e.g., "# 0060: Credit derivatives — not yet tracked in pipeline")
+
+**Acceptance criteria**:
+- `uv run ruff check src/rwa_calc/reporting/corep/`
+- `uv run mypy src/rwa_calc/reporting/corep/`
+- Generator produces per-exposure-class output with correct row sections
+- Column refs match actual COREP numbering
+
+**Note**: Tests will be updated in Task 1C. The generator may not pass old tests after this task — that's expected.
+
+---
+
+#### Task 1C: Rewrite tests and update Excel export
+
+**Goal**: Update all COREP tests for the new structure and fix the Excel export.
+
+**Files to modify**:
+- `tests/unit/test_corep.py`
+- `src/rwa_calc/reporting/corep/generator.py` (export_to_excel method only)
+- `src/rwa_calc/api/models.py` (if `to_corep()` references bundle fields)
+- `src/rwa_calc/api/export.py` (if `export_to_corep()` references bundle fields)
+
+**What to do**:
+
+1. Rewrite `tests/unit/test_corep.py`:
+   - `TestTemplateDefinitions`: verify new CRR/B31 column and row section definitions
+   - `TestC0700`: test per-exposure-class output shape, verify 5 row sections present, verify correct 4-digit column refs, test aggregation within each section
+   - `TestC0700RWBreakdown`: remove this class (merged into C 07.00 Section 3)
+   - `TestC0801`: test per-exposure-class, verify row sections, verify maturity in days (not years), correct column refs
+   - `TestC0802`: test obligor grade rows with PD banding, correct column refs
+   - `TestExcelExport`: test updated sheet structure
+   - `TestCombined`: test SA/IRB separation with per-class output
+   - Test both CRR and Basel 3.1 framework paths
+
+2. Update `export_to_excel()`:
+   - Iterate over per-class DataFrames
+   - Sheet naming: "C 07.00 - Corporate", "C 07.00 - Institution", etc. (or single sheet with class filter)
+   - Remove the "C 07.00 RW Breakdown" sheet
+   - Add multi-level column headers if feasible with xlsxwriter
+
+3. Update API integration points (`api/models.py`, `api/export.py`) if they reference `c07_rw_breakdown`.
+
+**Acceptance criteria**:
+- `uv run pytest tests/unit/test_corep.py -v` — all tests pass
+- `uv run pytest tests/ -v --benchmark-skip` — no regressions in full suite
+- `uv run ruff check`
+
+---
+
+### Phase 2: Wire Up Existing Pipeline Data
+
+Each Phase 2 task is independent and can run in any order or in parallel. Each adds new columns/rows to the generator using data already available in the pipeline.
+
+**Prerequisite**: Phase 1 complete.
+
+---
+
+#### Task 2A: Add supporting factor columns (CRR only)
+
+**Goal**: Populate COREP cols 0215-0217 (C 07.00) and 0255-0257 (C 08.01) for CRR framework.
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `sme_supporting_factor`, `infra_supporting_factor`, `rwa_pre_factor`, `supporting_factor_benefit`
+
+**Map**:
+- 0215/0255: `rwa_pre_factor.sum()` (RWEA pre factors)
+- 0216/0256: SME factor benefit = `(rwa_pre_factor - rwa_final)` where SME factor applied
+- 0217/0257: Infrastructure factor benefit (similar)
+- Skip these columns when `framework == "BASEL_3_1"`
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "supporting_factor"`
+
+---
+
+#### Task 2B: Add exposure type row breakdown (Section 2)
+
+**Goal**: Populate C 07.00/C 08.01 Section 2 rows (on-BS, off-BS) from `exposure_type`/`bs_type`.
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `exposure_type` ("loan" | "facility" | "contingent"), `bs_type` ("ONB" | "OFB")
+
+**Map**:
+- Row 0070: filter `bs_type == "ONB"` or `exposure_type == "loan"`, aggregate all columns
+- Row 0080: filter `bs_type == "OFB"` or `exposure_type in ("contingent", "facility")`, aggregate
+- Rows 0090-0130 (CCR): leave as zero/null (CCR not implemented)
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "exposure_type"`
+
+---
+
+#### Task 2C: Add CCF breakdown columns
+
+**Goal**: Populate off-BS CCF breakdown (cols 0160-0190 for CRR; cols 0160, 0170, 0171, 0180, 0190 for Basel 3.1).
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `ccf_applied` (0.0, 0.1, 0.2, 0.4, 0.5, 1.0), off-BS exposures only
+
+**Map**: Group off-BS exposures by `ccf_applied`, sum the fully adjusted exposure value (E*) into the appropriate CCF column. CRR has 0%/20%/50%/100%; Basel 3.1 has 10%/20%/40%/50%/100%.
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "ccf_breakdown"`
+
+---
+
+#### Task 2D: Add output floor columns (Basel 3.1 only)
+
+**Goal**: Populate OF 08.01 cols 0275/0276 with SA-equivalent values for output floor.
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `sa_equivalent_rwa` (or `sa_rwa`), `ead_final`
+
+**Map**:
+- 0275: `ead_final.sum()` (SA-equivalent exposure value)
+- 0276: `sa_equivalent_rwa.sum()` (SA-equivalent RWEA)
+- Only populate when `framework == "BASEL_3_1"`
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "output_floor"`
+
+---
+
+#### Task 2E: Add ECAI unrated split (Basel 3.1 col 0235)
+
+**Goal**: Add col 0235 (RWEA without ECAI) for Basel 3.1 alongside existing col 0230 (with ECAI).
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `sa_cqs` (null = unrated)
+
+**Map**: 0235 = `rwa_final.sum()` where `sa_cqs.is_null()`. Only for Basel 3.1.
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "ecai"`
+
+---
+
+#### Task 2F: Add large financial sector entity sub-columns
+
+**Goal**: Populate C 08.01 "of which: LFSE" columns (0030, 0140, 0240, 0270).
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `apply_fi_scalar` (boolean — True for LFSE counterparties)
+
+**Map**:
+- 0030: original exposure where `apply_fi_scalar == True`
+- 0140: exposure value where LFSE
+- 0240: EAD-weighted avg LGD where LFSE
+- 0270: RWEA where LFSE
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "lfse"`
+
+---
+
+#### Task 2G: Add "of which" detail rows (defaulted, SME)
+
+**Goal**: Populate C 07.00 "of which" rows 0015 (defaulted) and 0020 (SME); OF 08.01 cols 0125/0265 (of which: defaulted).
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `exposure_class == "defaulted"` (SA); `irb_pd_floored >= 1.0` (IRB defaulted); `sme_supporting_factor_eligible` or `exposure_class` containing "sme"
+
+**Map**:
+- C 07.00 row 0015: filter defaulted exposures, aggregate
+- C 07.00 row 0020: filter SME exposures, aggregate
+- OF 08.01 col 0125: `ead_final.sum()` where defaulted
+- OF 08.01 col 0265: `rwa_final.sum()` where defaulted
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "of_which"`
+
+---
+
+#### Task 2H: Wire up pre/post CRM substitution flows
+
+**Goal**: Populate C 07.00 cols 0050 (guarantees), 0090 (outflows), 0100 (inflows), 0110 (net after substitution).
+
+**Files**: `src/rwa_calc/reporting/corep/generator.py`, `tests/unit/test_corep.py`
+
+**Pipeline source**: `guaranteed_portion`, `pre_crm_exposure_class`, `post_crm_exposure_class_guaranteed`
+
+**Map**:
+- 0050: `guaranteed_portion.sum()` for exposures in this class
+- 0090: sum of `guaranteed_portion` where `pre_crm_exposure_class == this_class` AND `post_crm_exposure_class_guaranteed != this_class` (leaving this class)
+- 0100: sum of `guaranteed_portion` where `post_crm_exposure_class_guaranteed == this_class` AND `pre_crm_exposure_class != this_class` (arriving in this class)
+- 0110: col 0040 - col 0090 + col 0100
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "substitution"`
+
+---
+
+### Phase 3: Pipeline Enhancements
+
+Each Phase 3 task extends the pipeline itself to produce data not currently available. These are larger tasks that add new functionality upstream of the COREP generator.
+
+**Prerequisite**: Phase 1 complete. Phase 2 is recommended but not strictly required.
+
+---
+
+#### Task 3A: Collateral method split (simple vs comprehensive vs other funded)
+
+**Goal**: Track financial collateral simple method, comprehensive method, and other funded protection separately through the CRM pipeline.
+
+**COREP cols**: C 07.00: 0070, 0080, 0120-0140. C 08.01: 0170-0210.
+
+**Current state**: Pipeline applies supervisory haircuts uniformly. No simple vs comprehensive distinction. `collateral_adjusted_value` is a single total.
+
+**Files**:
+- `src/rwa_calc/contracts/config.py` — add `financial_collateral_method: Literal["simple", "comprehensive"]`
+- `src/rwa_calc/engine/crm/processor.py` — split collateral processing path
+- `src/rwa_calc/engine/crm/haircuts.py` — preserve FCCM intermediate values
+- `src/rwa_calc/data/schemas.py` — add output columns
+- `src/rwa_calc/reporting/corep/generator.py` — wire new columns to COREP
+- `tests/unit/test_corep.py`, `tests/unit/test_crm_*.py` — new tests
+
+**New output columns**:
+- `financial_collateral_simple_value` → COREP col 0070
+- `other_funded_protection_value` → COREP col 0080
+- `volatility_adjustment_he` → COREP col 0120
+- `collateral_cvam` → COREP col 0130
+- `cvam_vol_mat_portion` → COREP col 0140
+
+**Collateral type mapping for C 08.01 cols 0170-0210**:
+- 0170: other funded (non-financial, non-RE, non-receivable)
+- 0171: cash on deposit
+- 0172: life insurance policies
+- 0173: instruments held by third party
+- 0180: eligible financial collateral
+- 0190: real estate
+- 0200: other physical collateral
+- 0210: receivables
+
+**Verify**: `uv run pytest tests/unit/test_crm_collateral.py tests/unit/test_corep.py -v`
+
+---
+
+#### Task 3B: Credit derivatives tracking
+
+**Goal**: Track credit derivatives (CDS, CLN, TRS) separately from guarantees in the CRM pipeline.
+
+**COREP cols**: C 07.00: 0060. C 08.01: 0050, 0160, 0310.
+
+**Current state**: CRM handles guarantees only. No code path for credit derivatives.
+
+**Depends on**: None (independent of 3A)
+
+**Files**:
+- `src/rwa_calc/data/schemas.py` — add `protection_type: Literal["guarantee", "credit_derivative"]` to guarantee schema
+- `src/rwa_calc/engine/crm/processor.py` — split guarantee/derivative processing
+- `src/rwa_calc/engine/crm/namespace.py` — handle derivative-specific conditions (Art. 204, 216)
+- `src/rwa_calc/reporting/corep/generator.py` — wire to COREP cols
+- Tests
+
+**New output columns**:
+- `guarantee_value` → COREP col 0050
+- `credit_derivative_value` → COREP col 0060
+- `guarantee_lgd_adj_value` → C 08.01 col 0150
+- `credit_derivative_lgd_adj_value` → C 08.01 col 0160
+- `rwa_pre_credit_derivatives` → C 08.01 col 0310
+
+**Verify**: `uv run pytest tests/unit/test_crm_guarantees.py tests/unit/test_corep.py -v`
+
+---
+
+#### Task 3C: CRM substitution flow computation
+
+**Goal**: Compute cross-class CRM substitution outflows and inflows as proper aggregated flows.
+
+**COREP cols**: C 07.00: 0090, 0100. C 08.01: 0070, 0080.
+
+**Depends on**: Task 2H (basic substitution wiring)
+
+**Files**:
+- `src/rwa_calc/reporting/corep/generator.py` or new `src/rwa_calc/reporting/corep/flows.py`
+- Tests
+
+**Implementation**:
+- For each exposure where `pre_crm_exposure_class != post_crm_exposure_class_guaranteed`:
+  - Record outflow from `pre_crm_exposure_class` of `guaranteed_portion`
+  - Record inflow to `post_crm_exposure_class_guaranteed` of `guaranteed_portion`
+- Aggregate per class → cols 0090/0100
+- Net: col 0110 = col 0040 - col 0090 + col 0100
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "substitution_flow"`
+
+---
+
+#### Task 3D: On-balance-sheet netting (Basel 3.1 col 0035)
+
+**Goal**: Track on-balance-sheet netting as a separate adjustment in the EAD waterfall.
+
+**COREP cols**: OF 07.00: 0035. OF 08.01: 0035.
+
+**Files**:
+- `src/rwa_calc/data/schemas.py` — add `on_bs_netting_amount: pl.Float64` to exposure schema and output schema
+- `src/rwa_calc/engine/crm/processor.py` — insert netting step after provisions, before CRM
+- `src/rwa_calc/reporting/corep/generator.py` — wire to col 0035
+- Tests
+
+**Complexity**: Low. Input-driven column, straightforward waterfall insertion.
+
+**Verify**: `uv run pytest tests/unit/test_crm_processor.py tests/unit/test_corep.py -v`
+
+---
+
+#### Task 3E: Double default treatment (CRR only)
+
+**Goal**: Implement double default RW formula (CRR Art. 153(3), 202-203) for guaranteed IRB exposures.
+
+**COREP cols**: C 08.01: 0220, affects 0230 (avg LGD).
+
+**Current state**: Not implemented. Basel 3.1 removes this, so CRR-only.
+
+**Files**:
+- `src/rwa_calc/engine/irb/formulas.py` — add double default capital formula
+- `src/rwa_calc/engine/crm/processor.py` — add eligibility check
+- `src/rwa_calc/data/schemas.py` — add output columns
+- `src/rwa_calc/reporting/corep/generator.py` — wire to col 0220
+- Tests
+
+**New output columns**:
+- `is_double_default_eligible: bool`
+- `double_default_unfunded_protection: float` → COREP col 0220
+- `irb_lgd_double_default: float`
+
+**Complexity**: Medium-high. New IRB formula variant and eligibility logic.
+
+**Verify**: `uv run pytest tests/unit/test_irb_formulas.py tests/unit/test_corep.py -v`
+
+---
+
+#### Task 3F: Post-model adjustments (Basel 3.1 only)
+
+**Goal**: Add post-model adjustment columns for IRB RWEA and EL (PRA PS9/24, Art. 153(5A), 154(4A), 158(6A)).
+
+**COREP cols**: OF 08.01: 0251-0254 (RWEA), 0281-0282 (EL).
+
+**Files**:
+- `src/rwa_calc/contracts/config.py` — add adjustment config parameters
+- `src/rwa_calc/engine/irb/calculator.py` — apply adjustments after base IRB calculation
+- `src/rwa_calc/data/schemas.py` — add output columns
+- `src/rwa_calc/reporting/corep/generator.py` — wire to COREP cols
+- Tests
+
+**New output columns**:
+- `rwa_pre_adjustments` → col 0251
+- `post_model_adjustment_rwa` → col 0252
+- `mortgage_rw_floor_adjustment` → col 0253
+- `unrecognised_exposure_adjustment` → col 0254
+- `el_pre_adjustment` → col 0280
+- `post_model_adjustment_el` → col 0281
+- `el_after_adjustment` → col 0282
+
+**Complexity**: Medium. Config-driven adjustments applied in IRB calculator.
+
+**Verify**: `uv run pytest tests/unit/test_irb_calculator.py tests/unit/test_corep.py -v`
+
+---
+
+#### Task 3G: Specialised lending detail rows (Basel 3.1)
+
+**Goal**: Add project finance phase tracking and map to OF 07.00 rows 0021-0026.
+
+**COREP rows**: OF 07.00: 0021-0026.
+
+**Current state**: `sl_type` exists. Missing `project_phase`.
+
+**Files**:
+- `src/rwa_calc/data/schemas.py` — add `project_phase: Literal["pre_operational", "operational", "high_quality_operational"]`
+- `src/rwa_calc/reporting/corep/templates.py` — add rows to B31 sections
+- `src/rwa_calc/reporting/corep/generator.py` — filter and aggregate for SL sub-rows
+- Tests
+
+**Map**:
+- 0021: `sl_type == "object_finance"`
+- 0022: `sl_type == "commodities"`
+- 0023: `sl_type == "project_finance"` (total)
+- 0024: project_finance + `project_phase == "pre_operational"`
+- 0025: project_finance + `project_phase == "operational"`
+- 0026: project_finance + `project_phase == "high_quality_operational"`
+
+**Complexity**: Low.
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "specialised_lending"`
+
+---
+
+#### Task 3H: Real estate detail rows (Basel 3.1)
+
+**Goal**: Add cash-flow dependency flag and map to OF 07.00 rows 0330-0360.
+
+**COREP rows**: OF 07.00: 0330-0360.
+
+**Current state**: `property_type`, `property_ltv`, `is_income_producing`, `is_adc` exist. Missing `materially_dependent_on_property`.
+
+**Files**:
+- `src/rwa_calc/data/schemas.py` — add `materially_dependent_on_property: bool`
+- `src/rwa_calc/engine/classifier/` — add regulatory RE classification logic
+- `src/rwa_calc/reporting/corep/templates.py` — add rows to B31 sections
+- `src/rwa_calc/reporting/corep/generator.py` — filter and aggregate for RE sub-rows
+- Tests
+
+**Map**:
+- 0330: Regulatory residential RE (total)
+- 0331: RRE + not materially dependent
+- 0332: RRE + materially dependent
+- 0340-0344: Regulatory commercial RE + SME splits
+- 0350-0354: Other RE
+- 0360: ADC (`is_adc == True`)
+
+**Complexity**: Low-medium.
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "real_estate"`
+
+---
+
+#### Task 3I: Equity transitional provisions (Basel 3.1)
+
+**Goal**: Track equity transitional approach and map to OF 07.00 memorandum rows 0371-0374.
+
+**COREP rows**: OF 07.00: 0371-0374.
+
+**Files**:
+- `src/rwa_calc/engine/equity/calculator.py` — add transitional approach tracking
+- `src/rwa_calc/data/schemas.py` — add `equity_transitional_approach`, `equity_higher_risk`
+- `src/rwa_calc/reporting/corep/generator.py` — wire to memorandum rows
+- Tests
+
+**Map**:
+- 0371: SA transitional + higher risk (400%+ RW)
+- 0372: SA transitional + other equity
+- 0373: IRB transitional + higher risk
+- 0374: IRB transitional + other equity
+
+**Complexity**: Low.
+
+**Verify**: `uv run pytest tests/unit/test_corep.py -v -k "equity_transitional"`
+
+---
+
+#### Task 3J: Currency mismatch multiplier (Basel 3.1)
+
+**Goal**: Implement 1.5x RW multiplier for retail/RE when exposure currency differs from borrower income currency (Art. 123B).
+
+**COREP rows**: OF 07.00: 0380.
+
+**Files**:
+- `src/rwa_calc/data/schemas.py` — add `borrower_income_currency: pl.String` to exposure schema
+- `src/rwa_calc/engine/sa/calculator.py` — apply 1.5x multiplier post-base-RW
+- `src/rwa_calc/reporting/corep/generator.py` — wire to memorandum row 0380
+- Tests
+
+**New output column**: `currency_mismatch_multiplier_applied: bool`
+
+**Complexity**: Medium.
+
+**Verify**: `uv run pytest tests/unit/test_sa_calculator.py tests/unit/test_corep.py -v`
+
+---
+
+#### Task 3K: CCR module (Counterparty Credit Risk)
+
+**Goal**: Implement SA-CCR (CRR Art. 274-280b) for counterparty credit risk exposure values.
+
+**COREP cols**: C 07.00: 0210, 0211. C 07.00 rows: 0090-0130 (SFT, derivatives).
+
+**Current state**: Explicitly out of scope in PRD. No CCR module exists.
+
+**This is a major workstream** — not a single loop task. Breaking down:
+
+**Sub-tasks** (each a separate loop iteration):
+
+1. **3K.1**: Define CCR data model — input schemas for derivatives/SFTs, netting set definitions, trade-level data (`data/schemas.py`)
+2. **3K.2**: SA-CCR replacement cost (RC) calculation — mark-to-market, collateral, netting (`engine/ccr/replacement_cost.py`)
+3. **3K.3**: SA-CCR potential future exposure (PFE) — add-on factors by asset class, aggregation formula (`engine/ccr/pfe.py`)
+4. **3K.4**: SA-CCR EAD = alpha × (RC + PFE), alpha=1.4 (`engine/ccr/calculator.py`)
+5. **3K.5**: CCP exposure treatment — QCCP trade exposures (2% RW), default fund contributions (`engine/ccr/ccp.py`)
+6. **3K.6**: SFT exposure calculation — master netting, supervisory haircuts for SFTs (`engine/ccr/sft.py`)
+7. **3K.7**: Pipeline integration — add CCR calculator as new branch alongside SA/IRB/Slotting/Equity
+8. **3K.8**: COREP integration — wire CCR output to C 07.00 cols 0210/0211 and rows 0090-0130
+
+**Complexity**: Very high. Months of work. Recommend as a separate project.
+
+---
+
+## Dependency Graph
+
+```
+Phase 1 (atomic — must complete together)
+  1A ──→ 1B ──→ 1C
+                  │
+Phase 2 (independent tasks, can parallelise)
+  ├── 2A Supporting factors
+  ├── 2B Exposure type rows
+  ├── 2C CCF breakdown
+  ├── 2D Output floor
+  ├── 2E ECAI unrated split
+  ├── 2F LFSE sub-columns
+  ├── 2G "Of which" detail rows
+  └── 2H Pre/post CRM substitution
+                  │
+Phase 3 (pipeline enhancements)
+  ├── 3A Collateral method split ──→ 3B Credit derivatives
+  ├── 3C CRM substitution flows (depends on 2H)
+  ├── 3D On-BS netting (low effort, independent)
+  ├── 3E Double default CRR (independent)
+  ├── 3F Post-model adjustments B3.1 (independent)
+  ├── 3G SL detail rows (low effort, independent)
+  ├── 3H RE detail rows (independent)
+  ├── 3I Equity transitional (low effort, independent)
+  ├── 3J Currency mismatch multiplier (independent)
+  └── 3K CCR module (major workstream, 8 sub-tasks)
+```
+
+## Global Verification
+
+After each task: `uv run pytest tests/unit/test_corep.py -v`
+After each phase: `uv run pytest tests/ -v --benchmark-skip`
+Final: compare output against reference Excel templates in `docs/assets/`

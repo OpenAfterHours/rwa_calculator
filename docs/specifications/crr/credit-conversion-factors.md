@@ -50,7 +50,7 @@ When provisions are present (SA only), they are resolved **before** CCF applicat
 
 ```
 provision_on_drawn = min(provision_allocated, max(0, Drawn Amount))
-provision_on_nominal = provision_allocated - provision_on_drawn
+provision_on_nominal = min(provision_allocated - provision_on_drawn, Undrawn Amount)
 nominal_after_provision = Undrawn Amount - provision_on_nominal
 
 EAD = (max(0, Drawn Amount) - provision_on_drawn) + Accrued Interest

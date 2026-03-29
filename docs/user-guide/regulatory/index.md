@@ -75,7 +75,7 @@ config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
 
 - [**CRR (Basel 3.0)**](crr.md) - Complete CRR documentation
 - [**Basel 3.1**](basel31.md) - Complete Basel 3.1 documentation
-- [**Framework Comparison**](comparison.md) - Detailed side-by-side comparison
+- [**Framework Comparison**](../../framework-comparison/index.md) - Detailed side-by-side comparison
 
 ## UK-Specific Deviations
 
@@ -132,4 +132,4 @@ All calculations reference specific regulatory articles:
 
 - [CRR Deep Dive](crr.md) - Current framework details
 - [Basel 3.1 Deep Dive](basel31.md) - Future framework details
-- [Comparison](comparison.md) - Framework differences
+- [Comparison](../../framework-comparison/index.md) - Framework differences

@@ -31,7 +31,7 @@ This section provides an overview of all implemented features in the RWA calcula
 | **FX Conversion** | Multi-currency support with configurable base currency and audit trail | [Methodology](../user-guide/methodology/fx-conversion.md), [API](../api/engine.md#fx-converter) |
 | **Credit Conversion Factors** | SA and F-IRB CCFs for off-balance sheet exposures | [Specification](../specifications/crr/credit-conversion-factors.md), [API](../api/engine.md#ccf-calculator) |
 | **Supporting Factors** | CRR SME tiered factor (0.7619/0.85) and infrastructure factor (0.75) | [Methodology](../user-guide/methodology/supporting-factors.md), [Specification](../specifications/crr/supporting-factors.md) |
-| **Output Floor** | Basel 3.1 output floor (72.5% of SA) with transitional schedule | [Specification](../specifications/basel31/framework-differences.md#output-floor), [API](../api/engine.md#aggregator) |
+| **Output Floor** | Basel 3.1 output floor (72.5% of SA) with transitional schedule | [Specification](../framework-comparison/technical-reference.md#output-floor), [API](../api/engine.md#aggregator) |
 | **Input Validation** | Categorical value validation with DQ006 error codes | [Data Model](../data-model/data-validation.md) |
 | **Audit Trail** | Full calculation transparency with formatted audit strings for every approach | [API](../api/engine.md#audit-namespace) |
 
@@ -40,9 +40,9 @@ This section provides an overview of all implemented features in the RWA calcula
 | Feature | Description | Documentation |
 |---------|-------------|---------------|
 | **COREP Reporting** | C 07.00 (SA), C 07.00 RW breakdown, C 08.01 (IRB totals), C 08.02 (IRB by PD grade) | [Feature Guide](corep-reporting.md), [API](../api/reporting.md) |
-| **Dual-Framework Comparison** | Side-by-side CRR vs Basel 3.1 analysis with per-exposure delta joins | [Feature Guide](comparison.md), [API](../api/engine.md#comparison-module) |
-| **Capital Impact Analysis** | 4-driver waterfall attribution (scaling, supporting, methodology, floor) | [Feature Guide](comparison.md#capital-impact-analysis-m32), [API](../api/engine.md#comparison-module) |
-| **Transitional Floor Schedule** | Year-by-year output floor modelling from 50% (2027) to 72.5% (2032) | [Feature Guide](comparison.md#transitional-floor-schedule-m33), [API](../api/engine.md#comparison-module) |
+| **Dual-Framework Comparison** | Side-by-side CRR vs Basel 3.1 analysis with per-exposure delta joins | [Feature Guide](../framework-comparison/impact-analysis.md), [API](../api/engine.md#comparison-module) |
+| **Capital Impact Analysis** | 4-driver waterfall attribution (scaling, supporting, methodology, floor) | [Feature Guide](../framework-comparison/impact-analysis.md#capital-impact-analysis-m32), [API](../api/engine.md#comparison-module) |
+| **Transitional Floor Schedule** | Year-by-year output floor modelling from 50% (2027) to 72.5% (2032) | [Feature Guide](../framework-comparison/impact-analysis.md#transitional-floor-schedule-m33), [API](../api/engine.md#comparison-module) |
 
 ## Dual-Framework Support
 
@@ -53,7 +53,7 @@ config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))     # CRR
 config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))  # Basel 3.1
 ```
 
-Key differences are documented in the [Framework Differences](../specifications/basel31/framework-differences.md) specification.
+Key differences are documented in the [CRR vs Basel 3.1](../framework-comparison/index.md) section.
 
 ## Performance
 

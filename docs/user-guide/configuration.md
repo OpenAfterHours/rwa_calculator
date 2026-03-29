@@ -383,4 +383,4 @@ CONFIG_Q4_2026 = {
 
 - [Quick Start Guide](../getting-started/quickstart.md)
 - [API Reference - Configuration](../api/configuration.md)
-- [Framework Comparison](regulatory/comparison.md)
+- [Framework Comparison](../framework-comparison/index.md)

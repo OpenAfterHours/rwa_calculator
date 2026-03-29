@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Docs**: New top-level "CRR vs Basel 3.1" section consolidating all framework comparison content — key differences, reporting differences, impact analysis, and technical reference
+- **Docs**: New reporting differences page documenting COREP template changes between C-prefix (CRR) and OF-prefix (Basel 3.1) templates
+
 ### Changed
 - **Regulatory**: Update all Basel 3.1 references from PRA PS9/24 (near-final) to PRA PS1/26 (final rules) across source code, documentation, tests, and workbooks
 - **Regulatory**: Replace old PS9/24 and CP16/22 URLs with PS1/26 final rules links (policy statement, Appendix 1, Appendix 17)

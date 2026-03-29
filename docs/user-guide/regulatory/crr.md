@@ -281,5 +281,5 @@ config = CalculationConfig.crr(
 ## Next Steps
 
 - [Basel 3.1](basel31.md) - Future framework
-- [Framework Comparison](comparison.md) - CRR vs Basel 3.1
+- [Framework Comparison](../../framework-comparison/index.md) - CRR vs Basel 3.1
 - [Calculation Methodology](../methodology/index.md) - Detailed calculations

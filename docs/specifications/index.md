@@ -25,7 +25,9 @@ This section contains the formal specifications for the RWA Calculator. These sp
 
 | Specification | Description | Regulatory Reference |
 |--------------|-------------|---------------------|
-| [Framework Differences](basel31/framework-differences.md) | Key changes from CRR including output floor, PD/LGD floors | PRA PS1/26 |
+| [Framework Differences](../framework-comparison/technical-reference.md) | Key changes from CRR including output floor, PD/LGD floors | PRA PS1/26 |
+
+See the [CRR vs Basel 3.1](../framework-comparison/index.md) section for comprehensive comparison documentation.
 
 ### Common (Framework-Agnostic)
 

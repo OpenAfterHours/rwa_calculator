@@ -111,7 +111,7 @@ Basel 3.1 (BCBS CRE33) introduces three distinct slotting weight tables:
 | Weak | 250% |
 | Default | 0% (EL) |
 
-Compare with CRR slotting weights in the [Slotting Approach](../crr/slotting-approach.md) specification.
+Compare with CRR slotting weights in the [Slotting Approach](../specifications/crr/slotting-approach.md) specification.
 
 ## Financial Institution Correlation Multiplier (CRE31.5)
 

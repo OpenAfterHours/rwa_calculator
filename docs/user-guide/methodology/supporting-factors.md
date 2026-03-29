@@ -325,6 +325,6 @@ Impact = B31_RWA - CRR_RWA  # £1.36m increase (20.5%)
 
 ## Next Steps
 
-- [Framework Comparison](../regulatory/comparison.md) - CRR vs Basel 3.1 impact
+- [Framework Comparison](../../framework-comparison/index.md) - CRR vs Basel 3.1 impact
 - [Configuration Guide](../configuration.md) - Enabling/disabling factors
 - [IRB Approach](irb-approach.md) - SME correlation adjustment

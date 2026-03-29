@@ -10,6 +10,13 @@ extra_css = ["assets/stylesheets/homepage.css"]
 nav = [
   { "Home" = "index.md" },
   { "Overview" = "overview.md" },
+  { "CRR vs Basel 3.1" = [
+    "framework-comparison/index.md",
+    { "Key Differences" = "framework-comparison/key-differences.md" },
+    { "Reporting Differences" = "framework-comparison/reporting-differences.md" },
+    { "Impact Analysis" = "framework-comparison/impact-analysis.md" },
+    { "Technical Reference" = "framework-comparison/technical-reference.md" },
+  ]},
   { "Getting Started" = [
     "getting-started/index.md",
     { "Installation" = "getting-started/installation.md" },
@@ -23,7 +30,6 @@ nav = [
       "user-guide/regulatory/index.md",
       { "CRR (Basel 3.0)" = "user-guide/regulatory/crr.md" },
       { "Basel 3.1" = "user-guide/regulatory/basel31.md" },
-      { "Framework Comparison" = "user-guide/regulatory/comparison.md" },
     ]},
     { "Calculation Methodology" = [
       "user-guide/methodology/index.md",
@@ -57,7 +63,6 @@ nav = [
     "features/index.md",
     { "Classification" = "features/classification.md" },
     { "COREP Reporting" = "features/corep-reporting.md" },
-    { "Comparison & Impact Analysis" = "features/comparison.md" },
   ]},
   { "Data Model" = [
     "data-model/index.md",
@@ -88,9 +93,6 @@ nav = [
       { "Credit Risk Mitigation" = "specifications/crr/credit-risk-mitigation.md" },
       { "Slotting Approach" = "specifications/crr/slotting-approach.md" },
       { "Provisions" = "specifications/crr/provisions.md" },
-    ]},
-    { "Basel 3.1 Framework" = [
-      { "Framework Differences" = "specifications/basel31/framework-differences.md" },
     ]},
     { "Common" = [
       { "Hierarchy & Classification" = "specifications/common/hierarchy-classification.md" },

@@ -328,5 +328,5 @@ gantt
 ## Next Steps
 
 - [CRR](crr.md) - Current framework
-- [Framework Comparison](comparison.md) - Side-by-side comparison
+- [Framework Comparison](../../framework-comparison/index.md) - Side-by-side comparison
 - [Calculation Methodology](../methodology/index.md) - How calculations work

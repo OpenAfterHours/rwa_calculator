@@ -35,7 +35,7 @@ Under F-IRB, LGD is prescribed by the regulator based on collateral type:
 
 **CRR:** Single floor of **0.03%** for all exposure classes (Art. 163).
 
-See [Framework Differences](../basel31/framework-differences.md) for Basel 3.1 differentiated PD floors.
+See [Framework Differences](../../framework-comparison/technical-reference.md) for Basel 3.1 differentiated PD floors.
 
 ## Asset Correlation Formula (CRR Art. 153)
 

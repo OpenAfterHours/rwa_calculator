@@ -394,8 +394,11 @@ Basel 3.1:
 3. **Model Updates**: Review IRB models for floor compliance
 4. **Process Changes**: Update reporting for dual calculation
 
-## Next Steps
+## See Also
 
-- [CRR Details](crr.md) - Current framework in depth
-- [Basel 3.1 Details](basel31.md) - Future framework in depth
-- [Configuration Guide](../configuration.md) - Setting up both frameworks
+- [CRR Details](../user-guide/regulatory/crr.md) — current framework in depth
+- [Basel 3.1 Details](../user-guide/regulatory/basel31.md) — future framework in depth
+- [Reporting Differences](reporting-differences.md) — COREP template changes
+- [Impact Analysis](impact-analysis.md) — comparison tooling and capital attribution
+- [Technical Reference](technical-reference.md) — developer-facing parameter specification
+- [Configuration Guide](../user-guide/configuration.md) — setting up both frameworks

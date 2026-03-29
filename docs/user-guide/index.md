@@ -19,7 +19,7 @@ Understand the regulatory requirements that govern RWA calculations:
 - [**Overview**](regulatory/index.md) - Introduction to UK credit risk regulations
 - [**CRR (Basel 3.0)**](regulatory/crr.md) - Current framework until December 2026
 - [**Basel 3.1**](regulatory/basel31.md) - New framework from January 2027
-- [**Framework Comparison**](regulatory/comparison.md) - Key differences between frameworks
+- [**Framework Comparison**](../framework-comparison/index.md) - Key differences between frameworks
 
 ### Calculation Methodology
 
@@ -92,7 +92,7 @@ Start with:
 1. [Interactive UI](interactive-ui.md) - Run calculations without code
 2. [Regulatory Frameworks](regulatory/index.md) - Understand the rules
 3. [Calculation Methodology](methodology/index.md) - How calculations work
-4. [Framework Comparison](regulatory/comparison.md) - CRR vs Basel 3.1 differences
+4. [Framework Comparison](../framework-comparison/index.md) - CRR vs Basel 3.1 differences
 
 ### Business Users
 

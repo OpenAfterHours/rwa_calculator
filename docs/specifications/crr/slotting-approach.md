@@ -90,7 +90,7 @@ differentiating Non-HVCRE operational, Project Finance pre-operational, and HVCR
 | Weak | 250% |
 | Default | 0% (EL) |
 
-See [Framework Differences](../basel31/framework-differences.md) for full Basel 3.1 detail.
+See [Framework Differences](../../framework-comparison/technical-reference.md) for full Basel 3.1 detail.
 
 ## Equity
 

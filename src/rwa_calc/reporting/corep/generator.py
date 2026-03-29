@@ -19,6 +19,7 @@ References:
 - Regulation (EU) 2021/451, Annex I/II (CRR templates)
 - CRR Art. 111-134 (SA), Art. 142-191 (IRB)
 - PRA PS1/26 (Basel 3.1 reporting amendments)
+- PRA PS1/26, Annex I/II (Basel 3.1 OF templates)
 """
 
 from __future__ import annotations

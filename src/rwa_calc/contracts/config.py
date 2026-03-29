@@ -641,6 +641,8 @@ class CalculationConfig:
         - No supporting factors (SME/infrastructure)
         - Output floor (72.5%, transitional)
         - 1.06 scaling factor removed (PRA PS1/26 confirms)
+        - Post-model adjustments (mortgage RW floor, PMAs)
+        - 1.06 scaling factor removed (PRA CP16/22 confirms)
 
         Args:
             reporting_date: As-of date for calculation

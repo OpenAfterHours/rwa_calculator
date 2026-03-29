@@ -984,6 +984,12 @@ CALCULATION_OUTPUT_SCHEMA = {
     "post_model_adjustment_el": pl.Float64,  # General PMA add-on to EL
     "el_after_adjustment": pl.Float64,  # EL after post-model adjustments
     # -------------------------------------------------------------------------
+    # DOUBLE DEFAULT (CRR Art. 153(3), 202-203 — CRR only)
+    # -------------------------------------------------------------------------
+    "is_double_default_eligible": pl.Boolean,  # Whether exposure qualifies for DD treatment
+    "double_default_unfunded_protection": pl.Float64,  # Guaranteed portion under DD → COREP 0220
+    "irb_lgd_double_default": pl.Float64,  # LGD used in DD calculation (= obligor LGD)
+    # -------------------------------------------------------------------------
     # EXPECTED LOSS (IRB comparison to provisions)
     # -------------------------------------------------------------------------
     "irb_expected_loss": pl.Float64,  # PD × LGD × EAD

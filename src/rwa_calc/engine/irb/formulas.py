@@ -528,6 +528,51 @@ def _polars_maturity_adjustment_expr(
 
 
 # =============================================================================
+# DOUBLE DEFAULT TREATMENT (CRR Art. 153(3), Basel II para 284-286)
+# =============================================================================
+
+
+def _double_default_multiplier_expr(guarantor_pd_expr: pl.Expr) -> pl.Expr:
+    """
+    Double default multiplier per CRR Art. 153(3) / Basel II para 284.
+
+    K_dd = K_obligor × (0.15 + 160 × PD_g)
+
+    The multiplier (0.15 + 160 × PD_g) reduces the capital charge by accounting
+    for the joint probability that both obligor and guarantor default. For a
+    high-quality guarantor (PD_g = 0.03%), the multiplier ≈ 0.198, providing
+    ~80% capital relief vs standard substitution.
+
+    Args:
+        guarantor_pd_expr: Polars expression for the guarantor's PD (floored)
+
+    Returns:
+        Expression computing the double default multiplier (0.15 + 160 × PD_g)
+    """
+    return pl.lit(0.15) + pl.lit(160.0) * guarantor_pd_expr
+
+
+def calculate_double_default_k(
+    k_obligor: float,
+    guarantor_pd: float,
+) -> float:
+    """
+    Scalar double default K calculation.
+
+    K_dd = K_obligor × (0.15 + 160 × PD_g)
+
+    Args:
+        k_obligor: Standard IRB K for the obligor (pre-guarantee)
+        guarantor_pd: PD of the protection provider (floored)
+
+    Returns:
+        Capital requirement under double default treatment
+    """
+    multiplier = 0.15 + 160.0 * guarantor_pd
+    return k_obligor * multiplier
+
+
+# =============================================================================
 # PARAMETRIC IRB RISK WEIGHT (for guarantee parameter substitution)
 # =============================================================================
 

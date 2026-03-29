@@ -3339,3 +3339,120 @@ class TestPostModelAdjustments:
         corp = bundle.c08_01["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0253"][0] == pytest.approx(0.0)
+
+
+# =============================================================================
+# DOUBLE DEFAULT TREATMENT — Task 3E
+# =============================================================================
+
+
+def _irb_results_with_double_default() -> pl.LazyFrame:
+    """IRB results with double default tracking columns for C 08.01 col 0220.
+
+    Why: CRR Art. 153(3) requires reporting of unfunded credit protection
+    subject to double default treatment. Col 0220 shows the guaranteed amount
+    where the DD formula was used instead of standard substitution.
+
+    Two corporate exposures:
+    - IRB_DD_1: DD-eligible (guaranteed by institution, A-IRB, has DD protection)
+    - IRB_DD_2: Not DD-eligible (no guarantee)
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_DD_1", "IRB_DD_2"],
+            "approach_applied": ["advanced_irb", "advanced_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "drawn_amount": [5000.0, 3000.0],
+            "undrawn_amount": [1000.0, 0.0],
+            "ead_final": [5500.0, 3000.0],
+            "rwa_final": [2750.0, 1800.0],
+            "risk_weight": [0.50, 0.60],
+            "irb_pd_floored": [0.02, 0.01],
+            "irb_lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0],
+            "irb_expected_loss": [49.5, 13.5],
+            "irb_capital_k": [0.04, 0.048],
+            "provision_held": [50.0, 10.0],
+            "el_shortfall": [0.0, 3.5],
+            "el_excess": [0.5, 0.0],
+            "scra_provision_amount": [10.0, 5.0],
+            "gcra_provision_amount": [5.0, 5.0],
+            "counterparty_reference": ["CP_DD1", "CP_DD2"],
+            # Double default tracking columns
+            "is_double_default_eligible": [True, False],
+            "double_default_unfunded_protection": [3000.0, 0.0],
+            "irb_lgd_double_default": [0.45, None],
+            "guaranteed_portion": [3000.0, 0.0],
+            "unguaranteed_portion": [2500.0, 3000.0],
+        }
+    )
+
+
+class TestDoubleDefaultCOREP:
+    """Task 3E: Double default treatment in COREP C 08.01 col 0220.
+
+    Why: CRR Art. 153(3) allows firms with A-IRB permission to recognise
+    double default effects, reducing capital for guaranteed corporate exposures
+    where the joint default probability is low. Col 0220 reports the unfunded
+    protection amount subject to this treatment, enabling supervisory review
+    of DD usage and risk concentration.
+    """
+
+    def test_crr_col_0220_populated(self) -> None:
+        """CRR C 08.01 col 0220 reports DD unfunded protection amount."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_double_default(), framework="CRR"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # IRB_DD_1 has 3000 DD unfunded protection, IRB_DD_2 has 0
+        assert total["0220"][0] == pytest.approx(3000.0)
+
+    def test_crr_col_0220_zero_when_no_dd(self) -> None:
+        """CRR C 08.01 col 0220 is zero when no DD exposures."""
+        gen = COREPGenerator()
+        # Use plain IRB results (no DD columns)
+        bundle = gen.generate_from_lazyframe(_irb_results(), framework="CRR")
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Without DD column, should be None
+        assert total["0220"][0] is None
+
+    def test_b31_no_col_0220(self) -> None:
+        """Basel 3.1 OF 08.01 does not have col 0220 (DD removed)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_double_default(), framework="BASEL_3_1"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert "0220" not in total.columns
+
+    def test_crr_col_0220_institution_class(self) -> None:
+        """Col 0220 for institution class with no DD → None."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_double_default(), framework="CRR"
+        )
+        inst = bundle.c08_01.get("institution")
+        # No institution exposures in fixture → class absent or empty
+        if inst is not None:
+            total = inst.filter(pl.col("row_ref") == "0010")
+            if len(total) > 0:
+                # Institution exposures can't have DD (not corporate)
+                assert total["0220"][0] is None or total["0220"][0] == pytest.approx(0.0)
+
+    def test_dd_unfunded_included_in_total_guarantees(self) -> None:
+        """DD unfunded is a subset of total unfunded protection."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_double_default(), framework="CRR"
+        )
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        dd_amount = total["0220"][0]
+        guar_amount = total["0150"][0] if "0150" in total.columns else None
+        # DD unfunded should be <= total guarantees (DD is a subset of guarantee treatments)
+        if dd_amount is not None and guar_amount is not None:
+            assert dd_amount <= guar_amount + 0.01

@@ -343,8 +343,21 @@ class COREPGenerator:
                     )
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref in _RE_ROW_FILTERS:
+                # Real estate "of which" rows (B3.1 rows 0330-0360)
+                re_kwargs = _RE_ROW_FILTERS[row_def.ref]
+                subset = _filter_re(class_data, cols, **re_kwargs)
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
-                # Other "of which" rows — Phase 3 features (RE, equity), null for now
+                # Other "of which" rows — Phase 3 features (equity), null for now
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         # Section 2: Breakdown by Exposure Types
@@ -647,6 +660,30 @@ class COREPGenerator:
 
 
 # =============================================================================
+# RE ROW FILTER CONFIGURATION (Basel 3.1 OF 07.00 rows 0330-0360)
+# =============================================================================
+
+# Maps row refs to _filter_re() kwargs. Each entry defines the filter criteria
+# for a real estate "of which" row in B3.1 Section 1.
+_RE_ROW_FILTERS: dict[str, dict[str, object]] = {
+    # Regulatory residential RE (CRE20.71-82)
+    "0330": {"property_type": "residential"},
+    "0331": {"property_type": "residential", "materially_dependent": False},
+    "0332": {"property_type": "residential", "materially_dependent": True},
+    # Regulatory commercial RE (CRE20.83-87)
+    "0340": {"property_type": "commercial"},
+    "0341": {"property_type": "commercial", "materially_dependent": False, "is_sme": False},
+    "0342": {"property_type": "commercial", "materially_dependent": True},
+    "0343": {"property_type": "commercial", "materially_dependent": False, "is_sme": True},
+    "0344": {"property_type": "commercial", "materially_dependent": True, "is_sme": True},
+    # Land ADC (CRE20.88)
+    "0360": {"is_adc": True},
+}
+# Note: Rows 0350-0354 ("Other real estate") require a separate "other" RE
+# classification not yet in the pipeline. They remain null until a
+# regulatory_re_category field is added to distinguish regulatory vs other RE.
+
+# =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
 
@@ -756,6 +793,55 @@ def _filter_project_phase(
         (pl.col("sl_type") == "project_finance")
         & (pl.col("sl_project_phase") == phase)
     )
+
+
+def _filter_re(
+    data: pl.DataFrame,
+    cols: set[str],
+    *,
+    property_type: str | None = None,
+    materially_dependent: bool | None = None,
+    is_sme: bool | None = None,
+    is_adc: bool | None = None,
+) -> pl.DataFrame:
+    """Filter to real estate exposures with optional sub-criteria.
+
+    Args:
+        property_type: "residential" or "commercial" (None = any RE)
+        materially_dependent: True/False filter on materially_dependent_on_property
+        is_sme: True/False filter for SME sub-split (uses _filter_sme logic)
+        is_adc: True/False filter on is_adc column
+    """
+    if "property_type" not in cols:
+        return data.clear()
+
+    result = data.filter(pl.col("property_type").is_not_null())
+
+    if property_type is not None:
+        result = result.filter(pl.col("property_type") == property_type)
+
+    if materially_dependent is not None and "materially_dependent_on_property" in cols:
+        result = result.filter(
+            pl.col("materially_dependent_on_property") == materially_dependent
+        )
+    elif materially_dependent is not None:
+        return data.clear()
+
+    if is_sme is not None:
+        sme_subset = _filter_sme(result, set(result.columns))
+        if is_sme:
+            result = sme_subset
+        else:
+            sme_refs = set(sme_subset["exposure_reference"].to_list()) if len(sme_subset) > 0 else set()
+            if sme_refs:
+                result = result.filter(~pl.col("exposure_reference").is_in(sme_refs))
+
+    if is_adc is not None and "is_adc" in cols:
+        result = result.filter(pl.col("is_adc") == is_adc)
+    elif is_adc is True:
+        return data.clear()
+
+    return result
 
 
 def _null_row(

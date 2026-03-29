@@ -28,8 +28,8 @@ The COREP generator was built against an incorrect understanding of the template
 | Task | Status | Notes |
 |------|--------|-------|
 | 1A: Template definitions | **DONE** | CRR + B3.1 columns, row sections, risk weight bands all defined. Backward-compatible aliases kept for generator. 130 tests pass. |
-| 1B: Generator rewrite | Pending | Next priority |
-| 1C: Tests + Excel export | Pending | Depends on 1B |
+| 1B: Generator rewrite | **DONE** | Per-exposure-class output, 5-section row structure, 4-digit column refs, framework awareness, maturity in days. |
+| 1C: Tests + Excel export | **DONE** | Tests rewritten for new dict-based API. 134 COREP tests pass (3 Excel skipped). Excel export updated for per-class sheets. |
 
 ---
 
@@ -188,7 +188,17 @@ Phase 1 tasks are tightly coupled — they form an atomic rewrite of the templat
 - Generator produces per-exposure-class output with correct row sections
 - Column refs match actual COREP numbering
 
-**Note**: Tests will be updated in Task 1C. The generator may not pass old tests after this task — that's expected.
+**Implementation notes (completed)**:
+- `COREPTemplateBundle` changed from flat DataFrames to `dict[str, pl.DataFrame]` keyed by exposure class.
+- `c07_rw_breakdown` field removed — risk weight breakdown is now Section 3 of each per-class C 07.00 DataFrame.
+- Generator collects SA/IRB data once, then filters per-class for efficiency.
+- Column computation uses `_compute_c07_values()` and `_compute_c08_values()` helpers that map each 4-digit COREP ref to its pipeline source.
+- Columns without pipeline sources set to `None` with comments indicating which Phase 2/3 task will populate them.
+- Risk weight section uses `_compute_rw_section_rows()` which assigns bands via chained `when/then` expression.
+- Maturity (col 0250) multiplied by 365 to convert from pipeline years to COREP days.
+- ECAI check (col 0230) uses `sa_cqs.is_not_null()` (not `> 0` as before).
+- Framework parameter now actually used: CRR vs BASEL_3_1 selects different column/row section definitions.
+- 1699 unit tests pass (3 pre-existing fixture failures unrelated to COREP).
 
 ---
 
@@ -226,6 +236,15 @@ Phase 1 tasks are tightly coupled — they form an atomic rewrite of the templat
 - `uv run pytest tests/unit/test_corep.py -v` — all tests pass
 - `uv run pytest tests/ -v --benchmark-skip` — no regressions in full suite
 - `uv run ruff check`
+
+**Implementation notes (completed)**:
+- Tasks 1B and 1C were implemented together since they're tightly coupled.
+- Tests rewritten for new dict-based bundle API: `bundle.c07_00["corporate"]` instead of filtering.
+- Column assertions use 4-digit refs: `corp["0200"][0]` instead of `corp["exposure_value_070"][0]`.
+- `TestC0700RWBreakdown` replaced by `TestC0700RiskWeightSection` testing Section 3 rows.
+- New tests: `test_framework_affects_column_set`, `test_corporate_sme_separate_from_corporate`.
+- Excel export writes per-class sheets: "C 07.00 - Corporates", "C 08.01 - Corporates - Other", etc.
+- 134 COREP tests pass (3 Excel skipped due to missing xlsxwriter in sandbox).
 
 ---
 

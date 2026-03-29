@@ -12,6 +12,34 @@ This page provides a comprehensive comparison between CRR (Basel 3.0) and Basel 
 | **Supporting Factors** | SME + Infrastructure | None |
 | **Scaling** | 1.06 multiplier | None |
 
+## Exposure Class Restructuring
+
+Basel 3.1 restructures SA exposure classes with an explicit priority waterfall
+(PRA PS1/26 Art. 112, Table A2). The most significant structural change is that
+**real estate** becomes a standalone exposure class, rather than being a sub-treatment
+of secured corporate or retail exposures under CRR Art. 125/126.
+
+**New priority waterfall (highest to lowest):**
+
+1. Securitisation positions
+2. CIU units/shares
+3. Subordinated debt, equity and own funds instruments
+4. Exposures associated with particularly high risk
+5. Exposures in default
+6. Eligible covered bonds
+7. **Real estate exposures** (new standalone class)
+8. International organisations
+9. Multilateral development banks
+10. Institutions
+11. Central governments / central banks
+12. Regional governments / local authorities
+13. Public sector entities
+14. Retail exposures
+15. Corporates
+16. Other items
+
+Where an exposure meets multiple criteria, the highest-priority class applies.
+
 ## IRB Treatment
 
 ### Scaling Factor
@@ -96,11 +124,18 @@ This page provides a comprehensive comparison between CRR (Basel 3.0) and Basel 
 
 ### IRB Approach Restrictions
 
+A-IRB (own-LGD estimates) is removed for several exposure types:
+
 | Exposure Type | CRR | Basel 3.1 |
 |---------------|-----|-----------|
 | Large Corporate (>£500m) | F-IRB or A-IRB | **F-IRB only** |
+| Financial Sector Entities | F-IRB or A-IRB | **F-IRB only** |
 | Bank/Institution | F-IRB or A-IRB | **F-IRB only** |
 | Equity | IRB | **SA only** |
+
+**IRB 10% RW floor for UK residential mortgages (PRA-specific):** Non-defaulted retail exposures
+secured by UK residential property must have a minimum risk weight of **10%** under IRB,
+regardless of model output (applied as post-model adjustment).
 
 ### Large Corporate Correlation Multiplier
 
@@ -185,6 +220,35 @@ Under Basel 3.1, A-IRB own-estimate CCFs must be at least **50% of the SA CCF** 
 | Investment Grade | **65%** | Publicly traded + investment grade rating |
 | SME Corporate | **85%** | Turnover ≤ EUR 50m, unrated |
 
+### Institution Exposures
+
+Basel 3.1 replaces the CRR institution risk weight approach with two distinct methods:
+
+**Rated institutions — ECRA (External Credit Risk Assessment Approach):**
+
+| CQS | CRR | Basel 3.1 | Basel 3.1 (≤3m) | Change |
+|-----|-----|-----------|-----------------|--------|
+| CQS 1 | 20% | 20% | 20% | — |
+| CQS 2 | 50% | **30%** | 20% | -20pp |
+| CQS 3 | 50% | 50% | 20% | — |
+| CQS 4 | 100% | 100% | 50% | — |
+| CQS 5 | 100% | 100% | 50% | — |
+| CQS 6 | 150% | 150% | 150% | — |
+
+**Unrated institutions — SCRA (Standardised Credit Risk Assessment Approach):**
+
+| Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
+|-------|-------------------|-------------------|----------|
+| A | 40% | 20% | CET1 ≥ 14%, Leverage ≥ 5% |
+| B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
+| C | 150% | 150% | Below minimum requirements |
+
+Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
+a fundamentally different methodology based on the institution's own capital adequacy.
+
+**Sovereign floor:** Unrated institution risk weights cannot be lower than their sovereign's
+risk weight.
+
 ### Residential Real Estate
 
 | LTV | CRR | Basel 3.1 (Whole Loan) | Basel 3.1 (Income-Producing) |
@@ -212,21 +276,86 @@ Under Basel 3.1, A-IRB own-estimate CCFs must be at least **50% of the SA CCF** 
 
 ### Retail Exposures
 
-| Type | CRR | Basel 3.1 |
-|------|-----|-----------|
-| Retail - QRRE | 75% | 75% |
-| Retail - Other | 75% | 75% |
+| Type | CRR | Basel 3.1 | Change |
+|------|-----|-----------|--------|
+| Regulatory Retail QRRE | 75% | 75% | — |
+| Regulatory Retail Transactor | 75% | **45%** | -30pp |
+| Payroll / Pension Loans | 75% | **35%** | -40pp |
+| Retail Other | 75% | 75% | — |
+
+Transactor status requires full repayment each billing cycle. Payroll/pension loans are a
+new Basel 3.1 category for loans repaid directly from salary or pension.
+
+### Currency Mismatch Multiplier (CRE20.76)
+
+!!! warning "Not Yet Implemented"
+    The currency mismatch risk weight multiplier is not yet implemented in the calculator.
+
+| Scenario | CRR | Basel 3.1 |
+|----------|-----|-----------|
+| Unhedged FX retail / residential RE | No adjustment | **1.5x RW multiplier** (max 150% RW) |
+
+Applies when lending currency differs from borrower's income currency and the
+exposure is not hedged. Distinct from the 8% FX collateral haircut in CRM.
 
 ### Subordinated Debt
 
 | Type | CRR | Basel 3.1 |
 |------|-----|-----------|
-| Subordinated Debt | 100-150% | **150%** |
-| Equity-like | 150% | **250%** |
+| Subordinated Debt | 100-150% | **150%** (flat) |
+
+### Equity Exposures
+
+| Type | CRR | Basel 3.1 (Fully Phased) | Change |
+|------|-----|--------------------------|--------|
+| Standard listed equities | 100% | **250%** | +150pp |
+| Higher-risk (unlisted, < 5 yrs) | 250-400% | **400%** | Standardised |
+| Speculative / venture capital | 400% | **400%** | — |
+
+IRB is **removed** for equity under Basel 3.1 — SA only.
+
+**Transitional phase-in schedule:**
+
+| Year | Standard | Higher-Risk |
+|------|----------|-------------|
+| 2027 | 130% | 160% |
+| 2028 | 160% | 220% |
+| 2029 | 190% | 280% |
+| 2030+ | 250% | 400% |
 
 ### Defaulted Exposures
 
-Defaulted exposures receive 100% SA risk weight under both frameworks. Provision-coverage-based differentiation (CRE20.87-90) is not currently implemented in the SA calculator — defaulted treatment with provision coverage is handled through IRB.
+| Scenario | CRR | Basel 3.1 |
+|----------|-----|-----------|
+| Unsecured, provisions ≥ 20% | 100% | 100% |
+| Unsecured, provisions < 20% | 150% | 150% |
+| Residential RE (not cash-flow dependent) | 100-150% | **100%** (flat) |
+
+Provision-coverage-based differentiation (CRE20.87-90) is not currently implemented in the
+SA calculator — defaulted treatment with provision coverage is handled through IRB. The flat
+100% for defaulted residential RE (not cash-flow dependent) is a Basel 3.1 simplification.
+
+### Regional Governments and Local Authorities
+
+Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):
+
+| Type | CRR | Basel 3.1 |
+|------|-----|-----------|
+| Scottish/Welsh/NI governments | Sovereign-based | **0%** (treated as UK sovereign) |
+| UK local authorities (GBP) | Sovereign-based | **20%** |
+| Rated RGLAs | Sovereign-based | Own ECAI rating (20-150%) |
+| Unrated RGLAs | Sovereign-based | Based on sovereign CQS |
+
+### Covered Bonds
+
+| CQS | CRR | Basel 3.1 |
+|-----|-----|-----------|
+| CQS 1 | 10% | 10% |
+| CQS 2 | 20% | 20% |
+| CQS 3 | 20% | 20% |
+| CQS 4-5 | 50% | 50% |
+| CQS 6 | 100% | 100% |
+| Unrated | Derived from issuer | Derived from issuer (20%→10%, 50%→25%, 100%→50%) |
 
 ## Credit Conversion Factors
 
@@ -272,6 +401,70 @@ Defaulted exposures receive 100% SA risk weight under both frameworks. Provision
 | Default | 0% | 0% | 0% (EL) |
 
 **Note:** Under CRR, HVCRE has a separate risk weight table (Art. 153(5) Table 2) with higher weights than non-HVCRE.
+
+## SA Specialised Lending (Art. 122A-122B)
+
+!!! warning "Not Yet Implemented"
+    SA specialised lending risk weights are described here for regulatory completeness
+    but are not yet implemented in the calculator.
+
+Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from
+the IRB slotting approach above:
+
+| Type | CRR (SA) | Basel 3.1 (SA) |
+|------|----------|----------------|
+| Object Finance | Corporate RW | **100%** |
+| Commodities Finance | Corporate RW | **100%** |
+| Project Finance (pre-operational) | Corporate RW | **130%** |
+| Project Finance (operational) | Corporate RW | **100%** |
+| Project Finance (high-quality operational) | Corporate RW | **80%** |
+
+Under CRR, specialised lending under SA simply uses the corporate risk weight.
+Basel 3.1 provides differentiated weights that recognise the specific risk profile
+of each type.
+
+## Credit Risk Mitigation Changes
+
+### Method Taxonomy
+
+Basel 3.1 restructures CRM with clearer method names and explicit applicability rules
+(PRA PS1/26 Art. 191A):
+
+| Method | CRR Name | Applies To |
+|--------|----------|-----------|
+| Financial Collateral Simple | Same | SA only |
+| Financial Collateral Comprehensive | Same | SA + IRB |
+| **Foundation Collateral Method** | Various IRB collateral articles | F-IRB |
+| **Parameter Substitution Method** | Art. 236 substitution | F-IRB (unfunded) |
+| **LGD Adjustment Method** | Art. 183 | A-IRB (unfunded) |
+
+### Haircut Changes
+
+Significant increases for equities and long-dated bonds. Maturity bands expand from 3 to 5.
+
+| Collateral Type | CRR | Basel 3.1 | Change |
+|-----------------|-----|-----------|--------|
+| Main index equities | 15% | **25%** | +10pp |
+| Other listed equities | 25% | **35%** | +10pp |
+| Govt bonds CQS 2-3 (10y+) | 6% | **12%** | +6pp |
+| Corp bonds CQS 1 (10y+) | 8% | **12%** | +4pp |
+| Corp bonds CQS 2-3 (5-10y / 10y+) | 12% | **15%** | +3pp |
+
+CRR maturity bands: 0-1y, 1-5y, 5y+.
+Basel 3.1 maturity bands: 0-1y, 1-3y, 3-5y, 5-10y, 10y+.
+
+### Overcollateralisation (Foundation Collateral Method)
+
+| Collateral Type | Overcoll. Ratio | Minimum EAD Coverage |
+|-----------------|-----------------|---------------------|
+| Financial | 1.0x | None |
+| Receivables | 1.25x | None |
+| RE / Other Physical | 1.4x | 30% of EAD |
+
+### Unfunded Credit Protection
+
+New requirement: all unfunded credit protection must include **"change of control"** provisions.
+Transitional relief for contracts entered before 1 January 2027 until June 2028.
 
 ## Impact Analysis
 
@@ -371,9 +564,12 @@ Basel 3.1:
 | Low-risk IRB | **Increase** (output floor) |
 | SME | **Increase** (factor removal) |
 | Infrastructure | **Increase** (factor removal) |
+| Equity | **Increase** (250%/400% from 100%) |
+| Unhedged FX Retail/RE | **Increase** (1.5x multiplier) |
 | High LTV Mortgages | **Decrease** (better SA RWs) |
 | Low LTV Mortgages | **Decrease** (better SA RWs) |
 | High-risk Corporate | **Decrease** (CQS5 reduction) |
+| Retail Transactor | **Decrease** (45% from 75%) |
 | Standard Corporate | Neutral |
 
 ## Transition Planning

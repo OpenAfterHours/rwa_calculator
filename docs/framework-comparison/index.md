@@ -14,9 +14,14 @@ in one place.
 | **Infrastructure Factor** | 0.75 | Removed |
 | **PD Floors** | 0.03% uniform | Differentiated (0.03%–0.10%) |
 | **A-IRB LGD Floors** | None | Yes (5%–50% by collateral) |
-| **IRB Restrictions** | F-IRB or A-IRB for all | Large corp/bank: F-IRB only; equity: SA only |
+| **IRB Restrictions** | F-IRB or A-IRB for all | Large corp/bank/financial sector: F-IRB only; equity: SA only |
 | **SA Risk Weights** | Flat per CQS | LTV-based RE, revised corporate weights |
+| **Retail Risk Weights** | Flat 75% | Differentiated: 45% transactor, 35% payroll/pension |
+| **Equity Risk Weights** | 100% (standard) | 250%/400% (with transitional phase-in) |
 | **CCF (Unconditionally Cancellable)** | 0% | 10% |
+| **Haircuts (Equities)** | 15% / 25% | 25% / 35% |
+| **Currency Mismatch** | None | 1.5x RW multiplier for unhedged FX retail/RE |
+| **CRM Methods** | Scattered provisions | Foundation Collateral Method, Parameter Substitution |
 | **COREP Templates** | C prefix (C 07.00, C 08.01/02) | OF prefix (OF 07.00, OF 08.01/02/03) |
 
 ## In This Section

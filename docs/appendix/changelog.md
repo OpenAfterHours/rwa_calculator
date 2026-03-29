@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Docs**: New top-level "CRR vs Basel 3.1" section consolidating all framework comparison content — key differences, reporting differences, impact analysis, and technical reference
 - **Docs**: New reporting differences page documenting COREP template changes between C-prefix (CRR) and OF-prefix (Basel 3.1) templates
+- **Docs**: Add retail transactor (45%) and payroll/pension (35%) risk weights to framework comparison and Basel 3.1 guide
+- **Docs**: Add equity risk weight section with 250%/400% structure and 2027-2029 transitional phase-in schedule
+- **Docs**: Add currency mismatch 1.5x risk weight multiplier for unhedged FX retail/residential RE exposures
+- **Docs**: Add SA specialised lending risk weights (Art. 122A-122B: object/commodities/project finance)
+- **Docs**: Add CRM structural changes — Foundation Collateral Method, Parameter Substitution Method, overcollateralisation thresholds, change of control provisions
+- **Docs**: Add exposure class priority waterfall restructuring (real estate as standalone class)
+- **Docs**: Add institution ECRA/SCRA risk weight detail with short-term exposure weights
+- **Docs**: Add financial sector entities to IRB A-IRB restrictions table
+- **Docs**: Add IRB 10% RW floor for UK residential mortgages (PRA-specific)
+- **Docs**: Add regional government/local authority and covered bond risk weight changes
+- **Docs**: Add output floor OF-ADJ formula detail to technical reference
+- **Docs**: Add full supervisory haircut comparison tables (CRR 3-band vs Basel 3.1 5-band)
+- **Docs**: Add IRB maturity calculation changes (revolving: M = max contractual termination date)
+- **Docs**: Add slotting subgrade detail (Strong A/B, Good C/D for residual maturity)
 
 ### Changed
 - **Regulatory**: Update all Basel 3.1 references from PRA PS9/24 (near-final) to PRA PS1/26 (final rules) across source code, documentation, tests, and workbooks
@@ -24,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs**: Remove completed development roadmap (`docs/plans/roadmap.md`) to reduce maintenance burden
 
 ### Fixed
+- **Docs**: Fix incorrect Basel 3.1 haircut table in `basel31.md` — equity haircuts are 25%/35% (not 15%/25%), long-dated bond haircuts also increased
+- **Docs**: Fix defaulted exposure comparison table to show residential RE flat 100% under Basel 3.1
 - **Docs**: Fix mermaid diagrams not rendering by adding `custom_fences` configuration for `pymdownx.superfences`
 - **Style**: Update theme color palette to orange
 

@@ -2437,3 +2437,177 @@ class TestSpecialisedLendingRows:
         op = corp.filter(pl.col("row_ref") == "0025")["0200"][0]
         hq_op = corp.filter(pl.col("row_ref") == "0026")["0200"][0]
         assert total_pf == pytest.approx(pre_op + op + hq_op)
+
+
+# =============================================================================
+# Fixtures for real estate detail rows (Task 3H)
+# =============================================================================
+
+
+def _sa_results_with_re() -> pl.LazyFrame:
+    """SA results with real estate columns for Task 3H testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_RE_RES_1", "SA_RE_RES_2", "SA_RE_COMM_1",
+                "SA_RE_COMM_2", "SA_RE_COMM_3", "SA_RE_ADC_1", "SA_CORP_1",
+            ],
+            "approach_applied": ["standardised"] * 7,
+            "exposure_class": [
+                "secured_by_re_residential", "secured_by_re_residential",
+                "secured_by_re_commercial", "secured_by_re_commercial",
+                "secured_by_re_commercial",
+                "secured_by_re_commercial",
+                "corporate",
+            ],
+            "drawn_amount": [200.0, 300.0, 500.0, 400.0, 150.0, 100.0, 1000.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "ead_final": [200.0, 300.0, 500.0, 400.0, 150.0, 100.0, 1000.0],
+            "rwa_final": [40.0, 105.0, 300.0, 240.0, 112.5, 150.0, 1000.0],
+            "risk_weight": [0.20, 0.35, 0.60, 0.60, 0.75, 1.50, 1.00],
+            "scra_provision_amount": [0.0] * 7,
+            "gcra_provision_amount": [0.0] * 7,
+            "collateral_adjusted_value": [0.0] * 7,
+            "guaranteed_portion": [0.0] * 7,
+            "sa_cqs": [None] * 7,
+            "counterparty_reference": [
+                "CP_R1", "CP_R2", "CP_C1", "CP_C2", "CP_C3", "CP_ADC", "CP_CORP",
+            ],
+            "property_type": [
+                "residential", "residential", "commercial", "commercial",
+                "commercial", "commercial", None,
+            ],
+            "materially_dependent_on_property": [
+                False, True, False, True, False, None, None,
+            ],
+            "is_adc": [False, False, False, False, False, True, False],
+            # SME flag for commercial sub-split
+            "sme_supporting_factor_eligible": [
+                False, False, False, False, True, False, False,
+            ],
+        }
+    )
+
+
+class TestRealEstateRows:
+    """Task 3H: Real estate detail rows (B3.1 OF 07.00 rows 0330-0360).
+
+    Why: Basel 3.1 requires granular reporting of RE exposures by property
+    type, cash-flow dependency, and SME status. This enables supervisors to
+    assess concentration risk in property-secured lending.
+    """
+
+    def test_residential_re_total(self) -> None:
+        """Row 0330 shows total regulatory residential RE."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        # RE exposures are in "secured_by_re_residential" class
+        re_res = bundle.c07_00.get("secured_by_re_residential")
+        assert re_res is not None
+        row = re_res.filter(pl.col("row_ref") == "0330")
+        assert len(row) == 1
+        # SA_RE_RES_1 + SA_RE_RES_2: 200 + 300 = 500
+        assert row["0200"][0] == pytest.approx(500.0)
+
+    def test_residential_not_dependent(self) -> None:
+        """Row 0331: residential, not materially dependent."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        re_res = bundle.c07_00["secured_by_re_residential"]
+        row = re_res.filter(pl.col("row_ref") == "0331")
+        assert len(row) == 1
+        # SA_RE_RES_1: 200 (not dependent)
+        assert row["0200"][0] == pytest.approx(200.0)
+
+    def test_residential_dependent(self) -> None:
+        """Row 0332: residential, materially dependent."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        re_res = bundle.c07_00["secured_by_re_residential"]
+        row = re_res.filter(pl.col("row_ref") == "0332")
+        assert len(row) == 1
+        # SA_RE_RES_2: 300 (dependent)
+        assert row["0200"][0] == pytest.approx(300.0)
+
+    def test_commercial_re_total(self) -> None:
+        """Row 0340 shows total regulatory commercial RE."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        re_comm = bundle.c07_00.get("secured_by_re_commercial")
+        assert re_comm is not None
+        row = re_comm.filter(pl.col("row_ref") == "0340")
+        assert len(row) == 1
+        # All commercial (excl ADC): 500 + 400 + 150 + 100 = 1150
+        # But property_type = commercial for all, including ADC
+        assert row["0200"][0] == pytest.approx(1150.0)
+
+    def test_commercial_not_dependent_non_sme(self) -> None:
+        """Row 0341: commercial, not dependent, non-SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        re_comm = bundle.c07_00["secured_by_re_commercial"]
+        row = re_comm.filter(pl.col("row_ref") == "0341")
+        assert len(row) == 1
+        # SA_RE_COMM_1: 500 (not dependent, not SME)
+        assert row["0200"][0] == pytest.approx(500.0)
+
+    def test_commercial_sme_not_dependent(self) -> None:
+        """Row 0343: commercial, not dependent, SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        re_comm = bundle.c07_00["secured_by_re_commercial"]
+        row = re_comm.filter(pl.col("row_ref") == "0343")
+        assert len(row) == 1
+        # SA_RE_COMM_3: 150 (not dependent, SME)
+        assert row["0200"][0] == pytest.approx(150.0)
+
+    def test_adc_row(self) -> None:
+        """Row 0360 shows ADC exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        re_comm = bundle.c07_00["secured_by_re_commercial"]
+        row = re_comm.filter(pl.col("row_ref") == "0360")
+        assert len(row) == 1
+        # SA_RE_ADC_1: 100
+        assert row["0200"][0] == pytest.approx(100.0)
+
+    def test_re_rows_absent_crr(self) -> None:
+        """RE detail rows don't exist under CRR."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="CRR"
+        )
+        re_res = bundle.c07_00.get("secured_by_re_residential")
+        if re_res is not None:
+            re_rows = re_res.filter(
+                pl.col("row_ref").is_in(
+                    ["0330", "0331", "0332", "0340", "0341", "0342", "0360"]
+                )
+            )
+            assert len(re_rows) == 0
+
+    def test_dependent_splits_sum_to_total(self) -> None:
+        """Rows 0331 + 0332 = 0330 for residential RE."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re(), framework="BASEL_3_1"
+        )
+        re_res = bundle.c07_00["secured_by_re_residential"]
+        total = re_res.filter(pl.col("row_ref") == "0330")["0200"][0]
+        not_dep = re_res.filter(pl.col("row_ref") == "0331")["0200"][0]
+        dep = re_res.filter(pl.col("row_ref") == "0332")["0200"][0]
+        assert total == pytest.approx(not_dep + dep)

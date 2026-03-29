@@ -40,6 +40,7 @@ The COREP generator was built against an incorrect understanding of the template
 | 2H: CRM substitution flows | **DONE** | C 07.00 cols 0090/0100/0110. C 08.01 cols 0040/0070/0080/0090. Pre-computed per-class inflows; outflows from subset. |
 | 3D: On-BS netting | **DONE** | Col 0035 wired for B3.1 (C 07.00 + C 08.01). CRM processor tracks netting amounts. 7 new tests. |
 | 3G: SL detail rows | **DONE** | Rows 0021-0026 wired for B3.1 OF 07.00. project_phase added to schema. 9 new tests. |
+| 3H: RE detail rows | **DONE** | Rows 0330-0344, 0360 wired for B3.1 OF 07.00. materially_dependent_on_property added. 0350-0354 deferred. 9 new tests. |
 
 ---
 
@@ -706,6 +707,15 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 **Complexity**: Low-medium.
 
 **Verify**: `uv run pytest tests/unit/test_corep.py -v -k "real_estate"`
+
+**Implementation notes (completed)**:
+- `materially_dependent_on_property` added to `CALCULATION_OUTPUT_SCHEMA`.
+- `_filter_re()` helper: flexible filter supporting property_type, materially_dependent, is_sme, and is_adc criteria.
+- `_RE_ROW_FILTERS` config dict maps row refs to filter kwargs, keeping the generator Section 1 handler clean.
+- Rows 0330-0332 (residential), 0340-0344 (commercial with SME/dependency splits), 0360 (ADC) all wired.
+- Rows 0350-0354 ("Other RE") remain null — requires a `regulatory_re_category` field to distinguish regulatory vs other RE. Documented as future work.
+- 9 new tests in `TestRealEstateRows`: totals, dependency splits, SME splits, ADC, CRR absence, sum verification.
+- Total: 205 COREP tests pass (3 Excel skipped).
 
 ---
 

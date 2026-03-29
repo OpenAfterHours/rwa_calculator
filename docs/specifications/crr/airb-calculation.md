@@ -48,7 +48,7 @@ Under CRR, A-IRB has **no LGD floors**. Under Basel 3.1, the following floors ap
 
 ## FI Scalar
 
-The **1.25x** capital multiplier for large/unregulated financial sector entities applies equally to A-IRB and F-IRB (Art. 153(2)).
+The **1.25x correlation multiplier** for large/unregulated financial sector entities applies equally to A-IRB and F-IRB (Art. 153(2), CRE31.5). The 1.25 factor is applied to the asset correlation coefficient R, which has a non-linear effect on the capital requirement K.
 
 ## Calculation
 

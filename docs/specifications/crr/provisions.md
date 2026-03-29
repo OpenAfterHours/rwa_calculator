@@ -47,8 +47,8 @@ Under the Standardised Approach, provisions use a **drawn-first deduction** appr
 # Step 1: Absorb provision against drawn amount first
 provision_on_drawn = min(provision_allocated, max(0, drawn_amount))
 
-# Step 2: Remainder reduces nominal before CCF
-provision_on_nominal = provision_allocated - provision_on_drawn
+# Step 2: Remainder reduces nominal before CCF (capped at nominal)
+provision_on_nominal = min(provision_allocated - provision_on_drawn, nominal_amount)
 nominal_after_provision = nominal_amount - provision_on_nominal
 
 # Step 3: CCF applied to adjusted nominal

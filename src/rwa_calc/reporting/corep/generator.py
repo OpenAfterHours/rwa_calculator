@@ -424,8 +424,20 @@ class COREPGenerator:
                     )
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref == "0380":
+                # Currency mismatch multiplier (Basel 3.1 Art. 123B / CRE20.93)
+                subset = _filter_currency_mismatch(class_data, cols)
+                if len(subset) > 0:
+                    values = _compute_c07_values(
+                        subset, cols, ead_col, rwa_col, column_refs
+                    )
+                    rows.append(
+                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
+                    )
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
-                # Other memorandum rows (0300, 0320, 0380) — not yet implemented
+                # Other memorandum rows (0300, 0320) — not yet implemented
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         schema: dict[str, pl.DataType] = {
@@ -895,6 +907,18 @@ def _filter_re(
         return data.clear()
 
     return result
+
+
+def _filter_currency_mismatch(
+    data: pl.DataFrame, cols: set[str]
+) -> pl.DataFrame:
+    """Filter to exposures where the currency mismatch multiplier was applied.
+
+    Used for Basel 3.1 OF 07.00 memorandum row 0380.
+    """
+    if "currency_mismatch_multiplier_applied" not in cols:
+        return data.clear()
+    return data.filter(pl.col("currency_mismatch_multiplier_applied") == True)  # noqa: E712
 
 
 def _null_row(

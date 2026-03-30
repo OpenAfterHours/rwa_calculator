@@ -595,7 +595,6 @@ class CRMProcessor:
             counterparty_lookup,
             config,
             rating_inheritance,
-            is_basel_3_1=self._is_basel_3_1,
         )
 
     # --- Internal methods ---

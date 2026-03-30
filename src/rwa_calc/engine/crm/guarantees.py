@@ -41,7 +41,6 @@ def apply_guarantees(
     counterparty_lookup: pl.LazyFrame,
     config: CalculationConfig,
     rating_inheritance: pl.LazyFrame | None = None,
-    is_basel_3_1: bool = False,
 ) -> pl.LazyFrame:
     """
     Apply guarantee substitution.
@@ -54,7 +53,6 @@ def apply_guarantees(
         counterparty_lookup: For guarantor risk weights
         config: Calculation configuration
         rating_inheritance: For guarantor CQS lookup
-        is_basel_3_1: Whether Basel 3.1 framework applies
 
     Returns:
         Exposures with guarantee effects applied
@@ -71,15 +69,12 @@ def apply_guarantees(
             pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
         )
 
-    # Expand facility/counterparty-level guarantees to exposure-level
     guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
 
-    # Add parent_exposure_reference for traceability (before any splitting)
     exposures = exposures.with_columns(
         pl.col("exposure_reference").alias("parent_exposure_reference"),
     )
 
-    # Split into multi-guarantor vs single/no-guarantor paths
     exposures = _apply_guarantee_splits(guarantees, exposures)
 
     # Look up guarantor's entity type, country code, and CQS for risk weight substitution
@@ -104,14 +99,16 @@ def apply_guarantees(
     )
 
     # Ensure optional guarantor columns exist (fill null if not in counterparty data)
-    if "guarantor_country_code" not in exposures.collect_schema().names():
-        exposures = exposures.with_columns(
-            pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
+    post_join_names = exposures.collect_schema().names()
+    missing_guarantor_cols = []
+    if "guarantor_country_code" not in post_join_names:
+        missing_guarantor_cols.append(pl.lit(None).cast(pl.String).alias("guarantor_country_code"))
+    if "guarantor_is_ccp_client_cleared" not in post_join_names:
+        missing_guarantor_cols.append(
+            pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared")
         )
-    if "guarantor_is_ccp_client_cleared" not in exposures.collect_schema().names():
-        exposures = exposures.with_columns(
-            pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"),
-        )
+    if missing_guarantor_cols:
+        exposures = exposures.with_columns(missing_guarantor_cols)
 
     # Look up guarantor's CQS, rating type, PD, and internal_pd from ratings
     if rating_inheritance is not None:
@@ -136,24 +133,22 @@ def apply_guarantees(
             how="left",
         )
 
-        if "rating_type" not in ri_schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
-                ]
+        ri_names = ri_schema.names()
+        missing_rating_cols = []
+        if "rating_type" not in ri_names:
+            missing_rating_cols.append(
+                pl.lit(None).cast(pl.String).alias("guarantor_rating_type")
             )
-        if "pd" not in ri_schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
-                ]
+        if "pd" not in ri_names:
+            missing_rating_cols.append(
+                pl.lit(None).cast(pl.Float64).alias("guarantor_pd")
             )
-        if "internal_pd" not in ri_schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
-                ]
+        if "internal_pd" not in ri_names:
+            missing_rating_cols.append(
+                pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd")
             )
+        if missing_rating_cols:
+            exposures = exposures.with_columns(missing_rating_cols)
     else:
         exposures = exposures.with_columns(
             [
@@ -164,7 +159,6 @@ def apply_guarantees(
             ]
         )
 
-    # Fill nulls for exposures without guarantees
     exposures = exposures.with_columns(
         [
             pl.col("guarantor_entity_type").fill_null("").alias("guarantor_entity_type"),
@@ -285,83 +279,20 @@ def _resolve_guarantees_multi_level(
 
     if has_parent_fac:
         facility_guarantees = guarantees.filter(bt_lower == "facility")
-
-        fac_exposures = exposures.filter(pl.col("parent_facility_reference").is_not_null()).select(
-            "exposure_reference",
-            "parent_facility_reference",
-            "ead_after_collateral",
+        fac_exposures = exposures.filter(
+            pl.col("parent_facility_reference").is_not_null()
         )
-
-        fac_totals = fac_exposures.group_by("parent_facility_reference").agg(
-            pl.col("ead_after_collateral").sum().alias("_fac_total_ead"),
-        )
-
-        fac_exposures_weighted = (
-            fac_exposures.join(fac_totals, on="parent_facility_reference", how="left")
-            .with_columns(
-                pl.when(pl.col("_fac_total_ead") > 0)
-                .then(pl.col("ead_after_collateral") / pl.col("_fac_total_ead"))
-                .otherwise(pl.lit(0.0))
-                .alias("_weight"),
+        expanded_parts.append(
+            _allocate_guarantees_pro_rata(
+                facility_guarantees, fac_exposures, "parent_facility_reference"
             )
-            .select("exposure_reference", "parent_facility_reference", "_weight")
         )
-
-        expanded_fac = (
-            facility_guarantees.join(
-                fac_exposures_weighted,
-                left_on="beneficiary_reference",
-                right_on="parent_facility_reference",
-                how="inner",
-            )
-            .with_columns(
-                (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
-                pl.col("exposure_reference").alias("beneficiary_reference"),
-                pl.lit("loan").alias("beneficiary_type"),
-            )
-            .drop("exposure_reference", "_weight")
-        )
-        expanded_parts.append(expanded_fac)
 
     # --- 3. Counterparty-level guarantees — allocate pro-rata ---
     cp_guarantees = guarantees.filter(bt_lower == "counterparty")
-
-    cp_exposures = exposures.select(
-        "exposure_reference",
-        "counterparty_reference",
-        "ead_after_collateral",
+    expanded_parts.append(
+        _allocate_guarantees_pro_rata(cp_guarantees, exposures, "counterparty_reference")
     )
-
-    cp_totals = cp_exposures.group_by("counterparty_reference").agg(
-        pl.col("ead_after_collateral").sum().alias("_cp_total_ead"),
-    )
-
-    cp_exposures_weighted = (
-        cp_exposures.join(cp_totals, on="counterparty_reference", how="left")
-        .with_columns(
-            pl.when(pl.col("_cp_total_ead") > 0)
-            .then(pl.col("ead_after_collateral") / pl.col("_cp_total_ead"))
-            .otherwise(pl.lit(0.0))
-            .alias("_weight"),
-        )
-        .select("exposure_reference", "counterparty_reference", "_weight")
-    )
-
-    expanded_cp = (
-        cp_guarantees.join(
-            cp_exposures_weighted,
-            left_on="beneficiary_reference",
-            right_on="counterparty_reference",
-            how="inner",
-        )
-        .with_columns(
-            (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
-            pl.col("exposure_reference").alias("beneficiary_reference"),
-            pl.lit("loan").alias("beneficiary_type"),
-        )
-        .drop("exposure_reference", "_weight")
-    )
-    expanded_parts.append(expanded_cp)
 
     return pl.concat(expanded_parts, how="diagonal")
 
@@ -454,25 +385,9 @@ def _apply_guarantee_splits(
         how="inner",
     )
 
-    # Resolve guarantee amount (amount_covered or percentage_covered)
-    if "percentage_covered" in guar_cols:
-        single = single.with_columns(
-            pl.when(
-                (
-                    pl.col("amount_covered").is_null()
-                    | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
-                )
-                & pl.col("percentage_covered").is_not_null()
-                & (pl.col("percentage_covered") > 0)
-            )
-            .then(pl.col("percentage_covered") * pl.col("ead_after_collateral"))
-            .otherwise(pl.col("amount_covered").fill_null(0.0))
-            .alias("guarantee_amount"),
-        )
-    else:
-        single = single.with_columns(
-            pl.col("amount_covered").fill_null(0.0).alias("guarantee_amount"),
-        )
+    single = single.with_columns(
+        _resolve_guarantee_amount_expr("percentage_covered" in guar_cols, "guarantee_amount"),
+    )
 
     single = single.with_columns(
         pl.min_horizontal("guarantee_amount", "ead_after_collateral").alias("guaranteed_portion"),
@@ -495,25 +410,9 @@ def _apply_guarantee_splits(
         how="inner",
     )
 
-    # Resolve per-guarantor amount (same logic as single path)
-    if "percentage_covered" in guar_cols:
-        multi_joined = multi_joined.with_columns(
-            pl.when(
-                (
-                    pl.col("amount_covered").is_null()
-                    | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
-                )
-                & pl.col("percentage_covered").is_not_null()
-                & (pl.col("percentage_covered") > 0)
-            )
-            .then(pl.col("percentage_covered") * pl.col("ead_after_collateral"))
-            .otherwise(pl.col("amount_covered").fill_null(0.0))
-            .alias("_guar_amount"),
-        )
-    else:
-        multi_joined = multi_joined.with_columns(
-            pl.col("amount_covered").fill_null(0.0).alias("_guar_amount"),
-        )
+    multi_joined = multi_joined.with_columns(
+        _resolve_guarantee_amount_expr("percentage_covered" in guar_cols, "_guar_amount"),
+    )
 
     # Cap total coverage to EAD using pro-rata scaling
     multi_joined = (
@@ -581,19 +480,14 @@ def _apply_guarantee_splits(
     if "percentage_covered" in guar_cols:
         transient.append("percentage_covered")
 
-    def _drop_existing(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:
-        schema = lf.collect_schema()
-        to_drop = [c for c in cols if c in schema.names()]
-        return lf.drop(to_drop) if to_drop else lf
-
-    guarantor_sub_rows = _drop_existing(guarantor_sub_rows, transient)
-    remainder_sub_rows = _drop_existing(remainder_sub_rows, transient)
+    guarantor_sub_rows = _drop_columns_if_present(guarantor_sub_rows, transient)
+    remainder_sub_rows = _drop_columns_if_present(remainder_sub_rows, transient)
 
     # Also drop transient/join columns from single and no-guarantee paths
     single_drop = ["amount_covered"]
     if "percentage_covered" in guar_cols:
         single_drop.append("percentage_covered")
-    single = _drop_existing(single, single_drop)
+    single = _drop_columns_if_present(single, single_drop)
 
     # Concat all paths
     parts = [no_guarantee, single, guarantor_sub_rows, remainder_sub_rows]
@@ -620,7 +514,16 @@ def _apply_cross_approach_ccf(
     if not has_risk_type:
         return exposures
 
-    # Compute guarantee ratio
+    # Only IRB exposures with SA guarantors and off-balance-sheet items
+    needs_ccf_sub = (
+        pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+        & (pl.col("guarantor_approach") == "sa")
+        & (pl.col("guaranteed_portion") > 0)
+        & (pl.col("nominal_amount") > 0)
+    )
+
+    sa_ccf = sa_ccf_expression()
+
     exposures = exposures.with_columns(
         [
             pl.when(pl.col("ead_after_collateral") > 0)
@@ -631,28 +534,8 @@ def _apply_cross_approach_ccf(
             )
             .otherwise(pl.lit(0.0))
             .alias("guarantee_ratio"),
-        ]
-    )
-
-    # Determine if cross-approach substitution is needed
-    # Only IRB exposures with SA guarantors and off-balance-sheet items
-    needs_ccf_sub = (
-        pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
-        & (pl.col("guarantor_approach") == "sa")
-        & (pl.col("guaranteed_portion") > 0)
-        & (pl.col("nominal_amount") > 0)
-    )
-
-    # Compute SA CCF for the guaranteed portion
-    sa_ccf = sa_ccf_expression()
-
-    exposures = exposures.with_columns(
-        [
-            # Preserve original CCF
             pl.col("ccf").alias("ccf_original"),
-            # CCF for guaranteed portion: SA CCF if cross-approach, else original
             pl.when(needs_ccf_sub).then(sa_ccf).otherwise(pl.col("ccf")).alias("ccf_guaranteed"),
-            # CCF for unguaranteed portion: always original
             pl.col("ccf").alias("ccf_unguaranteed"),
         ]
     )
@@ -716,3 +599,72 @@ def _apply_cross_approach_ccf(
     )
 
     return exposures
+
+
+def _resolve_guarantee_amount_expr(has_percentage: bool, alias: str) -> pl.Expr:
+    """Build expression resolving guarantee amount from amount_covered or percentage_covered."""
+    if has_percentage:
+        return (
+            pl.when(
+                (
+                    pl.col("amount_covered").is_null()
+                    | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
+                )
+                & pl.col("percentage_covered").is_not_null()
+                & (pl.col("percentage_covered") > 0)
+            )
+            .then(pl.col("percentage_covered") * pl.col("ead_after_collateral"))
+            .otherwise(pl.col("amount_covered").fill_null(0.0))
+            .alias(alias)
+        )
+    return pl.col("amount_covered").fill_null(0.0).alias(alias)
+
+
+def _allocate_guarantees_pro_rata(
+    guarantees: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+    group_col: str,
+) -> pl.LazyFrame:
+    """Allocate amount-based guarantees pro-rata by ead_after_collateral within a group."""
+    level_exposures = exposures.select(
+        "exposure_reference",
+        group_col,
+        "ead_after_collateral",
+    )
+
+    totals = level_exposures.group_by(group_col).agg(
+        pl.col("ead_after_collateral").sum().alias("_total_ead"),
+    )
+
+    weighted = (
+        level_exposures.join(totals, on=group_col, how="left")
+        .with_columns(
+            pl.when(pl.col("_total_ead") > 0)
+            .then(pl.col("ead_after_collateral") / pl.col("_total_ead"))
+            .otherwise(pl.lit(0.0))
+            .alias("_weight"),
+        )
+        .select("exposure_reference", group_col, "_weight")
+    )
+
+    return (
+        guarantees.join(
+            weighted,
+            left_on="beneficiary_reference",
+            right_on=group_col,
+            how="inner",
+        )
+        .with_columns(
+            (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
+            pl.col("exposure_reference").alias("beneficiary_reference"),
+            pl.lit("loan").alias("beneficiary_type"),
+        )
+        .drop("exposure_reference", "_weight")
+    )
+
+
+def _drop_columns_if_present(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:
+    """Drop columns from LazyFrame, ignoring those not present."""
+    schema = lf.collect_schema()
+    to_drop = [c for c in cols if c in schema.names()]
+    return lf.drop(to_drop) if to_drop else lf

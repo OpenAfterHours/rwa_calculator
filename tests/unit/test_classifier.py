@@ -25,10 +25,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.classifier import (
-    ExposureClassifier,
-    create_exposure_classifier,
-)
+from rwa_calc.engine.classifier import ExposureClassifier
 
 if TYPE_CHECKING:
     pass
@@ -1609,15 +1606,6 @@ class TestClassificationAudit:
 # =============================================================================
 # Factory Function Tests
 # =============================================================================
-
-
-class TestCreateExposureClassifier:
-    """Tests for the factory function."""
-
-    def test_creates_instance(self) -> None:
-        """Factory should create an ExposureClassifier instance."""
-        classifier = create_exposure_classifier()
-        assert isinstance(classifier, ExposureClassifier)
 
 
 # =============================================================================

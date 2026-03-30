@@ -330,7 +330,7 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine import (
     SALazyFrame, IRBLazyFrame, CRMLazyFrame,
     HaircutsLazyFrame, SlottingLazyFrame,
-    HierarchyLazyFrame, AggregatorLazyFrame,
+    AggregatorLazyFrame,
     AuditLazyFrame, AuditExpr,
 )
 
@@ -361,13 +361,6 @@ crm_result = (
     .crm.apply_collateral(collateral, config)
     .crm.apply_guarantees(guarantees, counterparty_lookup, config)
     .crm.finalize_ead()
-)
-
-# Hierarchy resolution
-hierarchy_result = (
-    counterparties
-    .hierarchy.resolve_ultimate_parent(org_mappings)
-    .hierarchy.inherit_ratings(ratings)
 )
 
 # Aggregation with output floor (Basel 3.1)

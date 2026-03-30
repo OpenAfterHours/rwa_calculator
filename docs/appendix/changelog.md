@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Engine**: Remove unused `HierarchyLazyFrame` namespace (`hierarchy_namespace.py`) — duplicated logic from `hierarchy.py` and was not used in production code
+
 ### Added
 - **Docs**: New top-level "CRR vs Basel 3.1" section consolidating all framework comparison content — key differences, reporting differences, impact analysis, and technical reference
 - **Docs**: New reporting differences page documenting COREP template changes between C-prefix (CRR) and OF-prefix (Basel 3.1) templates

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Engine**: Remove unused `HierarchyLazyFrame` namespace (`hierarchy_namespace.py`) — duplicated logic from `hierarchy.py` and was not used in production code
 - **Engine**: Remove unused `CRMLazyFrame` namespace (`crm/namespace.py`) and `HaircutsLazyFrame`/`HaircutsExpr` namespaces (`crm/haircuts_namespace.py`) — independent reimplementations not used in production pipeline (CRMProcessor is the sole production API)
+- **Engine**: Remove unused `SALazyFrame`/`SAExpr` namespaces (`sa/namespace.py`) — SACalculator uses private methods directly
 
 ### Added
 - **Docs**: New top-level "CRR vs Basel 3.1" section consolidating all framework comparison content — key differences, reporting differences, impact analysis, and technical reference

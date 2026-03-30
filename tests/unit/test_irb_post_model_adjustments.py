@@ -82,7 +82,9 @@ class TestPostModelAdjustmentsCRR:
     def test_crr_el_unchanged(self) -> None:
         """CRR: Expected loss not modified."""
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        result = _make_irb_frame(expected_loss=10.0).irb.apply_post_model_adjustments(config).collect()
+        result = (
+            _make_irb_frame(expected_loss=10.0).irb.apply_post_model_adjustments(config).collect()
+        )
         assert result["el_after_adjustment"][0] == pytest.approx(10.0)
 
 
@@ -172,7 +174,9 @@ class TestPostModelAdjustmentsBasel31:
     def test_el_adjustment(self) -> None:
         """EL adjustment adds scalar × base_el to expected loss."""
         config = _b31_config(pma_el_scalar=Decimal("0.10"))
-        result = _make_irb_frame(expected_loss=10.0).irb.apply_post_model_adjustments(config).collect()
+        result = (
+            _make_irb_frame(expected_loss=10.0).irb.apply_post_model_adjustments(config).collect()
+        )
         assert result["el_pre_adjustment"][0] == pytest.approx(10.0)
         assert result["post_model_adjustment_el"][0] == pytest.approx(1.0)
         assert result["el_after_adjustment"][0] == pytest.approx(11.0)

@@ -534,9 +534,7 @@ B31_C08_COLUMNS: list[COREPColumn] = [
     COREPColumn(
         "0281", "Adjustment to EL due to post-model adjustments", "Memorandum"
     ),  # New in B3.1
-    COREPColumn(
-        "0282", "Expected loss amount after post-model adjustments", "Memorandum"
-    ),  # New
+    COREPColumn("0282", "Expected loss amount after post-model adjustments", "Memorandum"),  # New
     COREPColumn("0290", "(-) Value adjustments and provisions", "Memorandum"),
     COREPColumn("0300", "Number of obligors", "Memorandum"),
     COREPColumn("0310", "Pre-credit derivatives RWEA", "Memorandum"),

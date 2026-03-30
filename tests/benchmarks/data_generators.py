@@ -164,8 +164,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
     # Borrower income currency - map from country code for retail, null for others
     country_to_currency = {"GB": "GBP", "US": "USD", "DE": "EUR", "FR": "EUR", "JP": "JPY"}
     income_currencies = [
-        country_to_currency.get(c) if is_ind else None
-        for c, is_ind in zip(countries, ind_mask)
+        country_to_currency.get(c) if is_ind else None for c, is_ind in zip(countries, ind_mask)
     ]
 
     # Build DataFrame using Polars native operations

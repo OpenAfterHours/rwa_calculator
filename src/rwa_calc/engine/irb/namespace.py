@@ -992,11 +992,7 @@ class IRBLazyFrame:
             _has_guarantor_pd = pl.col("guarantor_pd").is_not_null()
 
             # (d) Firm uses A-IRB (own LGD estimates) — check is_airb column
-            _is_airb = (
-                pl.col("is_airb").fill_null(False)
-                if "is_airb" in cols
-                else pl.lit(False)
-            )
+            _is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in cols else pl.lit(False)
 
             # Combined eligibility
             _is_dd_eligible = (
@@ -1009,9 +1005,7 @@ class IRBLazyFrame:
 
             # Floor guarantor PD
             pd_floor_expr_dd = _pd_floor_expression(config, has_transactor_col=False)
-            guarantor_pd_floored_dd = pl.max_horizontal(
-                pl.col("guarantor_pd"), pd_floor_expr_dd
-            )
+            guarantor_pd_floored_dd = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr_dd)
 
             # Double default multiplier: (0.15 + 160 × PD_g)
             dd_multiplier = _double_default_multiplier_expr(guarantor_pd_floored_dd)
@@ -1042,7 +1036,11 @@ class IRBLazyFrame:
                     # Track DD method
                     pl.when(_is_dd_eligible & (rw_dd_floored < pl.col("guarantor_rw")))
                     .then(pl.lit(True))
-                    .otherwise(pl.col("_is_pd_substitution") if use_parameter_substitution else pl.lit(False))
+                    .otherwise(
+                        pl.col("_is_pd_substitution")
+                        if use_parameter_substitution
+                        else pl.lit(False)
+                    )
                     .alias("_is_dd_applied"),
                 ]
             )

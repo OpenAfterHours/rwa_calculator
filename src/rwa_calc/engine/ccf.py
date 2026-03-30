@@ -140,13 +140,9 @@ class CCFCalculator:
         names = schema.names()
         original_has_risk_type = "risk_type" in names
         original_has_interest = "interest" in names
-        has_provision_cols = (
-            "nominal_after_provision" in names and "provision_on_drawn" in names
-        )
+        has_provision_cols = "nominal_after_provision" in names and "provision_on_drawn" in names
 
-        exposures, added_cols = self._ensure_columns(
-            exposures, names, has_provision_cols
-        )
+        exposures, added_cols = self._ensure_columns(exposures, names, has_provision_cols)
         exposures = self._compute_ccf(exposures, config)
         exposures = self._compute_ead(exposures, has_provision_cols)
         exposures = self._build_audit_trail(
@@ -194,9 +190,7 @@ class CCFCalculator:
         # Only add defaults when both are absent.
         if not has_provision_cols:
             if "nominal_after_provision" not in names:
-                missing.append(
-                    pl.col("nominal_amount").alias("nominal_after_provision")
-                )
+                missing.append(pl.col("nominal_amount").alias("nominal_after_provision"))
                 added.append("nominal_after_provision")
             if "provision_on_drawn" not in names:
                 missing.append(pl.lit(0.0).alias("provision_on_drawn"))
@@ -234,41 +228,28 @@ class CCFCalculator:
                 & pl.col("is_short_term_trade_lc").fill_null(False)
             )
             .then(pl.lit(0.2))  # Art. 166(9) exception
-            .when(
-                normalized.is_in(
-                    ["mr", "medium_risk", "mlr", "medium_low_risk"]
-                )
-            )
+            .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
             .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
             .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
         )
 
         exposures = exposures.with_columns(
-            sa_ccf_expression(is_basel_3_1=is_b31).alias(
-                "_sa_ccf_from_risk_type"
-            ),
+            sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),
             firb_ccf.alias("_firb_ccf_from_risk_type"),
-            (
-                pl.col("nominal_amount").cast(pl.Float64, strict=False).abs()
-                < 1e-10
-            ).alias("_nominal_is_zero"),
+            (pl.col("nominal_amount").cast(pl.Float64, strict=False).abs() < 1e-10).alias(
+                "_nominal_is_zero"
+            ),
         )
 
         # A-IRB CCF: use modelled value, with Basel 3.1 floor (CRE32.27)
-        ccf_modelled_expr = pl.col("ccf_modelled").cast(
-            pl.Float64, strict=False
-        )
+        ccf_modelled_expr = pl.col("ccf_modelled").cast(pl.Float64, strict=False)
         if is_b31:
             airb_ccf = pl.max_horizontal(
-                ccf_modelled_expr.fill_null(
-                    pl.col("_sa_ccf_from_risk_type")
-                ),
+                ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
                 pl.col("_sa_ccf_from_risk_type") * 0.5,
             )
         else:
-            airb_ccf = ccf_modelled_expr.fill_null(
-                pl.col("_sa_ccf_from_risk_type")
-            )
+            airb_ccf = ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type"))
 
         # Select final CCF based on approach
         return exposures.with_columns(
@@ -293,17 +274,13 @@ class CCFCalculator:
         provision columns were present in the original input.
         """
         if has_provision_cols:
-            on_bal = (
-                drawn_for_ead() - pl.col("provision_on_drawn")
-            ).clip(lower_bound=0.0)
+            on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(lower_bound=0.0)
         else:
             on_bal = drawn_for_ead()
         on_bal = on_bal + interest_for_ead()
 
         return exposures.with_columns(
-            (pl.col("nominal_after_provision") * pl.col("ccf")).alias(
-                "ead_from_ccf"
-            ),
+            (pl.col("nominal_after_provision") * pl.col("ccf")).alias("ead_from_ccf"),
         ).with_columns(
             (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
         )

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Engine**: Simplify IRB engine module structure — extract `adjustments.py` (defaulted treatment, post-model adjustments, EL shortfall) and `guarantee.py` (guarantee substitution) from `namespace.py`, deduplicate correlation/K/maturity-adjustment formulas in `formulas.py`, remove dead code (`_norm_cdf`, `_norm_ppf`, `IRBCalculationError`)
+
 ### Removed
 - **Engine**: Remove unused `HierarchyLazyFrame` namespace (`hierarchy_namespace.py`) — duplicated logic from `hierarchy.py` and was not used in production code
 - **Engine**: Remove unused `CRMLazyFrame` namespace (`crm/namespace.py`) and `HaircutsLazyFrame`/`HaircutsExpr` namespaces (`crm/haircuts_namespace.py`) — independent reimplementations not used in production pipeline (CRMProcessor is the sole production API)

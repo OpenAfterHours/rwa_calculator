@@ -27,7 +27,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -53,15 +52,6 @@ from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
-
-
-@dataclass
-class IRBCalculationError:
-    """Error during IRB calculation."""
-
-    error_type: str
-    message: str
-    exposure_reference: str | None = None
 
 
 class IRBCalculator:
@@ -139,7 +129,7 @@ class IRBCalculator:
         Returns:
             IRBResultBundle with results and audit trail
         """
-        errors: list[IRBCalculationError] = []
+        errors: list[CalculationError] = []
 
         # Apply IRB calculations using namespace for fluent pipeline
         exposures = (

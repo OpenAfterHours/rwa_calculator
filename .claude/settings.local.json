@@ -29,7 +29,8 @@
       "Bash(uv run:*)",
       "Bash(uv sync:*)",
       "WebFetch(domain:zensical.org)",
-      "Bash(uv tool:*)"
+      "Bash(uv tool:*)",
+      "Bash(ls:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

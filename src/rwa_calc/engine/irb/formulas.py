@@ -384,12 +384,13 @@ def apply_irb_formulas(
 # =============================================================================
 
 
-def _polars_correlation_expr(
+def _correlation_expr_from_pd(
+    pd_expr: pl.Expr,
     sme_threshold: float = 50.0,
     eur_gbp_rate: float = 0.8732,
 ) -> pl.Expr:
     """
-    Pure Polars expression for correlation calculation.
+    Shared correlation expression accepting an arbitrary PD expression.
 
     Supports all exposure classes with proper correlation formulas:
     - Corporate/Institution/Sovereign: PD-dependent (decay=50)
@@ -401,23 +402,24 @@ def _polars_correlation_expr(
     - SME firm size adjustment for corporates (turnover converted from GBP to EUR)
     - FI scalar (1.25x) for large/unregulated financial sector entities (CRR Art. 153(2))
 
+    Reads exposure_class, turnover_m, requires_fi_scalar columns from the LazyFrame.
+
     Args:
+        pd_expr: Polars expression for the PD value to use
         sme_threshold: SME threshold in EUR millions (default 50.0)
         eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (default 0.8732)
     """
-    pd = pl.col("pd_floored")
     exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
-    turnover = pl.col("turnover_m")
 
     # Pre-calculate decay denominators (constants)
     corporate_denom = 1.0 - math.exp(-50.0)
     retail_denom = 1.0 - math.exp(-35.0)
 
     # f(PD) for corporate (decay = 50)
-    f_pd_corp = (1.0 - (-50.0 * pd).exp()) / corporate_denom
+    f_pd_corp = (1.0 - (-50.0 * pd_expr).exp()) / corporate_denom
 
     # f(PD) for retail (decay = 35)
-    f_pd_retail = (1.0 - (-35.0 * pd).exp()) / retail_denom
+    f_pd_retail = (1.0 - (-35.0 * pd_expr).exp()) / retail_denom
 
     # Corporate correlation: 0.12 × f(PD) + 0.24 × (1 - f(PD))
     r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)
@@ -431,7 +433,7 @@ def _polars_correlation_expr(
     # s_clamped = max(5, min(turnover_eur, 50))
     # adjustment = 0.04 × (1 - (s_clamped - 5) / 45)
     # Cast to Float64 first to handle null dtype, then convert to EUR and clip
-    turnover_float = turnover.cast(pl.Float64)
+    turnover_float = pl.col("turnover_m").cast(pl.Float64)
     turnover_eur = turnover_float / eur_gbp_rate
     s_clamped = turnover_eur.clip(5.0, sme_threshold)
     sme_adjustment = 0.04 * (1.0 - (s_clamped - 5.0) / 45.0)
@@ -459,11 +461,7 @@ def _polars_correlation_expr(
     )
 
     # Apply FI scalar (1.25x) for large/unregulated financial sector entities
-    # Per CRR Article 153(2): "For all exposures to large financial sector entities,
-    # the coefficient of correlation is multiplied by 1.25. For all exposures to
-    # unregulated financial sector entities, the coefficients of correlation are
-    # multiplied by 1.25."
-    # Note: The requires_fi_scalar column is set by the classifier
+    # Per CRR Article 153(2)
     fi_scalar = (
         pl.when(pl.col("requires_fi_scalar").fill_null(False) == True)  # noqa: E712
         .then(pl.lit(1.25))
@@ -473,35 +471,99 @@ def _polars_correlation_expr(
     return base_correlation * fi_scalar
 
 
-def _polars_capital_k_expr() -> pl.Expr:
+def _polars_correlation_expr(
+    sme_threshold: float = 50.0,
+    eur_gbp_rate: float = 0.8732,
+) -> pl.Expr:
     """
-    Pure Polars expression for capital requirement (K) calculation.
+    Pure Polars expression for correlation calculation using pd_floored column.
+
+    Thin wrapper around ``_correlation_expr_from_pd`` that reads ``pl.col("pd_floored")``.
+
+    Args:
+        sme_threshold: SME threshold in EUR millions (default 50.0)
+        eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (default 0.8732)
+    """
+    return _correlation_expr_from_pd(pl.col("pd_floored"), sme_threshold, eur_gbp_rate)
+
+
+def _capital_k_expr_from_params(
+    pd_expr: pl.Expr,
+    lgd_expr: pl.Expr,
+    correlation_expr: pl.Expr,
+) -> pl.Expr:
+    """
+    Shared K formula accepting arbitrary PD, LGD, and correlation expressions.
 
     K = LGD × N[(1-R)^(-0.5) × G(PD) + (R/(1-R))^(0.5) × G(0.999)] - PD × LGD
 
     Uses polars-normal-stats for normal_cdf and normal_ppf functions.
+
+    Args:
+        pd_expr: Polars expression for PD (will be clipped to [1e-10, 0.9999])
+        lgd_expr: Polars expression for LGD
+        correlation_expr: Polars expression for asset correlation
     """
-    # Safe PD to avoid edge cases
-    pd_safe = pl.col("pd_floored").clip(1e-10, 0.9999)
-    lgd = pl.col("lgd_floored")
-    correlation = pl.col("correlation")
+    pd_safe = pd_expr.clip(1e-10, 0.9999)
 
     # G(PD) = inverse normal CDF of PD
     g_pd = normal_ppf(pd_safe)
 
     # Calculate conditional default probability terms
-    one_minus_r = 1.0 - correlation
+    one_minus_r = 1.0 - correlation_expr
     term1 = (1.0 / one_minus_r).sqrt() * g_pd
-    term2 = (correlation / one_minus_r).sqrt() * G_999
+    term2 = (correlation_expr / one_minus_r).sqrt() * G_999
 
     # Conditional PD = N(term1 + term2)
     conditional_pd = normal_cdf(term1 + term2)
 
     # K = LGD × conditional_pd - PD × LGD
-    k = lgd * conditional_pd - pd_safe * lgd
+    k = lgd_expr * conditional_pd - pd_safe * lgd_expr
 
     # Floor at 0
     return pl.max_horizontal(k, pl.lit(0.0))
+
+
+def _polars_capital_k_expr() -> pl.Expr:
+    """
+    Pure Polars expression for K using pd_floored, lgd_floored, correlation columns.
+
+    Thin wrapper around ``_capital_k_expr_from_params``.
+    """
+    return _capital_k_expr_from_params(
+        pl.col("pd_floored"), pl.col("lgd_floored"), pl.col("correlation")
+    )
+
+
+def _maturity_adjustment_expr_from_pd(
+    pd_expr: pl.Expr,
+    maturity_floor: float = 1.0,
+    maturity_cap: float = 5.0,
+) -> pl.Expr:
+    """
+    Shared maturity adjustment expression accepting an arbitrary PD expression.
+
+    b = (0.11852 - 0.05478 × ln(PD))²
+    MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
+
+    Retail exposures should have MA=1.0 applied externally (this function
+    does not check exposure class).
+
+    Args:
+        pd_expr: Polars expression for PD
+        maturity_floor: Minimum maturity in years (default 1.0)
+        maturity_cap: Maximum maturity in years (default 5.0)
+    """
+    m = pl.col("maturity").clip(maturity_floor, maturity_cap)
+
+    # Safe PD for log calculation
+    pd_safe = pd_expr.clip(lower_bound=1e-10)
+
+    # b = (0.11852 - 0.05478 × ln(PD))²
+    b = (0.11852 - 0.05478 * pd_safe.log()) ** 2
+
+    # MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
+    return (1.0 + (m - 2.5) * b) / (1.0 - 1.5 * b)
 
 
 def _polars_maturity_adjustment_expr(
@@ -509,22 +571,13 @@ def _polars_maturity_adjustment_expr(
     maturity_cap: float = 5.0,
 ) -> pl.Expr:
     """
-    Pure Polars expression for maturity adjustment calculation.
+    Pure Polars expression for maturity adjustment using pd_floored column.
 
-    b = (0.11852 - 0.05478 × ln(PD))²
-    MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
+    Thin wrapper around ``_maturity_adjustment_expr_from_pd``.
     """
-    # Clamp maturity to bounds
-    m = pl.col("maturity").clip(maturity_floor, maturity_cap)
-
-    # Safe PD for log calculation
-    pd_safe = pl.col("pd_floored").clip(lower_bound=1e-10)
-
-    # b = (0.11852 - 0.05478 × ln(PD))²
-    b = (0.11852 - 0.05478 * pd_safe.log()) ** 2
-
-    # MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
-    return (1.0 + (m - 2.5) * b) / (1.0 - 1.5 * b)
+    return _maturity_adjustment_expr_from_pd(
+        pl.col("pd_floored"), maturity_floor, maturity_cap
+    )
 
 
 # =============================================================================
@@ -603,69 +656,12 @@ def _parametric_irb_risk_weight_expr(
     Returns:
         Expression computing risk_weight = K × 12.5 × scaling × MA
     """
-    # ---- Correlation (same formula as _polars_correlation_expr) ----
-    exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
-
-    corporate_denom = 1.0 - math.exp(-50.0)
-    retail_denom = 1.0 - math.exp(-35.0)
-
-    f_pd_corp = (1.0 - (-50.0 * pd_expr).exp()) / corporate_denom
-    f_pd_retail = (1.0 - (-35.0 * pd_expr).exp()) / retail_denom
-
-    r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)
-    r_retail_other = 0.03 * f_pd_retail + 0.16 * (1.0 - f_pd_retail)
-
-    # SME adjustment
-    turnover = pl.col("turnover_m").cast(pl.Float64)
-    turnover_eur = turnover / eur_gbp_rate
-    s_clamped = turnover_eur.clip(5.0, 50.0)
-    sme_adjustment = 0.04 * (1.0 - (s_clamped - 5.0) / 45.0)
-
-    is_corporate = exp_class.str.contains("CORPORATE")
-    has_valid_turnover = turnover_eur.is_not_null() & turnover_eur.is_finite()
-    is_sme = has_valid_turnover & (turnover_eur < 50.0)
-
-    r_corporate_with_sme = (
-        pl.when(is_corporate & is_sme).then(r_corporate - sme_adjustment).otherwise(r_corporate)
-    )
-
-    correlation = (
-        pl.when(exp_class.str.contains("MORTGAGE") | exp_class.str.contains("RESIDENTIAL"))
-        .then(pl.lit(0.15))
-        .when(exp_class.str.contains("QRRE"))
-        .then(pl.lit(0.04))
-        .when(exp_class.str.contains("RETAIL"))
-        .then(r_retail_other)
-        .otherwise(r_corporate_with_sme)
-    )
-
-    # FI scalar (1.25x for large/unregulated financial sector entities)
-    fi_scalar = (
-        pl.when(pl.col("requires_fi_scalar").fill_null(False) == True)  # noqa: E712
-        .then(pl.lit(1.25))
-        .otherwise(pl.lit(1.0))
-    )
-    correlation = correlation * fi_scalar
-
-    # ---- K formula ----
-    pd_safe = pd_expr.clip(1e-10, 0.9999)
-    g_pd = normal_ppf(pd_safe)
-
-    one_minus_r = 1.0 - correlation
-    term1 = (1.0 / one_minus_r).sqrt() * g_pd
-    term2 = (correlation / one_minus_r).sqrt() * G_999
-    conditional_pd = normal_cdf(term1 + term2)
-
-    k = lgd * conditional_pd - pd_safe * lgd
-    k = pl.max_horizontal(k, pl.lit(0.0))
-
-    # ---- Maturity adjustment ----
-    m = pl.col("maturity").clip(1.0, 5.0)
-    pd_safe_log = pd_expr.clip(lower_bound=1e-10)
-    b = (0.11852 - 0.05478 * pd_safe_log.log()) ** 2
-    ma = (1.0 + (m - 2.5) * b) / (1.0 - 1.5 * b)
+    correlation = _correlation_expr_from_pd(pd_expr, eur_gbp_rate=eur_gbp_rate)
+    k = _capital_k_expr_from_params(pd_expr, pl.lit(lgd), correlation)
+    ma = _maturity_adjustment_expr_from_pd(pd_expr)
 
     # Retail: no maturity adjustment (MA = 1.0)
+    exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
     is_retail = (
         exp_class.str.contains("RETAIL")
         | exp_class.str.contains("MORTGAGE")
@@ -777,25 +773,6 @@ def _run_scalar_via_vectorized(
 # SCALAR CALCULATIONS (wrappers around vectorized expressions)
 # =============================================================================
 
-
-def _norm_cdf(x: float) -> float:
-    """Scalar standard normal CDF.
-
-    Wrapper around vectorized normal_cdf expression.
-    """
-    return _run_scalar_via_vectorized({"x": x}, "cdf")
-
-
-def _norm_ppf(p: float) -> float:
-    """Scalar inverse standard normal CDF.
-
-    Wrapper around vectorized normal_ppf expression.
-    """
-    if p <= 0:
-        return float("-inf")
-    if p >= 1:
-        return float("inf")
-    return _run_scalar_via_vectorized({"p": p}, "ppf")
 
 
 def calculate_correlation(

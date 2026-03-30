@@ -51,6 +51,7 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "equity_main_index": Decimal("0.15"),
     "equity_other": Decimal("0.25"),
     # Other
+    "real_estate": Decimal("0.00"),
     "receivables": Decimal("0.20"),
     "other_physical": Decimal("0.40"),
 }
@@ -92,6 +93,7 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "equity_main_index": Decimal("0.25"),  # CRR: 15%
     "equity_other": Decimal("0.35"),  # CRR: 25%
     # Other (unchanged)
+    "real_estate": Decimal("0.00"),
     "receivables": Decimal("0.20"),
     "other_physical": Decimal("0.40"),
 }
@@ -271,6 +273,13 @@ def _create_crr_haircut_df() -> pl.DataFrame:
             "is_main_index": False,
         },
         # Other
+        {
+            "collateral_type": "real_estate",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.00,
+            "is_main_index": None,
+        },
         {
             "collateral_type": "receivables",
             "cqs": None,
@@ -543,6 +552,13 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "is_main_index": False,
         },
         # Other (unchanged)
+        {
+            "collateral_type": "real_estate",
+            "cqs": None,
+            "maturity_band": None,
+            "haircut": 0.00,
+            "is_main_index": None,
+        },
         {
             "collateral_type": "receivables",
             "cqs": None,

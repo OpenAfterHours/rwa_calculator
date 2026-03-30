@@ -31,6 +31,7 @@ from rwa_calc.data.tables.crr_haircuts import (
     lookup_collateral_haircut,
     lookup_fx_haircut,
 )
+from rwa_calc.engine.crm.constants import REAL_ESTATE_TYPES, RECEIVABLE_TYPES
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -181,268 +182,94 @@ class HaircutCalculator:
         collateral: pl.LazyFrame,
         is_basel_3_1: bool = False,
     ) -> pl.LazyFrame:
-        """
-        Apply collateral-type-specific haircuts.
+        """Apply collateral-type-specific haircuts via lookup table join."""
+        # Ensure issuer_type column exists for bond type normalization
+        schema = collateral.collect_schema()
+        if "issuer_type" not in schema.names():
+            collateral = collateral.with_columns(
+                pl.lit(None).cast(pl.String).alias("issuer_type")
+            )
 
-        Args:
-            collateral: Collateral with collateral_type column
-            is_basel_3_1: Whether to use Basel 3.1 haircut values
+        # Normalize collateral type and build sentinel join keys
+        bond_types = pl.col("_lookup_type").is_in(["govt_bond", "corp_bond"])
+        is_equity = pl.col("_lookup_type") == "equity"
 
-        Returns:
-            LazyFrame with collateral_haircut column added
-        """
-        # Equity haircut values differ by framework
-        equity_main = 0.25 if is_basel_3_1 else 0.15
-        equity_other = 0.35 if is_basel_3_1 else 0.25
-
-        # Bond haircuts — build the when/then chain
-        # Government bonds by CQS and maturity band
-        expr = self._build_govt_bond_haircut_chain(is_basel_3_1)
-
-        # Corporate bonds by CQS and maturity band
-        expr = self._extend_corp_bond_haircut_chain(expr, is_basel_3_1)
-
-        return collateral.with_columns(
+        collateral = collateral.with_columns(
+            [self._normalize_collateral_type_expr().alias("_lookup_type")]
+        ).with_columns(
             [
-                # Cash - 0%
-                pl.when(pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit"]))
-                .then(pl.lit(0.00))
-                # Gold - 15%
-                .when(pl.col("collateral_type").str.to_lowercase() == "gold")
-                .then(pl.lit(0.15))
-                # Government and corporate bonds via chain
-                .when(expr.is_not_null())
-                .then(expr)
-                # Equity
-                .when(
-                    (
-                        pl.col("collateral_type")
-                        .str.to_lowercase()
-                        .is_in(["equity", "shares", "stock"])
-                    )
-                    & (pl.col("is_eligible_financial_collateral") == True)  # noqa: E712
-                )
-                .then(pl.lit(equity_main))
-                .when(
-                    pl.col("collateral_type")
-                    .str.to_lowercase()
-                    .is_in(["equity", "shares", "stock"])
-                )
-                .then(pl.lit(equity_other))
-                # Receivables - 20%
-                .when(
-                    pl.col("collateral_type")
-                    .str.to_lowercase()
-                    .is_in(["receivables", "trade_receivables"])
-                )
-                .then(pl.lit(0.20))
-                # Real estate - no haircut (LTV-based treatment)
-                .when(
-                    pl.col("collateral_type")
-                    .str.to_lowercase()
-                    .is_in(
-                        [
-                            "real_estate",
-                            "property",
-                            "rre",
-                            "cre",
-                            "residential_property",
-                            "commercial_property",
-                        ]
-                    )
-                )
-                .then(pl.lit(0.00))
-                # Other physical - 40%
-                .otherwise(pl.lit(0.40))
-                .alias("collateral_haircut"),
+                pl.when(bond_types)
+                .then(pl.col("issuer_cqs").fill_null(-1))
+                .otherwise(pl.lit(-1))
+                .cast(pl.Int8)
+                .alias("_lookup_cqs"),
+                pl.when(bond_types)
+                .then(pl.col("maturity_band").fill_null("__none__"))
+                .otherwise(pl.lit("__none__"))
+                .alias("_lookup_maturity_band"),
+                pl.when(is_equity)
+                .then(pl.col("is_eligible_financial_collateral").fill_null(False).cast(pl.Int8))
+                .otherwise(pl.lit(-1).cast(pl.Int8))
+                .alias("_lookup_is_main_index"),
             ]
         )
 
-    def _build_govt_bond_haircut_chain(self, is_basel_3_1: bool) -> pl.Expr:
-        """Build Polars expression for government bond haircuts by CQS and maturity band."""
-        govt_types = pl.col("collateral_type").str.to_lowercase().is_in(
-            ["govt_bond", "sovereign_bond", "government_bond", "gilt"]
-        ) | (
-            (pl.col("collateral_type").str.to_lowercase() == "bond")
-            & (pl.col("issuer_type").str.to_lowercase() == "sovereign")
+        # Prepare haircut table with matching sentinels
+        ht = self._haircut_table.lazy().with_columns(
+            [
+                pl.col("cqs").fill_null(-1).cast(pl.Int8),
+                pl.col("maturity_band").fill_null("__none__"),
+                pl.col("is_main_index").cast(pl.Int8).fill_null(-1),
+            ]
         )
 
-        if is_basel_3_1:
-            return (
-                # CQS 1
-                pl.when(
-                    govt_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "0_1y")
-                )
-                .then(pl.lit(0.005))
-                .when(
-                    govt_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "1_3y")
-                )
-                .then(pl.lit(0.02))
-                .when(
-                    govt_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "3_5y")
-                )
-                .then(pl.lit(0.02))
-                .when(
-                    govt_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "5_10y")
-                )
-                .then(pl.lit(0.04))
-                .when(
-                    govt_types
-                    & (pl.col("issuer_cqs") == 1)
-                    & (pl.col("maturity_band") == "10y_plus")
-                )
-                .then(pl.lit(0.04))
-                # CQS 2-3
-                .when(
-                    govt_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "0_1y")
-                )
-                .then(pl.lit(0.01))
-                .when(
-                    govt_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "1_3y")
-                )
-                .then(pl.lit(0.03))
-                .when(
-                    govt_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "3_5y")
-                )
-                .then(pl.lit(0.04))
-                .when(
-                    govt_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "5_10y")
-                )
-                .then(pl.lit(0.06))
-                .when(
-                    govt_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "10y_plus")
-                )
-                .then(pl.lit(0.12))
-                .otherwise(pl.lit(None))
-            )
+        # Left join to look up haircut values
+        collateral = collateral.join(
+            ht.select(["collateral_type", "cqs", "maturity_band", "is_main_index", "haircut"]),
+            left_on=["_lookup_type", "_lookup_cqs", "_lookup_maturity_band", "_lookup_is_main_index"],
+            right_on=["collateral_type", "cqs", "maturity_band", "is_main_index"],
+            how="left",
+            suffix="_ht",
+        )
+
+        # Unmatched rows default to other_physical (40%)
+        collateral = collateral.with_columns(
+            [pl.col("haircut").fill_null(0.40).alias("collateral_haircut")]
+        ).drop(
+            [
+                "_lookup_type",
+                "_lookup_cqs",
+                "_lookup_maturity_band",
+                "_lookup_is_main_index",
+                "haircut",
+            ]
+        )
+
+        return collateral
+
+    @staticmethod
+    def _normalize_collateral_type_expr() -> pl.Expr:
+        """Map collateral_type aliases to canonical types for haircut table lookup."""
+        ct = pl.col("collateral_type").str.to_lowercase()
         return (
-            # CQS 1
-            pl.when(govt_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "0_1y"))
-            .then(pl.lit(0.005))
-            .when(govt_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "1_5y"))
-            .then(pl.lit(0.02))
-            .when(govt_types & (pl.col("issuer_cqs") == 1))
-            .then(pl.lit(0.04))
-            # CQS 2-3
+            pl.when(ct.is_in(["cash", "deposit"]))
+            .then(pl.lit("cash"))
+            .when(ct == "gold")
+            .then(pl.lit("gold"))
             .when(
-                govt_types
-                & pl.col("issuer_cqs").is_in([2, 3])
-                & (pl.col("maturity_band") == "0_1y")
+                ct.is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
+                | ((ct == "bond") & (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
             )
-            .then(pl.lit(0.01))
-            .when(
-                govt_types
-                & pl.col("issuer_cqs").is_in([2, 3])
-                & (pl.col("maturity_band") == "1_5y")
-            )
-            .then(pl.lit(0.03))
-            .when(govt_types & pl.col("issuer_cqs").is_in([2, 3]))
-            .then(pl.lit(0.06))
-            .otherwise(pl.lit(None))
-        )
-
-    def _extend_corp_bond_haircut_chain(self, base_expr: pl.Expr, is_basel_3_1: bool) -> pl.Expr:
-        """Build Polars expression for corporate bond haircuts by CQS and maturity band.
-
-        Returns a standalone expression (not chained off base_expr) — caller uses
-        coalesce-like when/then to merge government and corporate results.
-        """
-        corp_types = (
-            pl.col("collateral_type").str.to_lowercase().is_in(["corp_bond", "corporate_bond"])
-        )
-
-        if is_basel_3_1:
-            return (
-                # CQS 1 (AAA to AA-) — CRE22.52
-                pl.when(
-                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "0_1y")
-                )
-                .then(pl.lit(0.01))
-                .when(
-                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "1_3y")
-                )
-                .then(pl.lit(0.04))
-                .when(
-                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "3_5y")
-                )
-                .then(pl.lit(0.06))
-                .when(
-                    corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "5_10y")
-                )
-                .then(pl.lit(0.10))
-                .when(
-                    corp_types
-                    & (pl.col("issuer_cqs") == 1)
-                    & (pl.col("maturity_band") == "10y_plus")
-                )
-                .then(pl.lit(0.12))
-                # CQS 2-3 (A+ to BBB-) — CRE22.52
-                .when(
-                    corp_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "0_1y")
-                )
-                .then(pl.lit(0.02))
-                .when(
-                    corp_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "1_3y")
-                )
-                .then(pl.lit(0.06))
-                .when(
-                    corp_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "3_5y")
-                )
-                .then(pl.lit(0.08))
-                .when(
-                    corp_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "5_10y")
-                )
-                .then(pl.lit(0.15))
-                .when(
-                    corp_types
-                    & pl.col("issuer_cqs").is_in([2, 3])
-                    & (pl.col("maturity_band") == "10y_plus")
-                )
-                .then(pl.lit(0.15))
-                .otherwise(base_expr)
-            )
-        return (
-            # CQS 1 (AAA to AA-) — CRR Art. 224 Table 1
-            pl.when(corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "0_1y"))
-            .then(pl.lit(0.01))
-            .when(corp_types & (pl.col("issuer_cqs") == 1) & (pl.col("maturity_band") == "1_5y"))
-            .then(pl.lit(0.04))
-            .when(corp_types & (pl.col("issuer_cqs") == 1))
-            .then(pl.lit(0.08))
-            # CQS 2-3 (A+ to BBB-) — CRR Art. 224 Table 1
-            .when(
-                corp_types
-                & pl.col("issuer_cqs").is_in([2, 3])
-                & (pl.col("maturity_band") == "0_1y")
-            )
-            .then(pl.lit(0.02))
-            .when(
-                corp_types
-                & pl.col("issuer_cqs").is_in([2, 3])
-                & (pl.col("maturity_band") == "1_5y")
-            )
-            .then(pl.lit(0.06))
-            .when(corp_types & pl.col("issuer_cqs").is_in([2, 3]))
-            .then(pl.lit(0.12))
-            .otherwise(base_expr)
+            .then(pl.lit("govt_bond"))
+            .when(ct.is_in(["corp_bond", "corporate_bond"]))
+            .then(pl.lit("corp_bond"))
+            .when(ct.is_in(["equity", "shares", "stock"]))
+            .then(pl.lit("equity"))
+            .when(ct.is_in(RECEIVABLE_TYPES))
+            .then(pl.lit("receivables"))
+            .when(ct.is_in(REAL_ESTATE_TYPES))
+            .then(pl.lit("real_estate"))
+            .otherwise(pl.lit("other_physical"))
         )
 
     def apply_maturity_mismatch(

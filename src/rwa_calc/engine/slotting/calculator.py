@@ -30,7 +30,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -44,22 +43,10 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.data.tables.crr_slotting import (
-    lookup_slotting_rw,
-)
 from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
-
-
-@dataclass
-class SlottingCalculationError:
-    """Error during slotting calculation."""
-
-    error_type: str
-    message: str
-    exposure_reference: str | None = None
 
 
 class SlottingCalculator:
@@ -86,7 +73,6 @@ class SlottingCalculator:
 
     def __init__(self) -> None:
         """Initialize slotting calculator."""
-        self._slotting_table: pl.DataFrame | None = None
 
     def calculate_unified(
         self,
@@ -208,12 +194,8 @@ class SlottingCalculator:
                 errors=[],
             )
 
-        # Apply calculation pipeline using registered namespace
-        exposures = (
-            exposures.slotting.prepare_columns(config)
-            .slotting.apply_slotting_weights(config)
-            .slotting.calculate_rwa()
-        )
+        # Apply calculation pipeline
+        exposures = self.calculate_branch(exposures, config)
 
         # Build audit trail
         audit = exposures.slotting.build_audit()
@@ -257,11 +239,6 @@ class SlottingCalculator:
         if config is None:
             config = CalculationConfig.crr(reporting_date=date.today())
 
-        # Look up risk weight
-        if config.is_crr:
-            risk_weight = lookup_slotting_rw(category, is_hvcre, is_short_maturity)
-        else:
-            risk_weight = self._get_basel31_slotting_rw(category, is_hvcre, is_pre_operational)
         # Use expression namespace for lookup logic
         df = pl.DataFrame(
             {
@@ -293,33 +270,6 @@ class SlottingCalculator:
             "rwa": float(rwa),
             "framework": "CRR" if config.is_crr else "Basel 3.1",
         }
-
-    def _get_basel31_slotting_rw(
-        self,
-        category: str,
-        is_hvcre: bool,
-        is_pre_operational: bool = False,
-    ) -> Decimal:
-        """Get Basel 3.1 slotting risk weight (BCBS CRE33)."""
-        import rwa_calc.engine.slotting.namespace  # noqa: F401
-
-        # Use expression namespace for lookup logic
-        df = pl.DataFrame(
-            {
-                "slotting_category": [category],
-                "is_hvcre": [is_hvcre],
-                "is_pre_operational": [is_pre_operational],
-            }
-        )
-
-        rw_expr = col("slotting_category").slotting.lookup_rw(
-            is_crr=False,
-            is_hvcre=col("is_hvcre"),
-            is_preop=col("is_pre_operational"),
-        )
-
-        return Decimal(str(df.select(rw_expr).item()))
-
 
 def create_slotting_calculator() -> SlottingCalculator:
     """

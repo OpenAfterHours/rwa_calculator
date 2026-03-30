@@ -47,7 +47,6 @@ from rwa_calc.data.tables.crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
     calculate_slotting_rwa,
-    get_slotting_table,
     lookup_slotting_rw,
 )
 from rwa_calc.domain.enums import CQS, SlottingCategory
@@ -391,18 +390,6 @@ class TestSlottingLookup:
         rwa, rw, _ = calculate_slotting_rwa(Decimal("10000000"), "strong")
         assert rw == Decimal("0.70")
         assert rwa == Decimal("7000000")
-
-
-class TestSlottingDataFrame:
-    """Tests for slotting DataFrame generation."""
-
-    def test_table_has_both_types_and_maturities(self) -> None:
-        """Table includes HVCRE/non-HVCRE and maturity splits (5 categories × 2 × 2 = 20)."""
-        df = get_slotting_table()
-        hvcre_count = df.filter(pl.col("is_hvcre")).height
-        non_hvcre_count = df.filter(~pl.col("is_hvcre")).height
-        assert hvcre_count == 10  # 5 categories × 2 maturities
-        assert non_hvcre_count == 10  # 5 categories × 2 maturities
 
 
 # =============================================================================

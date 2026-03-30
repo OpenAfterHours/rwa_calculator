@@ -62,7 +62,6 @@ from .crr_risk_weights import (
 from .crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
-    get_slotting_table,
 )
 from .eu_sovereign import (
     EU_COUNTRY_DOMESTIC_CURRENCY,
@@ -102,7 +101,6 @@ __all__ = [
     # Slotting
     "SLOTTING_RISK_WEIGHTS",
     "SLOTTING_RISK_WEIGHTS_HVCRE",
-    "get_slotting_table",
     # F-IRB LGD
     "FIRB_SUPERVISORY_LGD",
     "BASEL31_FIRB_SUPERVISORY_LGD",

@@ -28,7 +28,8 @@
       "Bash(ls -la /c/Users/philm/PycharmProjects/rwa_calculator/tests/unit/test_guar*)",
       "Bash(uv run:*)",
       "Bash(uv sync:*)",
-      "WebFetch(domain:zensical.org)"
+      "WebFetch(domain:zensical.org)",
+      "Bash(uv tool:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

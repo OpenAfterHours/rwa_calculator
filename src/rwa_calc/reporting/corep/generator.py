@@ -156,9 +156,7 @@ class COREPGenerator:
         try:
             import xlsxwriter  # noqa: F401
         except ModuleNotFoundError:
-            msg = (
-                "COREP Excel export requires 'xlsxwriter'. Install with: uv add xlsxwriter"
-            )
+            msg = "COREP Excel export requires 'xlsxwriter'. Install with: uv add xlsxwriter"
             raise ModuleNotFoundError(msg) from None
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +199,7 @@ class COREPGenerator:
             if len(df) > 0:
                 display = class_names.get(ec, (None, ec))[1]
                 raw_sheet = f"{prefix} - {display}"
-                sheet = re.sub(r'[\[\]:*?/\\]', '', raw_sheet)[:31]
+                sheet = re.sub(r"[\[\]:*?/\\]", "", raw_sheet)[:31]
                 df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
                 total += len(df)
         return total
@@ -280,34 +278,28 @@ class COREPGenerator:
             if row_def.ref == "0010":
                 # Row 0010: aggregate ALL class data (with class-level inflows)
                 values = _compute_c07_values(
-                    class_data, cols, ead_col, rwa_col, column_refs,
+                    class_data,
+                    cols,
+                    ead_col,
+                    rwa_col,
+                    column_refs,
                     substitution_inflow=substitution_inflow,
                 )
-                rows.append(
-                    {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                )
+                rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
             elif row_def.ref == "0015":
                 # Row 0015: of which: Defaulted exposures
                 subset = _filter_defaulted(class_data, cols)
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             elif row_def.ref == "0020":
                 # Row 0020: of which: SME
                 subset = _filter_sme(class_data, cols)
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             elif row_def.ref in ("0021", "0022", "0023"):
@@ -319,12 +311,8 @@ class COREPGenerator:
                 }
                 subset = _filter_sl_type(class_data, cols, sl_type_map[row_def.ref])
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             elif row_def.ref in ("0024", "0025", "0026"):
@@ -334,16 +322,10 @@ class COREPGenerator:
                     "0025": "operational",
                     "0026": "high_quality_operational",
                 }
-                subset = _filter_project_phase(
-                    class_data, cols, phase_map[row_def.ref]
-                )
+                subset = _filter_project_phase(class_data, cols, phase_map[row_def.ref])
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             elif row_def.ref in _RE_ROW_FILTERS:
@@ -351,12 +333,8 @@ class COREPGenerator:
                 re_kwargs = _RE_ROW_FILTERS[row_def.ref]
                 subset = _filter_re(class_data, cols, **re_kwargs)
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
@@ -369,24 +347,16 @@ class COREPGenerator:
                 # On balance sheet exposures
                 subset = _filter_on_bs(class_data, cols)
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             elif row_def.ref == "0080":
                 # Off balance sheet exposures
                 subset = _filter_off_bs(class_data, cols)
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
@@ -401,9 +371,7 @@ class COREPGenerator:
         for row_def in row_sections[2].rows:
             if row_def.name in rw_row_data:
                 values = rw_row_data[row_def.name]
-                rows.append(
-                    {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                )
+                rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
             else:
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
@@ -415,28 +383,18 @@ class COREPGenerator:
         for row_def in row_sections[4].rows:
             if row_def.ref in _EQUITY_TRANSITIONAL_FILTERS:
                 eq_filter = _EQUITY_TRANSITIONAL_FILTERS[row_def.ref]
-                subset = _filter_equity_transitional(
-                    class_data, cols, **eq_filter
-                )
+                subset = _filter_equity_transitional(class_data, cols, **eq_filter)
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             elif row_def.ref == "0380":
                 # Currency mismatch multiplier (Basel 3.1 Art. 123B / CRE20.93)
                 subset = _filter_currency_mismatch(class_data, cols)
                 if len(subset) > 0:
-                    values = _compute_c07_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
@@ -447,7 +405,7 @@ class COREPGenerator:
             "row_ref": pl.String,
             "row_name": pl.String,
         }
-        schema.update({ref: pl.Float64 for ref in column_refs})
+        schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
     # =========================================================================
@@ -520,12 +478,14 @@ class COREPGenerator:
         for row_def in row_sections[0].rows:
             if row_def.ref == "0010":
                 values = _compute_c08_values(
-                    class_data, cols, ead_col, rwa_col, column_refs,
+                    class_data,
+                    cols,
+                    ead_col,
+                    rwa_col,
+                    column_refs,
                     substitution_inflow=substitution_inflow,
                 )
-                rows.append(
-                    {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                )
+                rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
             else:
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
@@ -535,24 +495,16 @@ class COREPGenerator:
                 # On balance sheet items
                 subset = _filter_on_bs(class_data, cols)
                 if len(subset) > 0:
-                    values = _compute_c08_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c08_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             elif row_def.ref == "0030":
                 # Off balance sheet items
                 subset = _filter_off_bs(class_data, cols)
                 if len(subset) > 0:
-                    values = _compute_c08_values(
-                        subset, cols, ead_col, rwa_col, column_refs
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c08_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
@@ -567,7 +519,7 @@ class COREPGenerator:
             "row_ref": pl.String,
             "row_name": pl.String,
         }
-        schema.update({ref: pl.Float64 for ref in column_refs})
+        schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
     # =========================================================================
@@ -592,9 +544,7 @@ class COREPGenerator:
             return {}
 
         if pd_col is None:
-            errors.append(
-                "C08.02: No PD column available — skipping PD grade breakdown"
-            )
+            errors.append("C08.02: No PD column available — skipping PD grade breakdown")
             return {}
 
         irb_df = irb_data.collect()
@@ -635,9 +585,7 @@ class COREPGenerator:
         band_expr = pl.lit("Unassigned")
         for lower, upper, label in reversed(PD_BANDS):
             band_expr = (
-                pl.when(
-                    (pl.col(pd_col) >= lower) & (pl.col(pd_col) < upper)
-                )
+                pl.when((pl.col(pd_col) >= lower) & (pl.col(pd_col) < upper))
                 .then(pl.lit(label))
                 .otherwise(band_expr)
             )
@@ -654,32 +602,24 @@ class COREPGenerator:
                 continue
 
             # Compute C 08.01-equivalent values for this band
-            values = _compute_c08_values(
-                band_data, cols, ead_col, rwa_col, column_refs
-            )
+            values = _compute_c08_values(band_data, cols, ead_col, rwa_col, column_refs)
             # Col 0005: obligor grade identifier = the PD band label
             values["0005"] = label
-            rows.append(
-                {"row_ref": label, "row_name": label, **values}
-            )
+            rows.append({"row_ref": label, "row_name": label, **values})
 
         # Handle unassigned
         unassigned = banded.filter(pl.col("_pd_band") == "Unassigned").drop("_pd_band")
         if len(unassigned) > 0:
-            values = _compute_c08_values(
-                unassigned, cols, ead_col, rwa_col, column_refs
-            )
+            values = _compute_c08_values(unassigned, cols, ead_col, rwa_col, column_refs)
             values["0005"] = "Unassigned"
-            rows.append(
-                {"row_ref": "Unassigned", "row_name": "Unassigned", **values}
-            )
+            rows.append({"row_ref": "Unassigned", "row_name": "Unassigned", **values})
 
         if not rows:
             schema: dict[str, pl.DataType] = {
                 "row_ref": pl.String,
                 "row_name": pl.String,
             }
-            schema.update({ref: pl.Float64 for ref in column_refs})
+            schema.update(dict.fromkeys(column_refs, pl.Float64))
             return pl.DataFrame(schema=schema)
 
         # Infer schema from column defs — 0005 is String, rest are Float64
@@ -842,24 +782,19 @@ def _filter_equity_transitional(
     return result
 
 
-def _filter_sl_type(
-    data: pl.DataFrame, cols: set[str], sl_type: str
-) -> pl.DataFrame:
+def _filter_sl_type(data: pl.DataFrame, cols: set[str], sl_type: str) -> pl.DataFrame:
     """Filter to exposures with a given specialised lending type."""
     if "sl_type" not in cols:
         return data.clear()
     return data.filter(pl.col("sl_type") == sl_type)
 
 
-def _filter_project_phase(
-    data: pl.DataFrame, cols: set[str], phase: str
-) -> pl.DataFrame:
+def _filter_project_phase(data: pl.DataFrame, cols: set[str], phase: str) -> pl.DataFrame:
     """Filter to project finance exposures in a given phase."""
     if "sl_type" not in cols or "sl_project_phase" not in cols:
         return data.clear()
     return data.filter(
-        (pl.col("sl_type") == "project_finance")
-        & (pl.col("sl_project_phase") == phase)
+        (pl.col("sl_type") == "project_finance") & (pl.col("sl_project_phase") == phase)
     )
 
 
@@ -889,9 +824,7 @@ def _filter_re(
         result = result.filter(pl.col("property_type") == property_type)
 
     if materially_dependent is not None and "materially_dependent_on_property" in cols:
-        result = result.filter(
-            pl.col("materially_dependent_on_property") == materially_dependent
-        )
+        result = result.filter(pl.col("materially_dependent_on_property") == materially_dependent)
     elif materially_dependent is not None:
         return data.clear()
 
@@ -900,7 +833,9 @@ def _filter_re(
         if is_sme:
             result = sme_subset
         else:
-            sme_refs = set(sme_subset["exposure_reference"].to_list()) if len(sme_subset) > 0 else set()
+            sme_refs = (
+                set(sme_subset["exposure_reference"].to_list()) if len(sme_subset) > 0 else set()
+            )
             if sme_refs:
                 result = result.filter(~pl.col("exposure_reference").is_in(sme_refs))
 
@@ -912,9 +847,7 @@ def _filter_re(
     return result
 
 
-def _filter_currency_mismatch(
-    data: pl.DataFrame, cols: set[str]
-) -> pl.DataFrame:
+def _filter_currency_mismatch(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     """Filter to exposures where the currency mismatch multiplier was applied.
 
     Used for Basel 3.1 OF 07.00 memorandum row 0380.
@@ -924,9 +857,7 @@ def _filter_currency_mismatch(
     return data.filter(pl.col("currency_mismatch_multiplier_applied") == True)  # noqa: E712
 
 
-def _null_row(
-    row_ref: str, row_name: str, column_refs: list[str]
-) -> dict[str, object]:
+def _null_row(row_ref: str, row_name: str, column_refs: list[str]) -> dict[str, object]:
     """Build a row dict with null values for all COREP columns."""
     row: dict[str, object] = {"row_ref": row_ref, "row_name": row_name}
     for ref in column_refs:
@@ -934,9 +865,7 @@ def _null_row(
     return row
 
 
-def _safe_sum_eager(
-    data: pl.DataFrame, cols: set[str], *col_names: str
-) -> float:
+def _safe_sum_eager(data: pl.DataFrame, cols: set[str], *col_names: str) -> float:
     """Sum multiple columns from an eager DataFrame. Missing columns skipped."""
     total = 0.0
     for c in col_names:
@@ -945,9 +874,7 @@ def _safe_sum_eager(
     return total
 
 
-def _col_sum_eager(
-    data: pl.DataFrame, cols: set[str], col_name: str | None
-) -> float | None:
+def _col_sum_eager(data: pl.DataFrame, cols: set[str], col_name: str | None) -> float | None:
     """Sum a single column from an eager DataFrame."""
     if col_name is None or col_name not in cols:
         return None
@@ -1007,27 +934,21 @@ def _compute_substitution_flows(
         return {}
 
     # Only consider rows where substitution actually occurs
-    migrated = full_df.filter(
-        (pl.col(gp_col) > 0) & (pl.col(pre_col) != pl.col(post_col))
-    )
+    migrated = full_df.filter((pl.col(gp_col) > 0) & (pl.col(pre_col) != pl.col(post_col)))
     if len(migrated) == 0:
         return {}
 
     result: dict[str, dict[str, float]] = {}
 
     # Outflows: grouped by pre_crm class (exposure leaving)
-    outflows = migrated.group_by(pre_col).agg(
-        pl.col(gp_col).sum().alias("outflow")
-    )
+    outflows = migrated.group_by(pre_col).agg(pl.col(gp_col).sum().alias("outflow"))
     for row in outflows.iter_rows(named=True):
         ec = row[pre_col]
         result.setdefault(ec, {"outflow": 0.0, "inflow": 0.0})
         result[ec]["outflow"] = float(row["outflow"])
 
     # Inflows: grouped by post_crm class (exposure arriving)
-    inflows = migrated.group_by(post_col).agg(
-        pl.col(gp_col).sum().alias("inflow")
-    )
+    inflows = migrated.group_by(post_col).agg(pl.col(gp_col).sum().alias("inflow"))
     for row in inflows.iter_rows(named=True):
         ec = row[post_col]
         result.setdefault(ec, {"outflow": 0.0, "inflow": 0.0})
@@ -1049,9 +970,7 @@ def _compute_substitution_outflow(data: pl.DataFrame, cols: set[str]) -> float:
     if pre_col is None or post_col is None or gp_col is None:
         return 0.0
 
-    migrated = data.filter(
-        (pl.col(gp_col) > 0) & (pl.col(pre_col) != pl.col(post_col))
-    )
+    migrated = data.filter((pl.col(gp_col) > 0) & (pl.col(pre_col) != pl.col(post_col)))
     if len(migrated) == 0:
         return 0.0
 
@@ -1078,7 +997,7 @@ def _compute_c07_values(
             total row (0010); sub-rows pass 0.
     """
     if len(data) == 0:
-        return {ref: None for ref in column_refs}
+        return dict.fromkeys(column_refs)
 
     ref_set = set(column_refs)
     values: dict[str, float | None] = {}
@@ -1088,9 +1007,7 @@ def _compute_c07_values(
     values["0010"] = _safe_sum_eager(data, cols, "drawn_amount", "undrawn_amount")
 
     # 0030: (-) Value adjustments and provisions
-    values["0030"] = _safe_sum_eager(
-        data, cols, "scra_provision_amount", "gcra_provision_amount"
-    )
+    values["0030"] = _safe_sum_eager(data, cols, "scra_provision_amount", "gcra_provision_amount")
 
     # 0035: (-) On-balance sheet netting (B3.1 col 0035, CRR Art. 195)
     values["0035"] = _col_sum_eager(data, cols, "on_bs_netting_amount")
@@ -1121,8 +1038,10 @@ def _compute_c07_values(
 
     # 0080: (-) Other funded credit protection (non-financial collateral)
     values["0080"] = _sum_cols_eager(
-        data, cols,
-        "collateral_re_value", "collateral_receivables_value",
+        data,
+        cols,
+        "collateral_re_value",
+        "collateral_receivables_value",
         "collateral_other_physical_value",
     )
 
@@ -1273,7 +1192,7 @@ def _compute_c08_values(
             total row (0010); sub-rows pass 0.
     """
     if len(data) == 0:
-        return {ref: None for ref in column_refs}
+        return dict.fromkeys(column_refs)
 
     values: dict[str, float | None] = {}
     ead_sum = float(data[ead_col].fill_null(0.0).sum()) if ead_col in cols else 0.0
@@ -1295,8 +1214,9 @@ def _compute_c08_values(
     # 0030: Of which: large financial sector entities — Phase 2F
     lfse_data = _filter_lfse(data, cols)
     if lfse_data is not None and len(lfse_data) > 0:
-        values["0030"] = _safe_sum_eager(lfse_data, set(lfse_data.columns),
-                                         "drawn_amount", "undrawn_amount")
+        values["0030"] = _safe_sum_eager(
+            lfse_data, set(lfse_data.columns), "drawn_amount", "undrawn_amount"
+        )
     else:
         values["0030"] = 0.0 if "apply_fi_scalar" in cols else None
 
@@ -1317,8 +1237,10 @@ def _compute_c08_values(
 
     # 0060: (-) Other funded credit protection (non-financial collateral)
     values["0060"] = _sum_cols_eager(
-        data, cols,
-        "collateral_re_value", "collateral_receivables_value",
+        data,
+        cols,
+        "collateral_re_value",
+        "collateral_receivables_value",
         "collateral_other_physical_value",
     )
 
@@ -1337,9 +1259,7 @@ def _compute_c08_values(
     v_c08_0060 = values.get("0060") or 0.0
     v_c08_0070 = values.get("0070") or 0.0
     v_c08_0080 = values.get("0080") or 0.0
-    values["0090"] = (
-        v_c08_0020 - v_c08_0040 - v_c08_0050 - v_c08_0060 - v_c08_0070 + v_c08_0080
-    )
+    values["0090"] = v_c08_0020 - v_c08_0040 - v_c08_0050 - v_c08_0060 - v_c08_0070 + v_c08_0080
 
     # 0100: Of which: off balance sheet
     off_bs = _filter_off_bs(data, cols)
@@ -1412,9 +1332,7 @@ def _compute_c08_values(
     # 0230: Exposure-weighted average LGD (%)
     lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
     if lgd_col is not None and ead_sum > 0:
-        lgd_x_ead = float(
-            (data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
-        )
+        lgd_x_ead = float((data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0230"] = lgd_x_ead / ead_sum
     else:
         values["0230"] = None
@@ -1423,7 +1341,9 @@ def _compute_c08_values(
     if lfse_data is not None and len(lfse_data) > 0:
         lfse_cols = set(lfse_data.columns)
         lfse_lgd_col = _pick(lfse_cols, "irb_lgd_floored", "irb_lgd_original")
-        lfse_ead_sum = float(lfse_data[ead_col].fill_null(0.0).sum()) if ead_col in lfse_cols else 0.0
+        lfse_ead_sum = (
+            float(lfse_data[ead_col].fill_null(0.0).sum()) if ead_col in lfse_cols else 0.0
+        )
         if lfse_lgd_col is not None and lfse_ead_sum > 0:
             lgd_x_ead = float(
                 (lfse_data[lfse_lgd_col].fill_null(0.0) * lfse_data[ead_col].fill_null(0.0)).sum()
@@ -1437,9 +1357,7 @@ def _compute_c08_values(
     # 0250: Exposure-weighted average maturity (DAYS, not years)
     if "irb_maturity_m" in cols and ead_sum > 0:
         m_x_ead = float(
-            (
-                data["irb_maturity_m"].fill_null(0.0) * data[ead_col].fill_null(0.0)
-            ).sum()
+            (data["irb_maturity_m"].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
         )
         values["0250"] = (m_x_ead / ead_sum) * 365.0  # Convert years to days
     else:
@@ -1513,9 +1431,7 @@ def _compute_c08_values(
     values["0282"] = _col_sum_eager(data, cols, "el_after_adjustment")
 
     # 0290: (-) Value adjustments and provisions
-    prov = _safe_sum_eager(
-        data, cols, "scra_provision_amount", "gcra_provision_amount"
-    )
+    prov = _safe_sum_eager(data, cols, "scra_provision_amount", "gcra_provision_amount")
     if abs(prov) < 1e-9:
         # Fall back to provision_held
         held = _col_sum_eager(data, cols, "provision_held")
@@ -1581,8 +1497,6 @@ def _compute_rw_section_rows(
     for label in banded["_rw_band"].unique().to_list():
         band_data = banded.filter(pl.col("_rw_band") == label).drop("_rw_band")
         if len(band_data) > 0:
-            result[label] = _compute_c07_values(
-                band_data, cols, ead_col, rwa_col, column_refs
-            )
+            result[label] = _compute_c07_values(band_data, cols, ead_col, rwa_col, column_refs)
 
     return result

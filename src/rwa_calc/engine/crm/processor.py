@@ -255,7 +255,10 @@ def _resolve_pledge_from_joined(collateral: pl.LazyFrame) -> pl.LazyFrame:
         return collateral.drop("_beneficiary_ead")
 
     needs_resolve = (
-        (pl.col("market_value").is_null() | (pl.col("market_value").cast(pl.Float64, strict=False).abs() < 1e-10))
+        (
+            pl.col("market_value").is_null()
+            | (pl.col("market_value").cast(pl.Float64, strict=False).abs() < 1e-10)
+        )
         & pl.col("pledge_percentage").is_not_null()
         & (pl.col("pledge_percentage") > 0.0)
     )
@@ -415,9 +418,7 @@ class CRMProcessor:
             else:
                 collateral = netting_collateral
         else:
-            exposures = exposures.with_columns(
-                pl.lit(0.0).alias("on_bs_netting_amount")
-            )
+            exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))
 
         # Step 4: Apply collateral (if available and valid)
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
@@ -522,9 +523,7 @@ class CRMProcessor:
             else:
                 collateral = netting_collateral
         else:
-            exposures = exposures.with_columns(
-                pl.lit(0.0).alias("on_bs_netting_amount")
-            )
+            exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))
 
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
@@ -1177,8 +1176,18 @@ class CRMProcessor:
         )
 
         _agg = [
-            "_cv", "_mv", "_ef", "_wf", "_en", "_wn", "_rn",
-            "_adj_fin", "_adj_cash", "_adj_re", "_adj_rec", "_adj_oth",
+            "_cv",
+            "_mv",
+            "_ef",
+            "_wf",
+            "_en",
+            "_wn",
+            "_rn",
+            "_adj_fin",
+            "_adj_cash",
+            "_adj_re",
+            "_adj_rec",
+            "_adj_oth",
         ]
 
         # Split the small aggregated result for per-level joins
@@ -2450,7 +2459,10 @@ class CRMProcessor:
         if "percentage_covered" in guar_cols:
             single = single.with_columns(
                 pl.when(
-                    (pl.col("amount_covered").is_null() | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10))
+                    (
+                        pl.col("amount_covered").is_null()
+                        | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
+                    )
                     & pl.col("percentage_covered").is_not_null()
                     & (pl.col("percentage_covered") > 0)
                 )
@@ -2490,7 +2502,10 @@ class CRMProcessor:
         if "percentage_covered" in guar_cols:
             multi_joined = multi_joined.with_columns(
                 pl.when(
-                    (pl.col("amount_covered").is_null() | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10))
+                    (
+                        pl.col("amount_covered").is_null()
+                        | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
+                    )
                     & pl.col("percentage_covered").is_not_null()
                     & (pl.col("percentage_covered") > 0)
                 )

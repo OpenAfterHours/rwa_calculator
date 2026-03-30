@@ -231,7 +231,9 @@ class CCFCalculator:
                 # Full logic with A-IRB ccf_modelled support
                 exposures = exposures.with_columns(
                     [
-                        pl.when(pl.col("nominal_amount").cast(pl.Float64, strict=False).abs() < 1e-10)
+                        pl.when(
+                            pl.col("nominal_amount").cast(pl.Float64, strict=False).abs() < 1e-10
+                        )
                         .then(pl.lit(0.0))  # Loans with no contingent - no CCF
                         .when(pl.col("approach") == ApproachType.AIRB.value)
                         .then(airb_ccf_expr)
@@ -245,7 +247,9 @@ class CCFCalculator:
                 # No ccf_modelled column
                 exposures = exposures.with_columns(
                     [
-                        pl.when(pl.col("nominal_amount").cast(pl.Float64, strict=False).abs() < 1e-10)
+                        pl.when(
+                            pl.col("nominal_amount").cast(pl.Float64, strict=False).abs() < 1e-10
+                        )
                         .then(pl.lit(0.0))  # Loans with no contingent - no CCF
                         .when(pl.col("approach") == ApproachType.FIRB.value)
                         .then(pl.col("_firb_ccf_from_risk_type"))  # F-IRB: 75% rule

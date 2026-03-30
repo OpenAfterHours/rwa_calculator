@@ -38,7 +38,6 @@ from rwa_calc.reporting.corep.templates import (
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
     SA_RISK_WEIGHT_BANDS,
-    RowSection,
     get_c07_columns,
     get_c08_columns,
     get_irb_row_sections,

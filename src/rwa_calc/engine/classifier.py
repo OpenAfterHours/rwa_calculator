@@ -192,9 +192,7 @@ class ExposureClassifier:
         irb_exposures = classified.filter(
             pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
         )
-        slotting_exposures = classified.filter(
-            pl.col("approach") == ApproachType.SLOTTING.value
-        )
+        slotting_exposures = classified.filter(pl.col("approach") == ApproachType.SLOTTING.value)
         classification_audit = self._build_audit_trail(classified)
 
         return ClassifiedExposuresBundle(
@@ -692,12 +690,18 @@ class ExposureClassifier:
         if "internal_pd" not in schema_names:
             exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
 
-        sl_airb = pl.lit(config.irb_permissions.is_permitted(
-            ExposureClass.SPECIALISED_LENDING, ApproachType.AIRB,
-        ))
-        sl_slotting = pl.lit(config.irb_permissions.is_permitted(
-            ExposureClass.SPECIALISED_LENDING, ApproachType.SLOTTING,
-        ))
+        sl_airb = pl.lit(
+            config.irb_permissions.is_permitted(
+                ExposureClass.SPECIALISED_LENDING,
+                ApproachType.AIRB,
+            )
+        )
+        sl_slotting = pl.lit(
+            config.irb_permissions.is_permitted(
+                ExposureClass.SPECIALISED_LENDING,
+                ApproachType.SLOTTING,
+            )
+        )
 
         # Managed-as-retail-without-LGD must use SA
         managed_as_retail_without_lgd = (

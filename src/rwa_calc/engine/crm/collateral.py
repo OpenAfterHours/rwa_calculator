@@ -20,6 +20,7 @@ References:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -200,9 +201,9 @@ def apply_collateral(
     config: CalculationConfig,
     haircut_calculator: HaircutCalculator,
     is_basel_3_1: bool,
-    build_exposure_lookups_fn: callable,
-    join_collateral_to_lookups_fn: callable,
-    resolve_pledge_from_joined_fn: callable,
+    build_exposure_lookups_fn: Callable,
+    join_collateral_to_lookups_fn: Callable,
+    resolve_pledge_from_joined_fn: Callable,
 ) -> pl.LazyFrame:
     """
     Apply collateral to reduce EAD (SA) or LGD (IRB).

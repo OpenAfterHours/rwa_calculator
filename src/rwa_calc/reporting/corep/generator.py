@@ -227,7 +227,7 @@ class COREPGenerator:
                 errors.append("C07: Missing exposure_class column")
             return {}
 
-        sa_df = sa_data.collect()
+        sa_df: pl.DataFrame = sa_data.collect()
         if len(sa_df) == 0:
             return {}
 
@@ -431,7 +431,7 @@ class COREPGenerator:
                 errors.append("C08.01: Missing exposure_class column")
             return {}
 
-        irb_df = irb_data.collect()
+        irb_df: pl.DataFrame = irb_data.collect()
         if len(irb_df) == 0:
             return {}
 
@@ -547,7 +547,7 @@ class COREPGenerator:
             errors.append("C08.02: No PD column available — skipping PD grade breakdown")
             return {}
 
-        irb_df = irb_data.collect()
+        irb_df: pl.DataFrame = irb_data.collect()
         if len(irb_df) == 0:
             return {}
 

@@ -22,8 +22,8 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig
 import rwa_calc.engine.slotting.namespace  # noqa: F401
+from rwa_calc.contracts.config import CalculationConfig
 
 # =============================================================================
 # Fixtures

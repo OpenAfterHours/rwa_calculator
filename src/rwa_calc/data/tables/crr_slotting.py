@@ -124,4 +124,3 @@ def calculate_slotting_rwa(
     description = f"Slotting{hvcre_str}{mat_str} {cat_str}: {risk_weight:.0%} RW"
 
     return rwa, risk_weight, description
-

@@ -25,6 +25,7 @@ References:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -199,7 +200,8 @@ class COREPGenerator:
         for ec, df in sorted(templates.items()):
             if len(df) > 0:
                 display = class_names.get(ec, (None, ec))[1]
-                sheet = f"{prefix} - {display}"[:31]  # Excel 31-char limit
+                raw_sheet = f"{prefix} - {display}"
+                sheet = re.sub(r'[\[\]:*?/\\]', '', raw_sheet)[:31]
                 df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
                 total += len(df)
         return total

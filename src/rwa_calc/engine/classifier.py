@@ -353,7 +353,7 @@ class ExposureClassifier:
                 pl.when(pl.col("lending_group_adjusted_exposure") > max_retail_exposure)
                 .then(pl.lit(False))
                 .when(
-                    (pl.col("lending_group_adjusted_exposure") == 0)
+                    (pl.col("lending_group_adjusted_exposure").cast(pl.Float64, strict=False).abs() < 1e-10)
                     & (pl.col("exposure_for_retail_threshold") > max_retail_exposure)
                 )
                 .then(pl.lit(False))

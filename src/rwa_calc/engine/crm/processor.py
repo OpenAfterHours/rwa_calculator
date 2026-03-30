@@ -255,7 +255,7 @@ def _resolve_pledge_from_joined(collateral: pl.LazyFrame) -> pl.LazyFrame:
         return collateral.drop("_beneficiary_ead")
 
     needs_resolve = (
-        (pl.col("market_value").is_null() | (pl.col("market_value") == 0.0))
+        (pl.col("market_value").is_null() | (pl.col("market_value").cast(pl.Float64, strict=False).abs() < 1e-10))
         & pl.col("pledge_percentage").is_not_null()
         & (pl.col("pledge_percentage") > 0.0)
     )
@@ -2450,7 +2450,7 @@ class CRMProcessor:
         if "percentage_covered" in guar_cols:
             single = single.with_columns(
                 pl.when(
-                    (pl.col("amount_covered").is_null() | (pl.col("amount_covered") == 0))
+                    (pl.col("amount_covered").is_null() | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10))
                     & pl.col("percentage_covered").is_not_null()
                     & (pl.col("percentage_covered") > 0)
                 )
@@ -2490,7 +2490,7 @@ class CRMProcessor:
         if "percentage_covered" in guar_cols:
             multi_joined = multi_joined.with_columns(
                 pl.when(
-                    (pl.col("amount_covered").is_null() | (pl.col("amount_covered") == 0))
+                    (pl.col("amount_covered").is_null() | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10))
                     & pl.col("percentage_covered").is_not_null()
                     & (pl.col("percentage_covered") > 0)
                 )

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Docs**: Expand COREP template comparison documentation to cover all 9 key credit risk templates (C 07.00, C 08.01–08.07, C 09.01–09.02) — previously only C 07.00, C 08.01, C 08.02 were documented
+- **Docs**: Add full CRR vs Basel 3.1 column/row reference for C 08.03 (PD ranges), C 08.04 (RWEA flow), C 08.06 (slotting), C 08.07 (scope of use), C 09.01 (geo SA), C 09.02 (geo IRB)
+
+### Fixed
+- **Docs**: Correct Template Overview in reporting-differences.md — C 08.03 exists in CRR (PD ranges breakdown), not a new Basel 3.1 slotting template
+
 ### Changed
 - **Engine**: Simplify IRB engine module structure — extract `adjustments.py` (defaulted treatment, post-model adjustments, EL shortfall) and `guarantee.py` (guarantee substitution) from `namespace.py`, deduplicate correlation/K/maturity-adjustment formulas in `formulas.py`, remove dead code (`_norm_cdf`, `_norm_ppf`, `IRBCalculationError`)
 

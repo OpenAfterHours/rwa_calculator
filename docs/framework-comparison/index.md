@@ -22,7 +22,7 @@ in one place.
 | **Haircuts (Equities)** | 15% / 25% | 25% / 35% |
 | **Currency Mismatch** | None | 1.5x RW multiplier for unhedged FX retail/RE |
 | **CRM Methods** | Scattered provisions | Foundation Collateral Method, Parameter Substitution |
-| **COREP Templates** | C prefix (C 07.00, C 08.01/02) | OF prefix (OF 07.00, OF 08.01/02/03) |
+| **COREP Templates** | C prefix (C 07.00, C 08.01–08.07, C 09.01–09.02) | OF prefix (OF 07.00, OF 08.01–08.07, OF 09.01–09.02) |
 
 ## In This Section
 

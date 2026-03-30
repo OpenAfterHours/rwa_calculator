@@ -45,20 +45,28 @@ breakdown, risk weight breakdown, memorandum items).
 - **C 07.00 / OF 07.00** — CR SA: one submission per SA exposure class. 24 columns (CRR) / 22 columns (Basel 3.1) covering original exposure, provisions, CRM substitution effects, Financial Collateral Comprehensive Method, CCF breakdown, exposure value, and RWEA. 5 row sections: totals, exposure types (on-BS/off-BS/CCR), risk weights (15 bands CRR / 29 bands Basel 3.1), CIU approach, memorandum items.
 - **C 08.01 / OF 08.01** — CR IRB totals: one submission per IRB exposure class × own-estimates filter. 33 columns (CRR) / 40+ columns (Basel 3.1) covering PD, original exposure, CRM substitution effects, CRM in LGD estimates (detailed collateral breakdown), exposure value, LGD, maturity, RWEA, expected loss, provisions, obligor count. Basel 3.1 adds post-model adjustment and output floor columns.
 - **C 08.02 / OF 08.02** — CR IRB by obligor grade: same columns as C 08.01 with dynamic rows (one per firm-specific internal rating grade/pool, ordered by PD).
+- **C 08.03 / OF 08.03** — CR IRB PD ranges: one submission per IRB exposure class. 11 columns covering on/off-BS, avg CCF, exposure value, avg PD, obligors, avg LGD, avg maturity, RWEA, EL, provisions. Rows are 17 fixed PD range buckets (0.00–0.15 through 100% default). Basel 3.1: PD and LGD columns reflect input floors, supporting factors removed, slotting excluded.
+- **C 08.04 / OF 08.04** — CR IRB RWEA flow statements: one submission per IRB exposure class. 1 column (RWEA), 9 rows (previous period, 7 movement categories, current period). Virtually identical between CRR and Basel 3.1 (supporting factors no longer mentioned).
+- **C 08.06 / OF 08.06** — CR IRB specialised lending slotting: one submission per SL type. 10 columns (CRR) / 11 columns (Basel 3.1 adds FCCM). Rows by slotting category (1–5) × maturity band. Basel 3.1 adds "substantially stronger" sub-categories and separates HVCRE from IPRE (5 SL types vs 4).
+- **C 08.07 / OF 08.07** — CR IRB scope of use: one submission covering all exposure/roll-out classes. 5 columns (CRR) / 18 columns (Basel 3.1 — significantly expanded with RWEA breakdown by SA reason and materiality thresholds). Rows change from exposure classes to roll-out classes (Art 147B).
+- **C 09.01 / OF 09.01** — CR GB 1 geographical breakdown SA: one submission per country. 13 columns (CRR) / 10 columns (Basel 3.1) covering original exposure, defaults, provisions, exposure value, RWEA. Rows by SA exposure class. Basel 3.1: supporting factor columns removed, real estate rows restructured (regulatory residential/commercial RE sub-rows).
+- **C 09.02 / OF 09.02** — CR GB 2 geographical breakdown IRB: one submission per country. 17 columns (CRR) / 15 columns (Basel 3.1) covering exposure, defaults, provisions, PD, LGD, RWEA, EL. Basel 3.1: adds defaulted exposure value column, removes supporting factors, adds corporate sub-rows, restructures retail RE rows, removes equity.
 
 ### Reference Documents
-- `docs/assets/corep-own-funds.xlsx` — CRR template layouts (sheets "7", "8.1", "8.2")
-- `docs/assets/annex-ii-instructions-for-reporting-on-own-funds.pdf` — CRR reporting instructions
-- `docs/assets/annex-i-of-07-00-credit-risk-sa-reporting-template.xlsx` — Basel 3.1 OF 07.00 layout
-- `docs/assets/annex-ii-reporting-instructions.pdf` — Basel 3.1 reporting instructions
+- `docs/assets/CRR - corep-own-funds.xlsx` — CRR template layouts (sheets "7", "8.1", "8.2", "8.3", "8.4", "8.6", "8.7", "9.1", "9.2")
+- `docs/assets/crr-annex-ii-reporting-instructins.pdf` — CRR reporting instructions
+- `docs/assets/0F07 - annex-i-of-07-00-credit-risk-sa-reporting-template.xlsx` — Basel 3.1 OF 07.00 layout
+- `docs/assets/OF0801-annex-i-of-08-01-credit-risk-irb-reporting-template.xlsx` — Basel 3.1 OF 08.01 layout
+- `docs/assets/OF0802-annex-i-of-08-02-credit-risk-irb-reporting-template.xlsx` — Basel 3.1 OF 08.02 layout
+- `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf` — Basel 3.1 reporting instructions
 
 ### Status
-- Generator: Needs rework — current implementation uses simplified column set and one-row-per-class structure. See `IMPLEMENTATION_PLAN.md` for phased rework plan.
+- Generator: Needs rework — current implementation uses simplified column set and one-row-per-class structure. Covers C 07.00, C 08.01, C 08.02 only. Templates 08.03–09.02 are documented but not yet implemented in the generator.
 - Template definitions: Needs rework — column refs and row structure don't match actual EBA/PRA templates.
 - Excel export: Needs update to match per-exposure-class template structure.
 - Integration: Done (`ResultExporter.export_to_corep()`, `CalculationResponse.to_corep()`)
 - Tests: Need rewrite to validate correct template structure.
-- Detailed feature docs: Done — see [COREP Reporting](../features/corep-reporting.md)
+- Detailed feature docs: Done — see [COREP Reporting](../features/corep-reporting.md) (all 9 templates documented)
 
 ## Export
 

@@ -29,16 +29,13 @@ Polars Namespaces:
     - lf.crm: Credit Risk Mitigation
     - lf.haircuts: Collateral haircuts
     - lf.slotting: Specialised lending slotting
-    - lf.aggregator: Result aggregation
     - lf.audit: Audit trail formatting
 """
 
 # Import namespace modules to register namespaces on module load
-import rwa_calc.engine.aggregator_namespace  # noqa: F401
 import rwa_calc.engine.audit_namespace  # noqa: F401
 
 from .aggregator import OutputAggregator, create_output_aggregator
-from .aggregator_namespace import AggregatorLazyFrame
 from .audit_namespace import AuditExpr, AuditLazyFrame
 from .comparison import CapitalImpactAnalyzer, DualFrameworkRunner, TransitionalScheduleRunner
 from .hierarchy import HierarchyResolver, create_hierarchy_resolver
@@ -59,7 +56,6 @@ __all__ = [
     "create_pipeline",
     "create_test_pipeline",
     # Namespace classes
-    "AggregatorLazyFrame",
     "AuditLazyFrame",
     "AuditExpr",
 ]

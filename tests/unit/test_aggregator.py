@@ -21,15 +21,13 @@ from rwa_calc.contracts.bundles import (
     SlottingResultBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine._aggregator_helpers import (
+from rwa_calc.engine.aggregator import (
+    OutputAggregator,
     compute_el_portfolio_summary,
+    create_output_aggregator,
     generate_post_crm_detailed,
     prepare_irb_results,
     prepare_sa_results,
-)
-from rwa_calc.engine.aggregator import (
-    OutputAggregator,
-    create_output_aggregator,
 )
 
 # =============================================================================

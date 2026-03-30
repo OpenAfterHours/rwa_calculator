@@ -54,7 +54,7 @@ from rwa_calc.contracts.protocols import (
     SACalculatorProtocol,
     SlottingCalculatorProtocol,
 )
-from rwa_calc.engine._aggregator_helpers import (
+from rwa_calc.engine.aggregator import (
     apply_floor_with_impact,
     compute_el_portfolio_summary,
     generate_post_crm_detailed,

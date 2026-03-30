@@ -1,11 +1,11 @@
-"""Unit tests for _aggregator_helpers module."""
+"""Unit tests for aggregator utility functions."""
 
 from __future__ import annotations
 
 import polars as pl
 import pytest
 
-from rwa_calc.engine._aggregator_helpers import (
+from rwa_calc.engine.aggregator import (
     FLOOR_IMPACT_SCHEMA,
     IRB_APPROACHES,
     RESULT_SCHEMA,

@@ -575,9 +575,7 @@ def _polars_maturity_adjustment_expr(
 
     Thin wrapper around ``_maturity_adjustment_expr_from_pd``.
     """
-    return _maturity_adjustment_expr_from_pd(
-        pl.col("pd_floored"), maturity_floor, maturity_cap
-    )
+    return _maturity_adjustment_expr_from_pd(pl.col("pd_floored"), maturity_floor, maturity_cap)
 
 
 # =============================================================================
@@ -772,7 +770,6 @@ def _run_scalar_via_vectorized(
 # =============================================================================
 # SCALAR CALCULATIONS (wrappers around vectorized expressions)
 # =============================================================================
-
 
 
 def calculate_correlation(

@@ -271,6 +271,7 @@ class SlottingCalculator:
             "framework": "CRR" if config.is_crr else "Basel 3.1",
         }
 
+
 def create_slotting_calculator() -> SlottingCalculator:
     """
     Create a slotting calculator instance.

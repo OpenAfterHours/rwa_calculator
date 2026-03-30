@@ -19,10 +19,9 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 — register namespace
+import rwa_calc.engine.irb.namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.engine.irb.formulas import calculate_double_default_k
-
 
 # =============================================================================
 # HELPERS

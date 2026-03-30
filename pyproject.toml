@@ -125,6 +125,9 @@ exclude = ["src/rwa_calc/ui/marimo/"]
 unresolved-attribute = "ignore"   # Polars namespaces (.rwa_sa, .irb, etc.) + union narrowing
 invalid-argument-type = "ignore"  # Polars type[DataType] vs DataType
 invalid-assignment = "ignore"     # Polars ChainedThen vs Then in when/then chains
+invalid-parameter-default = "ignore"  # Polars pl.String as DataType default
+no-matching-overload = "ignore"   # dict.fromkeys with Polars DataType values
+not-subscriptable = "ignore"      # LazyFrame.collect() returns DataFrame|InProcessQuery
 
 [dependency-groups]
 dev = [

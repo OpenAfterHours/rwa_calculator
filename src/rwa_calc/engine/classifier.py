@@ -32,7 +32,6 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -100,16 +99,6 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
 }
 
 
-@dataclass
-class ClassificationError:
-    """Error encountered during exposure classification."""
-
-    error_type: str
-    message: str
-    exposure_reference: str | None = None
-    context: dict = field(default_factory=dict)
-
-
 class ExposureClassifier:
     """
     Classify exposures by exposure class and approach.
@@ -142,8 +131,6 @@ class ExposureClassifier:
         Returns:
             ClassifiedExposuresBundle with exposures split by approach
         """
-        errors: list[ClassificationError] = []
-
         # Step 1: Join counterparty attributes (1 node)
         exposures = self._add_counterparty_attributes(
             data.exposures,
@@ -174,7 +161,7 @@ class ExposureClassifier:
         classified = self._derive_independent_flags(exposures, config, schema_names)
 
         # Step 3: SME + retail classification (1 .with_columns)
-        classified = self._classify_sme_and_retail(classified, config)
+        classified = self._classify_sme_and_retail(classified, config, schema_names)
 
         # Step 4: Corporate → retail reclassification (1 .with_columns)
         classified = self._reclassify_corporate_to_retail(
@@ -188,17 +175,24 @@ class ExposureClassifier:
         # Otherwise, falls back to org-wide IRBPermissions in _determine_approach_and_finalize.
         model_permissions = data.model_permissions
         if model_permissions is not None:
-            classified = self._resolve_model_permissions(classified, model_permissions)
+            classified = self._resolve_model_permissions(
+                classified, model_permissions, schema_names
+            )
 
         # Step 5: Approach assignment + finalization (1 .with_columns)
         classified = self._determine_approach_and_finalize(
-            classified, config, has_model_permissions=model_permissions is not None
+            classified,
+            config,
+            schema_names,
+            has_model_permissions=model_permissions is not None,
         )
 
         # Step 6: Split by approach (filter/select — no depth added)
-        sa_exposures = self._filter_by_approach(classified, ApproachType.SA)
-        irb_exposures = self._filter_irb_exposures(classified)
-        slotting_exposures = self._filter_by_approach(classified, ApproachType.SLOTTING)
+        sa_exposures = classified.filter(pl.col("approach") == ApproachType.SA.value)
+        irb_exposures = classified.filter(
+            pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+        )
+        slotting_exposures = classified.filter(pl.col("approach") == ApproachType.SLOTTING.value)
         classification_audit = self._build_audit_trail(classified)
 
         return ClassifiedExposuresBundle(
@@ -212,7 +206,7 @@ class ExposureClassifier:
             provisions=data.provisions,
             counterparty_lookup=data.counterparty_lookup,
             classification_audit=classification_audit,
-            classification_errors=errors,
+            classification_errors=[],
         )
 
     # =========================================================================
@@ -379,6 +373,7 @@ class ExposureClassifier:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        schema_names: set[str],
     ) -> pl.LazyFrame:
         """
         Merge SME, retail, and QRRE classification into a single .with_columns().
@@ -411,7 +406,6 @@ class ExposureClassifier:
         )
 
         # QRRE qualification: revolving, retail, under QRRE limit (CRR Art. 147(5))
-        schema_names = set(exposures.collect_schema().names())
         has_revolving = "is_revolving" in schema_names
         has_facility_limit = "facility_limit" in schema_names
 
@@ -560,6 +554,7 @@ class ExposureClassifier:
         self,
         exposures: pl.LazyFrame,
         model_permissions: pl.LazyFrame,
+        schema_names: set[str],
     ) -> pl.LazyFrame:
         """
         Join exposures with model_permissions to produce per-row permission flags.
@@ -580,7 +575,6 @@ class ExposureClassifier:
         Exposures without a model_id get both flags as False (→ SA fallback).
         """
         # Ensure model_id column exists on exposures
-        schema_names = set(exposures.collect_schema().names())
         if "model_id" not in schema_names:
             return exposures.with_columns(
                 pl.lit(False).alias("model_airb_permitted"),
@@ -673,6 +667,7 @@ class ExposureClassifier:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        schema_names: set[str],
         *,
         has_model_permissions: bool = False,
     ) -> pl.LazyFrame:
@@ -692,11 +687,21 @@ class ExposureClassifier:
         """
         # Ensure internal_pd exists (added by hierarchy resolver; may be absent
         # when classifier is invoked directly in tests without full pipeline)
-        if "internal_pd" not in set(exposures.collect_schema().names()):
+        if "internal_pd" not in schema_names:
             exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
 
-        sl_airb = self._check_sl_airb_permitted(config)
-        sl_slotting = self._check_slotting_permitted(config)
+        sl_airb = pl.lit(
+            config.irb_permissions.is_permitted(
+                ExposureClass.SPECIALISED_LENDING,
+                ApproachType.AIRB,
+            )
+        )
+        sl_slotting = pl.lit(
+            config.irb_permissions.is_permitted(
+                ExposureClass.SPECIALISED_LENDING,
+                ApproachType.SLOTTING,
+            )
+        )
 
         # Managed-as-retail-without-LGD must use SA
         managed_as_retail_without_lgd = (
@@ -797,110 +802,22 @@ class ExposureClassifier:
 
         Returns (airb_permitted_expr, firb_permitted_expr, firb_clear_expr).
         """
-        airb_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.AIRB
-        )
-        airb_corporate_sme = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE_SME, ApproachType.AIRB
-        )
-        airb_retail_mortgage = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_MORTGAGE, ApproachType.AIRB
-        )
-        airb_retail_other = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_OTHER, ApproachType.AIRB
-        )
-        airb_retail_qrre = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_QRRE, ApproachType.AIRB
-        )
-        airb_institution = config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION, ApproachType.AIRB
-        )
-        airb_cgcb = config.irb_permissions.is_permitted(
-            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.AIRB
-        )
+        perms = config.irb_permissions.permissions
+        airb_classes = [
+            ec.value for ec, approaches in perms.items() if ApproachType.AIRB in approaches
+        ]
+        firb_classes = [
+            ec.value for ec, approaches in perms.items() if ApproachType.FIRB in approaches
+        ]
+        firb_only_classes = [
+            ec.value
+            for ec, approaches in perms.items()
+            if ApproachType.FIRB in approaches and ApproachType.AIRB not in approaches
+        ]
 
-        firb_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.FIRB
-        )
-        firb_corporate_sme = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE_SME, ApproachType.FIRB
-        )
-        firb_institution = config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION, ApproachType.FIRB
-        )
-        firb_cgcb = config.irb_permissions.is_permitted(
-            ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.FIRB
-        )
-
-        # A-IRB expression: matches per-class permission
-        airb_expr = (
-            (
-                (pl.col("exposure_class") == ExposureClass.RETAIL_MORTGAGE.value)
-                & pl.lit(airb_retail_mortgage)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
-                & pl.lit(airb_retail_other)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.RETAIL_QRRE.value)
-                & pl.lit(airb_retail_qrre)
-            )
-            | ((pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(airb_corporate))
-            | (
-                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
-                & pl.lit(airb_corporate_sme)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
-                & pl.lit(airb_institution)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-                & pl.lit(airb_cgcb)
-            )
-        ) & has_internal_rating
-
-        # F-IRB expression: matches per-class permission (retail not eligible for FIRB)
-        firb_expr = (
-            ((pl.col("exposure_class") == ExposureClass.CORPORATE.value) & pl.lit(firb_corporate))
-            | (
-                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
-                & pl.lit(firb_corporate_sme)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
-                & pl.lit(firb_institution)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-                & pl.lit(firb_cgcb)
-            )
-        ) & has_internal_rating
-
-        # FIRB LGD clearing: FIRB permitted AND NOT AIRB permitted
-        firb_clear = (
-            (
-                (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
-                & pl.lit(firb_corporate)
-                & pl.lit(not airb_corporate)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.CORPORATE_SME.value)
-                & pl.lit(firb_corporate_sme)
-                & pl.lit(not airb_corporate_sme)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.INSTITUTION.value)
-                & pl.lit(firb_institution)
-                & pl.lit(not airb_institution)
-            )
-            | (
-                (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-                & pl.lit(firb_cgcb)
-                & pl.lit(not airb_cgcb)
-            )
-        ) & has_internal_rating
+        airb_expr = pl.col("exposure_class").is_in(airb_classes) & has_internal_rating
+        firb_expr = pl.col("exposure_class").is_in(firb_classes) & has_internal_rating
+        firb_clear = pl.col("exposure_class").is_in(firb_only_classes) & has_internal_rating
 
         return airb_expr, firb_expr, firb_clear
 
@@ -949,48 +866,8 @@ class ExposureClassifier:
         return expr
 
     # =========================================================================
-    # Permission helpers (retained unchanged)
+    # Audit trail
     # =========================================================================
-
-    def _check_slotting_permitted(self, config: CalculationConfig) -> pl.Expr:
-        """Check if slotting is permitted."""
-        if config.irb_permissions.is_permitted(
-            ExposureClass.SPECIALISED_LENDING,
-            ApproachType.SLOTTING,
-        ):
-            return pl.lit(True)
-        return pl.lit(False)
-
-    def _check_sl_airb_permitted(self, config: CalculationConfig) -> pl.Expr:
-        """Check if A-IRB is permitted specifically for SPECIALISED_LENDING."""
-        if config.irb_permissions.is_permitted(
-            ExposureClass.SPECIALISED_LENDING,
-            ApproachType.AIRB,
-        ):
-            return pl.lit(True)
-        return pl.lit(False)
-
-    # =========================================================================
-    # Filters and audit trail (retained unchanged)
-    # =========================================================================
-
-    def _filter_by_approach(
-        self,
-        exposures: pl.LazyFrame,
-        approach: ApproachType,
-    ) -> pl.LazyFrame:
-        """Filter exposures by calculation approach."""
-        return exposures.filter(pl.col("approach") == approach.value)
-
-    def _filter_irb_exposures(
-        self,
-        exposures: pl.LazyFrame,
-    ) -> pl.LazyFrame:
-        """Filter exposures using IRB approach (F-IRB or A-IRB)."""
-        return exposures.filter(
-            (pl.col("approach") == ApproachType.FIRB.value)
-            | (pl.col("approach") == ApproachType.AIRB.value)
-        )
 
     def _build_audit_trail(
         self,
@@ -1045,13 +922,3 @@ class ExposureClassifier:
                 ).alias("classification_reason"),
             ]
         )
-
-
-def create_exposure_classifier() -> ExposureClassifier:
-    """
-    Create an exposure classifier instance.
-
-    Returns:
-        ExposureClassifier ready for use
-    """
-    return ExposureClassifier()

@@ -1,0 +1,718 @@
+"""
+Guarantee substitution for CRM processing.
+
+Pipeline position:
+    Collateral -> apply_guarantees -> Finalise EAD
+
+Key responsibilities:
+- Multi-level guarantee resolution (direct / facility / counterparty)
+- Multi-guarantor row splitting
+- Cross-approach CCF substitution (IRB exposure + SA guarantor)
+- Guarantor attribute lookup for risk weight substitution
+
+References:
+    CRR Art. 213-217: Unfunded credit protection
+    CRE22.70-85: Basel 3.1 guarantee substitution
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import polars as pl
+
+from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.ccf import (
+    drawn_for_ead,
+    interest_for_ead,
+    on_balance_ead,
+    sa_ccf_expression,
+)
+from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
+from rwa_calc.engine.crm.constants import DIRECT_BENEFICIARY_TYPES
+
+if TYPE_CHECKING:
+    from rwa_calc.contracts.config import CalculationConfig
+
+
+def apply_guarantees(
+    exposures: pl.LazyFrame,
+    guarantees: pl.LazyFrame,
+    counterparty_lookup: pl.LazyFrame,
+    config: CalculationConfig,
+    rating_inheritance: pl.LazyFrame | None = None,
+    is_basel_3_1: bool = False,
+) -> pl.LazyFrame:
+    """
+    Apply guarantee substitution.
+
+    For guaranteed portion, substitute borrower RW with guarantor RW.
+
+    Args:
+        exposures: Exposures with EAD
+        guarantees: Guarantee data
+        counterparty_lookup: For guarantor risk weights
+        config: Calculation configuration
+        rating_inheritance: For guarantor CQS lookup
+        is_basel_3_1: Whether Basel 3.1 framework applies
+
+    Returns:
+        Exposures with guarantee effects applied
+    """
+    # Default protection_type to "guarantee" if not provided (backward compatibility)
+    guar_input_schema = guarantees.collect_schema()
+    if "protection_type" not in guar_input_schema.names():
+        guarantees = guarantees.with_columns(
+            pl.lit("guarantee").alias("protection_type"),
+        )
+    else:
+        # Fill nulls with "guarantee" (default for legacy data)
+        guarantees = guarantees.with_columns(
+            pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
+        )
+
+    # Expand facility/counterparty-level guarantees to exposure-level
+    guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
+
+    # Add parent_exposure_reference for traceability (before any splitting)
+    exposures = exposures.with_columns(
+        pl.col("exposure_reference").alias("parent_exposure_reference"),
+    )
+
+    # Split into multi-guarantor vs single/no-guarantor paths
+    exposures = _apply_guarantee_splits(guarantees, exposures)
+
+    # Look up guarantor's entity type, country code, and CQS for risk weight substitution
+    # Join with counterparty to get guarantor's entity type and country
+    cp_schema = counterparty_lookup.collect_schema()
+    cp_select_cols = [
+        pl.col("counterparty_reference"),
+        pl.col("entity_type").str.to_lowercase().alias("guarantor_entity_type"),
+    ]
+    if "country_code" in cp_schema.names():
+        cp_select_cols.append(pl.col("country_code").alias("guarantor_country_code"))
+    if "is_ccp_client_cleared" in cp_schema.names():
+        cp_select_cols.append(
+            pl.col("is_ccp_client_cleared").alias("guarantor_is_ccp_client_cleared")
+        )
+
+    exposures = exposures.join(
+        counterparty_lookup.select(cp_select_cols),
+        left_on="guarantor_reference",
+        right_on="counterparty_reference",
+        how="left",
+    )
+
+    # Ensure optional guarantor columns exist (fill null if not in counterparty data)
+    if "guarantor_country_code" not in exposures.collect_schema().names():
+        exposures = exposures.with_columns(
+            pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
+        )
+    if "guarantor_is_ccp_client_cleared" not in exposures.collect_schema().names():
+        exposures = exposures.with_columns(
+            pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"),
+        )
+
+    # Look up guarantor's CQS, rating type, PD, and internal_pd from ratings
+    if rating_inheritance is not None:
+        ri_schema = rating_inheritance.collect_schema()
+        ri_cols = [
+            pl.col("counterparty_reference"),
+            pl.col("cqs").alias("guarantor_cqs"),
+        ]
+        if "rating_type" in ri_schema.names():
+            ri_cols.append(pl.col("rating_type").alias("guarantor_rating_type"))
+        # Guarantor PD needed for Basel 3.1 parameter substitution (CRE22.70-85)
+        if "pd" in ri_schema.names():
+            ri_cols.append(pl.col("pd").alias("guarantor_pd"))
+        # Internal PD for approach determination (IRB requires internal rating)
+        if "internal_pd" in ri_schema.names():
+            ri_cols.append(pl.col("internal_pd").alias("guarantor_internal_pd"))
+
+        exposures = exposures.join(
+            rating_inheritance.select(ri_cols),
+            left_on="guarantor_reference",
+            right_on="counterparty_reference",
+            how="left",
+        )
+
+        if "rating_type" not in ri_schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                ]
+            )
+        if "pd" not in ri_schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
+                ]
+            )
+        if "internal_pd" not in ri_schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
+                ]
+            )
+    else:
+        exposures = exposures.with_columns(
+            [
+                pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
+                pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
+                pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
+                pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
+            ]
+        )
+
+    # Fill nulls for exposures without guarantees
+    exposures = exposures.with_columns(
+        [
+            pl.col("guarantor_entity_type").fill_null("").alias("guarantor_entity_type"),
+        ]
+    )
+
+    # Derive guarantor's exposure class from their entity type
+    # This is needed for post-CRM reporting where the guaranteed portion
+    # is reported under the guarantor's exposure class
+    exposures = exposures.with_columns(
+        [
+            pl.col("guarantor_entity_type")
+            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+            .alias("guarantor_exposure_class"),
+        ]
+    )
+
+    # Determine guarantor approach from IRB permissions AND rating type.
+    # A guarantor is treated under IRB only if:
+    # 1. The firm has IRB permission for the guarantor's exposure class, AND
+    # 2. The guarantor has an internal rating (PD) — indicating the firm
+    #    actively rates this counterparty under its IRB model.
+    # Counterparties with only external ratings (CQS) are treated under SA.
+    irb_exposure_class_values = set()
+    for ec, approaches in config.irb_permissions.permissions.items():
+        if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
+            irb_exposure_class_values.add(ec.value)
+
+    exposures = exposures.with_columns(
+        [
+            pl.when(
+                (pl.col("guarantor_exposure_class") != "")
+                & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
+                & pl.col("guarantor_internal_pd").is_not_null()
+            )
+            .then(pl.lit("irb"))
+            .when(pl.col("guarantor_exposure_class") != "")
+            .then(pl.lit("sa"))
+            .otherwise(pl.lit(""))
+            .alias("guarantor_approach"),
+        ]
+    )
+
+    # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
+    # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed portion
+    exposures = _apply_cross_approach_ccf(exposures)
+
+    # Add post-CRM composite attributes for regulatory reporting
+    # For the guaranteed portion, the post-CRM counterparty is the guarantor
+    exposures = exposures.with_columns(
+        [
+            # Post-CRM counterparty for guaranteed portion (guarantor or original)
+            pl.when(pl.col("guaranteed_portion") > 0)
+            .then(pl.col("guarantor_reference"))
+            .otherwise(pl.col("counterparty_reference"))
+            .alias("post_crm_counterparty_guaranteed"),
+            # Post-CRM exposure class for guaranteed portion (guarantor's class or original)
+            pl.when((pl.col("guaranteed_portion") > 0) & (pl.col("guarantor_exposure_class") != ""))
+            .then(pl.col("guarantor_exposure_class"))
+            .otherwise(pl.col("exposure_class"))
+            .alias("post_crm_exposure_class_guaranteed"),
+            # Flag indicating whether exposure has an effective guarantee
+            (pl.col("guaranteed_portion") > 0).alias("is_guaranteed"),
+        ]
+    )
+
+    # Note: Transient columns (guarantor_entity_type, guarantor_cqs, etc.) are kept
+    # because downstream SA/IRB calculators need them for risk weight substitution.
+    # They can be dropped in the final output aggregation if needed.
+
+    return exposures
+
+
+def _resolve_guarantees_multi_level(
+    guarantees: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """
+    Expand facility and counterparty-level guarantees to exposure-level.
+
+    Direct (loan/contingent) guarantees pass through unchanged. Facility-level
+    guarantees are allocated pro-rata by ``ead_after_collateral`` to all child
+    exposures under that facility. Counterparty-level guarantees are allocated
+    pro-rata across all exposures of that counterparty.
+
+    For amount-based guarantees (``amount_covered``), the amount is split
+    proportionally. For percentage-based guarantees (``percentage_covered``),
+    the percentage passes through unchanged since it applies equally to each
+    child exposure's EAD.
+
+    References:
+        CRR Art. 213-217: Unfunded credit protection
+        CRE22.70-85: Basel 3.1 guarantee substitution
+
+    Args:
+        guarantees: Guarantee data with beneficiary_type and beneficiary_reference
+        exposures: Exposures with ead_after_collateral, parent_facility_reference,
+                   counterparty_reference
+
+    Returns:
+        Guarantees expanded to exposure-level beneficiary_reference
+    """
+    guar_schema = guarantees.collect_schema()
+
+    if "beneficiary_type" not in guar_schema.names():
+        return guarantees
+
+    bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+
+    # --- 1. Direct guarantees — pass through unchanged ---
+    direct_guarantees = guarantees.filter(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
+
+    expanded_parts: list[pl.LazyFrame] = [direct_guarantees]
+
+    # --- 2. Facility-level guarantees — allocate pro-rata to child exposures ---
+    exp_schema = exposures.collect_schema()
+    has_parent_fac = "parent_facility_reference" in exp_schema.names()
+
+    if has_parent_fac:
+        facility_guarantees = guarantees.filter(bt_lower == "facility")
+
+        fac_exposures = exposures.filter(pl.col("parent_facility_reference").is_not_null()).select(
+            "exposure_reference",
+            "parent_facility_reference",
+            "ead_after_collateral",
+        )
+
+        fac_totals = fac_exposures.group_by("parent_facility_reference").agg(
+            pl.col("ead_after_collateral").sum().alias("_fac_total_ead"),
+        )
+
+        fac_exposures_weighted = (
+            fac_exposures.join(fac_totals, on="parent_facility_reference", how="left")
+            .with_columns(
+                pl.when(pl.col("_fac_total_ead") > 0)
+                .then(pl.col("ead_after_collateral") / pl.col("_fac_total_ead"))
+                .otherwise(pl.lit(0.0))
+                .alias("_weight"),
+            )
+            .select("exposure_reference", "parent_facility_reference", "_weight")
+        )
+
+        expanded_fac = (
+            facility_guarantees.join(
+                fac_exposures_weighted,
+                left_on="beneficiary_reference",
+                right_on="parent_facility_reference",
+                how="inner",
+            )
+            .with_columns(
+                (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
+                pl.col("exposure_reference").alias("beneficiary_reference"),
+                pl.lit("loan").alias("beneficiary_type"),
+            )
+            .drop("exposure_reference", "_weight")
+        )
+        expanded_parts.append(expanded_fac)
+
+    # --- 3. Counterparty-level guarantees — allocate pro-rata ---
+    cp_guarantees = guarantees.filter(bt_lower == "counterparty")
+
+    cp_exposures = exposures.select(
+        "exposure_reference",
+        "counterparty_reference",
+        "ead_after_collateral",
+    )
+
+    cp_totals = cp_exposures.group_by("counterparty_reference").agg(
+        pl.col("ead_after_collateral").sum().alias("_cp_total_ead"),
+    )
+
+    cp_exposures_weighted = (
+        cp_exposures.join(cp_totals, on="counterparty_reference", how="left")
+        .with_columns(
+            pl.when(pl.col("_cp_total_ead") > 0)
+            .then(pl.col("ead_after_collateral") / pl.col("_cp_total_ead"))
+            .otherwise(pl.lit(0.0))
+            .alias("_weight"),
+        )
+        .select("exposure_reference", "counterparty_reference", "_weight")
+    )
+
+    expanded_cp = (
+        cp_guarantees.join(
+            cp_exposures_weighted,
+            left_on="beneficiary_reference",
+            right_on="counterparty_reference",
+            how="inner",
+        )
+        .with_columns(
+            (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
+            pl.col("exposure_reference").alias("beneficiary_reference"),
+            pl.lit("loan").alias("beneficiary_type"),
+        )
+        .drop("exposure_reference", "_weight")
+    )
+    expanded_parts.append(expanded_cp)
+
+    return pl.concat(expanded_parts, how="diagonal")
+
+
+def _apply_guarantee_splits(
+    guarantees: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """
+    Split exposures with multiple guarantors into per-guarantor sub-rows.
+
+    For each exposure with N guarantors (N > 1), produces N+1 rows:
+    - N guarantor sub-rows, each with that guarantor's covered amount
+    - 1 remainder sub-row for the uncovered portion
+
+    Single-guarantor exposures keep the existing aggregation behavior.
+    Non-guaranteed exposures pass through unchanged.
+
+    References:
+        CRR Art. 215-217: Each guarantor's portion receives its own risk weight
+
+    Args:
+        guarantees: Exposure-level guarantees (after multi-level resolution)
+        exposures: Exposures with ead_after_collateral and parent_exposure_reference
+
+    Returns:
+        Exposures with guarantee portions set, potentially with additional rows
+    """
+    guar_schema = guarantees.collect_schema()
+    guar_cols = guar_schema.names()
+
+    # Pre-aggregate by (beneficiary_reference, guarantor) so that multiple
+    # protections from the same guarantor (e.g. direct + facility-level) are
+    # summed before we decide whether to split.
+    agg_exprs: list[pl.Expr] = [
+        pl.col("amount_covered").sum().alias("amount_covered"),
+    ]
+    if "percentage_covered" in guar_cols:
+        agg_exprs.append(pl.col("percentage_covered").first().alias("percentage_covered"))
+    if "guarantee_reference" in guar_cols:
+        agg_exprs.append(pl.col("guarantee_reference").first().alias("guarantee_reference"))
+    if "protection_type" in guar_cols:
+        agg_exprs.append(pl.col("protection_type").first().alias("protection_type"))
+
+    guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
+
+    # Refresh schema after aggregation
+    guar_schema = guarantees.collect_schema()
+    guar_cols = guar_schema.names()
+
+    # Determine which guarantee columns are available for selection
+    guar_select = ["beneficiary_reference", "amount_covered", "guarantor"]
+    if "percentage_covered" in guar_cols:
+        guar_select.append("percentage_covered")
+    if "guarantee_reference" in guar_cols:
+        guar_select.append("guarantee_reference")
+    if "protection_type" in guar_cols:
+        guar_select.append("protection_type")
+
+    # Count distinct guarantors per exposure
+    guarantee_counts = guarantees.group_by("beneficiary_reference").agg(
+        pl.len().alias("guarantee_count"),
+    )
+
+    # Identify which exposures have guarantees and how many
+    exposures_with_counts = exposures.join(
+        guarantee_counts,
+        left_on="exposure_reference",
+        right_on="beneficiary_reference",
+        how="left",
+    ).with_columns(pl.col("guarantee_count").fill_null(0))
+
+    # --- Path 1: No guarantees ---
+    no_guarantee = exposures_with_counts.filter(pl.col("guarantee_count") == 0).with_columns(
+        pl.lit(0.0).alias("guaranteed_portion"),
+        pl.col("ead_after_collateral").alias("unguaranteed_portion"),
+        pl.lit(None).cast(pl.String).alias("guarantor_reference"),
+        pl.lit(0.0).alias("guarantee_amount"),
+        pl.lit(None).cast(pl.String).alias("protection_type"),
+    )
+
+    # --- Path 2: Single guarantor (backward compatible, no split) ---
+    single_guar_exposures = exposures_with_counts.filter(pl.col("guarantee_count") == 1)
+    single_guarantees = guarantees.select(guar_select)
+
+    single = single_guar_exposures.join(
+        single_guarantees,
+        left_on="exposure_reference",
+        right_on="beneficiary_reference",
+        how="inner",
+    )
+
+    # Resolve guarantee amount (amount_covered or percentage_covered)
+    if "percentage_covered" in guar_cols:
+        single = single.with_columns(
+            pl.when(
+                (
+                    pl.col("amount_covered").is_null()
+                    | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
+                )
+                & pl.col("percentage_covered").is_not_null()
+                & (pl.col("percentage_covered") > 0)
+            )
+            .then(pl.col("percentage_covered") * pl.col("ead_after_collateral"))
+            .otherwise(pl.col("amount_covered").fill_null(0.0))
+            .alias("guarantee_amount"),
+        )
+    else:
+        single = single.with_columns(
+            pl.col("amount_covered").fill_null(0.0).alias("guarantee_amount"),
+        )
+
+    single = single.with_columns(
+        pl.min_horizontal("guarantee_amount", "ead_after_collateral").alias("guaranteed_portion"),
+        pl.col("guarantor").alias("guarantor_reference"),
+    ).with_columns(
+        (pl.col("ead_after_collateral") - pl.col("guaranteed_portion")).alias(
+            "unguaranteed_portion"
+        ),
+    )
+
+    # --- Path 3: Multiple guarantors — row splitting ---
+    multi_guar_exposures = exposures_with_counts.filter(pl.col("guarantee_count") > 1)
+    multi_guarantees = guarantees.select(guar_select)
+
+    # Join each guarantee to its exposure (1:N → produces N rows per exposure)
+    multi_joined = multi_guar_exposures.join(
+        multi_guarantees,
+        left_on="exposure_reference",
+        right_on="beneficiary_reference",
+        how="inner",
+    )
+
+    # Resolve per-guarantor amount (same logic as single path)
+    if "percentage_covered" in guar_cols:
+        multi_joined = multi_joined.with_columns(
+            pl.when(
+                (
+                    pl.col("amount_covered").is_null()
+                    | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
+                )
+                & pl.col("percentage_covered").is_not_null()
+                & (pl.col("percentage_covered") > 0)
+            )
+            .then(pl.col("percentage_covered") * pl.col("ead_after_collateral"))
+            .otherwise(pl.col("amount_covered").fill_null(0.0))
+            .alias("_guar_amount"),
+        )
+    else:
+        multi_joined = multi_joined.with_columns(
+            pl.col("amount_covered").fill_null(0.0).alias("_guar_amount"),
+        )
+
+    # Cap total coverage to EAD using pro-rata scaling
+    multi_joined = (
+        multi_joined.with_columns(
+            pl.col("_guar_amount").sum().over("parent_exposure_reference").alias("_total_coverage"),
+        )
+        .with_columns(
+            pl.min_horizontal(
+                pl.lit(1.0),
+                pl.col("ead_after_collateral") / pl.col("_total_coverage"),
+            ).alias("_scale"),
+        )
+        .with_columns(
+            (pl.col("_guar_amount") * pl.col("_scale")).alias("_effective_amount"),
+        )
+    )
+
+    # Compute remainder per exposure
+    multi_joined = multi_joined.with_columns(
+        pl.col("_effective_amount")
+        .sum()
+        .over("parent_exposure_reference")
+        .alias("_total_effective"),
+    )
+
+    # Build guarantor sub-rows: each gets its guarantor's covered amount
+    guarantor_sub_rows = multi_joined.with_columns(
+        pl.col("_effective_amount").alias("guaranteed_portion"),
+        pl.lit(0.0).alias("unguaranteed_portion"),
+        pl.col("_effective_amount").alias("ead_after_collateral"),
+        pl.col("_effective_amount").alias("guarantee_amount"),
+        pl.col("guarantor").alias("guarantor_reference"),
+        pl.concat_str(
+            [pl.col("parent_exposure_reference"), pl.lit("__G_"), pl.col("guarantor")],
+        ).alias("exposure_reference"),
+    )
+
+    # Build remainder sub-rows: one per multi-guarantor exposure
+    # Use first row per exposure to get the base columns
+    remainder_sub_rows = (
+        multi_joined.sort("parent_exposure_reference", "guarantor")
+        .group_by("parent_exposure_reference", maintain_order=True)
+        .first()
+    ).with_columns(
+        pl.lit(0.0).alias("guaranteed_portion"),
+        (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("unguaranteed_portion"),
+        (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("ead_after_collateral"),
+        pl.lit(0.0).alias("guarantee_amount"),
+        pl.lit(None).cast(pl.String).alias("guarantor_reference"),
+        pl.lit(None).cast(pl.String).alias("protection_type"),
+        pl.concat_str(
+            [pl.col("parent_exposure_reference"), pl.lit("__REM")],
+        ).alias("exposure_reference"),
+    )
+
+    # Drop transient columns used during splitting
+    transient = [
+        "_guar_amount",
+        "_total_coverage",
+        "_scale",
+        "_effective_amount",
+        "_total_effective",
+        "amount_covered",
+    ]
+    if "percentage_covered" in guar_cols:
+        transient.append("percentage_covered")
+
+    def _drop_existing(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:
+        schema = lf.collect_schema()
+        to_drop = [c for c in cols if c in schema.names()]
+        return lf.drop(to_drop) if to_drop else lf
+
+    guarantor_sub_rows = _drop_existing(guarantor_sub_rows, transient)
+    remainder_sub_rows = _drop_existing(remainder_sub_rows, transient)
+
+    # Also drop transient/join columns from single and no-guarantee paths
+    single_drop = ["amount_covered"]
+    if "percentage_covered" in guar_cols:
+        single_drop.append("percentage_covered")
+    single = _drop_existing(single, single_drop)
+
+    # Concat all paths
+    parts = [no_guarantee, single, guarantor_sub_rows, remainder_sub_rows]
+    return pl.concat(parts, how="diagonal_relaxed")
+
+
+def _apply_cross_approach_ccf(
+    exposures: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """
+    Apply cross-approach CCF substitution for guaranteed exposures.
+
+    When an IRB exposure (F-IRB or A-IRB) is guaranteed by an SA counterparty,
+    the guaranteed portion must use SA CCFs for COREP C07 reporting.
+    If the guarantor is also IRB, the original IRB CCF is retained.
+
+    Returns:
+        Exposures with CCF-adjusted guaranteed/unguaranteed portions
+    """
+    schema = exposures.collect_schema()
+    has_interest = "interest" in schema.names()
+    has_risk_type = "risk_type" in schema.names()
+
+    if not has_risk_type:
+        return exposures
+
+    # Compute guarantee ratio
+    exposures = exposures.with_columns(
+        [
+            pl.when(pl.col("ead_after_collateral") > 0)
+            .then(
+                (pl.col("guaranteed_portion") / pl.col("ead_after_collateral")).clip(
+                    upper_bound=1.0
+                )
+            )
+            .otherwise(pl.lit(0.0))
+            .alias("guarantee_ratio"),
+        ]
+    )
+
+    # Determine if cross-approach substitution is needed
+    # Only IRB exposures with SA guarantors and off-balance-sheet items
+    needs_ccf_sub = (
+        pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+        & (pl.col("guarantor_approach") == "sa")
+        & (pl.col("guaranteed_portion") > 0)
+        & (pl.col("nominal_amount") > 0)
+    )
+
+    # Compute SA CCF for the guaranteed portion
+    sa_ccf = sa_ccf_expression()
+
+    exposures = exposures.with_columns(
+        [
+            # Preserve original CCF
+            pl.col("ccf").alias("ccf_original"),
+            # CCF for guaranteed portion: SA CCF if cross-approach, else original
+            pl.when(needs_ccf_sub).then(sa_ccf).otherwise(pl.col("ccf")).alias("ccf_guaranteed"),
+            # CCF for unguaranteed portion: always original
+            pl.col("ccf").alias("ccf_unguaranteed"),
+        ]
+    )
+
+    # Recalculate EAD with split CCFs when cross-approach substitution applies
+    # Use provision-adjusted on-balance and nominal when available
+    has_provision_cols = "provision_on_drawn" in schema.names()
+
+    if has_provision_cols and has_interest:
+        on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(
+            lower_bound=0.0
+        ) + interest_for_ead()
+    elif has_provision_cols:
+        on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(lower_bound=0.0)
+    elif has_interest:
+        on_bal = on_balance_ead()
+    else:
+        on_bal = drawn_for_ead()
+
+    # Use nominal_after_provision if available, else nominal_amount
+    nominal_col = (
+        pl.col("nominal_after_provision")
+        if "nominal_after_provision" in schema.names()
+        else pl.col("nominal_amount")
+    )
+    ratio = pl.col("guarantee_ratio")
+
+    new_guaranteed = (on_bal * ratio) + (nominal_col * ratio * pl.col("ccf_guaranteed"))
+    new_unguaranteed = (on_bal * (pl.lit(1.0) - ratio)) + (
+        nominal_col * (pl.lit(1.0) - ratio) * pl.col("ccf_unguaranteed")
+    )
+
+    exposures = exposures.with_columns(
+        [
+            pl.when(needs_ccf_sub)
+            .then(new_guaranteed)
+            .otherwise(pl.col("guaranteed_portion"))
+            .alias("guaranteed_portion"),
+            pl.when(needs_ccf_sub)
+            .then(new_unguaranteed)
+            .otherwise(pl.col("unguaranteed_portion"))
+            .alias("unguaranteed_portion"),
+        ]
+    )
+
+    # Update ead_after_collateral and ead_from_ccf when substitution occurs
+    exposures = exposures.with_columns(
+        [
+            pl.when(needs_ccf_sub)
+            .then(pl.col("guaranteed_portion") + pl.col("unguaranteed_portion"))
+            .otherwise(pl.col("ead_after_collateral"))
+            .alias("ead_after_collateral"),
+            pl.when(needs_ccf_sub)
+            .then(
+                nominal_col * ratio * pl.col("ccf_guaranteed")
+                + nominal_col * (pl.lit(1.0) - ratio) * pl.col("ccf_unguaranteed")
+            )
+            .otherwise(pl.col("ead_from_ccf"))
+            .alias("ead_from_ccf"),
+        ]
+    )
+
+    return exposures

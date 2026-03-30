@@ -23,7 +23,6 @@ import rwa_calc.engine.irb.namespace  # noqa: F401 — register namespace
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.engine.irb.formulas import calculate_double_default_k
 
-
 # =============================================================================
 # HELPERS
 # =============================================================================

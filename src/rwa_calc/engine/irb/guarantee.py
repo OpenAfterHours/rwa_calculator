@@ -36,9 +36,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
 
-def apply_guarantee_substitution(
-    lf: pl.LazyFrame, config: CalculationConfig
-) -> pl.LazyFrame:
+def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     """
     Apply guarantee substitution for IRB exposures with unfunded credit protection.
 
@@ -97,9 +95,7 @@ def apply_guarantee_substitution(
     lf = _apply_parameter_substitution(lf, cols, config, use_parameter_substitution)
 
     # --- Double default treatment (CRR Art. 153(3), 202-203) ---
-    lf = _apply_double_default(
-        lf, cols, config, has_guarantor_pd, use_parameter_substitution
-    )
+    lf = _apply_double_default(lf, cols, config, has_guarantor_pd, use_parameter_substitution)
 
     # --- Blend RWA and adjust expected loss ---
     ead_col = "ead_final" if "ead_final" in cols else "ead"
@@ -354,9 +350,7 @@ def _apply_double_default(
 
     # Eligibility conditions per Art. 202:
     # (a) Underlying is corporate (not sovereign, institution, retail, equity, SL)
-    _exp_class_upper = (
-        pl.col("exposure_class").cast(pl.String).fill_null("").str.to_uppercase()
-    )
+    _exp_class_upper = pl.col("exposure_class").cast(pl.String).fill_null("").str.to_uppercase()
     _is_corporate_underlying = _exp_class_upper.str.contains("CORPORATE")
 
     # (b) Guarantor is institution, central govt, or rated corporate (CQS <= 2)
@@ -417,9 +411,7 @@ def _apply_double_default(
             pl.when(_is_dd_eligible & (rw_dd_floored < pl.col("guarantor_rw")))
             .then(pl.lit(True))
             .otherwise(
-                pl.col("_is_pd_substitution")
-                if use_parameter_substitution
-                else pl.lit(False)
+                pl.col("_is_pd_substitution") if use_parameter_substitution else pl.lit(False)
             )
             .alias("_is_dd_applied"),
         ]
@@ -459,9 +451,7 @@ def _adjust_expected_loss(
                         # substituted EL for guaranteed
                         pl.col("expected_loss_irb_original")
                         * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
-                        + guarantor_pd_floored
-                        * firb_lgd_senior
-                        * pl.col("guaranteed_portion")
+                        + guarantor_pd_floored * firb_lgd_senior * pl.col("guaranteed_portion")
                     )
                     .otherwise(
                         # SA guarantor: SA has no EL -- only unguaranteed retains EL

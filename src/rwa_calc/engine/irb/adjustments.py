@@ -134,9 +134,7 @@ def apply_defaulted_treatment(lf: pl.LazyFrame, config: CalculationConfig) -> pl
 # =============================================================================
 
 
-def apply_post_model_adjustments(
-    lf: pl.LazyFrame, config: CalculationConfig
-) -> pl.LazyFrame:
+def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     """
     Apply post-model adjustments to IRB RWEA and EL (Basel 3.1 only).
 

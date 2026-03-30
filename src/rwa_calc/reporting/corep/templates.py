@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-
 # =============================================================================
 # COREP ROW / COLUMN / SECTION METADATA
 # =============================================================================

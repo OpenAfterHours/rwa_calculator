@@ -68,6 +68,32 @@ breakdown, risk weight breakdown, memorandum items).
 - Tests: Need rewrite to validate correct template structure.
 - Detailed feature docs: Done — see [COREP Reporting](../features/corep-reporting.md) (all 9 templates documented)
 
+## Pillar III Disclosure Templates
+
+### Description
+Public disclosure templates under CRR Part 8 / Disclosure (CRR) Part for market transparency.
+CRR templates use the **UK** prefix; Basel 3.1 templates use the **UKB** prefix. These complement
+COREP supervisory returns with publicly available credit risk data.
+
+### Templates
+- **OV1** — Overview of risk-weighted exposure amounts (Art. 438(d))
+- **CR4** — SA exposure and CRM effects (Art. 444(e), 453(g-i))
+- **CR5** — SA risk weight allocation (Art. 444(e))
+- **CR6** — IRB exposures by exposure class and PD range (Art. 452(g))
+- **CR6-A** — Scope of IRB and SA use (Art. 452(b))
+- **CR7** — Credit derivatives effect on RWEA (Art. 453(j))
+- **CR7-A** — Extent of CRM techniques for IRB (Art. 453(g))
+- **CR8** — RWEA flow statements for IRB (Art. 438(h))
+- **CR10** — Slotting approach exposures (Art. 438(e))
+
+### Reference Documents
+- CRR: `docs/assets/crr-annex-xx-instructions-regarding-disclosure.PDF`, `crr-pillar3-irb-credit-risk-instructions.pdf`, `crr-pillar3-risk-weighted-exposure-instructions-leverage-ratio.pdf`, `crr-pillar3-specialised-lending-instructions.pdf`
+- Basel 3.1: `docs/assets/ps1-26-annex-xx-credit-risk-sa-disclosure-instructions.pdf`, `ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf`, `ps1-26-annex-xxiv-credit-risk-irb-disclosure-instructions.pdf`, `ps1-26-annex-ii-output-floor-and-capital-summaries-disclosure-instructions.pdf`
+
+### Status
+- Documentation: Done — see [Pillar III Disclosures](../features/pillar3-disclosures.md)
+- Code implementation: Not started
+
 ## Export
 
 ### Status

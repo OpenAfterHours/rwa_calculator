@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docs**: Add Pillar III disclosure documentation covering 9 quantitative credit risk templates (OV1, CR4, CR5, CR6, CR6-A, CR7, CR7-A, CR8, CR10) with CRR and Basel 3.1 column/row definitions
+- **Docs**: Add CRR vs Basel 3.1 disclosure differences page — template naming (UK→UKB), output floor rows, expanded risk weight columns, post-model adjustments, slotting CRM, equity transitional treatment
 - **Docs**: Expand COREP template comparison documentation to cover all 9 key credit risk templates (C 07.00, C 08.01–08.07, C 09.01–09.02) — previously only C 07.00, C 08.01, C 08.02 were documented
 - **Docs**: Add full CRR vs Basel 3.1 column/row reference for C 08.03 (PD ranges), C 08.04 (RWEA flow), C 08.06 (slotting), C 08.07 (scope of use), C 09.01 (geo SA), C 09.02 (geo IRB)
 

@@ -42,6 +42,13 @@ in one place.
     COREP template changes — column additions and removals, expanded risk weight bands,
     new real estate breakdowns, output floor columns, and post-model adjustments.
 
+-   **[Disclosure Differences](disclosure-differences.md)**
+
+    ---
+
+    Pillar III disclosure template changes — OV1 output floor rows, CR5 expanded risk
+    weight columns, CR6 post-model adjustments, CR7-A slotting CRM, CR10 HVCRE split.
+
 -   **[Impact Analysis](impact-analysis.md)**
 
     ---
@@ -63,4 +70,5 @@ in one place.
 - [CRR framework details](../user-guide/regulatory/crr.md)
 - [Basel 3.1 framework details](../user-guide/regulatory/basel31.md)
 - [Full COREP template specifications](../features/corep-reporting.md)
+- [Full Pillar III disclosure specifications](../features/pillar3-disclosures.md)
 - [Configuration guide](../user-guide/configuration.md)

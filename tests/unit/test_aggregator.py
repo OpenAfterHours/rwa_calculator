@@ -23,7 +23,11 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import (
     OutputAggregator,
+    compute_el_portfolio_summary,
     create_output_aggregator,
+    generate_post_crm_detailed,
+    prepare_irb_results,
+    prepare_sa_results,
 )
 
 # =============================================================================
@@ -1091,7 +1095,7 @@ class TestPostCRMApproachApplied:
             }
         )
 
-        result = aggregator._prepare_irb_results(irb_results).collect()
+        result = prepare_irb_results(irb_results).collect()
         assert result["approach_applied"][0] == "standardised"
 
     def test_partially_sa_guaranteed_irb_keeps_original(
@@ -1113,7 +1117,7 @@ class TestPostCRMApproachApplied:
             }
         )
 
-        result = aggregator._prepare_irb_results(irb_results).collect()
+        result = prepare_irb_results(irb_results).collect()
         assert result["approach_applied"][0] == "FIRB"
 
     def test_fully_irb_guaranteed_keeps_original(
@@ -1135,7 +1139,7 @@ class TestPostCRMApproachApplied:
             }
         )
 
-        result = aggregator._prepare_irb_results(irb_results).collect()
+        result = prepare_irb_results(irb_results).collect()
         assert result["approach_applied"][0] == "FIRB"
 
     def test_sa_exposure_unchanged(
@@ -1154,7 +1158,7 @@ class TestPostCRMApproachApplied:
             }
         )
 
-        result = aggregator._prepare_sa_results(sa_results).collect()
+        result = prepare_sa_results(sa_results).collect()
         assert result["approach_applied"][0] == "SA"
 
     def test_non_guaranteed_irb_unchanged(
@@ -1174,7 +1178,7 @@ class TestPostCRMApproachApplied:
             }
         )
 
-        result = aggregator._prepare_irb_results(irb_results).collect()
+        result = prepare_irb_results(irb_results).collect()
         assert result["approach_applied"][0] == "FIRB"
 
     def test_fully_sa_guaranteed_excluded_from_output_floor(
@@ -1256,8 +1260,8 @@ class TestPostCRMDetailedReportingApproach:
         )
 
         # Prepare IRB results (sets approach_applied)
-        prepared = aggregator._prepare_irb_results(irb_results)
-        detailed = aggregator._generate_post_crm_detailed(prepared)
+        prepared = prepare_irb_results(irb_results)
+        detailed = generate_post_crm_detailed(prepared)
         df = detailed.collect()
 
         assert "reporting_approach" in df.columns
@@ -1281,7 +1285,7 @@ class TestELPortfolioSummary:
 
     def test_returns_none_when_no_irb_results(self, aggregator: OutputAggregator) -> None:
         """Should return None when no IRB results are provided."""
-        result = aggregator._compute_el_portfolio_summary(None)
+        result = compute_el_portfolio_summary(None)
         assert result is None
 
     def test_returns_none_when_no_el_columns(self, aggregator: OutputAggregator) -> None:
@@ -1292,7 +1296,7 @@ class TestELPortfolioSummary:
                 "rwa_post_factor": [1000000.0],
             }
         )
-        result = aggregator._compute_el_portfolio_summary(irb)
+        result = compute_el_portfolio_summary(irb)
         assert result is None
 
     def test_basic_shortfall_computation(self, aggregator: OutputAggregator) -> None:
@@ -1308,7 +1312,7 @@ class TestELPortfolioSummary:
             }
         )
 
-        result = aggregator._compute_el_portfolio_summary(irb)
+        result = compute_el_portfolio_summary(irb)
 
         assert result is not None
         assert result.total_el_shortfall == pytest.approx(40000.0)
@@ -1330,7 +1334,7 @@ class TestELPortfolioSummary:
             }
         )
 
-        result = aggregator._compute_el_portfolio_summary(irb)
+        result = compute_el_portfolio_summary(irb)
 
         assert result is not None
         assert result.total_el_excess == pytest.approx(50000.0)
@@ -1353,7 +1357,7 @@ class TestELPortfolioSummary:
             }
         )
 
-        result = aggregator._compute_el_portfolio_summary(irb)
+        result = compute_el_portfolio_summary(irb)
 
         assert result is not None
         # T2 credit cap = 0.6% × 10M = 60,000
@@ -1372,7 +1376,7 @@ class TestELPortfolioSummary:
             }
         )
 
-        result = aggregator._compute_el_portfolio_summary(irb)
+        result = compute_el_portfolio_summary(irb)
 
         assert result is not None
         # T2 cap = 0.6% × 100M = 600,000
@@ -1393,7 +1397,7 @@ class TestELPortfolioSummary:
             }
         )
 
-        result = aggregator._compute_el_portfolio_summary(irb)
+        result = compute_el_portfolio_summary(irb)
 
         assert result is not None
         assert result.total_expected_loss == pytest.approx(80000.0)
@@ -1480,7 +1484,7 @@ class TestELPortfolioSummary:
             }
         )
 
-        result = aggregator._compute_el_portfolio_summary(irb)
+        result = compute_el_portfolio_summary(irb)
 
         assert result is not None
         assert result.total_irb_rwa == pytest.approx(2000000.0)

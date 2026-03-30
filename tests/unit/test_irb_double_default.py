@@ -77,31 +77,33 @@ def _make_guaranteed_frame(
     requires_fi_scalar: bool = False,
 ) -> pl.LazyFrame:
     """Build a LazyFrame representing a single guaranteed IRB exposure."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP_DD"],
-        "exposure_class": [exposure_class],
-        "pd": [pd],
-        "lgd": [lgd],
-        "lgd_floored": [lgd],
-        "pd_floored": [pd],
-        "ead_final": [ead_final],
-        "rwa": [rwa],
-        "risk_weight": [risk_weight],
-        "maturity": [maturity],
-        "guaranteed_portion": [guaranteed_portion],
-        "unguaranteed_portion": [unguaranteed_portion],
-        "guarantor_entity_type": [guarantor_entity_type],
-        "guarantor_exposure_class": [guarantor_exposure_class],
-        "guarantor_cqs": [guarantor_cqs],
-        "guarantor_pd": [guarantor_pd],
-        "guarantor_approach": [guarantor_approach],
-        "is_airb": [is_airb],
-        "expected_loss": [expected_loss],
-        "turnover_m": [turnover_m],
-        "requires_fi_scalar": [requires_fi_scalar],
-        "correlation": [0.15],
-        "k": [rwa / (ead_final * 12.5 * 1.06)],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP_DD"],
+            "exposure_class": [exposure_class],
+            "pd": [pd],
+            "lgd": [lgd],
+            "lgd_floored": [lgd],
+            "pd_floored": [pd],
+            "ead_final": [ead_final],
+            "rwa": [rwa],
+            "risk_weight": [risk_weight],
+            "maturity": [maturity],
+            "guaranteed_portion": [guaranteed_portion],
+            "unguaranteed_portion": [unguaranteed_portion],
+            "guarantor_entity_type": [guarantor_entity_type],
+            "guarantor_exposure_class": [guarantor_exposure_class],
+            "guarantor_cqs": [guarantor_cqs],
+            "guarantor_pd": [guarantor_pd],
+            "guarantor_approach": [guarantor_approach],
+            "is_airb": [is_airb],
+            "expected_loss": [expected_loss],
+            "turnover_m": [turnover_m],
+            "requires_fi_scalar": [requires_fi_scalar],
+            "correlation": [0.15],
+            "k": [rwa / (ead_final * 12.5 * 1.06)],
+        }
+    )
 
 
 # =============================================================================

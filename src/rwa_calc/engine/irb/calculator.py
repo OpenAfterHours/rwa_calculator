@@ -27,7 +27,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -55,15 +54,6 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
 
-@dataclass
-class IRBCalculationError:
-    """Error during IRB calculation."""
-
-    error_type: str
-    message: str
-    exposure_reference: str | None = None
-
-
 class IRBCalculator:
     """
     Calculate RWA using IRB approach.
@@ -76,14 +66,13 @@ class IRBCalculator:
     - CRR: Single PD floor (0.03%), no LGD floors, 1.06 scaling
     - Basel 3.1: Differentiated PD floors, LGD floors for A-IRB, no scaling
 
+    All methods delegate to the IRB namespace for formula calculations,
+    then apply supporting factors and wrap results.
+
     Usage:
         calculator = IRBCalculator()
         result = calculator.calculate(crm_bundle, config)
     """
-
-    def __init__(self) -> None:
-        """Initialize IRB calculator."""
-        self._firb_lgd_table: pl.DataFrame | None = None
 
     def calculate(
         self,
@@ -124,42 +113,22 @@ class IRBCalculator:
         config: CalculationConfig,
     ) -> IRBResultBundle:
         """
-        Calculate IRB RWA and return as a bundle.
-
-        Uses the IRB namespace for fluent calculations:
-        1. classify_approach - Determine F-IRB vs A-IRB
-        2. apply_firb_lgd - Apply supervisory LGD for F-IRB
-        3. prepare_columns - Ensure required columns exist
-        4. apply_all_formulas - Apply IRB formulas (PD floor, correlation, K, MA, RWA)
+        Calculate IRB RWA and return as a bundle with audit trail.
 
         Args:
             data: CRM-adjusted exposures
             config: Calculation configuration
 
         Returns:
-            IRBResultBundle with results and audit trail
+            IRBResultBundle with results, expected loss, and audit trail
         """
-        errors: list[IRBCalculationError] = []
-
-        # Apply IRB calculations using namespace for fluent pipeline
-        exposures = (
-            data.irb_exposures.irb.classify_approach(config)
-            .irb.apply_firb_lgd(config)
-            .irb.prepare_columns(config)
-            .irb.apply_all_formulas(config)
-            .irb.apply_post_model_adjustments(config)
-            .irb.compute_el_shortfall_excess()
-            .irb.apply_guarantee_substitution(config)
-        )
-
-        # Apply supporting factors (CRR only - Art. 501)
-        exposures = self._apply_supporting_factors(exposures, config)
+        exposures = self._run_irb_chain(data.irb_exposures, config)
 
         return IRBResultBundle(
             results=exposures,
             expected_loss=exposures.irb.select_expected_loss(),
             calculation_audit=exposures.irb.build_audit(),
-            errors=errors,
+            errors=[],
         )
 
     def calculate_unified(
@@ -171,8 +140,7 @@ class IRBCalculator:
         Apply IRB formulas to IRB rows on a unified frame.
 
         Uses filter-process-merge to avoid running expensive IRB formulas
-        (normal_ppf, normal_cdf) on non-IRB rows. Filters IRB rows out,
-        runs the namespace chain on the subset, then concats back.
+        (normal_ppf, normal_cdf) on non-IRB rows.
 
         Args:
             exposures: Unified frame with all approaches
@@ -185,25 +153,9 @@ class IRBCalculator:
             pl.col("approach") == ApproachType.AIRB.value
         )
 
-        # Split: separate IRB rows from non-IRB
         non_irb = exposures.filter(~is_irb)
-        irb = exposures.filter(is_irb)
+        irb = self._run_irb_chain(exposures.filter(is_irb), config)
 
-        # Process: run IRB namespace chain on IRB rows only
-        irb = (
-            irb.irb.classify_approach(config)
-            .irb.apply_firb_lgd(config)
-            .irb.prepare_columns(config)
-            .irb.apply_all_formulas(config)
-            .irb.apply_post_model_adjustments(config)
-            .irb.compute_el_shortfall_excess()
-            .irb.apply_guarantee_substitution(config)
-        )
-
-        # Apply supporting factors (CRR only — Art. 501)
-        irb = self._apply_supporting_factors(irb, config)
-
-        # Merge: concat IRB results back with non-IRB rows
         return pl.concat([non_irb, irb], how="diagonal_relaxed")
 
     def calculate_branch(
@@ -215,7 +167,7 @@ class IRBCalculator:
         Calculate IRB RWA on pre-filtered IRB-only rows.
 
         Unlike calculate_unified(), expects only IRB rows — no filter/concat
-        wrapper needed. Runs the namespace chain directly.
+        wrapper needed.
 
         Args:
             exposures: Pre-filtered IRB rows only
@@ -224,20 +176,7 @@ class IRBCalculator:
         Returns:
             LazyFrame with IRB RWA columns populated
         """
-        exposures = (
-            exposures.irb.classify_approach(config)
-            .irb.apply_firb_lgd(config)
-            .irb.prepare_columns(config)
-            .irb.apply_all_formulas(config)
-            .irb.apply_post_model_adjustments(config)
-            .irb.compute_el_shortfall_excess()
-            .irb.apply_guarantee_substitution(config)
-        )
-
-        # Apply supporting factors (CRR only — Art. 501)
-        exposures = self._apply_supporting_factors(exposures, config)
-
-        return exposures
+        return self._run_irb_chain(exposures, config)
 
     def calculate_expected_loss(
         self,
@@ -261,40 +200,39 @@ class IRBCalculator:
         # Ensure required columns
         schema = exposures.collect_schema()
         if "pd" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(0.01).alias("pd"),
-                ]
-            )
+            exposures = exposures.with_columns(pl.lit(0.01).alias("pd"))
         if "lgd" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(0.45).alias("lgd"),
-                ]
-            )
+            exposures = exposures.with_columns(pl.lit(0.45).alias("lgd"))
 
-        # Determine EAD column
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
 
-        # Calculate EL
         exposures = exposures.with_columns(
-            [
-                (pl.col("pd") * pl.col("lgd") * pl.col(ead_col)).alias("expected_loss"),
-            ]
+            (pl.col("pd") * pl.col("lgd") * pl.col(ead_col)).alias("expected_loss"),
         )
 
         return LazyFrameResult(
             frame=exposures.select(
-                [
-                    "exposure_reference",
-                    "pd",
-                    "lgd",
-                    ead_col,
-                    "expected_loss",
-                ]
+                "exposure_reference", "pd", "lgd", ead_col, "expected_loss"
             ),
             errors=[],
         )
+
+    def _run_irb_chain(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """Run the full IRB namespace chain plus supporting factors."""
+        exposures = (
+            exposures.irb.classify_approach(config)
+            .irb.apply_firb_lgd(config)
+            .irb.prepare_columns(config)
+            .irb.apply_all_formulas(config)
+            .irb.apply_post_model_adjustments(config)
+            .irb.compute_el_shortfall_excess()
+            .irb.apply_guarantee_substitution(config)
+        )
+        return self._apply_supporting_factors(exposures, config)
 
     def _apply_supporting_factors(
         self,

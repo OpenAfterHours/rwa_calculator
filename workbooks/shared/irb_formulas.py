@@ -17,9 +17,6 @@ from rwa_calc.engine.irb.formulas import (
     calculate_irb_rwa,
     calculate_k,
     calculate_maturity_adjustment,
-    # Also export scalar helper functions for workbook calculations
-    _norm_cdf,
-    _norm_ppf,
     # Export constants
     G_999,
     # Export correlation params for reference

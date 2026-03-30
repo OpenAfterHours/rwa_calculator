@@ -54,6 +54,17 @@ from rwa_calc.contracts.protocols import (
     SACalculatorProtocol,
     SlottingCalculatorProtocol,
 )
+from rwa_calc.engine.aggregator import (
+    apply_floor_with_impact,
+    compute_el_portfolio_summary,
+    generate_post_crm_detailed,
+    generate_post_crm_summary,
+    generate_pre_crm_summary,
+    generate_summary_by_approach,
+    generate_summary_by_class,
+    generate_supporting_factor_impact,
+    prepare_equity_results,
+)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -726,49 +737,34 @@ class PipelineOrchestrator:
             # Concat equity if present
             equity_results = None
             if equity_bundle and equity_bundle.results is not None:
-                equity_prepared = equity_bundle.results.with_columns(
-                    [
-                        pl.lit("EQUITY").alias("approach_applied"),
-                        pl.col(
-                            "rwa"
-                            if "rwa" in equity_bundle.results.collect_schema().names()
-                            else "rwa_final"
-                        ).alias("rwa_final"),
-                    ]
-                )
-                schema = equity_prepared.collect_schema()
-                if "exposure_class" not in schema.names():
-                    equity_prepared = equity_prepared.with_columns(
-                        pl.lit("equity").alias("exposure_class")
-                    )
+                equity_prepared = prepare_equity_results(equity_bundle.results)
                 combined = pl.concat([combined, equity_prepared], how="diagonal_relaxed")
                 equity_results = equity_bundle.results
 
-            # Generate summaries using the aggregator's methods
-            pre_crm_summary = self._aggregator._generate_pre_crm_summary(combined)
-            post_crm_detailed = self._aggregator._generate_post_crm_detailed(combined)
-            post_crm_summary = self._aggregator._generate_post_crm_summary(post_crm_detailed)
-            summary_by_class = self._aggregator._generate_summary_by_class(post_crm_detailed)
-            summary_by_approach = self._aggregator._generate_summary_by_approach(post_crm_detailed)
+            # Generate summaries
+            pre_crm_summary = generate_pre_crm_summary(combined)
+            post_crm_detailed = generate_post_crm_detailed(combined)
+            post_crm_summary = generate_post_crm_summary(post_crm_detailed)
+            summary_by_class = generate_summary_by_class(post_crm_detailed)
+            summary_by_approach = generate_summary_by_approach(post_crm_detailed)
 
             # Apply output floor if enabled
             floor_impact = None
             if config.output_floor.enabled:
-                combined, floor_impact = self._aggregator._apply_floor_with_impact(
+                floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
+                combined, floor_impact = apply_floor_with_impact(
                     combined,
                     combined,  # SA-equivalent RW already joined by SA calculator
-                    config,
+                    floor_pct,
                 )
 
             # Supporting factor impact
             supporting_factor_impact = None
             if config.supporting_factors.enabled:
-                supporting_factor_impact = self._aggregator._generate_supporting_factor_impact(
-                    combined
-                )
+                supporting_factor_impact = generate_supporting_factor_impact(combined)
 
             # EL portfolio summary (T2 credit cap, CET1/T2 deductions)
-            el_summary = self._aggregator._compute_el_portfolio_summary(irb_results)
+            el_summary = compute_el_portfolio_summary(irb_results)
 
             return AggregatedResultBundle(
                 results=combined,

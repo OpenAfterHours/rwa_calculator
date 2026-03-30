@@ -893,8 +893,10 @@ class SACalculator:
         if income_col is None or "currency" not in cols:
             return exposures
 
-        _uc = pl.col("_upper_class") if "_upper_class" in cols else (
-            pl.col("exposure_class").fill_null("").str.to_uppercase()
+        _uc = (
+            pl.col("_upper_class")
+            if "_upper_class" in cols
+            else (pl.col("exposure_class").fill_null("").str.to_uppercase())
         )
 
         is_retail_or_re = (
@@ -905,10 +907,7 @@ class SACalculator:
             | _uc.str.contains("CRE", literal=True)
         )
 
-        has_mismatch = (
-            pl.col(income_col).is_not_null()
-            & (pl.col(income_col) != pl.col("currency"))
-        )
+        has_mismatch = pl.col(income_col).is_not_null() & (pl.col(income_col) != pl.col("currency"))
 
         mismatch_applies = is_retail_or_re & has_mismatch
 

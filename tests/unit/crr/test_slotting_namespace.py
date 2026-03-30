@@ -23,7 +23,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.slotting import SlottingExpr, SlottingLazyFrame  # noqa: F401
+import rwa_calc.engine.slotting.namespace  # noqa: F401
 
 # =============================================================================
 # Fixtures

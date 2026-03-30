@@ -24,7 +24,6 @@ Subpackages:
 
 Polars Namespaces:
     All namespaces are registered when their parent modules are imported.
-    - lf.sa: Standardised Approach calculations
     - lf.irb: IRB approach calculations
     - lf.slotting: Specialised lending slotting
 """

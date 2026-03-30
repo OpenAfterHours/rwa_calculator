@@ -159,14 +159,14 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
     )
 
     # Entity flags - vectorized
-    is_fi = inst_mask
     apply_fi_scalar = np.zeros(n, dtype=bool)
-    pse_rand = rng.random(n) < 0.3
-    is_pse = sov_mask & pse_rand
-    ccp_rand = rng.random(n) < 0.05
-    is_ccp = inst_mask & ccp_rand
-    rgla_rand = rng.random(n) < 0.2
-    is_rgla = sov_mask & rgla_rand
+
+    # Borrower income currency - map from country code for retail, null for others
+    country_to_currency = {"GB": "GBP", "US": "USD", "DE": "EUR", "FR": "EUR", "JP": "JPY"}
+    income_currencies = [
+        country_to_currency.get(c) if is_ind else None
+        for c, is_ind in zip(countries, ind_mask)
+    ]
 
     # Build DataFrame using Polars native operations
     return (
@@ -180,17 +180,12 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "total_assets": pl.Series(assets),
                 "default_status": pl.Series(defaults),
                 "sector_code": pl.Series(sector_codes),
-                "is_financial_institution": pl.Series(is_fi),
                 "apply_fi_scalar": pl.Series(apply_fi_scalar),
-                "is_pse": pl.Series(is_pse),
-                "is_mdb": pl.Series(np.zeros(n, dtype=bool)),
-                "is_international_org": pl.Series(np.zeros(n, dtype=bool)),
-                "is_central_counterparty": pl.Series(is_ccp),
-                "is_regional_govt_local_auth": pl.Series(is_rgla),
                 "is_managed_as_retail": pl.Series(np.zeros(n, dtype=bool)),
                 "scra_grade": pl.Series([None] * n, dtype=pl.String),
                 "is_investment_grade": pl.Series(np.zeros(n, dtype=bool)),
                 "is_ccp_client_cleared": pl.Series([None] * n, dtype=pl.Boolean),
+                "borrower_income_currency": pl.Series(income_currencies, dtype=pl.String),
             }
         )
         .cast(COUNTERPARTY_SCHEMA)

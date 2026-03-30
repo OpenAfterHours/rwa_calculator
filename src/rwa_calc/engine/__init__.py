@@ -26,8 +26,6 @@ Polars Namespaces:
     All namespaces are registered when their parent modules are imported.
     - lf.sa: Standardised Approach calculations
     - lf.irb: IRB approach calculations
-    - lf.crm: Credit Risk Mitigation
-    - lf.haircuts: Collateral haircuts
     - lf.slotting: Specialised lending slotting
 """
 

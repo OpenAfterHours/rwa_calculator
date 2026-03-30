@@ -328,8 +328,7 @@ import polars as pl
 from datetime import date
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine import (
-    SALazyFrame, IRBLazyFrame, CRMLazyFrame,
-    HaircutsLazyFrame, SlottingLazyFrame,
+    SALazyFrame, IRBLazyFrame, SlottingLazyFrame,
     AggregatorLazyFrame,
     AuditLazyFrame, AuditExpr,
 )

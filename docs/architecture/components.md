@@ -24,8 +24,6 @@ The calculator uses Polars namespace extensions to provide fluent, chainable API
 |-----------|--------|-------------|
 | `lf.sa` | `engine/sa/namespace.py` | SA risk weights, RWA, supporting factors |
 | `lf.irb` | `engine/irb/namespace.py` | IRB formulas, K calculation, floors |
-| `lf.crm` | `engine/crm/namespace.py` | EAD waterfall, collateral, guarantees |
-| `lf.haircuts` | `engine/crm/haircuts_namespace.py` | Supervisory haircuts, FX/maturity mismatch |
 | `lf.slotting` | `engine/slotting/namespace.py` | Slotting risk weights |
 | `lf.equity` | `engine/equity/namespace.py` | Equity risk weights and RWA |
 | `lf.audit` | `engine/audit_namespace.py` | Audit trail formatting |
@@ -35,8 +33,7 @@ All namespaces are automatically registered when importing from `rwa_calc.engine
 
 ```python
 from rwa_calc.engine import (
-    SALazyFrame, IRBLazyFrame, CRMLazyFrame,
-    HaircutsLazyFrame, SlottingLazyFrame,
+    SALazyFrame, IRBLazyFrame, SlottingLazyFrame,
     AggregatorLazyFrame,
     EquityLazyFrame, AuditLazyFrame, AuditExpr,
 )

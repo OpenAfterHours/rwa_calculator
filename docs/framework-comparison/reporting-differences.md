@@ -10,9 +10,14 @@ differences. For complete column and row definitions, see the
 | Template | CRR Name | Basel 3.1 Name | Purpose |
 |----------|----------|----------------|---------|
 | **07.00** | C 07.00 | OF 07.00 | SA credit risk |
-| **08.01** | C 08.01 | OF 08.01 | IRB totals |
+| **08.01** | C 08.01 | OF 08.01 | IRB totals by exposure class |
 | **08.02** | C 08.02 | OF 08.02 | IRB by obligor grade |
-| **08.03** | — | OF 08.03 | Slotting approach (**new**) |
+| **08.03** | C 08.03 | OF 08.03 | IRB breakdown by PD ranges |
+| **08.04** | C 08.04 | OF 08.04 | IRB RWEA flow statements |
+| **08.06** | C 08.06 | OF 08.06 | Specialised lending slotting |
+| **08.07** | C 08.07 | OF 08.07 | Scope of use of IRB and SA |
+| **09.01** | C 09.01 | OF 09.01 | Geographical breakdown SA |
+| **09.02** | C 09.02 | OF 09.02 | Geographical breakdown IRB |
 
 ---
 
@@ -30,6 +35,16 @@ differences. For complete column and row definitions, see the
 | **Output floor** | Not applicable | Columns 0275–0276 (SA-equivalent for floor calculation) |
 | **Post-model adjustments** | Not applicable | Columns 0251–0254 (RWEA), 0281–0282 (EL) |
 | **CCF buckets (SA)** | 0%, 20%, 50%, 100% | 10%, 20%, 40%, 50%, 100% |
+| **PD ranges (08.03) columns** | 11 (0010–0110) | 11 — col names updated (PD post input floor, LGD with floors, RWEA without factors) |
+| **RWEA flow (08.04)** | 1 column, 9 rows | Virtually identical — supporting factors removed from RWEA description |
+| **Slotting (08.06) columns** | 10 (0010–0100) | 11 — adds 0031 (FCCM change); supporting factors removed |
+| **Slotting SL types** | 4 (PF, IPRE/HVCRE, OF, CF) | 5 — HVCRE separated from IPRE |
+| **Scope of use (08.07) columns** | 5 (0010–0050) | 18 — adds RWEA breakdown by SA reason, IRB RWEA, materiality thresholds |
+| **Scope of use rows** | 17 by exposure class | Restructured to roll-out classes (Art 147B) |
+| **Geo SA (09.01) columns** | 13 (0010–0090) | 10 — removes 0080–0082 (supporting factors) |
+| **Geo SA rows** | 18 by SA exposure class | Adds SL sub-rows, restructures RE rows (0091–0094), removes short-term |
+| **Geo IRB (09.02) columns** | 17 (0010–0130) | 15 — removes supporting factors (0110, 0121, 0122); adds 0107 (defaulted) |
+| **Geo IRB rows** | 15 by IRB exposure class | Adds corporate sub-rows (0048, 0049, 0055), restructures retail RE rows, removes equity |
 
 ---
 
@@ -126,7 +141,7 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 | **PD column** | Retained in OF 08.02 (removed from OF 08.01 totals only) |
 | **CCF breakdown** | New columns 0001, 0101–0105 for off-BS items by CCF bucket |
 | **PD ordering** | Basel 3.1 uses PDs without input floor adjustments |
-| **Slotting excluded** | Slotting exposures reported separately (new OF 08.03) |
+| **Slotting excluded** | Slotting exposures reported separately in OF 08.06 |
 | **Alt RE removed** | CRR exclusion for alternative RE treatment no longer applies |
 | **Double default** | Column 0220 removed (same as OF 08.01) |
 | **Supporting factors** | Columns 0255–0257 removed (same as OF 08.01) |
@@ -135,18 +150,189 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 
 ---
 
+## C 08.03 / OF 08.03 — CR IRB PD Ranges
+
+This template aggregates IRB exposures into fixed PD range buckets for disclosure purposes.
+It excludes slotting exposures (reported in C 08.06 / OF 08.06) and CCR exposures.
+
+### Column Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Changed** | 0050 | Renamed to "Exposure weighted average PD (post input floor)" — reflects new PD input floors (Art 160(1), 163(1)) |
+| **Changed** | 0070 | LGD now explicitly includes CRM effects, input floors, and downturn conditions |
+| **Changed** | 0090 | "RWEA" — no longer "after supporting factors" (factors removed) |
+
+### Row Changes
+
+| Change | Description |
+|--------|-------------|
+| **Changed** | PD range allocation now uses PDs **without** input floor adjustments (pre-floor PD determines bucket, post-floor PD used in calculation) |
+| **Unchanged** | Same 17 fixed PD range rows (0010–0170) with identical sub-band structure |
+
+---
+
+## C 08.04 / OF 08.04 — CR IRB RWEA Flow Statements
+
+This template reports quarter-over-quarter movements in IRB RWEA, decomposed into
+seven driver categories. It excludes CCR exposures.
+
+### Column Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Changed** | 0010 | "RWEA" — no longer references supporting factors (Art 501, 501a removed) |
+
+### Row Changes
+
+No row changes. The same 9 rows (0010–0090) are used in both frameworks:
+previous period RWEA, asset size, asset quality, model updates, methodology and policy,
+acquisitions and disposals, FX movements, other, current period RWEA.
+
+---
+
+## C 08.06 / OF 08.06 — CR IRB Specialised Lending Slotting
+
+This template reports specialised lending exposures subject to the supervisory slotting
+criteria, broken down by slotting category and remaining maturity.
+
+### Column Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Added** | 0031 | (-) Change in exposure due to FCCM — Financial Collateral Comprehensive Method adjustment |
+| **Changed** | 0080 | "RWEA" — no longer "after supporting factors" (factors removed) |
+
+### Row Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Added** | 0015 | Category 1 "substantially stronger" sub-row (≥ 2.5 years only, 50% RW) |
+| **Added** | 0025 | Category 2 "substantially stronger" sub-row (≥ 2.5 years only, 70% RW) |
+| **Changed** | — | SL types expanded from 4 to 5: HVCRE separated from IPRE (previously combined). Types are now: object finance, project finance, commodities finance, IPRE, HVCRE |
+
+---
+
+## C 08.07 / OF 08.07 — CR IRB Scope of Use
+
+This template reports the split of exposures between SA and IRB approaches, showing
+coverage percentages and RWEA attribution. **Significantly expanded in Basel 3.1.**
+
+### Column Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Unchanged** | 0010 | Total exposure value subject to IRB |
+| **Unchanged** | 0020 | Total exposure value subject to SA and IRB |
+| **Unchanged** | 0030 | % subject to permanent partial use of SA |
+| **Unchanged** | 0040 | % subject to roll-out plan |
+| **Unchanged** | 0050 | % subject to IRB approach |
+| **Added** | 0060 | Total RWEA for exposures subject to SA or IRB |
+| **Added** | 0070 | RWEA for SA: connected counterparties (Art 150(1)(e)) |
+| **Added** | 0080 | RWEA for SA: all exposures in roll-out classes — SA does not result in significantly lower capital |
+| **Added** | 0090 | RWEA for SA: all exposures in roll-out classes — cannot reasonably model |
+| **Added** | 0100 | RWEA for SA: all exposures in roll-out classes — immaterial |
+| **Added** | 0110 | RWEA for SA: all exposures in types — cannot reasonably model |
+| **Added** | 0120 | RWEA for SA: all exposures in types — immaterial in aggregate |
+| **Added** | 0130 | RWEA for SA: due to roll-out plan |
+| **Added** | 0140 | RWEA for SA: other |
+| **Added** | 0150 | RWEA for exposures subject to IRB |
+| **Added** | 0160 | Materiality of roll-out class (Art 150(1A)(c) threshold) |
+| **Added** | 0170 | % subject to permanent partial use (type of exposures) |
+| **Added** | 0180 | % subject to permanent partial use (immaterial in aggregate) |
+
+### Row Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Changed** | 0180–0250 | Rows restructured from **exposure classes** (CRR Art 147(2)) to **roll-out classes** (Basel 3.1 Art 147B). Roll-out classes align with the exposure classes but the regulatory basis differs. |
+| **Added** | 0260 | Total row (sum of 0180–0250) |
+| **Added** | 0270 | Percentage subject to permanent partial use (immateriality in aggregate) |
+| **Removed** | 0010–0170 | CRR exposure class rows replaced by roll-out class structure |
+
+---
+
+## C 09.01 / OF 09.01 — CR GB 1 (Geographical Breakdown SA)
+
+This template provides a geographical breakdown of SA exposures by country of obligor
+residence. Submitted once at total level and once per material country.
+
+### Column Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Added** | 0075 | Exposure value (was implicit in CRR, now explicit column ref) |
+| **Removed** | 0080 | RWEA pre supporting factors |
+| **Removed** | 0081 | (-) SME supporting factor adjustment |
+| **Removed** | 0082 | (-) Infrastructure supporting factor adjustment |
+| **Changed** | 0090 | "Risk-weighted exposure amount" — no longer "after supporting factors" |
+
+### Row Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Added** | 0071 | of which: specialised lending — object finance (under corporates) |
+| **Added** | 0072 | of which: specialised lending — commodities finance |
+| **Added** | 0073 | of which: specialised lending — project finance |
+| **Changed** | 0090 | Renamed from "Secured by mortgages on immovable property" to "Real estate exposures" |
+| **Added** | 0091 | of which: regulatory residential real estate |
+| **Added** | 0092 | of which: regulatory commercial real estate |
+| **Added** | 0093 | of which: other real estate |
+| **Added** | 0094 | of which: land acquisition, development and construction |
+| **Changed** | 0150 | Renamed from "Equity exposures" to "Subordinated debt, equity and other own funds instruments" |
+| **Removed** | 0130 | Claims on institutions and corporates with a short-term credit assessment |
+
+---
+
+## C 09.02 / OF 09.02 — CR GB 2 (Geographical Breakdown IRB)
+
+This template provides a geographical breakdown of IRB exposures by country of obligor
+residence. Submitted once at total level and once per material country.
+
+### Column Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Added** | 0107 | Of which: defaulted (exposure value for defaulted exposures) |
+| **Removed** | 0110 | RWEA pre supporting factors |
+| **Removed** | 0121 | (-) SME supporting factor adjustment |
+| **Removed** | 0122 | (-) Infrastructure supporting factor adjustment |
+| **Changed** | 0125 | "Risk-weighted exposure amount" — no longer "after supporting factors" |
+
+### Row Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Added** | 0048 | Financial corporates and large corporates (Art 147(4C)) |
+| **Added** | 0049 | Purchased receivables (corporate, Art 157) |
+| **Changed** | 0050 | Renamed from "Of Which: SME" to "Other general corporates — SME" (Art 147(4E)(c)) |
+| **Added** | 0055 | Other general corporates — non-SME (Art 147(4E)) |
+| **Changed** | 0071–0074 | Retail RE restructured: residential RE SME (0071), residential RE non-SME (0072), commercial RE SME (0073), commercial RE non-SME (0074) — replaces CRR rows 0070/0080/0090 |
+| **Added** | 0105 | Retail — purchased receivables (Art 157) |
+| **Removed** | 0140 | Equity row removed (equity no longer an IRB exposure class under Basel 3.1) |
+
+---
+
 ## Key Themes
 
-The template changes reflect four Basel 3.1 themes:
+The template changes across all nine credit risk templates reflect five Basel 3.1 themes:
 
-1. **Removal of capital relief mechanisms** — supporting factor columns (0215–0217, 0255–0257)
-   and double default (0220) are removed
-2. **Output floor infrastructure** — new columns (0275–0276) report SA-equivalent values
-   for floor calculation
-3. **Greater granularity** — expanded risk weight bands (15 → 29), detailed real estate
-   breakdowns (8 → 26+ "of which" rows), specialised lending sub-categories
-4. **Post-model oversight** — new adjustment columns (0251–0254, 0281–0282) capture
-   model overlays and regulatory floors separately from raw model output
+1. **Removal of capital relief mechanisms** — supporting factor columns removed across all
+   templates: SA (0215–0217), IRB (0255–0257), slotting (0080), PD ranges (0090),
+   geographical SA (0080–0082), geographical IRB (0110, 0121–0122). Double default (0220)
+   also removed.
+2. **Output floor infrastructure** — new columns (0275–0276) in IRB templates report
+   SA-equivalent values for floor calculation.
+3. **Greater granularity** — expanded SA risk weight bands (15 → 29), detailed real estate
+   breakdowns replacing broad mortgage rows (OF 07.00 rows 0330–0360, OF 09.01 rows
+   0091–0094), specialised lending sub-categories across SA and IRB geo breakdowns,
+   new corporate sub-rows in OF 09.02 (financial corporates, purchased receivables).
+4. **Post-model oversight** — new adjustment columns (0251–0254, 0281–0282) in IRB
+   templates capture model overlays and regulatory floors separately from raw model output.
+5. **Expanded scope-of-use transparency** — OF 08.07 expands from 5 to 18 columns,
+   requiring firms to decompose their SA RWEA by reason for SA use (connected
+   counterparties, immaterial exposures, roll-out plan, etc.) and report materiality
+   thresholds. Rows restructured from exposure classes to roll-out classes (Art 147B).
 
 ## See Also
 

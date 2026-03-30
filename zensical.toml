@@ -14,6 +14,7 @@ nav = [
     "framework-comparison/index.md",
     { "Key Differences" = "framework-comparison/key-differences.md" },
     { "Reporting Differences" = "framework-comparison/reporting-differences.md" },
+    { "Disclosure Differences" = "framework-comparison/disclosure-differences.md" },
     { "Impact Analysis" = "framework-comparison/impact-analysis.md" },
     { "Technical Reference" = "framework-comparison/technical-reference.md" },
   ]},
@@ -63,6 +64,7 @@ nav = [
     "features/index.md",
     { "Classification" = "features/classification.md" },
     { "COREP Reporting" = "features/corep-reporting.md" },
+    { "Pillar III Disclosures" = "features/pillar3-disclosures.md" },
   ]},
   { "Data Model" = [
     "data-model/index.md",

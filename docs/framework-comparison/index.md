@@ -22,7 +22,7 @@ in one place.
 | **Haircuts (Equities)** | 15% / 25% | 25% / 35% |
 | **Currency Mismatch** | None | 1.5x RW multiplier for unhedged FX retail/RE |
 | **CRM Methods** | Scattered provisions | Foundation Collateral Method, Parameter Substitution |
-| **COREP Templates** | C prefix (C 07.00, C 08.01/02) | OF prefix (OF 07.00, OF 08.01/02/03) |
+| **COREP Templates** | C prefix (C 07.00, C 08.01–08.07, C 09.01–09.02) | OF prefix (OF 07.00, OF 08.01–08.07, OF 09.01–09.02) |
 
 ## In This Section
 
@@ -41,6 +41,13 @@ in one place.
 
     COREP template changes — column additions and removals, expanded risk weight bands,
     new real estate breakdowns, output floor columns, and post-model adjustments.
+
+-   **[Disclosure Differences](disclosure-differences.md)**
+
+    ---
+
+    Pillar III disclosure template changes — OV1 output floor rows, CR5 expanded risk
+    weight columns, CR6 post-model adjustments, CR7-A slotting CRM, CR10 HVCRE split.
 
 -   **[Impact Analysis](impact-analysis.md)**
 
@@ -63,4 +70,5 @@ in one place.
 - [CRR framework details](../user-guide/regulatory/crr.md)
 - [Basel 3.1 framework details](../user-guide/regulatory/basel31.md)
 - [Full COREP template specifications](../features/corep-reporting.md)
+- [Full Pillar III disclosure specifications](../features/pillar3-disclosures.md)
 - [Configuration guide](../user-guide/configuration.md)

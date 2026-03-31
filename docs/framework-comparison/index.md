@@ -4,6 +4,52 @@ UK firms transition from CRR to Basel 3.1 (PRA PS1/26) on 1 January 2027, with t
 floor phasing in through 2032. This section brings together all framework comparison content
 in one place.
 
+## Why Basel 3.1?
+
+Basel 3.1 addresses three core problems the BCBS and PRA identified with the post-crisis
+CRR framework:
+
+### Excessive risk-weight variability
+
+BCBS studies found a "worrying degree of variability" in how banks calculated risk-weighted
+assets for identical portfolios. Under CRR, IRB banks had wide latitude in estimating PD,
+LGD, and EAD — different modelling choices produced materially different RWAs for the same
+risk, undermining confidence in reported capital ratios.
+
+### Inadequate capital requirements in certain areas
+
+The financial crisis exposed that some risk weights were too low. The standardised approach
+lacked granularity (e.g., all unrated corporates received 100% regardless of actual risk),
+and internal models in some asset classes produced capital requirements that did not reflect
+true economic risk.
+
+### Excessive complexity and model risk in IRB approaches
+
+The IRB framework had grown so complex that it was difficult for supervisors to validate and
+for firms to implement consistently. The complexity itself became a source of risk — models
+were opaque, hard to compare, and in some cases allowed firms to optimise their way to lower
+capital without reducing actual risk.
+
+### How Basel 3.1 responds
+
+| Problem | Basel 3.1 Solution |
+|---------|-------------------|
+| RWA variability | **Output floor** — IRB RWAs cannot fall below 72.5% of SA-equivalent |
+| SA too crude | **More risk-sensitive standardised approaches** — finer granularity by LTV, credit quality, etc. |
+| IRB too permissive | **Constraints on internal models** — A-IRB removed for large corporates/banks/FIs; input floors on PD/LGD |
+| Under-capitalisation | **Recalibrated risk weights** in areas the crisis showed were too low |
+
+The PRA adopted Basel 3.1 with targeted UK adjustments: more risk-sensitive treatment of
+unrated corporates, SME and infrastructure lending adjustments to avoid capital cliff-edges
+when existing support factors are removed, and alignment with international standards to
+maintain credibility and competitiveness.
+
+!!! info "Sources"
+
+    - [PRA PS1/26 — Basel 3.1 Final Rules](https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement)
+    - [BCBS d424 — Basel III: Finalising post-crisis reforms](https://www.bis.org/bcbs/publ/d424.pdf)
+    - [BCBS High-level summary of Basel III reforms](https://www.bis.org/bcbs/publ/d424_hlsummary.pdf)
+
 ## At a Glance
 
 | Area | CRR (until 31 Dec 2026) | Basel 3.1 (from 1 Jan 2027) |

@@ -1,28 +1,30 @@
 """
 Data loader implementations for the RWA calculator.
 
-Provides concrete implementations of LoaderProtocol for loading
-exposure data from various sources (Parquet, CSV, databases).
+Pipeline position:
+    DataSource -> Loader -> HierarchyResolver
 
-Classes:
-    ParquetLoader: Load data from Parquet files
-    CSVLoader: Load data from CSV files
+Key responsibilities:
+- Load exposure data from Parquet/CSV files as LazyFrames
+- Normalize column names and enforce expected schemas
+- Return a RawDataBundle for downstream pipeline stages
+
+References:
+- LoaderProtocol: contracts/protocols.py
 
 Usage:
     from rwa_calc.engine.loader import ParquetLoader
 
     loader = ParquetLoader(base_path="/path/to/data")
     raw_data = loader.load()
-
-The loader returns a RawDataBundle containing all required LazyFrames
-for the calculation pipeline.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import polars as pl
 
@@ -47,8 +49,7 @@ from rwa_calc.data.schemas import (
 )
 from rwa_calc.engine.utils import has_rows
 
-if TYPE_CHECKING:
-    pass
+type ScanFn = Callable[[Path], pl.LazyFrame]
 
 
 def enforce_schema(
@@ -71,24 +72,14 @@ def enforce_schema(
     Returns:
         LazyFrame with columns cast to expected types
     """
-    # Get current schema
     current_schema = lf.collect_schema()
     current_cols = set(current_schema.names())
 
-    # Build cast expressions for columns that exist and need casting
-    cast_exprs = []
-    for col_name, expected_type in schema.items():
-        if col_name not in current_cols:
-            continue
-
-        current_type = current_schema[col_name]
-
-        # Skip if already the correct type
-        if current_type == expected_type:
-            continue
-
-        # Cast to expected type
-        cast_exprs.append(pl.col(col_name).cast(expected_type, strict=strict).alias(col_name))
+    cast_exprs = [
+        pl.col(col_name).cast(expected_type, strict=strict).alias(col_name)
+        for col_name, expected_type in schema.items()
+        if col_name in current_cols and current_schema[col_name] != expected_type
+    ]
 
     if not cast_exprs:
         return lf
@@ -99,9 +90,6 @@ def enforce_schema(
 def normalize_columns(lf: pl.LazyFrame) -> pl.LazyFrame:
     """
     Normalize column names to lowercase with underscores.
-
-    Converts all column names to lowercase and replaces spaces with underscores.
-    This ensures consistent column naming regardless of input data formatting.
 
     Args:
         lf: LazyFrame with columns to normalize
@@ -119,22 +107,6 @@ class DataSourceConfig:
 
     Defines the expected file paths relative to a base directory.
     Supports both standard fixture layout and custom layouts.
-
-    Attributes:
-        counterparties_file: Path to consolidated counterparty data
-        facilities_file: Path to facilities data
-        loans_file: Path to loans data
-        contingents_file: Path to contingent/off-balance sheet data
-        collateral_file: Path to collateral data
-        guarantees_file: Path to guarantees data
-        provisions_file: Path to provisions data
-        ratings_file: Path to ratings data
-        facility_mappings_file: Path to facility hierarchy mappings
-        org_mappings_file: Path to organisational hierarchy mappings
-        lending_mappings_file: Path to lending group mappings
-        equity_exposures_file: Optional path to equity exposure data
-        fx_rates_file: Optional path to FX rates data for currency conversion
-        model_permissions_file: Optional path to per-model IRB permissions
     """
 
     counterparties_file: Path | None = None
@@ -196,15 +168,88 @@ class DataLoadError(Exception):
     """Exception raised when data cannot be loaded."""
 
     def __init__(self, message: str, source: Path | str | None = None) -> None:
-        """
-        Initialize DataLoadError.
-
-        Args:
-            message: Error message
-            source: Source file/table that caused the error (str or Path)
-        """
         self.source = source
         super().__init__(f"{message}" + (f" (source: {source})" if source else ""))
+
+
+# ---------------------------------------------------------------------------
+# Shared loading helpers — parameterised by scan function
+# ---------------------------------------------------------------------------
+
+
+def _load_file(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
+    relative_path: str | Path,
+    schema: dict[str, pl.DataType] | None = None,
+) -> pl.LazyFrame:
+    """Load a required file using *scan_fn*, with normalize + schema enforcement."""
+    full_path = base_path / relative_path
+    try:
+        lf = normalize_columns(scan_fn(full_path))
+        if enforce_schemas and schema is not None:
+            lf = enforce_schema(lf, schema, strict=False)
+        return lf
+    except FileNotFoundError:
+        raise DataLoadError(f"File not found: {full_path}", source=relative_path) from None
+    except Exception as e:
+        raise DataLoadError(f"Failed to load file: {e}", source=relative_path) from e
+
+
+def _load_file_optional(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
+    relative_path: str | Path | None,
+    schema: dict[str, pl.DataType] | None = None,
+) -> pl.LazyFrame | None:
+    """Load an optional file — returns None if missing, empty, or unreadable."""
+    if relative_path is None:
+        return None
+    try:
+        lf = normalize_columns(scan_fn(base_path / relative_path))
+        if not has_rows(lf):
+            return None
+        if enforce_schemas and schema is not None:
+            lf = enforce_schema(lf, schema, strict=False)
+        return lf
+    except Exception:
+        return None
+
+
+def _build_bundle(
+    load: Callable[[str | Path | None, dict[str, pl.DataType] | None], pl.LazyFrame],
+    load_optional: Callable[
+        [str | Path | None, dict[str, pl.DataType] | None], pl.LazyFrame | None
+    ],
+    config: DataSourceConfig,
+) -> RawDataBundle:
+    """Build a RawDataBundle — single implementation shared by all loaders."""
+    return RawDataBundle(
+        facilities=load(config.facilities_file, FACILITY_SCHEMA),
+        loans=load(config.loans_file, LOAN_SCHEMA),
+        counterparties=load(config.counterparties_file, COUNTERPARTY_SCHEMA),
+        facility_mappings=load(config.facility_mappings_file, FACILITY_MAPPING_SCHEMA),
+        org_mappings=load_optional(config.org_mappings_file, ORG_MAPPING_SCHEMA),
+        lending_mappings=load(config.lending_mappings_file, LENDING_MAPPING_SCHEMA),
+        contingents=load_optional(config.contingents_file, CONTINGENTS_SCHEMA),
+        collateral=load_optional(config.collateral_file, COLLATERAL_SCHEMA),
+        guarantees=load_optional(config.guarantees_file, GUARANTEE_SCHEMA),
+        provisions=load_optional(config.provisions_file, PROVISION_SCHEMA),
+        ratings=load_optional(config.ratings_file, RATINGS_SCHEMA),
+        equity_exposures=load_optional(config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA),
+        specialised_lending=load_optional(
+            config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
+        ),
+        fx_rates=load_optional(config.fx_rates_file, FX_RATES_SCHEMA),
+        model_permissions=load_optional(config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public loader classes
+# ---------------------------------------------------------------------------
 
 
 class ParquetLoader:
@@ -215,33 +260,8 @@ class ParquetLoader:
     of Parquet files. Uses Polars scan_parquet for lazy evaluation.
 
     Schema enforcement is applied during loading to ensure all columns
-    have the expected data types, preventing type mismatch errors in
-    downstream calculations.
-
-    Attributes:
-        base_path: Base directory containing data files
-        config: Data source configuration
-        enforce_schemas: Whether to cast columns to expected types (default True)
+    have the expected data types for downstream calculations.
     """
-
-    # Mapping of file config attributes to their schemas
-    _SCHEMA_MAP: dict[str, dict[str, pl.DataType]] = {
-        "counterparties_file": COUNTERPARTY_SCHEMA,
-        "facilities_file": FACILITY_SCHEMA,
-        "loans_file": LOAN_SCHEMA,
-        "contingents_file": CONTINGENTS_SCHEMA,
-        "collateral_file": COLLATERAL_SCHEMA,
-        "guarantees_file": GUARANTEE_SCHEMA,
-        "provisions_file": PROVISION_SCHEMA,
-        "ratings_file": RATINGS_SCHEMA,
-        "facility_mappings_file": FACILITY_MAPPING_SCHEMA,
-        "org_mappings_file": ORG_MAPPING_SCHEMA,
-        "lending_mappings_file": LENDING_MAPPING_SCHEMA,
-        "equity_exposures_file": EQUITY_EXPOSURE_SCHEMA,
-        "specialised_lending_file": SPECIALISED_LENDING_SCHEMA,
-        "fx_rates_file": FX_RATES_SCHEMA,
-        "model_permissions_file": MODEL_PERMISSIONS_SCHEMA,
-    }
 
     def __init__(
         self,
@@ -249,15 +269,6 @@ class ParquetLoader:
         config: DataSourceConfig | None = None,
         enforce_schemas: bool = True,
     ) -> None:
-        """
-        Initialize ParquetLoader.
-
-        Args:
-            base_path: Base directory containing data files
-            config: Optional data source configuration
-            enforce_schemas: Whether to enforce type casting based on schemas.
-                           Set to False to load raw types from files.
-        """
         self.base_path = Path(base_path)
         self.config = config or DataSourceConfig.from_registry(extension="parquet")
         self.enforce_schemas = enforce_schemas
@@ -270,123 +281,26 @@ class ParquetLoader:
         relative_path: str | Path,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame:
-        """
-        Load a single Parquet file as LazyFrame with optional schema enforcement.
-
-        Args:
-            relative_path: Path relative to base_path
-            schema: Optional schema to enforce on the loaded data
-
-        Returns:
-            LazyFrame from the Parquet file with schema enforced
-
-        Raises:
-            DataLoadError: If file cannot be loaded
-        """
-        full_path = self.base_path / relative_path
-        if not full_path.exists():
-            raise DataLoadError(f"File not found: {full_path}", source=relative_path)
-
-        try:
-            lf = normalize_columns(pl.scan_parquet(full_path))
-
-            # Apply schema enforcement if enabled and schema provided
-            if self.enforce_schemas and schema is not None:
-                lf = enforce_schema(lf, schema, strict=False)
-
-            return lf
-        except Exception as e:
-            raise DataLoadError(f"Failed to load parquet: {e}", source=relative_path) from e
+        return _load_file(
+            self.base_path, pl.scan_parquet, self.enforce_schemas, relative_path, schema
+        )
 
     def _load_parquet_optional(
         self,
         relative_path: str | Path | None,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame | None:
-        """
-        Load an optional Parquet file with optional schema enforcement.
-
-        Returns None if:
-        - relative_path is None
-        - File doesn't exist
-        - File exists but has no rows
-        - File cannot be loaded
-
-        This ensures downstream code can rely on a simple `is not None` check
-        to determine if valid data is available for processing.
-
-        Args:
-            relative_path: Path relative to base_path, or None
-            schema: Optional schema to enforce on the loaded data
-
-        Returns:
-            LazyFrame if file exists, loads, and has data; None otherwise
-        """
-        if relative_path is None:
-            return None
-
-        full_path = self.base_path / relative_path
-        if not full_path.exists():
-            return None
-
-        try:
-            lf = normalize_columns(pl.scan_parquet(full_path))
-            # Check if file has any rows - return None for empty files
-            if not has_rows(lf):
-                return None
-
-            # Apply schema enforcement if enabled and schema provided
-            if self.enforce_schemas and schema is not None:
-                lf = enforce_schema(lf, schema, strict=False)
-
-            return lf
-        except Exception:
-            return None
+        return _load_file_optional(
+            self.base_path, pl.scan_parquet, self.enforce_schemas, relative_path, schema
+        )
 
     def load(self) -> RawDataBundle:
-        """
-        Load all required data and return as a RawDataBundle.
-
-        Schema enforcement is applied to all loaded data when enforce_schemas=True,
-        ensuring columns have the correct data types for downstream calculations.
-
-        Returns:
-            RawDataBundle containing all input LazyFrames
-
-        Raises:
-            DataLoadError: If required data cannot be loaded
-        """
-        contingents = self._load_parquet_optional(self.config.contingents_file, CONTINGENTS_SCHEMA)
-
-        return RawDataBundle(
-            facilities=self._load_parquet(self.config.facilities_file, FACILITY_SCHEMA),
-            loans=self._load_parquet(self.config.loans_file, LOAN_SCHEMA),
-            counterparties=self._load_parquet(self.config.counterparties_file, COUNTERPARTY_SCHEMA),
-            facility_mappings=self._load_parquet(
-                self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
-            ),
-            org_mappings=self._load_parquet_optional(
-                self.config.org_mappings_file, ORG_MAPPING_SCHEMA
-            ),
-            lending_mappings=self._load_parquet(
-                self.config.lending_mappings_file, LENDING_MAPPING_SCHEMA
-            ),
-            contingents=contingents,
-            collateral=self._load_parquet_optional(self.config.collateral_file, COLLATERAL_SCHEMA),
-            guarantees=self._load_parquet_optional(self.config.guarantees_file, GUARANTEE_SCHEMA),
-            provisions=self._load_parquet_optional(self.config.provisions_file, PROVISION_SCHEMA),
-            ratings=self._load_parquet_optional(self.config.ratings_file, RATINGS_SCHEMA),
-            equity_exposures=self._load_parquet_optional(
-                self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
-            ),
-            specialised_lending=self._load_parquet_optional(
-                self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
-            ),
-            fx_rates=self._load_parquet_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
-            model_permissions=self._load_parquet_optional(
-                self.config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA
-            ),
+        """Load all required data and return as a RawDataBundle."""
+        load = partial(_load_file, self.base_path, pl.scan_parquet, self.enforce_schemas)
+        load_opt = partial(
+            _load_file_optional, self.base_path, pl.scan_parquet, self.enforce_schemas
         )
+        return _build_bundle(load, load_opt, self.config)
 
 
 class CSVLoader:
@@ -397,15 +311,6 @@ class CSVLoader:
     of CSV files. Uses Polars scan_csv for lazy evaluation.
 
     Useful for development and testing when Parquet files are not available.
-
-    Schema enforcement is applied during loading to ensure all columns
-    have the expected data types, preventing type mismatch errors in
-    downstream calculations.
-
-    Attributes:
-        base_path: Base directory containing data files
-        config: Data source configuration (paths should end in .csv)
-        enforce_schemas: Whether to cast columns to expected types (default True)
     """
 
     def __init__(
@@ -414,155 +319,47 @@ class CSVLoader:
         config: DataSourceConfig | None = None,
         enforce_schemas: bool = True,
     ) -> None:
-        """
-        Initialize CSVLoader.
-
-        Args:
-            base_path: Base directory containing data files
-            config: Optional data source configuration
-            enforce_schemas: Whether to enforce type casting based on schemas.
-                           Set to False to load raw types from files.
-        """
         self.base_path = Path(base_path)
-        self.config = config or self._get_csv_config()
+        self.config = config or DataSourceConfig.from_registry(extension="csv")
         self.enforce_schemas = enforce_schemas
 
         if not self.base_path.exists():
             raise DataLoadError(f"Base path does not exist: {self.base_path}")
 
     @staticmethod
-    def _get_csv_config() -> DataSourceConfig:
-        """Get config with CSV file extensions."""
-        return DataSourceConfig.from_registry(extension="csv")
+    def _scan_csv(path: Path) -> pl.LazyFrame:
+        return pl.scan_csv(path, try_parse_dates=True)
 
     def _load_csv(
         self,
         relative_path: str | Path,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame:
-        """
-        Load a single CSV file as LazyFrame with optional schema enforcement.
-
-        Args:
-            relative_path: Path relative to base_path
-            schema: Optional schema to enforce on the loaded data
-
-        Returns:
-            LazyFrame from the CSV file with schema enforced
-
-        Raises:
-            DataLoadError: If file cannot be loaded
-        """
-        full_path = self.base_path / relative_path
-        if not full_path.exists():
-            raise DataLoadError(f"File not found: {full_path}", source=relative_path)
-
-        try:
-            lf = normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
-
-            # Apply schema enforcement if enabled and schema provided
-            if self.enforce_schemas and schema is not None:
-                lf = enforce_schema(lf, schema, strict=False)
-
-            return lf
-        except Exception as e:
-            raise DataLoadError(f"Failed to load CSV: {e}", source=relative_path) from e
+        return _load_file(
+            self.base_path, self._scan_csv, self.enforce_schemas, relative_path, schema
+        )
 
     def _load_csv_optional(
         self,
         relative_path: str | Path | None,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame | None:
-        """
-        Load an optional CSV file with optional schema enforcement.
-
-        Returns None if:
-        - relative_path is None
-        - File doesn't exist
-        - File exists but has no rows
-        - File cannot be loaded
-
-        This ensures downstream code can rely on a simple `is not None` check
-        to determine if valid data is available for processing.
-
-        Args:
-            relative_path: Path relative to base_path, or None
-            schema: Optional schema to enforce on the loaded data
-
-        Returns:
-            LazyFrame if file exists, loads, and has data; None otherwise
-        """
-        if relative_path is None:
-            return None
-
-        full_path = self.base_path / relative_path
-        if not full_path.exists():
-            return None
-
-        try:
-            lf = normalize_columns(pl.scan_csv(full_path, try_parse_dates=True))
-            # Check if file has any rows - return None for empty files
-            if not has_rows(lf):
-                return None
-
-            # Apply schema enforcement if enabled and schema provided
-            if self.enforce_schemas and schema is not None:
-                lf = enforce_schema(lf, schema, strict=False)
-
-            return lf
-        except Exception:
-            return None
+        return _load_file_optional(
+            self.base_path, self._scan_csv, self.enforce_schemas, relative_path, schema
+        )
 
     def load(self) -> RawDataBundle:
-        """
-        Load all required data and return as a RawDataBundle.
-
-        Schema enforcement is applied to all loaded data when enforce_schemas=True,
-        ensuring columns have the correct data types for downstream calculations.
-
-        Returns:
-            RawDataBundle containing all input LazyFrames
-
-        Raises:
-            DataLoadError: If required data cannot be loaded
-        """
-        contingents = self._load_csv_optional(self.config.contingents_file, CONTINGENTS_SCHEMA)
-
-        return RawDataBundle(
-            facilities=self._load_csv(self.config.facilities_file, FACILITY_SCHEMA),
-            loans=self._load_csv(self.config.loans_file, LOAN_SCHEMA),
-            counterparties=self._load_csv(self.config.counterparties_file, COUNTERPARTY_SCHEMA),
-            facility_mappings=self._load_csv(
-                self.config.facility_mappings_file, FACILITY_MAPPING_SCHEMA
-            ),
-            org_mappings=self._load_csv_optional(self.config.org_mappings_file, ORG_MAPPING_SCHEMA),
-            lending_mappings=self._load_csv(
-                self.config.lending_mappings_file, LENDING_MAPPING_SCHEMA
-            ),
-            contingents=contingents,
-            collateral=self._load_csv_optional(self.config.collateral_file, COLLATERAL_SCHEMA),
-            guarantees=self._load_csv_optional(self.config.guarantees_file, GUARANTEE_SCHEMA),
-            provisions=self._load_csv_optional(self.config.provisions_file, PROVISION_SCHEMA),
-            ratings=self._load_csv_optional(self.config.ratings_file, RATINGS_SCHEMA),
-            equity_exposures=self._load_csv_optional(
-                self.config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
-            ),
-            specialised_lending=self._load_csv_optional(
-                self.config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
-            ),
-            fx_rates=self._load_csv_optional(self.config.fx_rates_file, FX_RATES_SCHEMA),
-            model_permissions=self._load_csv_optional(
-                self.config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA
-            ),
+        """Load all required data and return as a RawDataBundle."""
+        load = partial(_load_file, self.base_path, self._scan_csv, self.enforce_schemas)
+        load_opt = partial(
+            _load_file_optional, self.base_path, self._scan_csv, self.enforce_schemas
         )
+        return _build_bundle(load, load_opt, self.config)
 
 
 def create_test_loader(fixture_path: str | Path | None = None) -> ParquetLoader:
     """
     Create a loader configured for test fixtures.
-
-    Convenience function for testing that creates a ParquetLoader
-    pointing to the test fixtures directory.
 
     Args:
         fixture_path: Optional explicit path to fixtures.
@@ -572,7 +369,6 @@ def create_test_loader(fixture_path: str | Path | None = None) -> ParquetLoader:
         ParquetLoader configured for test fixtures
     """
     if fixture_path is None:
-        # Find project root by looking for pyproject.toml
         current = Path(__file__).parent
         while current.parent != current:
             if (current / "pyproject.toml").exists():

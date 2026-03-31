@@ -362,9 +362,10 @@ exposure is not hedged. Distinct from the 8% FX collateral haircut in CRM.
 | Higher-risk (unlisted, < 5 yrs) | 250-400% | **400%** | Standardised |
 | Speculative / venture capital | 400% | **400%** | — |
 
-IRB is **removed** for equity under Basel 3.1 — SA only.
+IRB is **removed** for equity under Basel 3.1 — SA only. The PD/LGD method (CRR Art. 155)
+is blanked in the final rules.
 
-**Transitional phase-in schedule:**
+**SA transitional phase-in schedule (Art. 4.2/4.3):**
 
 | Year | Standard | Higher-Risk |
 |------|----------|-------------|
@@ -372,6 +373,45 @@ IRB is **removed** for equity under Basel 3.1 — SA only.
 | 2028 | 190% | 280% |
 | 2029 | 220% | 340% |
 | 2030+ | 250% | 400% |
+
+**IRB transitional (Art. 4.4–4.6):** Firms that had IRB permission for equities on
+31 December 2026 use the **higher of**:
+
+- the risk weight from their old IRB methodology (PD/LGD method under CRR Art. 155,
+  as in force on 31 Dec 2026), and
+- the transitional SA risk weight from the schedule above.
+
+This provides a floor-based transition — IRB firms don't immediately jump to SA weights,
+but cannot produce risk weights below the transitional SA schedule.
+
+**Opt-out (Art. 4.9–4.10):** Firms may elect to skip the transitional and apply full Basel 3.1
+weights immediately. This election is **irrevocable** and requires prior PRA notification.
+
+### CIU Exposures
+
+Basel 3.1 retains the same three approaches for CIUs as CRR, but the removal of IRB
+for equity underlyings has a material impact:
+
+| Approach | Treatment | Change from CRR |
+|----------|-----------|-----------------|
+| Look-through (Art. 132A(1) / 152(2)) | RW each underlying as if held directly | Equity underlyings now get **SA RWs** (250%/400%) instead of IRB PD/LGD |
+| Mandate-based (Art. 132A(2) / 152(5)) | Worst-case allocation per mandate limits | Equity underlyings use SA RWs |
+| Fall-back | **1,250%** | Unchanged |
+
+Under CRR, IRB firms could apply the **simple risk weight approach** (Art. 155(2)) to
+equity underlyings in CIUs, producing lower risk weights via PD/LGD. Under Basel 3.1,
+Art. 155 is removed — equity underlyings must use SA 250%/400% even when applying
+look-through under IRB.
+
+**CIU transitional (Art. 4.7–4.8):** During the 3-year transition period (2027–2029), for
+firms with IRB permission on 31 December 2026, CIU equity underlyings that were subject
+to the simple risk weight approach use the **higher of**:
+
+- the old simple risk weight (CRR Art. 155(2), as in force before 1 Jan 2027), and
+- the transitional SA equity weights from the schedule above.
+
+The same opt-out (Art. 4.9–4.10) applies — firms can skip the CIU transitional alongside
+the equity transitional, but the election covers both and is irrevocable.
 
 ### Defaulted Exposures
 

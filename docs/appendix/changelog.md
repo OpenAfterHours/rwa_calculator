@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docs**: Add CIU exposure treatment to key-differences — three approaches (look-through, mandate-based, 1250% fallback), impact of IRB equity removal on CIU underlyings, and CIU transitional (Art. 4.7–4.8)
+- **Docs**: Add IRB equity transitional to key-differences — floor-based transition for firms with existing IRB permission (Art. 4.4–4.6), irrevocable opt-out (Art. 4.9–4.10)
 - **Docs**: Add post-model adjustments (PMAs) section to key-differences — new Basel 3.1 concept (Art. 146(3)) with no CRR equivalent
 - **Docs**: Add retail-specific A-IRB LGD floor table to key-differences — 5% mortgage, 50% QRRE, 30% other unsecured, 30% LGDU
 - **Docs**: Add "Why Basel 3.1?" section to framework comparison index — explains the rationale for transitioning from CRR (risk-weight variability, inadequate capital, IRB complexity) and how Basel 3.1 responds

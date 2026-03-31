@@ -186,9 +186,7 @@ class HaircutCalculator:
         # Ensure issuer_type column exists for bond type normalization
         schema = collateral.collect_schema()
         if "issuer_type" not in schema.names():
-            collateral = collateral.with_columns(
-                pl.lit(None).cast(pl.String).alias("issuer_type")
-            )
+            collateral = collateral.with_columns(pl.lit(None).cast(pl.String).alias("issuer_type"))
 
         # Normalize collateral type and build sentinel join keys
         bond_types = pl.col("_lookup_type").is_in(["govt_bond", "corp_bond"])
@@ -226,7 +224,12 @@ class HaircutCalculator:
         # Left join to look up haircut values
         collateral = collateral.join(
             ht.select(["collateral_type", "cqs", "maturity_band", "is_main_index", "haircut"]),
-            left_on=["_lookup_type", "_lookup_cqs", "_lookup_maturity_band", "_lookup_is_main_index"],
+            left_on=[
+                "_lookup_type",
+                "_lookup_cqs",
+                "_lookup_maturity_band",
+                "_lookup_is_main_index",
+            ],
             right_on=["collateral_type", "cqs", "maturity_band", "is_main_index"],
             how="left",
             suffix="_ht",

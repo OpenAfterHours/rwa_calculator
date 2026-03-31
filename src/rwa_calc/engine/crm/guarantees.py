@@ -136,17 +136,11 @@ def apply_guarantees(
         ri_names = ri_schema.names()
         missing_rating_cols = []
         if "rating_type" not in ri_names:
-            missing_rating_cols.append(
-                pl.lit(None).cast(pl.String).alias("guarantor_rating_type")
-            )
+            missing_rating_cols.append(pl.lit(None).cast(pl.String).alias("guarantor_rating_type"))
         if "pd" not in ri_names:
-            missing_rating_cols.append(
-                pl.lit(None).cast(pl.Float64).alias("guarantor_pd")
-            )
+            missing_rating_cols.append(pl.lit(None).cast(pl.Float64).alias("guarantor_pd"))
         if "internal_pd" not in ri_names:
-            missing_rating_cols.append(
-                pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd")
-            )
+            missing_rating_cols.append(pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"))
         if missing_rating_cols:
             exposures = exposures.with_columns(missing_rating_cols)
     else:
@@ -279,9 +273,7 @@ def _resolve_guarantees_multi_level(
 
     if has_parent_fac:
         facility_guarantees = guarantees.filter(bt_lower == "facility")
-        fac_exposures = exposures.filter(
-            pl.col("parent_facility_reference").is_not_null()
-        )
+        fac_exposures = exposures.filter(pl.col("parent_facility_reference").is_not_null())
         expanded_parts.append(
             _allocate_guarantees_pro_rata(
                 facility_guarantees, fac_exposures, "parent_facility_reference"

@@ -303,18 +303,13 @@ def apply_firb_supervisory_lgd_no_collateral(
     # Determine LGD based on seniority for F-IRB
     schema_names = set(exposures.collect_schema().names())
     is_subordinated = (
-        pl.col("seniority")
-        .fill_null("")
-        .str.to_lowercase()
-        .is_in(["subordinated", "junior"])
+        pl.col("seniority").fill_null("").str.to_lowercase().is_in(["subordinated", "junior"])
         if "seniority" in schema_names
         else pl.lit(False)
     )
     exposures = exposures.with_columns(
         [
-            pl.when(
-                (pl.col("approach") == ApproachType.FIRB.value) & is_subordinated
-            )
+            pl.when((pl.col("approach") == ApproachType.FIRB.value) & is_subordinated)
             .then(pl.lit(0.75))  # Subordinated (same both frameworks)
             .when(pl.col("approach") == ApproachType.FIRB.value)
             .then(pl.lit(lgd_senior))  # Senior unsecured

@@ -92,30 +92,47 @@ Where an exposure meets multiple criteria, the highest-priority class applies.
 | Corporate | 0.03% | 0.05% |
 | Large Corporate | 0.03% | 0.05% |
 | Institution/Bank | 0.03% | 0.05% |
-| Retail Mortgage | 0.03% | 0.05% |
-| Retail QRRE (Transactor) | 0.03% | 0.03% |
+| Retail Mortgage | 0.03% | **0.10%** |
+| Retail QRRE (Transactor) | 0.03% | 0.05% |
 | Retail QRRE (Revolver) | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
 
 ### LGD Floors (A-IRB Only)
 
+**Corporate / Institution:**
+
 | Collateral Type | CRR | Basel 3.1 |
 |-----------------|-----|-----------|
-| Unsecured Senior | None | 25% |
-| Unsecured Subordinated | None | 50% |
-| Financial Collateral | None | 0% |
-| Receivables | None | 10%* |
-| Commercial RE | None | 10%* |
-| Residential RE | None | 5%* |
-| Other Physical | None | 15%* |
+| Unsecured | None | 25% |
+| Financial Collateral (LGDS) | None | 0% |
+| Receivables (LGDS) | None | 10%* |
+| Commercial/Residential RE (LGDS) | None | 10%* |
+| Other Physical (LGDS) | None | 15%* |
 
-*Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
+**Retail:**
+
+| Exposure Type | CRR | Basel 3.1 |
+|---------------|-----|-----------|
+| Secured by Residential RE (flat) | None | **5%** |
+| QRRE Unsecured | None | **50%** |
+| Other Unsecured Retail | None | **30%** |
+| Secured — LGDU in LGD* formula | None | **30%** |
+| Secured — Financial Collateral (LGDS) | None | 0% |
+| Secured — Receivables (LGDS) | None | 10%* |
+| Secured — Immovable Property (LGDS) | None | 10%* |
+| Secured — Other Physical (LGDS) | None | 15%* |
+
+Note: The retail unsecured LGDU used in the LGD* formula for secured exposures is
+**30%** (Art. 164(4)(c)), compared to 25% for corporates (Art. 161(5)(b)).
+
+*LGDS values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
 ### F-IRB Supervisory LGD
 
 | Exposure Type | CRR | Basel 3.1 | Change |
 |---------------|-----|-----------|--------|
-| Corporate/Institution (Senior) | 45% | **40%** | -5pp |
+| Financial Sector Entity (Senior) | 45% | **45%** | — |
+| Other Corporate (Senior) | 45% | **40%** | -5pp |
 | Corporate/Institution (Subordinated) | 75% | **75%** | - |
 | Secured - Financial Collateral | 0% | **0%** | - |
 | Secured - Receivables | 35% | **20%** | -15pp |
@@ -128,7 +145,7 @@ A-IRB (own-LGD estimates) is removed for several exposure types:
 
 | Exposure Type | CRR | Basel 3.1 |
 |---------------|-----|-----------|
-| Large Corporate (>£500m) | F-IRB or A-IRB | **F-IRB only** |
+| Large Corporate (>£440m) | F-IRB or A-IRB | **F-IRB only** |
 | Financial Sector Entities | F-IRB or A-IRB | **F-IRB only** |
 | Bank/Institution | F-IRB or A-IRB | **F-IRB only** |
 | Equity | IRB | **SA only** |
@@ -137,13 +154,33 @@ A-IRB (own-LGD estimates) is removed for several exposure types:
 secured by UK residential property must have a minimum risk weight of **10%** under IRB,
 regardless of model output (applied as post-model adjustment).
 
-### Large Corporate Correlation Multiplier
+### Financial Sector Correlation Multiplier
 
-Under Basel 3.1, large corporates (consolidated revenue > £500m) receive a **1.25x** correlation multiplier on their asset correlation (CRE31.5). This increases capital requirements for large corporate exposures treated under F-IRB.
+Under both CRR and Basel 3.1, **large financial sector entities** and **unregulated financial
+sector entities** receive a **1.25x** correlation multiplier on their asset correlation
+(Art. 153(2) / CRE31.5). This is unchanged between frameworks. Note: this applies to
+financial sector entities specifically, not to all large corporates (>£440m revenue) — those
+are restricted to F-IRB but use the standard correlation formula.
 
 ### A-IRB CCF Floor
 
 Under Basel 3.1, A-IRB own-estimate CCFs must be at least **50% of the SA CCF** for the same item type (CRE32.27). This constrains A-IRB benefit from low CCF estimates.
+
+### Post-Model Adjustments (PMAs)
+
+Basel 3.1 introduces mandatory **post-model adjustments** (Art. 146(3)) — a new concept
+with no CRR equivalent. When an IRB rating system does not comply with IRB requirements
+and the non-compliance causes a material reduction in RWA or EL, the institution must
+quantify additive adjustments to offset the impact:
+
+| PMA Component | Covers | Added via |
+|---------------|--------|----------|
+| (a) Corporate/Institution RWA | Model deficiencies on corporate/institution exposures | Art. 153(5A) |
+| (b) Retail RWA | Model deficiencies on retail exposures | Art. 154(4A)(a) |
+| (c) Expected Loss | Model deficiencies affecting EL amounts | Art. 158(6A) |
+
+PMAs are included in the output floor calculation base, so they cannot be avoided by
+flooring to SA. They persist until the model non-compliance is remediated.
 
 ## Supporting Factors
 
@@ -331,9 +368,9 @@ IRB is **removed** for equity under Basel 3.1 — SA only.
 
 | Year | Standard | Higher-Risk |
 |------|----------|-------------|
-| 2027 | 130% | 160% |
-| 2028 | 160% | 220% |
-| 2029 | 190% | 280% |
+| 2027 | 160% | 220% |
+| 2028 | 190% | 280% |
+| 2029 | 220% | 340% |
 | 2030+ | 250% | 400% |
 
 ### Defaulted Exposures
@@ -476,8 +513,10 @@ Basel 3.1 maturity bands: 0-1y, 1-3y, 3-5y, 5-10y, 10y+.
 
 ### Unfunded Credit Protection
 
-New requirement: all unfunded credit protection must include **"change of control"** provisions.
-Transitional relief for contracts entered before 1 January 2027 until June 2028.
+New requirement: unfunded credit protection must not be unilaterally **cancellable or
+changeable** by the protection provider (Art. 213(1)(c)(i)). The "or change" condition is
+new in Basel 3.1. Transitional relief for contracts entered before 1 January 2027 until
+June 2028 waives the "or change" requirement for legacy contracts.
 
 ## Impact Analysis
 

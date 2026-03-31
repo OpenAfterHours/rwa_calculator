@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docs**: Add OF 02.00 and OF 02.01 output floor reporting documentation — master own funds requirements template with new SA-only and output floor columns, dedicated output floor comparison template (U-TREA vs S-TREA), flow diagram showing how IRB output floor columns feed into total capital, Pillar III cross-reference (UKB OV1/KM1)
 - **Docs**: Add CIU exposure treatment to key-differences — three approaches (look-through, mandate-based, 1250% fallback), impact of IRB equity removal on CIU underlyings, and CIU transitional (Art. 4.7–4.8)
 - **Docs**: Add IRB equity transitional to key-differences — floor-based transition for firms with existing IRB permission (Art. 4.4–4.6), irrevocable opt-out (Art. 4.9–4.10)
 - **Docs**: Add post-model adjustments (PMAs) section to key-differences — new Basel 3.1 concept (Art. 146(3)) with no CRR equivalent

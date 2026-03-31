@@ -9,6 +9,8 @@ differences. For complete column and row definitions, see the
 
 | Template | CRR Name | Basel 3.1 Name | Purpose |
 |----------|----------|----------------|---------|
+| **02.00** | C 02.00 | OF 02.00 | Own funds requirements (all risk types) |
+| **02.01** | — | OF 02.01 | Output floor comparison (**new**) |
 | **07.00** | C 07.00 | OF 07.00 | SA credit risk |
 | **08.01** | C 08.01 | OF 08.01 | IRB totals by exposure class |
 | **08.02** | C 08.02 | OF 08.02 | IRB by obligor grade |
@@ -313,6 +315,105 @@ residence. Submitted once at total level and once per material country.
 
 ---
 
+## C 02.00 / OF 02.00 — Own Funds Requirements (CA2)
+
+This is the master template aggregating RWEA across all risk types. Under Basel 3.1, it
+gains two new columns for the output floor calculation — this is where the floor is
+actually applied at the total capital level.
+
+### Column Changes
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Unchanged** | 0010 | All approaches — RWEA using actual modelled/SA mix |
+| **Added** | 0020 | Standardised approaches only — SA-equivalent RWEA per row (for floor comparison) |
+| **Added** | 0030 | Output floor — RWEA after applying floor multiplier and OF-ADJ per Art. 92 |
+
+Under CRR, C 02.00 had only column 0010. The two new columns enable the supervisory
+comparison between modelled and standardised RWEA at each row level.
+
+### Row Changes — Credit Risk
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Restructured** | 0240–0297 | F-IRB rows now broken out by subclass: institutions (0271), corporates — specialised lending (0290), financial/large corporates (0295), other general SME (0296), other general non-SME (0297) |
+| **Restructured** | 0310–0410 | A-IRB rows broken out: corporates — specialised lending (0350), other general SME (0355), non-SME (0356); retail — RIP SME (0382), RIP non-SME (0383), CRE SME (0384), CRE non-SME (0385), QRRE (0390), other SME (0400), other non-SME (0410) |
+| **Added** | 0411–0416 | Slotting separated from IRB: PF (0412), OF (0413), CF (0414), IPRE (0415), HVCRE (0416) |
+| **Added** | 0131 | SA corporates — of which: specialised lending |
+| **Unchanged** | 0070–0211 | SA exposure class breakdown (central govts through other items) |
+
+### Row Changes — Non-Credit Risk
+
+| Change | Ref(s) | Description |
+|--------|--------|-------------|
+| **Expanded** | 0530–5898 | Market risk rows expanded: SSA (0530), ASA for ASA desks (0571), IMA (0580), ASA for all desks / output floor (5860), ASA for IMA desks (5870) |
+| **Added** | 5898 | Capital charge for switching positions between trading and non-trading book |
+| **Restructured** | 0640–0643 | CVA risk broken out: SA (0641), BA (0642), AA (0643) |
+
+### How the Output Floor Flows Through
+
+```
+OF 08.01 / 08.02 cols 0275–0276     →  SA-equivalent RWEA per IRB exposure class
+  ↓ aggregated into
+OF 02.00 col 0020 (SA-only RWEA)    →  S-TREA components by risk type
+  ↓ compared against
+OF 02.00 col 0010 (all approaches)  →  U-TREA components by risk type
+  ↓ floor applied
+OF 02.00 col 0030 (output floor)    →  TREA = max(U-TREA, x × S-TREA + OF-ADJ)
+```
+
+---
+
+## OF 02.01 — Output Floor (New)
+
+A **new** template with no CRR equivalent. Provides the output floor comparison at the
+total risk type level for firms using internal models. This template does NOT apply the
+floor multiplier — it provides the raw comparison data. The actual floor application
+happens in OF 02.00 column 0030.
+
+**Scope:** OF 02.01 is required for IM firms in scope of the output floor, applied on:
+
+- consolidated basis at the UK group level
+- individual basis for UK standalone firms
+- sub-consolidated basis for ring-fenced bank (RFB) sub-groups
+
+### Columns
+
+| Ref | Description |
+|-----|-------------|
+| 0010 | RWA for modelled approaches only |
+| 0020 | RWA for portfolios on standardised approaches |
+| 0030 | Total RWA (**U-TREA**) = col 0010 + col 0020 |
+| 0040 | Standardised total RWA (**S-TREA**) — entire portfolio recalculated using SA only, **without** floor multiplier |
+
+### Rows
+
+| Ref | Description |
+|-----|-------------|
+| 0010 | Credit risk (excluding CCR) |
+| 0020 | Counterparty credit risk |
+| 0030 | Credit valuation adjustment |
+| 0040 | Securitisation exposures (banking book) |
+| 0050 | Market risk |
+| 0060 | Operational risk |
+| 0070 | Residual RWA (equity in funds, settlement risk, etc.) |
+| 0080 | **Total** (sum of rows 0010–0070) |
+
+The floor is then calculated externally:
+`TREA = max(row 0080 col 0030, x × row 0080 col 0040 + OF-ADJ)` where `x` is the
+transitional floor percentage (50% in 2027 → 72.5% in 2032+).
+
+### Relationship to Pillar III Disclosure
+
+| COREP (Supervisory) | Pillar III (Public) | Relationship |
+|---------------------|---------------------|-------------|
+| OF 02.00 col 0030 (output floor RWEA) | UKB OV1 row 29 (total RWEA) | Final floored RWEA |
+| OF 02.01 row 0080 col 0030 (U-TREA) | UKB KM1 row 4a (pre-floor RWEA) | Un-floored total |
+| Floor multiplier (Art. 92(5)) | UKB OV1 row 26 | Output floor % |
+| Floor adjustment (OF-ADJ) | UKB OV1 row 27 | Provision reconciliation |
+
+---
+
 ## Key Themes
 
 The template changes across all nine credit risk templates reflect five Basel 3.1 themes:
@@ -322,7 +423,9 @@ The template changes across all nine credit risk templates reflect five Basel 3.
    geographical SA (0080–0082), geographical IRB (0110, 0121–0122). Double default (0220)
    also removed.
 2. **Output floor infrastructure** — new columns (0275–0276) in IRB templates report
-   SA-equivalent values for floor calculation.
+   SA-equivalent values for floor calculation. These feed into **OF 02.00** columns 0020/0030
+   (output floor at total capital level) and the new **OF 02.01** template (U-TREA vs S-TREA
+   comparison).
 3. **Greater granularity** — expanded SA risk weight bands (15 → 29), detailed real estate
    breakdowns replacing broad mortgage rows (OF 07.00 rows 0330–0360, OF 09.01 rows
    0091–0094), specialised lending sub-categories across SA and IRB geo breakdowns,

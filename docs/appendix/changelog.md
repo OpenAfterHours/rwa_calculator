@@ -8,7 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docs**: Add post-model adjustments (PMAs) section to key-differences — new Basel 3.1 concept (Art. 146(3)) with no CRR equivalent
+- **Docs**: Add retail-specific A-IRB LGD floor table to key-differences — 5% mortgage, 50% QRRE, 30% other unsecured, 30% LGDU
 - **Docs**: Add "Why Basel 3.1?" section to framework comparison index — explains the rationale for transitioning from CRR (risk-weight variability, inadequate capital, IRB complexity) and how Basel 3.1 responds
+
+### Fixed
+- **Docs**: Correct equity transitional schedule — 2027 starts at 160%/220% (not 130%/160%) after implementation date shifted to 2027
+- **Docs**: Split F-IRB senior LGD into financial entities (45%, unchanged) and other corporates (40%) — previously shown as single 40% row
+- **Docs**: Correct large corporate threshold from >£500m to >£440m (Art. 147(4C))
+- **Docs**: Correct correlation multiplier scope — 1.25x applies to financial sector entities (Art. 153(2)), not all large corporates
+- **Docs**: Correct PD floor for retail mortgage from 0.05% to 0.10% (PRA Art. 163(1)(b))
+- **Docs**: Correct PD floor for QRRE transactor from 0.03% to 0.05% (falls under "all other retail")
+- **Docs**: Correct unfunded credit protection terminology — "cancel or change" (Art. 213(1)(c)(i)), not "change of control"
 - **Docs**: Add Pillar III disclosure documentation covering 9 quantitative credit risk templates (OV1, CR4, CR5, CR6, CR6-A, CR7, CR7-A, CR8, CR10) with CRR and Basel 3.1 column/row definitions
 - **Docs**: Add CRR vs Basel 3.1 disclosure differences page — template naming (UK→UKB), output floor rows, expanded risk weight columns, post-model adjustments, slotting CRM, equity transitional treatment
 - **Docs**: Expand COREP template comparison documentation to cover all 9 key credit risk templates (C 07.00, C 08.01–08.07, C 09.01–09.02) — previously only C 07.00, C 08.01, C 08.02 were documented

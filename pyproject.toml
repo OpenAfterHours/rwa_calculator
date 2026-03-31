@@ -135,4 +135,5 @@ dev = [
     "mkdocstrings[python]>=1.0.0",
     "pytest-benchmark>=5.2.3",
     "numpy>=1.26.0",  # For benchmark data generation only
+    "pymupdf>=1.27.2.2",
 ]

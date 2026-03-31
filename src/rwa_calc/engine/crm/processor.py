@@ -509,6 +509,13 @@ class CRMProcessor:
                 exposures, self._is_basel_3_1
             )
 
+        # Materialise after collateral before guarantee processing.
+        # Collateral adds 3 lookup joins + haircuts + unified allocation;
+        # without this collect, the guarantee module's 3-path concat
+        # (no-guarantee / single / multi-guarantor split) re-evaluates the
+        # full collateral plan per branch, causing ~4x slowdown at 100K scale.
+        exposures = exposures.collect().lazy()
+
         if (
             has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None

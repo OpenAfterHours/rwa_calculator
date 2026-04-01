@@ -730,5 +730,3 @@ def _build_guaranteed_portions(
             pl.lit("guaranteed").alias("crm_portion_type"),
         ]
     )
-
-

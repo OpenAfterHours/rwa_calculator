@@ -21,7 +21,6 @@ from rwa_calc.engine.aggregator import (
     apply_floor_with_impact,
     compute_el_portfolio_summary,
     generate_post_crm_detailed,
-    generate_post_crm_summary,
     generate_summary_by_approach,
     generate_summary_by_class,
     generate_supporting_factor_impact,
@@ -426,9 +425,7 @@ class TestSummaryGeneration:
                 "rwa_final": [7000000.0],
             }
         )
-        combined = pl.concat(
-            [sa_results, irb_results, slotting_results], how="diagonal_relaxed"
-        )
+        combined = pl.concat([sa_results, irb_results, slotting_results], how="diagonal_relaxed")
         post_crm_detailed = generate_post_crm_detailed(combined)
         summary = generate_summary_by_approach(post_crm_detailed).collect()
 

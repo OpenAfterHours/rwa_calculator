@@ -86,5 +86,3 @@ class TestIRBApproaches:
 
     def test_is_frozenset(self) -> None:
         assert isinstance(IRB_APPROACHES, frozenset)
-
-

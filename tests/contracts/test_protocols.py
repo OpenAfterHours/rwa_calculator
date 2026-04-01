@@ -234,4 +234,3 @@ class TestProtocolRuntimeCheckable:
         calculator = StubIRBCalculator()
 
         assert isinstance(calculator, IRBCalculatorProtocol)
-

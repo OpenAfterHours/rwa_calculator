@@ -26,7 +26,6 @@ from rwa_calc.contracts.protocols import (
     HierarchyResolverProtocol,
     IRBCalculatorProtocol,
     LoaderProtocol,
-    OutputAggregatorProtocol,
     SACalculatorProtocol,
 )
 
@@ -128,36 +127,6 @@ class StubIRBCalculator:
         return LazyFrameResult(frame=pl.LazyFrame())
 
 
-class StubOutputAggregator:
-    """Stub implementation of OutputAggregatorProtocol."""
-
-    def aggregate(
-        self,
-        sa_results: pl.LazyFrame,
-        irb_results: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        return pl.LazyFrame()
-
-    def aggregate_with_audit(
-        self,
-        sa_results: pl.LazyFrame,
-        irb_results: pl.LazyFrame,
-        config: CalculationConfig,
-    ):
-        from rwa_calc.contracts.bundles import AggregatedResultBundle
-
-        return AggregatedResultBundle(results=pl.LazyFrame())
-
-    def apply_output_floor(
-        self,
-        irb_rwa: pl.LazyFrame,
-        sa_equivalent_rwa: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        return pl.LazyFrame()
-
-
 class TestProtocolCompliance:
     """Tests that stub implementations satisfy protocols."""
 
@@ -224,18 +193,6 @@ class TestProtocolCompliance:
         result = calculator.calculate(data, config)
         assert isinstance(result, LazyFrameResult)
 
-    def test_output_aggregator_protocol_satisfied(self):
-        """StubOutputAggregator should satisfy OutputAggregatorProtocol."""
-        aggregator = StubOutputAggregator()
-        assert isinstance(aggregator, OutputAggregatorProtocol)
-
-        sa = pl.LazyFrame()
-        irb = pl.LazyFrame()
-        config = CalculationConfig.crr(reporting_date=date(2025, 1, 1))
-
-        result = aggregator.aggregate(sa, irb, config)
-        assert isinstance(result, pl.LazyFrame)
-
 
 class TestProtocolRuntimeCheckable:
     """Tests that protocols are runtime checkable."""
@@ -278,8 +235,3 @@ class TestProtocolRuntimeCheckable:
 
         assert isinstance(calculator, IRBCalculatorProtocol)
 
-    def test_output_aggregator_isinstance_check(self):
-        """isinstance should work with OutputAggregatorProtocol."""
-        aggregator = StubOutputAggregator()
-
-        assert isinstance(aggregator, OutputAggregatorProtocol)

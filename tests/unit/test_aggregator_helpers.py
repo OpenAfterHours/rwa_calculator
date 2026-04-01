@@ -11,8 +11,6 @@ from rwa_calc.engine.aggregator import (
     RESULT_SCHEMA,
     col_or_default,
     empty_frame,
-    prepare_irb_results,
-    prepare_sa_results,
     resolve_rwa_col,
 )
 
@@ -90,58 +88,3 @@ class TestIRBApproaches:
         assert isinstance(IRB_APPROACHES, frozenset)
 
 
-class TestPrepareIRBResults:
-    """Tests for prepare_irb_results guarantee-based approach substitution."""
-
-    def test_fully_guaranteed_sa_becomes_standardised(self) -> None:
-        irb = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "approach": ["FIRB"],
-                "rwa": [100.0],
-                "guarantor_approach": ["sa"],
-                "guarantee_ratio": [1.0],
-            }
-        )
-        result = prepare_irb_results(irb).collect()
-        assert result["approach_applied"][0] == "standardised"
-
-    def test_partially_guaranteed_keeps_original(self) -> None:
-        irb = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "approach": ["FIRB"],
-                "rwa": [100.0],
-                "guarantor_approach": ["sa"],
-                "guarantee_ratio": [0.5],
-            }
-        )
-        result = prepare_irb_results(irb).collect()
-        assert result["approach_applied"][0] == "FIRB"
-
-    def test_no_guarantee_cols_defaults_to_approach(self) -> None:
-        irb = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "approach": ["advanced_irb"],
-                "rwa": [100.0],
-            }
-        )
-        result = prepare_irb_results(irb).collect()
-        assert result["approach_applied"][0] == "advanced_irb"
-
-
-class TestPrepareSAResults:
-    """Tests for prepare_sa_results."""
-
-    def test_adds_sa_approach_and_rwa_final(self) -> None:
-        sa = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "rwa_post_factor": [500.0],
-                "rwa": [600.0],
-            }
-        )
-        result = prepare_sa_results(sa).collect()
-        assert result["approach_applied"][0] == "SA"
-        assert result["rwa_final"][0] == pytest.approx(500.0)  # prefers rwa_post_factor

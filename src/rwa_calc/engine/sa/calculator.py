@@ -5,7 +5,7 @@ Implements CRR Art. 112-134 and Basel 3.1 CRE20 risk weight lookups and RWA
 calculation. Supports both frameworks via config.is_basel_3_1 branching.
 
 Pipeline position:
-    CRMProcessor -> SACalculator -> OutputAggregator
+    CRMProcessor -> SACalculator -> Aggregation
 
 Key responsibilities:
 - CQS-based risk weight lookup (sovereign, institution, corporate)

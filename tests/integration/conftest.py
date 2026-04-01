@@ -34,7 +34,6 @@ from rwa_calc.data.schemas import (
     ORG_MAPPING_SCHEMA,
     RATINGS_SCHEMA,
 )
-from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator
@@ -387,8 +386,3 @@ def slotting_calculator() -> SlottingCalculator:
 @pytest.fixture
 def equity_calculator() -> EquityCalculator:
     return EquityCalculator()
-
-
-@pytest.fixture
-def aggregator() -> OutputAggregator:
-    return OutputAggregator()

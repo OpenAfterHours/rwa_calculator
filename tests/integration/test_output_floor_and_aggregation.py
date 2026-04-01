@@ -10,7 +10,7 @@ acceptance tests verify floor values with golden files, but cannot isolate
 aggregation logic. These tests verify the floor formula, transitional
 schedule, and summary generation wiring without full pipeline overhead.
 
-Components wired: SACalculator + IRBCalculator + SlottingCalculator → OutputAggregator
+Components wired: SACalculator + IRBCalculator + SlottingCalculator → Aggregation
 """
 
 from __future__ import annotations
@@ -29,11 +29,11 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import RATINGS_SCHEMA
-from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.irb.calculator import IRBCalculator
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
 
@@ -127,21 +127,19 @@ def _run_full_pipeline(
     sa_calculator: SACalculator,
     irb_calculator: IRBCalculator,
     slotting_calculator: SlottingCalculator,
-    aggregator: OutputAggregator,
     config: CalculationConfig,
     bundle: RawDataBundle,
 ) -> AggregatedResultBundle:
-    """Run full pipeline through aggregation."""
-    crm_bundle = _run_through_crm(resolver, classifier, crm_processor, config, bundle)
-    sa_result = sa_calculator.get_sa_result_bundle(crm_bundle, config)
-    irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, config)
-    slotting_result = slotting_calculator.get_slotting_result_bundle(crm_bundle, config)
-    return aggregator.aggregate_with_audit(
-        sa_bundle=sa_result,
-        irb_bundle=irb_result,
-        slotting_bundle=slotting_result,
-        config=config,
+    """Run full pipeline through aggregation using PipelineOrchestrator."""
+    pipeline = PipelineOrchestrator(
+        hierarchy_resolver=resolver,
+        classifier=classifier,
+        crm_processor=crm_processor,
+        sa_calculator=sa_calculator,
+        irb_calculator=irb_calculator,
+        slotting_calculator=slotting_calculator,
     )
+    return pipeline.run_with_data(bundle, config)
 
 
 # =============================================================================
@@ -160,7 +158,6 @@ class TestOutputFloor:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_firb_config,
     ):
         """CRR: no output floor → floor_impact is None."""
@@ -177,7 +174,6 @@ class TestOutputFloor:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_firb_config,
             bundle,
         )
@@ -192,7 +188,6 @@ class TestOutputFloor:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         basel31_full_irb_config,
     ):
         """Basel 3.1 with IRB exposures → floor_impact is populated."""
@@ -210,7 +205,6 @@ class TestOutputFloor:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             basel31_full_irb_config,
             bundle,
         )
@@ -266,7 +260,6 @@ class TestSummaries:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_config,
     ):
         """SA-only portfolio → summary_by_class is populated with exposure class rows."""
@@ -282,7 +275,6 @@ class TestSummaries:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_config,
             bundle,
         )
@@ -299,7 +291,6 @@ class TestSummaries:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_firb_config,
     ):
         """Mixed portfolio → summary_by_approach has at least SA row."""
@@ -350,7 +341,6 @@ class TestSummaries:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_firb_config,
             bundle,
         )
@@ -367,7 +357,6 @@ class TestSummaries:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_firb_config,
     ):
         """SA + IRB combined results contain all exposures."""
@@ -416,7 +405,6 @@ class TestSummaries:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_firb_config,
             bundle,
         )
@@ -441,7 +429,6 @@ class TestSummaries:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_firb_config,
     ):
         """IRB portfolio → EL summary has expected_loss and T2 credit cap."""
@@ -458,7 +445,6 @@ class TestSummaries:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_firb_config,
             bundle,
         )
@@ -481,7 +467,6 @@ class TestSummaries:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_config,
     ):
         """CRR SME corporate → supporting_factor_impact populated."""
@@ -499,7 +484,6 @@ class TestSummaries:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_config,
             bundle,
         )
@@ -527,7 +511,6 @@ class TestErrorAccumulation:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_config,
     ):
         """SA-only portfolio → valid aggregated result with no critical errors."""
@@ -543,7 +526,6 @@ class TestErrorAccumulation:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_config,
             bundle,
         )
@@ -559,7 +541,6 @@ class TestErrorAccumulation:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_config,
     ):
         """SA-only portfolio → no IRB results → still valid aggregation."""
@@ -575,7 +556,6 @@ class TestErrorAccumulation:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_config,
             bundle,
         )
@@ -596,7 +576,6 @@ class TestErrorAccumulation:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_config,
     ):
         """Pre-CRM summary is generated in aggregated results."""
@@ -612,7 +591,6 @@ class TestErrorAccumulation:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_config,
             bundle,
         )
@@ -629,7 +607,6 @@ class TestErrorAccumulation:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_config,
     ):
         """Post-CRM summary is generated in aggregated results."""
@@ -645,7 +622,6 @@ class TestErrorAccumulation:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_config,
             bundle,
         )
@@ -662,7 +638,6 @@ class TestErrorAccumulation:
         sa_calculator,
         irb_calculator,
         slotting_calculator,
-        aggregator,
         crr_config,
     ):
         """AggregatedResultBundle has all expected summary fields populated."""
@@ -678,7 +653,6 @@ class TestErrorAccumulation:
             sa_calculator,
             irb_calculator,
             slotting_calculator,
-            aggregator,
             crr_config,
             bundle,
         )

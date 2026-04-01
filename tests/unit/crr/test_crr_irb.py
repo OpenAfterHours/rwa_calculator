@@ -23,6 +23,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.single_exposure import calculate_single_irb_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -299,7 +300,8 @@ class TestFIRBSupervisoryLGD:
         crr_config: CalculationConfig,
     ) -> None:
         """Senior unsecured should get 45% LGD."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=None,  # F-IRB supervisory
@@ -315,7 +317,8 @@ class TestFIRBSupervisoryLGD:
         crr_config: CalculationConfig,
     ) -> None:
         """Subordinated should get 75% LGD."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=None,
@@ -332,7 +335,8 @@ class TestFIRBSupervisoryLGD:
         crr_config: CalculationConfig,
     ) -> None:
         """Real estate secured should get 35% LGD."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=None,
@@ -358,7 +362,8 @@ class TestPDFloor:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR PD floor (0.03%) should be applied."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.0001"),  # 0.01% - below floor
             lgd=Decimal("0.45"),
@@ -375,7 +380,8 @@ class TestPDFloor:
         crr_config: CalculationConfig,
     ) -> None:
         """PD above floor should be unchanged."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.05"),  # 5% - well above floor
             lgd=Decimal("0.45"),
@@ -456,7 +462,8 @@ class TestIRBRWACalculation:
         crr_config: CalculationConfig,
     ) -> None:
         """Retail exposures should not have maturity adjustment."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("100000"),
             pd=Decimal("0.02"),
             lgd=Decimal("0.30"),
@@ -489,7 +496,8 @@ class TestExpectedLoss:
         crr_config: CalculationConfig,
     ) -> None:
         """Expected loss should be included in calculation result."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=Decimal("0.45"),
@@ -633,7 +641,8 @@ class TestCRRVsBasel31:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR should apply 1.06 scaling factor."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=Decimal("0.45"),
@@ -649,7 +658,8 @@ class TestCRRVsBasel31:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1 should not apply 1.06 scaling factor."""
-        result = irb_calculator.calculate_single_exposure(
+        result = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=Decimal("0.45"),
@@ -666,14 +676,16 @@ class TestCRRVsBasel31:
         basel31_config: CalculationConfig,
     ) -> None:
         """CRR has 0.03% PD floor vs Basel 3.1 0.05% for corporates."""
-        result_crr = irb_calculator.calculate_single_exposure(
+        result_crr = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.0001"),
             lgd=Decimal("0.45"),
             exposure_class="CORPORATE",
             config=crr_config,
         )
-        result_basel = irb_calculator.calculate_single_exposure(
+        result_basel = calculate_single_irb_exposure(
+            irb_calculator,
             ead=Decimal("1000000"),
             pd=Decimal("0.0001"),
             lgd=Decimal("0.45"),

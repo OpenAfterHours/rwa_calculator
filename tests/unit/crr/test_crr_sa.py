@@ -23,6 +23,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -75,15 +76,16 @@ class TestSovereignRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CQS 1 sovereign (e.g., UK Govt) should get 0% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=1,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_cqs2_twenty_percent(
         self,
@@ -91,15 +93,16 @@ class TestSovereignRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CQS 2 sovereign should get 20% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
-        assert result["rwa"] == pytest.approx(Decimal("200000"))
+        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["rwa"] == pytest.approx(200000)
 
     def test_unrated_hundred_percent(
         self,
@@ -107,15 +110,16 @@ class TestSovereignRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """Unrated sovereign should get 100% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=None,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.0"))
-        assert result["rwa"] == pytest.approx(Decimal("1000000"))
+        assert result["risk_weight"] == pytest.approx(1.0)
+        assert result["rwa"] == pytest.approx(1000000)
 
 
 class TestArticle114_3DomesticCurrency:
@@ -131,7 +135,8 @@ class TestArticle114_3DomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """UK sovereign + GBP + CQS 2 → 0% RW (domestic currency override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -140,8 +145,8 @@ class TestArticle114_3DomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_uk_sovereign_gbp_unrated_gets_zero_rw(
         self,
@@ -149,7 +154,8 @@ class TestArticle114_3DomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """UK sovereign + GBP + unrated → 0% RW (domestic currency override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=None,
@@ -158,8 +164,8 @@ class TestArticle114_3DomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_uk_sovereign_usd_uses_cqs_based_rw(
         self,
@@ -167,7 +173,8 @@ class TestArticle114_3DomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """UK sovereign + USD + CQS 2 → 20% RW (foreign currency, no override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -176,8 +183,8 @@ class TestArticle114_3DomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
-        assert result["rwa"] == pytest.approx(Decimal("200000"))
+        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["rwa"] == pytest.approx(200000)
 
     def test_non_uk_sovereign_gbp_uses_cqs_based_rw(
         self,
@@ -185,7 +192,8 @@ class TestArticle114_3DomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Non-UK sovereign (US) + GBP + CQS 2 → 20% RW (not UK, no override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -194,8 +202,8 @@ class TestArticle114_3DomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
-        assert result["rwa"] == pytest.approx(Decimal("200000"))
+        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["rwa"] == pytest.approx(200000)
 
     def test_corporate_gb_gbp_no_override(
         self,
@@ -203,7 +211,8 @@ class TestArticle114_3DomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Corporate + GB + GBP → CQS-based RW (Art. 114(3) only applies to CGCB)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=2,
@@ -212,8 +221,8 @@ class TestArticle114_3DomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
-        assert result["rwa"] == pytest.approx(Decimal("500000"))
+        assert result["risk_weight"] == pytest.approx(0.50)
+        assert result["rwa"] == pytest.approx(500000)
 
     def test_missing_currency_falls_through_to_cqs(
         self,
@@ -221,7 +230,8 @@ class TestArticle114_3DomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Missing currency → falls through to CQS-based RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -229,7 +239,7 @@ class TestArticle114_3DomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
+        assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_uk_sovereign_gbp_cqs1_still_zero(
         self,
@@ -237,7 +247,8 @@ class TestArticle114_3DomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """UK sovereign + GBP + CQS 1 → 0% RW (both paths agree)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=1,
@@ -246,8 +257,8 @@ class TestArticle114_3DomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_uk_sovereign_gbp_basel31_gets_zero_rw(
         self,
@@ -255,7 +266,8 @@ class TestArticle114_3DomesticCurrency:
         basel31_config: CalculationConfig,
     ) -> None:
         """Art. 114(3) also applies under Basel 3.1 — UK sovereign + GBP → 0%."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=3,
@@ -264,8 +276,8 @@ class TestArticle114_3DomesticCurrency:
             config=basel31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
 
 class TestInstitutionRiskWeights:
@@ -277,15 +289,16 @@ class TestInstitutionRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CQS 1 institution should get 20% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="INSTITUTION",
             cqs=1,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
-        assert result["rwa"] == pytest.approx(Decimal("200000"))
+        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["rwa"] == pytest.approx(200000)
 
     def test_cqs2_uk_deviation_thirty_percent(
         self,
@@ -293,7 +306,8 @@ class TestInstitutionRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CQS 2 institution with UK deviation should get 30% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="INSTITUTION",
             cqs=2,
@@ -301,8 +315,8 @@ class TestInstitutionRiskWeights:
         )
 
         # UK deviation: 30% instead of Basel standard 50%
-        assert result["risk_weight"] == pytest.approx(Decimal("0.30"))
-        assert result["rwa"] == pytest.approx(Decimal("300000"))
+        assert result["risk_weight"] == pytest.approx(0.30)
+        assert result["rwa"] == pytest.approx(300000)
 
     def test_unrated_forty_percent(
         self,
@@ -310,15 +324,16 @@ class TestInstitutionRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """Unrated institution should get 40% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="INSTITUTION",
             cqs=None,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.40"))
-        assert result["rwa"] == pytest.approx(Decimal("400000"))
+        assert result["risk_weight"] == pytest.approx(0.40)
+        assert result["rwa"] == pytest.approx(400000)
 
 
 class TestCorporateRiskWeights:
@@ -330,15 +345,16 @@ class TestCorporateRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CQS 1 corporate should get 20% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=1,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
-        assert result["rwa"] == pytest.approx(Decimal("200000"))
+        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["rwa"] == pytest.approx(200000)
 
     def test_cqs2_fifty_percent(
         self,
@@ -346,15 +362,16 @@ class TestCorporateRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CQS 2 corporate should get 50% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=2,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
-        assert result["rwa"] == pytest.approx(Decimal("500000"))
+        assert result["risk_weight"] == pytest.approx(0.50)
+        assert result["rwa"] == pytest.approx(500000)
 
     def test_unrated_hundred_percent(
         self,
@@ -362,15 +379,16 @@ class TestCorporateRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """Unrated corporate should get 100% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.0"))
-        assert result["rwa"] == pytest.approx(Decimal("1000000"))
+        assert result["risk_weight"] == pytest.approx(1.0)
+        assert result["rwa"] == pytest.approx(1000000)
 
 
 # =============================================================================
@@ -387,14 +405,15 @@ class TestRetailRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """Retail exposures should get 75% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000"),
             exposure_class="RETAIL",
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.75"))
-        assert result["rwa"] == pytest.approx(Decimal("75000"))
+        assert result["risk_weight"] == pytest.approx(0.75)
+        assert result["rwa"] == pytest.approx(75000)
 
     def test_retail_ignores_cqs(
         self,
@@ -402,14 +421,15 @@ class TestRetailRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """Retail RW should not depend on CQS."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000"),
             exposure_class="RETAIL",
             cqs=1,  # Should be ignored
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.75"))
+        assert result["risk_weight"] == pytest.approx(0.75)
 
 
 # =============================================================================
@@ -426,15 +446,16 @@ class TestResidentialMortgageRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """LTV <= 80% should get 35% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.60"),
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.35"))
-        assert result["rwa"] == pytest.approx(Decimal("175000"))
+        assert result["risk_weight"] == pytest.approx(0.35)
+        assert result["rwa"] == pytest.approx(175000)
 
     def test_at_threshold_thirty_five_percent(
         self,
@@ -442,14 +463,15 @@ class TestResidentialMortgageRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """LTV exactly at 80% should get 35% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.80"),
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.35"))
+        assert result["risk_weight"] == pytest.approx(0.35)
 
     def test_high_ltv_split_treatment(
         self,
@@ -459,7 +481,8 @@ class TestResidentialMortgageRiskWeights:
         """LTV > 80% should get split treatment."""
         # At 100% LTV: 80% at 35%, 20% at 75%
         # Weighted: (0.80 × 0.35) + (0.20 × 0.75) = 0.28 + 0.15 = 0.43
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.00"),
@@ -803,7 +826,8 @@ class TestSMESupportingFactor:
         crr_config: CalculationConfig,
     ) -> None:
         """SME factor should reduce RWA."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,  # 100% RW
@@ -813,8 +837,8 @@ class TestSMESupportingFactor:
 
         # Without factor: RWA = 1m × 100% = 1m
         # With factor: RWA = 1m × 100% × 0.7619 = £761,900
-        assert result["supporting_factor"] == pytest.approx(Decimal("0.7619"))
-        assert result["rwa"] == pytest.approx(Decimal("761900"))
+        assert result["supporting_factor"] == pytest.approx(0.7619)
+        assert result["rwa"] == pytest.approx(761900)
         assert result["supporting_factor_applied"] is True
 
     def test_sme_factor_disabled_in_basel31(
@@ -823,7 +847,8 @@ class TestSMESupportingFactor:
         basel31_config: CalculationConfig,
     ) -> None:
         """SME factor should be 1.0 under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -831,7 +856,7 @@ class TestSMESupportingFactor:
             config=basel31_config,
         )
 
-        assert result["supporting_factor"] == pytest.approx(Decimal("1.0"))
+        assert result["supporting_factor"] == pytest.approx(1.0)
         assert result["supporting_factor_applied"] is False
 
 
@@ -844,7 +869,8 @@ class TestInfrastructureSupportingFactor:
         crr_config: CalculationConfig,
     ) -> None:
         """Infrastructure factor should be 0.75."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("10000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -852,9 +878,9 @@ class TestInfrastructureSupportingFactor:
             config=crr_config,
         )
 
-        assert result["supporting_factor"] == pytest.approx(Decimal("0.75"))
+        assert result["supporting_factor"] == pytest.approx(0.75)
         # RWA = 10m × 100% × 0.75 = £7.5m
-        assert result["rwa"] == pytest.approx(Decimal("7500000"))
+        assert result["rwa"] == pytest.approx(7500000)
 
     def test_infrastructure_factor_disabled_in_basel31(
         self,
@@ -862,7 +888,8 @@ class TestInfrastructureSupportingFactor:
         basel31_config: CalculationConfig,
     ) -> None:
         """Infrastructure factor should be 1.0 under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("10000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -870,7 +897,7 @@ class TestInfrastructureSupportingFactor:
             config=basel31_config,
         )
 
-        assert result["supporting_factor"] == pytest.approx(Decimal("1.0"))
+        assert result["supporting_factor"] == pytest.approx(1.0)
 
 
 class TestSupportingFactorPriority:
@@ -887,7 +914,8 @@ class TestSupportingFactorPriority:
         # Should use 0.75 (infrastructure is lower for large exposures)
 
         # Large exposure where SME factor > infra factor
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000000"),  # £100m - SME factor close to 0.85
             exposure_class="CORPORATE",
             cqs=None,
@@ -898,7 +926,7 @@ class TestSupportingFactorPriority:
 
         # At £100m, SME factor is close to 0.85, infra is 0.75
         # Should use 0.75
-        assert result["supporting_factor"] == pytest.approx(Decimal("0.75"))
+        assert result["supporting_factor"] == pytest.approx(0.75)
 
 
 class TestSMESupportingFactorCounterpartyAggregation:
@@ -1219,7 +1247,8 @@ class TestDefaultedExposureRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR Art. 127: provision >= 20% of unsecured EAD -> 100% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -1231,7 +1260,7 @@ class TestDefaultedExposureRiskWeights:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.0"))
+        assert result["risk_weight"] == pytest.approx(1.0)
 
     def test_crr_defaulted_low_provision_150pct_rw(
         self,
@@ -1239,7 +1268,8 @@ class TestDefaultedExposureRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR Art. 127: provision < 20% of unsecured EAD -> 150% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -1251,7 +1281,7 @@ class TestDefaultedExposureRiskWeights:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+        assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_crr_defaulted_zero_provision_150pct_rw(
         self,
@@ -1259,7 +1289,8 @@ class TestDefaultedExposureRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR Art. 127: no provisions at all -> 150% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -1267,7 +1298,7 @@ class TestDefaultedExposureRiskWeights:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+        assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_crr_defaulted_mortgage_gets_defaulted_rw(
         self,
@@ -1275,7 +1306,8 @@ class TestDefaultedExposureRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """Defaulted mortgage should get defaulted treatment, not LTV-based RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RETAIL_MORTGAGE",
             cqs=None,
@@ -1284,7 +1316,7 @@ class TestDefaultedExposureRiskWeights:
         )
 
         # Should be 150% (no provisions), NOT the 35% LTV-based weight
-        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+        assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_crr_non_defaulted_corporate_unchanged(
         self,
@@ -1292,7 +1324,8 @@ class TestDefaultedExposureRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """Non-defaulted corporate should still get normal CQS-based RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=2,
@@ -1300,7 +1333,7 @@ class TestDefaultedExposureRiskWeights:
         )
 
         # CQS 2 corporate = 50%
-        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+        assert result["risk_weight"] == pytest.approx(0.50)
 
     def test_b31_defaulted_high_provision_100pct_rw(
         self,
@@ -1308,7 +1341,8 @@ class TestDefaultedExposureRiskWeights:
         basel31_config: CalculationConfig,
     ) -> None:
         """CRE20.89: provision >= 50% -> 100% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -1320,7 +1354,7 @@ class TestDefaultedExposureRiskWeights:
             config=basel31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.0"))
+        assert result["risk_weight"] == pytest.approx(1.0)
 
     def test_b31_defaulted_low_provision_150pct_rw(
         self,
@@ -1328,7 +1362,8 @@ class TestDefaultedExposureRiskWeights:
         basel31_config: CalculationConfig,
     ) -> None:
         """CRE20.88: provision < 50% -> 150% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -1340,7 +1375,7 @@ class TestDefaultedExposureRiskWeights:
             config=basel31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+        assert result["risk_weight"] == pytest.approx(1.50)
 
 
 class TestDefaultedSMEExclusion:
@@ -1355,7 +1390,8 @@ class TestDefaultedSMEExclusion:
         crr_config: CalculationConfig,
     ) -> None:
         """Defaulted SME should NOT receive supporting factor."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -1366,7 +1402,7 @@ class TestDefaultedSMEExclusion:
             config=crr_config,
         )
 
-        assert result["supporting_factor"] == pytest.approx(Decimal("1.0"))
+        assert result["supporting_factor"] == pytest.approx(1.0)
         assert result["supporting_factor_applied"] is False
 
     def test_sme_factor_applies_to_performing_sme(
@@ -1375,7 +1411,8 @@ class TestDefaultedSMEExclusion:
         crr_config: CalculationConfig,
     ) -> None:
         """Non-defaulted SME should still receive supporting factor."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -1407,7 +1444,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """German sovereign + EUR + CQS 2 → 0% RW (EU domestic currency override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -1416,8 +1454,8 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_eu_eurozone_sovereign_eur_unrated_gets_zero_rw(
         self,
@@ -1425,7 +1463,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """French sovereign + EUR + unrated → 0% RW (EU domestic currency override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=None,
@@ -1434,8 +1473,8 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_eu_non_euro_sovereign_domestic_currency_gets_zero_rw(
         self,
@@ -1443,7 +1482,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Polish sovereign + PLN + CQS 3 → 0% RW (non-euro EU domestic currency)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=3,
@@ -1452,8 +1492,8 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_eu_non_euro_sovereign_eur_uses_cqs_based_rw(
         self,
@@ -1461,7 +1501,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Polish sovereign + EUR → CQS-based RW (EUR is not Poland's domestic currency)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=3,
@@ -1470,7 +1511,7 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+        assert result["risk_weight"] == pytest.approx(0.50)
 
     def test_eu_sovereign_usd_uses_cqs_based_rw(
         self,
@@ -1478,7 +1519,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """German sovereign + USD + CQS 2 → 20% RW (foreign currency, no override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -1487,8 +1529,8 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
-        assert result["rwa"] == pytest.approx(Decimal("200000"))
+        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["rwa"] == pytest.approx(200000)
 
     def test_non_eu_sovereign_eur_uses_cqs_based_rw(
         self,
@@ -1496,7 +1538,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Non-EU sovereign (US) + EUR → CQS-based RW (not EU, no override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -1505,7 +1548,7 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.20"))
+        assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_eu_sovereign_eur_basel31_gets_zero_rw(
         self,
@@ -1513,7 +1556,8 @@ class TestArticle114_4EUDomesticCurrency:
         basel31_config: CalculationConfig,
     ) -> None:
         """Art. 114(4) also applies under Basel 3.1 — EU sovereign + EUR → 0%."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=3,
@@ -1522,8 +1566,8 @@ class TestArticle114_4EUDomesticCurrency:
             config=basel31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_eu_corporate_eur_no_override(
         self,
@@ -1531,7 +1575,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Corporate + DE + EUR → CQS-based RW (Art. 114(4) only applies to CGCB)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=2,
@@ -1540,7 +1585,7 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.50"))
+        assert result["risk_weight"] == pytest.approx(0.50)
 
     def test_eu_sovereign_cqs6_domestic_gets_zero_rw(
         self,
@@ -1548,7 +1593,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Even CQS 6 (150%) gets overridden to 0% for EU domestic sovereign."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=6,
@@ -1557,8 +1603,8 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)
 
     def test_sweden_sek_gets_zero_rw(
         self,
@@ -1566,7 +1612,8 @@ class TestArticle114_4EUDomesticCurrency:
         crr_config: CalculationConfig,
     ) -> None:
         """Swedish sovereign + SEK → 0% RW (non-euro EU domestic currency)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=2,
@@ -1575,5 +1622,5 @@ class TestArticle114_4EUDomesticCurrency:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
-        assert result["rwa"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
+        assert result["rwa"] == pytest.approx(0.0)

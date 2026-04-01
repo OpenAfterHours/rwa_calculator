@@ -25,6 +25,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 import rwa_calc.engine.irb.namespace  # noqa: F401 - register namespace
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
@@ -1503,13 +1504,14 @@ class TestEquityBasel31:
         assert approach == "sa"
 
     def test_single_exposure_crr_irb_uses_irb_rw(self) -> None:
-        """CRR: calculate_single_exposure with IRB uses 370% for other."""
+        """CRR: calculate_single_equity_exposure with IRB uses 370% for other."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
             irb_permissions=IRBPermissions.full_irb(),
         )
         calculator = EquityCalculator()
-        result = calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            calculator,
             ead=Decimal("1000000"),
             equity_type="other",
             config=config,
@@ -1518,13 +1520,14 @@ class TestEquityBasel31:
         assert result["risk_weight"] == pytest.approx(3.70)
 
     def test_single_exposure_basel31_uses_sa_rw(self) -> None:
-        """Basel 3.1: calculate_single_exposure with IRB perm uses SA 250%."""
+        """Basel 3.1: calculate_single_equity_exposure with IRB perm uses SA 250%."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
             irb_permissions=IRBPermissions.full_irb(),
         )
         calculator = EquityCalculator()
-        result = calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=config,
@@ -1539,7 +1542,8 @@ class TestEquityBasel31:
             irb_permissions=IRBPermissions.full_irb(),
         )
         calculator = EquityCalculator()
-        result = calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            calculator,
             ead=Decimal("500000"),
             equity_type="listed",
             is_exchange_traded=True,

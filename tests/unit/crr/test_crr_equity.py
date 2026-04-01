@@ -26,6 +26,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
@@ -92,7 +93,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """Central bank equity gets 0% RW under SA (Art. 133(6))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="central_bank",
             config=sa_config,
@@ -106,7 +108,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """Listed equity gets 100% RW under SA (Art. 133(1))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=sa_config,
@@ -119,7 +122,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """Exchange-traded equity gets 100% RW under SA (Art. 133(1))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="exchange_traded",
             config=sa_config,
@@ -132,7 +136,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """Government-supported equity gets 100% RW under SA (Art. 133(4)(c))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="government_supported",
             config=sa_config,
@@ -145,7 +150,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """Unlisted equity gets 250% RW under SA (Art. 133(2))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=sa_config,
@@ -158,7 +164,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """Speculative unlisted equity gets 400% RW under SA (Art. 133(2))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="speculative",
             config=sa_config,
@@ -171,7 +178,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """is_speculative flag forces 400% RW even for unlisted type."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             is_speculative=True,
@@ -185,7 +193,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """Private equity gets 250% RW under SA (same as unlisted)."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="private_equity",
             config=sa_config,
@@ -198,7 +207,8 @@ class TestSAEquityRiskWeights:
         sa_config: CalculationConfig,
     ):
         """CIU (collective investment undertaking) gets 250% RW under SA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="ciu",
             config=sa_config,
@@ -220,7 +230,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Central bank equity gets 0% RW under IRB Simple."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="central_bank",
             config=irb_config,
@@ -234,7 +245,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Diversified private equity gets 190% RW under IRB Simple (Art. 155(2))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="private_equity",
             is_diversified=True,
@@ -248,7 +260,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Exchange-traded equity gets 290% RW under IRB Simple (Art. 155(2))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="exchange_traded",
             config=irb_config,
@@ -261,7 +274,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Listed equity gets 290% RW under IRB Simple (same as exchange-traded)."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=irb_config,
@@ -274,7 +288,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Other equity gets 370% RW under IRB Simple (Art. 155(2))."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="other",
             config=irb_config,
@@ -287,7 +302,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Unlisted equity gets 370% RW under IRB Simple."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=irb_config,
@@ -300,7 +316,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Speculative equity gets 370% RW under IRB Simple (same as other)."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="speculative",
             config=irb_config,
@@ -313,7 +330,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Government-supported gets 190% RW under IRB Simple (treated as PE diversified)."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="government_supported",
             config=irb_config,
@@ -326,7 +344,8 @@ class TestIRBSimpleEquityRiskWeights:
         irb_config: CalculationConfig,
     ):
         """Non-diversified private equity gets 370% RW under IRB Simple."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="private_equity",
             is_diversified=False,
@@ -350,7 +369,8 @@ class TestEquityRWACalculation:
     ):
         """RWA = EAD × RW."""
         ead = Decimal("1000000")
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=ead,
             equity_type="listed",
             config=sa_config,
@@ -364,7 +384,8 @@ class TestEquityRWACalculation:
         sa_config: CalculationConfig,
     ):
         """SA Listed: £1m at 100% = £1m RWA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=sa_config,
@@ -378,7 +399,8 @@ class TestEquityRWACalculation:
         sa_config: CalculationConfig,
     ):
         """SA Unlisted: £1m at 250% = £2.5m RWA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=sa_config,
@@ -392,7 +414,8 @@ class TestEquityRWACalculation:
         sa_config: CalculationConfig,
     ):
         """SA Speculative: £1m at 400% = £4m RWA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="speculative",
             config=sa_config,
@@ -406,7 +429,8 @@ class TestEquityRWACalculation:
         irb_config: CalculationConfig,
     ):
         """IRB PE Diversified: £1m at 190% = £1.9m RWA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="private_equity",
             is_diversified=True,
@@ -421,7 +445,8 @@ class TestEquityRWACalculation:
         irb_config: CalculationConfig,
     ):
         """IRB Exchange-traded: £1m at 290% = £2.9m RWA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="exchange_traded",
             config=irb_config,
@@ -435,7 +460,8 @@ class TestEquityRWACalculation:
         irb_config: CalculationConfig,
     ):
         """IRB Other: £1m at 370% = £3.7m RWA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="other",
             config=irb_config,
@@ -560,7 +586,8 @@ class TestApproachDetermination:
             reporting_date=date(2024, 12, 31),
             irb_permissions=IRBPermissions.sa_only(),
         )
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=config,
@@ -577,7 +604,8 @@ class TestApproachDetermination:
             reporting_date=date(2024, 12, 31),
             irb_permissions=IRBPermissions.firb_only(),
         )
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=config,
@@ -594,7 +622,8 @@ class TestApproachDetermination:
             reporting_date=date(2024, 12, 31),
             irb_permissions=IRBPermissions.airb_only(),
         )
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=config,
@@ -610,7 +639,8 @@ class TestApproachDetermination:
             reporting_date=date(2024, 12, 31),
             irb_permissions=IRBPermissions.full_irb(),
         )
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=config,
@@ -731,7 +761,8 @@ class TestEquityEdgeCases:
         sa_config: CalculationConfig,
     ):
         """Zero EAD produces zero RWA."""
-        result = equity_calculator.calculate_single_exposure(
+        result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("0"),
             equity_type="listed",
             config=sa_config,
@@ -849,12 +880,14 @@ class TestSAVsIRBSimple:
         irb_config: CalculationConfig,
     ):
         """Listed equity: SA (100%) is lower than IRB Simple (290%)."""
-        sa_result = equity_calculator.calculate_single_exposure(
+        sa_result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=sa_config,
         )
-        irb_result = equity_calculator.calculate_single_exposure(
+        irb_result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="listed",
             config=irb_config,
@@ -870,12 +903,14 @@ class TestSAVsIRBSimple:
         irb_config: CalculationConfig,
     ):
         """Unlisted equity: SA (250%) is lower than IRB Simple (370%)."""
-        sa_result = equity_calculator.calculate_single_exposure(
+        sa_result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=sa_config,
         )
-        irb_result = equity_calculator.calculate_single_exposure(
+        irb_result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=irb_config,
@@ -891,12 +926,14 @@ class TestSAVsIRBSimple:
         irb_config: CalculationConfig,
     ):
         """Speculative equity: SA (400%) is higher than IRB Simple (370%)."""
-        sa_result = equity_calculator.calculate_single_exposure(
+        sa_result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="speculative",
             config=sa_config,
         )
-        irb_result = equity_calculator.calculate_single_exposure(
+        irb_result = calculate_single_equity_exposure(
+            equity_calculator,
             ead=Decimal("1000000"),
             equity_type="speculative",
             config=irb_config,

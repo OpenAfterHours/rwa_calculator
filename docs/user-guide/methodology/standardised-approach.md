@@ -327,6 +327,7 @@ Final_RWA_B31 = £5,000,000
 The SA calculator is implemented in [`sa/calculator.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/sa/calculator.py).
 
 ```python
+import polars as pl
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.contracts.config import CalculationConfig
 from datetime import date
@@ -334,27 +335,22 @@ from datetime import date
 # Create SA calculator
 calculator = SACalculator()
 
-# Calculate RWA for a single exposure (convenience method)
-result = calculator.calculate_single_exposure(
-    ead=Decimal("10000000"),
-    exposure_class="CORPORATE",
-    cqs=2,
-    is_sme=True,
-    config=CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-)
+# Calculate RWA for a single exposure via calculate_branch()
+df = pl.DataFrame({
+    "exposure_reference": ["EX1"],
+    "ead": [10_000_000.0],
+    "exposure_class": ["CORPORATE"],
+    "cqs": [2],
+    "is_sme": [True],
+}).lazy()
+
+config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+result = calculator.calculate_branch(df, config).collect().to_dicts()[0]
 
 # Access results
 print(f"Risk Weight: {result['risk_weight']}")
 print(f"RWA: {result['rwa']}")
-print(f"Supporting Factor: {result['supporting_factor_applied']}")
 ```
-
-::: rwa_calc.engine.sa.calculator.SACalculator
-    options:
-      show_root_heading: true
-      members:
-        - calculate_single_exposure
-      show_source: false
 
 ### Risk Weight Lookup
 

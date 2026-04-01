@@ -504,39 +504,6 @@ class SACalculator:
         Expects only SA rows — no approach guards needed.
         """
 
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        exposure_class: str,
-        cqs: int | None = None,
-        ltv: Decimal | None = None,
-        is_sme: bool = False,
-        is_infrastructure: bool = False,
-        is_managed_as_retail: bool = False,
-        has_income_cover: bool = False,
-        property_type: str | None = None,
-        is_adc: bool = False,
-        is_presold: bool = False,
-        seniority: str = "senior",
-        scra_grade: str | None = None,
-        is_investment_grade: bool = False,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single exposure (convenience method).
-
-        Returns dict with: ead, exposure_class, cqs, risk_weight,
-        rwa_pre_factor, supporting_factor, rwa, supporting_factor_applied.
-
-        Example:
-            >>> calculator = SACalculator()
-            >>> result = calculator.calculate_single_exposure(
-            ...     ead=Decimal("1000000"),
-            ...     exposure_class="CORPORATE",
-            ...     cqs=3,
-            ... )
-            >>> print(f"RWA: {result['rwa']:,.0f}")
-        """
 ```
 
 **Factory:**
@@ -646,32 +613,6 @@ class IRBCalculator:
     ) -> LazyFrameResult:
         """Calculate expected loss for IRB exposures. EL = PD x LGD x EAD."""
 
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        pd: Decimal,
-        lgd: Decimal | None = None,
-        maturity: Decimal = Decimal("2.5"),
-        exposure_class: str = "CORPORATE",
-        turnover_m: Decimal | None = None,
-        collateral_type: str | None = None,
-        is_subordinated: bool = False,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single exposure (convenience method).
-
-        Returns dict with full calculation results including expected_loss.
-
-        Example:
-            >>> calculator = IRBCalculator()
-            >>> result = calculator.calculate_single_exposure(
-            ...     ead=Decimal("5000000"),
-            ...     pd=Decimal("0.01"),
-            ...     lgd=Decimal("0.45"),
-            ... )
-            >>> print(f"RWA: {result['rwa']:,.0f}")
-        """
 ```
 
 **Factory:**
@@ -859,22 +800,6 @@ class SlottingCalculator:
         Uses: prepare_columns → apply_slotting_weights → calculate_rwa.
         """
 
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        category: str,
-        is_hvcre: bool = False,
-        sl_type: str = "project_finance",
-        is_short_maturity: bool = False,
-        is_pre_operational: bool = False,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single slotting exposure (convenience method).
-
-        Returns dict with: ead, category, is_hvcre, sl_type,
-        risk_weight, rwa, framework.
-        """
 ```
 
 **Factory:**
@@ -990,32 +915,6 @@ class EquityCalculator:
             EquityResultBundle with results and audit trail.
         """
 
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        equity_type: str,
-        is_diversified: bool = False,
-        is_speculative: bool = False,
-        is_exchange_traded: bool = False,
-        is_government_supported: bool = False,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single equity exposure (convenience method).
-
-        Returns dict with: ead, equity_type, effective_type, is_diversified,
-        is_speculative, is_exchange_traded, is_government_supported,
-        approach, article, risk_weight, rwa.
-
-        Example:
-            >>> calculator = EquityCalculator()
-            >>> result = calculator.calculate_single_exposure(
-            ...     ead=Decimal("1000000"),
-            ...     equity_type="private_equity",
-            ...     is_diversified=True,
-            ... )
-            >>> print(f"RWA: {result['rwa']:,.0f}")
-        """
 ```
 
 **Factory:**

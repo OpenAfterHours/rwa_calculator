@@ -20,6 +20,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.single_exposure import calculate_single_slotting_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -76,7 +77,8 @@ class TestCRRSlottingRiskWeights:
         crr_config: CalculationConfig,
     ):
         """Strong category gets 70% RW under CRR (>=2.5yr, non-HVCRE)."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="strong",
             is_hvcre=False,
@@ -90,7 +92,8 @@ class TestCRRSlottingRiskWeights:
         crr_config: CalculationConfig,
     ):
         """Good category gets 90% RW under CRR (>=2.5yr, non-HVCRE)."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="good",
             is_hvcre=False,
@@ -104,7 +107,8 @@ class TestCRRSlottingRiskWeights:
         crr_config: CalculationConfig,
     ):
         """Satisfactory category gets 115% RW."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="satisfactory",
             is_hvcre=False,
@@ -118,7 +122,8 @@ class TestCRRSlottingRiskWeights:
         crr_config: CalculationConfig,
     ):
         """Weak category gets 250% RW (punitive weight)."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="weak",
             is_hvcre=False,
@@ -132,7 +137,8 @@ class TestCRRSlottingRiskWeights:
         crr_config: CalculationConfig,
     ):
         """Default category gets 0% RW (100% provisioned)."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("1000000"),
             category="default",
             is_hvcre=False,
@@ -155,7 +161,8 @@ class TestCRRShortMaturityWeights:
         crr_config: CalculationConfig,
     ):
         """Strong gets 50% RW for <2.5yr maturity (vs 70% for >=2.5yr)."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="strong",
             is_hvcre=False,
@@ -170,7 +177,8 @@ class TestCRRShortMaturityWeights:
         crr_config: CalculationConfig,
     ):
         """Good gets 70% RW for <2.5yr maturity (vs 90% for >=2.5yr)."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="good",
             is_hvcre=False,
@@ -185,7 +193,8 @@ class TestCRRShortMaturityWeights:
         crr_config: CalculationConfig,
     ):
         """Satisfactory is 115% regardless of maturity."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="satisfactory",
             is_hvcre=False,
@@ -200,7 +209,8 @@ class TestCRRShortMaturityWeights:
         crr_config: CalculationConfig,
     ):
         """Weak is 250% regardless of maturity."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="weak",
             is_hvcre=False,
@@ -224,7 +234,8 @@ class TestCRRHVCREWeights:
         crr_config: CalculationConfig,
     ):
         """HVCRE Strong = 95% (>=2.5yr), higher than non-HVCRE 70%."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="strong",
             is_hvcre=True,
@@ -238,7 +249,8 @@ class TestCRRHVCREWeights:
         crr_config: CalculationConfig,
     ):
         """HVCRE Good = 120% (>=2.5yr), higher than non-HVCRE 90%."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="good",
             is_hvcre=True,
@@ -252,7 +264,8 @@ class TestCRRHVCREWeights:
         crr_config: CalculationConfig,
     ):
         """HVCRE Satisfactory = 140% (>=2.5yr), higher than non-HVCRE 115%."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="satisfactory",
             is_hvcre=True,
@@ -266,13 +279,15 @@ class TestCRRHVCREWeights:
         crr_config: CalculationConfig,
     ):
         """HVCRE Weak = 250%, same as non-HVCRE Weak."""
-        hvcre_result = slotting_calculator.calculate_single_exposure(
+        hvcre_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="weak",
             is_hvcre=True,
             config=crr_config,
         )
-        non_hvcre_result = slotting_calculator.calculate_single_exposure(
+        non_hvcre_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="weak",
             is_hvcre=False,
@@ -287,7 +302,8 @@ class TestCRRHVCREWeights:
         crr_config: CalculationConfig,
     ):
         """HVCRE Strong <2.5yr = 70%."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="strong",
             is_hvcre=True,
@@ -302,7 +318,8 @@ class TestCRRHVCREWeights:
         crr_config: CalculationConfig,
     ):
         """HVCRE Good <2.5yr = 95%."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="good",
             is_hvcre=True,
@@ -327,7 +344,8 @@ class TestSlottingRWACalculation:
     ):
         """RWA = EAD x RW."""
         ead = Decimal("10000000")
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=ead,
             category="strong",
             is_hvcre=False,
@@ -342,7 +360,8 @@ class TestSlottingRWACalculation:
         crr_config: CalculationConfig,
     ):
         """CRR-E1: Project Finance Strong - 10m at 70% = 7m RWA."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="strong",
             is_hvcre=False,
@@ -358,7 +377,8 @@ class TestSlottingRWACalculation:
         crr_config: CalculationConfig,
     ):
         """CRR-E2: Project Finance Good - 10m at 90% = 9m RWA."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="good",
             is_hvcre=False,
@@ -374,7 +394,8 @@ class TestSlottingRWACalculation:
         crr_config: CalculationConfig,
     ):
         """CRR-E3: IPRE Weak - 5m at 250% = 12.5m RWA."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="weak",
             is_hvcre=False,
@@ -390,7 +411,8 @@ class TestSlottingRWACalculation:
         crr_config: CalculationConfig,
     ):
         """CRR-E4: HVCRE Strong - 5m at 95% = 4.75m RWA."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="strong",
             is_hvcre=True,
@@ -532,13 +554,15 @@ class TestCRRVsBasel31:
         basel31_config: CalculationConfig,
     ):
         """CRR Strong = 70%, Basel 3.1 Strong = 70% (non-HVCRE operational)."""
-        crr_result = slotting_calculator.calculate_single_exposure(
+        crr_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="strong",
             is_hvcre=False,
             config=crr_config,
         )
-        basel31_result = slotting_calculator.calculate_single_exposure(
+        basel31_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="strong",
             is_hvcre=False,
@@ -554,13 +578,15 @@ class TestCRRVsBasel31:
         basel31_config: CalculationConfig,
     ):
         """CRR Weak = 250%, Basel 3.1 Weak = 250% (non-HVCRE operational)."""
-        crr_result = slotting_calculator.calculate_single_exposure(
+        crr_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="weak",
             is_hvcre=False,
             config=crr_config,
         )
-        basel31_result = slotting_calculator.calculate_single_exposure(
+        basel31_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="weak",
             is_hvcre=False,
@@ -575,13 +601,15 @@ class TestCRRVsBasel31:
         basel31_config: CalculationConfig,
     ):
         """Basel 3.1 has higher HVCRE weights than non-HVCRE."""
-        hvcre_result = slotting_calculator.calculate_single_exposure(
+        hvcre_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="good",
             is_hvcre=True,
             config=basel31_config,
         )
-        non_hvcre_result = slotting_calculator.calculate_single_exposure(
+        non_hvcre_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="good",
             is_hvcre=False,
@@ -598,7 +626,8 @@ class TestCRRVsBasel31:
         basel31_config: CalculationConfig,
     ):
         """Basel 3.1 PF pre-operational Strong = 80% vs operational 70%."""
-        pre_op_result = slotting_calculator.calculate_single_exposure(
+        pre_op_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="strong",
             is_hvcre=False,
@@ -606,7 +635,8 @@ class TestCRRVsBasel31:
             sl_type="project_finance",
             config=basel31_config,
         )
-        operational_result = slotting_calculator.calculate_single_exposure(
+        operational_result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("10000000"),
             category="strong",
             is_hvcre=False,
@@ -700,7 +730,8 @@ class TestSpecialisedLendingTypes:
         expected_rw: float,
     ):
         """All specialised lending types can be processed with correct weights."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("5000000"),
             category="good",
             is_hvcre=is_hvcre,
@@ -766,7 +797,8 @@ class TestSlottingEdgeCases:
         crr_config: CalculationConfig,
     ):
         """Zero EAD produces zero RWA."""
-        result = slotting_calculator.calculate_single_exposure(
+        result = calculate_single_slotting_exposure(
+            slotting_calculator,
             ead=Decimal("0"),
             category="strong",
             is_hvcre=False,

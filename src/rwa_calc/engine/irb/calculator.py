@@ -27,7 +27,6 @@ References:
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -41,13 +40,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.data.tables.crr_firb_lgd import lookup_firb_lgd
 from rwa_calc.domain.enums import ApproachType
-from rwa_calc.engine.irb.formulas import (
-    calculate_correlation,
-    calculate_expected_loss,
-    calculate_irb_rwa,
-)
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -275,88 +268,6 @@ class IRBCalculator:
             )
 
         return exposures
-
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        pd: Decimal,
-        lgd: Decimal | None = None,
-        maturity: Decimal = Decimal("2.5"),
-        exposure_class: str = "CORPORATE",
-        turnover_m: Decimal | None = None,
-        collateral_type: str | None = None,
-        is_subordinated: bool = False,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single exposure (convenience method).
-
-        Args:
-            ead: Exposure at default
-            pd: Probability of default
-            lgd: Loss given default (None for F-IRB supervisory)
-            maturity: Effective maturity in years
-            exposure_class: Exposure class
-            turnover_m: Annual turnover in millions (for SME adjustment)
-            collateral_type: Collateral type for F-IRB LGD
-            is_subordinated: Whether subordinated (for F-IRB LGD)
-            config: Calculation configuration (defaults to CRR)
-
-        Returns:
-            Dictionary with calculation results
-        """
-        from datetime import date
-
-        from rwa_calc.contracts.config import CalculationConfig
-
-        if config is None:
-            config = CalculationConfig.crr(reporting_date=date.today())
-
-        # Determine LGD
-        if lgd is None:
-            # F-IRB supervisory LGD
-            lgd = lookup_firb_lgd(collateral_type, is_subordinated)
-
-        # Calculate correlation (pass EUR/GBP rate for SME adjustment)
-        turnover_float = float(turnover_m) if turnover_m else None
-        eur_gbp_rate = float(config.eur_gbp_rate)
-        correlation = calculate_correlation(
-            pd=float(pd),
-            exposure_class=exposure_class,
-            turnover_m=turnover_float,
-            eur_gbp_rate=eur_gbp_rate,
-        )
-
-        # Check if retail (no MA, no scaling)
-        is_retail = "RETAIL" in exposure_class.upper()
-
-        # Get configuration parameters
-        pd_floor = float(config.pd_floors.corporate)
-        lgd_floor = float(config.lgd_floors.unsecured) if config.is_basel_3_1 else None
-        apply_scaling = config.is_crr and not is_retail
-        apply_ma = not is_retail
-
-        # Calculate IRB RWA
-        result = calculate_irb_rwa(
-            ead=float(ead),
-            pd=float(pd),
-            lgd=float(lgd),
-            correlation=correlation,
-            maturity=float(maturity),
-            apply_maturity_adjustment=apply_ma,
-            apply_scaling_factor=apply_scaling,
-            pd_floor=pd_floor,
-            lgd_floor=lgd_floor,
-        )
-
-        # Add expected loss
-        result["expected_loss"] = calculate_expected_loss(
-            result["pd_floored"],
-            result["lgd_floored"],
-            float(ead),
-        )
-
-        return result
 
 
 def create_irb_calculator() -> IRBCalculator:

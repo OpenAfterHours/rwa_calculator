@@ -30,7 +30,6 @@ References:
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -205,71 +204,6 @@ class SlottingCalculator:
             calculation_audit=audit,
             errors=[],
         )
-
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        category: str,
-        is_hvcre: bool = False,
-        sl_type: str = "project_finance",
-        is_short_maturity: bool = False,
-        is_pre_operational: bool = False,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single slotting exposure (convenience method).
-
-        Args:
-            ead: Exposure at default
-            category: Slotting category (strong, good, satisfactory, weak, default)
-            is_hvcre: Whether this is high-volatility commercial real estate
-            sl_type: Specialised lending type
-            is_short_maturity: Whether remaining maturity < 2.5 years (CRR)
-            is_pre_operational: Whether PF is pre-operational (Basel 3.1)
-            config: Calculation configuration (defaults to CRR)
-
-        Returns:
-            Dictionary with calculation results
-        """
-        from datetime import date
-
-        import rwa_calc.engine.slotting.namespace  # noqa: F401
-        from rwa_calc.contracts.config import CalculationConfig
-
-        if config is None:
-            config = CalculationConfig.crr(reporting_date=date.today())
-
-        # Use expression namespace for lookup logic
-        df = pl.DataFrame(
-            {
-                "slotting_category": [category],
-                "is_hvcre": [is_hvcre],
-                "is_short_maturity": [is_short_maturity],
-                "is_pre_operational": [is_pre_operational],
-            }
-        )
-
-        rw_expr = col("slotting_category").slotting.lookup_rw(
-            is_crr=config.is_crr,
-            is_hvcre=col("is_hvcre"),
-            is_short=col("is_short_maturity"),
-            is_preop=col("is_pre_operational"),
-        )
-
-        risk_weight = Decimal(str(df.select(rw_expr).item()))
-
-        # Calculate RWA
-        rwa = ead * risk_weight
-
-        return {
-            "ead": float(ead),
-            "category": category,
-            "is_hvcre": is_hvcre,
-            "sl_type": sl_type,
-            "risk_weight": float(risk_weight),
-            "rwa": float(rwa),
-            "framework": "CRR" if config.is_crr else "Basel 3.1",
-        }
 
 
 def create_slotting_calculator() -> SlottingCalculator:

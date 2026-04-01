@@ -38,6 +38,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -145,7 +146,8 @@ class TestB31ResidentialGeneral:
         expected_rw: float,
     ) -> None:
         """Loan-splitting produces correct weighted-average RW per Art. 124F."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=ltv,
@@ -160,7 +162,8 @@ class TestB31ResidentialGeneral:
         b31_config: CalculationConfig,
     ) -> None:
         """Null LTV defaults to 1.0: secured_share = 55%, residual = 45%."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=None,
@@ -180,7 +183,8 @@ class TestB31ResidentialGeneral:
         """RWA = EAD × RW for a Basel 3.1 residential mortgage."""
         ltv = 0.65
         expected_rw = _expected_loan_split_rw(ltv)
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.65"),
@@ -234,7 +238,8 @@ class TestB31ResidentialIncomeProducing:
         expected_rw: Decimal,
     ) -> None:
         """Income-producing residential RE uses higher risk weight table."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=ltv,
@@ -242,7 +247,7 @@ class TestB31ResidentialIncomeProducing:
             config=b31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(expected_rw)
+        assert float(result["risk_weight"]) == pytest.approx(float(expected_rw))
 
 
 # =============================================================================
@@ -465,15 +470,16 @@ class TestB31ADCExposures:
         b31_config: CalculationConfig,
     ) -> None:
         """ADC exposure should get 150% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="CORPORATE",
             is_adc=True,
             config=b31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
-        assert result["rwa"] == pytest.approx(Decimal("3000000"))  # 2m × 150%
+        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["rwa"] == pytest.approx(3000000)  # 2m × 150%
 
     def test_adc_presold_100pct(
         self,
@@ -481,7 +487,8 @@ class TestB31ADCExposures:
         b31_config: CalculationConfig,
     ) -> None:
         """Pre-sold ADC exposure should get 100% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="CORPORATE",
             is_adc=True,
@@ -489,8 +496,8 @@ class TestB31ADCExposures:
             config=b31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("1.00"))
-        assert result["rwa"] == pytest.approx(Decimal("2000000"))  # 2m × 100%
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(2000000)  # 2m × 100%
 
     def test_adc_takes_priority_over_re(
         self,
@@ -498,7 +505,8 @@ class TestB31ADCExposures:
         b31_config: CalculationConfig,
     ) -> None:
         """ADC flag should override RE LTV-band treatment."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.50"),  # Would be 20% under B31 LTV bands
@@ -507,7 +515,7 @@ class TestB31ADCExposures:
         )
 
         # ADC overrides: 150%, not 20%
-        assert result["risk_weight"] == pytest.approx(Decimal("1.50"))
+        assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_adc_not_applied_under_crr(
         self,
@@ -515,7 +523,8 @@ class TestB31ADCExposures:
         crr_config: CalculationConfig,
     ) -> None:
         """ADC flag should be ignored under CRR (no ADC treatment in CRR SA)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -524,7 +533,7 @@ class TestB31ADCExposures:
         )
 
         # Under CRR, no ADC treatment → standard corporate unrated 100%
-        assert result["risk_weight"] == pytest.approx(Decimal("1.0"))
+        assert result["risk_weight"] == pytest.approx(1.0)
 
 
 # =============================================================================
@@ -604,14 +613,15 @@ class TestCRRRegression:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR residential mortgage LTV ≤ 80% → 35% (unchanged)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.60"),
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.35"))
+        assert result["risk_weight"] == pytest.approx(0.35)
 
     def test_crr_residential_high_ltv_split(
         self,
@@ -619,7 +629,8 @@ class TestCRRRegression:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR residential mortgage LTV 100% → split treatment (unchanged)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.00"),
@@ -665,14 +676,15 @@ class TestCRRRegression:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR sovereign CQS 1 → 0% (unchanged)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
             cqs=1,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.0"))
+        assert result["risk_weight"] == pytest.approx(0.0)
 
     def test_crr_retail_still_works(
         self,
@@ -680,13 +692,14 @@ class TestCRRRegression:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR retail → 75% (unchanged)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000"),
             exposure_class="RETAIL",
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.75"))
+        assert result["risk_weight"] == pytest.approx(0.75)
 
     def test_crr_institution_uk_deviation_still_works(
         self,
@@ -694,14 +707,15 @@ class TestCRRRegression:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR institution CQS 2 UK deviation → 30% (unchanged)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="INSTITUTION",
             cqs=2,
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(Decimal("0.30"))
+        assert result["risk_weight"] == pytest.approx(0.30)
 
 
 # =============================================================================
@@ -719,14 +733,16 @@ class TestCRRvsBasel31Comparison:
         b31_config: CalculationConfig,
     ) -> None:
         """At 50% LTV, Basel 3.1 (20%) is lower than CRR (35%)."""
-        crr_result = sa_calculator.calculate_single_exposure(
+        crr_result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.50"),
             config=crr_config,
         )
 
-        b31_result = sa_calculator.calculate_single_exposure(
+        b31_result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.50"),
@@ -744,14 +760,16 @@ class TestCRRvsBasel31Comparison:
         b31_config: CalculationConfig,
     ) -> None:
         """At 110% LTV, Basel 3.1 loan-split is higher than CRR split (~46%)."""
-        crr_result = sa_calculator.calculate_single_exposure(
+        crr_result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.10"),
             config=crr_config,
         )
 
-        b31_result = sa_calculator.calculate_single_exposure(
+        b31_result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.10"),
@@ -770,7 +788,8 @@ class TestCRRvsBasel31Comparison:
         b31_config: CalculationConfig,
     ) -> None:
         """SME supporting factor should be 1.0 under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="CORPORATE",
             cqs=None,
@@ -778,8 +797,8 @@ class TestCRRvsBasel31Comparison:
             config=b31_config,
         )
 
-        assert result["supporting_factor"] == pytest.approx(Decimal("1.0"))
-        assert result["rwa"] == pytest.approx(Decimal("1000000"))
+        assert result["supporting_factor"] == pytest.approx(1.0)
+        assert result["rwa"] == pytest.approx(1000000)
 
 
 # =============================================================================
@@ -904,13 +923,15 @@ class TestB31CorporateCQS:
         expected_crr_rw: float,
     ) -> None:
         """Corporate CQS risk weights differ between CRR and Basel 3.1."""
-        b31_result = sa_calculator.calculate_single_exposure(
+        b31_result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=cqs,
             config=b31_config,
         )
-        crr_result = sa_calculator.calculate_single_exposure(
+        crr_result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=cqs,
@@ -928,13 +949,15 @@ class TestB31CorporateCQS:
     ) -> None:
         """CQS 3 corporate: Basel 3.1 RWA should be 25% lower than CRR."""
         ead = Decimal("1000000")
-        b31 = sa_calculator.calculate_single_exposure(
+        b31 = calculate_single_sa_exposure(
+            sa_calculator,
             ead=ead,
             exposure_class="corporate",
             cqs=3,
             config=b31_config,
         )
-        crr = sa_calculator.calculate_single_exposure(
+        crr = calculate_single_sa_exposure(
+            sa_calculator,
             ead=ead,
             exposure_class="corporate",
             cqs=3,
@@ -985,7 +1008,8 @@ class TestB31SCRAInstitutionWeights:
         expected_rw: float,
     ) -> None:
         """Unrated institution risk weight determined by SCRA grade under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=None,
@@ -1001,7 +1025,8 @@ class TestB31SCRAInstitutionWeights:
         b31_config: CalculationConfig,
     ) -> None:
         """Rated institutions use ECRA (CQS-based), not SCRA, even if grade provided."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=2,  # CQS 2 → 30% (UK deviation)
@@ -1018,7 +1043,8 @@ class TestB31SCRAInstitutionWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """SCRA should be ignored under CRR — unrated institutions get 40%."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=None,
@@ -1035,7 +1061,8 @@ class TestB31SCRAInstitutionWeights:
         b31_config: CalculationConfig,
     ) -> None:
         """Unrated institution without SCRA grade uses CQS table default under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=None,
@@ -1052,7 +1079,8 @@ class TestB31SCRAInstitutionWeights:
         b31_config: CalculationConfig,
     ) -> None:
         """Grade B institution: verify full RWA calculation."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("10000000"),
             exposure_class="institution",
             cqs=None,
@@ -1087,7 +1115,8 @@ class TestB31InvestmentGradeCorporate:
         b31_config: CalculationConfig,
     ) -> None:
         """Investment-grade corporate gets 65% under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="corporate",
             cqs=None,
@@ -1104,7 +1133,8 @@ class TestB31InvestmentGradeCorporate:
         crr_config: CalculationConfig,
     ) -> None:
         """Investment-grade treatment does not exist under CRR → 100%."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="corporate",
             cqs=None,
@@ -1121,7 +1151,8 @@ class TestB31InvestmentGradeCorporate:
         b31_config: CalculationConfig,
     ) -> None:
         """Investment-grade flag should not apply to corporate_sme class."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="corporate_sme",
             cqs=None,
@@ -1138,7 +1169,8 @@ class TestB31InvestmentGradeCorporate:
         b31_config: CalculationConfig,
     ) -> None:
         """Rated corporate uses CQS-based weight, not investment-grade override."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="corporate",
             cqs=1,
@@ -1172,7 +1204,8 @@ class TestB31SMECorporate:
         b31_config: CalculationConfig,
     ) -> None:
         """SME corporate gets 85% under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="corporate_sme",
             cqs=None,
@@ -1188,7 +1221,8 @@ class TestB31SMECorporate:
         crr_config: CalculationConfig,
     ) -> None:
         """SME corporate gets 100% under CRR (no preferential treatment)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="corporate_sme",
             cqs=None,
@@ -1203,7 +1237,8 @@ class TestB31SMECorporate:
         b31_config: CalculationConfig,
     ) -> None:
         """SME managed as retail keeps 75% when under EUR 1m threshold."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="corporate_sme",
             cqs=None,
@@ -1221,7 +1256,8 @@ class TestB31SMECorporate:
         b31_config: CalculationConfig,
     ) -> None:
         """SME managed as retail but over EUR 1m threshold gets standard SME RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1500000"),
             exposure_class="corporate_sme",
             cqs=None,
@@ -1261,7 +1297,8 @@ class TestB31SubordinatedDebt:
         b31_config: CalculationConfig,
     ) -> None:
         """Subordinated corporate debt gets flat 150% under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=1,  # CQS 1 would normally be 20%
@@ -1278,7 +1315,8 @@ class TestB31SubordinatedDebt:
         b31_config: CalculationConfig,
     ) -> None:
         """Subordinated institution debt gets flat 150% under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=2,  # CQS 2 would normally be 30% (UK)
@@ -1296,7 +1334,8 @@ class TestB31SubordinatedDebt:
         crr_config: CalculationConfig,
     ) -> None:
         """Subordinated debt uses normal CQS table under CRR (no override)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=1,
@@ -1313,7 +1352,8 @@ class TestB31SubordinatedDebt:
         b31_config: CalculationConfig,
     ) -> None:
         """Senior debt uses normal CQS-based weight under Basel 3.1."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=1,
@@ -1330,7 +1370,8 @@ class TestB31SubordinatedDebt:
         b31_config: CalculationConfig,
     ) -> None:
         """Subordinated debt 150% takes priority over investment-grade 65%."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=None,
@@ -1348,7 +1389,8 @@ class TestB31SubordinatedDebt:
         b31_config: CalculationConfig,
     ) -> None:
         """Subordinated debt override only applies to institution + corporate."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="central_govt_central_bank",
             cqs=1,
@@ -1365,7 +1407,8 @@ class TestB31SubordinatedDebt:
         b31_config: CalculationConfig,
     ) -> None:
         """Subordinated SME corporate debt gets flat 150% (not 85%)."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="corporate_sme",
             cqs=None,
@@ -1404,7 +1447,8 @@ class TestCurrencyMismatchMultiplier:
         b31_config: CalculationConfig,
     ) -> None:
         """Retail exposure with currency mismatch gets 75% * 1.5 = 112.5% RW."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000"),
             exposure_class="retail_other",
             currency="EUR",
@@ -1419,7 +1463,8 @@ class TestCurrencyMismatchMultiplier:
         b31_config: CalculationConfig,
     ) -> None:
         """Retail exposure in same currency as income — no multiplier."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000"),
             exposure_class="retail_other",
             currency="GBP",
@@ -1434,7 +1479,8 @@ class TestCurrencyMismatchMultiplier:
         b31_config: CalculationConfig,
     ) -> None:
         """Residential mortgage with mismatch gets LTV-band RW * 1.5."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("200000"),
             exposure_class="retail_mortgage",
             ltv=Decimal("0.60"),
@@ -1455,7 +1501,8 @@ class TestCurrencyMismatchMultiplier:
         b31_config: CalculationConfig,
     ) -> None:
         """Commercial RE with currency mismatch gets 1.5x multiplier."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("500000"),
             exposure_class="secured_by_re_commercial",
             ltv=Decimal("0.55"),
@@ -1473,7 +1520,8 @@ class TestCurrencyMismatchMultiplier:
         b31_config: CalculationConfig,
     ) -> None:
         """Corporate exposure is NOT subject to currency mismatch multiplier."""
-        result_mismatch = sa_calculator.calculate_single_exposure(
+        result_mismatch = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=3,
@@ -1481,7 +1529,8 @@ class TestCurrencyMismatchMultiplier:
             borrower_income_currency="GBP",
             config=b31_config,
         )
-        result_no_mismatch = sa_calculator.calculate_single_exposure(
+        result_no_mismatch = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="corporate",
             cqs=3,
@@ -1499,7 +1548,8 @@ class TestCurrencyMismatchMultiplier:
         crr_config: CalculationConfig,
     ) -> None:
         """CRR framework does not apply currency mismatch multiplier."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000"),
             exposure_class="retail_other",
             currency="EUR",
@@ -1515,7 +1565,8 @@ class TestCurrencyMismatchMultiplier:
         b31_config: CalculationConfig,
     ) -> None:
         """When borrower income currency is null, no multiplier is applied."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("100000"),
             exposure_class="retail_other",
             currency="EUR",
@@ -1530,7 +1581,8 @@ class TestCurrencyMismatchMultiplier:
         b31_config: CalculationConfig,
     ) -> None:
         """Institution exposure is NOT subject to currency mismatch multiplier."""
-        result = sa_calculator.calculate_single_exposure(
+        result = calculate_single_sa_exposure(
+            sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="institution",
             cqs=1,

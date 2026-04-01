@@ -35,12 +35,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
-from rwa_calc.contracts.errors import (
-    CalculationError,
-    ErrorCategory,
-    ErrorSeverity,
-    LazyFrameResult,
-)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -65,7 +59,7 @@ class SlottingCalculator:
 
     Usage:
         calculator = SlottingCalculator()
-        result = calculator.calculate(crm_bundle, config)
+        result = calculator.calculate_branch(exposures, config)
     """
 
     def __init__(self) -> None:
@@ -90,39 +84,6 @@ class SlottingCalculator:
             exposures.slotting.prepare_columns(config)
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
-        )
-
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA using supervisory slotting approach.
-
-        Args:
-            data: CRM-adjusted exposures (uses slotting_exposures)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with slotting RWA calculations
-        """
-        bundle = self.get_slotting_result_bundle(data, config)
-
-        # Convert bundle errors to CalculationErrors
-        calc_errors = [
-            CalculationError(
-                code="SLOTTING001",
-                message=str(err),
-                severity=ErrorSeverity.ERROR,
-                category=ErrorCategory.CALCULATION,
-            )
-            for err in bundle.errors
-        ]
-
-        return LazyFrameResult(
-            frame=bundle.results,
-            errors=calc_errors,
         )
 
     def get_slotting_result_bundle(

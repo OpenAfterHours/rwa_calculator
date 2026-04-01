@@ -354,23 +354,6 @@ class SlottingCalculatorProtocol(Protocol):
         """
         ...
 
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA using supervisory slotting approach.
-
-        Args:
-            data: CRM-adjusted exposures (specialised lending)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with slotting RWA calculations
-        """
-        ...
-
 
 @runtime_checkable
 class EquityCalculatorProtocol(Protocol):

@@ -582,14 +582,6 @@ class SlottingCalculatorProtocol(Protocol):
     ) -> pl.LazyFrame:
         """Calculate slotting RWA on pre-filtered slotting-only rows."""
         ...
-
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """Calculate RWA using supervisory slotting approach."""
-        ...
 ```
 
 #### `EquityCalculatorProtocol`

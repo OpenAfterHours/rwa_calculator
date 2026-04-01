@@ -24,7 +24,6 @@ from tests.fixtures.single_exposure import calculate_single_slotting_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.engine.slotting import SlottingCalculator, create_slotting_calculator
 
 # =============================================================================
@@ -431,25 +430,24 @@ class TestSlottingRWACalculation:
 class TestSlottingBundleProcessing:
     """Test slotting calculator bundle processing."""
 
-    def test_calculate_returns_lazyframe_result(
+    def test_calculate_branch_returns_lazyframe(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """Calculate method returns LazyFrameResult."""
-        bundle = create_slotting_bundle(
-            [
-                {
-                    "exposure_reference": "SL001",
-                    "slotting_category": "strong",
-                    "is_hvcre": False,
-                    "ead": 10_000_000.0,
-                },
-            ]
+        """calculate_branch returns a LazyFrame with results."""
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "ead": [10_000_000.0],
+            }
         )
-        result = slotting_calculator.calculate(bundle, crr_config)
-        assert isinstance(result, LazyFrameResult)
-        assert result.frame is not None
+        result = slotting_calculator.calculate_branch(exposures, crr_config)
+        assert isinstance(result, pl.LazyFrame)
+        df = result.collect()
+        assert len(df) == 1
 
     def test_multiple_exposures_processed(
         self,
@@ -457,24 +455,15 @@ class TestSlottingBundleProcessing:
         crr_config: CalculationConfig,
     ):
         """Multiple slotting exposures are processed correctly."""
-        bundle = create_slotting_bundle(
-            [
-                {
-                    "exposure_reference": "SL001",
-                    "slotting_category": "strong",
-                    "is_hvcre": False,
-                    "ead": 10_000_000.0,
-                },
-                {
-                    "exposure_reference": "SL002",
-                    "slotting_category": "weak",
-                    "is_hvcre": True,
-                    "ead": 5_000_000.0,
-                },
-            ]
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001", "SL002"],
+                "slotting_category": ["strong", "weak"],
+                "is_hvcre": [False, True],
+                "ead": [10_000_000.0, 5_000_000.0],
+            }
         )
-        result = slotting_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
         assert len(df) == 2
 
         # Check first exposure (non-HVCRE Strong = 70%)
@@ -492,15 +481,15 @@ class TestSlottingBundleProcessing:
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """Empty slotting exposures returns empty result."""
+        """None slotting exposures returns empty result via get_slotting_result_bundle."""
         bundle = CRMAdjustedBundle(
             exposures=pl.LazyFrame(),
             sa_exposures=pl.LazyFrame(),
             irb_exposures=pl.LazyFrame(),
             slotting_exposures=None,
         )
-        result = slotting_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
+        df = result.results.collect()
         assert len(df) == 0
 
     def test_get_slotting_result_bundle_returns_bundle(
@@ -757,18 +746,15 @@ class TestSlottingEdgeCases:
         crr_config: CalculationConfig,
     ):
         """Slotting category matching is case-insensitive."""
-        bundle = create_slotting_bundle(
-            [
-                {
-                    "exposure_reference": "SL001",
-                    "slotting_category": "STRONG",
-                    "is_hvcre": False,
-                    "ead": 10_000_000.0,
-                },
-            ]
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "slotting_category": ["STRONG"],
+                "is_hvcre": [False],
+                "ead": [10_000_000.0],
+            }
         )
-        result = slotting_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
         assert df["risk_weight"][0] == pytest.approx(0.70)
 
     def test_unknown_category_defaults_to_satisfactory(
@@ -777,18 +763,15 @@ class TestSlottingEdgeCases:
         crr_config: CalculationConfig,
     ):
         """Unknown slotting category defaults to satisfactory (115%)."""
-        bundle = create_slotting_bundle(
-            [
-                {
-                    "exposure_reference": "SL001",
-                    "slotting_category": "unknown_category",
-                    "is_hvcre": False,
-                    "ead": 10_000_000.0,
-                },
-            ]
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "slotting_category": ["unknown_category"],
+                "is_hvcre": [False],
+                "ead": [10_000_000.0],
+            }
         )
-        result = slotting_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
         assert df["risk_weight"][0] == pytest.approx(1.15)
 
     def test_zero_ead_produces_zero_rwa(

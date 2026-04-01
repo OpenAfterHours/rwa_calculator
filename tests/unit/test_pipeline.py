@@ -573,12 +573,8 @@ class TestPipelineStageExecution:
         pipeline._ensure_components_initialized()
 
         # Filter to slotting rows only (none exist in mock data)
-        empty_slotting = mock_crm_bundle.exposures.filter(
-            pl.col("approach") == "slotting"
-        )
-        result = pipeline._slotting_calculator.calculate_branch(
-            empty_slotting, crr_config
-        )
+        empty_slotting = mock_crm_bundle.exposures.filter(pl.col("approach") == "slotting")
+        result = pipeline._slotting_calculator.calculate_branch(empty_slotting, crr_config)
 
         collected = result.collect()
         assert collected.height == 0

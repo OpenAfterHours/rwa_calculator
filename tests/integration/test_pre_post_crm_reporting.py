@@ -1,9 +1,11 @@
 """
 Integration tests for Pre/Post CRM regulatory reporting.
 
-Tests the aggregation free functions' ability to generate pre-CRM and post-CRM
+Tests the OutputAggregator's ability to generate pre-CRM and post-CRM
 summary views for regulatory reporting (COREP).
 """
+
+from __future__ import annotations
 
 from datetime import date
 
@@ -11,11 +13,9 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.aggregator import (
-    generate_post_crm_detailed,
-    generate_post_crm_summary,
-    generate_pre_crm_summary,
-)
+from rwa_calc.engine.aggregator import OutputAggregator
+
+EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
 
 
 @pytest.fixture
@@ -24,10 +24,19 @@ def crr_config() -> CalculationConfig:
     return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
 
+@pytest.fixture
+def aggregator() -> OutputAggregator:
+    return OutputAggregator()
+
+
 class TestPostCRMDetailedView:
     """Tests for post-CRM detailed view with split rows."""
 
-    def test_post_crm_detailed_creates_two_rows_for_guaranteed(self) -> None:
+    def test_post_crm_detailed_creates_two_rows_for_guaranteed(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
         """Guaranteed exposure should generate two reporting rows."""
         sa_results = pl.LazyFrame(
             {
@@ -51,8 +60,15 @@ class TestPostCRMDetailedView:
             }
         )
 
-        detailed = generate_post_crm_detailed(sa_results)
-        detailed_df = detailed.collect()
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=None,
+            config=crr_config,
+        )
+
+        detailed_df = result.post_crm_detailed.collect()
 
         # Should have 2 rows for the guaranteed exposure
         assert len(detailed_df) == 2
@@ -71,7 +87,11 @@ class TestPostCRMDetailedView:
         assert guar_row["reporting_exposure_class"][0] == "CENTRAL_GOVT_CENTRAL_BANK"
         assert guar_row["reporting_ead"][0] == pytest.approx(600_000.0)
 
-    def test_non_guaranteed_exposure_single_row(self) -> None:
+    def test_non_guaranteed_exposure_single_row(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
         """Non-guaranteed exposure should have single reporting row."""
         sa_results = pl.LazyFrame(
             {
@@ -92,9 +112,15 @@ class TestPostCRMDetailedView:
             }
         )
 
-        detailed = generate_post_crm_detailed(sa_results)
-        detailed_df = detailed.collect()
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=None,
+            config=crr_config,
+        )
 
+        detailed_df = result.post_crm_detailed.collect()
         assert len(detailed_df) == 1
         assert detailed_df["crm_portion_type"][0] == "original"
 
@@ -102,7 +128,11 @@ class TestPostCRMDetailedView:
 class TestPreCRMSummary:
     """Tests for pre-CRM summary view."""
 
-    def test_pre_crm_summary_shows_original_class(self) -> None:
+    def test_pre_crm_summary_shows_original_class(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
         """Pre-CRM summary groups all EAD under original borrower's class."""
         sa_results = pl.LazyFrame(
             {
@@ -127,9 +157,15 @@ class TestPreCRMSummary:
             }
         )
 
-        summary = generate_pre_crm_summary(sa_results)
-        summary_df = summary.collect()
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=None,
+            config=crr_config,
+        )
 
+        summary_df = result.pre_crm_summary.collect()
         corp_row = summary_df.filter(pl.col("pre_crm_exposure_class") == "CORPORATE")
         assert len(corp_row) == 1
 
@@ -140,7 +176,11 @@ class TestPreCRMSummary:
 class TestPostCRMSummary:
     """Tests for post-CRM summary view."""
 
-    def test_post_crm_summary_splits_by_guarantor_class(self) -> None:
+    def test_post_crm_summary_splits_by_guarantor_class(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
         """Guaranteed portion should aggregate under guarantor's exposure class."""
         sa_results = pl.LazyFrame(
             {
@@ -164,10 +204,15 @@ class TestPostCRMSummary:
             }
         )
 
-        detailed = generate_post_crm_detailed(sa_results)
-        summary = generate_post_crm_summary(detailed)
-        summary_df = summary.collect()
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=None,
+            config=crr_config,
+        )
 
+        summary_df = result.post_crm_summary.collect()
         assert len(summary_df) == 2
 
         corp_row = summary_df.filter(pl.col("reporting_exposure_class") == "CORPORATE")
@@ -187,7 +232,11 @@ class TestPostCRMSummary:
 class TestMixedSAIRBPortfolio:
     """Tests for mixed SA and IRB portfolios."""
 
-    def test_mixed_sa_irb_portfolio_aggregation(self) -> None:
+    def test_mixed_sa_irb_portfolio_aggregation(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
         """Aggregation handles mixed SA and IRB exposures with guarantees."""
         sa_results = pl.LazyFrame(
             {
@@ -228,17 +277,20 @@ class TestMixedSAIRBPortfolio:
             }
         )
 
-        combined = pl.concat([sa_results, irb_results], how="diagonal_relaxed")
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=irb_results,
+            slotting_results=EMPTY,
+            equity_bundle=None,
+            config=crr_config,
+        )
 
         # Pre-CRM summary should show all under CORPORATE
-        pre_crm = generate_pre_crm_summary(combined)
-        pre_crm_df = pre_crm.collect()
+        pre_crm_df = result.pre_crm_summary.collect()
         corp_row = pre_crm_df.filter(pl.col("pre_crm_exposure_class") == "CORPORATE")
         assert corp_row["total_ead"][0] == pytest.approx(1_500_000.0)
         assert corp_row["exposure_count"][0] == 2
 
         # Post-CRM summary should show split across classes
-        detailed = generate_post_crm_detailed(combined)
-        post_crm = generate_post_crm_summary(detailed)
-        post_crm_df = post_crm.collect()
+        post_crm_df = result.post_crm_summary.collect()
         assert len(post_crm_df) >= 2

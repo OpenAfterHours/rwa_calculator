@@ -49,19 +49,9 @@ from rwa_calc.contracts.protocols import (
     HierarchyResolverProtocol,
     IRBCalculatorProtocol,
     LoaderProtocol,
+    OutputAggregatorProtocol,
     SACalculatorProtocol,
     SlottingCalculatorProtocol,
-)
-from rwa_calc.engine.aggregator import (
-    apply_floor_with_impact,
-    compute_el_portfolio_summary,
-    generate_post_crm_detailed,
-    generate_post_crm_summary,
-    generate_pre_crm_summary,
-    generate_summary_by_approach,
-    generate_summary_by_class,
-    generate_supporting_factor_impact,
-    prepare_equity_results,
 )
 
 if TYPE_CHECKING:
@@ -131,6 +121,7 @@ class PipelineOrchestrator:
         irb_calculator: IRBCalculatorProtocol | None = None,
         slotting_calculator: SlottingCalculatorProtocol | None = None,
         equity_calculator: EquityCalculatorProtocol | None = None,
+        output_aggregator: OutputAggregatorProtocol | None = None,
     ) -> None:
         """
         Initialize pipeline with components.
@@ -147,6 +138,7 @@ class PipelineOrchestrator:
             irb_calculator: IRB calculator
             slotting_calculator: Slotting calculator
             equity_calculator: Equity calculator
+            output_aggregator: Output aggregator
         """
         self._loader = loader
         self._hierarchy_resolver = hierarchy_resolver
@@ -156,6 +148,7 @@ class PipelineOrchestrator:
         self._irb_calculator = irb_calculator
         self._slotting_calculator = slotting_calculator
         self._equity_calculator = equity_calculator
+        self._output_aggregator = output_aggregator
         self._errors: list[PipelineError] = []
 
     # =========================================================================
@@ -301,6 +294,10 @@ class PipelineOrchestrator:
             self._slotting_calculator = SlottingCalculator()
         if self._equity_calculator is None:
             self._equity_calculator = EquityCalculator()
+        if self._output_aggregator is None:
+            from rwa_calc.engine.aggregator import OutputAggregator
+
+            self._output_aggregator = OutputAggregator()
 
     # =========================================================================
     # Private Methods - Stage Execution
@@ -647,61 +644,12 @@ class PipelineOrchestrator:
     ) -> AggregatedResultBundle:
         """Aggregate results from collect_all DataFrames."""
         try:
-            # Per-approach results — already separated, no filtering needed
-            sa_results = sa_df.lazy()
-            irb_results = irb_df.lazy()
-            slotting_results = slotting_df.lazy()
-
-            # Combine for summaries (data already materialised — cheap concat)
-            combined = pl.concat([sa_df, irb_df, slotting_df], how="diagonal_relaxed").lazy()
-
-            # Concat equity if present
-            equity_results = None
-            if equity_bundle and equity_bundle.results is not None:
-                equity_prepared = prepare_equity_results(equity_bundle.results)
-                combined = pl.concat([combined, equity_prepared], how="diagonal_relaxed")
-                equity_results = equity_bundle.results
-
-            # Generate summaries
-            pre_crm_summary = generate_pre_crm_summary(combined)
-            post_crm_detailed = generate_post_crm_detailed(combined)
-            post_crm_summary = generate_post_crm_summary(post_crm_detailed)
-            summary_by_class = generate_summary_by_class(post_crm_detailed)
-            summary_by_approach = generate_summary_by_approach(post_crm_detailed)
-
-            # Apply output floor if enabled
-            floor_impact = None
-            if config.output_floor.enabled:
-                floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
-                combined, floor_impact = apply_floor_with_impact(
-                    combined,
-                    combined,  # SA-equivalent RW already joined by SA calculator
-                    floor_pct,
-                )
-
-            # Supporting factor impact
-            supporting_factor_impact = None
-            if config.supporting_factors.enabled:
-                supporting_factor_impact = generate_supporting_factor_impact(combined)
-
-            # EL portfolio summary (T2 credit cap, CET1/T2 deductions)
-            el_summary = compute_el_portfolio_summary(irb_results)
-
-            return AggregatedResultBundle(
-                results=combined,
-                sa_results=sa_results,
-                irb_results=irb_results,
-                slotting_results=slotting_results,
-                equity_results=equity_results,
-                floor_impact=floor_impact,
-                supporting_factor_impact=supporting_factor_impact,
-                summary_by_class=summary_by_class,
-                summary_by_approach=summary_by_approach,
-                pre_crm_summary=pre_crm_summary,
-                post_crm_detailed=post_crm_detailed,
-                post_crm_summary=post_crm_summary,
-                el_summary=el_summary,
-                errors=[],
+            return self._output_aggregator.aggregate(
+                sa_results=sa_df.lazy(),
+                irb_results=irb_df.lazy(),
+                slotting_results=slotting_df.lazy(),
+                equity_bundle=equity_bundle,
+                config=config,
             )
         except Exception as e:
             self._errors.append(

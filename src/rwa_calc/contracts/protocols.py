@@ -401,6 +401,47 @@ class EquityCalculatorProtocol(Protocol):
 
 
 @runtime_checkable
+class OutputAggregatorProtocol(Protocol):
+    """
+    Protocol for output aggregation components.
+
+    Responsible for:
+    - Combining SA, IRB, Slotting, and Equity results
+    - Applying output floor (Basel 3.1)
+    - Generating supporting factor impact (CRR)
+    - Generating summaries by class and approach
+    - Generating pre/post-CRM reporting views
+    - Computing EL portfolio summary with T2 credit cap
+
+    Input: Per-approach calculator results + CalculationConfig
+    Output: AggregatedResultBundle
+    """
+
+    def aggregate(
+        self,
+        sa_results: pl.LazyFrame,
+        irb_results: pl.LazyFrame,
+        slotting_results: pl.LazyFrame,
+        equity_bundle: EquityResultBundle | None,
+        config: CalculationConfig,
+    ) -> AggregatedResultBundle:
+        """
+        Aggregate calculator outputs into final result bundle.
+
+        Args:
+            sa_results: SA branch results (already collected and re-lazied).
+            irb_results: IRB branch results.
+            slotting_results: Slotting branch results.
+            equity_bundle: Equity result bundle (optional, separate path).
+            config: Calculation configuration.
+
+        Returns:
+            AggregatedResultBundle with all summaries and adjustments.
+        """
+        ...
+
+
+@runtime_checkable
 class PipelineProtocol(Protocol):
     """
     Protocol for the complete calculation pipeline.

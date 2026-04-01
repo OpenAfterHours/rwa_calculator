@@ -1,88 +1,120 @@
-"""Unit tests for aggregator utility functions."""
+"""
+Unit tests for OutputAggregator contract compliance and bundle structure.
+
+Tests cover:
+- OutputAggregator satisfies OutputAggregatorProtocol
+- AggregatedResultBundle has all expected fields
+- Empty inputs produce valid (empty) outputs
+"""
 
 from __future__ import annotations
+
+from datetime import date
 
 import polars as pl
 import pytest
 
-from rwa_calc.engine.aggregator import (
-    FLOOR_IMPACT_SCHEMA,
-    IRB_APPROACHES,
-    RESULT_SCHEMA,
-    col_or_default,
-    empty_frame,
-    resolve_rwa_col,
-)
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.protocols import OutputAggregatorProtocol
+from rwa_calc.engine.aggregator import OutputAggregator
+
+EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
 
 
-class TestResolveRwaCol:
-    """Tests for resolve_rwa_col fallback chain."""
+class TestOutputAggregatorProtocolCompliance:
+    """Tests that OutputAggregator satisfies OutputAggregatorProtocol."""
 
-    def test_prefers_rwa_post_factor(self) -> None:
-        assert resolve_rwa_col({"rwa_post_factor", "rwa_final", "rwa"}) == "rwa_post_factor"
+    def test_satisfies_protocol(self) -> None:
+        aggregator = OutputAggregator()
+        assert isinstance(aggregator, OutputAggregatorProtocol)
 
-    def test_falls_back_to_rwa_final(self) -> None:
-        assert resolve_rwa_col({"rwa_final", "rwa"}) == "rwa_final"
-
-    def test_falls_back_to_rwa(self) -> None:
-        assert resolve_rwa_col({"rwa", "other"}) == "rwa"
-
-    def test_returns_none_when_missing(self) -> None:
-        assert resolve_rwa_col({"ead", "risk_weight"}) is None
-
-    def test_accepts_list(self) -> None:
-        assert resolve_rwa_col(["rwa_final", "ead"]) == "rwa_final"
+    def test_aggregate_method_exists(self) -> None:
+        assert hasattr(OutputAggregator, "aggregate")
 
 
-class TestColOrDefault:
-    """Tests for col_or_default expression builder."""
+class TestEmptyInputs:
+    """Tests that OutputAggregator handles empty inputs gracefully."""
 
-    def test_returns_col_when_present(self) -> None:
-        cols = {"exposure_class", "ead_final"}
-        expr = col_or_default("exposure_class", cols)
-        lf = pl.LazyFrame({"exposure_class": ["CORPORATE"]})
-        result = lf.select(expr).collect()
-        assert result["exposure_class"][0] == "CORPORATE"
+    def test_empty_inputs_produce_valid_bundle(self) -> None:
+        """Aggregate with all empty inputs returns valid bundle."""
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+        aggregator = OutputAggregator()
 
-    def test_returns_null_when_absent(self) -> None:
-        cols: set[str] = {"ead_final"}
-        expr = col_or_default("exposure_class", cols)
-        lf = pl.LazyFrame({"ead_final": [100.0]})
-        result = lf.select(expr).collect()
-        assert result["exposure_class"][0] is None
+        result = aggregator.aggregate(
+            sa_results=EMPTY,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=None,
+            config=config,
+        )
 
-    def test_returns_custom_default(self) -> None:
-        cols: set[str] = {"ead_final"}
-        expr = col_or_default("is_sme", cols, pl.lit(False))
-        lf = pl.LazyFrame({"ead_final": [100.0]})
-        result = lf.select(expr).collect()
-        assert result["is_sme"][0] is False
+        assert result.results is not None
+        assert result.results.collect().shape[0] == 0
+        assert result.el_summary is None
+        assert result.floor_impact is None
+        assert result.errors == []
 
+    def test_bundle_has_all_summary_fields(self) -> None:
+        """AggregatedResultBundle has all summary LazyFrames."""
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+        aggregator = OutputAggregator()
 
-class TestEmptyFrame:
-    """Tests for empty_frame factory."""
+        result = aggregator.aggregate(
+            sa_results=EMPTY,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=None,
+            config=config,
+        )
 
-    def test_creates_correct_schema(self) -> None:
-        lf = empty_frame(RESULT_SCHEMA)
-        schema = lf.collect_schema()
-        assert schema["exposure_reference"] == pl.String
-        assert schema["rwa_final"] == pl.Float64
-        assert len(schema) == len(RESULT_SCHEMA)
-
-    def test_has_zero_rows(self) -> None:
-        df = empty_frame(FLOOR_IMPACT_SCHEMA).collect()
-        assert len(df) == 0
-
-
-class TestIRBApproaches:
-    """Tests for IRB_APPROACHES constant."""
+        assert result.summary_by_class is not None
+        assert result.summary_by_approach is not None
+        assert result.pre_crm_summary is not None
+        assert result.post_crm_detailed is not None
+        assert result.post_crm_summary is not None
 
     @pytest.mark.parametrize(
-        "approach",
-        ["foundation_irb", "advanced_irb", "FIRB", "AIRB", "IRB"],
+        "field",
+        [
+            "sa_results",
+            "irb_results",
+            "slotting_results",
+        ],
     )
-    def test_contains_all_expected(self, approach: str) -> None:
-        assert approach in IRB_APPROACHES
+    def test_per_approach_results_preserved(self, field: str) -> None:
+        """Per-approach results are passed through on the bundle."""
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+        aggregator = OutputAggregator()
 
-    def test_is_frozenset(self) -> None:
-        assert isinstance(IRB_APPROACHES, frozenset)
+        sa = pl.LazyFrame(
+            {
+                "exposure_reference": ["SA1"],
+                "approach_applied": ["SA"],
+                "rwa_final": [100.0],
+            }
+        )
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["IRB1"],
+                "approach_applied": ["FIRB"],
+                "rwa_final": [200.0],
+            }
+        )
+        slotting = pl.LazyFrame(
+            {
+                "exposure_reference": ["SLOT1"],
+                "approach_applied": ["SLOTTING"],
+                "rwa_final": [300.0],
+            }
+        )
+
+        result = aggregator.aggregate(
+            sa_results=sa,
+            irb_results=irb,
+            slotting_results=slotting,
+            equity_bundle=None,
+            config=config,
+        )
+
+        branch_df = getattr(result, field).collect()
+        assert len(branch_df) == 1

@@ -46,6 +46,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
 from rwa_calc.data.tables.crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
+    SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
+    SLOTTING_RISK_WEIGHTS_SHORT,
     calculate_slotting_rwa,
     lookup_slotting_rw,
 )
@@ -370,6 +372,44 @@ class TestSlottingRiskWeights:
         assert (
             SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.DEFAULT]
             == SLOTTING_RISK_WEIGHTS[SlottingCategory.DEFAULT]
+        )
+
+
+class TestSlottingShortMaturityWeights:
+    """Tests for short maturity (<2.5yr) slotting weights (CRR Art. 153(5))."""
+
+    def test_short_strong_fifty_percent(self) -> None:
+        """Strong <2.5yr non-HVCRE gets 50% RW."""
+        assert SLOTTING_RISK_WEIGHTS_SHORT[SlottingCategory.STRONG] == Decimal("0.50")
+
+    def test_short_good_seventy_percent(self) -> None:
+        """Good <2.5yr non-HVCRE gets 70% RW."""
+        assert SLOTTING_RISK_WEIGHTS_SHORT[SlottingCategory.GOOD] == Decimal("0.70")
+
+    def test_short_satisfactory_same_as_long(self) -> None:
+        """Satisfactory <2.5yr is same as >=2.5yr (115%)."""
+        assert (
+            SLOTTING_RISK_WEIGHTS_SHORT[SlottingCategory.SATISFACTORY]
+            == SLOTTING_RISK_WEIGHTS[SlottingCategory.SATISFACTORY]
+        )
+
+    def test_hvcre_short_strong_seventy_percent(self) -> None:
+        """Strong <2.5yr HVCRE gets 70% RW."""
+        assert SLOTTING_RISK_WEIGHTS_HVCRE_SHORT[SlottingCategory.STRONG] == Decimal("0.70")
+
+    def test_hvcre_short_good_ninety_five_percent(self) -> None:
+        """Good <2.5yr HVCRE gets 95% RW."""
+        assert SLOTTING_RISK_WEIGHTS_HVCRE_SHORT[SlottingCategory.GOOD] == Decimal("0.95")
+
+    def test_hvcre_short_satisfactory_one_forty(self) -> None:
+        """Satisfactory <2.5yr HVCRE gets 140% RW."""
+        assert SLOTTING_RISK_WEIGHTS_HVCRE_SHORT[SlottingCategory.SATISFACTORY] == Decimal("1.40")
+
+    def test_short_maturity_lookup(self) -> None:
+        """Test lookup function with short maturity flag."""
+        assert lookup_slotting_rw("strong", is_short_maturity=True) == Decimal("0.50")
+        assert (
+            lookup_slotting_rw("strong", is_hvcre=True, is_short_maturity=True) == Decimal("0.70")
         )
 
 

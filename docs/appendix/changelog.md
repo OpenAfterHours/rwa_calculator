@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Data Tables**: Consolidate slotting risk weights — `engine/slotting/namespace.py` now sources all risk weights from `data/tables/` instead of defining them inline, consistent with SA/IRB/Equity engines
+- **Data Tables**: Export all 4 CRR slotting weight dicts and convenience functions from `data/tables/__init__.py` (previously only 2 of 4 were exported)
+
+### Added
+- **Data Tables**: Add `b31_slotting.py` with Basel 3.1 slotting risk weights (base, pre-operational, HVCRE) per BCBS CRE33
+- **Tests**: Add unit tests for Basel 3.1 slotting tables and extend CRR slotting short-maturity test coverage
+
 ### Removed
 - **Engine**: Remove unused `calculate_unified()` from `SlottingCalculator`, `IRBCalculator`, and their protocols — only SA uses this method (for the output floor). Simplifies the slotting and IRB calculator interfaces.
 - **Engine**: Remove unused `calculate()` from `SlottingCalculator` and its protocol — the pipeline uses `calculate_branch()` directly. Also remove dead `_run_slotting_calculator()` from pipeline.

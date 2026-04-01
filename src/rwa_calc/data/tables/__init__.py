@@ -9,7 +9,8 @@ Modules:
     crr_risk_weights: SA risk weights by exposure class and CQS
     b31_risk_weights: Basel 3.1 LTV-band SA risk weights for real estate
     crr_haircuts: CRM supervisory haircuts
-    crr_slotting: Specialised lending slotting risk weights
+    crr_slotting: CRR specialised lending slotting risk weights
+    b31_slotting: Basel 3.1 specialised lending slotting risk weights
     crr_firb_lgd: F-IRB supervisory LGD values
     crr_equity_rw: Equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
 """
@@ -28,6 +29,12 @@ from .b31_risk_weights import (
     b31_residential_rw_expr,
     lookup_b31_commercial_rw,
     lookup_b31_residential_rw,
+)
+from .b31_slotting import (
+    B31_SLOTTING_RISK_WEIGHTS,
+    B31_SLOTTING_RISK_WEIGHTS_HVCRE,
+    B31_SLOTTING_RISK_WEIGHTS_PREOP,
+    lookup_b31_slotting_rw,
 )
 from .crr_equity_rw import (
     IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
@@ -62,6 +69,10 @@ from .crr_risk_weights import (
 from .crr_slotting import (
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
+    SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
+    SLOTTING_RISK_WEIGHTS_SHORT,
+    calculate_slotting_rwa,
+    lookup_slotting_rw,
 )
 from .eu_sovereign import (
     EU_COUNTRY_DOMESTIC_CURRENCY,
@@ -98,9 +109,18 @@ __all__ = [
     "BASEL31_COLLATERAL_HAIRCUTS",
     "FX_HAIRCUT",
     "get_haircut_table",
-    # Slotting
+    # Slotting — CRR
     "SLOTTING_RISK_WEIGHTS",
+    "SLOTTING_RISK_WEIGHTS_SHORT",
     "SLOTTING_RISK_WEIGHTS_HVCRE",
+    "SLOTTING_RISK_WEIGHTS_HVCRE_SHORT",
+    "lookup_slotting_rw",
+    "calculate_slotting_rwa",
+    # Slotting — Basel 3.1
+    "B31_SLOTTING_RISK_WEIGHTS",
+    "B31_SLOTTING_RISK_WEIGHTS_PREOP",
+    "B31_SLOTTING_RISK_WEIGHTS_HVCRE",
+    "lookup_b31_slotting_rw",
     # F-IRB LGD
     "FIRB_SUPERVISORY_LGD",
     "BASEL31_FIRB_SUPERVISORY_LGD",

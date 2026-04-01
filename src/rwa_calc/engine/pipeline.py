@@ -486,8 +486,6 @@ class PipelineOrchestrator:
             )
             return None
 
-
-
     def _run_equity_calculator(
         self,
         data: CRMAdjustedBundle,

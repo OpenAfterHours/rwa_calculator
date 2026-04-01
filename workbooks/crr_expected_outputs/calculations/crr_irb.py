@@ -10,8 +10,8 @@ Key differences from Basel 3.1:
 - SME supporting factor (0.7619) available
 """
 
-from decimal import Decimal
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 # Add project root to path for imports
@@ -20,20 +20,25 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Import shared IRB formulas (core K calculation is framework-independent)
-from workbooks.shared.irb_formulas import (
-    calculate_k,
-    calculate_maturity_adjustment as _base_calculate_maturity_adjustment,
-    calculate_irb_rwa as _base_calculate_irb_rwa,
-    calculate_expected_loss,
-    apply_pd_floor as _base_apply_pd_floor,
-)
-
 # Import CRR specific parameters
 from workbooks.crr_expected_outputs.data.crr_params import (
-    CRR_PD_FLOOR,
     CRR_FIRB_LGD,
-    CRR_MATURITY_FLOOR,
     CRR_MATURITY_CAP,
+    CRR_MATURITY_FLOOR,
+    CRR_PD_FLOOR,
+)
+from workbooks.shared.irb_formulas import (
+    apply_pd_floor as _base_apply_pd_floor,
+)
+from workbooks.shared.irb_formulas import (
+    calculate_expected_loss,
+    calculate_k,
+)
+from workbooks.shared.irb_formulas import (
+    calculate_irb_rwa as _base_calculate_irb_rwa,
+)
+from workbooks.shared.irb_formulas import (
+    calculate_maturity_adjustment as _base_calculate_maturity_adjustment,
 )
 
 

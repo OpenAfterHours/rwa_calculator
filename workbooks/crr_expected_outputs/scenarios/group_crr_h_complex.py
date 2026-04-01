@@ -26,28 +26,26 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
+    import sys
+    from decimal import Decimal
+    from pathlib import Path
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from datetime import date
-    from decimal import Decimal
-    import json
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.shared.fixture_loader import load_fixtures
+    from workbooks.crr_expected_outputs.calculations.crr_haircuts import (
+        calculate_adjusted_collateral_value,
+        get_collateral_haircut,
+    )
     from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
+        calculate_sa_rwa,
         get_corporate_rw,
         get_institution_rw,
-        calculate_sa_rwa,
-    )
-    from workbooks.crr_expected_outputs.calculations.crr_haircuts import (
-        get_collateral_haircut,
-        calculate_adjusted_collateral_value,
     )
     from workbooks.crr_expected_outputs.calculations.crr_supporting_factors import (
         apply_sme_supporting_factor,
@@ -55,6 +53,7 @@ def _():
     from workbooks.crr_expected_outputs.data.crr_params import (
         CRR_SME_SUPPORTING_FACTOR,
     )
+    from workbooks.shared.fixture_loader import load_fixtures
 
     return (
         CRR_SME_SUPPORTING_FACTOR,
@@ -104,7 +103,7 @@ def _(load_fixtures):
 @app.cell
 def _():
     """Scenario result dataclass for Complex scenarios."""
-    from dataclasses import dataclass, asdict
+    from dataclasses import asdict, dataclass
     from typing import Any
 
     @dataclass
@@ -443,7 +442,7 @@ def _(
         regulatory_reference="CRR Art. 501",
     )
 
-    print(f"CRR-H3: SME with Supporting Factor")
+    print("CRR-H3: SME with Supporting Factor")
     print(f"  Turnover=£{turnover_h3:,.0f}, EAD=£{ead_h3:,.0f}")
     print(f"  RWA before SF=£{rwa_before_sf_h3:,.0f}")
     print(f"  SF={CRR_SME_SUPPORTING_FACTOR}, RWA after SF=£{rwa_after_sf_h3:,.0f}")
@@ -589,7 +588,7 @@ def _(
         regulatory_reference="CRR Art. 207-236",
     )
 
-    print(f"CRR-H4: Full CRM Chain")
+    print("CRR-H4: Full CRM Chain")
     print(f"  Gross=£{gross_exp_h4:,.0f}")
     print(
         f"  Provision=£{provision_h4:,.0f}, Cash=£{cash_coll_h4:,.0f}, Guarantee=£{guarantee_amount_h4:,.0f}"

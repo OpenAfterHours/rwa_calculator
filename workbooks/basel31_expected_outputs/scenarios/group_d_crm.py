@@ -16,30 +16,31 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import sys
+    from dataclasses import asdict, dataclass
+    from pathlib import Path
+    from typing import Any
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from dataclasses import dataclass, asdict
-    from typing import Any
 
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.rwa_expected_outputs.data.fixture_loader import load_fixtures
+    from workbooks.rwa_expected_outputs.calculations.crm_haircuts import (
+        apply_fx_mismatch,
+        apply_maturity_mismatch,
+        calculate_adjusted_collateral_value,
+        calculate_guarantee_substitution,
+        get_collateral_haircut,
+    )
     from workbooks.rwa_expected_outputs.calculations.sa_risk_weights import (
+        calculate_sa_rwa,
         get_corporate_risk_weight,
         get_institution_risk_weight,
-        calculate_sa_rwa,
     )
-    from workbooks.rwa_expected_outputs.calculations.crm_haircuts import (
-        get_collateral_haircut,
-        calculate_adjusted_collateral_value,
-        apply_maturity_mismatch,
-        apply_fx_mismatch,
-        calculate_guarantee_substitution,
-    )
+    from workbooks.rwa_expected_outputs.data.fixture_loader import load_fixtures
 
     @dataclass
     class ScenarioResult:

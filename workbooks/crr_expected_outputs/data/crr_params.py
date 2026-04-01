@@ -30,7 +30,6 @@ from src.rwa_calc.config.fx_rates import (
     get_crr_threshold_gbp,
 )
 
-
 # =============================================================================
 # STANDARDISED APPROACH RISK WEIGHTS
 # =============================================================================

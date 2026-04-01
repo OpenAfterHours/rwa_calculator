@@ -28,24 +28,23 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
+    import sys
+    from decimal import Decimal
+    from pathlib import Path
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from datetime import date
-    from decimal import Decimal
-    import json
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.shared.fixture_loader import load_fixtures
     from workbooks.crr_expected_outputs.data.crr_params import (
         CRR_SLOTTING_RW,
         CRR_SLOTTING_RW_HVCRE,
     )
+    from workbooks.shared.fixture_loader import load_fixtures
 
     return (
         CRR_SLOTTING_RW,
@@ -173,7 +172,7 @@ def _():
 @app.cell
 def _():
     """Scenario result dataclass for Slotting."""
-    from dataclasses import dataclass, asdict
+    from dataclasses import asdict, dataclass
     from typing import Any
 
     @dataclass
@@ -262,7 +261,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         regulatory_reference="CRR Art. 153(5)",
     )
 
-    print(f"CRR-E1: Project Finance (Strong)")
+    print("CRR-E1: Project Finance (Strong)")
     print(f"  EAD=£{ead_e1:,.0f}, RW={rw_e1 * 100:.0f}%, RWA=£{rwa_e1:,.0f}")
     return (result_crr_e1,)
 
@@ -320,7 +319,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         regulatory_reference="CRR Art. 153(5)",
     )
 
-    print(f"CRR-E2: Project Finance (Good)")
+    print("CRR-E2: Project Finance (Good)")
     print(f"  EAD=£{ead_e2:,.0f}, RW={rw_e2 * 100:.0f}%, RWA=£{rwa_e2:,.0f}")
     return (result_crr_e2,)
 
@@ -384,7 +383,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         regulatory_reference="CRR Art. 153(5)",
     )
 
-    print(f"CRR-E3: IPRE (Weak)")
+    print("CRR-E3: IPRE (Weak)")
     print(f"  EAD=£{ead_e3:,.0f}, RW={rw_e3 * 100:.0f}%, RWA=£{rwa_e3:,.0f}")
     return (result_crr_e3,)
 
@@ -447,7 +446,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         regulatory_reference="CRR Art. 153(5)",
     )
 
-    print(f"CRR-E4: HVCRE (Strong)")
+    print("CRR-E4: HVCRE (Strong)")
     print(f"  EAD=£{ead_e4:,.0f}, RW={rw_e4 * 100:.0f}%, RWA=£{rwa_e4:,.0f}")
     return (result_crr_e4,)
 

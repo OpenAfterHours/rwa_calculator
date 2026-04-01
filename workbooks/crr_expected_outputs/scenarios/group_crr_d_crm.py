@@ -27,35 +27,34 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
+    import sys
+    from decimal import Decimal
+    from pathlib import Path
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from datetime import date
-    from decimal import Decimal
-    import json
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.shared.fixture_loader import load_fixtures
-    from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
-        get_corporate_rw,
-        get_institution_rw,
-        calculate_sa_rwa,
-    )
     from workbooks.crr_expected_outputs.calculations.crr_haircuts import (
+        apply_maturity_mismatch,
+        calculate_adjusted_collateral_value,
         get_collateral_haircut,
         get_fx_haircut,
-        calculate_adjusted_collateral_value,
-        apply_maturity_mismatch,
+    )
+    from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
+        calculate_sa_rwa,
+        get_corporate_rw,
+        get_institution_rw,
     )
     from workbooks.crr_expected_outputs.data.crr_params import (
-        CRR_HAIRCUTS,
         CRR_FX_HAIRCUT,
+        CRR_HAIRCUTS,
     )
+    from workbooks.shared.fixture_loader import load_fixtures
 
     return (
         CRR_FX_HAIRCUT,
@@ -116,7 +115,7 @@ def _(load_fixtures):
 @app.cell
 def _():
     """Scenario result dataclass for CRM."""
-    from dataclasses import dataclass, asdict
+    from dataclasses import asdict, dataclass
     from typing import Any
 
     @dataclass

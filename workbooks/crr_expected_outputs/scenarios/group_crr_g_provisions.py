@@ -25,32 +25,31 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
+    import sys
+    from decimal import Decimal
+    from pathlib import Path
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from datetime import date
-    from decimal import Decimal
-    import json
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.shared.fixture_loader import load_fixtures
-    from workbooks.shared.irb_formulas import calculate_expected_loss
-    from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
-        get_corporate_rw,
-        calculate_sa_rwa,
-    )
     from workbooks.crr_expected_outputs.calculations.crr_irb import (
-        calculate_irb_rwa,
         apply_pd_floor,
+        calculate_irb_rwa,
         get_firb_lgd,
     )
-    from workbooks.shared.correlation import calculate_correlation
+    from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
+        calculate_sa_rwa,
+        get_corporate_rw,
+    )
     from workbooks.crr_expected_outputs.data.crr_params import CRR_PD_FLOOR
+    from workbooks.shared.correlation import calculate_correlation
+    from workbooks.shared.fixture_loader import load_fixtures
+    from workbooks.shared.irb_formulas import calculate_expected_loss
 
     return (
         CRR_PD_FLOOR,
@@ -110,7 +109,7 @@ def _(load_fixtures):
 @app.cell
 def _():
     """Scenario result dataclass for Provisions."""
-    from dataclasses import dataclass, asdict
+    from dataclasses import asdict, dataclass
     from typing import Any
 
     @dataclass
@@ -219,7 +218,7 @@ def _(CRRProvisionResult, Decimal, calculate_sa_rwa, get_corporate_rw):
         regulatory_reference="CRR Art. 110",
     )
 
-    print(f"CRR-G1: SA with specific provision")
+    print("CRR-G1: SA with specific provision")
     print(f"  Gross=£{gross_exp_g1:,.0f}, Provision=£{specific_prov_g1:,.0f}")
     print(f"  Net=£{net_exp_g1:,.0f}, RWA=£{rwa_g1:,.0f}")
     return (result_crr_g1,)
@@ -329,7 +328,7 @@ def _(
         regulatory_reference="CRR Art. 158, 159",
     )
 
-    print(f"CRR-G2: IRB EL Shortfall")
+    print("CRR-G2: IRB EL Shortfall")
     print(f"  EL=£{el_g2:,.0f}, Provisions=£{total_prov_g2:,.0f}")
     print(f"  Shortfall=£{el_shortfall_g2:,.0f}")
     print(f"  CET1 deduction=£{cet1_deduction_g2:,.0f}")
@@ -442,7 +441,7 @@ def _(
         regulatory_reference="CRR Art. 62(d)",
     )
 
-    print(f"CRR-G3: IRB EL Excess")
+    print("CRR-G3: IRB EL Excess")
     print(f"  EL=£{el_g3:,.0f}, Provisions=£{total_prov_g3:,.0f}")
     print(f"  Excess=£{el_excess_g3:,.0f}")
     print(f"  T2 credit (capped)=£{t2_credit_g3:,.0f}")

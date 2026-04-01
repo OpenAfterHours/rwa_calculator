@@ -5,9 +5,9 @@ Provides lookup functions for SA risk weights by exposure class,
 following CRE20 and UK PRA PS1/26 deviations.
 """
 
-from typing import Literal
 import sys
 from pathlib import Path
+from typing import Literal
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent.parent.parent
@@ -15,17 +15,17 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from workbooks.rwa_expected_outputs.data.regulatory_params import (
+    ADC_PRESOLD_RISK_WEIGHT,
+    ADC_RISK_WEIGHT,
     CGCB_RISK_WEIGHTS,
+    COMMERCIAL_RE_RISK_WEIGHTS,
+    CORPORATE_RISK_WEIGHTS,
+    HVCRE_MULTIPLIER,
     INSTITUTION_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS_UK,
-    CORPORATE_RISK_WEIGHTS,
-    RETAIL_RISK_WEIGHT,
     RESIDENTIAL_MORTGAGE_RISK_WEIGHTS,
-    COMMERCIAL_RE_RISK_WEIGHTS,
+    RETAIL_RISK_WEIGHT,
     SLOTTING_RISK_WEIGHTS,
-    HVCRE_MULTIPLIER,
-    ADC_RISK_WEIGHT,
-    ADC_PRESOLD_RISK_WEIGHT,
 )
 
 

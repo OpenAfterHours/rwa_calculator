@@ -10,10 +10,10 @@ Usage:
 
 import json
 import sys
-from pathlib import Path
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
-from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -23,51 +23,45 @@ project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from workbooks.shared.fixture_loader import load_fixtures
-from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
-    get_cgcb_rw,
-    get_institution_rw,
-    get_corporate_rw,
-    get_retail_rw,
-    get_residential_mortgage_rw,
-    get_commercial_re_rw,
-    calculate_sa_rwa,
-)
 from workbooks.crr_expected_outputs.calculations.crr_ccf import (
-    get_ccf,
     calculate_ead_off_balance_sheet,
+)
+from workbooks.crr_expected_outputs.calculations.crr_haircuts import (
+    apply_maturity_mismatch,
+    calculate_adjusted_collateral_value,
+    get_collateral_haircut,
+    get_fx_haircut,
+)
+from workbooks.crr_expected_outputs.calculations.crr_irb import (
+    apply_pd_floor,
+    calculate_irb_rwa,
+)
+from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
+    calculate_sa_rwa,
+    get_cgcb_rw,
+    get_commercial_re_rw,
+    get_corporate_rw,
+    get_institution_rw,
+    get_residential_mortgage_rw,
+    get_retail_rw,
 )
 from workbooks.crr_expected_outputs.calculations.crr_supporting_factors import (
     apply_sme_supporting_factor,
-    apply_sme_supporting_factor_simple,
-    calculate_sme_supporting_factor,
-    is_sme_eligible,
+)
+from workbooks.crr_expected_outputs.data.crr_params import (
+    CRR_PD_FLOOR,
+    CRR_SME_SUPPORTING_FACTOR,
 )
 from workbooks.crr_expected_outputs.scenarios.group_crr_f_supporting_factors import (
     generate_crr_f_scenarios as generate_crr_f_raw_scenarios,
 )
-from workbooks.crr_expected_outputs.calculations.crr_irb import (
-    apply_pd_floor,
-    get_firb_lgd,
-    calculate_irb_rwa,
-    calculate_irb_rwa_with_turnover,
-)
 from workbooks.shared.correlation import calculate_correlation
+from workbooks.shared.fixture_loader import load_fixtures
+from workbooks.shared.irb_formulas import (
+    calculate_expected_loss,
+)
 from workbooks.shared.irb_formulas import (
     calculate_irb_rwa as base_calculate_irb_rwa,
-    calculate_expected_loss,
-    apply_pd_floor as base_apply_pd_floor,
-)
-from workbooks.crr_expected_outputs.calculations.crr_haircuts import (
-    get_collateral_haircut,
-    get_fx_haircut,
-    calculate_adjusted_collateral_value,
-    apply_maturity_mismatch,
-)
-from workbooks.crr_expected_outputs.data.crr_params import (
-    CRR_SME_SUPPORTING_FACTOR,
-    CRR_PD_FLOOR,
-    CRR_SLOTTING_RW,
 )
 
 
@@ -1168,7 +1162,7 @@ def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
             rwa_after_sf=float(rwa_post_d4),
             expected_loss=None,
             regulatory_reference="CRR Art. 213-217",
-            calculation_notes=f"Guarantor 30% RW, Borrower 100% RW. Split treatment.",
+            calculation_notes="Guarantor 30% RW, Borrower 100% RW. Split treatment.",
         )
     )
 
@@ -1789,7 +1783,7 @@ def main():
     print("\n" + "=" * 60)
     print("Generation complete!")
     print(f"Total scenarios: {len(scenarios)}")
-    print(f"\nOutput files:")
+    print("\nOutput files:")
     print(f"  - {json_path}")
     print(f"  - {parquet_path}")
     print(f"  - {csv_path}")

@@ -8,7 +8,6 @@ Usage:
 from pathlib import Path
 
 import polars as pl
-
 from ratings import create_ratings, save_ratings
 
 

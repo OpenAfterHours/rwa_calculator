@@ -15,12 +15,13 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import sys
+    from dataclasses import asdict, dataclass
+    from pathlib import Path
+    from typing import Any
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from dataclasses import dataclass, asdict
-    from typing import Any
 
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:

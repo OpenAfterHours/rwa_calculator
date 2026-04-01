@@ -237,11 +237,11 @@ Examples:
         print(f"  - Update version to {new_version} in:")
         for file_path in VERSION_FILES:
             print(f"    - {file_path}")
-        print(f"  - Update changelog")
-        print(f"  - Run: uv sync")
-        print(f"  - Run: uv build")
+        print("  - Update changelog")
+        print("  - Run: uv sync")
+        print("  - Run: uv build")
         if args.publish:
-            print(f"  - Run: uv publish")
+            print("  - Run: uv publish")
         return 0
 
     # Confirm
@@ -297,10 +297,10 @@ Examples:
 
     # Remind about git
     print("\nDon't forget to commit and tag:")
-    print(f"  git add -A")
+    print("  git add -A")
     print(f'  git commit -m "chore: release v{new_version}"')
     print(f"  git tag v{new_version}")
-    print(f"  git push origin master --tags")
+    print("  git push origin master --tags")
 
     return 0
 

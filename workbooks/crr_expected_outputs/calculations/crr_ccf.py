@@ -4,8 +4,8 @@ CRR Credit Conversion Factors (CRR Art. 111).
 Implements CCF lookups for off-balance sheet items.
 """
 
-from decimal import Decimal
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 # Add project root to path for imports

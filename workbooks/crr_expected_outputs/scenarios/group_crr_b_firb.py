@@ -26,37 +26,33 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
+    import sys
+    from decimal import Decimal
+    from pathlib import Path
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from datetime import date
-    from decimal import Decimal
-    import json
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.shared.fixture_loader import load_fixtures
-    from workbooks.shared.correlation import calculate_correlation
     from workbooks.crr_expected_outputs.calculations.crr_irb import (
         apply_pd_floor,
-        get_firb_lgd,
+        calculate_expected_loss,
         calculate_irb_rwa,
         calculate_irb_rwa_with_turnover,
-        calculate_maturity_adjustment,
-        calculate_expected_loss,
+        get_firb_lgd,
     )
     from workbooks.crr_expected_outputs.calculations.crr_supporting_factors import (
         apply_sme_supporting_factor,
-        is_sme_eligible,
     )
     from workbooks.crr_expected_outputs.data.crr_params import (
         CRR_PD_FLOOR,
-        CRR_FIRB_LGD,
     )
+    from workbooks.shared.correlation import calculate_correlation
+    from workbooks.shared.fixture_loader import load_fixtures
 
     return (
         CRR_PD_FLOOR,
@@ -115,7 +111,7 @@ def _(load_fixtures):
 @app.cell
 def _():
     """Scenario result dataclass for F-IRB."""
-    from dataclasses import dataclass, asdict
+    from dataclasses import asdict, dataclass
     from typing import Any
 
     @dataclass

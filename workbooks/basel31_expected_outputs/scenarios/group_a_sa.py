@@ -17,31 +17,29 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
-    import marimo as mo
-    import polars as pl
     import sys
     from pathlib import Path
-    from datetime import date
-    import json
+
+    import marimo as mo
+    import polars as pl
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.rwa_expected_outputs.data.fixture_loader import load_fixtures
-    from workbooks.rwa_expected_outputs.calculations.sa_risk_weights import (
-        get_cgcb_risk_weight,
-        get_institution_risk_weight,
-        get_corporate_risk_weight,
-        get_retail_risk_weight,
-        get_mortgage_risk_weight,
-        calculate_sa_rwa,
-    )
     from workbooks.rwa_expected_outputs.calculations.ccf import (
-        get_ccf,
         calculate_ead_from_contingent,
     )
+    from workbooks.rwa_expected_outputs.calculations.sa_risk_weights import (
+        calculate_sa_rwa,
+        get_cgcb_risk_weight,
+        get_corporate_risk_weight,
+        get_institution_risk_weight,
+        get_mortgage_risk_weight,
+        get_retail_risk_weight,
+    )
+    from workbooks.rwa_expected_outputs.data.fixture_loader import load_fixtures
 
     return (
         calculate_ead_from_contingent,
@@ -96,7 +94,7 @@ def _(fixtures, mo):
 @app.cell
 def _():
     """Scenario result dataclass."""
-    from dataclasses import dataclass, asdict
+    from dataclasses import asdict, dataclass
     from typing import Any
 
     @dataclass

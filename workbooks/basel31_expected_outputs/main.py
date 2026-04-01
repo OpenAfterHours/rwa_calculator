@@ -21,14 +21,15 @@ app = marimo.App(width="full")
 @app.cell
 def _():
     """Imports and setup."""
-    import marimo as mo
-    import polars as pl
     import json
     import sys
-    from pathlib import Path
+    from dataclasses import asdict, dataclass
     from datetime import datetime
-    from dataclasses import dataclass, asdict
+    from pathlib import Path
     from typing import Any
+
+    import marimo as mo
+    import polars as pl
 
     project_root = Path(__file__).parent.parent.parent
     if str(project_root) not in sys.path:
@@ -810,7 +811,7 @@ def _(all_results):
     total_rwa = sum(r.rwa for r in all_results)
 
     print(f"\n{'=' * 50}")
-    print(f"GENERATION COMPLETE")
+    print("GENERATION COMPLETE")
     print(f"{'=' * 50}")
     print(f"Total scenarios: {total_scenarios}")
     print(f"Total EAD: £{total_ead:,.0f}")

@@ -21,8 +21,8 @@ References:
 - CRR Art. 501a: Infrastructure supporting factor
 """
 
-from decimal import Decimal
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 # Add project root to path for imports
@@ -31,12 +31,12 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from workbooks.crr_expected_outputs.data.crr_params import (
+    CRR_INFRASTRUCTURE_SUPPORTING_FACTOR,
+    CRR_SME_EXPOSURE_THRESHOLD_EUR,
+    CRR_SME_EXPOSURE_THRESHOLD_GBP,
     CRR_SME_SUPPORTING_FACTOR,
     CRR_SME_SUPPORTING_FACTOR_TIER1,
     CRR_SME_SUPPORTING_FACTOR_TIER2,
-    CRR_SME_EXPOSURE_THRESHOLD_EUR,
-    CRR_SME_EXPOSURE_THRESHOLD_GBP,
-    CRR_INFRASTRUCTURE_SUPPORTING_FACTOR,
     CRR_SME_TURNOVER_THRESHOLD_EUR,
     CRR_SME_TURNOVER_THRESHOLD_GBP,
 )

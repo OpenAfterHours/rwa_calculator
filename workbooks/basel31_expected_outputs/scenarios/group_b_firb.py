@@ -16,28 +16,29 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
+    import sys
+    from dataclasses import asdict, dataclass
+    from pathlib import Path
+    from typing import Any
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from dataclasses import dataclass, asdict
-    from typing import Any
 
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
+    from workbooks.rwa_expected_outputs.calculations.correlation import (
+        calculate_correlation,
+    )
+    from workbooks.rwa_expected_outputs.calculations.irb_formulas import (
+        apply_pd_floor,
+        calculate_irb_rwa,
+    )
     from workbooks.rwa_expected_outputs.data.fixture_loader import load_fixtures
     from workbooks.rwa_expected_outputs.data.regulatory_params import (
         FIRB_LGD,
         PD_FLOORS,
-    )
-    from workbooks.rwa_expected_outputs.calculations.irb_formulas import (
-        calculate_irb_rwa,
-        apply_pd_floor,
-    )
-    from workbooks.rwa_expected_outputs.calculations.correlation import (
-        calculate_correlation,
     )
 
     @dataclass

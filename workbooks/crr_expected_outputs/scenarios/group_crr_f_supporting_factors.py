@@ -18,9 +18,9 @@ References:
 - CRR Art. 501a
 """
 
+import sys
 from dataclasses import dataclass
 from decimal import Decimal
-import sys
 from pathlib import Path
 
 # Add project root to path for imports
@@ -30,15 +30,12 @@ if str(project_root) not in sys.path:
 
 from workbooks.crr_expected_outputs.calculations.crr_supporting_factors import (
     calculate_sme_supporting_factor,
-    apply_sme_supporting_factor,
-    apply_infrastructure_supporting_factor,
-    is_sme_eligible,
 )
 from workbooks.crr_expected_outputs.data.crr_params import (
+    CRR_INFRASTRUCTURE_SUPPORTING_FACTOR,
     CRR_SME_EXPOSURE_THRESHOLD_GBP,
     CRR_SME_SUPPORTING_FACTOR_TIER1,
     CRR_SME_SUPPORTING_FACTOR_TIER2,
-    CRR_INFRASTRUCTURE_SUPPORTING_FACTOR,
 )
 
 

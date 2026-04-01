@@ -27,13 +27,14 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
-    import marimo as mo
-    import polars as pl
-    import sys
     import json
-    from pathlib import Path
+    import sys
     from datetime import datetime
     from decimal import Decimal
+    from pathlib import Path
+
+    import marimo as mo
+    import polars as pl
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent

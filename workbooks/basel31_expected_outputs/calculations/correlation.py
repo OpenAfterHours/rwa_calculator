@@ -7,9 +7,9 @@ The asset correlation formula is the same for CRR and Basel 3.1.
 
 # Re-export from shared module
 from workbooks.shared.correlation import (
+    CORRELATION_PARAMS,
     calculate_correlation,
     get_correlation_for_class,
-    CORRELATION_PARAMS,
 )
 
 __all__ = [

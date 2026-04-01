@@ -4,8 +4,8 @@ CRR SA risk weight lookup functions.
 Implements risk weight lookups per CRR Articles 112-134.
 """
 
-from decimal import Decimal
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 # Add project root to path for imports
@@ -15,16 +15,16 @@ if str(project_root) not in sys.path:
 
 from workbooks.crr_expected_outputs.data.crr_params import (
     CRR_CGCB_RW,
-    CRR_INSTITUTION_RW_UK,
-    CRR_INSTITUTION_RW_STANDARD,
-    CRR_CORPORATE_RW,
-    CRR_RETAIL_RW,
-    CRR_RESIDENTIAL_RW_LOW_LTV,
-    CRR_RESIDENTIAL_RW_HIGH_LTV,
-    CRR_RESIDENTIAL_LTV_THRESHOLD,
+    CRR_COMMERCIAL_LTV_THRESHOLD,
     CRR_COMMERCIAL_RW_LOW_LTV,
     CRR_COMMERCIAL_RW_STANDARD,
-    CRR_COMMERCIAL_LTV_THRESHOLD,
+    CRR_CORPORATE_RW,
+    CRR_INSTITUTION_RW_STANDARD,
+    CRR_INSTITUTION_RW_UK,
+    CRR_RESIDENTIAL_LTV_THRESHOLD,
+    CRR_RESIDENTIAL_RW_HIGH_LTV,
+    CRR_RESIDENTIAL_RW_LOW_LTV,
+    CRR_RETAIL_RW,
     CRR_SLOTTING_RW,
     CRR_SLOTTING_RW_HVCRE,
 )
@@ -133,7 +133,7 @@ def get_commercial_re_rw(ltv: Decimal, has_income_cover: bool = True) -> tuple[D
     if ltv <= CRR_COMMERCIAL_LTV_THRESHOLD and has_income_cover:
         return CRR_COMMERCIAL_RW_LOW_LTV, f"50% RW (LTV {ltv:.0%} <= 50% with income cover)"
 
-    return CRR_COMMERCIAL_RW_STANDARD, f"100% RW (standard treatment)"
+    return CRR_COMMERCIAL_RW_STANDARD, "100% RW (standard treatment)"
 
 
 def get_slotting_rw(category: str, is_hvcre: bool = False) -> Decimal:

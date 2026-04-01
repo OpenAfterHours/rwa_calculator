@@ -17,21 +17,28 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Import shared IRB formulas (core K calculation is framework-independent)
-from workbooks.shared.irb_formulas import (
-    calculate_k,
-    calculate_maturity_adjustment as _base_calculate_maturity_adjustment,
-    calculate_irb_rwa as _base_calculate_irb_rwa,
-    calculate_expected_loss,
-    apply_pd_floor as _base_apply_pd_floor,
-    apply_lgd_floor as _base_apply_lgd_floor,
-)
-
 # Import Basel 3.1 specific parameters
 from workbooks.basel31_expected_outputs.data.regulatory_params import (
-    PD_FLOORS,
     AIRB_LGD_FLOORS,
-    MATURITY_FLOOR,
     MATURITY_CAP,
+    MATURITY_FLOOR,
+    PD_FLOORS,
+)
+from workbooks.shared.irb_formulas import (
+    apply_lgd_floor as _base_apply_lgd_floor,
+)
+from workbooks.shared.irb_formulas import (
+    apply_pd_floor as _base_apply_pd_floor,
+)
+from workbooks.shared.irb_formulas import (
+    calculate_expected_loss,
+    calculate_k,
+)
+from workbooks.shared.irb_formulas import (
+    calculate_irb_rwa as _base_calculate_irb_rwa,
+)
+from workbooks.shared.irb_formulas import (
+    calculate_maturity_adjustment as _base_calculate_maturity_adjustment,
 )
 
 

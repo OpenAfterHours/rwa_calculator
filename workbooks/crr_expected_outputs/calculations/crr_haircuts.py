@@ -4,8 +4,8 @@ CRR CRM supervisory haircuts (CRR Art. 224).
 Implements collateral haircut lookups and adjustments.
 """
 
-from decimal import Decimal
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 # Add project root to path for imports
@@ -14,8 +14,8 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from workbooks.crr_expected_outputs.data.crr_params import (
-    CRR_HAIRCUTS,
     CRR_FX_HAIRCUT,
+    CRR_HAIRCUTS,
 )
 
 

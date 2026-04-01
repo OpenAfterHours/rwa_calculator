@@ -118,9 +118,8 @@ class TestB31SlottingLookup:
 
     def test_lookup_hvcre_takes_precedence_over_preop(self) -> None:
         """HVCRE flag takes precedence when both flags are set."""
-        assert (
-            lookup_b31_slotting_rw("strong", is_hvcre=True, is_pre_operational=True)
-            == Decimal("0.95")
+        assert lookup_b31_slotting_rw("strong", is_hvcre=True, is_pre_operational=True) == Decimal(
+            "0.95"
         )
 
     def test_lookup_unknown_category_defaults_to_satisfactory(self) -> None:

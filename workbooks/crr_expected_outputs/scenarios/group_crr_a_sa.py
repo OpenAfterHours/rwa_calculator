@@ -27,37 +27,36 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Imports and setup."""
+    import sys
+    from decimal import Decimal
+    from pathlib import Path
+
     import marimo as mo
     import polars as pl
-    import sys
-    from pathlib import Path
-    from datetime import date
-    from decimal import Decimal
-    import json
 
     # Add project root to path
     project_root = Path(__file__).parent.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from workbooks.shared.fixture_loader import load_fixtures
-    from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
-        get_cgcb_rw,
-        get_institution_rw,
-        get_corporate_rw,
-        get_retail_rw,
-        get_residential_mortgage_rw,
-        get_commercial_re_rw,
-        calculate_sa_rwa,
-    )
     from workbooks.crr_expected_outputs.calculations.crr_ccf import (
-        get_ccf,
         calculate_ead_off_balance_sheet,
+        get_ccf,
+    )
+    from workbooks.crr_expected_outputs.calculations.crr_risk_weights import (
+        calculate_sa_rwa,
+        get_cgcb_rw,
+        get_commercial_re_rw,
+        get_corporate_rw,
+        get_institution_rw,
+        get_residential_mortgage_rw,
+        get_retail_rw,
     )
     from workbooks.crr_expected_outputs.calculations.crr_supporting_factors import (
         apply_sme_supporting_factor,
         is_sme_eligible,
     )
+    from workbooks.shared.fixture_loader import load_fixtures
 
     return (
         Decimal,
@@ -124,7 +123,7 @@ def _(fixtures, mo):
 @app.cell
 def _():
     """Scenario result dataclass."""
-    from dataclasses import dataclass, asdict
+    from dataclasses import asdict, dataclass
     from typing import Any
 
     @dataclass

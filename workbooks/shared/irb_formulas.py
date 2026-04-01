@@ -12,16 +12,16 @@ References:
 
 # Re-export from main module to avoid duplication
 from rwa_calc.engine.irb.formulas import (
+    # Export correlation params for reference
+    CORRELATION_PARAMS,
+    # Export constants
+    G_999,
+    CorrelationParams,
     calculate_correlation,
     calculate_expected_loss,
     calculate_irb_rwa,
     calculate_k,
     calculate_maturity_adjustment,
-    # Export constants
-    G_999,
-    # Export correlation params for reference
-    CORRELATION_PARAMS,
-    CorrelationParams,
     get_correlation_params,
 )
 

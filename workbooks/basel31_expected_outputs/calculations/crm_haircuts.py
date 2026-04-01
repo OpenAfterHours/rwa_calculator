@@ -5,7 +5,6 @@ Implements supervisory haircuts, maturity mismatch adjustments,
 and FX mismatch adjustments per CRE22.
 """
 
-from typing import Literal
 import sys
 from pathlib import Path
 

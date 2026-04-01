@@ -408,8 +408,8 @@ class TestSlottingShortMaturityWeights:
     def test_short_maturity_lookup(self) -> None:
         """Test lookup function with short maturity flag."""
         assert lookup_slotting_rw("strong", is_short_maturity=True) == Decimal("0.50")
-        assert (
-            lookup_slotting_rw("strong", is_hvcre=True, is_short_maturity=True) == Decimal("0.70")
+        assert lookup_slotting_rw("strong", is_hvcre=True, is_short_maturity=True) == Decimal(
+            "0.70"
         )
 
 

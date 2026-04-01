@@ -915,10 +915,7 @@ class HierarchyResolver:
             .with_columns(
                 [
                     (pl.col("total_drawn") + pl.col("total_contingent")).alias("total_utilised"),
-                    (
-                        pl.col("limit")
-                        - (pl.col("total_drawn") + pl.col("total_contingent"))
-                    )
+                    (pl.col("limit") - (pl.col("total_drawn") + pl.col("total_contingent")))
                     .clip(lower_bound=0.0)
                     .alias("undrawn_amount"),
                 ]

@@ -736,22 +736,6 @@ class SlottingCalculator:
     Basel 3.1 (BCBS CRE33): Revised operational, PF pre-op, and HVCRE weights.
     """
 
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate slotting RWA for all specialised lending exposures.
-
-        Args:
-            data: CRM-adjusted bundle (uses slotting_exposures field).
-            config: Calculation configuration.
-
-        Returns:
-            LazyFrameResult with slotting RWA calculations.
-        """
-
     def get_slotting_result_bundle(
         self,
         data: CRMAdjustedBundle,

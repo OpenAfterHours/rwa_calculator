@@ -486,34 +486,7 @@ class PipelineOrchestrator:
             )
             return None
 
-    def _run_slotting_calculator(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> SlottingResultBundle | None:
-        """Run Slotting calculation stage."""
-        try:
-            result = self._slotting_calculator.get_slotting_result_bundle(data, config)
-            # Accumulate Slotting errors
-            if result.errors:
-                for error in result.errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="slotting_calculator",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                        )
-                    )
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="slotting_calculator",
-                    error_type="slotting_calculation_error",
-                    message=str(e),
-                )
-            )
-            return None
+
 
     def _run_equity_calculator(
         self,

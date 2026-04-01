@@ -144,4 +144,4 @@ class TestPrepareSAResults:
         )
         result = prepare_sa_results(sa).collect()
         assert result["approach_applied"][0] == "SA"
-        assert result["rwa_final"][0] == 500.0  # prefers rwa_post_factor
+        assert result["rwa_final"][0] == pytest.approx(500.0)  # prefers rwa_post_factor

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Engine**: Remove unused `calculate_unified()` from `SlottingCalculator`, `IRBCalculator`, and their protocols — only SA uses this method (for the output floor). Simplifies the slotting and IRB calculator interfaces.
+
 ### Added
 - **Docs**: Add OF 02.00 and OF 02.01 output floor reporting documentation — master own funds requirements template with new SA-only and output floor columns, dedicated output floor comparison template (U-TREA vs S-TREA), flow diagram showing how IRB output floor columns feed into total capital, Pillar III cross-reference (UKB OV1/KM1)
 - **Docs**: Add CIU exposure treatment to key-differences — three approaches (look-through, mandate-based, 1250% fallback), impact of IRB equity removal on CIU underlyings, and CIU transitional (Art. 4.7–4.8)

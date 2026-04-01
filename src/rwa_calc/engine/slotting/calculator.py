@@ -33,7 +33,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
-from polars import col
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
 from rwa_calc.contracts.errors import (
@@ -42,7 +41,6 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -73,33 +71,6 @@ class SlottingCalculator:
     def __init__(self) -> None:
         """Initialize slotting calculator."""
 
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply slotting weights on unified frame (single-pass pipeline).
-
-        Filters slotting rows, applies the namespace chain, then concats
-        back with non-slotting rows to preserve the unified frame.
-
-        Args:
-            exposures: Unified frame with all approaches
-            config: Calculation configuration
-
-        Returns:
-            Unified frame with slotting columns populated for slotting rows
-        """
-        is_slotting = col("approach") == ApproachType.SLOTTING.value
-
-        non_slotting = exposures.filter(~is_slotting)
-        slotting = exposures.filter(is_slotting)
-
-        slotting = self.calculate_branch(slotting, config)
-
-        return pl.concat([non_slotting, slotting], how="diagonal_relaxed")
-
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
@@ -107,9 +78,6 @@ class SlottingCalculator:
     ) -> pl.LazyFrame:
         """
         Calculate Slotting RWA on pre-filtered slotting-only rows.
-
-        Unlike calculate_unified(), expects only slotting rows — no
-        approach guards needed.
 
         Args:
             exposures: Pre-filtered slotting rows only

@@ -583,18 +583,6 @@ class IRBCalculator:
             calculation_audit, and errors.
         """
 
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply IRB formulas to IRB rows on a unified frame.
-
-        Uses filter-process-merge to avoid running expensive IRB
-        formulas on non-IRB rows.
-        """
-
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
@@ -776,17 +764,6 @@ class SlottingCalculator:
 
         Returns:
             SlottingResultBundle with results, calculation_audit, and errors.
-        """
-
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply slotting weights on unified frame (single-pass pipeline).
-
-        Filters slotting rows, applies namespace chain, concats back.
         """
 
     def calculate_branch(

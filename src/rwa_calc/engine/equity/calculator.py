@@ -6,7 +6,7 @@ Implements two approaches under CRR:
 - Article 155: IRB Simple Risk Weight Method - For firms with IRB permission
 
 Pipeline position:
-    CRMProcessor -> EquityCalculator -> OutputAggregator
+    CRMProcessor -> EquityCalculator -> Aggregation
 
 Key responsibilities:
 - Determine equity risk weights based on equity type

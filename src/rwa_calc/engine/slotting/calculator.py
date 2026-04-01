@@ -5,7 +5,7 @@ Implements CRR Art. 153(5) for supervisory slotting approach.
 Supports both CRR and Basel 3.1 frameworks with appropriate risk weights.
 
 Pipeline position:
-    CRMProcessor -> SlottingCalculator -> OutputAggregator
+    CRMProcessor -> SlottingCalculator -> Aggregation
 
 Key responsibilities:
 - Map slotting categories to risk weights

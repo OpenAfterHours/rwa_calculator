@@ -5,7 +5,7 @@ Implements CRR Art. 153-154 for F-IRB and A-IRB approaches.
 Supports both CRR and Basel 3.1 frameworks with appropriate floors.
 
 Pipeline position:
-    CRMProcessor -> IRBCalculator -> OutputAggregator
+    CRMProcessor -> IRBCalculator -> Aggregation
 
 Key responsibilities:
 - Apply PD floors (differentiated for Basel 3.1)

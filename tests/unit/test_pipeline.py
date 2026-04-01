@@ -459,7 +459,6 @@ class TestPipelineOrchestratorInitialization:
         assert pipeline._sa_calculator is not None
         assert pipeline._irb_calculator is not None
         assert pipeline._slotting_calculator is not None
-        assert pipeline._aggregator is not None
 
 
 class TestPipelineRunWithData:

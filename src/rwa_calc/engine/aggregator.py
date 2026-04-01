@@ -1,13 +1,13 @@
 """
-Output Aggregator for RWA Calculations.
+Output Aggregation Helpers for RWA Calculations.
 
 Pipeline position:
-    SACalculator/IRBCalculator/SlottingCalculator -> OutputAggregator -> Pipeline output
+    SA/IRB/Slotting Calculators -> aggregation free functions -> Pipeline output
 
 Key responsibilities:
 - Canonical constants (IRB approach identifiers, empty-frame schemas)
 - RWA column resolution with consistent fallback chains
-- Result preparation per approach (SA, IRB, Slotting, Equity)
+- Equity result preparation
 - Output floor application and impact analysis (Basel 3.1 only)
 - Supporting factor tracking (CRR only)
 - Summary generation by exposure class and approach
@@ -24,22 +24,9 @@ References:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import polars as pl
 
-from rwa_calc.contracts.bundles import (
-    AggregatedResultBundle,
-    ELPortfolioSummary,
-    EquityResultBundle,
-    IRBResultBundle,
-    SAResultBundle,
-    SlottingResultBundle,
-)
-
-if TYPE_CHECKING:
-    from rwa_calc.contracts.config import CalculationConfig
-
+from rwa_calc.contracts.bundles import ELPortfolioSummary
 
 # =============================================================================
 # Constants
@@ -174,56 +161,6 @@ def empty_frame(schema: dict[str, pl.DataType]) -> pl.LazyFrame:
 # =============================================================================
 
 
-def prepare_sa_results(sa_results: pl.LazyFrame) -> pl.LazyFrame:
-    """Add SA approach tag and normalize RWA column."""
-    cols = set(sa_results.collect_schema().names())
-    rwa_col = "rwa_post_factor" if "rwa_post_factor" in cols else "rwa"
-    return sa_results.with_columns(
-        [
-            pl.lit("SA").alias("approach_applied"),
-            pl.col(rwa_col).alias("rwa_final"),
-        ]
-    )
-
-
-def prepare_irb_results(irb_results: pl.LazyFrame) -> pl.LazyFrame:
-    """Add IRB approach tag (with guarantee-based substitution) and normalize RWA."""
-    cols = set(irb_results.collect_schema().names())
-
-    # Determine base approach expression
-    base_approach_expr = pl.col("approach") if "approach" in cols else pl.lit("FIRB")
-
-    # Post-CRM: fully SA-guaranteed IRB exposures report as "standardised"
-    if "guarantor_approach" in cols and "guarantee_ratio" in cols:
-        approach_expr = (
-            pl.when((pl.col("guarantor_approach") == "sa") & (pl.col("guarantee_ratio") >= 1.0))
-            .then(pl.lit("standardised"))
-            .otherwise(base_approach_expr)
-        )
-    else:
-        approach_expr = base_approach_expr
-
-    rwa_col = "rwa" if "rwa" in cols else "rwa_post_factor"
-    return irb_results.with_columns(
-        [
-            approach_expr.alias("approach_applied"),
-            pl.col(rwa_col).alias("rwa_final"),
-        ]
-    )
-
-
-def prepare_slotting_results(slotting_results: pl.LazyFrame) -> pl.LazyFrame:
-    """Add SLOTTING approach tag and normalize RWA column."""
-    cols = set(slotting_results.collect_schema().names())
-    rwa_col = "rwa" if "rwa" in cols else "rwa_post_factor"
-    return slotting_results.with_columns(
-        [
-            pl.lit("SLOTTING").alias("approach_applied"),
-            pl.col(rwa_col).alias("rwa_final"),
-        ]
-    )
-
-
 def prepare_equity_results(equity_results: pl.LazyFrame) -> pl.LazyFrame:
     """Add EQUITY approach tag, ensure exposure_class exists, and normalize RWA."""
     cols = set(equity_results.collect_schema().names())
@@ -239,34 +176,6 @@ def prepare_equity_results(equity_results: pl.LazyFrame) -> pl.LazyFrame:
             pl.col(rwa_col).alias("rwa_final"),
         ]
     )
-
-
-def combine_results(
-    sa_results: pl.LazyFrame | None = None,
-    irb_results: pl.LazyFrame | None = None,
-    slotting_results: pl.LazyFrame | None = None,
-    equity_results: pl.LazyFrame | None = None,
-) -> pl.LazyFrame:
-    """
-    Combine SA, IRB, Slotting, and Equity results into a unified LazyFrame.
-
-    Adds approach identification and standardizes column names.
-    """
-    frames: list[pl.LazyFrame] = []
-    if sa_results is not None:
-        frames.append(prepare_sa_results(sa_results))
-    if irb_results is not None:
-        frames.append(prepare_irb_results(irb_results))
-    if slotting_results is not None:
-        frames.append(prepare_slotting_results(slotting_results))
-    if equity_results is not None:
-        frames.append(prepare_equity_results(equity_results))
-
-    if not frames:
-        return empty_frame(RESULT_SCHEMA)
-    if len(frames) == 1:
-        return frames[0]
-    return pl.concat(frames, how="diagonal_relaxed")
 
 
 # =============================================================================
@@ -821,215 +730,3 @@ def _build_guaranteed_portions(
             pl.lit("guaranteed").alias("crm_portion_type"),
         ]
     )
-
-
-# =============================================================================
-# Output Aggregator class
-# =============================================================================
-
-
-class OutputAggregator:
-    """
-    Aggregate final RWA results from all calculators.
-
-    Implements OutputAggregatorProtocol for:
-    - Combining SA, IRB, and Slotting results
-    - Applying output floor (Basel 3.1)
-    - Tracking supporting factor impact (CRR)
-    - Generating summaries by exposure class and approach
-
-    Usage:
-        aggregator = OutputAggregator()
-        result = aggregator.aggregate_with_audit(
-            sa_bundle=sa_results,
-            irb_bundle=irb_results,
-            slotting_bundle=slotting_results,
-            config=config,
-        )
-    """
-
-    def __init__(self) -> None:
-        """Initialize output aggregator."""
-        pass
-
-    # =========================================================================
-    # Public API
-    # =========================================================================
-
-    def aggregate(
-        self,
-        sa_results: pl.LazyFrame,
-        irb_results: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Aggregate SA and IRB results into final output.
-
-        Args:
-            sa_results: Standardised Approach calculations
-            irb_results: IRB approach calculations
-            config: Calculation configuration
-
-        Returns:
-            Combined LazyFrame with all calculations
-        """
-        return combine_results(sa_results=sa_results, irb_results=irb_results)
-
-    def aggregate_with_audit(
-        self,
-        sa_bundle: SAResultBundle | None,
-        irb_bundle: IRBResultBundle | None,
-        slotting_bundle: SlottingResultBundle | None,
-        config: CalculationConfig,
-        equity_bundle: EquityResultBundle | None = None,
-    ) -> AggregatedResultBundle:
-        """
-        Aggregate with full audit trail.
-
-        Args:
-            sa_bundle: SA calculation results bundle
-            irb_bundle: IRB calculation results bundle
-            slotting_bundle: Slotting calculation results bundle
-            config: Calculation configuration
-            equity_bundle: Equity calculation results bundle
-
-        Returns:
-            AggregatedResultBundle with full audit trail
-        """
-        # Get result frames from bundles
-        sa_results = sa_bundle.results if sa_bundle else None
-        irb_results = irb_bundle.results if irb_bundle else None
-        slotting_results = slotting_bundle.results if slotting_bundle else None
-        equity_results = equity_bundle.results if equity_bundle else None
-
-        # Combine all results
-        combined = combine_results(
-            sa_results=sa_results,
-            irb_results=irb_results,
-            slotting_results=slotting_results,
-            equity_results=equity_results,
-        )
-
-        # Apply output floor (Basel 3.1 only)
-        floor_impact = None
-        if config.output_floor.enabled and irb_results is not None and sa_results is not None:
-            floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
-            combined, floor_impact = apply_floor_with_impact(combined, sa_results, floor_pct)
-
-        # Generate supporting factor impact (CRR only)
-        supporting_factor_impact = None
-        if config.supporting_factors.enabled and sa_results is not None:
-            supporting_factor_impact = generate_supporting_factor_impact(sa_results)
-
-        # Generate pre/post CRM summaries for regulatory reporting
-        pre_crm_summary = generate_pre_crm_summary(combined)
-        post_crm_detailed = generate_post_crm_detailed(combined)
-        post_crm_summary = generate_post_crm_summary(post_crm_detailed)
-
-        # Generate summaries from post-CRM detailed view (split rows for guarantees)
-        summary_by_class = generate_summary_by_class(post_crm_detailed)
-        summary_by_approach = generate_summary_by_approach(post_crm_detailed)
-
-        # Compute portfolio-level EL summary with T2 credit cap (IRB only)
-        el_summary = compute_el_portfolio_summary(irb_results)
-
-        # Collect all errors from input bundles
-        all_errors: list = []
-        for bundle in (sa_bundle, irb_bundle, slotting_bundle, equity_bundle):
-            if bundle:
-                all_errors.extend(bundle.errors)
-
-        return AggregatedResultBundle(
-            results=combined,
-            sa_results=sa_results,
-            irb_results=irb_results,
-            slotting_results=slotting_results,
-            equity_results=equity_results,
-            floor_impact=floor_impact,
-            supporting_factor_impact=supporting_factor_impact,
-            summary_by_class=summary_by_class,
-            summary_by_approach=summary_by_approach,
-            pre_crm_summary=pre_crm_summary,
-            post_crm_detailed=post_crm_detailed,
-            post_crm_summary=post_crm_summary,
-            el_summary=el_summary,
-            errors=all_errors,
-        )
-
-    def apply_output_floor(
-        self,
-        irb_rwa: pl.LazyFrame,
-        sa_equivalent_rwa: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply output floor to IRB RWA (Basel 3.1 only).
-
-        Final RWA = max(IRB RWA, SA RWA x floor_percentage)
-
-        Args:
-            irb_rwa: IRB RWA before floor
-            sa_equivalent_rwa: Equivalent SA RWA for comparison
-            config: Calculation configuration
-
-        Returns:
-            LazyFrame with floor-adjusted RWA
-        """
-        if not config.output_floor.enabled:
-            return irb_rwa
-
-        floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
-
-        # Join IRB and SA results on exposure_reference
-        sa_cols = set(sa_equivalent_rwa.collect_schema().names())
-        sa_rwa_col = resolve_rwa_col(sa_cols)
-        if not sa_rwa_col:
-            return irb_rwa
-
-        floored = irb_rwa.join(
-            sa_equivalent_rwa.select(
-                [
-                    pl.col("exposure_reference"),
-                    pl.col(sa_rwa_col).alias("sa_rwa"),
-                ]
-            ),
-            on="exposure_reference",
-            how="left",
-        )
-
-        irb_cols = set(floored.collect_schema().names())
-        irb_rwa_col = "rwa" if "rwa" in irb_cols else "rwa_post_factor"
-
-        return floored.with_columns(
-            [
-                (pl.col("sa_rwa").fill_null(0.0) * floor_pct).alias("floor_rwa"),
-                pl.lit(floor_pct).alias("output_floor_pct"),
-            ]
-        ).with_columns(
-            [
-                (pl.col("floor_rwa") > pl.col(irb_rwa_col)).alias("is_floor_binding"),
-                pl.max_horizontal(
-                    pl.lit(0.0),
-                    pl.col("floor_rwa") - pl.col(irb_rwa_col),
-                ).alias("floor_impact_rwa"),
-                pl.max_horizontal(
-                    pl.col(irb_rwa_col),
-                    pl.col("floor_rwa"),
-                ).alias("rwa_final"),
-            ]
-        )
-
-
-# =============================================================================
-# Factory Function
-# =============================================================================
-
-
-def create_output_aggregator() -> OutputAggregator:
-    """
-    Create an OutputAggregator instance.
-
-    Returns:
-        OutputAggregator ready for use
-    """
-    return OutputAggregator()

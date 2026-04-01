@@ -3,7 +3,7 @@ Pipeline Orchestrator for RWA Calculator.
 
 Orchestrates the complete RWA calculation pipeline, wiring together:
     Loader -> HierarchyResolver -> Classifier -> CRMProcessor
-        -> SA/IRB/Slotting Calculators -> OutputAggregator
+        -> SA/IRB/Slotting Calculators -> Aggregation
 
 Pipeline position:
     Entry point for full pipeline execution
@@ -41,7 +41,6 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
     SAResultBundle,
-    SlottingResultBundle,
 )
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
@@ -50,7 +49,6 @@ from rwa_calc.contracts.protocols import (
     HierarchyResolverProtocol,
     IRBCalculatorProtocol,
     LoaderProtocol,
-    OutputAggregatorProtocol,
     SACalculatorProtocol,
     SlottingCalculatorProtocol,
 )
@@ -108,7 +106,7 @@ class PipelineOrchestrator:
     5. SACalculator: Calculate SA RWA
     6. IRBCalculator: Calculate IRB RWA
     7. SlottingCalculator: Calculate Slotting RWA
-    8. OutputAggregator: Combine results, apply floor, generate summaries
+    8. Aggregation: Combine results, apply floor, generate summaries
 
     Usage:
         orchestrator = PipelineOrchestrator(
@@ -119,7 +117,6 @@ class PipelineOrchestrator:
             sa_calculator=SACalculator(),
             irb_calculator=IRBCalculator(),
             slotting_calculator=SlottingCalculator(),
-            aggregator=OutputAggregator(),
         )
         result = orchestrator.run(config)
     """
@@ -134,7 +131,6 @@ class PipelineOrchestrator:
         irb_calculator: IRBCalculatorProtocol | None = None,
         slotting_calculator: SlottingCalculatorProtocol | None = None,
         equity_calculator: EquityCalculatorProtocol | None = None,
-        aggregator: OutputAggregatorProtocol | None = None,
     ) -> None:
         """
         Initialize pipeline with components.
@@ -151,7 +147,6 @@ class PipelineOrchestrator:
             irb_calculator: IRB calculator
             slotting_calculator: Slotting calculator
             equity_calculator: Equity calculator
-            aggregator: Output aggregator
         """
         self._loader = loader
         self._hierarchy_resolver = hierarchy_resolver
@@ -161,7 +156,6 @@ class PipelineOrchestrator:
         self._irb_calculator = irb_calculator
         self._slotting_calculator = slotting_calculator
         self._equity_calculator = equity_calculator
-        self._aggregator = aggregator
         self._errors: list[PipelineError] = []
 
     # =========================================================================
@@ -284,7 +278,6 @@ class PipelineOrchestrator:
         Args:
             config: Calculation config, used to create framework-specific CRM processor
         """
-        from rwa_calc.engine.aggregator import OutputAggregator
         from rwa_calc.engine.classifier import ExposureClassifier
         from rwa_calc.engine.crm.processor import CRMProcessor
         from rwa_calc.engine.equity.calculator import EquityCalculator
@@ -308,8 +301,6 @@ class PipelineOrchestrator:
             self._slotting_calculator = SlottingCalculator()
         if self._equity_calculator is None:
             self._equity_calculator = EquityCalculator()
-        if self._aggregator is None:
-            self._aggregator = OutputAggregator()
 
     # =========================================================================
     # Private Methods - Stage Execution
@@ -514,47 +505,6 @@ class PipelineOrchestrator:
                 )
             )
             return None
-
-    def _run_aggregator(
-        self,
-        sa_bundle: SAResultBundle | None,
-        irb_bundle: IRBResultBundle | None,
-        slotting_bundle: SlottingResultBundle | None,
-        equity_bundle: EquityResultBundle | None,
-        config: CalculationConfig,
-    ) -> AggregatedResultBundle:
-        """Run output aggregation stage."""
-        try:
-            result = self._aggregator.aggregate_with_audit(
-                sa_bundle=sa_bundle,
-                irb_bundle=irb_bundle,
-                slotting_bundle=slotting_bundle,
-                config=config,
-                equity_bundle=equity_bundle,
-            )
-            # Accumulate aggregation errors
-            if result.errors:
-                for error in result.errors:
-                    if isinstance(error, PipelineError):
-                        self._errors.append(error)
-                    else:
-                        self._errors.append(
-                            PipelineError(
-                                stage="aggregator",
-                                error_type=getattr(error, "error_type", "unknown"),
-                                message=getattr(error, "message", str(error)),
-                            )
-                        )
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="aggregator",
-                    error_type="aggregation_error",
-                    message=str(e),
-                )
-            )
-            return self._create_error_result()
 
     # =========================================================================
     # Private Methods - Single-Pass Pipeline

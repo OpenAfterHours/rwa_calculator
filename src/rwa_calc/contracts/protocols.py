@@ -9,8 +9,7 @@ typing. Components implementing these protocols can be:
 
 Each protocol represents a distinct pipeline stage:
     LoaderProtocol -> HierarchyResolverProtocol -> ClassifierProtocol
-        -> CRMProcessorProtocol -> SA/IRBCalculatorProtocol
-        -> OutputAggregatorProtocol
+        -> CRMProcessorProtocol -> SA/IRB/SlottingCalculatorProtocol
 
 All protocols use LazyFrames to maintain deferred execution.
 """
@@ -33,11 +32,8 @@ if TYPE_CHECKING:
         ComparisonBundle,
         CRMAdjustedBundle,
         EquityResultBundle,
-        IRBResultBundle,
         RawDataBundle,
         ResolvedHierarchyBundle,
-        SAResultBundle,
-        SlottingResultBundle,
     )
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import LazyFrameResult
@@ -400,86 +396,6 @@ class EquityCalculatorProtocol(Protocol):
 
         Returns:
             EquityResultBundle with results and audit trail
-        """
-        ...
-
-
-@runtime_checkable
-class OutputAggregatorProtocol(Protocol):
-    """
-    Protocol for aggregating final results.
-
-    Responsible for:
-    - Combining SA and IRB results
-    - Applying output floor (Basel 3.1)
-    - Applying supporting factors (CRR)
-    - Generating summary statistics
-    - Combining all audit trails
-
-    Input: SA and IRB LazyFrames
-    Output: Final aggregated LazyFrame
-    """
-
-    def aggregate(
-        self,
-        sa_results: pl.LazyFrame,
-        irb_results: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Aggregate SA and IRB results into final output.
-
-        Args:
-            sa_results: Standardised Approach calculations
-            irb_results: IRB approach calculations
-            config: Calculation configuration
-
-        Returns:
-            Combined LazyFrame with all calculations
-        """
-        ...
-
-    def aggregate_with_audit(
-        self,
-        sa_bundle: SAResultBundle | None,
-        irb_bundle: IRBResultBundle | None,
-        slotting_bundle: SlottingResultBundle | None,
-        config: CalculationConfig,
-        equity_bundle: EquityResultBundle | None = None,
-    ) -> AggregatedResultBundle:
-        """
-        Aggregate with full audit trail.
-
-        Args:
-            sa_bundle: SA calculation results bundle
-            irb_bundle: IRB calculation results bundle
-            slotting_bundle: Slotting calculation results bundle
-            config: Calculation configuration
-            equity_bundle: Equity calculation results bundle
-
-        Returns:
-            AggregatedResultBundle with audit information
-        """
-        ...
-
-    def apply_output_floor(
-        self,
-        irb_rwa: pl.LazyFrame,
-        sa_equivalent_rwa: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply output floor to IRB RWA (Basel 3.1 only).
-
-        Final RWA = max(IRB RWA, SA RWA x floor_percentage)
-
-        Args:
-            irb_rwa: IRB RWA before floor
-            sa_equivalent_rwa: Equivalent SA RWA for comparison
-            config: Calculation configuration
-
-        Returns:
-            LazyFrame with floor-adjusted RWA
         """
         ...
 

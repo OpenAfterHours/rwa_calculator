@@ -914,14 +914,11 @@ class HierarchyResolver:
             )
             .with_columns(
                 [
-                    # total_utilised = loans drawn + contingent nominal
                     (pl.col("total_drawn") + pl.col("total_contingent")).alias("total_utilised"),
-                ]
-            )
-            .with_columns(
-                [
-                    # undrawn = limit - total_utilised, floor at 0
-                    (pl.col("limit") - pl.col("total_utilised"))
+                    (
+                        pl.col("limit")
+                        - (pl.col("total_drawn") + pl.col("total_contingent"))
+                    )
                     .clip(lower_bound=0.0)
                     .alias("undrawn_amount"),
                 ]
@@ -965,9 +962,9 @@ class HierarchyResolver:
             if "currency" in facility_cols
             else pl.lit(None).cast(pl.String).alias("currency"),
             pl.lit(0.0).alias("drawn_amount"),
-            pl.lit(0.0).alias("interest"),  # Facility undrawn has no accrued interest
+            pl.lit(0.0).alias("interest"),
             pl.col("undrawn_amount"),
-            pl.col("undrawn_amount").alias("nominal_amount"),  # CCF uses nominal_amount
+            pl.col("undrawn_amount").alias("nominal_amount"),
             pl.col("lgd").cast(pl.Float64, strict=False)
             if "lgd" in facility_cols
             else pl.lit(None).cast(pl.Float64).alias("lgd"),
@@ -1256,6 +1253,7 @@ class HierarchyResolver:
         # have NULLs from diagonal_relaxed concat. This join fills them in.
         fac_cols = set(facilities.collect_schema().names()) if facilities is not None else set()
         has_fac_ref = "facility_reference" in fac_cols
+        exp_schema: set[str] = set()
 
         if has_fac_ref:
             fac_select = [pl.col("facility_reference").alias("_fac_ref")]
@@ -1276,6 +1274,7 @@ class HierarchyResolver:
                 how="left",
             )
             coalesce_cols = []
+            # Single schema check covers both QRRE coalesce and default columns below
             exp_schema = set(exposures.collect_schema().names())
             if "_fac_revolving" in exp_schema:
                 coalesce_cols.append(
@@ -1317,8 +1316,9 @@ class HierarchyResolver:
 
         # Ensure QRRE columns always exist with safe defaults.
         # After the facility join branch above, these columns may or may not exist
-        # depending on the facility data. Check the schema once here.
-        qrre_schema = set(exposures.collect_schema().names())
+        # depending on the facility data. Reuse exp_schema from the join branch
+        # (or check fresh if we skipped the branch entirely).
+        qrre_schema = exp_schema if has_fac_ref else set(exposures.collect_schema().names())
         default_cols = []
         if "is_revolving" not in qrre_schema:
             default_cols.append(pl.lit(False).alias("is_revolving"))

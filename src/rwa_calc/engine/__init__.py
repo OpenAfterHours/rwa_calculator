@@ -30,7 +30,7 @@ Polars Namespaces:
 
 from .aggregator import OutputAggregator, create_output_aggregator
 from .comparison import CapitalImpactAnalyzer, DualFrameworkRunner, TransitionalScheduleRunner
-from .hierarchy import HierarchyResolver, create_hierarchy_resolver
+from .hierarchy import HierarchyResolver
 from .loader import CSVLoader, ParquetLoader
 from .pipeline import PipelineOrchestrator, create_pipeline, create_test_pipeline
 
@@ -38,7 +38,6 @@ __all__ = [
     "ParquetLoader",
     "CSVLoader",
     "HierarchyResolver",
-    "create_hierarchy_resolver",
     "OutputAggregator",
     "create_output_aggregator",
     "CapitalImpactAnalyzer",

@@ -90,12 +90,11 @@ class TestCounterpartyLookup:
             rating_inheritance=pl.LazyFrame(
                 {
                     "counterparty_reference": ["A"],
+                    "internal_pd": [None],
+                    "internal_model_id": [None],
+                    "external_cqs": [1],
                     "cqs": [1],
                     "pd": [0.001],
-                    "rating_value": ["A2"],
-                    "inherited": [False],
-                    "source_counterparty": ["A"],
-                    "inheritance_reason": ["own_rating"],
                 }
             ),
         )

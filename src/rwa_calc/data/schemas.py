@@ -578,10 +578,6 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "parent_counterparty_reference": pl.String,
     "ultimate_parent_reference": pl.String,
     "counterparty_hierarchy_depth": pl.Int8,
-    # Rating inheritance
-    "rating_inherited": pl.Boolean,
-    "rating_source_counterparty": pl.String,
-    "rating_inheritance_reason": pl.String,
     # Facility hierarchy additions
     "exposure_has_parent": pl.Boolean,
     "parent_facility_reference": pl.String,
@@ -797,9 +793,6 @@ CALCULATION_OUTPUT_SCHEMA = {
     "counterparty_hierarchy_depth": pl.Int8,  # Levels from ultimate parent (0=top)
     "internal_pd": pl.Float64,  # Internal PD from firm's IRB model (gates IRB approach)
     "external_cqs": pl.Int8,  # CQS from external rating agency
-    "rating_inherited": pl.Boolean,  # Whether rating came from parent
-    "rating_source_counterparty": pl.String,  # Counterparty whose rating was used
-    "rating_inheritance_reason": pl.String,  # "own_rating", "parent_rating", "group_rating", "unrated"
     # -------------------------------------------------------------------------
     # LENDING GROUP HIERARCHY (Retail Threshold Aggregation)
     # -------------------------------------------------------------------------

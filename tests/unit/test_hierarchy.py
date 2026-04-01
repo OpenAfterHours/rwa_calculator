@@ -23,10 +23,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.hierarchy import (
-    HierarchyResolver,
-    create_hierarchy_resolver,
-)
+from rwa_calc.engine.hierarchy import HierarchyResolver
 
 if TYPE_CHECKING:
     pass
@@ -363,9 +360,6 @@ class TestBuildRatingInheritanceLazy:
         # CP001 has own rating
         cp001 = df.filter(pl.col("counterparty_reference") == "CP001")
         assert cp001["cqs"][0] == 2
-        assert cp001["inherited"][0] is False
-        assert cp001["source_counterparty"][0] == "CP001"
-        assert cp001["inheritance_reason"][0] == "own_rating"
 
     def test_entity_inherits_from_parent(
         self,
@@ -387,9 +381,6 @@ class TestBuildRatingInheritanceLazy:
         # CP002 inherits from CP001
         cp002 = df.filter(pl.col("counterparty_reference") == "CP002")
         assert cp002["cqs"][0] == 2
-        assert cp002["inherited"][0] is True
-        assert cp002["source_counterparty"][0] == "CP001"
-        assert cp002["inheritance_reason"][0] == "parent_rating"
 
     def test_standalone_unrated_entity(
         self,
@@ -417,8 +408,6 @@ class TestBuildRatingInheritanceLazy:
         # CP004 is standalone and unrated
         cp004 = df.filter(pl.col("counterparty_reference") == "CP004")
         assert cp004["cqs"][0] is None
-        assert cp004["inherited"][0] is False
-        assert cp004["inheritance_reason"][0] == "unrated"
 
 
 class TestDualRatingResolution:
@@ -460,7 +449,6 @@ class TestDualRatingResolution:
         # Derived: cqs = external-first, pd = internal only
         assert cp["cqs"][0] == 2
         assert cp["pd"][0] == pytest.approx(0.0063)
-        assert cp["inherited"][0] is False
 
     def test_most_recent_per_type(
         self,
@@ -534,14 +522,11 @@ class TestDualRatingResolution:
         child = result.filter(pl.col("counterparty_reference") == "CHILD")
         # Own internal
         assert child["internal_pd"][0] == pytest.approx(0.003)
-        assert child["internal_inherited"][0] is False
         # Inherited external from parent
         assert child["external_cqs"][0] == 1
-        assert child["external_inherited"][0] is True
         # Derived
         assert child["cqs"][0] == 1  # External-first
         assert child["pd"][0] == pytest.approx(0.003)  # Internal PD
-        assert child["inherited"][0] is False  # Has own rating (internal)
 
     def test_external_only_counterparty(
         self,
@@ -869,20 +854,6 @@ class TestFullResolution:
 
         # Verify counterparty lookup is populated
         assert isinstance(result.counterparty_lookup, CounterpartyLookup)
-
-
-# =============================================================================
-# create_hierarchy_resolver Tests
-# =============================================================================
-
-
-class TestCreateHierarchyResolver:
-    """Tests for the factory function."""
-
-    def test_creates_instance(self) -> None:
-        """Factory should create a HierarchyResolver instance."""
-        resolver = create_hierarchy_resolver()
-        assert isinstance(resolver, HierarchyResolver)
 
 
 # =============================================================================
@@ -1999,11 +1970,6 @@ class TestSameFacilityAndLoanReference:
                 pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
                 pl.lit(None).cast(pl.Int8).alias("cqs"),
                 pl.lit(None).cast(pl.Float64).alias("pd"),
-                pl.lit(None).cast(pl.String).alias("rating_value"),
-                pl.lit(None).cast(pl.String).alias("rating_agency"),
-                pl.lit(False).alias("rating_inherited"),
-                pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-                pl.lit("unrated").alias("rating_inheritance_reason"),
             ]
         )
 
@@ -2025,12 +1991,11 @@ class TestSameFacilityAndLoanReference:
             rating_inheritance=pl.LazyFrame(
                 schema={
                     "counterparty_reference": pl.String,
+                    "internal_pd": pl.Float64,
+                    "internal_model_id": pl.String,
+                    "external_cqs": pl.Int8,
                     "cqs": pl.Int8,
                     "pd": pl.Float64,
-                    "rating_value": pl.String,
-                    "inherited": pl.Boolean,
-                    "source_counterparty": pl.String,
-                    "inheritance_reason": pl.String,
                 }
             ),
         )
@@ -2083,11 +2048,6 @@ class TestSameFacilityAndLoanReference:
                 pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
                 pl.lit(None).cast(pl.Int8).alias("cqs"),
                 pl.lit(None).cast(pl.Float64).alias("pd"),
-                pl.lit(None).cast(pl.String).alias("rating_value"),
-                pl.lit(None).cast(pl.String).alias("rating_agency"),
-                pl.lit(False).alias("rating_inherited"),
-                pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-                pl.lit("unrated").alias("rating_inheritance_reason"),
             ]
         )
 
@@ -2109,12 +2069,11 @@ class TestSameFacilityAndLoanReference:
             rating_inheritance=pl.LazyFrame(
                 schema={
                     "counterparty_reference": pl.String,
+                    "internal_pd": pl.Float64,
+                    "internal_model_id": pl.String,
+                    "external_cqs": pl.Int8,
                     "cqs": pl.Int8,
                     "pd": pl.Float64,
-                    "rating_value": pl.String,
-                    "inherited": pl.Boolean,
-                    "source_counterparty": pl.String,
-                    "inheritance_reason": pl.String,
                 }
             ),
         )
@@ -2516,11 +2475,6 @@ class TestLendingGroupDuplicateMembership:
                 pl.lit(0).cast(pl.Int32).alias("counterparty_hierarchy_depth"),
                 pl.lit(None).cast(pl.Int8).alias("cqs"),
                 pl.lit(None).cast(pl.Float64).alias("pd"),
-                pl.lit(None).cast(pl.String).alias("rating_value"),
-                pl.lit(None).cast(pl.String).alias("rating_agency"),
-                pl.lit(False).alias("rating_inherited"),
-                pl.lit(None).cast(pl.String).alias("rating_source_counterparty"),
-                pl.lit("unrated").alias("rating_inheritance_reason"),
             ]
         )
         return CounterpartyLookup(
@@ -2541,12 +2495,11 @@ class TestLendingGroupDuplicateMembership:
             rating_inheritance=pl.LazyFrame(
                 schema={
                     "counterparty_reference": pl.String,
+                    "internal_pd": pl.Float64,
+                    "internal_model_id": pl.String,
+                    "external_cqs": pl.Int8,
                     "cqs": pl.Int8,
                     "pd": pl.Float64,
-                    "rating_value": pl.String,
-                    "inherited": pl.Boolean,
-                    "source_counterparty": pl.String,
-                    "inheritance_reason": pl.String,
                 }
             ),
         )

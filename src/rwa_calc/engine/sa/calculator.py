@@ -39,7 +39,6 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -1043,115 +1042,6 @@ class SACalculator:
         )
 
         return audit
-
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        exposure_class: str,
-        cqs: int | None = None,
-        ltv: Decimal | None = None,
-        is_sme: bool = False,
-        is_infrastructure: bool = False,
-        is_managed_as_retail: bool = False,
-        qualifies_as_retail: bool = True,
-        has_income_cover: bool = False,
-        property_type: str | None = None,
-        is_adc: bool = False,
-        is_presold: bool = False,
-        seniority: str = "senior",
-        scra_grade: str | None = None,
-        is_investment_grade: bool = False,
-        is_defaulted: bool = False,
-        provision_allocated: Decimal | None = None,
-        provision_deducted: Decimal | None = None,
-        currency: str | None = None,
-        country_code: str | None = None,
-        borrower_income_currency: str | None = None,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single exposure (convenience method).
-
-        Args:
-            ead: Exposure at default
-            exposure_class: Exposure class
-            cqs: Credit quality step (1-6 or None for unrated)
-            ltv: Loan-to-value ratio (for real estate)
-            is_sme: Whether SME supporting factor applies
-            is_infrastructure: Whether infrastructure factor applies
-            is_managed_as_retail: Whether SME is managed on pooled retail basis (CRR Art. 123)
-            has_income_cover: Whether income materially depends on property cash flows
-            property_type: Property type ("residential" or "commercial") from collateral
-            is_adc: Whether this is an ADC (Acquisition/Development/Construction) exposure
-            is_presold: Whether ADC exposure is pre-sold to qualifying buyer
-            seniority: "senior" or "subordinated" — subordinated gets 150% under Basel 3.1
-            scra_grade: SCRA grade for unrated institutions ("A"/"B"/"C", Basel 3.1 only)
-            is_investment_grade: Whether counterparty qualifies as investment grade (Basel 3.1)
-            is_defaulted: Whether counterparty is in default (CRR Art. 127 / CRE20.88-90)
-            provision_allocated: Total specific provisions allocated to exposure
-            provision_deducted: Total provisions deducted from EAD
-            currency: Exposure denomination currency (ISO, e.g. "GBP") for Art. 114(3)
-            country_code: Counterparty country (ISO, e.g. "GB") for Art. 114(3)
-            borrower_income_currency: ISO currency of borrower's income (Basel 3.1 Art. 123B)
-            config: Calculation configuration (defaults to CRR)
-
-        Returns:
-            Dictionary with calculation results
-        """
-        from datetime import date
-
-        from rwa_calc.contracts.config import CalculationConfig
-
-        if config is None:
-            config = CalculationConfig.crr(reporting_date=date.today())
-
-        # Create single-row DataFrame
-        df = pl.DataFrame(
-            {
-                "exposure_reference": ["SINGLE"],
-                "ead_final": [float(ead)],
-                "exposure_class": [exposure_class],
-                "cqs": [cqs],
-                "ltv": [float(ltv) if ltv else None],
-                "is_sme": [is_sme],
-                "is_infrastructure": [is_infrastructure],
-                "has_income_cover": [has_income_cover],
-                "cp_is_managed_as_retail": [is_managed_as_retail],
-                "qualifies_as_retail": [qualifies_as_retail],
-                "property_type": [property_type],
-                "is_adc": [is_adc],
-                "is_presold": [is_presold],
-                "seniority": [seniority],
-                "cp_scra_grade": [scra_grade],
-                "cp_is_investment_grade": [is_investment_grade],
-                "is_defaulted": [is_defaulted],
-                "provision_allocated": [float(provision_allocated) if provision_allocated else 0.0],
-                "provision_deducted": [float(provision_deducted) if provision_deducted else 0.0],
-                "currency": [currency],
-                "cp_country_code": [country_code],
-                "borrower_income_currency": [borrower_income_currency],
-            }
-        ).lazy()
-
-        # Apply risk weights
-        df = self._apply_risk_weights(df, config)
-        df = self._apply_currency_mismatch_multiplier(df, config)
-        df = self._calculate_rwa(df)
-        df = self._apply_supporting_factors(df, config)
-
-        # Collect result
-        result = df.collect().to_dicts()[0]
-
-        return {
-            "ead": ead,
-            "exposure_class": exposure_class,
-            "cqs": cqs,
-            "risk_weight": Decimal(str(result["risk_weight"])),
-            "rwa_pre_factor": Decimal(str(result["rwa_pre_factor"])),
-            "supporting_factor": Decimal(str(result["supporting_factor"])),
-            "rwa": Decimal(str(result["rwa_post_factor"])),
-            "supporting_factor_applied": result["supporting_factor_applied"],
-        }
 
 
 def create_sa_calculator() -> SACalculator:

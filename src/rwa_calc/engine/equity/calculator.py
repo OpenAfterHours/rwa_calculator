@@ -36,7 +36,6 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -48,7 +47,6 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.data.tables.crr_equity_rw import lookup_equity_rw
 from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
@@ -84,6 +82,32 @@ class EquityCalculator:
     def __init__(self) -> None:
         """Initialize equity calculator."""
         pass
+
+    def calculate_branch(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Calculate equity RWA on pre-filtered equity-only rows.
+
+        Args:
+            exposures: Pre-filtered equity rows only
+            config: Calculation configuration
+
+        Returns:
+            LazyFrame with equity RWA columns populated
+        """
+        approach = self._determine_approach(config)
+
+        exposures = self._prepare_columns(exposures, config)
+
+        if approach == "irb_simple":
+            exposures = self._apply_equity_weights_irb_simple(exposures, config)
+        else:
+            exposures = self._apply_equity_weights_sa(exposures, config)
+
+        return self._calculate_rwa(exposures)
 
     def calculate(
         self,
@@ -424,69 +448,6 @@ class EquityCalculator:
         )
 
         return audit
-
-    def calculate_single_exposure(
-        self,
-        ead: Decimal,
-        equity_type: str,
-        is_diversified: bool = False,
-        is_speculative: bool = False,
-        is_exchange_traded: bool = False,
-        is_government_supported: bool = False,
-        config: CalculationConfig | None = None,
-    ) -> dict:
-        """
-        Calculate RWA for a single equity exposure (convenience method).
-
-        Args:
-            ead: Exposure at default
-            equity_type: Type of equity exposure
-            is_diversified: Whether in diversified portfolio (for PE)
-            is_speculative: Whether speculative unlisted
-            is_exchange_traded: Whether exchange traded
-            is_government_supported: Whether government supported
-            config: Calculation configuration (defaults to CRR SA)
-
-        Returns:
-            Dictionary with calculation results
-        """
-        from datetime import date
-
-        from rwa_calc.contracts.config import CalculationConfig
-
-        if config is None:
-            config = CalculationConfig.crr(reporting_date=date.today())
-
-        approach = self._determine_approach(config)
-
-        if is_speculative:
-            effective_type = "speculative"
-        elif is_exchange_traded:
-            effective_type = "exchange_traded"
-        elif is_government_supported:
-            effective_type = "government_supported"
-        elif equity_type.lower() == "private_equity" and is_diversified:
-            effective_type = "private_equity_diversified"
-        else:
-            effective_type = equity_type
-
-        risk_weight = lookup_equity_rw(effective_type, approach, is_diversified)
-
-        rwa = ead * risk_weight
-
-        return {
-            "ead": float(ead),
-            "equity_type": equity_type,
-            "effective_type": effective_type,
-            "is_diversified": is_diversified,
-            "is_speculative": is_speculative,
-            "is_exchange_traded": is_exchange_traded,
-            "is_government_supported": is_government_supported,
-            "approach": approach,
-            "article": "133" if approach == "sa" else "155",
-            "risk_weight": float(risk_weight),
-            "rwa": float(rwa),
-        }
 
 
 def create_equity_calculator() -> EquityCalculator:

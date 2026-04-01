@@ -184,15 +184,25 @@ result = calculator.calculate(
 rwa_df = result.frame.collect()
 ```
 
-For single-exposure calculations:
+For single-exposure calculations, build a single-row LazyFrame and call
+`calculate_branch()`:
 
 ```python
-rwa = calculator.calculate_single_exposure(
-    ead=20_000_000,
-    slotting_category="good",
-    config=CalculationConfig.crr(reporting_date=date(2026, 12, 31)),
-)
-# Returns: 18_000_000.0
+import polars as pl
+
+df = pl.DataFrame({
+    "exposure_reference": ["EX1"],
+    "ead": [20_000_000.0],
+    "slotting_category": ["good"],
+    "is_hvcre": [False],
+    "is_short_maturity": [False],
+    "is_pre_operational": [False],
+}).lazy()
+
+result = calculator.calculate_branch(
+    df, CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+).collect().to_dicts()[0]
+# result["rwa"] -> 18_000_000.0
 ```
 
 ### Risk Weight Lookup

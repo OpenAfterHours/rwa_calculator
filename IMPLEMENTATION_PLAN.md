@@ -844,7 +844,6 @@ Each Phase 3 task extends the pipeline itself to produce data not currently avai
 - Risk weight multiplied by 1.5; `currency_mismatch_multiplier_applied` boolean column set for COREP tracking.
 - `currency_mismatch_multiplier_applied` output column added to `CALCULATION_OUTPUT_SCHEMA`.
 - Wired into all 3 SA calculator entry points: `get_sa_result_bundle()`, `calculate_unified()`, `calculate_branch()`.
-- `calculate_single_exposure()` updated with `borrower_income_currency` parameter.
 - CRR unaffected: method returns immediately when `is_basel_3_1 == False`.
 - Null `borrower_income_currency` → no multiplier (graceful handling).
 - COREP generator: `_filter_currency_mismatch()` helper filters on `currency_mismatch_multiplier_applied == True`. Row 0380 populated for B3.1 OF 07.00 memorandum Section 5. Absent under CRR.

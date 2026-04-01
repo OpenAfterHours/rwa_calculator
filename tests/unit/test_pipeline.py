@@ -572,12 +572,16 @@ class TestPipelineStageExecution:
         pipeline = PipelineOrchestrator()
         pipeline._ensure_components_initialized()
 
-        result = pipeline._run_slotting_calculator(mock_crm_bundle, crr_config)
+        # Filter to slotting rows only (none exist in mock data)
+        empty_slotting = mock_crm_bundle.exposures.filter(
+            pl.col("approach") == "slotting"
+        )
+        result = pipeline._slotting_calculator.calculate_branch(
+            empty_slotting, crr_config
+        )
 
-        # With no slotting exposures (None), calculator returns empty bundle
-        if result is not None:
-            collected = result.results.collect()
-            assert collected.height == 0
+        collected = result.collect()
+        assert collected.height == 0
 
 
 class TestPipelineErrorHandling:

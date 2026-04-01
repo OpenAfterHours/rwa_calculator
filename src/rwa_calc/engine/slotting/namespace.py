@@ -33,65 +33,49 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars import col, lit
 
+from rwa_calc.data.tables.b31_slotting import (
+    B31_SLOTTING_RISK_WEIGHTS,
+    B31_SLOTTING_RISK_WEIGHTS_HVCRE,
+    B31_SLOTTING_RISK_WEIGHTS_PREOP,
+)
+from rwa_calc.data.tables.crr_slotting import (
+    SLOTTING_RISK_WEIGHTS,
+    SLOTTING_RISK_WEIGHTS_HVCRE,
+    SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
+    SLOTTING_RISK_WEIGHTS_SHORT,
+)
 from rwa_calc.engine.utils import exact_fractional_years_expr
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import SlottingCategory
 
 # Threshold for short maturity classification under CRR Art. 153(5)
 _SHORT_MATURITY_THRESHOLD_YEARS = 2.5
 
 
+def _to_float_map(weights: dict[SlottingCategory, Decimal]) -> dict[str, float]:
+    """Convert Decimal enum-keyed weights to str/float dict for Polars replace_strict."""
+    return {cat.value: float(w) for cat, w in weights.items()}
+
+
 # =============================================================================
-# RISK WEIGHT CONSTANTS
+# RISK WEIGHT CONSTANTS — sourced from data/tables/
 # =============================================================================
 
-# Categories: strong, good, satisfactory, weak, default
-# Default weight for unknown categories is 'satisfactory'
-
-SLOTTING_WEIGHTS = {
-    # CRR Art. 153(5)
+_SLOTTING_WEIGHTS: dict[str, dict[str, dict[str, float]]] = {
     "crr": {
-        "base": {"strong": 0.70, "good": 0.90, "satisfactory": 1.15, "weak": 2.50, "default": 0.00},
-        "short": {
-            "strong": 0.50,
-            "good": 0.70,
-            "satisfactory": 1.15,
-            "weak": 2.50,
-            "default": 0.00,
-        },
-        "hvcre": {
-            "strong": 0.95,
-            "good": 1.20,
-            "satisfactory": 1.40,
-            "weak": 2.50,
-            "default": 0.00,
-        },
-        "hvcre_short": {
-            "strong": 0.70,
-            "good": 0.95,
-            "satisfactory": 1.40,
-            "weak": 2.50,
-            "default": 0.00,
-        },
+        "base": _to_float_map(SLOTTING_RISK_WEIGHTS),
+        "short": _to_float_map(SLOTTING_RISK_WEIGHTS_SHORT),
+        "hvcre": _to_float_map(SLOTTING_RISK_WEIGHTS_HVCRE),
+        "hvcre_short": _to_float_map(SLOTTING_RISK_WEIGHTS_HVCRE_SHORT),
     },
-    # Basel 3.1 BCBS CRE33
     "basel_3_1": {
-        "base": {"strong": 0.70, "good": 0.90, "satisfactory": 1.15, "weak": 2.50, "default": 0.00},
-        "preop": {
-            "strong": 0.80,
-            "good": 1.00,
-            "satisfactory": 1.20,
-            "weak": 3.50,
-            "default": 0.00,
-        },
-        "hvcre": {
-            "strong": 0.95,
-            "good": 1.20,
-            "satisfactory": 1.40,
-            "weak": 2.50,
-            "default": 0.00,
-        },
+        "base": _to_float_map(B31_SLOTTING_RISK_WEIGHTS),
+        "preop": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_PREOP),
+        "hvcre": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_HVCRE),
     },
 }
 
@@ -296,7 +280,7 @@ class SlottingExpr:
         is_preop_expr = lit(is_preop) if isinstance(is_preop, bool) else is_preop
 
         if is_crr:
-            weights = SLOTTING_WEIGHTS["crr"]
+            weights = _SLOTTING_WEIGHTS["crr"]
             return (
                 pl.when(is_hvcre_expr.not_() & is_short_expr.not_())
                 .then(self._map_category(cat, weights["base"]))
@@ -307,7 +291,7 @@ class SlottingExpr:
                 .otherwise(self._map_category(cat, weights["hvcre_short"]))
             )
         else:
-            weights = SLOTTING_WEIGHTS["basel_3_1"]
+            weights = _SLOTTING_WEIGHTS["basel_3_1"]
             return (
                 pl.when(is_hvcre_expr)
                 .then(self._map_category(cat, weights["hvcre"]))

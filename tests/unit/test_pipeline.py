@@ -278,12 +278,11 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
     rating_inheritance = pl.LazyFrame(
         {
             "counterparty_reference": ["CP001", "CP002"],
-            "cqs": [3, 0],  # CP002 is unrated
+            "internal_pd": [None, None],
+            "internal_model_id": [None, None],
+            "external_cqs": [3, None],
+            "cqs": [3, None],
             "pd": [0.005, None],
-            "rating_value": ["BBB", None],
-            "inherited": [False, False],
-            "source_counterparty": ["CP001", None],
-            "inheritance_reason": ["own_rating", "unrated"],
         }
     )
 

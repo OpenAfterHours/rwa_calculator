@@ -100,12 +100,11 @@ def create_test_bundle(
         rating_inheritance=pl.LazyFrame(
             schema={
                 "counterparty_reference": pl.String,
+                "internal_pd": pl.Float64,
+                "internal_model_id": pl.String,
+                "external_cqs": pl.Int8,
                 "cqs": pl.Int8,
                 "pd": pl.Float64,
-                "rating_value": pl.String,
-                "inherited": pl.Boolean,
-                "source_counterparty": pl.String,
-                "inheritance_reason": pl.String,
             }
         ),
     )

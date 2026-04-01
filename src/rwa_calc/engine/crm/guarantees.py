@@ -110,15 +110,13 @@ def apply_guarantees(
     if missing_guarantor_cols:
         exposures = exposures.with_columns(missing_guarantor_cols)
 
-    # Look up guarantor's CQS, rating type, PD, and internal_pd from ratings
+    # Look up guarantor's CQS, PD, and internal_pd from ratings
     if rating_inheritance is not None:
         ri_schema = rating_inheritance.collect_schema()
         ri_cols = [
             pl.col("counterparty_reference"),
             pl.col("cqs").alias("guarantor_cqs"),
         ]
-        if "rating_type" in ri_schema.names():
-            ri_cols.append(pl.col("rating_type").alias("guarantor_rating_type"))
         # Guarantor PD needed for Basel 3.1 parameter substitution (CRE22.70-85)
         if "pd" in ri_schema.names():
             ri_cols.append(pl.col("pd").alias("guarantor_pd"))
@@ -135,8 +133,6 @@ def apply_guarantees(
 
         ri_names = ri_schema.names()
         missing_rating_cols = []
-        if "rating_type" not in ri_names:
-            missing_rating_cols.append(pl.lit(None).cast(pl.String).alias("guarantor_rating_type"))
         if "pd" not in ri_names:
             missing_rating_cols.append(pl.lit(None).cast(pl.Float64).alias("guarantor_pd"))
         if "internal_pd" not in ri_names:
@@ -147,7 +143,6 @@ def apply_guarantees(
         exposures = exposures.with_columns(
             [
                 pl.lit(None).cast(pl.Int8).alias("guarantor_cqs"),
-                pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
                 pl.lit(None).cast(pl.Float64).alias("guarantor_pd"),
                 pl.lit(None).cast(pl.Float64).alias("guarantor_internal_pd"),
             ]

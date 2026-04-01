@@ -24,7 +24,6 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -34,21 +33,12 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.engine.fx_converter import FXConverter
 from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
-
-
-@dataclass
-class HierarchyError:
-    """Error encountered during hierarchy resolution."""
-
-    error_type: str
-    message: str
-    entity_reference: str | None = None
-    context: dict = field(default_factory=dict)
 
 
 class HierarchyResolver:
@@ -79,9 +69,8 @@ class HierarchyResolver:
         Returns:
             ResolvedHierarchyBundle with hierarchy metadata added
         """
-        errors: list[HierarchyError] = []
+        errors: list[CalculationError] = []
 
-        # Step 1: Build counterparty hierarchy lookup
         counterparty_lookup, cp_errors = self._build_counterparty_lookup(
             data.counterparties,
             data.org_mappings,
@@ -89,7 +78,6 @@ class HierarchyResolver:
         )
         errors.extend(cp_errors)
 
-        # Step 2: Unify exposures (loans + contingents + facility undrawn) with hierarchy metadata
         exposures, exp_errors = self._unify_exposures(
             data.loans,
             data.contingents,
@@ -99,8 +87,7 @@ class HierarchyResolver:
         )
         errors.extend(exp_errors)
 
-        # Step 2a: Apply FX conversion to exposures and CRM data
-        # This enables threshold calculations in consistent currency
+        # Apply FX conversion so threshold calculations use consistent currency
         fx_converter = FXConverter()
         collateral = data.collateral
         guarantees = data.guarantees
@@ -133,12 +120,9 @@ class HierarchyResolver:
                 ]
             )
 
-        # Step 2b: Add collateral LTV to exposures (for real estate risk weights)
         exposures = self._add_collateral_ltv(exposures, collateral)
 
-        # Step 3: Enrich exposures with property coverage and lending group totals
-        # Uses .over() window functions instead of group_by + join-back to avoid
-        # duplicating the upstream plan tree (self-join elimination)
+        # .over() window functions avoid group_by + join-back plan tree branching
         exposures = self._enrich_with_property_coverage(exposures, collateral)
         exposures = self._enrich_with_lending_group(exposures, data.lending_mappings)
 
@@ -180,14 +164,14 @@ class HierarchyResolver:
         counterparties: pl.LazyFrame,
         org_mappings: pl.LazyFrame | None,
         ratings: pl.LazyFrame | None,
-    ) -> tuple[CounterpartyLookup, list[HierarchyError]]:
+    ) -> tuple[CounterpartyLookup, list[CalculationError]]:
         """
         Build counterparty hierarchy lookup using pure LazyFrame operations.
 
         Returns:
             Tuple of (CounterpartyLookup, list of errors)
         """
-        errors: list[HierarchyError] = []
+        errors: list[CalculationError] = []
 
         # If org_mappings is None, create empty LazyFrame with expected schema
         if org_mappings is None:
@@ -614,15 +598,8 @@ class HierarchyResolver:
             }
         )
 
-        # Detect type column (child_type / node_type / neither)
-        mapping_schema = facility_mappings.collect_schema()
-        mapping_cols = set(mapping_schema.names())
-
-        if "child_type" in mapping_cols:
-            type_col = "child_type"
-        elif "node_type" in mapping_cols:
-            type_col = "node_type"
-        else:
+        type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
+        if type_col is None:
             return empty_result
 
         # Filter to facility→facility relationships and collect (small data)
@@ -811,15 +788,7 @@ class HierarchyResolver:
                 }
             )
 
-        # Detect type column for filtering mappings (used by both loan and contingent sections)
-        mapping_schema = facility_mappings.collect_schema()
-        mapping_cols = set(mapping_schema.names())
-        if "child_type" in mapping_cols:
-            type_col = "child_type"
-        elif "node_type" in mapping_cols:
-            type_col = "node_type"
-        else:
-            type_col = None
+        type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
 
         # Prepare root lookup for multi-level hierarchies (used by both loan and contingent sections).
         # Left join with empty lookup naturally produces nulls; coalesce falls back to parent.
@@ -866,29 +835,7 @@ class HierarchyResolver:
                 how="inner",
             )
 
-            # For multi-level hierarchies, map each loan's drawn amount to the ROOT facility.
-            loan_with_parent = (
-                loan_with_parent.join(
-                    root_lookup.select(
-                        [
-                            pl.col("child_facility_reference"),
-                            pl.col("root_facility_reference").alias("_root_fac"),
-                        ]
-                    ),
-                    left_on="parent_facility_reference",
-                    right_on="child_facility_reference",
-                    how="left",
-                )
-                .with_columns(
-                    [
-                        pl.coalesce(
-                            pl.col("_root_fac"),
-                            pl.col("parent_facility_reference"),
-                        ).alias("aggregation_facility"),
-                    ]
-                )
-                .drop("_root_fac")
-            )
+            loan_with_parent = _resolve_to_root_facility(loan_with_parent, root_lookup)
 
             loan_drawn_totals = loan_with_parent.group_by("aggregation_facility").agg(
                 [
@@ -929,30 +876,7 @@ class HierarchyResolver:
                 how="inner",
             )
 
-            # For multi-level hierarchies, map to root facility.
-            # Reuse root_lookup from loan section (already handles None case).
-            contingent_with_parent = (
-                contingent_with_parent.join(
-                    root_lookup.select(
-                        [
-                            pl.col("child_facility_reference"),
-                            pl.col("root_facility_reference").alias("_root_fac"),
-                        ]
-                    ),
-                    left_on="parent_facility_reference",
-                    right_on="child_facility_reference",
-                    how="left",
-                )
-                .with_columns(
-                    [
-                        pl.coalesce(
-                            pl.col("_root_fac"),
-                            pl.col("parent_facility_reference"),
-                        ).alias("aggregation_facility"),
-                    ]
-                )
-                .drop("_root_fac")
-            )
+            contingent_with_parent = _resolve_to_root_facility(contingent_with_parent, root_lookup)
 
             contingent_totals = contingent_with_parent.group_by("aggregation_facility").agg(
                 [
@@ -1105,7 +1029,7 @@ class HierarchyResolver:
         facilities: pl.LazyFrame | None,
         facility_mappings: pl.LazyFrame,
         counterparty_lookup: CounterpartyLookup,
-    ) -> tuple[pl.LazyFrame, list[HierarchyError]]:
+    ) -> tuple[pl.LazyFrame, list[CalculationError]]:
         """
         Unify loans, contingents, and facility undrawn into a single exposures LazyFrame.
 
@@ -1117,7 +1041,7 @@ class HierarchyResolver:
         Returns:
             Tuple of (unified exposures LazyFrame, list of errors)
         """
-        errors: list[HierarchyError] = []
+        errors: list[CalculationError] = []
 
         # Standardize loan columns
         # Note: Loans are drawn exposures - CCF fields are N/A since EAD = drawn_amount + interest directly.
@@ -1242,15 +1166,7 @@ class HierarchyResolver:
         # loans, contingents, and facility_undrawn (never raw facilities).
         # Without this filter, when facility_reference = loan_reference AND the facility
         # is a sub-facility, child_reference has duplicate values causing row duplication.
-        mapping_schema = facility_mappings.collect_schema()
-        mapping_cols = set(mapping_schema.names())
-
-        if "child_type" in mapping_cols:
-            type_col = "child_type"
-        elif "node_type" in mapping_cols:
-            type_col = "node_type"
-        else:
-            type_col = None
+        type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
 
         if type_col is not None:
             exposure_level_mappings = (
@@ -1388,23 +1304,27 @@ class HierarchyResolver:
 
             if coalesce_cols:
                 exposures = exposures.with_columns(coalesce_cols)
-            # Drop temporary join columns
-            temp_cols = [
-                c
-                for c in ["_fac_revolving", "_fac_transactor", "_fac_limit"]
-                if c in exposures.collect_schema().names()
-            ]
+            # Drop temporary join columns (we know which exist from fac_cols)
+            temp_cols = []
+            if "is_revolving" in fac_cols:
+                temp_cols.append("_fac_revolving")
+            if "is_qrre_transactor" in fac_cols:
+                temp_cols.append("_fac_transactor")
+            if "limit" in fac_cols:
+                temp_cols.append("_fac_limit")
             if temp_cols:
                 exposures = exposures.drop(temp_cols)
 
-        # Ensure QRRE columns always exist with safe defaults
-        exp_schema = set(exposures.collect_schema().names())
+        # Ensure QRRE columns always exist with safe defaults.
+        # After the facility join branch above, these columns may or may not exist
+        # depending on the facility data. Check the schema once here.
+        qrre_schema = set(exposures.collect_schema().names())
         default_cols = []
-        if "is_revolving" not in exp_schema:
+        if "is_revolving" not in qrre_schema:
             default_cols.append(pl.lit(False).alias("is_revolving"))
-        if "is_qrre_transactor" not in exp_schema:
+        if "is_qrre_transactor" not in qrre_schema:
             default_cols.append(pl.lit(False).alias("is_qrre_transactor"))
-        if "facility_limit" not in exp_schema:
+        if "facility_limit" not in qrre_schema:
             default_cols.append(pl.lit(None).cast(pl.Float64).alias("facility_limit"))
         if default_cols:
             exposures = exposures.with_columns(default_cols)
@@ -1438,13 +1358,13 @@ class HierarchyResolver:
         if rating_defaults:
             exposures = exposures.with_columns(rating_defaults)
 
-        # model_id: sourced from internal_model_id (rating inheritance pipeline)
-        exp_schema = set(exposures.collect_schema().names())
-        if "internal_model_id" in exp_schema:
+        # model_id: sourced from internal_model_id (rating inheritance pipeline).
+        # We know internal_model_id was joined from cp_schema above.
+        if "internal_model_id" in cp_schema:
             exposures = exposures.with_columns(pl.col("internal_model_id").alias("model_id")).drop(
                 "internal_model_id"
             )
-        elif "model_id" not in exp_schema:
+        else:
             exposures = exposures.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
 
         return exposures, errors
@@ -1499,30 +1419,24 @@ class HierarchyResolver:
         collateral_schema = collateral.collect_schema()
         has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
 
-        # Filter for residential property collateral (for threshold exclusion)
-        residential_collateral = collateral.filter(
-            (pl.col("collateral_type").str.to_lowercase() == "real_estate")
-            & (pl.col("property_type").str.to_lowercase() == "residential")
-        )
-        # Filter for ALL property collateral (residential + commercial)
+        # Single filter for all property collateral; split residential inline
         all_property_collateral = collateral.filter(
             pl.col("collateral_type").str.to_lowercase() == "real_estate"
         )
+        is_residential = pl.col("property_type").str.to_lowercase() == "residential"
 
         if not has_beneficiary_type:
-            # Legacy: assume direct exposure linking only
-            res_lookup = residential_collateral.group_by("beneficiary_reference").agg(
-                pl.col("market_value").sum().alias("residential_collateral_value"),
-            )
+            # Legacy: assume direct exposure linking only — one group_by, two aggregates
             prop_lookup = all_property_collateral.group_by("beneficiary_reference").agg(
-                pl.col("market_value").sum().alias("property_collateral_value"),
+                [
+                    pl.col("market_value")
+                    .filter(is_residential)
+                    .sum()
+                    .alias("residential_collateral_value"),
+                    pl.col("market_value").sum().alias("property_collateral_value"),
+                ]
             )
             exposures = exposures.join(
-                res_lookup,
-                left_on="exposure_reference",
-                right_on="beneficiary_reference",
-                how="left",
-            ).join(
                 prop_lookup,
                 left_on="exposure_reference",
                 right_on="beneficiary_reference",
@@ -1534,7 +1448,7 @@ class HierarchyResolver:
             needs_facility_flag = True
         else:
             # Multi-level linking with .over() allocation weights
-            # This sets has_facility_property_collateral inline.
+            residential_collateral = all_property_collateral.filter(is_residential)
             exposures = self._join_property_collateral_multi_level(
                 exposures,
                 residential_collateral,
@@ -1542,35 +1456,25 @@ class HierarchyResolver:
             )
             needs_facility_flag = False
 
-        # Fill nulls, cap at exposure amount, derive threshold
-        exposures = (
-            exposures.with_columns(
-                [
-                    pl.col("residential_collateral_value").fill_null(0.0),
-                    pl.col("property_collateral_value").fill_null(0.0),
-                ]
-            )
-            .with_columns(
-                [
-                    pl.when(
-                        pl.col("residential_collateral_value") > pl.col("total_exposure_amount")
-                    )
-                    .then(pl.col("total_exposure_amount"))
-                    .otherwise(pl.col("residential_collateral_value"))
-                    .alias("residential_collateral_value"),
-                    pl.when(pl.col("property_collateral_value") > pl.col("total_exposure_amount"))
-                    .then(pl.col("total_exposure_amount"))
-                    .otherwise(pl.col("property_collateral_value"))
-                    .alias("property_collateral_value"),
-                ]
-            )
-            .with_columns(
-                [
-                    (
-                        pl.col("total_exposure_amount") - pl.col("residential_collateral_value")
-                    ).alias("exposure_for_retail_threshold"),
-                ]
-            )
+        # Fill nulls, then cap at exposure amount and derive threshold
+        exposures = exposures.with_columns(
+            [
+                pl.col("residential_collateral_value").fill_null(0.0),
+                pl.col("property_collateral_value").fill_null(0.0),
+            ]
+        ).with_columns(
+            [
+                pl.min_horizontal("residential_collateral_value", "total_exposure_amount").alias(
+                    "residential_collateral_value"
+                ),
+                pl.min_horizontal("property_collateral_value", "total_exposure_amount").alias(
+                    "property_collateral_value"
+                ),
+                (
+                    pl.col("total_exposure_amount")
+                    - pl.min_horizontal("residential_collateral_value", "total_exposure_amount")
+                ).alias("exposure_for_retail_threshold"),
+            ]
         )
 
         # Add has_facility_property_collateral for legacy path
@@ -1987,6 +1891,47 @@ class HierarchyResolver:
         )
 
         return exposures
+
+
+def _resolve_to_root_facility(
+    frame: pl.LazyFrame,
+    root_lookup: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """Map each row's parent_facility_reference to the root facility.
+
+    Adds an ``aggregation_facility`` column that is the root facility for
+    multi-level hierarchies, or falls back to ``parent_facility_reference``
+    for single-level ones.
+    """
+    return (
+        frame.join(
+            root_lookup.select(
+                [
+                    pl.col("child_facility_reference"),
+                    pl.col("root_facility_reference").alias("_root_fac"),
+                ]
+            ),
+            left_on="parent_facility_reference",
+            right_on="child_facility_reference",
+            how="left",
+        )
+        .with_columns(
+            pl.coalesce(
+                pl.col("_root_fac"),
+                pl.col("parent_facility_reference"),
+            ).alias("aggregation_facility"),
+        )
+        .drop("_root_fac")
+    )
+
+
+def _detect_type_column(schema_names: set[str]) -> str | None:
+    """Return the child-type column name if present, else None."""
+    if "child_type" in schema_names:
+        return "child_type"
+    if "node_type" in schema_names:
+        return "node_type"
+    return None
 
 
 def _resolve_graph_eager(

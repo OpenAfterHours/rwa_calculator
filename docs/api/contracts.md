@@ -507,11 +507,9 @@ class CRMProcessorProtocol(Protocol):
 
 ### Calculator Protocols
 
-All calculator protocols follow a three-method pattern:
-
-- `calculate_unified()` — operates on a unified frame (single-pass pipeline)
-- `calculate_branch()` — operates on pre-filtered approach-specific rows
-- `calculate()` — takes a `CRMAdjustedBundle` and returns `LazyFrameResult`
+Calculator protocols provide `calculate_branch()` for pre-filtered rows and `calculate()` for
+bundle-based entry. SA additionally provides `calculate_unified()` for the Basel 3.1 output floor
+(which needs SA-equivalent risk weights on all rows in a single pass).
 
 #### `SACalculatorProtocol`
 
@@ -544,18 +542,10 @@ class SACalculatorProtocol(Protocol):
 
 #### `IRBCalculatorProtocol`
 
-Extends the three-method pattern with `calculate_expected_loss()`:
+Adds `calculate_expected_loss()` for EL calculation:
 
 ```python
 class IRBCalculatorProtocol(Protocol):
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """Apply IRB formulas on unified frame (single-pass pipeline)."""
-        ...
-
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
@@ -585,14 +575,6 @@ class IRBCalculatorProtocol(Protocol):
 
 ```python
 class SlottingCalculatorProtocol(Protocol):
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """Apply slotting weights on unified frame."""
-        ...
-
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,

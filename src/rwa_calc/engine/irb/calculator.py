@@ -40,7 +40,6 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -124,33 +123,6 @@ class IRBCalculator:
             errors=[],
         )
 
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply IRB formulas to IRB rows on a unified frame.
-
-        Uses filter-process-merge to avoid running expensive IRB formulas
-        (normal_ppf, normal_cdf) on non-IRB rows.
-
-        Args:
-            exposures: Unified frame with all approaches
-            config: Calculation configuration
-
-        Returns:
-            Unified frame with IRB columns populated for IRB rows
-        """
-        is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
-            pl.col("approach") == ApproachType.AIRB.value
-        )
-
-        non_irb = exposures.filter(~is_irb)
-        irb = self._run_irb_chain(exposures.filter(is_irb), config)
-
-        return pl.concat([non_irb, irb], how="diagonal_relaxed")
-
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
@@ -158,9 +130,6 @@ class IRBCalculator:
     ) -> pl.LazyFrame:
         """
         Calculate IRB RWA on pre-filtered IRB-only rows.
-
-        Unlike calculate_unified(), expects only IRB rows — no filter/concat
-        wrapper needed.
 
         Args:
             exposures: Pre-filtered IRB rows only

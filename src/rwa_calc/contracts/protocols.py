@@ -269,23 +269,6 @@ class IRBCalculatorProtocol(Protocol):
     Output: LazyFrameResult with IRB calculations
     """
 
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply IRB formulas on unified frame (single-pass pipeline).
-
-        Args:
-            exposures: Unified frame with all approaches
-            config: Calculation configuration
-
-        Returns:
-            Unified frame with IRB columns populated for IRB rows
-        """
-        ...
-
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
@@ -353,23 +336,6 @@ class SlottingCalculatorProtocol(Protocol):
     Input: CRMAdjustedBundle (slotting exposures)
     Output: LazyFrameResult with slotting calculations
     """
-
-    def calculate_unified(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply slotting weights on unified frame (single-pass pipeline).
-
-        Args:
-            exposures: Unified frame with all approaches
-            config: Calculation configuration
-
-        Returns:
-            Unified frame with slotting columns populated for slotting rows
-        """
-        ...
 
     def calculate_branch(
         self,

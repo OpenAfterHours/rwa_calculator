@@ -18,12 +18,10 @@ Components wired: Classifier → EquityCalculator → OutputAggregator
 
 from __future__ import annotations
 
-from datetime import date
-
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
+from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier

@@ -77,9 +77,7 @@ class OutputAggregator:
             AggregatedResultBundle with all summaries and adjustments.
         """
         # Combine for summaries (data already materialised — cheap concat)
-        combined = pl.concat(
-            [sa_results, irb_results, slotting_results], how="diagonal_relaxed"
-        )
+        combined = pl.concat([sa_results, irb_results, slotting_results], how="diagonal_relaxed")
 
         # Concat equity if present
         equity_results = None

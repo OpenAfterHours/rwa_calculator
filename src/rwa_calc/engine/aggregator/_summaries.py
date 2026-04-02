@@ -126,8 +126,6 @@ def generate_summary_by_approach(results: pl.LazyFrame) -> pl.LazyFrame:
         if group_col != "approach_applied":
             summary = summary.rename({group_col: "approach_applied"})
     else:
-        summary = results.select(agg_exprs).with_columns(
-            [pl.lit("ALL").alias("approach_applied")]
-        )
+        summary = results.select(agg_exprs).with_columns([pl.lit("ALL").alias("approach_applied")])
 
     return summary

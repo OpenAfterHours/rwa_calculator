@@ -53,6 +53,7 @@ class CalculationConfig:
     scaling_factor: Decimal = Decimal("1.06")
     eur_gbp_rate: Decimal = Decimal("0.8732")
     collect_engine: PolarsEngine = "streaming"
+    spill_dir: Path | None = None
 ```
 
 #### Properties
@@ -80,6 +81,7 @@ class CalculationConfig:
         irb_permissions: IRBPermissions | None = None,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         collect_engine: PolarsEngine = "streaming",
+        spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """
         Create CRR (Basel 3.0) configuration.
@@ -97,6 +99,7 @@ class CalculationConfig:
             irb_permissions: IRB approach permissions (defaults to SA-only).
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion.
             collect_engine: Polars collection engine.
+            spill_dir: Directory for temp files during streaming (None = system temp).
 
         Example:
             >>> config = CalculationConfig.crr(
@@ -111,6 +114,7 @@ class CalculationConfig:
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
         collect_engine: PolarsEngine = "streaming",
+        spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """
         Create Basel 3.1 (PRA PS1/26) configuration.
@@ -126,6 +130,7 @@ class CalculationConfig:
             reporting_date: As-of date for calculation.
             irb_permissions: IRB approach permissions (defaults to SA-only).
             collect_engine: Polars collection engine.
+            spill_dir: Directory for temp files during streaming (None = system temp).
 
         Example:
             >>> config = CalculationConfig.basel_3_1(

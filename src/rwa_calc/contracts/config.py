@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from rwa_calc.domain.enums import (
@@ -540,6 +541,8 @@ class CalculationConfig:
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
         collect_engine: Polars engine for .collect() - 'streaming' (default)
             processes in batches for lower memory usage, 'cpu' for in-memory
+        spill_dir: Directory for temp parquet files during streaming materialization.
+            None uses system temp directory.
     """
 
     framework: RegulatoryFramework
@@ -559,6 +562,7 @@ class CalculationConfig:
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
     collect_engine: PolarsEngine = "streaming"  # Default to streaming for memory efficiency
+    spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
     @property
     def is_crr(self) -> bool:
@@ -582,6 +586,7 @@ class CalculationConfig:
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
         collect_engine: PolarsEngine = "streaming",
+        spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """
         Create CRR (Basel 3.0) configuration.
@@ -622,6 +627,7 @@ class CalculationConfig:
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
             collect_engine=collect_engine,
+            spill_dir=spill_dir,
         )
 
     @classmethod
@@ -631,6 +637,7 @@ class CalculationConfig:
         irb_permissions: IRBPermissions | None = None,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
         collect_engine: PolarsEngine = "streaming",
+        spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """
         Create Basel 3.1 (PRA PS1/26) configuration.
@@ -670,4 +677,5 @@ class CalculationConfig:
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             collect_engine=collect_engine,
+            spill_dir=spill_dir,
         )

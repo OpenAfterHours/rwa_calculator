@@ -410,11 +410,13 @@ class CRMProcessor:
             and data.counterparty_lookup is not None
         ):
             # Materialise guarantee lookup tables to prevent parquet re-scans.
-            guarantees_df, cp_lookup_df, ri_df = pl.collect_all([
-                data.guarantees,
-                data.counterparty_lookup.counterparties,
-                data.counterparty_lookup.rating_inheritance,
-            ])
+            guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
+                [
+                    data.guarantees,
+                    data.counterparty_lookup.counterparties,
+                    data.counterparty_lookup.rating_inheritance,
+                ]
+            )
             exposures = self.apply_guarantees(
                 exposures,
                 guarantees_df.lazy(),
@@ -529,12 +531,14 @@ class CRMProcessor:
             # reference the original parquet scans + hierarchy joins; without
             # materialisation, the guarantee collect re-executes the full
             # hierarchy/rating plan for each join (~568ms → <100ms at 100K).
-            exp_df, guarantees_df, cp_lookup_df, ri_df = pl.collect_all([
-                exposures,
-                data.guarantees,
-                data.counterparty_lookup.counterparties,
-                data.counterparty_lookup.rating_inheritance,
-            ])
+            exp_df, guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
+                [
+                    exposures,
+                    data.guarantees,
+                    data.counterparty_lookup.counterparties,
+                    data.counterparty_lookup.rating_inheritance,
+                ]
+            )
             exposures = self.apply_guarantees(
                 exp_df.lazy(),
                 guarantees_df.lazy(),

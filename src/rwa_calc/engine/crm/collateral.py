@@ -232,9 +232,7 @@ def apply_collateral(
     # duplication. Each lookup is referenced in multiple downstream joins;
     # without this, Polars re-evaluates the group_by/select at each reference.
     # collect_all runs all 3 concurrently and enables CSE on shared upstream.
-    direct_df, facility_df, cp_df = pl.collect_all(
-        [direct_lookup, facility_lookup, cp_lookup]
-    )
+    direct_df, facility_df, cp_df = pl.collect_all([direct_lookup, facility_lookup, cp_lookup])
     direct_lookup = direct_df.lazy()
     facility_lookup = facility_df.lazy()
     cp_lookup = cp_df.lazy()

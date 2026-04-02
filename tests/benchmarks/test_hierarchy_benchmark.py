@@ -185,7 +185,9 @@ class TestHierarchyBenchmark100K:
 
         result = benchmark.pedantic(
             lambda: resolver.resolve(raw_data, config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -211,7 +213,10 @@ class TestHierarchyBenchmark100K:
             return resolver._build_counterparty_lookup(counterparties, org_mappings, ratings)
 
         result, errors = benchmark.pedantic(
-            build_lookup, rounds=3, warmup_rounds=1, iterations=1,
+            build_lookup,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -240,7 +245,10 @@ class TestHierarchyBenchmark100K:
             return resolver._build_counterparty_lookup(counterparties, org_mappings, ratings)
 
         result, _ = benchmark.pedantic(
-            build_lookup, rounds=3, warmup_rounds=1, iterations=1,
+            build_lookup,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         # Verify hierarchy has depth >= 2
@@ -288,7 +296,10 @@ class TestHierarchyBenchmark100K:
             )
 
         result, _ = benchmark.pedantic(
-            unify, rounds=3, warmup_rounds=1, iterations=1,
+            unify,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         # Verify facility hierarchy
@@ -354,7 +365,9 @@ class TestHierarchyBenchmark1M:
 
         result = benchmark.pedantic(
             lambda: resolver.resolve(raw_data, config),
-            rounds=2, warmup_rounds=0, iterations=1,
+            rounds=2,
+            warmup_rounds=0,
+            iterations=1,
         )
 
         assert result is not None
@@ -405,7 +418,9 @@ class TestHierarchyBenchmark10M:
 
         result = benchmark.pedantic(
             lambda: resolver.resolve(raw_data, config),
-            rounds=1, warmup_rounds=0, iterations=1,
+            rounds=1,
+            warmup_rounds=0,
+            iterations=1,
         )
 
         assert result is not None

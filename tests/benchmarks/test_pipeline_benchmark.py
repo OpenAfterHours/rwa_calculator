@@ -173,7 +173,9 @@ class TestPipelineBenchmark100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -199,7 +201,9 @@ class TestPipelineBenchmark100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -220,7 +224,9 @@ class TestPipelineBenchmark100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         # Get timing from benchmark (stats is None when benchmarking is disabled)
@@ -259,7 +265,9 @@ class TestPipelineBenchmark1M:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=2, warmup_rounds=0, iterations=1,
+            rounds=2,
+            warmup_rounds=0,
+            iterations=1,
         )
 
         assert result is not None
@@ -293,7 +301,9 @@ class TestPipelineBenchmark10M:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=1, warmup_rounds=0, iterations=1,
+            rounds=1,
+            warmup_rounds=0,
+            iterations=1,
         )
 
         assert result is not None
@@ -329,7 +339,9 @@ class TestComponentBenchmarks100K:
 
         result = benchmark.pedantic(
             lambda: classifier.classify(resolved, config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -362,7 +374,9 @@ class TestComponentBenchmarks100K:
 
         result = benchmark.pedantic(
             lambda: sa_calc.calculate(crm_adjusted, config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -427,7 +441,9 @@ class TestApproachBenchmarks100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -453,7 +469,9 @@ class TestApproachBenchmarks100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -478,7 +496,9 @@ class TestApproachBenchmarks100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -503,7 +523,9 @@ class TestApproachBenchmarks100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -528,7 +550,9 @@ class TestApproachBenchmarks100K:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=3, warmup_rounds=1, iterations=1,
+            rounds=3,
+            warmup_rounds=1,
+            iterations=1,
         )
 
         assert result is not None
@@ -556,7 +580,9 @@ class TestApproachBenchmarks1M:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=2, warmup_rounds=0, iterations=1,
+            rounds=2,
+            warmup_rounds=0,
+            iterations=1,
         )
         assert result is not None
 
@@ -576,7 +602,9 @@ class TestApproachBenchmarks1M:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=2, warmup_rounds=0, iterations=1,
+            rounds=2,
+            warmup_rounds=0,
+            iterations=1,
         )
         assert result is not None
 
@@ -596,7 +624,9 @@ class TestApproachBenchmarks1M:
 
         result = benchmark.pedantic(
             lambda: pipeline.run(config),
-            rounds=2, warmup_rounds=0, iterations=1,
+            rounds=2,
+            warmup_rounds=0,
+            iterations=1,
         )
         assert result is not None
 

@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 # Timing helpers
 # ---------------------------------------------------------------------------
 
+
 def _time(fn, label: str, results: list[tuple[str, float]]) -> object:
     """Time a function call, append (label, elapsed_ms) to results, return fn result."""
     t0 = time.perf_counter()
@@ -65,6 +66,7 @@ def _time(fn, label: str, results: list[tuple[str, float]]) -> object:
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
+
 
 def _load_from_parquet(path: str) -> RawDataBundle:
     """Load RawDataBundle from a parquet directory."""
@@ -92,6 +94,7 @@ def _load_synthetic_100k() -> RawDataBundle:
 # ---------------------------------------------------------------------------
 # Per-stage profiling
 # ---------------------------------------------------------------------------
+
 
 def profile_pipeline_stages(
     raw_data: RawDataBundle,
@@ -237,8 +240,12 @@ def profile_pipeline_stages(
 
         exposures = _time(
             lambda: collateral_mod._apply_collateral_unified(
-                exposures, adjusted_collateral, config,
-                facility_ead_totals, cp_ead_totals, config.is_basel_3_1,
+                exposures,
+                adjusted_collateral,
+                config,
+                facility_ead_totals,
+                cp_ead_totals,
+                config.is_basel_3_1,
             ),
             "CRM: collateral allocation (lazy)",
             results,
@@ -258,13 +265,16 @@ def profile_pipeline_stages(
         and data.counterparty_lookup is not None
     )
     if has_guarantees:
+
         def _collect_guarantee_inputs():
-            e, g, cp, ri = pl.collect_all([
-                exposures,
-                data.guarantees,
-                data.counterparty_lookup.counterparties,
-                data.counterparty_lookup.rating_inheritance,
-            ])
+            e, g, cp, ri = pl.collect_all(
+                [
+                    exposures,
+                    data.guarantees,
+                    data.counterparty_lookup.counterparties,
+                    data.counterparty_lookup.rating_inheritance,
+                ]
+            )
             return e.lazy(), g.lazy(), cp.lazy(), ri.lazy()
 
         exposures, guar_lf, cp_lf, ri_lf = _time(
@@ -386,6 +396,7 @@ def profile_pipeline_stages(
 # Output formatting
 # ---------------------------------------------------------------------------
 
+
 def _print_results(results: list[tuple[str, float]], run_label: str = "") -> None:
     """Print a formatted table of stage timings."""
     total = sum(ms for _, ms in results)
@@ -440,14 +451,14 @@ def _print_summary(all_runs: list[list[tuple[str, float]]]) -> None:
     totals = [sum(ms for _, ms in run) for run in all_runs]
     print(f"  {'-' * 42} {'-' * 8} {'-' * 8} {'-' * 8}")
     print(
-        f"  {'TOTAL':<42} {min(totals):>8.1f} "
-        f"{sum(totals) / len(totals):>8.1f} {max(totals):>8.1f}"
+        f"  {'TOTAL':<42} {min(totals):>8.1f} {sum(totals) / len(totals):>8.1f} {max(totals):>8.1f}"
     )
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Profile RWA pipeline stages")

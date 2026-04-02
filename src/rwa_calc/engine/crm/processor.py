@@ -409,12 +409,20 @@ class CRMProcessor:
             has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
+            # Materialise guarantee lookup tables to prevent parquet re-scans.
+            guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
+                [
+                    data.guarantees,
+                    data.counterparty_lookup.counterparties,
+                    data.counterparty_lookup.rating_inheritance,
+                ]
+            )
             exposures = self.apply_guarantees(
                 exposures,
-                data.guarantees,
-                data.counterparty_lookup.counterparties,
+                guarantees_df.lazy(),
+                cp_lookup_df.lazy(),
                 config,
-                data.counterparty_lookup.rating_inheritance,
+                ri_df.lazy(),
             )
 
         # Step 6: Calculate final EAD after all CRM adjustments
@@ -514,19 +522,32 @@ class CRMProcessor:
         # without this collect, the guarantee module's 3-path concat
         # (no-guarantee / single / multi-guarantor split) re-evaluates the
         # full collateral plan per branch, causing ~4x slowdown at 100K scale.
-        exposures = exposures.collect().lazy()
-
         if (
             has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
-            exposures = self.apply_guarantees(
-                exposures,
-                data.guarantees,
-                data.counterparty_lookup.counterparties,
-                config,
-                data.counterparty_lookup.rating_inheritance,
+            # Materialise exposures + guarantee lookup tables in parallel.
+            # The lookup LazyFrames (guarantees, counterparties, rating_inheritance)
+            # reference the original parquet scans + hierarchy joins; without
+            # materialisation, the guarantee collect re-executes the full
+            # hierarchy/rating plan for each join (~568ms → <100ms at 100K).
+            exp_df, guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
+                [
+                    exposures,
+                    data.guarantees,
+                    data.counterparty_lookup.counterparties,
+                    data.counterparty_lookup.rating_inheritance,
+                ]
             )
+            exposures = self.apply_guarantees(
+                exp_df.lazy(),
+                guarantees_df.lazy(),
+                cp_lookup_df.lazy(),
+                config,
+                ri_df.lazy(),
+            )
+        else:
+            exposures = exposures.collect().lazy()
 
         exposures = self._finalize_ead(exposures)
         exposures = self._add_crm_audit(exposures)

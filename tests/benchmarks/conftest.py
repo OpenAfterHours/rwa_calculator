@@ -24,6 +24,7 @@ Usage:
     uv run pytest tests/benchmarks/ --benchmark-only --benchmark-regenerate-scale=100k
 """
 
+import gc
 import logging
 
 import polars as pl
@@ -241,73 +242,20 @@ def dataset_10m_stats(dataset_10m: dict[str, pl.LazyFrame]) -> dict:
 
 
 # =============================================================================
-# COLLECTED DATA FIXTURES (Eager DataFrames for benchmark functions)
-# =============================================================================
-
-
-@pytest.fixture(scope="session")
-def counterparties_10k(dataset_10k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected counterparties for 10K benchmark."""
-    return dataset_10k["counterparties"].collect()
-
-
-@pytest.fixture(scope="session")
-def counterparties_100k(dataset_100k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected counterparties for 100K benchmark."""
-    return dataset_100k["counterparties"].collect()
-
-
-@pytest.fixture(scope="session")
-def loans_10k(dataset_10k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected loans for 10K benchmark."""
-    return dataset_10k["loans"].collect()
-
-
-@pytest.fixture(scope="session")
-def loans_100k(dataset_100k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected loans for 100K benchmark."""
-    return dataset_100k["loans"].collect()
-
-
-@pytest.fixture(scope="session")
-def org_mappings_10k(dataset_10k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected org_mappings for 10K benchmark."""
-    return dataset_10k["org_mappings"].collect()
-
-
-@pytest.fixture(scope="session")
-def org_mappings_100k(dataset_100k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected org_mappings for 100K benchmark."""
-    return dataset_100k["org_mappings"].collect()
-
-
-@pytest.fixture(scope="session")
-def facility_mappings_10k(dataset_10k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected facility_mappings for 10K benchmark."""
-    return dataset_10k["facility_mappings"].collect()
-
-
-@pytest.fixture(scope="session")
-def facility_mappings_100k(dataset_100k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected facility_mappings for 100K benchmark."""
-    return dataset_100k["facility_mappings"].collect()
-
-
-@pytest.fixture(scope="session")
-def ratings_10k(dataset_10k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected ratings for 10K benchmark."""
-    return dataset_10k["ratings"].collect()
-
-
-@pytest.fixture(scope="session")
-def ratings_100k(dataset_100k: dict[str, pl.LazyFrame]) -> pl.DataFrame:
-    """Collected ratings for 100K benchmark."""
-    return dataset_100k["ratings"].collect()
-
-
-# =============================================================================
 # HELPER FIXTURES
 # =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _gc_between_benchmarks():
+    """Force garbage collection between benchmark tests.
+
+    Polars/Arrow memory is managed by Rust and not tracked by Python's GC,
+    but clearing Python-level references helps the Rust allocator reuse
+    freed buffers instead of allocating fresh pages.
+    """
+    yield
+    gc.collect()
 
 
 @pytest.fixture

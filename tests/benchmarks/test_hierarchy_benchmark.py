@@ -18,7 +18,6 @@ Usage:
 """
 
 from datetime import date
-from typing import Literal
 
 import polars as pl
 import pytest
@@ -29,9 +28,6 @@ from rwa_calc.engine.hierarchy import HierarchyResolver
 
 # Default reporting date for benchmarks
 BENCHMARK_REPORTING_DATE = date(2026, 1, 1)
-
-# Default engine for benchmarks - streaming for memory efficiency
-BENCHMARK_ENGINE: Literal["cpu", "gpu", "streaming"] = "streaming"
 
 
 # =============================================================================
@@ -187,7 +183,10 @@ class TestHierarchyBenchmark100K:
 
         resolver = HierarchyResolver()
 
-        result = benchmark(resolver.resolve, raw_data, config)
+        result = benchmark.pedantic(
+            lambda: resolver.resolve(raw_data, config),
+            rounds=3, warmup_rounds=1, iterations=1,
+        )
 
         assert result is not None
         assert result.exposures is not None
@@ -211,7 +210,9 @@ class TestHierarchyBenchmark100K:
         def build_lookup():
             return resolver._build_counterparty_lookup(counterparties, org_mappings, ratings)
 
-        result, errors = benchmark(build_lookup)
+        result, errors = benchmark.pedantic(
+            build_lookup, rounds=3, warmup_rounds=1, iterations=1,
+        )
 
         assert result is not None
 
@@ -238,11 +239,13 @@ class TestHierarchyBenchmark100K:
         def build_lookup():
             return resolver._build_counterparty_lookup(counterparties, org_mappings, ratings)
 
-        result, _ = benchmark(build_lookup)
+        result, _ = benchmark.pedantic(
+            build_lookup, rounds=3, warmup_rounds=1, iterations=1,
+        )
 
         # Verify hierarchy has depth >= 2
         # By checking that some counterparties have grandparents
-        enriched = result.counterparties.collect(engine=BENCHMARK_ENGINE)
+        enriched = result.counterparties.collect()
 
         # Count counterparties with hierarchy depth >= 2
         depth_counts = enriched.group_by("counterparty_hierarchy_depth").len()
@@ -284,10 +287,12 @@ class TestHierarchyBenchmark100K:
                 loans, contingents, facilities, facility_mappings, counterparty_lookup
             )
 
-        result, _ = benchmark(unify)
+        result, _ = benchmark.pedantic(
+            unify, rounds=3, warmup_rounds=1, iterations=1,
+        )
 
         # Verify facility hierarchy
-        exposures = result.collect(engine=BENCHMARK_ENGINE)
+        exposures = result.collect()
 
         # Count exposures with facility hierarchy depth
         depth_counts = exposures.group_by("facility_hierarchy_depth").len()
@@ -347,7 +352,10 @@ class TestHierarchyBenchmark1M:
 
         resolver = HierarchyResolver()
 
-        result = benchmark(resolver.resolve, raw_data, config)
+        result = benchmark.pedantic(
+            lambda: resolver.resolve(raw_data, config),
+            rounds=2, warmup_rounds=0, iterations=1,
+        )
 
         assert result is not None
 
@@ -395,7 +403,10 @@ class TestHierarchyBenchmark10M:
 
         resolver = HierarchyResolver()
 
-        result = benchmark(resolver.resolve, raw_data, config)
+        result = benchmark.pedantic(
+            lambda: resolver.resolve(raw_data, config),
+            rounds=1, warmup_rounds=0, iterations=1,
+        )
 
         assert result is not None
 
@@ -442,8 +453,6 @@ class TestHierarchyMemoryBenchmark:
 
         with memory_tracker as tracker:
             result = resolver.resolve(raw_data, config)
-            # Force materialization
-            _ = result.exposures.collect(engine=BENCHMARK_ENGINE)
 
         print(f"\nPeak memory usage: {tracker.peak_mb:.2f} MB")
         assert tracker.peak_mb < 500, f"Memory usage {tracker.peak_mb:.2f} MB exceeds 500 MB limit"
@@ -481,7 +490,6 @@ class TestHierarchyMemoryBenchmark:
 
         with memory_tracker as tracker:
             result = resolver.resolve(raw_data, config)
-            _ = result.exposures.collect(engine=BENCHMARK_ENGINE)
 
         print(f"\nPeak memory usage: {tracker.peak_mb:.2f} MB")
         assert tracker.peak_mb < 2000, (

@@ -552,11 +552,12 @@ class PipelineOrchestrator:
         from rwa_calc.domain.enums import ApproachType
 
         try:
-            exposures = crm_adjusted.exposures  # Lazy (materialised at init_ead)
+            exposures = crm_adjusted.exposures  # Lazy (shallow plan on materialised data)
 
-            # Materialise CRM plan before calculator split.
-            # CRM output is a deep lazy plan; without this, collect_all
-            # re-optimizes it 3× (once per SA/IRB/Slotting branch).
+            # Materialise CRM output before calculator split.
+            # Even though CRM now materialises inputs before guarantee joins,
+            # the guarantee plan (joins + finalize + audit) is still deep enough
+            # that collect_all would re-evaluate it per branch without this.
             exposures = exposures.collect().lazy()
 
             # For Basel 3.1 output floor: SA-equivalent RW needed on all rows

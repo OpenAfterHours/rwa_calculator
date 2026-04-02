@@ -323,6 +323,13 @@ class HierarchyResolver:
             )
         )
 
+        # Materialise the per-counterparty best-rating aggregates before joining.
+        # Each is referenced twice (own rating + parent rating); without this,
+        # Polars re-evaluates the filter→sort→group_by chain per reference.
+        best_int_df, best_ext_df = pl.collect_all([best_internal, best_external])
+        best_internal = best_int_df.lazy()
+        best_external = best_ext_df.lazy()
+
         # Start with all counterparties, join own ratings per type
         result = counterparties.select("counterparty_reference")
         result = result.join(

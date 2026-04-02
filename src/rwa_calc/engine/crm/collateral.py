@@ -228,12 +228,16 @@ def apply_collateral(
     # Pre-compute shared exposure lookups once
     direct_lookup, facility_lookup, cp_lookup = build_exposure_lookups_fn(exposures)
 
-    # Materialise the small lookup frames to prevent plan-tree duplication.
-    # Each lookup is referenced in multiple downstream joins; without this,
-    # Polars re-evaluates the group_by/select expressions at each reference.
-    direct_lookup = direct_lookup.collect().lazy()
-    facility_lookup = facility_lookup.collect().lazy()
-    cp_lookup = cp_lookup.collect().lazy()
+    # Materialise the small lookup frames in parallel to prevent plan-tree
+    # duplication. Each lookup is referenced in multiple downstream joins;
+    # without this, Polars re-evaluates the group_by/select at each reference.
+    # collect_all runs all 3 concurrently and enables CSE on shared upstream.
+    direct_df, facility_df, cp_df = pl.collect_all(
+        [direct_lookup, facility_lookup, cp_lookup]
+    )
+    direct_lookup = direct_df.lazy()
+    facility_lookup = facility_df.lazy()
+    cp_lookup = cp_df.lazy()
 
     # Derive EAD totals from the lookups for allocation methods
     facility_ead_totals = facility_lookup.select(

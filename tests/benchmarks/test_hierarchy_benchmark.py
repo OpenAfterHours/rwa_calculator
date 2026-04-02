@@ -467,7 +467,7 @@ class TestHierarchyMemoryBenchmark:
         resolver = HierarchyResolver()
 
         with memory_tracker as tracker:
-            result = resolver.resolve(raw_data, config)
+            resolver.resolve(raw_data, config)
 
         print(f"\nPeak memory usage: {tracker.peak_mb:.2f} MB")
         assert tracker.peak_mb < 500, f"Memory usage {tracker.peak_mb:.2f} MB exceeds 500 MB limit"
@@ -504,7 +504,7 @@ class TestHierarchyMemoryBenchmark:
         resolver = HierarchyResolver()
 
         with memory_tracker as tracker:
-            result = resolver.resolve(raw_data, config)
+            resolver.resolve(raw_data, config)
 
         print(f"\nPeak memory usage: {tracker.peak_mb:.2f} MB")
         assert tracker.peak_mb < 2000, (

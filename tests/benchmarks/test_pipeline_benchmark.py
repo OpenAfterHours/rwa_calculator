@@ -656,7 +656,7 @@ class TestPipelineMemoryBenchmark:
         pipeline = create_pipeline(raw_data)
 
         with memory_tracker as tracker:
-            result = pipeline.run(config)
+            pipeline.run(config)
 
         print(f"\nPeak memory usage: {tracker.peak_mb:.2f} MB")
         assert tracker.peak_mb < 4000, (

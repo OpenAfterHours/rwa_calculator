@@ -13,7 +13,7 @@ adjustment). Lower priority because it is less interconnected than the
 main credit risk pipeline, but still needs integration coverage to verify
 the pass-through wiring and approach determination logic.
 
-Components wired: Classifier → EquityCalculator → aggregation
+Components wired: Classifier → EquityCalculator → OutputAggregator
 """
 
 from __future__ import annotations
@@ -23,11 +23,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.aggregator import (
-    generate_post_crm_detailed,
-    generate_summary_by_approach,
-    prepare_equity_results,
-)
+from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator
@@ -44,6 +40,8 @@ from .conftest import (
 # =============================================================================
 # HELPERS
 # =============================================================================
+
+EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
 
 
 def _run_through_hierarchy_classifier_crm(
@@ -243,13 +241,17 @@ class TestEquityRiskWeights:
 class TestEquityAggregation:
     """Verify equity results integrate correctly into aggregated output."""
 
+    @pytest.fixture
+    def aggregator(self) -> OutputAggregator:
+        return OutputAggregator()
+
     def test_equity_results_in_aggregated_output(
         self,
+        aggregator: OutputAggregator,
         equity_calculator: EquityCalculator,
         crr_config: CalculationConfig,
     ) -> None:
         """Equity bundle is included in the aggregated combined results."""
-        # Arrange — create a minimal SA result + equity result
         sa_results = pl.LazyFrame(
             {
                 "exposure_reference": ["LN001"],
@@ -265,19 +267,23 @@ class TestEquityAggregation:
             [make_equity_exposure(equity_type="listed", fair_value=500_000.0)]
         )
         equity_bundle = equity_calculator.get_equity_result_bundle(crm_bundle, crr_config)
-        equity_prepared = prepare_equity_results(equity_bundle.results)
 
-        # Act — combine using free functions
-        combined = pl.concat([sa_results, equity_prepared], how="diagonal_relaxed")
-        combined_df = combined.collect()
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=equity_bundle,
+            config=crr_config,
+        )
 
-        # Assert — equity row present in combined results
+        combined_df = result.results.collect()
         equity_rows = combined_df.filter(pl.col("approach_applied") == "EQUITY")
         assert len(equity_rows) == 1
-        assert equity_rows["rwa_final"][0] == pytest.approx(500_000.0)  # 100% RW x 500k
+        assert equity_rows["rwa_final"][0] == pytest.approx(500_000.0)
 
     def test_equity_separate_from_unified_frame(
         self,
+        aggregator: OutputAggregator,
         equity_calculator: EquityCalculator,
         crr_config: CalculationConfig,
     ) -> None:
@@ -303,11 +309,16 @@ class TestEquityAggregation:
             ]
         )
         equity_bundle = equity_calculator.get_equity_result_bundle(crm_bundle, crr_config)
-        equity_prepared = prepare_equity_results(equity_bundle.results)
 
-        combined = pl.concat([sa_results, equity_prepared], how="diagonal_relaxed")
-        combined_df = combined.collect()
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=equity_bundle,
+            config=crr_config,
+        )
 
+        combined_df = result.results.collect()
         approaches = combined_df["approach_applied"].unique().to_list()
         assert "EQUITY" in approaches
         assert "SA" in approaches
@@ -316,6 +327,7 @@ class TestEquityAggregation:
 
     def test_equity_summary_by_approach(
         self,
+        aggregator: OutputAggregator,
         equity_calculator: EquityCalculator,
         crr_config: CalculationConfig,
     ) -> None:
@@ -334,13 +346,16 @@ class TestEquityAggregation:
             [make_equity_exposure(equity_type="listed", fair_value=300_000.0)]
         )
         equity_bundle = equity_calculator.get_equity_result_bundle(crm_bundle, crr_config)
-        equity_prepared = prepare_equity_results(equity_bundle.results)
 
-        combined = pl.concat([sa_results, equity_prepared], how="diagonal_relaxed")
-        post_crm_detailed = generate_post_crm_detailed(combined)
-        summary = generate_summary_by_approach(post_crm_detailed)
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=EMPTY,
+            slotting_results=EMPTY,
+            equity_bundle=equity_bundle,
+            config=crr_config,
+        )
 
-        summary_df = summary.collect()
+        summary_df = result.summary_by_approach.collect()
         approaches_in_summary = summary_df["approach_applied"].to_list()
         assert "EQUITY" in approaches_in_summary
 

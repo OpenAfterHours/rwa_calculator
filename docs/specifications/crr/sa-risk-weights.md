@@ -84,55 +84,94 @@ avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 | LTV ≤ 50% and rental income ≥ 1.5x interest costs | 50% |
 | All other CRE | 100% |
 
-## Basel 3.1 Residential Real Estate (CRE20.73)
+## Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 
-### General Residential (CRE20.73)
+### General Residential — Loan-Splitting (Art. 124F)
 
-Whole-loan approach (PRA PS1/26):
+Not materially dependent on cash flows from the property. PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
 
-| LTV Band | Risk Weight |
-|----------|-------------|
-| ≤ 50% | 20% |
-| 50-60% | 25% |
-| 60-70% | 25% |
-| 70-80% | 30% |
-| 80-90% | 40% |
-| 90-100% | 50% |
-| > 100% | 70% |
+- **Secured portion** (up to 55% of property value): **20%** risk weight
+- **Residual portion** (above 55% of property value): **counterparty risk weight** (Art. 124L)
 
-### Income-Producing Residential (CRE20.82)
+```
+secured_share = min(1.0, 0.55 / LTV)
+RW = 0.20 × secured_share + counterparty_RW × (1.0 - secured_share)
+```
+
+**Counterparty risk weight** (Art. 124L):
+
+| Counterparty Type | RW |
+|-------------------|----|
+| Natural person (non-SME) | 75% |
+| Retail-qualifying SME | 75% |
+| Other SME (unrated) | 85% |
+| Social housing | max(75%, unsecured RW) |
+| Other | Unsecured counterparty RW |
+
+**Junior charges** (Art. 124F(2)): If a prior or pari passu charge exists, the 55% threshold is reduced by the amount of the prior charge. Not yet modelled.
+
+### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
+
+Materially dependent on cash flows from the property (e.g., buy-to-let). Whole-loan approach — single risk weight on entire exposure:
 
 | LTV Band | Risk Weight |
 |----------|-------------|
 | ≤ 50% | 30% |
 | 50-60% | 35% |
-| 60-70% | 45% |
+| 60-70% | 40% |
 | 70-80% | 50% |
 | 80-90% | 60% |
 | 90-100% | 75% |
 | > 100% | 105% |
 
-### Commercial RE — General (CRE20.85)
+**Junior charge multiplier** (Art. 124G(2)): 1.25× on income-dependent RESI RE if LTV > 50% and prior/pari passu charges exist. Not yet modelled.
 
-| Condition | Risk Weight |
-|-----------|-------------|
-| LTV ≤ 60% | min(60%, counterparty RW) |
-| LTV > 60% | Counterparty RW |
+### Commercial RE — General, Loan-Splitting (Art. 124H)
 
-### Commercial RE — Income-Producing (CRE20.86)
+Not materially dependent on cash flows:
+
+**Natural person / SME**: Split approach — **60%** on portion up to 55% of property value, counterparty RW on remainder.
+
+```
+secured_share = min(1.0, 0.55 / LTV)
+RW = 0.60 × secured_share + counterparty_RW × (1.0 - secured_share)
+```
+
+**Other counterparties**: `max(60%, min(counterparty_RW, Art 124I income-producing RW))`
+
+### Commercial RE — Income-Producing (Art. 124I)
+
+Materially dependent on cash flows:
 
 | LTV Band | Risk Weight |
 |----------|-------------|
-| ≤ 60% | 70% |
-| 60-80% | 90% |
+| ≤ 80% | 100% |
 | > 80% | 110% |
 
-### ADC Exposures (CRE20.87-88)
+**Junior charge multiplier** (Art. 124I(3)):
+
+| LTV Band | Multiplier |
+|----------|------------|
+| ≤ 60% | 1.0× (100%) |
+| 60-80% | 1.25× (125%) |
+| > 80% | 1.375× (137.5%) |
+
+### Other Real Estate (Art. 124J)
+
+Non-regulatory real estate (doesn't meet Art. 124A requirements):
+
+| Type | Risk Weight |
+|------|-------------|
+| Income-dependent | 150% |
+| RESI non-dependent | Counterparty RW |
+| CRE non-dependent | max(60%, counterparty RW) |
+
+### ADC Exposures (Art. 124K)
 
 | Condition | Risk Weight |
 |-----------|-------------|
 | Default | 150% |
-| Pre-sold/pre-let | 100% |
+| Residential with pre-sales/equity at risk | 100% |
 
 ## Basel 3.1 Corporate Exposures (CRE20.42-49)
 
@@ -158,22 +197,95 @@ Whole-loan approach (PRA PS1/26):
 
 Rated institutions use ECRA (same CQS table as CRR, including UK CQS 2 = 30% deviation). Unrated institutions use SCRA:
 
-| SCRA Grade | Risk Weight | Criteria |
-|------------|-------------|----------|
-| A | 40% | CET1 > 14%, Leverage > 5% |
-| B | 75% | CET1 > 5.5%, Leverage > 3% |
-| C | 150% | Below minimum requirements |
+| SCRA Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
+|------------|--------------------|--------------------|----------|
+| A | 40% | 20% | Meets all minimum requirements + buffers |
+| A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
+| B | 75% | 50% | Meets minimum requirements |
+| C | 150% | 150% | Below minimum requirements |
 
 ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR.
 
+## Equity Exposures (CRR Art. 133 / PRA PS1/26 Art. 133)
+
+### CRR Equity Risk Weights
+
+| Equity Type | Risk Weight | Reference |
+|-------------|-------------|-----------|
+| Central bank/sovereign | 0% | Art. 133(1) |
+| Listed/exchange-traded | 100% | Art. 133(2) |
+| Government-supported | 100% | Art. 133(3) |
+
+### Basel 3.1 Equity Risk Weights (Art. 133)
+
+| Equity Type | Risk Weight | Reference |
+|-------------|-------------|-----------|
+| Standard equity (listed) | 250% | Art. 133(3) |
+| Higher risk (unlisted, <5yr, PE, speculative) | 400% | Art. 133(5) |
+| Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
+| Legislative equity (govt mandate) | 100% | Art. 133(6) |
+| CQS 1-2 speculative unlisted | 100% | Art. 133(4)(a) |
+| CQS 3-6/unrated speculative | 150% | Art. 133(4)(b) |
+
+**Note:** Basel 3.1 removes IRB equity approaches. All equity uses SA risk weights.
+
+## Defaulted Exposures (CRR Art. 127 / PRA PS1/26 Art. 127)
+
+### CRR Default Risk Weights
+
+| Condition | Risk Weight |
+|-----------|-------------|
+| Specific provisions ≥ 20% of (EAD + provision_deducted) | 100% |
+| Specific provisions < 20% | 150% |
+
+### Basel 3.1 Default Risk Weights
+
+| Condition | Risk Weight |
+|-----------|-------------|
+| Specific provisions ≥ 20% of exposure value | 100% |
+| Specific provisions < 20% | 150% |
+| RESI RE non-dependent (Art. 124F) in default | 100% (always) |
+
+## Basel 3.1 SA Specialised Lending (Art. 122A-122B)
+
+New Basel 3.1 SA exposure class with risk weights distinct from general corporates:
+
+| SL Type | Phase | Risk Weight |
+|---------|-------|-------------|
+| Object finance | — | 100% |
+| Commodities finance | — | 100% |
+| Project finance | Pre-operational | 130% |
+| Project finance | Operational | 100% |
+| Project finance | High-quality operational | 80% |
+
+Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
+
+## Other Items (CRR Art. 134 / PRA PS1/26 Art. 134)
+
+| Item | Risk Weight |
+|------|-------------|
+| Cash and equivalent (notes, coins, gold bullion) | 0% |
+| Items in course of collection | 20% |
+| Tangible assets (premises, equipment) | 100% |
+| Prepaid expenses, accrued income | 100% |
+| Residual value of leased assets | 1/t × 100% (t = remaining lease years) |
+| All other | 100% |
+
 ## Basel 3.1 Changes Summary
 
-- **LTV-based residential RE weights** (CRE20.71): Risk weights vary by loan-to-value ratio — Done
+- **Residential RE loan-splitting** (Art. 124F): 20% on ≤55% LTV, counterparty RW on residual — Done
+- **Residential RE income-producing** (Art. 124G): Whole-loan LTV table (30%-105%) — Done
+- **Commercial RE loan-splitting** (Art. 124H): 60% on ≤55% LTV, counterparty RW on residual — Done
+- **Commercial RE income-producing** (Art. 124I): 100%/110% at ≤80%/>80% — Done
 - **Revised corporate CQS mapping** (CRE20.42): CQS 3 from 100% to 75%, CQS 5 from 150% to 100% — Done
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
 - **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done
 - **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
+- **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
+- **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Pending
+- **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE exception — Done
+- **Other items** (Art. 134): Cash=0%, collection=20%, tangible=100% — Done
 - **Removal of SME supporting factor**: No longer applicable under Basel 3.1
 - **Removal of 1.06 scaling factor**: Scaling factor set to 1.0 under Basel 3.1
 

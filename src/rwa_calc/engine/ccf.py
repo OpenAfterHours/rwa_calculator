@@ -70,7 +70,7 @@ def sa_ccf_expression(
     - MLR / medium_low_risk: 20%
     - LR / low_risk: 0%
 
-    Basel 3.1 (CRE20.88): LR (unconditionally cancellable) changes to 10%.
+    Basel 3.1 (PRA Art. 111 Table A1): LR (unconditionally cancellable) changes to 10%.
 
     Args:
         risk_type_col: Name of the risk_type column (default "risk_type")
@@ -80,7 +80,7 @@ def sa_ccf_expression(
         Polars expression resolving to Float64 SA CCF values
     """
     normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
-    # Basel 3.1: UCC/LR gets 10% instead of 0% (CRE20.88)
+    # Basel 3.1: SA UCC/LR gets 10% instead of 0% (PRA Art. 111 Table A1)
     lr_ccf = 0.10 if is_basel_3_1 else 0.0
     return (
         pl.when(normalized.is_in(["fr", "full_risk"]))
@@ -212,17 +212,18 @@ class CCFCalculator:
         based on the exposure's approach (SA/F-IRB/A-IRB).
         """
         is_b31 = config.is_basel_3_1
-        lr_ccf = 0.10 if is_b31 else 0.0
+        # FIRB: UCC is 40% under Basel 3.1 (PRA Art. 166C), vs SA 10% (Art. 111)
+        firb_lr_ccf = 0.40 if is_b31 else 0.0
 
         normalized = pl.col("risk_type").fill_null("").str.to_lowercase()
 
         # F-IRB CCF: Art. 166(8) = 75%, with Art. 166(9) exception for
-        # short-term trade LCs
+        # short-term trade LCs. Basel 3.1 Art. 166C: UCC = 40%.
         firb_ccf = (
             pl.when(normalized.is_in(["fr", "full_risk"]))
             .then(pl.lit(1.0))
             .when(normalized.is_in(["lr", "low_risk"]))
-            .then(pl.lit(lr_ccf))
+            .then(pl.lit(firb_lr_ccf))
             .when(
                 normalized.is_in(["mlr", "medium_low_risk"])
                 & pl.col("is_short_term_trade_lc").fill_null(False)

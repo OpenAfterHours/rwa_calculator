@@ -88,6 +88,32 @@ Counterparty entity type determines the base SA exposure class:
 | `specialised_lending` | SPECIALISED_LENDING |
 | `equity` | EQUITY |
 
+### Basel 3.1 Exposure Class Priority (Art. 112)
+
+PRA PS1/26 Art. 112 defines 17 exposure classes with a strict priority ordering. When an exposure could belong to multiple classes, the highest-priority class takes precedence:
+
+| Priority | Exposure Class | Art. 112 Ref |
+|----------|---------------|--------------|
+| 1 (highest) | Securitisation positions | (n) |
+| 2 | CIUs | (o) |
+| 3 | Subordinated debt / equity / own funds | (p) |
+| 4 | Items associated with particularly high risk | (l) |
+| 5 | Exposures in default | (k) |
+| 6 | Covered bonds | (m) |
+| 7 | Real estate (RESI / CRE / ADC) | (i), (j) |
+| 8 | International organisations | (e) |
+| 9 | MDBs | (d) |
+| 10 | Institutions | (f) |
+| 11 | Central governments / central banks | (a) |
+| 12 | Regional governments / local authorities | (b) |
+| 13 | Public sector entities | (c) |
+| 14 | Retail | (h) |
+| 15 | Specialised lending | (ga) |
+| 16 | Corporates | (g) |
+| 17 (lowest) | Other items | (q) |
+
+**Calculator coverage**: The calculator currently implements classes for: central govt/CB, RGLA, PSE, MDB, institution, corporate, specialised lending, retail, equity, real estate, ADC, and default. Securitisation, CIU (beyond 250% fallback), covered bonds, and high-risk items are tracked as future enhancements.
+
 ### SME Detection
 
 Corporate counterparties are reclassified as CORPORATE_SME when:

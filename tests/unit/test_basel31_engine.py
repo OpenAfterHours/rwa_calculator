@@ -456,7 +456,7 @@ class TestLGDFloors:
         - Unsecured: 25%
         - Financial collateral: 0%
         - Receivables: 10%
-        - RRE: 5%, CRE: 10%
+        - RRE: 10%, CRE: 10%
         - Other physical: 15%
     """
 
@@ -510,11 +510,11 @@ class TestLGDFloors:
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.0)
 
-    def test_basel31_rre_floor_5pct(
+    def test_basel31_rre_floor_10pct(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: Residential real estate LGD floor is 5%."""
+        """Basel 3.1: Residential real estate LGD floor is 10% (PRA Art. 161/164)."""
         lf = pl.LazyFrame(
             {
                 "lgd": [0.01],
@@ -524,7 +524,7 @@ class TestLGDFloors:
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config).alias("lgd_floor")
         ).collect()
-        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        assert result["lgd_floor"][0] == pytest.approx(0.10)
 
     def test_basel31_cre_floor_10pct(
         self,
@@ -679,8 +679,8 @@ class TestLGDFloors:
         result = apply_irb_formulas(lf, basel31_config).collect()
         # Financial collateral: floor 0%, so lgd stays at 0.01
         assert result["lgd_floored"][0] == pytest.approx(0.01)
-        # Residential RE: floor 5%, so lgd stays at 0.05
-        assert result["lgd_floored"][1] == pytest.approx(0.05)
+        # Residential RE: floor 10%, so lgd is floored up to 0.10
+        assert result["lgd_floored"][1] == pytest.approx(0.10)
 
     def test_apply_irb_formulas_lgd_floor_basel31_mixed_approaches(
         self,
@@ -775,7 +775,7 @@ class TestLGDFloors:
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config).alias("lgd_floor")
         ).collect()
-        expected = [0.00, 0.10, 0.05, 0.10, 0.15]
+        expected = [0.00, 0.10, 0.10, 0.10, 0.15]
         for i, (coll_type, exp_floor) in enumerate(
             zip(result["collateral_type"].to_list(), expected, strict=True)
         ):
@@ -863,8 +863,8 @@ class TestLGDFloors:
                 "lgd_floor"
             )
         ).collect()
-        # Collateral floor takes precedence: RRE 5%, other physical 15%
-        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        # Collateral floor takes precedence: RRE 10%, other physical 15%
+        assert result["lgd_floor"][0] == pytest.approx(0.10)
         assert result["lgd_floor"][1] == pytest.approx(0.15)
 
     def test_apply_all_formulas_lgd_floor_airb_only(
@@ -1550,8 +1550,64 @@ class TestEquityBasel31:
             config=config,
         )
         assert result["approach"] == "sa"
-        assert result["risk_weight"] == pytest.approx(1.00)
-        assert result["rwa"] == pytest.approx(500_000.0)
+        # Basel 3.1 equity transitional (PRA Rule 4.2): 190% floor in 2028
+        # (phases from 160% in 2027 to 250% in 2030+)
+        assert result["risk_weight"] == pytest.approx(1.90)
+        assert result["rwa"] == pytest.approx(950_000.0)
+
+
+class TestEquityTransitionalSchedule:
+    """Tests for equity transitional phase-in (PRA Rules 4.1-4.10)."""
+
+    @pytest.mark.parametrize(
+        ("year", "expected_std_rw", "expected_hr_rw"),
+        [
+            (2027, 1.60, 2.20),
+            (2028, 1.90, 2.80),
+            (2029, 2.20, 3.40),
+            (2030, 2.50, 4.00),
+            (2031, 2.50, 4.00),  # fully phased
+        ],
+        ids=["2027", "2028", "2029", "2030_full", "2031_full"],
+    )
+    def test_transitional_floor_by_year(
+        self,
+        year: int,
+        expected_std_rw: float,
+        expected_hr_rw: float,
+    ) -> None:
+        """Transitional floor should match PRA schedule per year."""
+        from rwa_calc.contracts.config import EquityTransitionalConfig
+
+        config = EquityTransitionalConfig.basel_3_1()
+
+        std = config.get_transitional_rw(date(year, 6, 30), is_higher_risk=False)
+        hr = config.get_transitional_rw(date(year, 6, 30), is_higher_risk=True)
+
+        assert std is not None
+        assert hr is not None
+        assert float(std) == pytest.approx(expected_std_rw)
+        assert float(hr) == pytest.approx(expected_hr_rw)
+
+    def test_crr_no_transitional(self) -> None:
+        """CRR config should not have equity transitional enabled."""
+        config = CalculationConfig.crr(reporting_date=date(2026, 6, 30))
+        assert config.equity_transitional.enabled is False
+
+    def test_speculative_equity_gets_higher_risk_floor(self) -> None:
+        """Speculative equity should get the higher-risk transitional floor."""
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+        calculator = EquityCalculator()
+        result = calculate_single_equity_exposure(
+            calculator,
+            ead=Decimal("100000"),
+            equity_type="speculative",
+            is_speculative=True,
+            config=config,
+        )
+        # 2027 higher-risk transitional = 220%, SA speculative = 400%
+        # max(400%, 220%) = 400% (SA weight already exceeds transitional)
+        assert result["risk_weight"] == pytest.approx(4.00)
 
 
 # =============================================================================
@@ -1707,7 +1763,7 @@ class TestConfigFactoryMethods:
         assert config.lgd_floors.unsecured == Decimal("0.25")
         assert config.lgd_floors.financial_collateral == Decimal("0.0")
         assert config.lgd_floors.receivables == Decimal("0.10")
-        assert config.lgd_floors.residential_real_estate == Decimal("0.05")
+        assert config.lgd_floors.residential_real_estate == Decimal("0.10")
         assert config.lgd_floors.commercial_real_estate == Decimal("0.10")
         assert config.lgd_floors.other_physical == Decimal("0.15")
 

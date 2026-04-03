@@ -214,10 +214,10 @@ class TestOutputFloor:
         assert basel31_full_irb_config.output_floor.enabled is True
 
     def test_transitional_floor_percentage_2028(self):
-        """2028 reporting date → 55% floor per PRA transitional schedule."""
+        """2028 reporting date → 65% floor per PRA transitional schedule."""
         config = CalculationConfig.basel_3_1(reporting_date=date(2028, 6, 15))
         floor_pct = config.output_floor.get_floor_percentage(config.reporting_date)
-        assert floor_pct == Decimal("0.55")
+        assert floor_pct == Decimal("0.65")
 
     def test_transitional_floor_percentage_2032(self):
         """2032+ reporting date → 72.5% floor (fully phased in)."""
@@ -226,14 +226,12 @@ class TestOutputFloor:
         assert floor_pct == Decimal("0.725")
 
     def test_floor_percentage_schedule_all_years(self):
-        """Verify complete transitional schedule: 50%→55%→60%→65%→70%→72.5%."""
+        """Verify complete transitional schedule: 60%→65%→70%→72.5%."""
         expected = {
-            date(2027, 6, 1): Decimal("0.50"),
-            date(2028, 6, 1): Decimal("0.55"),
-            date(2029, 6, 1): Decimal("0.60"),
-            date(2030, 6, 1): Decimal("0.65"),
-            date(2031, 6, 1): Decimal("0.70"),
-            date(2032, 6, 1): Decimal("0.725"),
+            date(2027, 6, 1): Decimal("0.60"),
+            date(2028, 6, 1): Decimal("0.65"),
+            date(2029, 6, 1): Decimal("0.70"),
+            date(2030, 6, 1): Decimal("0.725"),
             date(2035, 1, 1): Decimal("0.725"),
         }
         for reporting_date, expected_pct in expected.items():

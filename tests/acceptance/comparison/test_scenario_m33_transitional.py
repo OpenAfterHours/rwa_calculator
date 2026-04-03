@@ -2,10 +2,10 @@
 M3.3 Transitional Floor Schedule Modelling Acceptance Tests.
 
 These tests validate that the TransitionalScheduleRunner correctly models
-the output floor phase-in across 2027-2032 using real fixture data.
+the output floor phase-in across 2027-2030 using real fixture data.
 
 Why these tests matter:
-    The PRA PS1/26 output floor phases in from 50% (2027) to 72.5% (2032+).
+    PRA PS1/26 Art. 92(5) phases in the output floor from 60% (2027) to 72.5% (2030+).
     This progressive tightening means a portfolio that is not floor-constrained
     in 2027 may become floor-constrained by 2030. Firms need accurate year-by-year
     modelling to plan capital buffers and identify which exposure classes become
@@ -37,8 +37,8 @@ import pytest
 def transitional_schedule_bundle(raw_data_bundle):
     """Run TransitionalScheduleRunner on fixture data with F-IRB permissions.
 
-    Uses the default 2027-2032 mid-year dates. Session-scoped: runs
-    the pipeline 6 times (once per year). Shared across all tests.
+    Uses the default 2027-2030 mid-year dates. Session-scoped: runs
+    the pipeline 4 times (once per year). Shared across all tests.
     """
     from rwa_calc.contracts.config import IRBPermissions
     from rwa_calc.engine.comparison import TransitionalScheduleRunner
@@ -64,16 +64,14 @@ def timeline_df(transitional_schedule_bundle) -> pl.DataFrame:
 class TestM33TimelineStructure:
     """Verify the timeline DataFrame has correct structure and completeness."""
 
-    def test_timeline_has_six_years(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-S1: Timeline should contain all 6 transitional years."""
-        assert timeline_df.height == 6, f"Expected 6 years in timeline, got {timeline_df.height}"
+    def test_timeline_has_four_years(self, timeline_df: pl.DataFrame) -> None:
+        """M3.3-S1: Timeline should contain all 4 transitional years."""
+        assert timeline_df.height == 4, f"Expected 4 years in timeline, got {timeline_df.height}"
 
     def test_timeline_years_correct(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-S2: Timeline years should be 2027-2032."""
+        """M3.3-S2: Timeline years should be 2027-2030."""
         years = timeline_df["year"].to_list()
-        assert years == [2027, 2028, 2029, 2030, 2031, 2032], (
-            f"Expected years 2027-2032, got {years}"
-        )
+        assert years == [2027, 2028, 2029, 2030], f"Expected years 2027-2030, got {years}"
 
     def test_timeline_columns_complete(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-S3: All expected columns should be present."""
@@ -100,38 +98,28 @@ class TestM33TimelineStructure:
 
 
 class TestM33FloorPercentages:
-    """Verify floor percentages match the PRA PS1/26 transitional schedule."""
+    """Verify floor percentages match the PRA PS1/26 Art. 92(5) transitional schedule."""
 
-    def test_2027_floor_50_pct(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-P1: 2027 floor should be 50%."""
+    def test_2027_floor_60_pct(self, timeline_df: pl.DataFrame) -> None:
+        """M3.3-P1: 2027 floor should be 60%."""
         row = timeline_df.filter(pl.col("year") == 2027)
-        assert row["floor_percentage"][0] == pytest.approx(0.50), (
-            f"2027 floor should be 50%, got {row['floor_percentage'][0] * 100:.1f}%"
+        assert row["floor_percentage"][0] == pytest.approx(0.60), (
+            f"2027 floor should be 60%, got {row['floor_percentage'][0] * 100:.1f}%"
         )
 
-    def test_2028_floor_55_pct(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-P2: 2028 floor should be 55%."""
+    def test_2028_floor_65_pct(self, timeline_df: pl.DataFrame) -> None:
+        """M3.3-P2: 2028 floor should be 65%."""
         row = timeline_df.filter(pl.col("year") == 2028)
-        assert row["floor_percentage"][0] == pytest.approx(0.55)
-
-    def test_2029_floor_60_pct(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-P3: 2029 floor should be 60%."""
-        row = timeline_df.filter(pl.col("year") == 2029)
-        assert row["floor_percentage"][0] == pytest.approx(0.60)
-
-    def test_2030_floor_65_pct(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-P4: 2030 floor should be 65%."""
-        row = timeline_df.filter(pl.col("year") == 2030)
         assert row["floor_percentage"][0] == pytest.approx(0.65)
 
-    def test_2031_floor_70_pct(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-P5: 2031 floor should be 70%."""
-        row = timeline_df.filter(pl.col("year") == 2031)
+    def test_2029_floor_70_pct(self, timeline_df: pl.DataFrame) -> None:
+        """M3.3-P3: 2029 floor should be 70%."""
+        row = timeline_df.filter(pl.col("year") == 2029)
         assert row["floor_percentage"][0] == pytest.approx(0.70)
 
-    def test_2032_floor_725_pct(self, timeline_df: pl.DataFrame) -> None:
-        """M3.3-P6: 2032 floor should be 72.5% (fully phased)."""
-        row = timeline_df.filter(pl.col("year") == 2032)
+    def test_2030_floor_725_pct(self, timeline_df: pl.DataFrame) -> None:
+        """M3.3-P4: 2030 floor should be 72.5% (fully phased)."""
+        row = timeline_df.filter(pl.col("year") == 2030)
         assert row["floor_percentage"][0] == pytest.approx(0.725)
 
 
@@ -143,7 +131,7 @@ class TestM33FloorPercentages:
 class TestM33MonotonicityInvariants:
     """Verify monotonicity invariants that must hold across all years.
 
-    As the floor percentage rises from 50% to 72.5%, the floor impact
+    As the floor percentage rises from 60% to 72.5%, the floor impact
     should never decrease — more RWA is captured by the floor.
     """
 
@@ -252,9 +240,9 @@ class TestM33YearlyResults:
     """Verify that individual yearly results are accessible and valid."""
 
     def test_yearly_results_has_all_years(self, transitional_schedule_bundle) -> None:
-        """M3.3-Y1: yearly_results should contain all 6 years."""
-        assert len(transitional_schedule_bundle.yearly_results) == 6
-        for year in range(2027, 2033):
+        """M3.3-Y1: yearly_results should contain all 4 years."""
+        assert len(transitional_schedule_bundle.yearly_results) == 4
+        for year in range(2027, 2031):
             assert year in transitional_schedule_bundle.yearly_results
 
     def test_yearly_results_are_aggregated_bundles(self, transitional_schedule_bundle) -> None:

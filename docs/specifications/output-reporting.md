@@ -17,14 +17,33 @@
 ### Description
 IRB RWA must be at least X% of what SA-equivalent RWA would produce. Transitional phase-in:
 
-| Year | Floor Percentage |
-|------|-----------------|
-| 2027 | 50% |
-| 2028 | 55% |
-| 2029 | 60% |
-| 2030 | 65% |
-| 2031 | 70% |
-| 2032+ | 72.5% |
+| Year | Floor Percentage | Reference |
+|------|-----------------|-----------|
+| 2027 | 60% | PRA PS1/26 Art. 92(5) |
+| 2028 | 65% | PRA PS1/26 Art. 92(5) |
+| 2029 | 70% | PRA PS1/26 Art. 92(5) |
+| 2030+ | 72.5% | PRA PS1/26 Art. 92(5) |
+
+### Output Floor Adjustment (OF-ADJ)
+
+PRA PS1/26 Art. 92 defines the output floor formula:
+
+```
+TREA = max(U-TREA, x × S-TREA + OF-ADJ)
+```
+
+Where:
+- **U-TREA** = un-floored total risk exposure amount (para 3)
+- **S-TREA** = standardised total risk exposure amount (para 3A) — calculated WITHOUT IRB, SFT VaR, SEC-IRBA, IAA, IMM, or IMA
+- **x** = floor multiplier from transitional schedule (60%-72.5%)
+- **OF-ADJ** = `12.5 × (IRB_T2 - IRB_CET1 - GCRA + SA_T2)` — adjusts for approach-specific deductions
+
+| Component | Description |
+|-----------|-------------|
+| IRB_T2 | IRB-specific T2 deductions (provisioning shortfall) |
+| IRB_CET1 | IRB-specific CET1 deductions (EL shortfall) |
+| GCRA | General credit risk adjustment included in T2 |
+| SA_T2 | SA-specific T2 deductions |
 
 ### Status
 - Engine implemented — Done
@@ -53,6 +72,24 @@ breakdown, risk weight breakdown, memorandum items).
 - **C 08.07 / OF 08.07** — CR IRB scope of use: one submission covering all exposure/roll-out classes. 5 columns (CRR) / 18 columns (Basel 3.1 — significantly expanded with RWEA breakdown by SA reason and materiality thresholds). Rows change from exposure classes to roll-out classes (Art 147B).
 - **C 09.01 / OF 09.01** — CR GB 1 geographical breakdown SA: one submission per country. 13 columns (CRR) / 10 columns (Basel 3.1) covering original exposure, defaults, provisions, exposure value, RWEA. Rows by SA exposure class. Basel 3.1: supporting factor columns removed, real estate rows restructured (regulatory residential/commercial RE sub-rows).
 - **C 09.02 / OF 09.02** — CR GB 2 geographical breakdown IRB: one submission per country. 17 columns (CRR) / 15 columns (Basel 3.1) covering exposure, defaults, provisions, PD, LGD, RWEA, EL. Basel 3.1: adds defaulted exposure value column, removes supporting factors, adds corporate sub-rows, restructures retail RE rows, removes equity.
+
+### Basel 3.1 Reporting Field Additions
+
+**OF 07.00 (SA)** — new columns vs CRR C 07.00:
+- Col 0035: (-) Adjustment for on-balance sheet netting (Art. 219)
+- Col 0160-0190: Off-balance sheet breakdown now uses 5 CCF bands (10%, 20%, 40%, 50%, 100%) instead of 4
+- Rows 0021-0026: Specialised lending sub-types (object, commodities, project finance phases)
+- Rows 0330-0360: Real estate sub-breakdowns (regulatory RESI/CRE, dependent/not, ADC)
+- Row 0380: Currency mismatch multiplier (retail and real estate)
+
+**OF 08.01 (IRB)** — new columns vs CRR C 08.01:
+- Col 0101-0104: FCCM adjustments (slotting only)
+- Col 0125: Of which: defaulted exposure value
+- Col 0251: RWEA pre-adjustments
+- Col 0252: Adjustment for post-model adjustments
+- Col 0253: Adjustment for mortgage RW floor
+- Col 0275-0276: Non-modelled approaches exposure value and RWEA (for output floor)
+- Col 0281: Expected loss adjustment for post-model adjustments
 
 ### Reference Documents
 - `docs/assets/CRR - corep-own-funds.xlsx` — CRR template layouts (sheets "7", "8.1", "8.2", "8.3", "8.4", "8.6", "8.7", "9.1", "9.2")

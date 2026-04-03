@@ -27,9 +27,32 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 | MLR (trade LCs) | 20% | Short-term trade LCs for goods movement (Art. 166(9) exception) |
 | Low Risk (LR) | 0% | Same as SA |
 
-## A-IRB Approach
+## Basel 3.1 SA Changes (PRA PS1/26 Art. 111 Table A1)
 
-- Uses modelled CCF if provided by the bank
+| CCF Category | CRR | Basel 3.1 | Description |
+|-------------|-----|-----------|-------------|
+| Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees |
+| Medium Risk (MR) | 50% | 50% | NIFs, RUFs, UK resi mortgage commitments |
+| Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
+| Other commitments | 0% | **40%** | All other commitments not in other categories |
+| Low Risk (LR) | 0% | **10%** | Unconditionally cancellable commitments |
+
+## Basel 3.1 F-IRB Changes (PRA PS1/26 Art. 166C)
+
+| CCF Category | CRR | Basel 3.1 | Description |
+|-------------|-----|-----------|-------------|
+| Full Risk (FR) | 100% | 100% | Same as SA |
+| Medium Risk (MR) | 75% | 75% | General undrawn commitments |
+| MLR (trade LCs) | 20% | 20% | Short-term trade LCs (Art. 166(9) / 166C exception) |
+| Low Risk (LR) | 0% | **40%** | Unconditionally cancellable commitments |
+
+## Basel 3.1 A-IRB Changes (PRA PS1/26 Art. 166D)
+
+- Own CCF estimates **only permitted for revolving facilities**
+- All other off-balance sheet items must use **SA CCFs**
+- The revolving-only restriction is a data classification concern — exposures should carry an `is_revolving` flag; non-revolving AIRB facilities must use SA CCFs regardless of modelled estimates
+- Code enforces the 50% floor: `max(ccf_modelled, sa_ccf × 0.5)` in `ccf.py`
+- EAD floor: drawn + 50% of off-balance sheet using F-IRB CCF
 - Falls back to SA CCFs if not available
 
 ## EAD Calculation

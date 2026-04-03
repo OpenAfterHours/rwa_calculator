@@ -218,7 +218,7 @@ def b31_irb_transitional_config():
     """
     Create Basel 3.1 CalculationConfig with 2027 reporting date.
 
-    Used for transitional output floor tests (50% floor in 2027).
+    Used for transitional output floor tests (60% floor in 2027).
     """
     from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 

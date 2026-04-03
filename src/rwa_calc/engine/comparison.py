@@ -225,26 +225,24 @@ class CapitalImpactAnalyzer:
 
 # PRA PS1/26 transitional dates: 1 Jan of each year, with mid-year reporting
 _TRANSITIONAL_REPORTING_DATES = [
-    date(2027, 6, 30),  # Year 1: 50%
-    date(2028, 6, 30),  # Year 2: 55%
-    date(2029, 6, 30),  # Year 3: 60%
-    date(2030, 6, 30),  # Year 4: 65%
-    date(2031, 6, 30),  # Year 5: 70%
-    date(2032, 6, 30),  # Year 6: 72.5% (fully phased)
+    date(2027, 6, 30),  # Year 1: 60% (PRA PS1/26 Art. 92(5))
+    date(2028, 6, 30),  # Year 2: 65%
+    date(2029, 6, 30),  # Year 3: 70%
+    date(2030, 6, 30),  # Year 4: 72.5% (fully phased)
 ]
 
 
 class TransitionalScheduleRunner:
     """
-    Model the output floor phase-in across 2027-2032.
+    Model the output floor phase-in across 2027-2030.
 
     Runs the same portfolio through the Basel 3.1 pipeline for each
     transitional year, collecting floor impact metrics to produce a
     year-by-year timeline. This enables capital planning for the
     increasing floor bite.
 
-    Why: PRA PS1/26 phases in the output floor gradually (50% in 2027
-    to 72.5% in 2032+). A portfolio that is not floor-constrained in 2027
+    Why: PRA PS1/26 Art. 92(5) phases in the output floor (60% in 2027
+    to 72.5% in 2030+). A portfolio that is not floor-constrained in 2027
     may become floor-constrained as the percentage rises. Modelling this
     trajectory is essential for forward-looking capital management.
 

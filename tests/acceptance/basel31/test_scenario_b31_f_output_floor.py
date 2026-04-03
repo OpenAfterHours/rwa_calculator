@@ -13,7 +13,7 @@ Why these tests matter:
 
 Regulatory References:
 - PRA PS1/26: Output floor rule: RWA_final = max(RWA_IRB, floor% × RWA_SA)
-- PRA PS1/26: Transitional schedule: 50% (2027), 55% (2028), ..., 72.5% (2032+)
+- PRA PS1/26 Art. 92(5): Transitional schedule: 60% (2027), 65% (2028), 70% (2029), 72.5% (2030+)
 """
 
 import polars as pl
@@ -122,18 +122,18 @@ class TestB31GroupF_OutputFloor:
                 f"floor RWA ({floor_rwa:,.0f}) for high-PD exposure"
             )
 
-    def test_b31_f3_transitional_floor_2027_50pct(
+    def test_b31_f3_transitional_floor_2027_60pct(
         self,
         transitional_results_df: pl.DataFrame,
         irb_pipeline_results_df: pl.DataFrame,
     ) -> None:
         """
-        B31-F3: Transitional floor in 2027 should be 50% (vs 72.5% fully-phased).
+        B31-F3: Transitional floor in 2027 should be 60% (vs 72.5% fully-phased).
 
         Input: Same low-PD corporate as B31-F1 (LOAN_CORP_UK_003) with 2027 date
-        Expected: Floor at 50% produces lower floored RWA than 72.5%
-        Rationale: The transitional schedule phases in the floor gradually
-            (50% in 2027 → 72.5% in 2032+), reducing the capital impact
+        Expected: Floor at 60% produces lower floored RWA than 72.5%
+        Rationale: PRA PS1/26 Art. 92(5) phases in the floor gradually
+            (60% in 2027 → 72.5% in 2030+), reducing the capital impact
             of the floor in the early years.
         """
         result_transitional = get_result_for_exposure(transitional_results_df, "LOAN_CORP_UK_003")
@@ -162,11 +162,11 @@ class TestB31GroupF_OutputFloor:
                 f"should be lower than fully-phased ({full_floor_rwa:,.0f})"
             )
 
-            # Verify approximate ratio: transitional/full ≈ 50/72.5 ≈ 0.69
+            # Verify approximate ratio: transitional/full ≈ 60/72.5 ≈ 0.828
             if full_floor_rwa > 0:
                 ratio = transitional_floor_rwa / full_floor_rwa
-                assert ratio == pytest.approx(50.0 / 72.5, rel=0.05), (
-                    f"B31-F3: Floor ratio ({ratio:.3f}) should be ~{50 / 72.5:.3f} (50% / 72.5%)"
+                assert ratio == pytest.approx(60.0 / 72.5, rel=0.05), (
+                    f"B31-F3: Floor ratio ({ratio:.3f}) should be ~{60 / 72.5:.3f} (60% / 72.5%)"
                 )
 
         # RWA under transitional should be lower or equal to full-phase RWA

@@ -3,7 +3,7 @@ Unit tests for TransitionalScheduleRunner (M3.3).
 
 Tests the transitional floor schedule modelling including:
 - Timeline structure and column completeness
-- Floor percentage progression (50% → 72.5%) matches PRA PS1/26
+- Floor percentage progression (60% → 72.5%) matches PRA PS1/26
 - Monotonically increasing floor impact as percentage rises
 - Custom reporting dates support
 - Edge cases (empty data, single date)
@@ -11,8 +11,8 @@ Tests the transitional floor schedule modelling including:
 
 Why these tests matter:
     The transitional output floor is the most capital-impactful Basel 3.1
-    change for IRB banks. Modelling the year-by-year trajectory from 50%
-    (2027) to 72.5% (2032+) is essential for capital planning. An error
+    change for IRB banks. Modelling the year-by-year trajectory from 60%
+    (2027) to 72.5% (2030+) is essential for capital planning. An error
     in floor percentage lookup or metric extraction would produce incorrect
     capital trajectory forecasts, potentially leading to capital shortfalls.
 
@@ -120,9 +120,9 @@ def mock_result_no_floor() -> AggregatedResultBundle:
 class TestTransitionalDates:
     """Tests for the default transitional reporting dates."""
 
-    def test_six_transitional_years(self):
-        """PRA PS1/26 defines 6 transitional years (2027-2032)."""
-        assert len(_TRANSITIONAL_REPORTING_DATES) == 6
+    def test_four_transitional_years(self):
+        """PRA PS1/26 defines 4 transitional years (2027-2030)."""
+        assert len(_TRANSITIONAL_REPORTING_DATES) == 4
 
     def test_dates_are_mid_year(self):
         """Reporting dates should be mid-year (June 30)."""
@@ -130,10 +130,10 @@ class TestTransitionalDates:
             assert d.month == 6
             assert d.day == 30
 
-    def test_dates_span_2027_to_2032(self):
-        """Dates should cover 2027 through 2032."""
+    def test_dates_span_2027_to_2030(self):
+        """Dates should cover 2027 through 2030."""
         years = [d.year for d in _TRANSITIONAL_REPORTING_DATES]
-        assert years == [2027, 2028, 2029, 2030, 2031, 2032]
+        assert years == [2027, 2028, 2029, 2030]
 
 
 # =============================================================================
@@ -383,7 +383,7 @@ class TestTransitionalScheduleRunner:
     def test_runner_floor_percentage_matches_schedule(self, irb_permissions):
         """Floor percentage in timeline should match PRA PS1/26 schedule."""
         runner = TransitionalScheduleRunner()
-        dates = [date(2027, 6, 30), date(2030, 6, 30), date(2032, 6, 30)]
+        dates = [date(2027, 6, 30), date(2029, 6, 30), date(2030, 6, 30)]
         result = runner.run(
             data=_make_minimal_raw_data(),
             irb_permissions=irb_permissions,
@@ -391,9 +391,9 @@ class TestTransitionalScheduleRunner:
         )
         df = result.timeline.collect()
         pct_by_year = dict(zip(df["year"].to_list(), df["floor_percentage"].to_list(), strict=True))
-        assert pct_by_year[2027] == pytest.approx(0.50)
-        assert pct_by_year[2030] == pytest.approx(0.65)
-        assert pct_by_year[2032] == pytest.approx(0.725)
+        assert pct_by_year[2027] == pytest.approx(0.60)
+        assert pct_by_year[2029] == pytest.approx(0.70)
+        assert pct_by_year[2030] == pytest.approx(0.725)
 
     def test_runner_custom_dates(self, irb_permissions):
         """Runner should accept custom reporting dates."""
@@ -408,16 +408,16 @@ class TestTransitionalScheduleRunner:
         assert df.height == 2
         assert df["year"].to_list() == [2027, 2029]
 
-    def test_runner_default_dates_produces_six_rows(self, irb_permissions):
-        """Default dates should produce 6 timeline rows (2027-2032)."""
+    def test_runner_default_dates_produces_four_rows(self, irb_permissions):
+        """Default dates should produce 4 timeline rows (2027-2030)."""
         runner = TransitionalScheduleRunner()
         result = runner.run(
             data=_make_minimal_raw_data(),
             irb_permissions=irb_permissions,
         )
         df = result.timeline.collect()
-        assert df.height == 6
-        assert df["year"].to_list() == [2027, 2028, 2029, 2030, 2031, 2032]
+        assert df.height == 4
+        assert df["year"].to_list() == [2027, 2028, 2029, 2030]
 
 
 # =============================================================================

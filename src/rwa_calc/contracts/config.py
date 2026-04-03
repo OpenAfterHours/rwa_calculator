@@ -113,7 +113,7 @@ class LGDFloors:
     financial_collateral: Decimal = Decimal("0.0")  # 0%
     receivables: Decimal = Decimal("0.10")  # 10%
     commercial_real_estate: Decimal = Decimal("0.10")  # 10%
-    residential_real_estate: Decimal = Decimal("0.05")  # 5%
+    residential_real_estate: Decimal = Decimal("0.10")  # 10% (PRA Art. 161/164)
     other_physical: Decimal = Decimal("0.15")  # 15%
 
     def get_floor(self, collateral_type: CollateralType) -> Decimal:
@@ -145,9 +145,9 @@ class LGDFloors:
         """
         Basel 3.1 LGD floors (CRE30.41).
 
-        Note: Values reflect PRA implementation. BCBS standard values differ
-        for some collateral types (Receivables: 15%, RRE: 10%, Other Physical: 20%).
-        TODO: Verify against PRA PS1/26 final rules when published.
+        Values reflect PRA PS1/26 Art. 161(5) / Art. 164(4) implementation.
+        Note: BCBS CRE30.41 has different values for some types (RRE: 5%).
+        PRA sets immovable property (both RESI and CRE) at 10%.
         """
         return cls(
             unsecured=Decimal("0.25"),  # 25%
@@ -155,7 +155,7 @@ class LGDFloors:
             financial_collateral=Decimal("0.0"),  # 0%
             receivables=Decimal("0.10"),  # 10%
             commercial_real_estate=Decimal("0.10"),  # 10%
-            residential_real_estate=Decimal("0.05"),  # 5%
+            residential_real_estate=Decimal("0.10"),  # 10% (PRA Art. 161/164)
             other_physical=Decimal("0.15"),  # 15%
         )
 
@@ -258,21 +258,67 @@ class OutputFloorConfig:
     @classmethod
     def basel_3_1(cls) -> OutputFloorConfig:
         """Basel 3.1 output floor configuration with transitional period."""
-        # PRA PS1/26 transitional schedule
+        # PRA PS1/26 Art. 92(5) transitional schedule
+        # NOTE: PRA compressed the BCBS 6-year phase-in to 4 years (2027-2030).
         transitional_schedule = {
-            date(2027, 1, 1): Decimal("0.50"),  # 50%
-            date(2028, 1, 1): Decimal("0.55"),  # 55%
-            date(2029, 1, 1): Decimal("0.60"),  # 60%
-            date(2030, 1, 1): Decimal("0.65"),  # 65%
-            date(2031, 1, 1): Decimal("0.70"),  # 70%
-            date(2032, 1, 1): Decimal("0.725"),  # 72.5% (fully phased)
+            date(2027, 1, 1): Decimal("0.60"),  # 60%
+            date(2028, 1, 1): Decimal("0.65"),  # 65%
+            date(2029, 1, 1): Decimal("0.70"),  # 70%
+            date(2030, 1, 1): Decimal("0.725"),  # 72.5% (fully phased)
         }
         return cls(
             enabled=True,
             floor_percentage=Decimal("0.725"),
             transitional_start_date=date(2027, 1, 1),
-            transitional_end_date=date(2032, 1, 1),
+            transitional_end_date=date(2030, 1, 1),
             transitional_floor_schedule=transitional_schedule,
+        )
+
+
+@dataclass(frozen=True)
+class EquityTransitionalConfig:
+    """
+    Equity transitional configuration for Basel 3.1 (PRA Rules 4.1-4.10).
+
+    Firms transitioning from CRR to Basel 3.1 equity weights use a phase-in
+    schedule. Firms with prior IRB equity permission use the higher of the
+    IRB model RW and the transitional SA RW (Rules 4.4-4.6).
+    """
+
+    enabled: bool = False
+    schedule: dict[date, tuple[Decimal, Decimal]] = field(default_factory=dict)
+    # (standard_rw, higher_risk_rw) keyed by effective date
+
+    def get_transitional_rw(
+        self,
+        reporting_date: date,
+        is_higher_risk: bool = False,
+    ) -> Decimal | None:
+        """Get the transitional RW for a given date, or None if not in transition."""
+        if not self.enabled or not self.schedule:
+            return None
+
+        applicable: tuple[Decimal, Decimal] | None = None
+        for schedule_date, rws in sorted(self.schedule.items()):
+            if reporting_date >= schedule_date:
+                applicable = rws
+
+        if applicable is None:
+            return None
+
+        return applicable[1] if is_higher_risk else applicable[0]
+
+    @classmethod
+    def basel_3_1(cls) -> EquityTransitionalConfig:
+        """PRA Rules 4.1-4.3: SA transitional equity risk weights (2027-2029)."""
+        return cls(
+            enabled=True,
+            schedule={
+                date(2027, 1, 1): (Decimal("1.60"), Decimal("2.20")),
+                date(2028, 1, 1): (Decimal("1.90"), Decimal("2.80")),
+                date(2029, 1, 1): (Decimal("2.20"), Decimal("3.40")),
+                date(2030, 1, 1): (Decimal("2.50"), Decimal("4.00")),
+            },
         )
 
 
@@ -558,6 +604,7 @@ class CalculationConfig:
     )
     retail_thresholds: RetailThresholds = field(default_factory=RetailThresholds.crr)
     irb_permissions: IRBPermissions = field(default_factory=IRBPermissions.sa_only)
+    equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
@@ -674,6 +721,7 @@ class CalculationConfig:
             ),
             retail_thresholds=RetailThresholds.basel_3_1(),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
+            equity_transitional=EquityTransitionalConfig.basel_3_1(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             collect_engine=collect_engine,

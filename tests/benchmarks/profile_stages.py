@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import time
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import polars as pl
 
@@ -47,7 +47,11 @@ from rwa_calc.engine.slotting.calculator import SlottingCalculator
 from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from rwa_calc.contracts.bundles import ClassifiedExposuresBundle, RawDataBundle
+
+_T = TypeVar("_T")
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +59,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _time(fn, label: str, results: list[tuple[str, float]]) -> object:
+def _time(fn: Callable[[], _T], label: str, results: list[tuple[str, float]]) -> _T:
     """Time a function call, append (label, elapsed_ms) to results, return fn result."""
     t0 = time.perf_counter()
     result = fn()

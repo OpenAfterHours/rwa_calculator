@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **API**: Replace `RWAService` + `CalculationRequest` + `quick_calculate` + `create_service` with single `CreditRiskCalc` class. Usage: `CreditRiskCalc(data_path=..., framework=..., reporting_date=...).calculate()`. All response models (`CalculationResponse`, `SummaryStatistics`, etc.) are unchanged.
 - **Config**: Replace granular `IRBPermissions` config (with `sa_only()`, `full_irb()`, `firb_only()`, etc.) with a simple two-mode `PermissionMode` enum (`STANDARDISED` / `IRB`). The `permission_mode` parameter on `CalculationConfig.crr()` and `.basel_3_1()` replaces the old `irb_permissions` parameter. In IRB mode, `model_permissions` input data drives all approach routing (AIRB, FIRB, slotting); without it, the pipeline falls back to SA with a warning. `IRBPermissions` remains as an internal implementation detail but is no longer part of the public API.
 - **Classifier**: Add `model_slotting_permitted` flag to model permissions resolution, enabling slotting to be driven by per-model permissions alongside AIRB and FIRB
 - **Model Permissions**: Add `"slotting"` as a valid `approach` value (alongside `"foundation_irb"` and `"advanced_irb"`)
 - **Comparison**: `TransitionalScheduleRunner.run()` now accepts `permission_mode` instead of `irb_permissions`
-- **API**: Request model uses `permission_mode: Literal["standardised", "irb"]` replacing the old `irb_approach` field
 
 ### Added
 - **Engine**: Add `materialise.py` module with strategy-aware materialization barriers — supports disk-spill (`sink_parquet` → `scan_parquet`) for out-of-core datasets and in-memory (`collect().lazy()`) for backward compatibility, controlled by `config.collect_engine`

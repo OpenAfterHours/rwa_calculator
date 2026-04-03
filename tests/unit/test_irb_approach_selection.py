@@ -2,21 +2,18 @@
 
 Tests cover:
 - PermissionMode enum values
-- CalculationRequest permission_mode field
-- RWAService._create_config() with permission modes
+- CreditRiskCalc._create_config() with permission modes
 - CCF behavior under different approach selections (FIRB 75% vs SA 50%)
 """
 
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import polars as pl
 import pytest
 
-from rwa_calc.api.models import CalculationRequest
-from rwa_calc.api.service import RWAService
+from rwa_calc.api.service import CreditRiskCalc
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 
@@ -52,12 +49,8 @@ class TestCalculationConfigPermissionMode:
             reporting_date=date(2024, 12, 31),
             permission_mode=PermissionMode.STANDARDISED,
         )
-        assert not config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.FIRB
-        )
-        assert not config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.AIRB
-        )
+        assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
+        assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 
     def test_irb_derives_full_irb(self) -> None:
         """IRB mode should derive full_irb irb_permissions."""
@@ -75,103 +68,58 @@ class TestCalculationConfigPermissionMode:
 
 
 # =============================================================================
-# CalculationRequest Tests
-# =============================================================================
-
-
-class TestCalculationRequestPermissionMode:
-    """Tests for CalculationRequest with permission_mode field."""
-
-    def test_request_with_standardised(self) -> None:
-        """CalculationRequest should accept permission_mode='standardised'."""
-        request = CalculationRequest(
-            data_path="/test/path",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-            permission_mode="standardised",
-        )
-        assert request.permission_mode == "standardised"
-
-    def test_request_with_irb(self) -> None:
-        """CalculationRequest should accept permission_mode='irb'."""
-        request = CalculationRequest(
-            data_path="/test/path",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-            permission_mode="irb",
-        )
-        assert request.permission_mode == "irb"
-
-    def test_request_defaults_to_standardised(self) -> None:
-        """CalculationRequest should default permission_mode to 'standardised'."""
-        request = CalculationRequest(
-            data_path="/test/path",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-        )
-        assert request.permission_mode == "standardised"
-
-
-# =============================================================================
-# RWAService._create_config Tests
+# CreditRiskCalc._create_config Tests
 # =============================================================================
 
 
 class TestServiceCreateConfig:
-    """Tests for RWAService._create_config() with permission modes."""
+    """Tests for CreditRiskCalc._create_config() with permission modes."""
 
-    @pytest.fixture
-    def service(self, tmp_path: Path) -> RWAService:
-        """Return an RWAService instance."""
-        return RWAService(cache_dir=tmp_path / "cache")
-
-    def test_create_config_standardised(self, service: RWAService) -> None:
+    def test_create_config_standardised(self) -> None:
         """_create_config with 'standardised' should use sa_only permissions."""
-        request = CalculationRequest(
+        calc = CreditRiskCalc(
             data_path="/test/path",
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             permission_mode="standardised",
         )
-        config = service._create_config(request)
+        config = calc._create_config()
         assert config.permission_mode == PermissionMode.STANDARDISED
-        assert not config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.FIRB
-        )
+        assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
 
-    def test_create_config_irb(self, service: RWAService) -> None:
+    def test_create_config_irb(self) -> None:
         """_create_config with 'irb' should use full_irb permissions."""
-        request = CalculationRequest(
+        calc = CreditRiskCalc(
             data_path="/test/path",
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             permission_mode="irb",
         )
-        config = service._create_config(request)
+        config = calc._create_config()
         assert config.permission_mode == PermissionMode.IRB
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 
-    def test_create_config_crr_framework(self, service: RWAService) -> None:
+    def test_create_config_crr_framework(self) -> None:
         """_create_config should create CRR config when framework='CRR'."""
-        request = CalculationRequest(
+        calc = CreditRiskCalc(
             data_path="/test/path",
             framework="CRR",
             reporting_date=date(2024, 12, 31),
             permission_mode="irb",
         )
-        config = service._create_config(request)
+        config = calc._create_config()
         assert config.is_crr
 
-    def test_create_config_basel_3_1_framework(self, service: RWAService) -> None:
+    def test_create_config_basel_3_1_framework(self) -> None:
         """_create_config should create Basel 3.1 config when framework='BASEL_3_1'."""
-        request = CalculationRequest(
+        calc = CreditRiskCalc(
             data_path="/test/path",
             framework="BASEL_3_1",
             reporting_date=date(2027, 6, 30),
             permission_mode="irb",
         )
-        config = service._create_config(request)
+        config = calc._create_config()
         assert config.is_basel_3_1
 
 

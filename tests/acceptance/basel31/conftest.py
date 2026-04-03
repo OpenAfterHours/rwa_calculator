@@ -373,11 +373,9 @@ def irb_raw_data_bundle(load_test_fixtures):
     Enriches internal ratings with model_id and creates full-coverage
     model_permissions so the pipeline routes exposures to IRB approaches.
     """
-    from rwa_calc.contracts.bundles import RawDataBundle
 
     from tests.fixtures.irb_test_helpers import (
         create_full_irb_model_permissions,
-        enrich_ratings_with_model_id,
     )
 
     fixtures = load_test_fixtures
@@ -407,9 +405,9 @@ def slotting_raw_data_bundle(load_test_fixtures):
 
 def _make_irb_bundle(fixtures, model_permissions):
     """Build RawDataBundle with enriched ratings and given model_permissions."""
-    from rwa_calc.contracts.bundles import RawDataBundle
-
     from tests.fixtures.irb_test_helpers import enrich_ratings_with_model_id
+
+    from rwa_calc.contracts.bundles import RawDataBundle
 
     return RawDataBundle(
         facilities=fixtures.facilities,

@@ -49,38 +49,19 @@ For detailed UI documentation, see the [Interactive UI Guide](../user-guide/inte
 
 ## Using the Python API
 
-### Quickest Start
+### Basic Usage
 
-Run a complete RWA calculation in one call:
-
-```python
-from rwa_calc.api import quick_calculate
-
-response = quick_calculate("/path/to/data")
-print(f"Total RWA: {response.summary.total_rwa:,.0f}")
-```
-
-That's it. `quick_calculate` loads your data, runs the full pipeline, and returns a
-`CalculationResponse` with summary statistics and detailed results.
-
-### More Control with RWAService
-
-For more control over framework, permission mode, and reporting date, use `RWAService`:
+Run a complete RWA calculation:
 
 ```python
 from datetime import date
-from pathlib import Path
-from rwa_calc.api import RWAService, CalculationRequest, create_service
+from rwa_calc.api import CreditRiskCalc
 
-service = create_service()
-response = service.calculate(
-    CalculationRequest(
-        data_path="/path/to/data",
-        framework="CRR",
-        reporting_date=date(2026, 12, 31),
-        permission_mode="irb",
-    )
-)
+response = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+).calculate()
 
 if response.success:
     print(f"Total RWA: {response.summary.total_rwa:,.0f}")
@@ -96,21 +77,13 @@ Here's a full script with validation, error handling, and export:
 from datetime import date
 from pathlib import Path
 
-from rwa_calc.api import (
-    RWAService,
-    CalculationRequest,
-    create_service,
-)
+from rwa_calc.api import CreditRiskCalc
 
 
 def calculate_rwa():
-    """Calculate RWA for credit exposures using the Service API."""
+    """Calculate RWA for credit exposures."""
 
-    # Create the service (cache_dir defaults to a temp directory)
-    service = create_service()
-
-    # Build request
-    request = CalculationRequest(
+    calc = CreditRiskCalc(
         data_path="/path/to/data",
         framework="CRR",
         reporting_date=date(2026, 12, 31),
@@ -118,7 +91,7 @@ def calculate_rwa():
     )
 
     # Run calculation
-    response = service.calculate(request)
+    response = calc.calculate()
 
     # Check for errors
     if not response.success:
@@ -166,23 +139,18 @@ if __name__ == "__main__":
 
 ### Specifying Data Format
 
-By default, the service reads Parquet files. To use CSV:
+By default, the calculator reads Parquet files. To use CSV:
 
 ```python
-from rwa_calc.api import quick_calculate
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
-response = quick_calculate("/path/to/csv-data", data_format="csv")
-```
-
-Or with `CalculationRequest`:
-
-```python
-request = CalculationRequest(
+response = CreditRiskCalc(
     data_path="/path/to/csv-data",
-    data_format="csv",
     framework="CRR",
     reporting_date=date(2026, 12, 31),
-)
+    data_format="csv",
+).calculate()
 ```
 
 ### Required Data Files
@@ -205,13 +173,16 @@ The calculator expects the following files in your data directory:
 ### Validating Data Before Calculation
 
 ```python
-from rwa_calc.api import create_service, ValidationRequest
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
-service = create_service()
-validation = service.validate_data_path(
-    ValidationRequest(data_path="/path/to/data")
+calc = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
 )
 
+validation = calc.validate()
 if validation.valid:
     print(f"Ready: {validation.found_count} files found")
 else:
@@ -223,30 +194,36 @@ else:
 ### CRR Framework
 
 ```python
-from rwa_calc.api import quick_calculate
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
 # CRR with default settings
-response = quick_calculate("/path/to/data", framework="CRR")
+response = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+).calculate()
 
 # CRR with IRB routing (requires model_permissions input data)
-response = quick_calculate(
-    "/path/to/data",
+response = CreditRiskCalc(
+    data_path="/path/to/data",
     framework="CRR",
     reporting_date=date(2026, 12, 31),
     permission_mode="irb",
-)
+).calculate()
 ```
 
 ### Basel 3.1 Framework
 
 ```python
-from rwa_calc.api import quick_calculate
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
-response = quick_calculate(
-    "/path/to/data",
+response = CreditRiskCalc(
+    data_path="/path/to/data",
     framework="BASEL_3_1",
     reporting_date=date(2027, 1, 1),
-)
+).calculate()
 ```
 
 ### Permission Mode
@@ -268,8 +245,6 @@ The `CalculationResponse` provides several ways to access results:
 ### Summary Statistics
 
 ```python
-response = quick_calculate("/path/to/data")
-
 summary = response.summary
 summary.total_rwa           # Total risk-weighted assets
 summary.total_ead           # Total exposure at default
@@ -328,8 +303,6 @@ response.to_corep(Path("output/corep.xlsx"))
 The calculator accumulates errors rather than failing fast:
 
 ```python
-response = quick_calculate("/path/to/data")
-
 # Check overall success
 if not response.success:
     print("Calculation failed")

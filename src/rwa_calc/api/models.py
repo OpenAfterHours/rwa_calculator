@@ -1,8 +1,7 @@
 """
 API request and response models for RWA Calculator.
 
-RWAService uses these models for clean interface contracts:
-- CalculationRequest: Input parameters for RWA calculation
+Models for clean interface contracts:
 - ValidationRequest: Input for data path validation
 - CalculationResponse: Calculation results with summary statistics
 - ValidationResponse: Data path validation results
@@ -30,51 +29,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class BaseRequest:
-    """Base class for API requests involving file paths."""
-
-    data_path: str | Path
-
-    @property
-    def path(self) -> Path:
-        """Get data_path as Path object."""
-        return Path(self.data_path)
-
-
-@dataclass(frozen=True)
-class CalculationRequest(BaseRequest):
-    """
-    Request model for RWA calculation.
-
-    Encapsulates all parameters needed to run a calculation,
-    providing a clean API surface for callers.
-
-    Attributes:
-        data_path: Path to directory containing input data files
-        framework: Regulatory framework ("CRR" or "BASEL_3_1")
-        reporting_date: As-of date for the calculation
-        base_currency: Currency for reporting (default GBP)
-        permission_mode: "standardised" (all SA) or "irb" (model permissions drive routing)
-        data_format: Format of input files ("parquet" or "csv")
-        eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
-
-    When ``permission_mode`` is ``"irb"``, approach routing is driven by the
-    ``model_permissions`` input table. Each model's approved approach (AIRB,
-    FIRB, slotting) is resolved per-exposure. Exposures without a matching
-    model permission fall back to SA. If no ``model_permissions`` file exists,
-    all exposures fall back to SA with a warning.
-    """
-
-    framework: Literal["CRR", "BASEL_3_1"]
-    reporting_date: date
-    base_currency: str = "GBP"
-    permission_mode: Literal["standardised", "irb"] = "standardised"
-    data_format: Literal["parquet", "csv"] = "parquet"
-    eur_gbp_rate: Decimal = field(default_factory=lambda: Decimal("0.8732"))
-
-
-@dataclass(frozen=True)
-class ValidationRequest(BaseRequest):
+class ValidationRequest:
     """
     Request model for data path validation.
 
@@ -86,7 +41,13 @@ class ValidationRequest(BaseRequest):
         data_format: Expected format of files ("parquet" or "csv")
     """
 
+    data_path: str | Path
     data_format: Literal["parquet", "csv"] = "parquet"
+
+    @property
+    def path(self) -> Path:
+        """Get data_path as Path object."""
+        return Path(self.data_path)
 
 
 # =============================================================================

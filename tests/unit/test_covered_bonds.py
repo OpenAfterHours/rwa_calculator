@@ -161,7 +161,7 @@ class TestCoveredBondPermissions:
 
     @pytest.mark.parametrize(
         "factory_name",
-        ["full_irb", "firb_only", "airb_only", "retail_airb_corporate_firb"],
+        ["sa_only", "full_irb"],
     )
     def test_sa_only_in_all_irb_configs(self, factory_name: str):
         """Covered bonds are SA-only regardless of IRB permissions."""

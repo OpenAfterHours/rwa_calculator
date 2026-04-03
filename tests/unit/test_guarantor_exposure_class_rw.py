@@ -65,7 +65,8 @@ def _sa_guarantee_result(
     calc = _make_sa_calculator()
     # Call the private method directly for isolated testing
     result_lf = calc._apply_guarantee_substitution(lf, config)
-    return result_lf.collect()
+    result: pl.DataFrame = result_lf.collect()
+    return result
 
 
 def _irb_guarantee_result(

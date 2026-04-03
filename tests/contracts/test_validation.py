@@ -579,6 +579,7 @@ class TestValidateBundleValues:
         errors = validate_bundle_values(bundle)
 
         assert len(errors) == 1
+        assert errors[0].field_name is not None
         assert "entity_type" in errors[0].field_name
         assert "INVALID_TYPE" in errors[0].message
 

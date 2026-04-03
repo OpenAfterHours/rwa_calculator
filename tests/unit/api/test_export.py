@@ -32,8 +32,10 @@ from rwa_calc.api.results_cache import ResultsCache
 # Fixtures
 # =============================================================================
 
+import importlib.util
+
 XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
-    __import__("importlib").util.find_spec("xlsxwriter") is not None
+    importlib.util.find_spec("xlsxwriter") is not None
 )
 
 

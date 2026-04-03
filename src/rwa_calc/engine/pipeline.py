@@ -231,17 +231,12 @@ class PipelineOrchestrator:
             self._validate_input_data(data)
 
             # IRB mode requires model_permissions data; without it, fall back to SA
-            if (
-                config.permission_mode == PermissionMode.IRB
-                and data.model_permissions is None
-            ):
+            if config.permission_mode == PermissionMode.IRB and data.model_permissions is None:
                 logger.warning(
                     "IRB permission mode selected but no model_permissions data provided. "
                     "All exposures will fall back to Standardised Approach."
                 )
-                config = dataclasses.replace(
-                    config, permission_mode=PermissionMode.STANDARDISED
-                )
+                config = dataclasses.replace(config, permission_mode=PermissionMode.STANDARDISED)
 
             # Stage 2: Resolve hierarchies
             resolved = self._run_hierarchy_resolver(data, config)

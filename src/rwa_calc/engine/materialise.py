@@ -90,7 +90,8 @@ def materialise_branches(
         List of DataFrames in the same order as input branches
     """
     if config.collect_engine == "cpu":
-        return pl.collect_all(branches)
+        result: list[pl.DataFrame] = pl.collect_all(branches)
+        return result
 
     # Streaming mode: sink each branch individually
     results: list[pl.DataFrame] = []

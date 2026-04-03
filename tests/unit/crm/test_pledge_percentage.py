@@ -141,7 +141,8 @@ def _run_resolve(
     direct_lookup, facility_lookup, cp_lookup = _build_exposure_lookups(exposures)
     joined = _join_collateral_to_lookups(collateral, direct_lookup, facility_lookup, cp_lookup)
     resolved = _resolve_pledge_from_joined(joined)
-    return resolved.collect()
+    df: pl.DataFrame = resolved.collect()
+    return df
 
 
 # =============================================================================

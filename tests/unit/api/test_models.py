@@ -1,7 +1,6 @@
 """Unit tests for the API models module.
 
 Tests cover:
-- CalculationRequest dataclass
 - ValidationRequest dataclass
 - SummaryStatistics dataclass
 - APIError dataclass
@@ -21,85 +20,12 @@ import pytest
 
 from rwa_calc.api.models import (
     APIError,
-    CalculationRequest,
     CalculationResponse,
     PerformanceMetrics,
     SummaryStatistics,
     ValidationRequest,
     ValidationResponse,
 )
-
-# =============================================================================
-# CalculationRequest Tests
-# =============================================================================
-
-
-class TestCalculationRequest:
-    """Tests for CalculationRequest dataclass."""
-
-    def test_create_with_required_fields(self) -> None:
-        """Request should be created with required fields."""
-        request = CalculationRequest(
-            data_path="/path/to/data",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-        )
-        assert request.data_path == "/path/to/data"
-        assert request.framework == "CRR"
-        assert request.reporting_date == date(2024, 12, 31)
-
-    def test_default_values(self) -> None:
-        """Default values should be set correctly."""
-        request = CalculationRequest(
-            data_path="/path/to/data",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-        )
-        assert request.base_currency == "GBP"
-        assert request.permission_mode == "standardised"
-        assert request.data_format == "parquet"
-        assert request.eur_gbp_rate == Decimal("0.8732")
-
-    def test_path_property_returns_path_object(self) -> None:
-        """Path property should return Path object."""
-        request = CalculationRequest(
-            data_path="/path/to/data",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-        )
-        assert isinstance(request.path, Path)
-        # Compare parts to handle platform differences
-        assert request.path.parts[-3:] == ("path", "to", "data")
-
-    def test_frozen_dataclass(self) -> None:
-        """Request should be immutable."""
-        request = CalculationRequest(
-            data_path="/path/to/data",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-        )
-        with pytest.raises(AttributeError):  # FrozenInstanceError
-            request.data_path = "/new/path"  # type: ignore
-
-    def test_basel_31_framework(self) -> None:
-        """Should accept BASEL_3_1 framework."""
-        request = CalculationRequest(
-            data_path="/path/to/data",
-            framework="BASEL_3_1",
-            reporting_date=date(2027, 1, 1),
-        )
-        assert request.framework == "BASEL_3_1"
-
-    def test_csv_format(self) -> None:
-        """Should accept csv data format."""
-        request = CalculationRequest(
-            data_path="/path/to/data",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-            data_format="csv",
-        )
-        assert request.data_format == "csv"
-
 
 # =============================================================================
 # ValidationRequest Tests

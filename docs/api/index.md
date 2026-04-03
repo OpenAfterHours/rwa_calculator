@@ -6,7 +6,7 @@ This section provides complete API documentation for the RWA calculator modules.
 
 | Module | Purpose |
 |--------|---------|
-| [**Service API**](service.md) | High-level facade: `quick_calculate`, `RWAService`, request/response models |
+| [**Service API**](service.md) | High-level facade: `CreditRiskCalc`, response models |
 | [**Pipeline**](pipeline.md) | Low-level orchestration and custom pipeline construction |
 | [**Configuration**](configuration.md) | Configuration classes and factories |
 | [**Engine**](engine.md) | Calculation components |
@@ -18,28 +18,15 @@ This section provides complete API documentation for the RWA calculator modules.
 ### Main Entry Point
 
 ```python
-from rwa_calc.api import quick_calculate
-
-# One-liner calculation
-response = quick_calculate("/path/to/data")
-print(f"Total RWA: {response.summary.total_rwa:,.0f}")
-```
-
-### Service API (More Control)
-
-```python
 from datetime import date
-from rwa_calc.api import RWAService, CalculationRequest, create_service
+from rwa_calc.api import CreditRiskCalc
 
-service = create_service()
-response = service.calculate(
-    CalculationRequest(
-        data_path="/path/to/data",
-        framework="CRR",
-        reporting_date=date(2026, 12, 31),
-        permission_mode="irb",
-    )
-)
+response = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+    permission_mode="irb",
+).calculate()
 
 if response.success:
     print(f"Total RWA: {response.summary.total_rwa:,.0f}")
@@ -105,7 +92,7 @@ from rwa_calc.contracts.bundles import (
 
 ## API Sections
 
-- [**Service API**](service.md) - High-level facade (`quick_calculate`, `RWAService`)
+- [**Service API**](service.md) - High-level facade (`CreditRiskCalc`)
 - [**Pipeline API**](pipeline.md) - Pipeline creation and execution
 - [**Configuration API**](configuration.md) - Configuration classes
 - [**Engine API**](engine.md) - Calculation components

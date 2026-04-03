@@ -1,7 +1,7 @@
 """
 RWA Calculator Marimo Application.
 
-Interactive UI for running RWA calculations using the RWAService API.
+Interactive UI for running RWA calculations using the CreditRiskCalc API.
 
 Usage:
     uv run marimo edit src/rwa_calc/ui/marimo/rwa_app.py
@@ -229,28 +229,25 @@ def _(
 ):
     from datetime import date as date_type
 
-    from rwa_calc.api import CalculationRequest, RWAService
+    from rwa_calc.api import CreditRiskCalc
 
     calculation_response = None
     calculation_error = None
 
     if run_button.value:
         try:
-            service = RWAService(cache_dir=cache_dir)
-
             rd = reporting_date_input.value
             if not isinstance(rd, date_type):
                 rd = date_type.fromisoformat(str(rd))
 
-            request = CalculationRequest(
+            calculation_response = CreditRiskCalc(
                 data_path=data_path_input.value,
                 framework=framework_dropdown.value,
                 reporting_date=rd,
-                irb_approach=irb_approach_dropdown.value,
+                permission_mode=irb_approach_dropdown.value,
                 data_format=format_dropdown.value,
-            )
-
-            calculation_response = service.calculate(request)
+                cache_dir=cache_dir,
+            ).calculate()
 
         except Exception as e:
             calculation_error = str(e)

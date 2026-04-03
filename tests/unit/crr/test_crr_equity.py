@@ -30,12 +30,12 @@ from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.data.tables.crr_equity_rw import (
     get_equity_rw_table,
     lookup_equity_rw,
 )
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.equity import EquityCalculator, create_equity_calculator
 
 # =============================================================================

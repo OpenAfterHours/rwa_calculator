@@ -18,6 +18,7 @@ Usage (from source):
 Or with uvicorn directly (templates only, no workbench):
     uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
 """
+
 from __future__ import annotations
 
 import shutil
@@ -43,6 +44,7 @@ workspaces_dir.mkdir(parents=True, exist_ok=True)
 EDIT_SERVER_PORT = 8002
 
 TEMPLATE_REGISTRY: dict[str, str] = {
+    "landing": "landing_app.py",
     "calculator": "rwa_app.py",
     "results_explorer": "results_explorer.py",
     "comparison": "comparison_app.py",
@@ -54,7 +56,7 @@ TEMPLATE_REGISTRY: dict[str, str] = {
 # ---------------------------------------------------------------------------
 templates_asgi = (
     marimo.create_asgi_app()
-    .with_app(path="", root=str(apps_dir / "rwa_app.py"))
+    .with_app(path="", root=str(apps_dir / "landing_app.py"))
     .with_app(path="/calculator", root=str(apps_dir / "rwa_app.py"))
     .with_app(path="/results", root=str(apps_dir / "results_explorer.py"))
     .with_app(path="/comparison", root=str(apps_dir / "comparison_app.py"))
@@ -82,9 +84,7 @@ async def list_workbooks() -> dict[str, list[str]]:
 
 
 @gateway.post("/api/workbooks/duplicate")
-async def duplicate_template(
-    template: str, name: str | None = None
-) -> dict[str, str]:
+async def duplicate_template(template: str, name: str | None = None) -> dict[str, str]:
     """Duplicate a template into the user workspace."""
     if template not in TEMPLATE_REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown template: {template}")
@@ -151,7 +151,7 @@ def main() -> None:
     )
 
     print("Templates (read-only):")
-    print("  http://localhost:8000/            (Calculator)")
+    print("  http://localhost:8000/            (Landing Page)")
     print("  http://localhost:8000/calculator  (Calculator)")
     print("  http://localhost:8000/results     (Results Explorer)")
     print("  http://localhost:8000/comparison  (Impact Analysis)")

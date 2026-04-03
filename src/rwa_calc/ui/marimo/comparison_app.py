@@ -65,6 +65,7 @@ def _(mo):
             mo.md("# RWA Calculator"),
             mo.nav_menu(
                 {
+                    "/": f"{mo.icon('home')} Home",
                     "/calculator": f"{mo.icon('calculator')} Calculator",
                     "/results": f"{mo.icon('table')} Results Explorer",
                     "/comparison": f"{mo.icon('git-compare')} Impact Analysis",

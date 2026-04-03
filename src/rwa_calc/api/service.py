@@ -40,19 +40,13 @@ class RWAService:
     for UI integration. Handles configuration setup, data loading,
     and result formatting.
 
-    IRB Permissions:
-        Two permission modes are supported, with model-level taking precedence:
-
-        1. **Model-level** (data-driven): Place a ``model_permissions.parquet``
-           file in the data directory. Each row grants IRB approval for a model_id
-           + exposure_class, optionally scoped by geography and book code
-           exclusions. Internal ratings link via ``model_id``; the rating
-           inheritance pipeline propagates this to exposures. The classifier
-           joins permissions per-exposure and gates on data availability
-           (internal_pd for FIRB, internal_pd + lgd for AIRB).
-
-        2. **Org-wide** (config-driven): Set ``irb_approach`` on the request.
-           Used as fallback when no ``model_permissions`` file is present.
+    Permission Modes:
+        - **standardised**: All exposures use SA. Model permissions ignored.
+        - **irb**: Approach routing is driven by ``model_permissions`` input data.
+          Each row grants IRB approval for a model_id + exposure_class, optionally
+          scoped by geography and book code exclusions. Exposures without a matching
+          model permission fall back to SA. If no ``model_permissions`` file exists,
+          all exposures fall back to SA with a warning.
 
     Usage:
         from rwa_calc.api import RWAService, CalculationRequest
@@ -64,7 +58,7 @@ class RWAService:
                 data_path="/path/to/data",
                 framework="CRR",
                 reporting_date=date(2024, 12, 31),
-                irb_approach="full_irb",
+                permission_mode="irb",
             )
         )
 
@@ -216,44 +210,27 @@ class RWAService:
         """
         Create CalculationConfig from request parameters.
 
-        The ``irb_approach`` on the request maps to org-wide IRBPermissions.
-        These are used as fallback when no ``model_permissions`` file exists
-        in the data directory. When model_permissions is present, the
-        classifier resolves permissions per-exposure via model_id join,
-        ignoring the org-wide setting for matched exposures.
-
         Args:
             request: CalculationRequest with parameters
 
         Returns:
             Configured CalculationConfig
         """
-        from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+        from rwa_calc.contracts.config import CalculationConfig
+        from rwa_calc.domain.enums import PermissionMode
 
-        # Determine IRB permissions from request
-        if request.irb_approach == "sa_only":
-            irb_permissions = IRBPermissions.sa_only()
-        elif request.irb_approach == "firb":
-            irb_permissions = IRBPermissions.firb_only()
-        elif request.irb_approach == "airb":
-            irb_permissions = IRBPermissions.airb_only()
-        elif request.irb_approach == "retail_airb_corporate_firb":
-            irb_permissions = IRBPermissions.retail_airb_corporate_firb()
-        elif request.irb_approach == "full_irb":
-            irb_permissions = IRBPermissions.full_irb()
-        else:
-            irb_permissions = IRBPermissions.sa_only()
+        mode = PermissionMode(request.permission_mode)
 
         if request.framework == "CRR":
             return CalculationConfig.crr(
                 reporting_date=request.reporting_date,
-                irb_permissions=irb_permissions,
+                permission_mode=mode,
                 eur_gbp_rate=request.eur_gbp_rate,
             )
         else:
             return CalculationConfig.basel_3_1(
                 reporting_date=request.reporting_date,
-                irb_permissions=irb_permissions,
+                permission_mode=mode,
             )
 
     def _create_loader(self, request: CalculationRequest) -> LoaderProtocol:
@@ -325,8 +302,7 @@ def quick_calculate(
     data_path: str | Path,
     framework: Literal["CRR", "BASEL_3_1"] = "CRR",
     reporting_date: date | None = None,
-    irb_approach: Literal["sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"]
-    | None = None,
+    permission_mode: Literal["standardised", "irb"] = "standardised",
     data_format: Literal["parquet", "csv"] = "parquet",
     cache_dir: Path | None = None,
 ) -> CalculationResponse:
@@ -339,7 +315,7 @@ def quick_calculate(
         data_path: Path to data directory
         framework: Regulatory framework
         reporting_date: As-of date (defaults to today)
-        irb_approach: IRB approach selection (default SA only)
+        permission_mode: "standardised" (all SA) or "irb" (model permissions drive routing)
         data_format: Format of input files
         cache_dir: Directory for caching results. Defaults to a temp directory.
 
@@ -355,7 +331,7 @@ def quick_calculate(
         data_path=data_path,
         framework=framework,
         reporting_date=reporting_date or date.today(),
-        irb_approach=irb_approach,
+        permission_mode=permission_mode,
         data_format=data_format,
     )
     return service.calculate(request)

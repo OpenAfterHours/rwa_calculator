@@ -38,8 +38,8 @@ import polars as pl
 import pytest
 
 import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.irb.formulas import _parametric_irb_risk_weight_expr
 
@@ -66,19 +66,19 @@ def _compute_expected_irb_rw(
 
 @pytest.fixture(scope="module")
 def b31_firb_config() -> CalculationConfig:
-    """Basel 3.1 F-IRB config with corporate F-IRB permissions."""
+    """Basel 3.1 IRB config with corporate F-IRB permissions."""
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
 @pytest.fixture(scope="module")
 def crr_firb_config() -> CalculationConfig:
-    """CRR F-IRB config for comparison."""
+    """CRR IRB config for comparison."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

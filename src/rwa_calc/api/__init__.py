@@ -18,7 +18,7 @@ Usage:
             data_path="/path/to/data",
             framework="CRR",
             reporting_date=date(2024, 12, 31),
-            irb_approach="full_irb",
+            permission_mode="irb",
         )
     )
 

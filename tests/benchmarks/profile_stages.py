@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
@@ -507,15 +508,15 @@ def main() -> None:
         raw_data = _load_synthetic_100k()
 
     # Build config
-    irb_perms = {
-        "none": IRBPermissions.sa_only(),
-        "full": IRBPermissions.full_irb(),
+    perm_mode = {
+        "none": PermissionMode.STANDARDISED,
+        "full": PermissionMode.IRB,
     }[args.irb]
 
     if args.framework == "basel31":
-        config = CalculationConfig.basel_3_1(reporting_date, irb_permissions=irb_perms)
+        config = CalculationConfig.basel_3_1(reporting_date, permission_mode=perm_mode)
     else:
-        config = CalculationConfig.crr(reporting_date, irb_permissions=irb_perms)
+        config = CalculationConfig.crr(reporting_date, permission_mode=perm_mode)
 
     print(f"Framework: {args.framework}, IRB: {args.irb}, Date: {reporting_date}")
     print(f"Running {args.runs} profiling run(s)...")

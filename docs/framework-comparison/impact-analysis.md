@@ -145,24 +145,22 @@ the Basel 3.1 pipeline at each transitional reporting date.
 
 | Year | Reporting Date | Floor % |
 |------|---------------|---------|
-| 2027 | 30 Jun 2027 | 50.0% |
-| 2028 | 30 Jun 2028 | 55.0% |
-| 2029 | 30 Jun 2029 | 60.0% |
-| 2030 | 30 Jun 2030 | 65.0% |
-| 2031 | 30 Jun 2031 | 70.0% |
-| 2032 | 30 Jun 2032 | 72.5% |
+| 2027 | 30 Jun 2027 | 60.0% |
+| 2028 | 30 Jun 2028 | 65.0% |
+| 2029 | 30 Jun 2029 | 70.0% |
+| 2030 | 30 Jun 2030 | 72.5% |
 
 ### Usage
 
 ```python
-from rwa_calc.contracts.config import IRBPermissions
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.comparison import TransitionalScheduleRunner
 
 runner = TransitionalScheduleRunner()
 
 schedule = runner.run(
     data=raw_data_bundle,
-    irb_permissions=IRBPermissions.firb_only(),
+    permission_mode=PermissionMode.IRB,
 )
 
 # Access the timeline
@@ -171,7 +169,7 @@ print(timeline)
 
 # Access individual year results
 result_2027 = schedule.yearly_results[2027]
-result_2032 = schedule.yearly_results[2032]
+result_2030 = schedule.yearly_results[2030]
 ```
 
 ### Custom Reporting Dates
@@ -179,10 +177,10 @@ result_2032 = schedule.yearly_results[2032]
 ```python
 from datetime import date
 
-# Model specific dates instead of the default 6-year schedule
+# Model specific dates instead of the default 4-year schedule
 schedule = runner.run(
     data=raw_data_bundle,
-    irb_permissions=IRBPermissions.firb_only(),
+    permission_mode=PermissionMode.IRB,
     reporting_dates=[date(2027, 12, 31), date(2030, 12, 31)],
 )
 ```

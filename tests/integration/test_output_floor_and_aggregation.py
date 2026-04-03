@@ -19,6 +19,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
@@ -36,6 +37,11 @@ from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
+from tests.fixtures.irb_test_helpers import (
+    create_firb_only_model_permissions,
+    create_full_irb_model_permissions,
+    enrich_ratings_with_model_id,
+)
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -78,9 +84,14 @@ def _make_bundle_with_ratings(
     loans: list[dict[str, Any]] | None = None,
     facilities: list[dict[str, Any]] | None = None,
     ratings: list[dict[str, Any]] | None = None,
+    model_permissions: pl.LazyFrame | None = None,
     **kwargs: Any,
 ) -> RawDataBundle:
-    """Build a RawDataBundle that includes ratings (for IRB eligibility)."""
+    """Build a RawDataBundle that includes ratings (for IRB eligibility).
+
+    When model_permissions is provided, ratings are enriched with model_id
+    so the classifier can match them against the permissions table.
+    """
     bundle = make_raw_data_bundle(
         counterparties=counterparties,
         loans=loans,
@@ -88,6 +99,8 @@ def _make_bundle_with_ratings(
         **kwargs,
     )
     ratings_lf = _rows_to_lazyframe(ratings, RATINGS_SCHEMA) if ratings else None
+    if ratings_lf is not None and model_permissions is not None:
+        ratings_lf = enrich_ratings_with_model_id(ratings_lf)
     return RawDataBundle(
         facilities=bundle.facilities,
         loans=bundle.loans,
@@ -103,7 +116,7 @@ def _make_bundle_with_ratings(
         specialised_lending=bundle.specialised_lending,
         equity_exposures=bundle.equity_exposures,
         fx_rates=bundle.fx_rates,
-        model_permissions=bundle.model_permissions,
+        model_permissions=model_permissions,
     )
 
 
@@ -165,6 +178,7 @@ class TestOutputFloor:
             counterparties=[make_counterparty(entity_type="corporate")],
             loans=[make_loan(drawn_amount=1_000_000.0)],
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         result = _run_full_pipeline(
@@ -196,6 +210,7 @@ class TestOutputFloor:
             loans=[make_loan(drawn_amount=1_000_000.0, lgd=0.30)],
             facilities=[make_facility(lgd=0.30)],
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            model_permissions=create_full_irb_model_permissions(),
         )
 
         _run_full_pipeline(
@@ -330,6 +345,7 @@ class TestSummaries:
             ratings=[
                 _make_internal_rating(counterparty_reference="CP_CORP", pd=0.02),
             ],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         result = _run_full_pipeline(
@@ -394,6 +410,7 @@ class TestSummaries:
             ratings=[
                 _make_internal_rating(counterparty_reference="CP_CORP", pd=0.02),
             ],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         result = _run_full_pipeline(
@@ -434,6 +451,7 @@ class TestSummaries:
             counterparties=[make_counterparty(entity_type="corporate")],
             loans=[make_loan(drawn_amount=1_000_000.0)],
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.02)],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         result = _run_full_pipeline(

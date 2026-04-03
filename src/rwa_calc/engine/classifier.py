@@ -570,15 +570,17 @@ class ExposureClassifier:
         Priority: AIRB > FIRB. If a model has both, AIRB wins for exposures that
         also have modelled LGD; otherwise FIRB is used if the exposure has internal_pd.
 
-        Sets: model_airb_permitted (bool), model_firb_permitted (bool)
+        Sets: model_airb_permitted (bool), model_firb_permitted (bool),
+              model_slotting_permitted (bool)
 
-        Exposures without a model_id get both flags as False (→ SA fallback).
+        Exposures without a model_id get all flags as False (→ SA fallback).
         """
         # Ensure model_id column exists on exposures
         if "model_id" not in schema_names:
             return exposures.with_columns(
                 pl.lit(False).alias("model_airb_permitted"),
                 pl.lit(False).alias("model_firb_permitted"),
+                pl.lit(False).alias("model_slotting_permitted"),
             )
 
         # Cast model_id to String to handle null-typed columns (all values null)
@@ -634,15 +636,22 @@ class ExposureClassifier:
         firb_permitted = (
             permission_valid & (pl.col("mp_approach") == ApproachType.FIRB.value)
         ).alias("_firb_match")
+        slotting_permitted = (
+            permission_valid & (pl.col("mp_approach") == ApproachType.SLOTTING.value)
+        ).alias("_slotting_match")
 
         # Add match flags then aggregate: group by all original columns,
-        # take max of the match flags (any valid AIRB/FIRB permission → True)
-        result = joined.with_columns(airb_permitted, firb_permitted)
+        # take max of the match flags (any valid AIRB/FIRB/slotting permission → True)
+        result = joined.with_columns(airb_permitted, firb_permitted, slotting_permitted)
 
         # Aggregate back to one row per exposure using .over() to avoid group_by
         result = result.with_columns(
             pl.col("_airb_match").max().over("exposure_reference").alias("model_airb_permitted"),
             pl.col("_firb_match").max().over("exposure_reference").alias("model_firb_permitted"),
+            pl.col("_slotting_match")
+            .max()
+            .over("exposure_reference")
+            .alias("model_slotting_permitted"),
         )
 
         # Drop the join columns and keep only one row per exposure
@@ -654,6 +663,7 @@ class ExposureClassifier:
                 "mp_excluded_book_codes",
                 "_airb_match",
                 "_firb_match",
+                "_slotting_match",
             )
         ).unique(subset=["exposure_reference"], keep="first")
 
@@ -690,18 +700,24 @@ class ExposureClassifier:
         if "internal_pd" not in schema_names:
             exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
 
-        sl_airb = pl.lit(
-            config.irb_permissions.is_permitted(
-                ExposureClass.SPECIALISED_LENDING,
-                ApproachType.AIRB,
+        if has_model_permissions:
+            # Model-level SL permissions: per-row flags from _resolve_model_permissions
+            sl_airb = pl.col("model_airb_permitted")
+            sl_slotting = pl.col("model_slotting_permitted")
+        else:
+            # Org-wide SL permissions from config (STD mode or IRB fallback)
+            sl_airb = pl.lit(
+                config.irb_permissions.is_permitted(
+                    ExposureClass.SPECIALISED_LENDING,
+                    ApproachType.AIRB,
+                )
             )
-        )
-        sl_slotting = pl.lit(
-            config.irb_permissions.is_permitted(
-                ExposureClass.SPECIALISED_LENDING,
-                ApproachType.SLOTTING,
+            sl_slotting = pl.lit(
+                config.irb_permissions.is_permitted(
+                    ExposureClass.SPECIALISED_LENDING,
+                    ApproachType.SLOTTING,
+                )
             )
-        )
 
         # Managed-as-retail-without-LGD must use SA
         managed_as_retail_without_lgd = (

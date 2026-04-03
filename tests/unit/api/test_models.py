@@ -56,7 +56,7 @@ class TestCalculationRequest:
             reporting_date=date(2024, 12, 31),
         )
         assert request.base_currency == "GBP"
-        assert request.irb_approach is None
+        assert request.permission_mode == "standardised"
         assert request.data_format == "parquet"
         assert request.eur_gbp_rate == Decimal("0.8732")
 

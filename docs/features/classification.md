@@ -235,16 +235,18 @@ Reclassifies exposures based on retail threshold outcomes:
 _resolve_model_permissions(exposures, model_permissions)
 ```
 
-When `model_permissions` data is provided, resolves per-exposure IRB permissions:
+When `permission_mode=PermissionMode.IRB` and `model_permissions` data is provided,
+resolves per-exposure IRB permissions:
 
 1. Joins exposures to `model_permissions` via `model_id` (propagated from internal rating via rating inheritance)
 2. Filters by `exposure_class` match
 3. Applies geography filter (`country_codes`) and book code exclusions
-4. Sets `model_airb_permitted` and `model_firb_permitted` boolean columns
-5. Exposures without `model_id` get both flags set to `False` (fall back to org-wide permissions)
+4. Sets `model_airb_permitted`, `model_firb_permitted`, and `model_slotting_permitted` boolean columns
+5. Exposures without `model_id` get all flags set to `False` (fall back to SA)
 
 When model permissions are active, Step 6 uses per-row `model_airb_permitted` /
-`model_firb_permitted` instead of org-wide `IRBPermissions`.
+`model_firb_permitted` / `model_slotting_permitted` flags exclusively. There is
+no org-wide fallback — exposures without a matching model permission use SA.
 
 See [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema) for the data schema.
 
@@ -255,9 +257,12 @@ _determine_approach_and_finalize(exposures, config, has_model_permissions)
 ```
 
 Assigns calculation approach and builds classification audit trail in a single
-`.with_columns()` call. When model permissions are present, per-row
-`model_airb_permitted` / `model_firb_permitted` flags take precedence over
-org-wide `IRBPermissions` config.
+`.with_columns()` call.
+
+When `permission_mode=PermissionMode.IRB` and model permissions are present,
+per-row `model_airb_permitted` / `model_firb_permitted` / `model_slotting_permitted`
+flags drive all approach routing. When `permission_mode=PermissionMode.STANDARDISED`,
+all exposures are assigned SA.
 
 | Condition | Approach |
 |-----------|----------|
@@ -269,9 +274,10 @@ org-wide `IRBPermissions` config.
 | Default / No IRB permission | SA |
 
 !!! note
-    "A-IRB permission" and "F-IRB permission" above refer to either org-wide
-    `IRBPermissions` or per-row model permissions when `model_permissions` data
-    is provided. See [Step 5](#step-5-resolve-model-permissions).
+    "A-IRB permission", "F-IRB permission", and "Slotting permission" above
+    refer to per-row model permission flags when `model_permissions` data is
+    provided (IRB mode). In STANDARDISED mode, all exposures use SA regardless
+    of model permissions. See [Step 5](#step-5-resolve-model-permissions).
 
 **Audit trail** — builds a classification reason string for each exposure:
 ```
@@ -305,8 +311,9 @@ The classifier adds these columns to the exposure data:
 | `is_infrastructure` | Boolean | Infrastructure lending flag |
 | `requires_fi_scalar` | Boolean | Requires 1.25x IRB correlation (from `apply_fi_scalar`) |
 | `approach` | String | Calculation approach (SA/FIRB/AIRB/SLOTTING) |
-| `firb_permitted` | Boolean | F-IRB permitted by config |
-| `airb_permitted` | Boolean | A-IRB permitted by config |
+| `model_firb_permitted` | Boolean | F-IRB permitted by model permissions |
+| `model_airb_permitted` | Boolean | A-IRB permitted by model permissions |
+| `model_slotting_permitted` | Boolean | Slotting permitted by model permissions |
 | `slotting_category` | String | Slotting category (for SL) |
 | `sl_type` | String | Specialised lending type |
 | `is_hvcre` | Boolean | High-volatility CRE flag |

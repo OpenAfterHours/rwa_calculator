@@ -24,6 +24,7 @@ from rwa_calc.domain.enums import (
     ApproachType,
     CollateralType,
     ExposureClass,
+    PermissionMode,
     RegulatoryFramework,
 )
 
@@ -469,98 +470,6 @@ class IRBPermissions:
             }
         )
 
-    @classmethod
-    def firb_only(cls) -> IRBPermissions:
-        """
-        Foundation IRB only - no AIRB permissions.
-
-        Regulatory constraints per exposure class:
-        - FIRB not permitted for retail (CRE30.1) - falls back to SA
-        - Specialised lending can use FIRB or slotting (CRE33)
-        - Equity uses SA only (IRB removed under Basel 3.1)
-        """
-        return cls(
-            permissions={
-                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA},  # FIRB not permitted for retail
-                ExposureClass.RETAIL_QRRE: {ApproachType.SA},  # FIRB not permitted for retail
-                ExposureClass.RETAIL_OTHER: {ApproachType.SA},  # FIRB not permitted for retail
-                ExposureClass.SPECIALISED_LENDING: {
-                    ApproachType.SA,
-                    ApproachType.SLOTTING,
-                    ApproachType.FIRB,
-                },
-                ExposureClass.EQUITY: {ApproachType.SA},
-            }
-        )
-
-    @classmethod
-    def airb_only(cls) -> IRBPermissions:
-        """
-        Advanced IRB only - no FIRB permissions.
-
-        Regulatory constraints per exposure class:
-        - AIRB permitted for all non-equity classes except specialised lending
-        - Specialised lending uses slotting (no AIRB - CRE33.5)
-        - Equity uses SA only (IRB removed under Basel 3.1)
-        """
-        return cls(
-            permissions={
-                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.SPECIALISED_LENDING: {
-                    ApproachType.SA,
-                    ApproachType.SLOTTING,
-                },  # No AIRB for SL
-                ExposureClass.EQUITY: {ApproachType.SA},
-            }
-        )
-
-    @classmethod
-    def retail_airb_corporate_firb(cls) -> IRBPermissions:
-        """
-        AIRB for retail, FIRB for corporate - hybrid approach.
-
-        Use when firm has:
-        - AIRB approval for retail exposures
-        - FIRB approval for corporate exposures
-        - Ability to reclassify qualifying corporates as regulatory retail
-
-        Corporates can be treated as retail (per CRR Art. 147(5)) if:
-        - Managed as part of retail pool (is_managed_as_retail=True)
-        - Aggregated exposure < EUR 1m
-        - Has internally modelled LGD
-
-        Reclassification target:
-        - With property collateral → RETAIL_MORTGAGE
-        - Without property collateral → RETAIL_OTHER
-        - NOT eligible for QRRE
-        """
-        return cls(
-            permissions={
-                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB},
-                ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.SPECIALISED_LENDING: {
-                    ApproachType.SA,
-                    ApproachType.SLOTTING,
-                    ApproachType.FIRB,
-                },
-                ExposureClass.EQUITY: {ApproachType.SA},
-            }
-        )
 
 
 @dataclass(frozen=True)
@@ -583,7 +492,7 @@ class CalculationConfig:
         output_floor: Output floor configuration
         post_model_adjustments: Post-model adjustments (Basel 3.1 only)
         retail_thresholds: Retail classification thresholds
-        irb_permissions: IRB approach permissions
+        permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
         collect_engine: Polars engine for .collect() - 'cpu' (default)
             processes in batches for lower memory usage, 'cpu' for in-memory
@@ -603,13 +512,21 @@ class CalculationConfig:
         default_factory=PostModelAdjustmentConfig.crr
     )
     retail_thresholds: RetailThresholds = field(default_factory=RetailThresholds.crr)
-    irb_permissions: IRBPermissions = field(default_factory=IRBPermissions.sa_only)
+    permission_mode: PermissionMode = PermissionMode.STANDARDISED
+    irb_permissions: IRBPermissions = field(init=False)
     equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
+
+    def __post_init__(self) -> None:
+        """Derive internal irb_permissions from permission_mode."""
+        if self.permission_mode == PermissionMode.IRB:
+            object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb())
+        else:
+            object.__setattr__(self, "irb_permissions", IRBPermissions.sa_only())
 
     @property
     def is_crr(self) -> bool:
@@ -629,7 +546,7 @@ class CalculationConfig:
     def crr(
         cls,
         reporting_date: date,
-        irb_permissions: IRBPermissions | None = None,
+        permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
         collect_engine: PolarsEngine = "cpu",
@@ -650,7 +567,7 @@ class CalculationConfig:
 
         Args:
             reporting_date: As-of date for calculation
-            irb_permissions: IRB approach permissions (optional)
+            permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
             enable_double_default: Enable double default treatment for eligible guarantees
             collect_engine: Polars engine for .collect() - 'cpu' (default)
@@ -669,7 +586,7 @@ class CalculationConfig:
             output_floor=OutputFloorConfig.crr(),
             post_model_adjustments=PostModelAdjustmentConfig.crr(),
             retail_thresholds=RetailThresholds.crr(eur_gbp_rate=eur_gbp_rate),
-            irb_permissions=irb_permissions or IRBPermissions.sa_only(),
+            permission_mode=permission_mode,
             scaling_factor=Decimal("1.06"),
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
@@ -681,7 +598,7 @@ class CalculationConfig:
     def basel_3_1(
         cls,
         reporting_date: date,
-        irb_permissions: IRBPermissions | None = None,
+        permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
@@ -696,11 +613,10 @@ class CalculationConfig:
         - Output floor (72.5%, transitional)
         - 1.06 scaling factor removed (PRA PS1/26 confirms)
         - Post-model adjustments (mortgage RW floor, PMAs)
-        - 1.06 scaling factor removed (PRA CP16/22 confirms)
 
         Args:
             reporting_date: As-of date for calculation
-            irb_permissions: IRB approach permissions (optional)
+            permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             post_model_adjustments: PMA configuration (optional, defaults to B3.1)
             collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
@@ -720,7 +636,7 @@ class CalculationConfig:
                 post_model_adjustments or PostModelAdjustmentConfig.basel_3_1()
             ),
             retail_thresholds=RetailThresholds.basel_3_1(),
-            irb_permissions=irb_permissions or IRBPermissions.sa_only(),
+            permission_mode=permission_mode,
             equity_transitional=EquityTransitionalConfig.basel_3_1(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)

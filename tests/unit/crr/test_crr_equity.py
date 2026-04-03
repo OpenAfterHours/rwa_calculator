@@ -29,7 +29,8 @@ import pytest
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.data.tables.crr_equity_rw import (
     get_equity_rw_table,
@@ -47,7 +48,7 @@ def sa_config() -> CalculationConfig:
     """SA-only configuration for testing Article 133."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
@@ -56,7 +57,7 @@ def irb_config() -> CalculationConfig:
     """IRB configuration for testing Article 155."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -584,7 +585,7 @@ class TestApproachDetermination:
         """SA_ONLY config uses Article 133 (SA approach)."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.sa_only(),
+            permission_mode=PermissionMode.STANDARDISED,
         )
         result = calculate_single_equity_exposure(
             equity_calculator,
@@ -599,10 +600,10 @@ class TestApproachDetermination:
         self,
         equity_calculator: EquityCalculator,
     ):
-        """FIRB config uses Article 155 (IRB Simple approach)."""
+        """IRB config uses Article 155 (IRB Simple approach)."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.firb_only(),
+            permission_mode=PermissionMode.IRB,
         )
         result = calculate_single_equity_exposure(
             equity_calculator,
@@ -617,10 +618,10 @@ class TestApproachDetermination:
         self,
         equity_calculator: EquityCalculator,
     ):
-        """AIRB config uses Article 155 (IRB Simple approach)."""
+        """IRB config uses Article 155 (IRB Simple approach)."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.airb_only(),
+            permission_mode=PermissionMode.IRB,
         )
         result = calculate_single_equity_exposure(
             equity_calculator,
@@ -634,10 +635,10 @@ class TestApproachDetermination:
         self,
         equity_calculator: EquityCalculator,
     ):
-        """FULL_IRB config uses Article 155 (IRB Simple approach)."""
+        """IRB config uses Article 155 (IRB Simple approach)."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
         result = calculate_single_equity_exposure(
             equity_calculator,

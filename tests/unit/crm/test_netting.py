@@ -31,8 +31,8 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CounterpartyLookup,
 )
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 
 # =============================================================================
@@ -49,7 +49,7 @@ def processor() -> CRMProcessor:
 def sa_config() -> CalculationConfig:
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
@@ -57,7 +57,7 @@ def sa_config() -> CalculationConfig:
 def firb_config() -> CalculationConfig:
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

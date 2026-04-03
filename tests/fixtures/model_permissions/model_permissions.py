@@ -4,8 +4,8 @@ Generate model permissions test fixtures for IRB approach testing.
 The output will be saved as `model_permissions.parquet` ready to get picked up
 within the wider testing process.
 
-Model permissions define per-model IRB approvals, replacing the org-wide
-IRBPermissions config with granular, data-driven approach gating. Each row
+Model permissions define per-model IRB approvals, providing granular,
+data-driven approach gating when PermissionMode.IRB is used. Each row
 grants a specific IRB model permission for an exposure class, optionally
 scoped by geography and with book code exclusions.
 

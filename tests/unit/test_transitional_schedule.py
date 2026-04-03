@@ -28,7 +28,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle, TransitionalScheduleBundle
-from rwa_calc.contracts.config import IRBPermissions
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.comparison import (
     _TRANSITIONAL_REPORTING_DATES,
     TransitionalScheduleRunner,
@@ -42,9 +42,9 @@ from rwa_calc.engine.comparison import (
 
 
 @pytest.fixture
-def irb_permissions() -> IRBPermissions:
-    """F-IRB permissions for transitional schedule tests."""
-    return IRBPermissions.firb_only()
+def permission_mode() -> PermissionMode:
+    """IRB permission mode for transitional schedule tests."""
+    return PermissionMode.IRB
 
 
 @pytest.fixture
@@ -334,22 +334,22 @@ class TestTransitionalScheduleRunner:
     Rich portfolio testing is in acceptance tests.
     """
 
-    def test_runner_returns_bundle(self, irb_permissions):
+    def test_runner_returns_bundle(self, permission_mode):
         """Runner should return a TransitionalScheduleBundle."""
         runner = TransitionalScheduleRunner()
         result = runner.run(
             data=_make_minimal_raw_data(),
-            irb_permissions=irb_permissions,
+            permission_mode=permission_mode,
             reporting_dates=[date(2027, 6, 30)],  # Single date for speed
         )
         assert isinstance(result, TransitionalScheduleBundle)
 
-    def test_runner_timeline_has_correct_columns(self, irb_permissions):
+    def test_runner_timeline_has_correct_columns(self, permission_mode):
         """Timeline should have all expected columns."""
         runner = TransitionalScheduleRunner()
         result = runner.run(
             data=_make_minimal_raw_data(),
-            irb_permissions=irb_permissions,
+            permission_mode=permission_mode,
             reporting_dates=[date(2027, 6, 30)],
         )
         df = result.timeline.collect()
@@ -367,26 +367,26 @@ class TestTransitionalScheduleRunner:
         }
         assert expected_cols == set(df.columns)
 
-    def test_runner_yearly_results_populated(self, irb_permissions):
+    def test_runner_yearly_results_populated(self, permission_mode):
         """yearly_results should contain one entry per reporting date."""
         runner = TransitionalScheduleRunner()
         dates = [date(2027, 6, 30), date(2028, 6, 30)]
         result = runner.run(
             data=_make_minimal_raw_data(),
-            irb_permissions=irb_permissions,
+            permission_mode=permission_mode,
             reporting_dates=dates,
         )
         assert 2027 in result.yearly_results
         assert 2028 in result.yearly_results
         assert isinstance(result.yearly_results[2027], AggregatedResultBundle)
 
-    def test_runner_floor_percentage_matches_schedule(self, irb_permissions):
+    def test_runner_floor_percentage_matches_schedule(self, permission_mode):
         """Floor percentage in timeline should match PRA PS1/26 schedule."""
         runner = TransitionalScheduleRunner()
         dates = [date(2027, 6, 30), date(2029, 6, 30), date(2030, 6, 30)]
         result = runner.run(
             data=_make_minimal_raw_data(),
-            irb_permissions=irb_permissions,
+            permission_mode=permission_mode,
             reporting_dates=dates,
         )
         df = result.timeline.collect()
@@ -395,25 +395,25 @@ class TestTransitionalScheduleRunner:
         assert pct_by_year[2029] == pytest.approx(0.70)
         assert pct_by_year[2030] == pytest.approx(0.725)
 
-    def test_runner_custom_dates(self, irb_permissions):
+    def test_runner_custom_dates(self, permission_mode):
         """Runner should accept custom reporting dates."""
         runner = TransitionalScheduleRunner()
         custom_dates = [date(2027, 12, 31), date(2029, 12, 31)]
         result = runner.run(
             data=_make_minimal_raw_data(),
-            irb_permissions=irb_permissions,
+            permission_mode=permission_mode,
             reporting_dates=custom_dates,
         )
         df = result.timeline.collect()
         assert df.height == 2
         assert df["year"].to_list() == [2027, 2029]
 
-    def test_runner_default_dates_produces_four_rows(self, irb_permissions):
+    def test_runner_default_dates_produces_four_rows(self, permission_mode):
         """Default dates should produce 4 timeline rows (2027-2030)."""
         runner = TransitionalScheduleRunner()
         result = runner.run(
             data=_make_minimal_raw_data(),
-            irb_permissions=irb_permissions,
+            permission_mode=permission_mode,
         )
         df = result.timeline.collect()
         assert df.height == 4

@@ -24,7 +24,8 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.irb import IRBLazyFrame  # noqa: F401 - registers namespace
 
 # =============================================================================
@@ -34,10 +35,10 @@ from rwa_calc.engine.irb import IRBLazyFrame  # noqa: F401 - registers namespace
 
 @pytest.fixture
 def crr_irb_config() -> CalculationConfig:
-    """CRR config with full IRB permissions."""
+    """CRR config with IRB permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2025, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

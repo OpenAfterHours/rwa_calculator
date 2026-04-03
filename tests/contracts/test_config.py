@@ -21,6 +21,7 @@ from rwa_calc.domain.enums import (
     ApproachType,
     CollateralType,
     ExposureClass,
+    PermissionMode,
     RegulatoryFramework,
 )
 
@@ -231,15 +232,14 @@ class TestCalculationConfig:
         with pytest.raises(AttributeError):
             config.reporting_date = date(2026, 1, 1)
 
-    def test_config_with_custom_irb_permissions(self):
-        """Configuration should accept custom IRB permissions."""
-        permissions = IRBPermissions.full_irb()
+    def test_config_with_irb_permission_mode(self):
+        """Configuration should accept IRB permission mode."""
         config = CalculationConfig.crr(
             reporting_date=date(2025, 12, 31),
-            irb_permissions=permissions,
+            permission_mode=PermissionMode.IRB,
         )
 
-        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
+        assert config.permission_mode == PermissionMode.IRB
 
     def test_get_output_floor_percentage(self):
         """get_output_floor_percentage should use reporting date."""

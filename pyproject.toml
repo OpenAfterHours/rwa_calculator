@@ -72,6 +72,7 @@ packages = ["src/rwa_calc"]
 target-version = "py313"
 line-length = 100
 src = ["src", "tests"]
+exclude = ["workbooks"]
 
 [tool.ruff.lint]
 select = [

@@ -70,9 +70,7 @@ class TestMaterialiseBarrier:
         assert df["id"].to_list() == [1, 2, 3]
         assert df["value"].to_list() == [10.0, 20.0, 30.0]
 
-    def test_streaming_mode_returns_correct_data(
-        self, streaming_config: CalculationConfig
-    ) -> None:
+    def test_streaming_mode_returns_correct_data(self, streaming_config: CalculationConfig) -> None:
         lf = _sample_lf()
         result = materialise_barrier(lf, streaming_config, "test_streaming")
         df = result.collect()
@@ -90,18 +88,14 @@ class TestMaterialiseBarrier:
         parquet_files = list(tmp_path.glob("rwa_test_spill_*.parquet"))
         assert len(parquet_files) >= 1
 
-    def test_cpu_mode_no_spill_files(
-        self, cpu_config: CalculationConfig, tmp_path: Path
-    ) -> None:
+    def test_cpu_mode_no_spill_files(self, cpu_config: CalculationConfig, tmp_path: Path) -> None:
         lf = _sample_lf()
         materialise_barrier(lf, cpu_config, "test_no_spill")
 
         parquet_files = list(tmp_path.glob("rwa_*.parquet"))
         assert len(parquet_files) == 0
 
-    def test_streaming_preserves_schema(
-        self, streaming_config: CalculationConfig
-    ) -> None:
+    def test_streaming_preserves_schema(self, streaming_config: CalculationConfig) -> None:
         lf = pl.LazyFrame(
             {
                 "str_col": ["a", "b"],
@@ -141,9 +135,7 @@ class TestMaterialiseBranches:
             pl.LazyFrame({"id": [2], "val": [20.0]}),
             pl.LazyFrame({"id": [3], "val": [30.0]}),
         ]
-        results = materialise_branches(
-            branches, cpu_config, ["sa", "irb", "slotting"]
-        )
+        results = materialise_branches(branches, cpu_config, ["sa", "irb", "slotting"])
 
         assert len(results) == 3
         assert all(isinstance(r, pl.DataFrame) for r in results)
@@ -151,17 +143,13 @@ class TestMaterialiseBranches:
         assert results[1]["id"].to_list() == [2]
         assert results[2]["id"].to_list() == [3]
 
-    def test_streaming_mode_returns_correct_data(
-        self, streaming_config: CalculationConfig
-    ) -> None:
+    def test_streaming_mode_returns_correct_data(self, streaming_config: CalculationConfig) -> None:
         branches = [
             pl.LazyFrame({"id": [1], "val": [10.0]}),
             pl.LazyFrame({"id": [2], "val": [20.0]}),
             pl.LazyFrame({"id": [3], "val": [30.0]}),
         ]
-        results = materialise_branches(
-            branches, streaming_config, ["sa", "irb", "slotting"]
-        )
+        results = materialise_branches(branches, streaming_config, ["sa", "irb", "slotting"])
 
         assert len(results) == 3
         assert results[0]["id"].to_list() == [1]

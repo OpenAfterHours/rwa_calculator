@@ -182,8 +182,12 @@
     grid-template-columns: 1fr !important;
   }
 
-  .landing-ui-section__title {
-    font-size: 1.4rem !important;
+  .landing-cta-card {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .landing-cta-card__title {
+    font-size: 1.2rem;
   }
 }
 
@@ -244,27 +248,36 @@
 }
 
 /* =========================================================================
-   Interactive UI section — CTA below features
+   Interactive UI CTA card — contained card below features
    ========================================================================= */
 
-.landing-ui-section {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+.landing-cta-card {
+  grid-column: 1 / -1;
+  padding: 2rem 2.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 145, 0, 0.2);
+  border-left: 3px solid #ff9100;
+  background: rgba(255, 145, 0, 0.04);
   text-align: center;
 }
 
-.landing-ui-section__title {
-  font-size: 1.8rem;
+[data-md-color-scheme="slate"] .landing-cta-card {
+  background: rgba(255, 145, 0, 0.06);
+  border-color: rgba(255, 145, 0, 0.25);
+  border-left-color: #ff9100;
+}
+
+.landing-cta-card__title {
+  font-size: 1.4rem;
   font-weight: 700;
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
   color: var(--md-default-fg-color);
 }
 
-.landing-ui-section__desc {
-  font-size: 1.05rem;
+.landing-cta-card__desc {
+  font-size: 0.95rem;
   line-height: 1.6;
-  margin: 0 0 2rem;
+  margin: 0 0 1.5rem;
   opacity: 0.7;
   color: var(--md-default-fg-color);
 }

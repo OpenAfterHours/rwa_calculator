@@ -96,6 +96,9 @@ uv sync
 
 # Install with development dependencies
 uv sync --all-extras
+
+# Download regulatory reference documents
+uv run python scripts/download_docs.py
 ```
 
 ## Installation with pip
@@ -191,7 +194,7 @@ rwa_calculator/
 │       └── engine/         # Calculation engines
 ├── tests/                  # Test suite
 ├── workbooks/              # Reference implementations
-├── ref_docs/               # Regulatory documents
+├── docs/assets/            # Regulatory documents (run scripts/download_docs.py)
 ├── docs/                   # This documentation
 ├── pyproject.toml          # Project configuration
 └── zensical.toml           # Documentation configuration

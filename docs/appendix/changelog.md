@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **UI**: Add template workbench — duplicate read-only template workbooks into editable user workspace with full Python and SQL support via `marimo edit`
+- **UI**: Add workspace management REST API (`/api/templates`, `/api/workbooks`, `/api/workbooks/duplicate`, `/api/workbooks/{name}`)
+- **UI**: Add "Workbench" link to sidebar navigation in all template apps
+
 ### Changed
 - **API**: Replace `RWAService` + `CalculationRequest` + `quick_calculate` + `create_service` with single `CreditRiskCalc` class. Usage: `CreditRiskCalc(data_path=..., framework=..., reporting_date=...).calculate()`. All response models (`CalculationResponse`, `SummaryStatistics`, etc.) are unchanged.
 - **Config**: Replace granular `IRBPermissions` config (with `sa_only()`, `full_irb()`, `firb_only()`, etc.) with a simple two-mode `PermissionMode` enum (`STANDARDISED` / `IRB`). The `permission_mode` parameter on `CalculationConfig.crr()` and `.basel_3_1()` replaces the old `irb_permissions` parameter. In IRB mode, `model_permissions` input data drives all approach routing (AIRB, FIRB, slotting); without it, the pipeline falls back to SA with a warning. `IRBPermissions` remains as an internal implementation detail but is no longer part of the public API.

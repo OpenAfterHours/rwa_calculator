@@ -51,13 +51,15 @@ Once started, open your browser to [http://localhost:8000](http://localhost:8000
 
 ## Available Applications
 
-The UI provides three integrated applications:
+The UI provides four integrated applications plus an editable workbench:
 
 | Application | URL | Purpose |
 |-------------|-----|---------|
 | **RWA Calculator** | `/` or `/calculator` | Run RWA calculations on your data |
 | **Results Explorer** | `/results` | Filter, aggregate, and export results |
+| **Impact Analysis** | `/comparison` | Compare CRR vs Basel 3.1 side-by-side |
 | **Framework Reference** | `/reference` | View regulatory parameters and risk weights |
+| **Workbench** | `http://localhost:8002/` | Editable workbooks — duplicate templates, write Python & SQL |
 
 ---
 
@@ -155,6 +157,51 @@ This reference is useful for:
 - Validating calculation inputs
 - Understanding regulatory differences
 - Quick lookup of risk weights and parameters
+
+---
+
+## Workbench
+
+The Workbench at [http://localhost:8002/](http://localhost:8002/) provides an editable environment for interactive analysis using Python and SQL.
+
+### How It Works
+
+The template applications (Calculator, Results Explorer, etc.) are **read-only** — you can view and interact with their outputs but cannot modify code. The Workbench lets you **duplicate** any template into your own editable workspace.
+
+### Duplicating a Template
+
+Use the REST API to duplicate a template:
+
+```bash
+# Duplicate the calculator template
+curl -X POST "http://localhost:8000/api/workbooks/duplicate?template=calculator"
+
+# Duplicate with a custom name
+curl -X POST "http://localhost:8000/api/workbooks/duplicate?template=results_explorer&name=my_analysis"
+```
+
+The response includes the URL to open the workbook in the Workbench.
+
+### Managing Workbooks
+
+```bash
+# List available templates
+curl http://localhost:8000/api/templates
+
+# List your workbooks
+curl http://localhost:8000/api/workbooks
+
+# Delete a workbook
+curl -X DELETE http://localhost:8000/api/workbooks/my_analysis
+```
+
+### Using the Workbench
+
+Once a workbook is duplicated, open it in the Workbench to:
+
+- **Edit Python cells** — modify calculations, add visualisations, explore data
+- **Add SQL cells** — query Polars DataFrames with SQL using `mo.sql()`
+- **Save changes** — workbooks persist in `workspaces/local/` across server restarts
 
 ---
 

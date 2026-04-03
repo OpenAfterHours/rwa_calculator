@@ -204,6 +204,7 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
     """
     from rwa_calc.data.tables.crr_risk_weights import (
         _create_cgcb_df,
+        _create_covered_bond_df,
         _create_institution_df,
     )
 
@@ -214,6 +215,7 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
                 ["exposure_class", "cqs", "risk_weight"]
             ),
             _create_b31_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_covered_bond_df().select(["exposure_class", "cqs", "risk_weight"]),
         ]
     )
 

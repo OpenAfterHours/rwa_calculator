@@ -390,6 +390,8 @@ class SACalculator:
                 .then(pl.lit("INSTITUTION"))
                 .when(_upper.str.contains("CORPORATE", literal=True))
                 .then(pl.lit("CORPORATE"))
+                .when(_upper.str.contains("COVERED_BOND", literal=True))
+                .then(pl.lit("COVERED_BOND"))
                 .otherwise(_upper)
                 .alias("_lookup_class"),
                 # Use -1 as sentinel for null CQS (for join matching)
@@ -544,7 +546,22 @@ class SACalculator:
                     # 10. Retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
-                    # 9. Default: CQS-based or 100%
+                    # 11. Unrated covered bonds: derive from issuer institution RW
+                    # (Art. 129(5)) — SCRA grade A=40%→20%, B=75%→35%, C=150%→100%
+                    .when(
+                        _uc.str.contains("COVERED_BOND", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(
+                        pl.when(pl.col("cp_scra_grade") == "A")
+                        .then(pl.lit(0.20))
+                        .when(pl.col("cp_scra_grade") == "B")
+                        .then(pl.lit(0.35))
+                        .when(pl.col("cp_scra_grade") == "C")
+                        .then(pl.lit(1.00))
+                        .otherwise(pl.lit(0.20))  # Default: assume Grade A
+                    )
+                    # Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
                 ]
@@ -636,7 +653,14 @@ class SACalculator:
                     # 5. Retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
-                    # 6. Default: CQS-based or 100%
+                    # 6. Unrated covered bonds: derive from issuer institution RW
+                    # (CRR Art. 129(5)) — unrated institution = 40% → covered bond = 20%
+                    .when(
+                        _uc.str.contains("COVERED_BOND", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(pl.lit(0.20))
+                    # 7. Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
                 ]

@@ -67,6 +67,7 @@ class RawDataBundle:
     ratings: pl.LazyFrame | None = None
     specialised_lending: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
+    ciu_holdings: pl.LazyFrame | None = None
     fx_rates: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
 
@@ -122,6 +123,7 @@ class ResolvedHierarchyBundle:
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
+    ciu_holdings: pl.LazyFrame | None = None
     specialised_lending: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
     hierarchy_errors: list = field(default_factory=list)
@@ -154,6 +156,7 @@ class ClassifiedExposuresBundle:
     irb_exposures: pl.LazyFrame
     slotting_exposures: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
+    ciu_holdings: pl.LazyFrame | None = None
     collateral: pl.LazyFrame | None = None
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
@@ -190,6 +193,7 @@ class CRMAdjustedBundle:
     irb_exposures: pl.LazyFrame
     slotting_exposures: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
+    ciu_holdings: pl.LazyFrame | None = None
     crm_audit: pl.LazyFrame | None = None
     collateral_allocation: pl.LazyFrame | None = None
     crm_errors: list = field(default_factory=list)

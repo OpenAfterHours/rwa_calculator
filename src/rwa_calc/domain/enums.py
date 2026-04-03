@@ -82,6 +82,9 @@ class ExposureClass(StrEnum):
     RGLA = "rgla"
     """Regional government and local authorities (CRR Art. 115)"""
 
+    COVERED_BOND = "covered_bond"
+    """Covered bonds (CRR Art. 129, PRA PS1/26 Art. 129)"""
+
     OTHER = "other"
     """Other items (CRR Art. 112(q))"""
 

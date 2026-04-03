@@ -466,6 +466,7 @@ class IRBPermissions:
                     ApproachType.AIRB,
                 },
                 ExposureClass.EQUITY: {ApproachType.SA},  # IRB for equity removed under Basel 3.1
+                ExposureClass.COVERED_BOND: {ApproachType.SA},  # SA-only (Art. 129)
             }
         )
 
@@ -494,6 +495,7 @@ class IRBPermissions:
                     ApproachType.FIRB,
                 },
                 ExposureClass.EQUITY: {ApproachType.SA},
+                ExposureClass.COVERED_BOND: {ApproachType.SA},  # SA-only (Art. 129)
             }
         )
 
@@ -521,6 +523,7 @@ class IRBPermissions:
                     ApproachType.SLOTTING,
                 },  # No AIRB for SL
                 ExposureClass.EQUITY: {ApproachType.SA},
+                ExposureClass.COVERED_BOND: {ApproachType.SA},  # SA-only (Art. 129)
             }
         )
 
@@ -559,6 +562,7 @@ class IRBPermissions:
                     ApproachType.FIRB,
                 },
                 ExposureClass.EQUITY: {ApproachType.SA},
+                ExposureClass.COVERED_BOND: {ApproachType.SA},  # SA-only (Art. 129)
             }
         )
 

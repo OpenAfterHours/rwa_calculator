@@ -116,10 +116,32 @@ EAGER ─── COLLECT #4: collect_all(3 branches) ─────────�
 
 ---
 
+## Out-of-Core Support (Implemented)
+
+All hot-path collects now go through `engine/materialise.py`, which selects strategy based on `config.collect_engine`:
+
+| Engine | `materialise_barrier()` | `materialise_branches()` |
+|--------|------------------------|--------------------------|
+| `"cpu"` | `.collect().lazy()` (original behavior) | `pl.collect_all()` with CSE |
+| `"streaming"` (default) | `sink_parquet` → `scan_parquet` (disk spill) | Sink each branch sequentially → read back |
+
+**Streaming mode** caps peak memory to approximately one column-batch at a time by spilling intermediate results to temp parquet files. This enables the pipeline to process datasets larger than available RAM.
+
+**Config options:**
+- `collect_engine: "streaming"` (default) — disk-spill for out-of-core support
+- `collect_engine: "cpu"` — in-memory collect for backward compatibility
+- `spill_dir: Path | None` — directory for temp files (default: system temp)
+
+**Fallback:** If `sink_parquet` fails for a particular expression (unsupported in streaming engine), the barrier falls back to in-memory `.collect().lazy()`.
+
+**Cleanup:** Temp files are cleaned up via `cleanup_spill_files()` in `pipeline.run_with_data()`'s `finally` block, plus an `atexit` safety net.
+
+---
+
 ## Key Takeaway
 
-**Most hot-path collects exist because of Polars optimizer limitations** (deep plan re-execution, no streaming CSE). The remaining 2 are algorithmic (graph traversal on small data). The pipeline architecture is already well-optimized — the `collect().lazy()` pattern at each barrier is the standard workaround. The realistic path forward is:
+**Most hot-path collects exist because of Polars optimizer limitations** (deep plan re-execution, no streaming CSE). The remaining 2 are algorithmic (graph traversal on small data). The materialization barriers are now strategy-aware via `engine/materialise.py`, supporting both in-memory and disk-spill modes. The realistic path forward is:
 
-1. **Short term**: Accept current architecture. The collects are well-placed and well-documented.
+1. **Short term** (done): Disk-spill materialization via `materialise_barrier` / `materialise_branches` enables out-of-core processing for any dataset size.
 2. **Medium term**: Monitor Polars' `LazyFrame.cache()` and CSE roadmap. When available, the 3 lookup collects and the pre-branch collect can likely be replaced.
 3. **Long term**: A single `collect_all()` at the output boundary becomes feasible only when Polars can handle deep plan trees with fan-out without re-execution or segfaults.

@@ -39,6 +39,7 @@ from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.materialise import materialise_barrier
 from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
@@ -378,7 +379,8 @@ class CRMProcessor:
         # Without this, _generate_netting_collateral's two-join matching and
         # apply_collateral's 3 lookup collects each re-execute the full upstream
         # plan, and the plan depth causes Polars optimizer segfaults.
-        exposures = exposures.collect().lazy()
+        # In streaming mode, spills to disk instead of loading into memory.
+        exposures = materialise_barrier(exposures, config, "crm_post_ead_fanout")
 
         # Step 3.5: Generate synthetic collateral from netting (CRR Art. 195)
         netting_collateral = collateral_mod.generate_netting_collateral(exposures)
@@ -437,7 +439,8 @@ class CRMProcessor:
         # (SA, IRB, slotting) via has_rows() and individual calculators.
         # Without this collect, the full pipeline plan is re-evaluated per
         # branch and the plan depth causes Polars optimizer segfaults.
-        exposures = exposures.collect().lazy()
+        # In streaming mode, spills to disk instead of loading into memory.
+        exposures = materialise_barrier(exposures, config, "crm_post_audit_fanout")
 
         # Split by approach for output
         sa_exposures = exposures.filter(pl.col("approach") == ApproachType.SA.value)
@@ -493,7 +496,8 @@ class CRMProcessor:
         # the full upstream plan, and the final collect re-executes it again
         # (4× total).  Collecting here means all downstream operations
         # (collateral, guarantees, finalize, audit) work on materialised data.
-        exposures = exposures.collect().lazy()
+        # In streaming mode, spills to disk instead of loading into memory.
+        exposures = materialise_barrier(exposures, config, "crm_post_ead_unified")
 
         # Generate synthetic collateral from netting (CRR Art. 195)
         netting_collateral = collateral_mod.generate_netting_collateral(exposures)
@@ -526,28 +530,26 @@ class CRMProcessor:
             has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
-            # Materialise exposures + guarantee lookup tables in parallel.
-            # The lookup LazyFrames (guarantees, counterparties, rating_inheritance)
-            # reference the original parquet scans + hierarchy joins; without
-            # materialisation, the guarantee collect re-executes the full
-            # hierarchy/rating plan for each join (~568ms → <100ms at 100K).
-            exp_df, guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
+            # Materialise exposures via barrier (disk-spill in streaming mode).
+            # Lookup tables (guarantees, counterparties, rating_inheritance)
+            # are small reference data — collect in-memory via collect_all.
+            exposures = materialise_barrier(exposures, config, "crm_pre_guarantee_unified")
+            guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
                 [
-                    exposures,
                     data.guarantees,
                     data.counterparty_lookup.counterparties,
                     data.counterparty_lookup.rating_inheritance,
                 ]
             )
             exposures = self.apply_guarantees(
-                exp_df.lazy(),
+                exposures,
                 guarantees_df.lazy(),
                 cp_lookup_df.lazy(),
                 config,
                 ri_df.lazy(),
             )
         else:
-            exposures = exposures.collect().lazy()
+            exposures = materialise_barrier(exposures, config, "crm_no_guarantee")
 
         exposures = self._finalize_ead(exposures)
         exposures = self._add_crm_audit(exposures)

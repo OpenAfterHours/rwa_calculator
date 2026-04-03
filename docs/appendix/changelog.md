@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Engine**: Add `materialise.py` module with strategy-aware materialization barriers — supports disk-spill (`sink_parquet` → `scan_parquet`) for out-of-core datasets and in-memory (`collect().lazy()`) for backward compatibility, controlled by `config.collect_engine`
+- **Config**: Add `spill_dir` field to `CalculationConfig` for configuring temp file directory during streaming materialization
+- **Tests**: Add unit tests for `materialise_barrier`, `materialise_branches`, and `cleanup_spill_files`
+
 ### Changed
 - **Data Tables**: Consolidate slotting risk weights — `engine/slotting/namespace.py` now sources all risk weights from `data/tables/` instead of defining them inline, consistent with SA/IRB/Equity engines
 - **Data Tables**: Export all 4 CRR slotting weight dicts and convenience functions from `data/tables/__init__.py` (previously only 2 of 4 were exported)

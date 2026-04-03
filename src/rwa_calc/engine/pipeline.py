@@ -53,6 +53,11 @@ from rwa_calc.contracts.protocols import (
     SACalculatorProtocol,
     SlottingCalculatorProtocol,
 )
+from rwa_calc.engine.materialise import (
+    cleanup_spill_files,
+    materialise_barrier,
+    materialise_branches,
+)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -213,53 +218,57 @@ class PipelineOrchestrator:
         # Reset errors for new run
         self._errors = []
 
-        # Ensure components are initialized (config needed for framework-specific CRM)
-        self._ensure_components_initialized(config)
+        try:
+            # Ensure components are initialized (config needed for framework-specific CRM)
+            self._ensure_components_initialized(config)
 
-        # Validate input data values
-        self._validate_input_data(data)
+            # Validate input data values
+            self._validate_input_data(data)
 
-        # Stage 2: Resolve hierarchies
-        resolved = self._run_hierarchy_resolver(data, config)
-        if resolved is None:
-            return self._create_error_result()
+            # Stage 2: Resolve hierarchies
+            resolved = self._run_hierarchy_resolver(data, config)
+            if resolved is None:
+                return self._create_error_result()
 
-        # Stage 3: Classify exposures
-        classified = self._run_classifier(resolved, config)
-        if classified is None:
-            return self._create_error_result()
+            # Stage 3: Classify exposures
+            classified = self._run_classifier(resolved, config)
+            if classified is None:
+                return self._create_error_result()
 
-        # Stage 4: Apply CRM (unified — no fan-out split)
-        crm_adjusted = self._run_crm_processor_unified(classified, config)
-        if crm_adjusted is None:
-            return self._create_error_result()
+            # Stage 4: Apply CRM (unified — no fan-out split)
+            crm_adjusted = self._run_crm_processor_unified(classified, config)
+            if crm_adjusted is None:
+                return self._create_error_result()
 
-        # Stages 5-8: Single-pass calculation and aggregation
-        result = self._run_single_pass(crm_adjusted, config)
+            # Stages 5-8: Single-pass calculation and aggregation
+            result = self._run_single_pass(crm_adjusted, config)
 
-        # Add pipeline errors to result
-        if self._errors:
-            all_errors = list(result.errors) + [
-                self._convert_pipeline_error(e) for e in self._errors
-            ]
-            result = AggregatedResultBundle(
-                results=result.results,
-                sa_results=result.sa_results,
-                irb_results=result.irb_results,
-                slotting_results=result.slotting_results,
-                equity_results=result.equity_results,
-                floor_impact=result.floor_impact,
-                supporting_factor_impact=result.supporting_factor_impact,
-                summary_by_class=result.summary_by_class,
-                summary_by_approach=result.summary_by_approach,
-                pre_crm_summary=result.pre_crm_summary,
-                post_crm_detailed=result.post_crm_detailed,
-                post_crm_summary=result.post_crm_summary,
-                el_summary=result.el_summary,
-                errors=all_errors,
-            )
+            # Add pipeline errors to result
+            if self._errors:
+                all_errors = list(result.errors) + [
+                    self._convert_pipeline_error(e) for e in self._errors
+                ]
+                result = AggregatedResultBundle(
+                    results=result.results,
+                    sa_results=result.sa_results,
+                    irb_results=result.irb_results,
+                    slotting_results=result.slotting_results,
+                    equity_results=result.equity_results,
+                    floor_impact=result.floor_impact,
+                    supporting_factor_impact=result.supporting_factor_impact,
+                    summary_by_class=result.summary_by_class,
+                    summary_by_approach=result.summary_by_approach,
+                    pre_crm_summary=result.pre_crm_summary,
+                    post_crm_detailed=result.post_crm_detailed,
+                    post_crm_summary=result.post_crm_summary,
+                    el_summary=result.el_summary,
+                    errors=all_errors,
+                )
 
-        return result
+            return result
+        finally:
+            # Clean up any temp parquet files created during materialization
+            cleanup_spill_files()
 
     # =========================================================================
     # Private Methods - Component Initialization
@@ -558,7 +567,8 @@ class PipelineOrchestrator:
             # Even though CRM now materialises inputs before guarantee joins,
             # the guarantee plan (joins + finalize + audit) is still deep enough
             # that collect_all would re-evaluate it per branch without this.
-            exposures = exposures.collect().lazy()
+            # In streaming mode, spills to disk instead of loading into memory.
+            exposures = materialise_barrier(exposures, config, "pipeline_pre_branch")
 
             # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
             if config.output_floor.enabled:
@@ -589,11 +599,13 @@ class PipelineOrchestrator:
             irb_result = self._standardize_branch_output(irb_result)
             slotting_result = self._standardize_branch_output(slotting_result)
 
-            # Collect all in parallel — CSE computes shared upstream once.
-            # Force cpu engine: streaming doesn't support CSE, so each branch
-            # would re-execute the full CRM plan independently (~9x slower).
-            sa_df, irb_df, slotting_df = pl.collect_all(
+            # Collect all branches. In cpu mode, uses collect_all with CSE so
+            # shared upstream computes once. In streaming mode, sinks each
+            # branch to disk sequentially (peak memory = 1 branch at a time).
+            sa_df, irb_df, slotting_df = materialise_branches(
                 [sa_result, irb_result, slotting_result],
+                config,
+                ["sa_branch", "irb_branch", "slotting_branch"],
             )
 
             # Equity — separate path (not in unified frame)

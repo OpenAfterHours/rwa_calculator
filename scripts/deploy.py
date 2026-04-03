@@ -253,11 +253,12 @@ Examples:
             return 1
 
     # Run tests first (unless skipped)
-    if not args.skip_tests:
-        if not run_command(["uv", "run", "pytest", "-x", "-q"], "Running tests"):
-            print("\nTests failed. Fix tests before deploying.")
-            print("Use --skip-tests to bypass (not recommended).")
-            return 1
+    if not args.skip_tests and not run_command(
+        ["uv", "run", "pytest", "-x", "-q"], "Running tests"
+    ):
+        print("\nTests failed. Fix tests before deploying.")
+        print("Use --skip-tests to bypass (not recommended).")
+        return 1
 
     # Update version in all files
     print("\nUpdating version numbers...")

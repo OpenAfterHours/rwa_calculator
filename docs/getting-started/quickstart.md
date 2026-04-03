@@ -65,7 +65,7 @@ That's it. `quick_calculate` loads your data, runs the full pipeline, and return
 
 ### More Control with RWAService
 
-For more control over framework, IRB approach, and reporting date, use `RWAService`:
+For more control over framework, permission mode, and reporting date, use `RWAService`:
 
 ```python
 from datetime import date
@@ -78,7 +78,7 @@ response = service.calculate(
         data_path="/path/to/data",
         framework="CRR",
         reporting_date=date(2026, 12, 31),
-        irb_approach="full_irb",
+        permission_mode="irb",
     )
 )
 
@@ -114,7 +114,7 @@ def calculate_rwa():
         data_path="/path/to/data",
         framework="CRR",
         reporting_date=date(2026, 12, 31),
-        irb_approach="full_irb",
+        permission_mode="irb",
     )
 
     # Run calculation
@@ -228,12 +228,12 @@ from rwa_calc.api import quick_calculate
 # CRR with default settings
 response = quick_calculate("/path/to/data", framework="CRR")
 
-# CRR with specific IRB approach
+# CRR with IRB routing (requires model_permissions input data)
 response = quick_calculate(
     "/path/to/data",
     framework="CRR",
     reporting_date=date(2026, 12, 31),
-    irb_approach="full_irb",
+    permission_mode="irb",
 )
 ```
 
@@ -249,15 +249,17 @@ response = quick_calculate(
 )
 ```
 
-### IRB Approach Options
+### Permission Mode
 
 | Value | Description |
 |-------|-------------|
-| `"sa_only"` | Standardised Approach only (default) |
-| `"firb"` | Foundation IRB where permitted |
-| `"airb"` | Advanced IRB where permitted |
-| `"full_irb"` | Both FIRB and AIRB (AIRB preferred) |
-| `"retail_airb_corporate_firb"` | A-IRB for retail, F-IRB for corporate |
+| `"standardised"` | All exposures use the Standardised Approach (default) |
+| `"irb"` | Approach routing is driven by `model_permissions` input data. Each model's approved approach (AIRB, FIRB, slotting) is resolved per-exposure. Exposures without a matching model permission fall back to SA. |
+
+!!! note "Model permissions required for IRB mode"
+    When `permission_mode="irb"`, provide a `model_permissions` input table to control
+    which exposures use FIRB, AIRB, or slotting. Without it, all exposures fall back to SA
+    with a warning. See [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema).
 
 ## Understanding Results
 

@@ -23,9 +23,7 @@ def quick_calculate(
     data_path: str | Path,
     framework: Literal["CRR", "BASEL_3_1"] = "CRR",
     reporting_date: date | None = None,
-    irb_approach: Literal[
-        "sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"
-    ] | None = None,
+    permission_mode: Literal["standardised", "irb"] = "standardised",
     data_format: Literal["parquet", "csv"] = "parquet",
     cache_dir: Path | None = None,
 ) -> CalculationResponse
@@ -38,7 +36,7 @@ def quick_calculate(
 | `data_path` | `str \| Path` | *required* | Path to directory containing input data files |
 | `framework` | `"CRR" \| "BASEL_3_1"` | `"CRR"` | Regulatory framework |
 | `reporting_date` | `date \| None` | today | As-of date for the calculation |
-| `irb_approach` | `str \| None` | `None` (SA only) | IRB approach selection |
+| `permission_mode` | `"standardised" \| "irb"` | `"standardised"` | Permission mode: SA-only or IRB with model permissions |
 | `data_format` | `"parquet" \| "csv"` | `"parquet"` | Format of input files |
 | `cache_dir` | `Path \| None` | temp dir | Directory for caching result parquet files |
 
@@ -56,7 +54,7 @@ response = quick_calculate(
     "/data/exposures",
     framework="BASEL_3_1",
     reporting_date=date(2027, 1, 1),
-    irb_approach="full_irb",
+    permission_mode="irb",
 )
 
 # CSV input
@@ -175,7 +173,7 @@ request = CalculationRequest(
     data_path="/path/to/data",
     framework="CRR",
     reporting_date=date(2026, 12, 31),
-    irb_approach="full_irb",
+    permission_mode="irb",
 )
 ```
 
@@ -185,26 +183,24 @@ request = CalculationRequest(
 | `framework` | `"CRR" \| "BASEL_3_1"` | *required* | Regulatory framework |
 | `reporting_date` | `date` | *required* | As-of date for calculation |
 | `base_currency` | `str` | `"GBP"` | Reporting currency |
-| `irb_approach` | `str \| None` | `None` | IRB approach (see table below) |
+| `permission_mode` | `"standardised" \| "irb"` | `"standardised"` | Permission mode (see table below) |
 | `data_format` | `"parquet" \| "csv"` | `"parquet"` | Input file format |
 | `eur_gbp_rate` | `Decimal` | `0.8732` | EUR/GBP exchange rate |
 
-**IRB approach options:**
+**Permission mode options:**
 
 | Value | Description |
 |-------|-------------|
-| `None` / `"sa_only"` | Standardised Approach only |
-| `"firb"` | Foundation IRB where permitted |
-| `"airb"` | Advanced IRB where permitted |
-| `"full_irb"` | Both FIRB and AIRB (AIRB preferred) |
-| `"retail_airb_corporate_firb"` | A-IRB for retail, F-IRB for corporate |
+| `"standardised"` | All exposures use the Standardised Approach (default) |
+| `"irb"` | Approach routing is driven by the `model_permissions` input table. Each model's approved approach (AIRB, FIRB, slotting) is resolved per-exposure. Exposures without a matching model permission fall back to SA. |
 
-!!! note "Model-level permissions"
-    If `config/model_permissions.parquet` exists in `data_path`, per-model permissions
-    take precedence over `irb_approach`. Models are linked to counterparties via
-    `model_id` on the **ratings schema** (not the counterparty schema). The rating
-    inheritance pipeline flows `model_id` through to exposures. Exposures without a
-    `model_id` fall back to the org-wide `irb_approach` setting. See
+!!! note "Model permissions required for IRB mode"
+    When `permission_mode="irb"`, the calculator requires `model_permissions` input data
+    to determine which exposures use FIRB, AIRB, or slotting. Models are linked to
+    counterparties via `model_id` on the **ratings schema**. The rating inheritance
+    pipeline flows `model_id` through to exposures. Exposures without a matching model
+    permission fall back to SA. If no `model_permissions` file is provided, all exposures
+    fall back to SA with a warning. See
     [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema)
     for the schema.
 
@@ -406,7 +402,7 @@ response = service.calculate(
 from pathlib import Path
 from rwa_calc.api import quick_calculate
 
-response = quick_calculate("/data/exposures", irb_approach="full_irb")
+response = quick_calculate("/data/exposures", permission_mode="irb")
 
 if response.success:
     response.to_parquet(Path("output/parquet/"))
@@ -425,14 +421,14 @@ crr = quick_calculate(
     "/data/exposures",
     framework="CRR",
     reporting_date=date(2026, 12, 31),
-    irb_approach="full_irb",
+    permission_mode="irb",
 )
 
 b31 = quick_calculate(
     "/data/exposures",
     framework="BASEL_3_1",
     reporting_date=date(2027, 1, 1),
-    irb_approach="full_irb",
+    permission_mode="irb",
 )
 
 if crr.success and b31.success:

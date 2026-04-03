@@ -37,7 +37,7 @@ response = service.calculate(
         data_path="/path/to/data",
         framework="CRR",
         reporting_date=date(2026, 12, 31),
-        irb_approach="full_irb",
+        permission_mode="irb",
     )
 )
 

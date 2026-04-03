@@ -57,6 +57,62 @@ config = CalculationConfig.basel_3_1(
 )
 ```
 
+## Permission Mode
+
+The `permission_mode` parameter controls whether exposures are calculated using the
+Standardised Approach (SA) or routed to IRB based on model-level permissions.
+
+### Standardised Mode (Default)
+
+```python
+from datetime import date
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
+
+# All exposures use SA — this is the default
+config = CalculationConfig.crr(
+    reporting_date=date(2026, 12, 31),
+    permission_mode=PermissionMode.STANDARDISED,
+)
+```
+
+### IRB Mode
+
+In IRB mode, approach routing is driven by the `model_permissions` input table. Each
+model's approved approach (AIRB, FIRB, slotting) is resolved per-exposure. Exposures
+without a matching model permission fall back to SA.
+
+```python
+# IRB routing — requires model_permissions input data
+config = CalculationConfig.crr(
+    reporting_date=date(2026, 12, 31),
+    permission_mode=PermissionMode.IRB,
+)
+```
+
+| Mode | Behaviour |
+|------|-----------|
+| `PermissionMode.STANDARDISED` | All exposures use the Standardised Approach. No IRB routing. |
+| `PermissionMode.IRB` | Approach routing is driven by the `model_permissions` input table. Exposures without a matching model permission fall back to SA. If no `model_permissions` file is provided, all exposures fall back to SA with a warning. |
+
+When using the Service API, pass the string values `"standardised"` or `"irb"`:
+
+```python
+from rwa_calc.api import quick_calculate
+
+# SA-only (default)
+response = quick_calculate("/path/to/data")
+
+# IRB mode
+response = quick_calculate("/path/to/data", permission_mode="irb")
+```
+
+!!! note "Model permissions required for IRB mode"
+    When using IRB mode, provide a `model_permissions` input table to control which
+    exposures use FIRB, AIRB, or slotting. Without it, all exposures fall back to SA
+    with a warning. See
+    [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema).
+
 ## Configuration Parameters
 
 ### Common Parameters
@@ -64,6 +120,7 @@ config = CalculationConfig.basel_3_1(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `reporting_date` | `date` | Required | Calculation reference date |
+| `permission_mode` | `PermissionMode` | `STANDARDISED` | SA-only or IRB with model permissions |
 | `eur_gbp_rate` | `Decimal` | 0.88 | EUR to GBP conversion rate |
 
 ### CRR-Specific Parameters

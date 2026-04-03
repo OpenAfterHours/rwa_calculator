@@ -392,7 +392,7 @@ CORRELATION_PARAMETER_SCHEMA = {
 MODEL_PERMISSIONS_SCHEMA = {
     "model_id": pl.String,  # Unique model identifier (e.g., "UK_CORP_PD_01")
     "exposure_class": pl.String,  # ExposureClass value this permission covers
-    "approach": pl.String,  # "foundation_irb" or "advanced_irb"
+    "approach": pl.String,  # "foundation_irb", "advanced_irb", or "slotting"
     "country_codes": pl.String,  # Comma-separated ISO codes, null = all geographies
     "excluded_book_codes": pl.String,  # Comma-separated book codes to exclude, null = none
 }
@@ -483,7 +483,7 @@ VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 
-VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb"}
+VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting"}
 
 # Registry: maps table_name -> {column_name -> valid_values_set}
 # Used by validate_bundle_values() for input validation.

@@ -786,7 +786,7 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 
 ## Model Permissions Schema
 
-**Purpose:** Defines per-model IRB approach permissions, enabling granular control over which exposures can use FIRB or AIRB. When provided, model permissions take precedence over org-wide `IRBPermissions` config. When absent, the calculator falls back to org-wide permissions.
+**Purpose:** Defines per-model IRB approach permissions, enabling granular control over which exposures can use FIRB, AIRB, or slotting. When `permission_mode=PermissionMode.IRB`, model permissions drive all approach routing. When absent in IRB mode, the pipeline falls back to SA for all exposures with a warning.
 
 **Why model-level permissions matter:** Banks typically have multiple IRB models, each approved for specific exposure classes, geographies, and portfolios. This schema allows the calculator to resolve the correct approach per-exposure based on the model it belongs to, rather than applying a single org-wide permission.
 
@@ -796,7 +796,7 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 |--------|------|----------|-------------|
 | `model_id` | `String` | Yes | Unique model identifier (e.g., `"UK_CORP_PD_01"`) — referenced by `model_id` on internal ratings |
 | `exposure_class` | `String` | Yes | ExposureClass value this permission covers (e.g., `"corporate"`, `"institution"`) |
-| `approach` | `String` | Yes | Approved approach: `"foundation_irb"` or `"advanced_irb"` |
+| `approach` | `String` | Yes | Approved approach: `"foundation_irb"`, `"advanced_irb"`, or `"slotting"` |
 | `country_codes` | `String` | No | Comma-separated ISO country codes where this permission applies. Null = all geographies. |
 | `excluded_book_codes` | `String` | No | Comma-separated book codes excluded from this permission. Null = no exclusions. |
 
@@ -812,6 +812,7 @@ Exposures are aggregated to the group level for retail eligibility (threshold: E
 | FIRB permission + `internal_pd` + no `lgd` | **F-IRB** (uses regulatory LGD floors) |
 | Both AIRB + FIRB permissions + `internal_pd` + `lgd` | **A-IRB** (higher approach wins) |
 | Both AIRB + FIRB permissions + `internal_pd` + no `lgd` | **F-IRB** (fallback) |
+| Slotting permission + `internal_pd` | **Slotting** |
 | No `model_id` on internal rating | **SA** (default) |
 
 **Example:**

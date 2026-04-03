@@ -138,11 +138,12 @@ def b31_calculation_config():
     Uses SA-only permissions for B31-A acceptance tests.
     Reporting date set to mid-2030 for fully-phased output floor (72.5%).
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.basel_3_1(
         reporting_date=date(2030, 6, 30),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
@@ -154,11 +155,12 @@ def b31_irb_calculation_config():
     Used for output floor tests (B31-F) with fully-phased 72.5% floor.
     Reporting date set to 2032 to ensure full phase-in.
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.basel_3_1(
         reporting_date=date(2032, 6, 30),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -176,11 +178,12 @@ def b31_firb_calculation_config():
     - Scaling factor: 1.0 (was 1.06)
     - Supporting factor: disabled
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -197,19 +200,12 @@ def b31_slotting_calculation_config():
     - PF pre-operational: higher weights (80/100/120/350 vs 70/90/115/250)
     - HVCRE weights unchanged
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-    from rwa_calc.domain.enums import ApproachType, ExposureClass
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30),
-        irb_permissions=IRBPermissions(
-            permissions={
-                ExposureClass.SPECIALISED_LENDING: {
-                    ApproachType.SA,
-                    ApproachType.SLOTTING,
-                },
-            }
-        ),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -220,11 +216,12 @@ def b31_irb_transitional_config():
 
     Used for transitional output floor tests (60% floor in 2027).
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -343,11 +340,10 @@ def assert_supporting_factor_match(
 @pytest.fixture(scope="session")
 def raw_data_bundle(load_test_fixtures):
     """
-    Convert test fixtures to RawDataBundle for pipeline processing.
+    Convert test fixtures to RawDataBundle for SA pipeline processing.
 
     Uses the same fixtures as CRR tests — the difference is the framework config.
-    This validates that the same portfolio produces different (correct) results
-    under each framework.
+    No model_permissions needed for SA-only tests.
     """
     from rwa_calc.contracts.bundles import RawDataBundle
 
@@ -366,6 +362,69 @@ def raw_data_bundle(load_test_fixtures):
         org_mappings=fixtures.org_mappings,
         lending_mappings=fixtures.lending_mappings,
         specialised_lending=fixtures.specialised_lending,
+    )
+
+
+@pytest.fixture(scope="session")
+def irb_raw_data_bundle(load_test_fixtures):
+    """
+    Convert test fixtures to RawDataBundle with model permissions for IRB testing.
+
+    Enriches internal ratings with model_id and creates full-coverage
+    model_permissions so the pipeline routes exposures to IRB approaches.
+    """
+    from rwa_calc.contracts.bundles import RawDataBundle
+
+    from tests.fixtures.irb_test_helpers import (
+        create_full_irb_model_permissions,
+        enrich_ratings_with_model_id,
+    )
+
+    fixtures = load_test_fixtures
+
+    return _make_irb_bundle(fixtures, create_full_irb_model_permissions())
+
+
+@pytest.fixture(scope="session")
+def firb_raw_data_bundle(load_test_fixtures):
+    """RawDataBundle with FIRB-only model permissions (no AIRB)."""
+    from tests.fixtures.irb_test_helpers import (
+        create_firb_only_model_permissions,
+    )
+
+    return _make_irb_bundle(load_test_fixtures, create_firb_only_model_permissions())
+
+
+@pytest.fixture(scope="session")
+def slotting_raw_data_bundle(load_test_fixtures):
+    """RawDataBundle with slotting-only model permissions."""
+    from tests.fixtures.irb_test_helpers import (
+        create_slotting_only_model_permissions,
+    )
+
+    return _make_irb_bundle(load_test_fixtures, create_slotting_only_model_permissions())
+
+
+def _make_irb_bundle(fixtures, model_permissions):
+    """Build RawDataBundle with enriched ratings and given model_permissions."""
+    from rwa_calc.contracts.bundles import RawDataBundle
+
+    from tests.fixtures.irb_test_helpers import enrich_ratings_with_model_id
+
+    return RawDataBundle(
+        facilities=fixtures.facilities,
+        loans=fixtures.loans,
+        contingents=fixtures.contingents,
+        counterparties=fixtures.counterparties,
+        collateral=fixtures.collateral,
+        guarantees=fixtures.guarantees,
+        provisions=fixtures.provisions,
+        ratings=enrich_ratings_with_model_id(fixtures.ratings),
+        facility_mappings=fixtures.facility_mappings,
+        org_mappings=fixtures.org_mappings,
+        lending_mappings=fixtures.lending_mappings,
+        specialised_lending=fixtures.specialised_lending,
+        model_permissions=model_permissions,
     )
 
 
@@ -397,7 +456,7 @@ def sa_results_df(pipeline_results) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def irb_pipeline_results(raw_data_bundle, b31_irb_calculation_config):
+def irb_pipeline_results(irb_raw_data_bundle, b31_irb_calculation_config):
     """
     Run all fixtures through the Basel 3.1 pipeline with full IRB permissions.
 
@@ -406,7 +465,7 @@ def irb_pipeline_results(raw_data_bundle, b31_irb_calculation_config):
     from rwa_calc.engine.pipeline import PipelineOrchestrator
 
     pipeline = PipelineOrchestrator()
-    return pipeline.run_with_data(raw_data_bundle, b31_irb_calculation_config)
+    return pipeline.run_with_data(irb_raw_data_bundle, b31_irb_calculation_config)
 
 
 @pytest.fixture(scope="session")
@@ -424,7 +483,7 @@ def irb_only_results_df(irb_pipeline_results) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def firb_pipeline_results(raw_data_bundle, b31_firb_calculation_config):
+def firb_pipeline_results(firb_raw_data_bundle, b31_firb_calculation_config):
     """
     Run all fixtures through the Basel 3.1 pipeline with F-IRB only permissions.
 
@@ -433,7 +492,7 @@ def firb_pipeline_results(raw_data_bundle, b31_firb_calculation_config):
     from rwa_calc.engine.pipeline import PipelineOrchestrator
 
     pipeline = PipelineOrchestrator()
-    return pipeline.run_with_data(raw_data_bundle, b31_firb_calculation_config)
+    return pipeline.run_with_data(firb_raw_data_bundle, b31_firb_calculation_config)
 
 
 @pytest.fixture(scope="session")
@@ -445,7 +504,7 @@ def firb_results_df(firb_pipeline_results) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def transitional_pipeline_results(raw_data_bundle, b31_irb_transitional_config):
+def transitional_pipeline_results(irb_raw_data_bundle, b31_irb_transitional_config):
     """
     Run all fixtures through the Basel 3.1 pipeline with 2027 transitional floor.
 
@@ -454,7 +513,7 @@ def transitional_pipeline_results(raw_data_bundle, b31_irb_transitional_config):
     from rwa_calc.engine.pipeline import PipelineOrchestrator
 
     pipeline = PipelineOrchestrator()
-    return pipeline.run_with_data(raw_data_bundle, b31_irb_transitional_config)
+    return pipeline.run_with_data(irb_raw_data_bundle, b31_irb_transitional_config)
 
 
 @pytest.fixture(scope="session")
@@ -476,7 +535,7 @@ def airb_results_df(transitional_pipeline_results) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def slotting_pipeline_results(raw_data_bundle, b31_slotting_calculation_config):
+def slotting_pipeline_results(slotting_raw_data_bundle, b31_slotting_calculation_config):
     """
     Run all fixtures through the Basel 3.1 pipeline with Slotting permissions.
 
@@ -485,7 +544,7 @@ def slotting_pipeline_results(raw_data_bundle, b31_slotting_calculation_config):
     from rwa_calc.engine.pipeline import PipelineOrchestrator
 
     pipeline = PipelineOrchestrator()
-    return pipeline.run_with_data(raw_data_bundle, b31_slotting_calculation_config)
+    return pipeline.run_with_data(slotting_raw_data_bundle, b31_slotting_calculation_config)
 
 
 @pytest.fixture(scope="session")

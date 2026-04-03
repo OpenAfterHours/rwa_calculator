@@ -1181,21 +1181,19 @@ class CapitalImpactAnalyzer:
 
 ```python
 class TransitionalScheduleRunner:
-    """Model the output floor phase-in across 2027-2032.
+    """Model the output floor phase-in across 2027-2030.
 
-    Output floor percentages:
-    - 2027: 50%
-    - 2028: 55%
-    - 2029: 60%
-    - 2030: 65%
-    - 2031: 70%
-    - 2032+: 72.5%
+    Output floor percentages (PRA PS1/26 Art. 92(5)):
+    - 2027: 60%
+    - 2028: 65%
+    - 2029: 70%
+    - 2030+: 72.5%
     """
 
     def run(
         self,
         data: RawDataBundle,
-        irb_permissions: IRBPermissions,
+        permission_mode: PermissionMode = PermissionMode.IRB,
         reporting_dates: list[date] | None = None,
     ) -> TransitionalScheduleBundle:
         """
@@ -1203,9 +1201,10 @@ class TransitionalScheduleRunner:
 
         Args:
             data: Raw data bundle.
-            irb_permissions: IRB permissions configuration.
+            permission_mode: STANDARDISED or IRB (defaults to IRB for
+                transitional analysis).
             reporting_dates: Optional custom reporting dates.
-                Defaults to 2027-06-30 through 2032-06-30.
+                Defaults to 2027-06-30 through 2030-06-30.
 
         Returns:
             TransitionalScheduleBundle with year-by-year floor impact timeline.
@@ -1220,6 +1219,7 @@ from rwa_calc.engine.comparison import (
     CapitalImpactAnalyzer,
     TransitionalScheduleRunner,
 )
+from rwa_calc.domain.enums import PermissionMode
 
 # Dual-framework comparison
 runner = DualFrameworkRunner()
@@ -1231,7 +1231,7 @@ impact = analyzer.analyze(comparison)
 
 # Transitional schedule
 schedule_runner = TransitionalScheduleRunner()
-schedule = schedule_runner.run(data, irb_permissions)
+schedule = schedule_runner.run(data, PermissionMode.IRB)
 ```
 
 ## FX Converter

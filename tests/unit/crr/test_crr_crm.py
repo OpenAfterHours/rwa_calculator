@@ -20,8 +20,8 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm import (
     CRMProcessor,
     HaircutCalculator,
@@ -58,10 +58,10 @@ def crr_config() -> CalculationConfig:
 
 @pytest.fixture
 def crr_config_with_irb() -> CalculationConfig:
-    """Return a CRR configuration with full IRB permissions."""
+    """Return a CRR configuration with IRB permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

@@ -54,30 +54,21 @@ class CalculationRequest(BaseRequest):
         framework: Regulatory framework ("CRR" or "BASEL_3_1")
         reporting_date: As-of date for the calculation
         base_currency: Currency for reporting (default GBP)
-        irb_approach: IRB approach selection (org-wide fallback)
-            - "sa_only": Standardised only, no IRB
-            - "firb": Foundation IRB where permitted
-            - "airb": Advanced IRB where permitted
-            - "full_irb": Both FIRB and AIRB permitted (AIRB preferred)
+        permission_mode: "standardised" (all SA) or "irb" (model permissions drive routing)
         data_format: Format of input files ("parquet" or "csv")
         eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
 
-    IRB Permissions Precedence:
-        Model-level permissions (from ``model_permissions.parquet`` in data_path)
-        take precedence over the org-wide ``irb_approach`` setting. When
-        ``model_permissions`` is present in the data directory, internal ratings
-        with a ``model_id`` have their model's approved approach resolved onto
-        exposures. Exposures without a ``model_id`` (or without a matching
-        permission) fall back to SA. When no ``model_permissions`` file exists,
-        the ``irb_approach`` parameter controls permissions org-wide.
+    When ``permission_mode`` is ``"irb"``, approach routing is driven by the
+    ``model_permissions`` input table. Each model's approved approach (AIRB,
+    FIRB, slotting) is resolved per-exposure. Exposures without a matching
+    model permission fall back to SA. If no ``model_permissions`` file exists,
+    all exposures fall back to SA with a warning.
     """
 
     framework: Literal["CRR", "BASEL_3_1"]
     reporting_date: date
     base_currency: str = "GBP"
-    irb_approach: (
-        Literal["sa_only", "firb", "airb", "full_irb", "retail_airb_corporate_firb"] | None
-    ) = None
+    permission_mode: Literal["standardised", "irb"] = "standardised"
     data_format: Literal["parquet", "csv"] = "parquet"
     eur_gbp_rate: Decimal = field(default_factory=lambda: Decimal("0.8732"))
 

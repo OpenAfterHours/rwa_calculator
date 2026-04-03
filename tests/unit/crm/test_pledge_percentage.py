@@ -22,7 +22,8 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.crm.processor import (
     CRMProcessor,
     _build_exposure_lookups,
@@ -46,7 +47,7 @@ def sa_config() -> CalculationConfig:
     """SA-only CRR config."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
@@ -55,7 +56,7 @@ def firb_config() -> CalculationConfig:
     """F-IRB CRR config."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

@@ -125,16 +125,13 @@ def _(mo, project_root):
 
 @app.cell
 def _(date, mo):
-    irb_approach_dropdown = mo.ui.dropdown(
+    permission_mode_dropdown = mo.ui.dropdown(
         options={
-            "SA Only (No IRB)": "sa_only",
-            "Foundation IRB (F-IRB)": "firb",
-            "Advanced IRB (A-IRB)": "airb",
-            "Full IRB (A-IRB preferred)": "full_irb",
-            "Retail A-IRB / Corporate F-IRB": "retail_airb_corporate_firb",
+            "Standardised (All SA)": "standardised",
+            "IRB (Model Permissions)": "irb",
         },
-        value="Foundation IRB (F-IRB)",
-        label="IRB Approach",
+        value="IRB (Model Permissions)",
+        label="Permission Mode",
     )
 
     format_dropdown = mo.ui.dropdown(
@@ -150,12 +147,12 @@ def _(date, mo):
 
     mo.output.replace(
         mo.hstack(
-            [irb_approach_dropdown, format_dropdown, reporting_date_input],
+            [permission_mode_dropdown, format_dropdown, reporting_date_input],
             justify="start",
             gap=2,
         )
     )
-    return (format_dropdown, irb_approach_dropdown, reporting_date_input)
+    return (format_dropdown, permission_mode_dropdown, reporting_date_input)
 
 
 # =============================================================================
@@ -239,7 +236,7 @@ def _(
     Path,
     data_path_input,
     format_dropdown,
-    irb_approach_dropdown,
+    permission_mode_dropdown,
     mo,
     reporting_date_input,
     run_button,
@@ -253,7 +250,8 @@ def _(
 
     if run_button.value:
         try:
-            from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+            from rwa_calc.contracts.config import CalculationConfig
+            from rwa_calc.domain.enums import PermissionMode
             from rwa_calc.engine.comparison import (
                 CapitalImpactAnalyzer,
                 DualFrameworkRunner,
@@ -270,20 +268,7 @@ def _(
 
             raw_data = loader.load()
 
-            # Resolve IRB permissions
-            irb_approach = irb_approach_dropdown.value
-            if irb_approach == "sa_only":
-                irb_perms = IRBPermissions.sa_only()
-            elif irb_approach == "firb":
-                irb_perms = IRBPermissions.firb_only()
-            elif irb_approach == "airb":
-                irb_perms = IRBPermissions.airb_only()
-            elif irb_approach == "retail_airb_corporate_firb":
-                irb_perms = IRBPermissions.retail_airb_corporate_firb()
-            elif irb_approach == "full_irb":
-                irb_perms = IRBPermissions.full_irb()
-            else:
-                irb_perms = IRBPermissions.sa_only()
+            mode = PermissionMode(permission_mode_dropdown.value)
 
             rd = reporting_date_input.value
             if not isinstance(rd, date_type):
@@ -292,12 +277,12 @@ def _(
             # Create configs for both frameworks
             crr_config = CalculationConfig.crr(
                 reporting_date=rd,
-                irb_permissions=irb_perms,
+                permission_mode=mode,
                 eur_gbp_rate=Decimal("0.8732"),
             )
             b31_config = CalculationConfig.basel_3_1(
                 reporting_date=rd,
-                irb_permissions=irb_perms,
+                permission_mode=mode,
             )
 
             # M3.1: Run dual-framework comparison
@@ -309,9 +294,9 @@ def _(
             impact_bundle = analyzer.analyze(comparison_bundle)
 
             # M3.3: Transitional floor schedule (only if IRB is enabled)
-            if irb_approach != "sa_only":
+            if mode == PermissionMode.IRB:
                 schedule_runner = TransitionalScheduleRunner()
-                schedule_bundle = schedule_runner.run(raw_data, irb_perms)
+                schedule_bundle = schedule_runner.run(raw_data, mode)
 
         except Exception as e:
             run_error = str(e)

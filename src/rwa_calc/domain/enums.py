@@ -362,47 +362,28 @@ class RiskType(StrEnum):
     """
 
 
-class IRBApproachOption(StrEnum):
+class PermissionMode(StrEnum):
     """
-    User-selectable IRB approach options.
+    High-level permission mode for the calculation.
 
-    Determines which IRB approaches are permitted for the calculation.
-    """
+    Controls whether the firm uses the Standardised Approach for all exposures
+    or routes exposures to IRB based on model-level permissions.
 
-    SA_ONLY = "sa_only"
-    """Standardised Approach only - no IRB permissions"""
-
-    FIRB = "firb"
-    """
-    Foundation IRB permitted (where regulatory allowed).
-
-    - Retail classes fall back to SA (FIRB not permitted for retail)
-    - Specialised lending can use FIRB or slotting
+    When IRB is selected, approach routing is driven entirely by the
+    ``model_permissions`` input table — each model's approved approach
+    (AIRB, FIRB, slotting) is resolved per-exposure. Exposures without
+    a matching model permission fall back to SA.
     """
 
-    AIRB = "airb"
-    """
-    Advanced IRB permitted (where regulatory allowed).
+    STANDARDISED = "standardised"
+    """All exposures use the Standardised Approach."""
 
-    - Specialised lending uses slotting (AIRB not permitted)
+    IRB = "irb"
     """
+    IRB approaches permitted, driven by model-level permissions.
 
-    FULL_IRB = "full_irb"
-    """
-    Full IRB permissions (FIRB and AIRB).
-
-    - AIRB takes precedence when both are permitted
-    """
-
-    RETAIL_AIRB_CORPORATE_FIRB = "retail_airb_corporate_firb"
-    """
-    Hybrid approach: AIRB for retail and FIRB for corporate.
-
-    Corporates can be reclassified to retail if:
-    - Managed as part of retail pool (is_managed_as_retail=True)
-    - Aggregated exposure < EUR 1m
-    - Has internally modelled LGD
-    With property collateral → RETAIL_MORTGAGE, otherwise → RETAIL_OTHER
+    Requires ``model_permissions`` input data. Without it, all exposures
+    fall back to SA with a warning.
     """
 
 

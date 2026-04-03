@@ -23,9 +23,9 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import RATINGS_SCHEMA
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
@@ -346,7 +346,7 @@ class TestIRBBranch:
         # Basel 3.1 FIRB pipeline
         b31_firb_config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 15),
-            irb_permissions=IRBPermissions.firb_only(),
+            permission_mode=PermissionMode.IRB,
         )
         crm_b31 = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor_b31, b31_firb_config, bundle

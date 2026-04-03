@@ -33,33 +33,36 @@ if str(project_root) not in sys.path:
 @pytest.fixture(scope="session")
 def crr_sa_config():
     """CRR config with SA-only permissions for comparison."""
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.crr(
         reporting_date=date(2025, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
 @pytest.fixture(scope="session")
 def b31_sa_config():
     """Basel 3.1 config with SA-only permissions for comparison."""
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.basel_3_1(
         reporting_date=date(2030, 6, 30),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
 @pytest.fixture(scope="session")
 def crr_firb_config():
     """CRR config with F-IRB permissions for comparison."""
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.crr(
         reporting_date=date(2025, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -70,11 +73,12 @@ def b31_firb_config():
     Uses 2027-06-30 reporting date for meaningful maturities
     from fixture loans (maturity dates 2028-2033).
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -111,6 +115,39 @@ def raw_data_bundle(load_test_fixtures):
         org_mappings=fixtures.org_mappings,
         lending_mappings=fixtures.lending_mappings,
         specialised_lending=fixtures.specialised_lending,
+    )
+
+
+@pytest.fixture(scope="session")
+def irb_raw_data_bundle(load_test_fixtures):
+    """Convert test fixtures to RawDataBundle with model permissions for IRB testing."""
+    from rwa_calc.contracts.bundles import RawDataBundle
+
+    from tests.fixtures.irb_test_helpers import create_firb_only_model_permissions
+
+    return _make_irb_bundle(load_test_fixtures, create_firb_only_model_permissions())
+
+
+def _make_irb_bundle(fixtures, model_permissions):
+    """Build RawDataBundle with enriched ratings and given model_permissions."""
+    from rwa_calc.contracts.bundles import RawDataBundle
+
+    from tests.fixtures.irb_test_helpers import enrich_ratings_with_model_id
+
+    return RawDataBundle(
+        facilities=fixtures.facilities,
+        loans=fixtures.loans,
+        contingents=fixtures.contingents,
+        counterparties=fixtures.counterparties,
+        collateral=fixtures.collateral,
+        guarantees=fixtures.guarantees,
+        provisions=fixtures.provisions,
+        ratings=enrich_ratings_with_model_id(fixtures.ratings),
+        facility_mappings=fixtures.facility_mappings,
+        org_mappings=fixtures.org_mappings,
+        lending_mappings=fixtures.lending_mappings,
+        specialised_lending=fixtures.specialised_lending,
+        model_permissions=model_permissions,
     )
 
 
@@ -151,7 +188,7 @@ def sa_comparison_approach_summary_df(sa_comparison) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def firb_comparison(raw_data_bundle, crr_firb_config, b31_firb_config):
+def firb_comparison(irb_raw_data_bundle, crr_firb_config, b31_firb_config):
     """Run DualFrameworkRunner with F-IRB permissions.
 
     Session-scoped: compares CRR F-IRB vs Basel 3.1 F-IRB.
@@ -161,7 +198,7 @@ def firb_comparison(raw_data_bundle, crr_firb_config, b31_firb_config):
     from rwa_calc.engine.comparison import DualFrameworkRunner
 
     runner = DualFrameworkRunner()
-    return runner.compare(raw_data_bundle, crr_firb_config, b31_firb_config)
+    return runner.compare(irb_raw_data_bundle, crr_firb_config, b31_firb_config)
 
 
 @pytest.fixture(scope="session")

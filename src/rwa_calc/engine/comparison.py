@@ -38,7 +38,7 @@ Usage:
 
     # M3.3: Transitional floor schedule modelling
     schedule_runner = TransitionalScheduleRunner()
-    schedule = schedule_runner.run(raw_data, irb_permissions)
+    schedule = schedule_runner.run(raw_data, permission_mode)
     timeline_df = schedule.timeline.collect()
 """
 
@@ -55,11 +55,12 @@ from rwa_calc.contracts.bundles import (
     ComparisonBundle,
     TransitionalScheduleBundle,
 )
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -250,14 +251,14 @@ class TransitionalScheduleRunner:
         from rwa_calc.engine.comparison import TransitionalScheduleRunner
 
         runner = TransitionalScheduleRunner()
-        schedule = runner.run(raw_data, irb_permissions)
+        schedule = runner.run(raw_data, permission_mode)
         timeline_df = schedule.timeline.collect()
     """
 
     def run(
         self,
         data: RawDataBundle,
-        irb_permissions: IRBPermissions,
+        permission_mode: PermissionMode = PermissionMode.IRB,
         reporting_dates: list[date] | None = None,
     ) -> TransitionalScheduleBundle:
         """
@@ -265,7 +266,7 @@ class TransitionalScheduleRunner:
 
         Args:
             data: Pre-loaded raw data bundle (shared across all years)
-            irb_permissions: IRB approach permissions for the firm
+            permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             reporting_dates: Optional custom reporting dates (default: 2027-2032 mid-year)
 
         Returns:
@@ -286,7 +287,7 @@ class TransitionalScheduleRunner:
 
             config = CalculationConfig.basel_3_1(
                 reporting_date=reporting_date,
-                irb_permissions=irb_permissions,
+                permission_mode=permission_mode,
             )
 
             pipeline = PipelineOrchestrator()

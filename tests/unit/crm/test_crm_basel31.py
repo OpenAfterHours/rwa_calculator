@@ -33,7 +33,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.crr_firb_lgd import (
     BASEL31_FIRB_SUPERVISORY_LGD,
     FIRB_SUPERVISORY_LGD,
@@ -46,7 +46,7 @@ from rwa_calc.data.tables.crr_haircuts import (
     get_maturity_band,
     lookup_collateral_haircut,
 )
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -60,7 +60,7 @@ def crr_config() -> CalculationConfig:
     """CRR configuration."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -69,7 +69,7 @@ def b31_config() -> CalculationConfig:
     """Basel 3.1 configuration."""
     return CalculationConfig.basel_3_1(
         reporting_date=date(2028, 1, 1),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

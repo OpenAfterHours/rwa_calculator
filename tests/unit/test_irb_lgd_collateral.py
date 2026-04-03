@@ -15,8 +15,8 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle, CounterpartyLookup
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 
 # =============================================================================
@@ -35,7 +35,7 @@ def firb_config() -> CalculationConfig:
     """Return CRR config with FIRB permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -44,7 +44,7 @@ def airb_config() -> CalculationConfig:
     """Return CRR config with full AIRB permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

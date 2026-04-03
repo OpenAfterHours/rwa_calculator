@@ -20,7 +20,8 @@ import polars as pl
 import pytest
 
 import rwa_calc.engine.irb.namespace  # noqa: F401
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.irb.formulas import calculate_double_default_k
 
 # =============================================================================
@@ -32,7 +33,7 @@ def _crr_dd_config() -> CalculationConfig:
     """CRR config with double default enabled and full IRB permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
         enable_double_default=True,
     )
 
@@ -41,7 +42,7 @@ def _crr_no_dd_config() -> CalculationConfig:
     """CRR config with double default disabled."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
         enable_double_default=False,
     )
 
@@ -50,7 +51,7 @@ def _b31_config() -> CalculationConfig:
     """Basel 3.1 config (double default never applies)."""
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

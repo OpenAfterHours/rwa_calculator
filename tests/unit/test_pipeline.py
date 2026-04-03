@@ -27,7 +27,8 @@ from rwa_calc.contracts.bundles import (
     SAResultBundle,
     create_empty_raw_data_bundle,
 )
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import (
     PipelineError,
     PipelineOrchestrator,
@@ -51,7 +52,7 @@ def basel31_config() -> CalculationConfig:
     """Basel 3.1 configuration with IRB permissions."""
     return CalculationConfig.basel_3_1(
         reporting_date=date(2028, 1, 15),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -720,7 +721,7 @@ class TestPipelineIntegration:
         """Test complete pipeline with IRB permissions."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = PipelineOrchestrator()

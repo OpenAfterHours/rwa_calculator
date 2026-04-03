@@ -28,14 +28,14 @@ import pytest
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 import rwa_calc.engine.irb.namespace  # noqa: F401 - register namespace
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.crr_firb_lgd import (
     BASEL31_FIRB_SUPERVISORY_LGD,
     FIRB_SUPERVISORY_LGD,
     get_firb_lgd_table_for_framework,
     lookup_firb_lgd,
 )
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.ccf import CCFCalculator, sa_ccf_expression
 from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.irb.formulas import (
@@ -55,7 +55,7 @@ def crr_config() -> CalculationConfig:
     """CRR (Basel 3.0) configuration."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -64,7 +64,7 @@ def basel31_config() -> CalculationConfig:
     """Basel 3.1 configuration."""
     return CalculationConfig.basel_3_1(
         reporting_date=date(2028, 1, 1),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -73,7 +73,7 @@ def crr_sa_only_config() -> CalculationConfig:
     """CRR configuration with SA-only permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
@@ -82,7 +82,7 @@ def basel31_sa_only_config() -> CalculationConfig:
     """Basel 3.1 configuration with SA-only permissions."""
     return CalculationConfig.basel_3_1(
         reporting_date=date(2028, 1, 1),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
@@ -1467,7 +1467,7 @@ class TestEquityBasel31:
         """CRR + F-IRB only permissions -> irb_simple."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.firb_only(),
+            permission_mode=PermissionMode.IRB,
         )
         calculator = EquityCalculator()
         approach = calculator._determine_approach(config)
@@ -1477,7 +1477,7 @@ class TestEquityBasel31:
         """Basel 3.1 + F-IRB only permissions -> sa (IRB equity removed)."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
-            irb_permissions=IRBPermissions.firb_only(),
+            permission_mode=PermissionMode.IRB,
         )
         calculator = EquityCalculator()
         approach = calculator._determine_approach(config)
@@ -1487,7 +1487,7 @@ class TestEquityBasel31:
         """CRR + A-IRB only permissions -> irb_simple."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.airb_only(),
+            permission_mode=PermissionMode.IRB,
         )
         calculator = EquityCalculator()
         approach = calculator._determine_approach(config)
@@ -1497,7 +1497,7 @@ class TestEquityBasel31:
         """Basel 3.1 + A-IRB only permissions -> sa (IRB equity removed)."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
-            irb_permissions=IRBPermissions.airb_only(),
+            permission_mode=PermissionMode.IRB,
         )
         calculator = EquityCalculator()
         approach = calculator._determine_approach(config)
@@ -1507,7 +1507,7 @@ class TestEquityBasel31:
         """CRR: calculate_single_equity_exposure with IRB uses 370% for other."""
         config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
         calculator = EquityCalculator()
         result = calculate_single_equity_exposure(
@@ -1523,7 +1523,7 @@ class TestEquityBasel31:
         """Basel 3.1: calculate_single_equity_exposure with IRB perm uses SA 250%."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
         calculator = EquityCalculator()
         result = calculate_single_equity_exposure(
@@ -1539,7 +1539,7 @@ class TestEquityBasel31:
         """Basel 3.1: Exchange-traded equity gets SA 100% RW (not IRB 290%)."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
         calculator = EquityCalculator()
         result = calculate_single_equity_exposure(

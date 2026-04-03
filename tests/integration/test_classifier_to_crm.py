@@ -31,6 +31,11 @@ from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.irb_test_helpers import (
+    create_firb_only_model_permissions,
+    create_full_irb_model_permissions,
+    enrich_ratings_with_model_id,
+)
 
 from .conftest import (
     make_contingent,
@@ -85,9 +90,17 @@ def _rows_to_lazyframe(rows: list[dict[str, Any]], schema: dict[str, Any]) -> pl
 def _bundle_with_ratings(
     bundle: RawDataBundle,
     ratings: list[dict[str, Any]],
+    model_permissions: pl.LazyFrame | None = None,
 ) -> RawDataBundle:
-    """Add ratings data to an existing RawDataBundle."""
-    return replace(bundle, ratings=_rows_to_lazyframe(ratings, RATINGS_SCHEMA))
+    """Add ratings data to an existing RawDataBundle.
+
+    When model_permissions is provided, ratings are enriched with model_id
+    so the classifier can match them against the permissions table.
+    """
+    ratings_lf = _rows_to_lazyframe(ratings, RATINGS_SCHEMA)
+    if model_permissions is not None:
+        ratings_lf = enrich_ratings_with_model_id(ratings_lf)
+    return replace(bundle, ratings=ratings_lf, model_permissions=model_permissions)
 
 
 def _run_pipeline(
@@ -143,6 +156,7 @@ class TestApproachSpecificCRM:
                 facilities=[make_facility()],
             ),
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.01)],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         crm_bundle = _run_pipeline(
@@ -166,6 +180,7 @@ class TestApproachSpecificCRM:
                 facilities=[make_facility(lgd=0.30)],
             ),
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.01)],
+            model_permissions=create_full_irb_model_permissions(),
         )
 
         crm_bundle = _run_pipeline(
@@ -235,6 +250,7 @@ class TestApproachSpecificCRM:
             # Only corporate has internal rating -> gets FIRB
             # Institution has no internal rating -> falls to SA
             ratings=[_make_internal_rating(counterparty_reference="CP_CORP", pd=0.02)],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         crm_bundle = _run_pipeline(
@@ -291,6 +307,7 @@ class TestProvisionHandling:
                 facilities=[make_facility()],
             ),
             ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.01)],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         crm_bundle = _run_pipeline(
@@ -478,6 +495,7 @@ class TestApproachSplit:
                     pd=0.02,
                 ),
             ],
+            model_permissions=create_full_irb_model_permissions(),
         )
 
         crm_bundle = _run_pipeline(
@@ -520,6 +538,7 @@ class TestApproachSplit:
             ),
             # Corporate gets internal rating -> FIRB; institution has none -> SA
             ratings=[_make_internal_rating(counterparty_reference="CP_CORP", pd=0.01)],
+            model_permissions=create_firb_only_model_permissions(),
         )
 
         crm_bundle = _run_pipeline(

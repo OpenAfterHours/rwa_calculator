@@ -20,8 +20,8 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # Default reporting date for benchmarks
@@ -136,7 +136,7 @@ class TestPipelineBenchmark10K:
         raw_data = create_raw_data_bundle(dataset_10k)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -194,7 +194,7 @@ class TestPipelineBenchmark100K:
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -387,33 +387,14 @@ class TestComponentBenchmarks100K:
 # =============================================================================
 
 
-def create_irb_with_slotting_permissions() -> IRBPermissions:
-    """Create IRB permissions that include slotting for specialised lending."""
-    permissions = {
-        ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {
-            ApproachType.SA,
-            ApproachType.FIRB,
-            ApproachType.AIRB,
-        },
-        ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
-        ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
-        ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
-        ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
-        ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
-        ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-        ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING},
-        ExposureClass.EQUITY: {ApproachType.SA},
-    }
-    return IRBPermissions(permissions=permissions)
+def irb_permission_mode() -> PermissionMode:
+    """Return IRB permission mode (replaces create_irb_with_slotting_permissions)."""
+    return PermissionMode.IRB
 
 
-def create_corporate_only_irb_permissions() -> IRBPermissions:
-    """Create IRB permissions for corporates only (partial IRB rollout)."""
-    permissions = {
-        ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB},
-        ExposureClass.CORPORATE_SME: {ApproachType.SA, ApproachType.FIRB},
-    }
-    return IRBPermissions(permissions=permissions)
+def corporate_only_irb_permission_mode() -> PermissionMode:
+    """Return IRB permission mode (replaces create_corporate_only_irb_permissions)."""
+    return PermissionMode.IRB
 
 
 @pytest.mark.benchmark
@@ -434,7 +415,7 @@ class TestApproachBenchmarks100K:
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=IRBPermissions.sa_only(),
+            permission_mode=PermissionMode.STANDARDISED,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -462,7 +443,7 @@ class TestApproachBenchmarks100K:
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -489,7 +470,7 @@ class TestApproachBenchmarks100K:
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=create_irb_with_slotting_permissions(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -516,7 +497,7 @@ class TestApproachBenchmarks100K:
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=create_corporate_only_irb_permissions(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -543,7 +524,7 @@ class TestApproachBenchmarks100K:
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.basel_3_1(
             date(2030, 1, 1),  # Full output floor
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -573,7 +554,7 @@ class TestApproachBenchmarks1M:
         raw_data = create_raw_data_bundle(dataset_1m)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=IRBPermissions.sa_only(),
+            permission_mode=PermissionMode.STANDARDISED,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -595,7 +576,7 @@ class TestApproachBenchmarks1M:
         raw_data = create_raw_data_bundle(dataset_1m)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=IRBPermissions.full_irb(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)
@@ -617,7 +598,7 @@ class TestApproachBenchmarks1M:
         raw_data = create_raw_data_bundle(dataset_1m)
         config = CalculationConfig.crr(
             BENCHMARK_REPORTING_DATE,
-            irb_permissions=create_irb_with_slotting_permissions(),
+            permission_mode=PermissionMode.IRB,
         )
 
         pipeline = create_pipeline(raw_data)

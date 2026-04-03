@@ -23,8 +23,8 @@ from rwa_calc.contracts.bundles import (
     CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ def crr_config_with_irb() -> CalculationConfig:
     """Return a CRR configuration with full IRB permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

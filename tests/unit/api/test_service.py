@@ -246,19 +246,18 @@ class TestRWAServiceCreateConfig:
 
     def test_irb_enabled(self, service: RWAService) -> None:
         """Should enable IRB permissions when requested."""
+        from rwa_calc.domain.enums import PermissionMode
+
         request = CalculationRequest(
             data_path="/path/to/data",
             framework="CRR",
             reporting_date=date(2024, 12, 31),
-            irb_approach="full_irb",
+            permission_mode="irb",
         )
 
         config = service._create_config(request)
 
-        # IRB permissions should allow FIRB and AIRB
-        from rwa_calc.domain.enums import ApproachType, ExposureClass
-
-        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
+        assert config.permission_mode == PermissionMode.IRB
 
 
 class TestRWAServiceCreateLoader:
@@ -340,5 +339,5 @@ class TestQuickCalculate:
             # Check default values were used
             call_args = mock_calc.call_args[0][0]
             assert call_args.framework == "CRR"
-            assert call_args.irb_approach is None
+            assert call_args.permission_mode == "standardised"
             assert call_args.data_format == "parquet"

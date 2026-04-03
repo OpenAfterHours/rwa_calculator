@@ -21,7 +21,8 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.data.schemas import (
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -56,7 +57,7 @@ def crr_config() -> CalculationConfig:
 def crr_firb_config() -> CalculationConfig:
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -64,7 +65,7 @@ def crr_firb_config() -> CalculationConfig:
 def crr_full_irb_config() -> CalculationConfig:
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -77,7 +78,7 @@ def basel31_config() -> CalculationConfig:
 def basel31_full_irb_config() -> CalculationConfig:
     return CalculationConfig.basel_3_1(
         reporting_date=date(2028, 1, 15),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 

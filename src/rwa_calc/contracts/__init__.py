@@ -40,7 +40,6 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import (
     CalculationConfig,
-    IRBPermissions,
     LGDFloors,
     OutputFloorConfig,
     PDFloors,
@@ -120,11 +119,12 @@ from rwa_calc.contracts.validation import (
     validate_schema,
     validate_schema_to_errors,
 )
+from rwa_calc.domain.enums import PermissionMode
 
 __all__ = [
     # Configuration
     "CalculationConfig",
-    "IRBPermissions",
+    "PermissionMode",
     "LGDFloors",
     "OutputFloorConfig",
     "PDFloors",

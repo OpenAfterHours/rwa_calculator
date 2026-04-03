@@ -34,10 +34,10 @@ class CalculationConfig:
         supporting_factors: SME/infrastructure factors.
         output_floor: Output floor configuration.
         retail_thresholds: Retail classification thresholds.
-        irb_permissions: IRB approach permissions.
+        permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing).
         scaling_factor: 1.06 scaling for IRB K (CRR Art. 153), 1.0 for Basel 3.1.
         eur_gbp_rate: EUR/GBP exchange rate for threshold conversion.
-        collect_engine: Polars engine for .collect() — "streaming" (default).
+        collect_engine: Polars engine for .collect() — "cpu" (default).
     """
 
     framework: RegulatoryFramework
@@ -49,7 +49,7 @@ class CalculationConfig:
     supporting_factors: SupportingFactors
     output_floor: OutputFloorConfig
     retail_thresholds: RetailThresholds
-    irb_permissions: IRBPermissions
+    permission_mode: PermissionMode = PermissionMode.STANDARDISED
     scaling_factor: Decimal = Decimal("1.06")
     eur_gbp_rate: Decimal = Decimal("0.8732")
     collect_engine: PolarsEngine = "cpu"
@@ -78,7 +78,7 @@ class CalculationConfig:
     def crr(
         cls,
         reporting_date: date,
-        irb_permissions: IRBPermissions | None = None,
+        permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
@@ -96,7 +96,8 @@ class CalculationConfig:
 
         Args:
             reporting_date: As-of date for calculation.
-            irb_permissions: IRB approach permissions (defaults to SA-only).
+            permission_mode: STANDARDISED (all SA) or IRB (model permissions
+                drive routing).
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion.
             collect_engine: Polars collection engine.
             spill_dir: Directory for temp files during streaming (None = system temp).
@@ -104,7 +105,7 @@ class CalculationConfig:
         Example:
             >>> config = CalculationConfig.crr(
             ...     reporting_date=date(2026, 12, 31),
-            ...     irb_permissions=IRBPermissions.full_irb(),
+            ...     permission_mode=PermissionMode.IRB,
             ... )
         """
 
@@ -112,7 +113,7 @@ class CalculationConfig:
     def basel_3_1(
         cls,
         reporting_date: date,
-        irb_permissions: IRBPermissions | None = None,
+        permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -123,19 +124,20 @@ class CalculationConfig:
         - Differentiated PD floors by exposure class
         - LGD floors for A-IRB by collateral type
         - No supporting factors
-        - Output floor (72.5%, transitional from 50% in 2027)
+        - Output floor (72.5%, transitional from 60% in 2027)
         - 1.06 scaling factor removed
 
         Args:
             reporting_date: As-of date for calculation.
-            irb_permissions: IRB approach permissions (defaults to SA-only).
+            permission_mode: STANDARDISED (all SA) or IRB (model permissions
+                drive routing).
             collect_engine: Polars collection engine.
             spill_dir: Directory for temp files during streaming (None = system temp).
 
         Example:
             >>> config = CalculationConfig.basel_3_1(
             ...     reporting_date=date(2027, 6, 30),
-            ...     irb_permissions=IRBPermissions.full_irb(),
+            ...     permission_mode=PermissionMode.IRB,
             ... )
         """
 ```
@@ -320,85 +322,27 @@ class RetailThresholds:
         """
 ```
 
-### `IRBPermissions`
+### `PermissionMode`
 
-IRB approach permissions by exposure class. Tracks which approaches are
-permitted for each class — must align with PRA permissions granted to the firm.
-
-```python
-@dataclass(frozen=True)
-class IRBPermissions:
-    permissions: dict[ExposureClass, set[ApproachType]] = field(default_factory=dict)
-
-    def is_permitted(
-        self,
-        exposure_class: ExposureClass,
-        approach: ApproachType,
-    ) -> bool:
-        """Check if an approach is permitted for an exposure class.
-        Defaults to SA only if no permissions defined."""
-
-    def get_permitted_approaches(
-        self,
-        exposure_class: ExposureClass,
-    ) -> set[ApproachType]:
-        """Get all permitted approaches for an exposure class."""
-```
-
-#### Factory Methods
+High-level permission mode controlling whether the firm uses SA for all
+exposures or routes exposures to IRB based on model-level permissions.
 
 ```python
-    @classmethod
-    def sa_only(cls) -> IRBPermissions:
-        """SA only — no IRB permissions."""
-
-    @classmethod
-    def full_irb(cls) -> IRBPermissions:
-        """Full IRB permissions for all applicable classes.
-
-        Includes FIRB + AIRB for corporates, institutions, sovereigns.
-        AIRB only for retail (FIRB not permitted — CRE30.1).
-        Slotting + FIRB + AIRB for specialised lending.
-        SA only for equity (IRB removed under Basel 3.1).
-        """
-
-    @classmethod
-    def firb_only(cls) -> IRBPermissions:
-        """Foundation IRB only — no AIRB permissions.
-
-        FIRB not permitted for retail (CRE30.1) — falls back to SA.
-        Specialised lending can use FIRB or slotting (CRE33).
-        """
-
-    @classmethod
-    def airb_only(cls) -> IRBPermissions:
-        """Advanced IRB only — no FIRB permissions.
-
-        AIRB permitted for all non-equity classes except specialised lending.
-        Specialised lending uses slotting (no AIRB — CRE33.5).
-        """
-
-    @classmethod
-    def retail_airb_corporate_firb(cls) -> IRBPermissions:
-        """AIRB for retail, FIRB for corporate — hybrid approach.
-
-        For firms with:
-        - AIRB approval for retail exposures
-        - FIRB approval for corporate exposures
-        - Ability to reclassify qualifying corporates as regulatory retail
-
-        Corporate-to-retail reclassification (CRR Art. 147(5)):
-        - Must be managed as part of retail pool
-        - Aggregated exposure < EUR 1m
-        - Must have internally modelled LGD
-        """
+class PermissionMode(StrEnum):
+    STANDARDISED = "standardised"
+    IRB = "irb"
 ```
 
-!!! note "Model-level override"
-    When `model_permissions.parquet` is provided in the data directory,
-    per-model permissions take precedence over `IRBPermissions` config for
-    counterparties with internal ratings that carry a `model_id`. `IRBPermissions` still applies as the
-    fallback for exposures without model-level permissions. See
+| Mode | Behaviour |
+|------|-----------|
+| `STANDARDISED` | All exposures use the Standardised Approach. No IRB routing. |
+| `IRB` | Approach routing is driven by the `model_permissions` input table. Each model's approved approach (AIRB, FIRB, slotting) is resolved per-exposure. Exposures without a matching model permission fall back to SA. If no `model_permissions` file is provided, **all exposures fall back to SA** with a warning. |
+
+!!! note "Model permissions required for IRB mode"
+    When `permission_mode=PermissionMode.IRB`, the calculator requires
+    `model_permissions` input data to determine which exposures use FIRB,
+    AIRB, or slotting. Without it, the pipeline falls back to SA for all
+    exposures and emits a warning. See
     [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema).
 
 ## Usage Examples
@@ -408,17 +352,18 @@ class IRBPermissions:
 ```python
 from datetime import date
 from decimal import Decimal
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 
-# SA-only CRR configuration
+# SA-only CRR configuration (default)
 config = CalculationConfig.crr(
     reporting_date=date(2026, 12, 31),
 )
 
-# CRR with full IRB permissions
+# CRR with IRB routing (requires model_permissions input data)
 config = CalculationConfig.crr(
     reporting_date=date(2026, 12, 31),
-    irb_permissions=IRBPermissions.full_irb(),
+    permission_mode=PermissionMode.IRB,
 )
 
 # Access configuration
@@ -431,20 +376,20 @@ print(f"SME enabled: {config.supporting_factors.enabled}")  # True
 ### Basel 3.1 Configuration
 
 ```python
-# Basel 3.1 with full IRB (auto-calculates output floor from reporting_date)
+# Basel 3.1 with IRB routing (auto-calculates output floor from reporting_date)
 config = CalculationConfig.basel_3_1(
     reporting_date=date(2027, 6, 30),
-    irb_permissions=IRBPermissions.full_irb(),
+    permission_mode=PermissionMode.IRB,
 )
 
-# Check output floor percentage (transitional for 2027 = 50%)
+# Check output floor percentage (transitional for 2027 = 60%)
 floor = config.get_output_floor_percentage()
-print(f"Output floor: {floor:.0%}")  # 50%
+print(f"Output floor: {floor:.0%}")  # 60%
 
-# Fully phased-in (2032+)
+# Fully phased-in (2030+)
 config = CalculationConfig.basel_3_1(
-    reporting_date=date(2032, 1, 1),
-    irb_permissions=IRBPermissions.full_irb(),
+    reporting_date=date(2030, 1, 1),
+    permission_mode=PermissionMode.IRB,
 )
 floor = config.get_output_floor_percentage()
 print(f"Output floor: {floor:.1%}")  # 72.5%
@@ -470,25 +415,24 @@ lgd_floor = config.lgd_floors.get_floor(CollateralType.IMMOVABLE)
 print(f"CRE LGD floor: {lgd_floor:.0%}")  # 10%
 ```
 
-### IRB Permissions
+### Permission Mode
 
 ```python
-from rwa_calc.contracts.config import IRBPermissions
-from rwa_calc.domain.enums import ExposureClass, ApproachType
+from rwa_calc.domain.enums import PermissionMode
 
-# Check permissions
-permissions = IRBPermissions.full_irb()
-print(permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB))  # True
-print(permissions.is_permitted(ExposureClass.EQUITY, ApproachType.AIRB))     # False
+# SA-only — all exposures use standardised approach
+config = CalculationConfig.crr(
+    reporting_date=date(2026, 12, 31),
+    permission_mode=PermissionMode.STANDARDISED,  # default
+)
 
-# Get all permitted approaches
-approaches = permissions.get_permitted_approaches(ExposureClass.CORPORATE)
-print(approaches)  # {SA, FIRB, AIRB}
-
-# Hybrid approach — common for UK banks
-permissions = IRBPermissions.retail_airb_corporate_firb()
-print(permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB))      # True
-print(permissions.is_permitted(ExposureClass.RETAIL_MORTGAGE, ApproachType.AIRB)) # True
+# IRB mode — model_permissions input data drives approach routing
+# Each exposure is matched to its model's approved approach (AIRB, FIRB, slotting)
+# Exposures without a model permission fall back to SA
+config = CalculationConfig.basel_3_1(
+    reporting_date=date(2027, 6, 30),
+    permission_mode=PermissionMode.IRB,
+)
 ```
 
 ## Related

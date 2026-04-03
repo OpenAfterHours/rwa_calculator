@@ -364,11 +364,12 @@ def crr_calculation_config():
     SA scenarios are processed using the Standardised Approach.
     IRB tests use a separate config with IRB permissions.
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.crr(
         reporting_date=date(2025, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 
@@ -379,11 +380,12 @@ def crr_irb_calculation_config():
 
     Used for IRB scenario tests (CRR-B, CRR-C).
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.crr(
         reporting_date=date(2025, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -395,34 +397,12 @@ def crr_slotting_calculation_config():
     For slotting tests, we permit SLOTTING but not A-IRB for SPECIALISED_LENDING
     to ensure exposures use the slotting approach instead of A-IRB.
     """
-    from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-    from rwa_calc.domain.enums import ApproachType, ExposureClass
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.domain.enums import PermissionMode
 
     return CalculationConfig.crr(
         reporting_date=date(2025, 12, 31),
-        irb_permissions=IRBPermissions(
-            permissions={
-                # Full IRB for normal exposure classes
-                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {
-                    ApproachType.SA,
-                    ApproachType.FIRB,
-                    ApproachType.AIRB,
-                },
-                ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
-                ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB, ApproachType.AIRB},
-                ExposureClass.CORPORATE_SME: {
-                    ApproachType.SA,
-                    ApproachType.FIRB,
-                    ApproachType.AIRB,
-                },
-                ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
-                ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
-                # Slotting for specialised lending (NOT A-IRB)
-                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING},
-                ExposureClass.EQUITY: {ApproachType.SA},
-            }
-        ),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -451,6 +431,49 @@ def raw_data_bundle(load_test_fixtures):
         org_mappings=fixtures.org_mappings,
         lending_mappings=fixtures.lending_mappings,
         specialised_lending=fixtures.specialised_lending,
+    )
+
+
+@pytest.fixture(scope="session")
+def irb_raw_data_bundle(load_test_fixtures):
+    """
+    Convert test fixtures to RawDataBundle with model permissions for IRB testing.
+    """
+    from rwa_calc.contracts.bundles import RawDataBundle
+
+    from tests.fixtures.irb_test_helpers import create_full_irb_model_permissions
+
+    return _make_irb_bundle(load_test_fixtures, create_full_irb_model_permissions())
+
+
+@pytest.fixture(scope="session")
+def slotting_raw_data_bundle(load_test_fixtures):
+    """RawDataBundle with slotting-only model permissions."""
+    from tests.fixtures.irb_test_helpers import create_slotting_only_model_permissions
+
+    return _make_irb_bundle(load_test_fixtures, create_slotting_only_model_permissions())
+
+
+def _make_irb_bundle(fixtures, model_permissions):
+    """Build RawDataBundle with enriched ratings and given model_permissions."""
+    from rwa_calc.contracts.bundles import RawDataBundle
+
+    from tests.fixtures.irb_test_helpers import enrich_ratings_with_model_id
+
+    return RawDataBundle(
+        facilities=fixtures.facilities,
+        loans=fixtures.loans,
+        contingents=fixtures.contingents,
+        counterparties=fixtures.counterparties,
+        collateral=fixtures.collateral,
+        guarantees=fixtures.guarantees,
+        provisions=fixtures.provisions,
+        ratings=enrich_ratings_with_model_id(fixtures.ratings),
+        facility_mappings=fixtures.facility_mappings,
+        org_mappings=fixtures.org_mappings,
+        lending_mappings=fixtures.lending_mappings,
+        specialised_lending=fixtures.specialised_lending,
+        model_permissions=model_permissions,
     )
 
 
@@ -500,7 +523,7 @@ def irb_results_df(pipeline_results) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def slotting_pipeline_results(raw_data_bundle, crr_slotting_calculation_config):
+def slotting_pipeline_results(slotting_raw_data_bundle, crr_slotting_calculation_config):
     """
     Run all fixtures through the pipeline with slotting permissions.
 
@@ -514,7 +537,7 @@ def slotting_pipeline_results(raw_data_bundle, crr_slotting_calculation_config):
     from rwa_calc.engine.pipeline import PipelineOrchestrator
 
     pipeline = PipelineOrchestrator()
-    result = pipeline.run_with_data(raw_data_bundle, crr_slotting_calculation_config)
+    result = pipeline.run_with_data(slotting_raw_data_bundle, crr_slotting_calculation_config)
 
     return result
 
@@ -533,7 +556,7 @@ def slotting_results_df(slotting_pipeline_results) -> pl.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def irb_pipeline_results(raw_data_bundle, crr_irb_calculation_config):
+def irb_pipeline_results(irb_raw_data_bundle, crr_irb_calculation_config):
     """
     Run all fixtures through the pipeline with IRB permissions.
 
@@ -546,7 +569,7 @@ def irb_pipeline_results(raw_data_bundle, crr_irb_calculation_config):
     from rwa_calc.engine.pipeline import PipelineOrchestrator
 
     pipeline = PipelineOrchestrator()
-    result = pipeline.run_with_data(raw_data_bundle, crr_irb_calculation_config)
+    result = pipeline.run_with_data(irb_raw_data_bundle, crr_irb_calculation_config)
 
     return result
 

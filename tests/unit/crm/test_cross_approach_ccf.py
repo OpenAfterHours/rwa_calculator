@@ -26,7 +26,8 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CounterpartyLookup,
 )
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 
 # =============================================================================
@@ -42,10 +43,10 @@ def crm_processor() -> CRMProcessor:
 
 @pytest.fixture
 def firb_config() -> CalculationConfig:
-    """CRR config with F-IRB permissions for corporate."""
+    """CRR config with IRB permissions for corporate."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.firb_only(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -54,7 +55,7 @@ def full_irb_config() -> CalculationConfig:
     """CRR config with full IRB permissions."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.full_irb(),
+        permission_mode=PermissionMode.IRB,
     )
 
 
@@ -63,7 +64,7 @@ def sa_only_config() -> CalculationConfig:
     """CRR config with SA only (no IRB permissions)."""
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
+        permission_mode=PermissionMode.STANDARDISED,
     )
 
 

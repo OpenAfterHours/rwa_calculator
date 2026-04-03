@@ -539,7 +539,7 @@ class CalculationConfig:
         retail_thresholds: Retail classification thresholds
         irb_permissions: IRB approach permissions
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
-        collect_engine: Polars engine for .collect() - 'streaming' (default)
+        collect_engine: Polars engine for .collect() - 'cpu' (default)
             processes in batches for lower memory usage, 'cpu' for in-memory
         spill_dir: Directory for temp parquet files during streaming materialization.
             None uses system temp directory.
@@ -561,7 +561,7 @@ class CalculationConfig:
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
-    collect_engine: PolarsEngine = "streaming"  # Default to streaming for memory efficiency
+    collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
     @property
@@ -585,7 +585,7 @@ class CalculationConfig:
         irb_permissions: IRBPermissions | None = None,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
-        collect_engine: PolarsEngine = "streaming",
+        collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """
@@ -606,7 +606,7 @@ class CalculationConfig:
             irb_permissions: IRB approach permissions (optional)
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
             enable_double_default: Enable double default treatment for eligible guarantees
-            collect_engine: Polars engine for .collect() - 'streaming' (default)
+            collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
         Returns:
@@ -636,7 +636,7 @@ class CalculationConfig:
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
-        collect_engine: PolarsEngine = "streaming",
+        collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """
@@ -655,7 +655,7 @@ class CalculationConfig:
             reporting_date: As-of date for calculation
             irb_permissions: IRB approach permissions (optional)
             post_model_adjustments: PMA configuration (optional, defaults to B3.1)
-            collect_engine: Polars engine for .collect() - 'streaming' (default)
+            collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
         Returns:

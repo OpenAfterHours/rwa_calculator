@@ -52,7 +52,7 @@ class CalculationConfig:
     irb_permissions: IRBPermissions
     scaling_factor: Decimal = Decimal("1.06")
     eur_gbp_rate: Decimal = Decimal("0.8732")
-    collect_engine: PolarsEngine = "streaming"
+    collect_engine: PolarsEngine = "cpu"
     spill_dir: Path | None = None
 ```
 
@@ -80,7 +80,7 @@ class CalculationConfig:
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
-        collect_engine: PolarsEngine = "streaming",
+        collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """
@@ -113,7 +113,7 @@ class CalculationConfig:
         cls,
         reporting_date: date,
         irb_permissions: IRBPermissions | None = None,
-        collect_engine: PolarsEngine = "streaming",
+        collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
         """

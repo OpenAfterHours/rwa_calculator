@@ -78,3 +78,27 @@ username = __token__
 password = pypi-xxxxx
 EOF
 ```
+
+## download_docs.py
+
+Downloads regulatory reference documents (PDFs and templates) to `docs/assets/`.
+
+New collaborators should run this after cloning and installing dependencies. Files with
+known direct URLs are fetched automatically; remaining files are listed with manual
+download instructions.
+
+### Usage
+
+```bash
+# Download all available documents
+uv run python scripts/download_docs.py
+
+# Force re-download (overwrite existing files)
+uv run python scripts/download_docs.py --force
+
+# List all documents in the manifest
+uv run python scripts/download_docs.py --list
+
+# Dry run (show what would be done)
+uv run python scripts/download_docs.py --dry-run
+```

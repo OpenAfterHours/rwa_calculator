@@ -609,6 +609,134 @@ class TestScalarLookups:
 
 
 # =============================================================================
+# QRRE TRANSACTOR — 45% (PRA Art. 123)
+# =============================================================================
+
+
+class TestB31QRRETransactor:
+    """Basel 3.1 QRRE transactor — 45% risk weight (PRA Art. 123)."""
+
+    def test_qrre_transactor_gets_45pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """QRRE transactor exposure should get 45% RW under Basel 3.1."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["QRRE_T001"],
+                "ead_final": [50000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.45)
+
+    def test_qrre_non_transactor_gets_75pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-transactor QRRE should still get 75% RW."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["QRRE_R001"],
+                "ead_final": [50000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+
+# =============================================================================
+# SA SPECIALISED LENDING — Art. 122A-122B
+# =============================================================================
+
+
+class TestB31SASpecialisedLending:
+    """Basel 3.1 SA specialised lending risk weights (Art. 122A-122B)."""
+
+    @pytest.mark.parametrize(
+        ("sl_type", "sl_project_phase", "expected_rw"),
+        [
+            ("object_finance", None, 1.00),
+            ("commodities_finance", None, 1.00),
+            ("project_finance", "pre_operational", 1.30),
+            ("project_finance", "operational", 1.00),
+            ("project_finance", "high_quality", 0.80),
+            ("project_finance", None, 1.00),  # defaults to operational
+        ],
+        ids=[
+            "object_finance_100pct",
+            "commodities_finance_100pct",
+            "pf_pre_op_130pct",
+            "pf_operational_100pct",
+            "pf_high_quality_80pct",
+            "pf_default_100pct",
+        ],
+    )
+    def test_sa_sl_risk_weight(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        sl_type: str,
+        sl_project_phase: str | None,
+        expected_rw: float,
+    ) -> None:
+        """SA specialised lending should use Art. 122A-122B risk weights."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": [sl_type],
+                "sl_project_phase": [sl_project_phase],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(expected_rw)
+
+
+# =============================================================================
 # CRR REGRESSION — existing risk weights unchanged
 # =============================================================================
 

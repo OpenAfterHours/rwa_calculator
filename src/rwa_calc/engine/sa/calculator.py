@@ -61,6 +61,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     b31_adc_rw_expr,
     b31_commercial_rw_expr,
     b31_residential_rw_expr,
+    b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.crr_risk_weights import (
@@ -359,6 +360,12 @@ class SACalculator:
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_entity_type"))
         if "cp_is_ccp_client_cleared" not in schema.names():
             missing_cols.append(pl.lit(None).cast(pl.Boolean).alias("cp_is_ccp_client_cleared"))
+        if "sl_type" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("sl_type"))
+        if "sl_project_phase" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("sl_project_phase"))
+        if "is_qrre_transactor" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_qrre_transactor"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -516,13 +523,25 @@ class SACalculator:
                         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
                     )
                     .then(pl.lit(retail_rw))
-                    # 7. Corporate SME: 85% (CRE20.47-49, Basel 3.1)
+                    # 7. SA Specialised Lending: Art. 122A-122B
+                    .when(
+                        _uc.str.contains("SPECIALISED", literal=True)
+                        | (pl.col("sl_type").fill_null("").str.len_chars() > 0)
+                    )
+                    .then(b31_sa_sl_rw_expr())
+                    # 8. Corporate SME: 85% (CRE20.47-49, Basel 3.1)
                     .when(
                         _uc.str.contains("CORPORATE", literal=True)
                         & _uc.str.contains("SME", literal=True)
                     )
                     .then(pl.lit(sme_corp_rw))
-                    # 8. Retail (non-mortgage): 75% flat
+                    # 9. QRRE transactor: 45% (Art. 123)
+                    .when(
+                        _uc.str.contains("RETAIL", literal=True)
+                        & pl.col("is_qrre_transactor").fill_null(False)
+                    )
+                    .then(pl.lit(0.45))
+                    # 10. Retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
                     # 9. Default: CQS-based or 100%

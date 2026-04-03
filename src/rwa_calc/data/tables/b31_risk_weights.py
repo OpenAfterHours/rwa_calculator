@@ -137,6 +137,27 @@ B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
 }
 
 # =============================================================================
+# RETAIL TRANSACTOR RISK WEIGHT — BASEL 3.1 (PRA PS1/26 Art. 123)
+# Qualifying revolving retail exposures where obligor repays in full each period
+# =============================================================================
+
+B31_RETAIL_TRANSACTOR_RW = Decimal("0.45")  # 45% for QRRE transactors
+
+# =============================================================================
+# SA SPECIALISED LENDING — BASEL 3.1 (PRA PS1/26 Art. 122A-122B)
+# New SA exposure class with risk weights distinct from general corporates.
+# Rated SL exposures use the corporate CQS table (Art. 122A(3)).
+# =============================================================================
+
+B31_SA_SL_RISK_WEIGHTS: dict[str, Decimal] = {
+    "object_finance": Decimal("1.00"),  # 100%
+    "commodities_finance": Decimal("1.00"),  # 100%
+    "project_finance_pre_operational": Decimal("1.30"),  # 130%
+    "project_finance_operational": Decimal("1.00"),  # 100%
+    "project_finance_high_quality": Decimal("0.80"),  # 80%
+}
+
+# =============================================================================
 # SUBORDINATED DEBT RISK WEIGHT — BASEL 3.1 (CRE20.49)
 # Flat 150% for all subordinated debt (institution + corporate)
 # =============================================================================
@@ -304,6 +325,38 @@ def b31_adc_rw_expr() -> pl.Expr:
         Expression resolving to 1.50 or 1.00
     """
     return pl.when(pl.col("is_presold").fill_null(False)).then(pl.lit(1.00)).otherwise(pl.lit(1.50))
+
+
+def b31_sa_sl_rw_expr() -> pl.Expr:
+    """
+    Polars expression for Basel 3.1 SA specialised lending risk weights.
+
+    PRA PS1/26 Art. 122A-122B. Unrated SL exposures get type-specific risk
+    weights rather than falling through to corporate 100%.
+
+    Requires columns: sl_type (String), sl_project_phase (String, optional)
+
+    Returns:
+        Expression resolving to the SL-specific risk weight
+    """
+    sl = pl.col("sl_type").fill_null("").str.to_lowercase()
+    phase = pl.col("sl_project_phase").fill_null("").str.to_lowercase()
+
+    return (
+        pl.when(sl.str.contains("object"))
+        .then(pl.lit(1.00))
+        .when(sl.str.contains("commodit"))
+        .then(pl.lit(1.00))
+        .when(sl.str.contains("project"))
+        .then(
+            pl.when(phase.str.contains("pre"))
+            .then(pl.lit(1.30))
+            .when(phase.str.contains("high"))
+            .then(pl.lit(0.80))
+            .otherwise(pl.lit(1.00))  # operational default
+        )
+        .otherwise(pl.lit(1.00))  # fallback for unknown SL types
+    )
 
 
 # =============================================================================

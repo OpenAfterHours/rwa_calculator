@@ -107,6 +107,8 @@ class EquityCalculator:
         else:
             exposures = self._apply_equity_weights_sa(exposures, config)
 
+        exposures = self._apply_transitional_floor(exposures, config)
+
         return self._calculate_rwa(exposures)
 
     def calculate(
@@ -388,6 +390,44 @@ class EquityCalculator:
                 .otherwise(pl.lit(3.70))
                 .alias("risk_weight"),
             ]
+        )
+
+    def _apply_transitional_floor(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply equity transitional risk weight floor (PRA Rules 4.1-4.10).
+
+        During the transitional period (2027-2029), equity risk weights phase
+        in from CRR levels to full Basel 3.1 levels. The transitional RW acts
+        as a floor: final_rw = max(assigned_rw, transitional_rw).
+
+        For firms with prior IRB equity permission (Rules 4.4-4.6), the floor
+        is the higher of the IRB model RW and the transitional SA RW.
+        """
+        eq_config = config.equity_transitional
+        if not eq_config.enabled:
+            return exposures
+
+        std_rw = eq_config.get_transitional_rw(config.reporting_date, is_higher_risk=False)
+        hr_rw = eq_config.get_transitional_rw(config.reporting_date, is_higher_risk=True)
+
+        if std_rw is None or hr_rw is None:
+            return exposures
+
+        schema = exposures.collect_schema()
+        is_hr = (
+            pl.col("is_speculative").fill_null(False)
+            if "is_speculative" in schema.names()
+            else pl.lit(False)
+        )
+
+        transitional_rw = pl.when(is_hr).then(pl.lit(float(hr_rw))).otherwise(pl.lit(float(std_rw)))
+
+        return exposures.with_columns(
+            pl.max_horizontal(pl.col("risk_weight"), transitional_rw).alias("risk_weight"),
         )
 
     def _calculate_rwa(

@@ -50,6 +50,8 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 
 - Own CCF estimates **only permitted for revolving facilities**
 - All other off-balance sheet items must use **SA CCFs**
+- The revolving-only restriction is a data classification concern — exposures should carry an `is_revolving` flag; non-revolving AIRB facilities must use SA CCFs regardless of modelled estimates
+- Code enforces the 50% floor: `max(ccf_modelled, sa_ccf × 0.5)` in `ccf.py`
 - EAD floor: drawn + 50% of off-balance sheet using F-IRB CCF
 - Falls back to SA CCFs if not available
 

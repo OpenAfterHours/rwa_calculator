@@ -276,6 +276,53 @@ class OutputFloorConfig:
 
 
 @dataclass(frozen=True)
+class EquityTransitionalConfig:
+    """
+    Equity transitional configuration for Basel 3.1 (PRA Rules 4.1-4.10).
+
+    Firms transitioning from CRR to Basel 3.1 equity weights use a phase-in
+    schedule. Firms with prior IRB equity permission use the higher of the
+    IRB model RW and the transitional SA RW (Rules 4.4-4.6).
+    """
+
+    enabled: bool = False
+    schedule: dict[date, tuple[Decimal, Decimal]] = field(default_factory=dict)
+    # (standard_rw, higher_risk_rw) keyed by effective date
+
+    def get_transitional_rw(
+        self,
+        reporting_date: date,
+        is_higher_risk: bool = False,
+    ) -> Decimal | None:
+        """Get the transitional RW for a given date, or None if not in transition."""
+        if not self.enabled or not self.schedule:
+            return None
+
+        applicable: tuple[Decimal, Decimal] | None = None
+        for schedule_date, rws in sorted(self.schedule.items()):
+            if reporting_date >= schedule_date:
+                applicable = rws
+
+        if applicable is None:
+            return None
+
+        return applicable[1] if is_higher_risk else applicable[0]
+
+    @classmethod
+    def basel_3_1(cls) -> EquityTransitionalConfig:
+        """PRA Rules 4.1-4.3: SA transitional equity risk weights (2027-2029)."""
+        return cls(
+            enabled=True,
+            schedule={
+                date(2027, 1, 1): (Decimal("1.60"), Decimal("2.20")),
+                date(2028, 1, 1): (Decimal("1.90"), Decimal("2.80")),
+                date(2029, 1, 1): (Decimal("2.20"), Decimal("3.40")),
+                date(2030, 1, 1): (Decimal("2.50"), Decimal("4.00")),
+            },
+        )
+
+
+@dataclass(frozen=True)
 class PostModelAdjustmentConfig:
     """
     Post-model adjustment configuration for Basel 3.1 IRB.
@@ -557,6 +604,7 @@ class CalculationConfig:
     )
     retail_thresholds: RetailThresholds = field(default_factory=RetailThresholds.crr)
     irb_permissions: IRBPermissions = field(default_factory=IRBPermissions.sa_only)
+    equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
@@ -673,6 +721,7 @@ class CalculationConfig:
             ),
             retail_thresholds=RetailThresholds.basel_3_1(),
             irb_permissions=irb_permissions or IRBPermissions.sa_only(),
+            equity_transitional=EquityTransitionalConfig.basel_3_1(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             collect_engine=collect_engine,

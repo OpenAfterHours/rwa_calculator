@@ -54,6 +54,26 @@ The **1.25x correlation multiplier** for large/unregulated financial sector enti
 
 The capital requirement formula, correlation functions, maturity adjustment, and RWA computation are identical to F-IRB. See [F-IRB Specification](firb-calculation.md) for full details.
 
+## Post-Model Adjustments (Basel 3.1)
+
+### Mortgage Risk Weight Floor (Art. 153(5A) / Art. 154(4A))
+
+Basel 3.1 introduces a minimum risk weight floor for UK residential property exposures under IRB:
+
+- **Default floor**: 15% (configurable via `PostModelAdjustmentConfig.mortgage_rw_floor`)
+- **Scope**: All IRB exposures secured by UK residential immovable property
+- **Formula**: `floor_adjustment = max(0, floor_rw - modelled_rw) × EAD`
+- **RWEA**: `RWEA_adjusted = RWEA_modelled + floor_adjustment`
+- **Reported**: COREP column 0253 (adjustment for mortgage RW floor)
+
+### General Post-Model Adjustments (Art. 158(6A))
+
+Firms must apply post-model adjustments (PMAs) to compensate for known model deficiencies:
+
+- **PMA on RWEA**: `RWEA_adjusted = RWEA_modelled × (1 + pma_rwa_scalar)`
+- **PMA on EL**: `EL_adjusted = EL_modelled × (1 + pma_el_scalar)`
+- **Reported**: COREP column 0252 (adjustment for post-model adjustments)
+
 ## Key Scenarios
 
 | Scenario ID | Description |

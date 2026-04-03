@@ -178,6 +178,55 @@ ead_unguaranteed = (1 - guarantee_ratio) × (drawn + undrawn × ccf_irb)
 
 Provisions are resolved **before** the CRM waterfall (and before CCF application). See [Provisions Specification](provisions.md) for the drawn-first deduction approach and multi-level beneficiary resolution. The CRM waterfall (collateral → guarantees) operates on the provision-adjusted EAD.
 
+## CRM Method Selection (PRA PS1/26 Art. 191A)
+
+Basel 3.1 introduces a formal decision tree framework for CRM method selection (Appendix 1):
+
+### Part 1 — Funded CRM with CCR Exposure
+CCR exposures → IMM / SFT VaR Method / Financial Collateral Comprehensive Method / Financial Collateral Simple Method (SA only)
+
+### Part 2 — Funded CRM without CCR
+1. On-balance sheet netting → Art. 219
+2. Financial collateral → Comprehensive Method (Art. 223) or Simple Method (Art. 222, SA only)
+3. Immovable property / receivables / other physical → Foundation Collateral Method (Art. 229-231, IRB only)
+4. Life insurance / instruments from institutions → Other Funded Protection Method (Art. 232)
+
+### Part 3 — Unfunded CRM
+- SA / Slotting → Risk-Weight Substitution Method (Art. 235)
+- FIRB / AIRB → Parameter Substitution Method (Art. 236)
+- AIRB (own estimates) → LGD Adjustment Method (Art. 183)
+
+### Part 4 — Unfunded Covered by Funded
+Nested application of Parts 1-3 where unfunded protection is itself collateralised.
+
+## Financial Collateral Simple Method (Art. 222)
+
+SA-only method. The risk weight of the collateral substitutes for the exposure risk weight on the secured portion:
+
+- **Floor**: 20% minimum risk weight (except qualifying repo-style transactions: 0%)
+- **Eligibility**: Collateral must be eligible financial collateral per Art. 197
+- **Maturity**: Collateral maturity must cover exposure maturity (no mismatch allowed)
+- **Formula**: `RW_secured = max(20%, RW_collateral)`, `RW_unsecured = RW_obligor`
+
+The calculator uses the Financial Collateral Comprehensive Method by default.
+
+## Parameter Substitution Method (Art. 236)
+
+IRB-only method for unfunded credit protection (guarantees and credit derivatives):
+
+- **Covered portion**: Uses protection provider's PD with exposure's LGD
+  - FIRB: covered LGD = supervisory LGD for senior unsecured claim on guarantor
+  - AIRB: covered LGD = own LGD estimate for senior unsecured claim on guarantor
+- **Uncovered portion**: Uses obligor's own PD and LGD
+- **Expected loss**: `EL_covered = PD_guarantor × LGD_covered`, `EL_uncovered = PD_obligor × LGD`
+- **Double recovery constraint**: Combined coverage from funded + unfunded cannot exceed 100%
+
+## Unfunded Credit Protection Transitional (Rule 4.11)
+
+Pre-existing unfunded credit protection (guarantees/credit derivatives) issued before 1 January 2027 may continue to use CRR treatment until **30 June 2028**, provided:
+- The protection was in place and eligible under CRR as at 31 December 2026
+- The protection has not been restructured or materially changed after 1 January 2027
+
 ## Key Scenarios
 
 | Scenario ID | Description |

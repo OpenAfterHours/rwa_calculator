@@ -197,13 +197,79 @@ Non-regulatory real estate (doesn't meet Art. 124A requirements):
 
 Rated institutions use ECRA (same CQS table as CRR, including UK CQS 2 = 30% deviation). Unrated institutions use SCRA:
 
-| SCRA Grade | Risk Weight | Criteria |
-|------------|-------------|----------|
-| A | 40% | CET1 > 14%, Leverage > 5% |
-| B | 75% | CET1 > 5.5%, Leverage > 3% |
-| C | 150% | Below minimum requirements |
+| SCRA Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
+|------------|--------------------|--------------------|----------|
+| A | 40% | 20% | Meets all minimum requirements + buffers |
+| A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
+| B | 75% | 50% | Meets minimum requirements |
+| C | 150% | 150% | Below minimum requirements |
 
 ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR.
+
+## Equity Exposures (CRR Art. 133 / PRA PS1/26 Art. 133)
+
+### CRR Equity Risk Weights
+
+| Equity Type | Risk Weight | Reference |
+|-------------|-------------|-----------|
+| Central bank/sovereign | 0% | Art. 133(1) |
+| Listed/exchange-traded | 100% | Art. 133(2) |
+| Government-supported | 100% | Art. 133(3) |
+
+### Basel 3.1 Equity Risk Weights (Art. 133)
+
+| Equity Type | Risk Weight | Reference |
+|-------------|-------------|-----------|
+| Standard equity (listed) | 250% | Art. 133(3) |
+| Higher risk (unlisted, <5yr, PE, speculative) | 400% | Art. 133(5) |
+| Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
+| Legislative equity (govt mandate) | 100% | Art. 133(6) |
+| CQS 1-2 speculative unlisted | 100% | Art. 133(4)(a) |
+| CQS 3-6/unrated speculative | 150% | Art. 133(4)(b) |
+
+**Note:** Basel 3.1 removes IRB equity approaches. All equity uses SA risk weights.
+
+## Defaulted Exposures (CRR Art. 127 / PRA PS1/26 Art. 127)
+
+### CRR Default Risk Weights
+
+| Condition | Risk Weight |
+|-----------|-------------|
+| Specific provisions ≥ 20% of (EAD + provision_deducted) | 100% |
+| Specific provisions < 20% | 150% |
+
+### Basel 3.1 Default Risk Weights
+
+| Condition | Risk Weight |
+|-----------|-------------|
+| Specific provisions ≥ 20% of exposure value | 100% |
+| Specific provisions < 20% | 150% |
+| RESI RE non-dependent (Art. 124F) in default | 100% (always) |
+
+## Basel 3.1 SA Specialised Lending (Art. 122A-122B)
+
+New Basel 3.1 SA exposure class with risk weights distinct from general corporates:
+
+| SL Type | Phase | Risk Weight |
+|---------|-------|-------------|
+| Object finance | — | 100% |
+| Commodities finance | — | 100% |
+| Project finance | Pre-operational | 130% |
+| Project finance | Operational | 100% |
+| Project finance | High-quality operational | 80% |
+
+Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
+
+## Other Items (CRR Art. 134 / PRA PS1/26 Art. 134)
+
+| Item | Risk Weight |
+|------|-------------|
+| Cash and equivalent (notes, coins, gold bullion) | 0% |
+| Items in course of collection | 20% |
+| Tangible assets (premises, equipment) | 100% |
+| Prepaid expenses, accrued income | 100% |
+| Residual value of leased assets | 1/t × 100% (t = remaining lease years) |
+| All other | 100% |
 
 ## Basel 3.1 Changes Summary
 
@@ -216,6 +282,10 @@ ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR
 - **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done
 - **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
+- **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
+- **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Pending
+- **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE exception — Done
+- **Other items** (Art. 134): Cash=0%, collection=20%, tangible=100% — Done
 - **Removal of SME supporting factor**: No longer applicable under Basel 3.1
 - **Removal of 1.06 scaling factor**: Scaling factor set to 1.0 under Basel 3.1
 

@@ -1550,8 +1550,64 @@ class TestEquityBasel31:
             config=config,
         )
         assert result["approach"] == "sa"
-        assert result["risk_weight"] == pytest.approx(1.00)
-        assert result["rwa"] == pytest.approx(500_000.0)
+        # Basel 3.1 equity transitional (PRA Rule 4.2): 190% floor in 2028
+        # (phases from 160% in 2027 to 250% in 2030+)
+        assert result["risk_weight"] == pytest.approx(1.90)
+        assert result["rwa"] == pytest.approx(950_000.0)
+
+
+class TestEquityTransitionalSchedule:
+    """Tests for equity transitional phase-in (PRA Rules 4.1-4.10)."""
+
+    @pytest.mark.parametrize(
+        ("year", "expected_std_rw", "expected_hr_rw"),
+        [
+            (2027, 1.60, 2.20),
+            (2028, 1.90, 2.80),
+            (2029, 2.20, 3.40),
+            (2030, 2.50, 4.00),
+            (2031, 2.50, 4.00),  # fully phased
+        ],
+        ids=["2027", "2028", "2029", "2030_full", "2031_full"],
+    )
+    def test_transitional_floor_by_year(
+        self,
+        year: int,
+        expected_std_rw: float,
+        expected_hr_rw: float,
+    ) -> None:
+        """Transitional floor should match PRA schedule per year."""
+        from rwa_calc.contracts.config import EquityTransitionalConfig
+
+        config = EquityTransitionalConfig.basel_3_1()
+
+        std = config.get_transitional_rw(date(year, 6, 30), is_higher_risk=False)
+        hr = config.get_transitional_rw(date(year, 6, 30), is_higher_risk=True)
+
+        assert std is not None
+        assert hr is not None
+        assert float(std) == pytest.approx(expected_std_rw)
+        assert float(hr) == pytest.approx(expected_hr_rw)
+
+    def test_crr_no_transitional(self) -> None:
+        """CRR config should not have equity transitional enabled."""
+        config = CalculationConfig.crr(reporting_date=date(2026, 6, 30))
+        assert config.equity_transitional.enabled is False
+
+    def test_speculative_equity_gets_higher_risk_floor(self) -> None:
+        """Speculative equity should get the higher-risk transitional floor."""
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+        calculator = EquityCalculator()
+        result = calculate_single_equity_exposure(
+            calculator,
+            ead=Decimal("100000"),
+            equity_type="speculative",
+            is_speculative=True,
+            config=config,
+        )
+        # 2027 higher-risk transitional = 220%, SA speculative = 400%
+        # max(400%, 220%) = 400% (SA weight already exceeds transitional)
+        assert result["risk_weight"] == pytest.approx(4.00)
 
 
 # =============================================================================

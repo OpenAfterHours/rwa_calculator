@@ -141,14 +141,27 @@ Note: The retail unsecured LGDU used in the LGD* formula for secured exposures i
 
 ### IRB Approach Restrictions
 
-A-IRB (own-LGD estimates) is removed for several exposure types:
+Basel 3.1 introduces two levels of IRB restriction (Art. 147A):
 
-| Exposure Type | CRR | Basel 3.1 |
-|---------------|-----|-----------|
-| Large Corporate (>£440m) | F-IRB or A-IRB | **F-IRB only** |
-| Financial Sector Entities | F-IRB or A-IRB | **F-IRB only** |
-| Bank/Institution | F-IRB or A-IRB | **F-IRB only** |
-| Equity | IRB | **SA only** |
+- **Complete IRB removal** — certain exposure classes must use the Standardised Approach;
+  IRB (both F-IRB and A-IRB) is no longer permitted.
+- **A-IRB removal** — own-LGD estimates are removed; only F-IRB (supervisory LGD) is allowed.
+
+| Exposure Type | CRR | Basel 3.1 | Reference |
+|---------------|-----|-----------|-----------|
+| Central Govts, Central Banks & Quasi-Sovereigns | F-IRB or A-IRB | **SA only** | Art. 147A(1)(a) |
+| Bank/Institution | F-IRB or A-IRB | **F-IRB only** | Art. 147A(1)(b) |
+| IPRE / HVCRE (Specialised Lending) | F-IRB, A-IRB, or Slotting | **Slotting only** | Art. 147A(1)(c) |
+| Other SL (Object/Project/Commodities) | F-IRB, A-IRB, or Slotting | F-IRB, A-IRB, or Slotting | Art. 147A(1)(d) |
+| Financial Sector Entities | F-IRB or A-IRB | **F-IRB only** | Art. 147A(1)(e) |
+| Large Corporate (>£440m) | F-IRB or A-IRB | **F-IRB only** | Art. 147A(1)(e) |
+| Other General Corporates | F-IRB or A-IRB | F-IRB or A-IRB | Art. 147A(1)(f) |
+| Retail (all subclasses) | A-IRB | A-IRB | Art. 147A(1)(g) |
+| Equity | IRB | **SA only** | Art. 147A(1)(h) |
+
+**Quasi-sovereign scope (Art. 147(3)):** The central governments/central banks class includes
+regional governments, local authorities, PSEs, MDBs, and international organisations that
+receive a 0% SA risk weight. Under Basel 3.1, all of these entities are mandatorily SA.
 
 **IRB 10% RW floor for UK residential mortgages (PRA-specific):** Non-defaulted retail exposures
 secured by UK residential property must have a minimum risk weight of **10%** under IRB,

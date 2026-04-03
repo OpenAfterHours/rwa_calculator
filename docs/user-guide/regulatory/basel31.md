@@ -284,16 +284,19 @@ The phase-in allows firms to gradually adjust to the higher capital requirements
 
 ## IRB Restrictions
 
-Basel 3.1 restricts IRB usage for certain exposures. A-IRB (own-LGD estimates)
-is removed for financial sector entities and large corporates:
+Basel 3.1 restricts IRB usage for certain exposures (Art. 147A). For some classes,
+all IRB approaches are removed (SA only). For others, only A-IRB is removed
+(F-IRB with supervisory LGD remains):
 
 | Exposure Type | Allowed Approaches |
 |---------------|-------------------|
-| Large Corporate (Revenue > £500m) | SA or F-IRB only |
+| Central Govts, Central Banks & Quasi-Sovereigns | SA only |
+| Large Corporate (>£440m) | SA or F-IRB only |
 | Financial Sector Entities | SA or F-IRB only |
 | Bank/Institution | SA or F-IRB only |
 | Equity | SA only |
-| Specialised Lending (no PD) | SA or Slotting only |
+| IPRE / HVCRE (Specialised Lending) | SA or Slotting only |
+| Other SL (Object/Project/Commodities) | SA, F-IRB, A-IRB, or Slotting |
 
 **IRB 10% RW floor for UK residential mortgages (PRA-specific):**
 Non-defaulted retail exposures secured by UK residential property must have a minimum risk weight

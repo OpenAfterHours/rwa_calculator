@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs**: Add "Why Basel 3.1?" section to framework comparison index — explains the rationale for transitioning from CRR (risk-weight variability, inadequate capital, IRB complexity) and how Basel 3.1 responds
 
 ### Fixed
+- **Docs**: Add missing sovereign (central govts, central banks, quasi-sovereigns) SA-only restriction to IRB approach tables — Art. 147A(1)(a) mandates SA for all sovereign exposures under Basel 3.1, removing F-IRB and A-IRB
+- **Docs**: Add missing IPRE/HVCRE specialised lending Slotting-only restriction — Art. 147A(1)(c); replaces misleading "Specialised Lending (no PD)" row which conflated all SL sub-types
+- **Docs**: Correct large corporate revenue threshold in `basel31.md` from >£500m to >£440m (Art. 147(4C))
 - **Docs**: Correct equity transitional schedule — 2027 starts at 160%/220% (not 130%/160%) after implementation date shifted to 2027
 - **Docs**: Split F-IRB senior LGD into financial entities (45%, unchanged) and other corporates (40%) — previously shown as single 40% row
 - **Docs**: Correct large corporate threshold from >£500m to >£440m (Art. 147(4C))

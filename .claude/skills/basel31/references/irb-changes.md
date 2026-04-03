@@ -58,14 +58,23 @@ All IRB parameter changes from CRR to Basel 3.1.
 | Secured - CRE/RRE | 35% | 20% | -15pp |
 | Secured - other physical | 40% | 25% | -15pp |
 
-## A-IRB Approach Restrictions
+## IRB Approach Restrictions (Art. 147A)
+
+Basel 3.1 restricts IRB in two ways: complete IRB removal (SA only) and A-IRB
+removal (F-IRB only). IPRE/HVCRE specialised lending is restricted to Slotting.
 
 | Exposure Type | CRR | Basel 3.1 |
 |--------------|-----|-----------|
-| Large corporate (>GBP 440m) | F-IRB or A-IRB | **F-IRB only** |
-| Financial sector entities | F-IRB or A-IRB | **F-IRB only** |
+| Central govts, central banks & quasi-sovereigns | F-IRB or A-IRB | **SA only** |
 | Bank / Institution | F-IRB or A-IRB | **F-IRB only** |
+| IPRE / HVCRE (Specialised Lending) | F-IRB, A-IRB, or Slotting | **Slotting only** |
+| Other SL (Object/Project/Commodities) | F-IRB, A-IRB, or Slotting | F-IRB, A-IRB, or Slotting |
+| Financial sector entities | F-IRB or A-IRB | **F-IRB only** |
+| Large corporate (>GBP 440m) | F-IRB or A-IRB | **F-IRB only** |
 | Equity | IRB | **SA only** |
+
+Quasi-sovereign scope (Art. 147(3)): regional govts, local authorities, PSEs,
+MDBs, and international organisations with 0% SA risk weight.
 
 ## Scaling Factor
 

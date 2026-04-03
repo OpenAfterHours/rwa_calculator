@@ -136,7 +136,7 @@ nav = [
 
 [project.theme]
 name = "material"
-custom_dir = "overrides"
+custom_dir = "docs/overrides"
 logo = "assets/openafterhours_icon_512.png"
 favicon = "assets/openafterhours_icon_512.png"
 features = [

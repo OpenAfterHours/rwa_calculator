@@ -45,7 +45,6 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_ADC_PRESOLD_RISK_WEIGHT,
     B31_ADC_RISK_WEIGHT,
-    B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO,
     B31_COMMERCIAL_GENERAL_SECURED_RW,
     B31_COMMERCIAL_INCOME_LTV_BANDS,
     B31_CORPORATE_INVESTMENT_GRADE_RW,

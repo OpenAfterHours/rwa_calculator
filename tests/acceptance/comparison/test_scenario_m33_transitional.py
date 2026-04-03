@@ -71,9 +71,7 @@ class TestM33TimelineStructure:
     def test_timeline_years_correct(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-S2: Timeline years should be 2027-2030."""
         years = timeline_df["year"].to_list()
-        assert years == [2027, 2028, 2029, 2030], (
-            f"Expected years 2027-2030, got {years}"
-        )
+        assert years == [2027, 2028, 2029, 2030], f"Expected years 2027-2030, got {years}"
 
     def test_timeline_columns_complete(self, timeline_df: pl.DataFrame) -> None:
         """M3.3-S3: All expected columns should be present."""

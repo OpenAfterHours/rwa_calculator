@@ -22,7 +22,6 @@ import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.data.schemas import (
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -35,6 +34,7 @@ from rwa_calc.data.schemas import (
     ORG_MAPPING_SCHEMA,
     RATINGS_SCHEMA,
 )
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator

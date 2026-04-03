@@ -98,13 +98,23 @@ config = CalculationConfig.crr(
 When using the Service API, pass the string values `"standardised"` or `"irb"`:
 
 ```python
-from rwa_calc.api import quick_calculate
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
 # SA-only (default)
-response = quick_calculate("/path/to/data")
+response = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+).calculate()
 
 # IRB mode
-response = quick_calculate("/path/to/data", permission_mode="irb")
+response = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+    permission_mode="irb",
+).calculate()
 ```
 
 !!! note "Model permissions required for IRB mode"

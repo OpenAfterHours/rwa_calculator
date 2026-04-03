@@ -31,30 +31,16 @@ pip install rwa-calc[ui]
 
 ## Quick Start
 
-**Quickest Start** — one call does everything:
-
-```python
-from rwa_calc.api import quick_calculate
-
-response = quick_calculate("/path/to/data")
-print(f"Total RWA: {response.summary.total_rwa:,.0f}")
-```
-
-**More Control** — choose framework, permission mode, and reporting date:
-
 ```python
 from datetime import date
-from rwa_calc.api import create_service, CalculationRequest
+from rwa_calc.api import CreditRiskCalc
 
-service = create_service()
-response = service.calculate(
-    CalculationRequest(
-        data_path="/path/to/data",
-        framework="CRR",
-        reporting_date=date(2026, 12, 31),
-        permission_mode="irb",
-    )
-)
+response = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+    permission_mode="irb",
+).calculate()
 
 if response.success:
     print(f"Total RWA: {response.summary.total_rwa:,.0f}")

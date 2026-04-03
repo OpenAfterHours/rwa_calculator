@@ -45,8 +45,10 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_row_sections,
 )
 
+import importlib.util
+
 XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
-    __import__("importlib").util.find_spec("xlsxwriter") is not None
+    importlib.util.find_spec("xlsxwriter") is not None
 )
 
 # =============================================================================
@@ -1428,7 +1430,7 @@ class TestExcelExport:
         gen.export_to_excel(bundle, output)
 
         sheets = pl.read_excel(output, sheet_id=0)
-        sheet_names = list(sheets.keys()) if isinstance(sheets, dict) else []
+        sheet_names: list[str] = list(sheets.keys()) if isinstance(sheets, dict) else []
 
         # Should have C 07.00 sheets for SA classes
         assert any("C 07.00" in s for s in sheet_names)

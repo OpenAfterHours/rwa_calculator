@@ -146,7 +146,7 @@ class TestM32_FIRB_Attribution:
     ) -> None:
         """M3.2-F5: Output floor can only add RWA, never reduce it."""
         min_floor = firb_impact_attribution_df["output_floor_impact"].min()
-        assert min_floor >= -1.0  # Tolerance for floating point
+        assert float(min_floor) >= -1.0  # Tolerance for floating point
 
 
 # =============================================================================

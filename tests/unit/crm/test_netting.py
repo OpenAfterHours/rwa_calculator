@@ -155,7 +155,8 @@ def _run_crm(
     exposures = pl.LazyFrame(exposure_rows)
     bundle = _make_bundle(exposures, collateral)
     result = processor.get_crm_adjusted_bundle(bundle, config)
-    return result.exposures.collect()
+    df: pl.DataFrame = result.exposures.collect()
+    return df
 
 
 # =============================================================================

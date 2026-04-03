@@ -119,7 +119,12 @@ python-version = "3.13"
 
 [tool.ty.src]
 # Marimo UI module excluded from type checking (equivalent to mypy ignore_errors)
-exclude = ["src/rwa_calc/ui/marimo/"]
+exclude = [
+    "src/rwa_calc/ui/marimo/",
+    "workbooks",
+    "tests/fixtures/generate_all.py",
+    "tests/fixtures/*/generate_all.py",
+]
 
 [tool.ty.rules]
 # Polars custom namespaces (register_lazyframe_namespace) produce false positives

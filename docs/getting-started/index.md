@@ -44,14 +44,19 @@ graph TD
 ## Quick Example
 
 ```python
-from rwa_calc.api import quick_calculate
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
-# Run a complete RWA calculation in one call
-response = quick_calculate("/path/to/data")
+response = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+).calculate()
+
 print(f"Total RWA: {response.summary.total_rwa:,.0f}")
 ```
 
-Need more control? Use `RWAService` for framework selection, IRB approach, and export options — see the [Quick Start](quickstart.md).
+Need more control? See the [Quick Start](quickstart.md) for framework selection, IRB mode, and export options.
 
 ## Next Steps
 

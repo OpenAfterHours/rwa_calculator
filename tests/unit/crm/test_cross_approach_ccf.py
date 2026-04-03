@@ -181,7 +181,8 @@ def _run_crm(
 
     bundle = _make_bundle(exposures, guarantees, counterparties, rating_inheritance)
     result = processor.get_crm_adjusted_bundle(bundle, config)
-    return result.exposures.collect()
+    df: pl.DataFrame = result.exposures.collect()
+    return df
 
 
 # =============================================================================

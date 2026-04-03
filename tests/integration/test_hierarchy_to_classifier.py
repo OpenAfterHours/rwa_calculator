@@ -41,7 +41,8 @@ def _run_pipeline(
     """Run hierarchy + classifier and collect all_exposures."""
     resolved = resolver.resolve(bundle, config)
     classified = classifier.classify(resolved, config)
-    return classified.all_exposures.collect()
+    result: pl.DataFrame = classified.all_exposures.collect()
+    return result
 
 
 # =============================================================================

@@ -23,7 +23,7 @@ import pytest
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.equity import EquityCalculator
 
 # =============================================================================
@@ -40,7 +40,6 @@ def equity_calculator() -> EquityCalculator:
 def sa_config() -> CalculationConfig:
     return CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        irb_permissions=IRBPermissions.sa_only(),
     )
 
 
@@ -265,20 +264,24 @@ class TestCIULookThrough:
     ):
         """CIU with a single CORPORATE CQS3 holding uses that holding's RW."""
         bundle = _make_look_through_bundle(
-            equity_data=[{
-                "exposure_reference": "CIU_1",
-                "ead_final": 1_000_000.0,
-                "equity_type": "ciu",
-                "ciu_approach": "look_through",
-                "fund_reference": "FUND_A",
-            }],
-            holdings_data=[{
-                "fund_reference": "FUND_A",
-                "holding_reference": "H1",
-                "exposure_class": "CORPORATE",
-                "cqs": 3,
-                "holding_value": 1_000_000.0,
-            }],
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_A",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 3,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         row = result.results.collect().to_dicts()[0]
@@ -292,13 +295,15 @@ class TestCIULookThrough:
     ):
         """CIU with mixed holdings gets value-weighted average RW."""
         bundle = _make_look_through_bundle(
-            equity_data=[{
-                "exposure_reference": "CIU_1",
-                "ead_final": 1_000_000.0,
-                "equity_type": "ciu",
-                "ciu_approach": "look_through",
-                "fund_reference": "FUND_A",
-            }],
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                }
+            ],
             holdings_data=[
                 {
                     "fund_reference": "FUND_A",
@@ -328,20 +333,24 @@ class TestCIULookThrough:
     ):
         """CIU with look_through but no matching holdings falls back to 250%."""
         bundle = _make_look_through_bundle(
-            equity_data=[{
-                "exposure_reference": "CIU_1",
-                "ead_final": 1_000_000.0,
-                "equity_type": "ciu",
-                "ciu_approach": "look_through",
-                "fund_reference": "FUND_X",
-            }],
-            holdings_data=[{
-                "fund_reference": "FUND_OTHER",
-                "holding_reference": "H1",
-                "exposure_class": "CORPORATE",
-                "cqs": 1,
-                "holding_value": 1_000_000.0,
-            }],
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_X",
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_OTHER",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         row = result.results.collect().to_dicts()[0]
@@ -354,13 +363,15 @@ class TestCIULookThrough:
     ):
         """CIU with look_through and ciu_holdings=None falls back to 250%."""
         bundle = _make_look_through_bundle(
-            equity_data=[{
-                "exposure_reference": "CIU_1",
-                "ead_final": 1_000_000.0,
-                "equity_type": "ciu",
-                "ciu_approach": "look_through",
-                "fund_reference": "FUND_A",
-            }],
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                }
+            ],
             holdings_data=None,
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
@@ -374,20 +385,24 @@ class TestCIULookThrough:
     ):
         """Holding with unrated CQS (null) defaults to 100% RW."""
         bundle = _make_look_through_bundle(
-            equity_data=[{
-                "exposure_reference": "CIU_1",
-                "ead_final": 1_000_000.0,
-                "equity_type": "ciu",
-                "ciu_approach": "look_through",
-                "fund_reference": "FUND_A",
-            }],
-            holdings_data=[{
-                "fund_reference": "FUND_A",
-                "holding_reference": "H1",
-                "exposure_class": "CORPORATE",
-                "cqs": None,
-                "holding_value": 1_000_000.0,
-            }],
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_A",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": None,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         row = result.results.collect().to_dicts()[0]
@@ -448,21 +463,25 @@ class TestCIULookThrough:
     ):
         """Mandate-based CIU ignores holdings data and uses mandate_rw."""
         bundle = _make_look_through_bundle(
-            equity_data=[{
-                "exposure_reference": "CIU_1",
-                "ead_final": 1_000_000.0,
-                "equity_type": "ciu",
-                "ciu_approach": "mandate_based",
-                "fund_reference": "FUND_A",
-                "ciu_mandate_rw": 3.50,
-            }],
-            holdings_data=[{
-                "fund_reference": "FUND_A",
-                "holding_reference": "H1",
-                "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK",
-                "cqs": 1,
-                "holding_value": 1_000_000.0,
-            }],
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "mandate_based",
+                    "fund_reference": "FUND_A",
+                    "ciu_mandate_rw": 3.50,
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_A",
+                    "holding_reference": "H1",
+                    "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK",
+                    "cqs": 1,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         row = result.results.collect().to_dicts()[0]
@@ -475,20 +494,24 @@ class TestCIULookThrough:
     ):
         """Look-through RWA = EAD * effective_rw."""
         bundle = _make_look_through_bundle(
-            equity_data=[{
-                "exposure_reference": "CIU_1",
-                "ead_final": 2_000_000.0,
-                "equity_type": "ciu",
-                "ciu_approach": "look_through",
-                "fund_reference": "FUND_A",
-            }],
-            holdings_data=[{
-                "fund_reference": "FUND_A",
-                "holding_reference": "H1",
-                "exposure_class": "CORPORATE",
-                "cqs": 1,
-                "holding_value": 1_000_000.0,
-            }],
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 2_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_A",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         row = result.results.collect().to_dicts()[0]

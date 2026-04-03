@@ -45,29 +45,37 @@ def create_full_irb_model_permissions() -> pl.LazyFrame:
             ExposureClass.RETAIL_QRRE,
             ExposureClass.RETAIL_OTHER,
         ):
-            rows.append({
+            rows.append(
+                {
+                    "model_id": _TEST_MODEL_ID,
+                    "exposure_class": ec.value,
+                    "approach": ApproachType.FIRB.value,
+                }
+            )
+        # Grant AIRB
+        rows.append(
+            {
                 "model_id": _TEST_MODEL_ID,
                 "exposure_class": ec.value,
-                "approach": ApproachType.FIRB.value,
-            })
-        # Grant AIRB
-        rows.append({
-            "model_id": _TEST_MODEL_ID,
-            "exposure_class": ec.value,
-            "approach": ApproachType.AIRB.value,
-        })
+                "approach": ApproachType.AIRB.value,
+            }
+        )
     # Grant slotting for specialised lending
-    rows.append({
-        "model_id": _TEST_MODEL_ID,
-        "exposure_class": ExposureClass.SPECIALISED_LENDING.value,
-        "approach": ApproachType.SLOTTING.value,
-    })
+    rows.append(
+        {
+            "model_id": _TEST_MODEL_ID,
+            "exposure_class": ExposureClass.SPECIALISED_LENDING.value,
+            "approach": ApproachType.SLOTTING.value,
+        }
+    )
 
-    return pl.LazyFrame(rows).cast({
-        "model_id": pl.String,
-        "exposure_class": pl.String,
-        "approach": pl.String,
-    })
+    return pl.LazyFrame(rows).cast(
+        {
+            "model_id": pl.String,
+            "exposure_class": pl.String,
+            "approach": pl.String,
+        }
+    )
 
 
 def create_firb_only_model_permissions() -> pl.LazyFrame:
@@ -84,23 +92,29 @@ def create_firb_only_model_permissions() -> pl.LazyFrame:
             ExposureClass.RETAIL_OTHER,
         ):
             continue  # FIRB not permitted for retail
-        rows.append({
-            "model_id": _TEST_MODEL_ID,
-            "exposure_class": ec.value,
-            "approach": ApproachType.FIRB.value,
-        })
+        rows.append(
+            {
+                "model_id": _TEST_MODEL_ID,
+                "exposure_class": ec.value,
+                "approach": ApproachType.FIRB.value,
+            }
+        )
     # Slotting for specialised lending
-    rows.append({
-        "model_id": _TEST_MODEL_ID,
-        "exposure_class": ExposureClass.SPECIALISED_LENDING.value,
-        "approach": ApproachType.SLOTTING.value,
-    })
+    rows.append(
+        {
+            "model_id": _TEST_MODEL_ID,
+            "exposure_class": ExposureClass.SPECIALISED_LENDING.value,
+            "approach": ApproachType.SLOTTING.value,
+        }
+    )
 
-    return pl.LazyFrame(rows).cast({
-        "model_id": pl.String,
-        "exposure_class": pl.String,
-        "approach": pl.String,
-    })
+    return pl.LazyFrame(rows).cast(
+        {
+            "model_id": pl.String,
+            "exposure_class": pl.String,
+            "approach": pl.String,
+        }
+    )
 
 
 def create_slotting_only_model_permissions() -> pl.LazyFrame:
@@ -108,16 +122,20 @@ def create_slotting_only_model_permissions() -> pl.LazyFrame:
 
     Used for slotting-specific acceptance tests.
     """
-    rows = [{
-        "model_id": _TEST_MODEL_ID,
-        "exposure_class": ExposureClass.SPECIALISED_LENDING.value,
-        "approach": ApproachType.SLOTTING.value,
-    }]
-    return pl.LazyFrame(rows).cast({
-        "model_id": pl.String,
-        "exposure_class": pl.String,
-        "approach": pl.String,
-    })
+    rows = [
+        {
+            "model_id": _TEST_MODEL_ID,
+            "exposure_class": ExposureClass.SPECIALISED_LENDING.value,
+            "approach": ApproachType.SLOTTING.value,
+        }
+    ]
+    return pl.LazyFrame(rows).cast(
+        {
+            "model_id": pl.String,
+            "exposure_class": pl.String,
+            "approach": pl.String,
+        }
+    )
 
 
 def enrich_ratings_with_model_id(ratings: pl.LazyFrame) -> pl.LazyFrame:
@@ -127,9 +145,7 @@ def enrich_ratings_with_model_id(ratings: pl.LazyFrame) -> pl.LazyFrame:
     so they can be matched against model_permissions.
     """
     return ratings.with_columns(
-        pl.when(
-            (pl.col("rating_type") == "internal") & pl.col("model_id").is_null()
-        )
+        pl.when((pl.col("rating_type") == "internal") & pl.col("model_id").is_null())
         .then(pl.lit(_TEST_MODEL_ID))
         .otherwise(pl.col("model_id"))
         .alias("model_id")

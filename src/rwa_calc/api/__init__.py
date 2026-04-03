@@ -2,25 +2,21 @@
 RWA Calculator API Module.
 
 Public API for RWA calculations providing:
-- RWAService: Main service facade for calculations
-- Request/Response models: Clean interface contracts
+- CreditRiskCalc: Single entry point for calculations
+- Response models: Clean interface contracts
 - ResultsCache: Memory-efficient parquet caching
 - Validation utilities: Data path validation
 
 Usage:
-    from rwa_calc.api import RWAService, CalculationRequest
     from datetime import date
-    from pathlib import Path
+    from rwa_calc.api import CreditRiskCalc
 
-    service = RWAService(cache_dir=Path(".cache"))
-    response = service.calculate(
-        CalculationRequest(
-            data_path="/path/to/data",
-            framework="CRR",
-            reporting_date=date(2024, 12, 31),
-            permission_mode="irb",
-        )
-    )
+    response = CreditRiskCalc(
+        data_path="/path/to/data",
+        framework="CRR",
+        reporting_date=date(2024, 12, 31),
+        permission_mode="irb",
+    ).calculate()
 
     if response.success:
         print(f"Total RWA: {response.summary.total_rwa:,.0f}")
@@ -34,7 +30,6 @@ from rwa_calc.api.export import (
 )
 from rwa_calc.api.models import (
     APIError,
-    CalculationRequest,
     CalculationResponse,
     PerformanceMetrics,
     SummaryStatistics,
@@ -46,9 +41,9 @@ from rwa_calc.api.results_cache import (
     ResultsCache,
 )
 from rwa_calc.api.service import (
-    RWAService,
-    create_service,
-    quick_calculate,
+    CreditRiskCalc,
+    get_default_config,
+    get_supported_frameworks,
 )
 from rwa_calc.api.validation import (
     DataPathValidator,
@@ -58,11 +53,11 @@ from rwa_calc.api.validation import (
 
 __all__ = [
     # Service
-    "RWAService",
-    "create_service",
-    "quick_calculate",
+    "CreditRiskCalc",
+    # Utilities
+    "get_supported_frameworks",
+    "get_default_config",
     # Request models
-    "CalculationRequest",
     "ValidationRequest",
     # Response models
     "CalculationResponse",

@@ -6,186 +6,35 @@ validation, caching, and result formatting.
 
 **Import path:** `from rwa_calc.api import ...`
 
-## quick_calculate
+## CreditRiskCalc
 
-One-liner convenience function for simple use cases.
-
-```python
-from rwa_calc.api import quick_calculate
-
-response = quick_calculate("/path/to/data")
-```
-
-### Signature
-
-```python
-def quick_calculate(
-    data_path: str | Path,
-    framework: Literal["CRR", "BASEL_3_1"] = "CRR",
-    reporting_date: date | None = None,
-    permission_mode: Literal["standardised", "irb"] = "standardised",
-    data_format: Literal["parquet", "csv"] = "parquet",
-    cache_dir: Path | None = None,
-) -> CalculationResponse
-```
-
-### Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `data_path` | `str \| Path` | *required* | Path to directory containing input data files |
-| `framework` | `"CRR" \| "BASEL_3_1"` | `"CRR"` | Regulatory framework |
-| `reporting_date` | `date \| None` | today | As-of date for the calculation |
-| `permission_mode` | `"standardised" \| "irb"` | `"standardised"` | Permission mode: SA-only or IRB with model permissions |
-| `data_format` | `"parquet" \| "csv"` | `"parquet"` | Format of input files |
-| `cache_dir` | `Path \| None` | temp dir | Directory for caching result parquet files |
-
-### Examples
+Single entry point for credit risk RWA calculations. Takes all parameters in the
+constructor and exposes `calculate()` and `validate()` methods.
 
 ```python
 from datetime import date
-from rwa_calc.api import quick_calculate
+from rwa_calc.api import CreditRiskCalc
 
-# Simplest usage — CRR framework, today's date, SA only
-response = quick_calculate("/data/exposures")
-
-# Basel 3.1 with IRB
-response = quick_calculate(
-    "/data/exposures",
-    framework="BASEL_3_1",
-    reporting_date=date(2027, 1, 1),
-    permission_mode="irb",
-)
-
-# CSV input
-response = quick_calculate("/data/csv-exports", data_format="csv")
-```
-
----
-
-## create_service
-
-Factory function to create an `RWAService` instance.
-
-```python
-from rwa_calc.api import create_service
-
-service = create_service()
-```
-
-### Signature
-
-```python
-def create_service(cache_dir: Path | None = None) -> RWAService
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cache_dir` | `Path \| None` | temp dir | Directory for caching result parquet files |
-
----
-
-## RWAService
-
-High-level service for RWA calculations. Wraps the `PipelineOrchestrator` with a
-clean API suitable for UI integration, automation, and scripting.
-
-```python
-from rwa_calc.api import RWAService, create_service
-
-service = create_service()
-# or: service = RWAService(cache_dir=Path(".cache"))
-```
-
-### Methods
-
-#### calculate
-
-Run an RWA calculation with the specified parameters.
-
-```python
-response = service.calculate(request)
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `request` | `CalculationRequest` | Request with all calculation parameters |
-
-**Returns:** `CalculationResponse`
-
-#### validate_data_path
-
-Validate a data directory for calculation readiness.
-
-```python
-from rwa_calc.api import ValidationRequest
-
-validation = service.validate_data_path(
-    ValidationRequest(data_path="/path/to/data")
-)
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `request` | `ValidationRequest` | Request with path and format |
-
-**Returns:** `ValidationResponse`
-
-#### get_supported_frameworks
-
-List available regulatory frameworks.
-
-```python
-frameworks = service.get_supported_frameworks()
-# [{"id": "CRR", "name": "CRR (Basel 3.0)", ...}, ...]
-```
-
-**Returns:** `list[dict[str, str]]`
-
-#### get_default_config
-
-Get default configuration values for a framework.
-
-```python
-defaults = service.get_default_config("CRR", date(2026, 12, 31))
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `framework` | `"CRR" \| "BASEL_3_1"` | Regulatory framework |
-| `reporting_date` | `date` | As-of date |
-
-**Returns:** `dict` with keys like `framework`, `reporting_date`, `pd_floors`, etc.
-
----
-
-## Request Models
-
-### CalculationRequest
-
-Frozen dataclass encapsulating all parameters for a calculation.
-
-```python
-from datetime import date
-from rwa_calc.api import CalculationRequest
-
-request = CalculationRequest(
+response = CreditRiskCalc(
     data_path="/path/to/data",
     framework="CRR",
     reporting_date=date(2026, 12, 31),
     permission_mode="irb",
-)
+).calculate()
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `data_path` | `str \| Path` | *required* | Path to data directory |
+### Constructor Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `data_path` | `str \| Path` | *required* | Path to directory containing input data files |
 | `framework` | `"CRR" \| "BASEL_3_1"` | *required* | Regulatory framework |
-| `reporting_date` | `date` | *required* | As-of date for calculation |
-| `base_currency` | `str` | `"GBP"` | Reporting currency |
+| `reporting_date` | `date` | *required* | As-of date for the calculation |
 | `permission_mode` | `"standardised" \| "irb"` | `"standardised"` | Permission mode (see table below) |
-| `data_format` | `"parquet" \| "csv"` | `"parquet"` | Input file format |
+| `data_format` | `"parquet" \| "csv"` | `"parquet"` | Format of input files |
+| `base_currency` | `str` | `"GBP"` | Reporting currency |
 | `eur_gbp_rate` | `Decimal` | `0.8732` | EUR/GBP exchange rate |
+| `cache_dir` | `Path \| None` | temp dir | Directory for caching result parquet files |
 
 **Permission mode options:**
 
@@ -203,6 +52,96 @@ request = CalculationRequest(
     fall back to SA with a warning. See
     [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema)
     for the schema.
+
+### Methods
+
+#### calculate
+
+Run the RWA calculation.
+
+```python
+response = calc.calculate()
+```
+
+**Returns:** `CalculationResponse`
+
+#### validate
+
+Validate the data path for calculation readiness.
+
+```python
+validation = calc.validate()
+```
+
+**Returns:** `ValidationResponse`
+
+### Examples
+
+```python
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
+
+# CRR with SA only
+response = CreditRiskCalc(
+    data_path="/data/exposures",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+).calculate()
+
+# Basel 3.1 with IRB
+response = CreditRiskCalc(
+    data_path="/data/exposures",
+    framework="BASEL_3_1",
+    reporting_date=date(2027, 1, 1),
+    permission_mode="irb",
+).calculate()
+
+# CSV input
+response = CreditRiskCalc(
+    data_path="/data/csv-exports",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+    data_format="csv",
+).calculate()
+```
+
+---
+
+## Module Functions
+
+### get_supported_frameworks
+
+List available regulatory frameworks.
+
+```python
+from rwa_calc.api import get_supported_frameworks
+
+frameworks = get_supported_frameworks()
+# [{"id": "CRR", "name": "CRR (Basel 3.0)", ...}, ...]
+```
+
+**Returns:** `list[dict[str, str]]`
+
+### get_default_config
+
+Get default configuration values for a framework.
+
+```python
+from rwa_calc.api import get_default_config
+
+defaults = get_default_config("CRR", date(2026, 12, 31))
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `framework` | `"CRR" \| "BASEL_3_1"` | Regulatory framework |
+| `reporting_date` | `date` | As-of date |
+
+**Returns:** `dict` with keys like `framework`, `reporting_date`, `pd_floors`, etc.
+
+---
+
+## Request Models
 
 ### ValidationRequest
 
@@ -228,7 +167,7 @@ request = ValidationRequest(
 
 ### CalculationResponse
 
-Main response from `RWAService.calculate()` or `quick_calculate()`.
+Main response from `CreditRiskCalc.calculate()`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -286,7 +225,7 @@ Aggregated summary metrics from the calculation.
 
 ### ValidationResponse
 
-Response from `validate_data_path()`.
+Response from `CreditRiskCalc.validate()`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -363,9 +302,15 @@ Result of an export operation.
 ### Basic Calculation
 
 ```python
-from rwa_calc.api import quick_calculate
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
-response = quick_calculate("/data/exposures")
+response = CreditRiskCalc(
+    data_path="/data/exposures",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+).calculate()
+
 if response.success:
     print(f"Total RWA: {response.summary.total_rwa:,.0f}")
 ```
@@ -373,36 +318,35 @@ if response.success:
 ### Validation Before Calculation
 
 ```python
-from rwa_calc.api import create_service, ValidationRequest, CalculationRequest
 from datetime import date
+from rwa_calc.api import CreditRiskCalc
 
-service = create_service()
-
-# Validate first
-validation = service.validate_data_path(
-    ValidationRequest(data_path="/data/exposures")
+calc = CreditRiskCalc(
+    data_path="/data/exposures",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
 )
+
+validation = calc.validate()
 if not validation.valid:
     print(f"Missing: {validation.files_missing}")
-    exit(1)
-
-# Then calculate
-response = service.calculate(
-    CalculationRequest(
-        data_path="/data/exposures",
-        framework="CRR",
-        reporting_date=date(2026, 12, 31),
-    )
-)
+else:
+    response = calc.calculate()
 ```
 
 ### Export to Multiple Formats
 
 ```python
+from datetime import date
 from pathlib import Path
-from rwa_calc.api import quick_calculate
+from rwa_calc.api import CreditRiskCalc
 
-response = quick_calculate("/data/exposures", permission_mode="irb")
+response = CreditRiskCalc(
+    data_path="/data/exposures",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+    permission_mode="irb",
+).calculate()
 
 if response.success:
     response.to_parquet(Path("output/parquet/"))
@@ -415,21 +359,21 @@ if response.success:
 
 ```python
 from datetime import date
-from rwa_calc.api import quick_calculate
+from rwa_calc.api import CreditRiskCalc
 
-crr = quick_calculate(
-    "/data/exposures",
+crr = CreditRiskCalc(
+    data_path="/data/exposures",
     framework="CRR",
     reporting_date=date(2026, 12, 31),
     permission_mode="irb",
-)
+).calculate()
 
-b31 = quick_calculate(
-    "/data/exposures",
+b31 = CreditRiskCalc(
+    data_path="/data/exposures",
     framework="BASEL_3_1",
     reporting_date=date(2027, 1, 1),
     permission_mode="irb",
-)
+).calculate()
 
 if crr.success and b31.success:
     delta = b31.summary.total_rwa - crr.summary.total_rwa

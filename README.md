@@ -40,7 +40,7 @@ response = quick_calculate("/path/to/data")
 print(f"Total RWA: {response.summary.total_rwa:,.0f}")
 ```
 
-**More Control** — choose framework, IRB approach, and reporting date:
+**More Control** — choose framework, permission mode, and reporting date:
 
 ```python
 from datetime import date
@@ -52,7 +52,7 @@ response = service.calculate(
         data_path="/path/to/data",
         framework="CRR",
         reporting_date=date(2026, 12, 31),
-        irb_approach="full_irb",
+        permission_mode="irb",
     )
 )
 
@@ -61,11 +61,11 @@ if response.success:
     df = response.collect_results()
 ```
 
-**Per-Model IRB Permissions** — for banks with multiple approved IRB models, place a
-`config/model_permissions.parquet` file in your data directory to control IRB approach at
-the model level. Counterparties link to models via `model_id`. See the
+**IRB Mode** — set `permission_mode="irb"` and provide a `model_permissions` input table
+to route exposures to FIRB, AIRB, or slotting based on per-model approvals. Exposures
+without a matching model permission fall back to SA. See the
 [Data Model docs](https://OpenAfterHours.github.io/rwa_calculator/data-model/input-schemas/#model-permissions-schema)
-for schema details.
+for the model permissions schema.
 
 **Interactive UI** — web-based calculator interface:
 

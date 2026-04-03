@@ -7,7 +7,7 @@
     "primary": "PRA PS9/24 — Implementation of the Basel 3.1 standards",
     "sa_risk_weights": "CRE20.7-26, CRE20.71-88 (SA risk weights, LTV-based RE)",
     "irb_approach": "CRE30-36 (IRB approach)",
-    "output_floor": "PRA PS9/24 Transitional Schedule (50%-72.5%, 2027-2032)"
+    "output_floor": "PRA PS1/26 Art. 92(5) Transitional Schedule (60%-72.5%, 2027-2030)"
   },
   "scenario_groups": {
     "B31-A": {
@@ -51,12 +51,12 @@
     "No 1.06 scaling factor for IRB",
     "Differentiated PD floors by exposure class (Corporate 0.05%, QRRE 0.03%/0.10%)",
     "A-IRB LGD floors (25% unsecured, 0% financial, 5%-15% physical)",
-    "Output floor: max(IRB RWA, floor% x SA RWA), 50%-72.5% phase-in 2027-2032",
+    "Output floor: max(IRB RWA, floor% x SA RWA), 60%-72.5% phase-in 2027-2030",
     "Corporate CQS 3: 75% (was 100%); CQS 5: 100% (was 150%)",
     "SCRA grading for unrated institutions (A=40%, B=75%, C=150%)",
     "Investment-grade unrated corporates: 65%",
     "Subordinated debt: 150% flat for institution/corporate",
-    "Income-producing commercial RE: LTV-banded (70%/90%/110%)"
+    "Income-producing commercial RE: LTV-banded (100%/110% per PRA Art. 124I)"
   ],
   "scenario_count": 38,
   "scenarios": [
@@ -207,7 +207,7 @@
     {
       "scenario_id": "B31-A7",
       "scenario_group": "B31-A",
-      "description": "Commercial RE 40% LTV income-producing — 70% RW (was CRR 50%)",
+      "description": "Commercial RE 40% LTV income-producing — 100% RW (was CRR 50%)",
       "regulatory_framework": "Basel 3.1",
       "approach": "SA",
       "exposure_class": "CRE",
@@ -220,13 +220,13 @@
       "cqs": null,
       "ltv": 0.4,
       "turnover": null,
-      "risk_weight": 0.7,
-      "rwa_before_sf": 280000.0,
+      "risk_weight": 1.0,
+      "rwa_before_sf": 400000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 280000.0,
+      "rwa_after_sf": 400000.0,
       "expected_loss": null,
-      "regulatory_reference": "CRE20.86 Table 18",
-      "calculation_notes": "Income-producing commercial RE. LTV 40% → band 0%-60% → 70% RW. Was 50% under CRR Art. 126."
+      "regulatory_reference": "PRA PS1/26 Art. 124I",
+      "calculation_notes": "Income-producing commercial RE. LTV 40% ≤ 80% → 100% RW per PRA PS1/26 Art. 124I. Was 50% under CRR Art. 126."
     },
     {
       "scenario_id": "B31-A8",

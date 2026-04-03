@@ -456,7 +456,7 @@ class TestLGDFloors:
         - Unsecured: 25%
         - Financial collateral: 0%
         - Receivables: 10%
-        - RRE: 5%, CRE: 10%
+        - RRE: 10%, CRE: 10%
         - Other physical: 15%
     """
 
@@ -510,11 +510,11 @@ class TestLGDFloors:
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.0)
 
-    def test_basel31_rre_floor_5pct(
+    def test_basel31_rre_floor_10pct(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: Residential real estate LGD floor is 5%."""
+        """Basel 3.1: Residential real estate LGD floor is 10% (PRA Art. 161/164)."""
         lf = pl.LazyFrame(
             {
                 "lgd": [0.01],
@@ -524,7 +524,7 @@ class TestLGDFloors:
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config).alias("lgd_floor")
         ).collect()
-        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        assert result["lgd_floor"][0] == pytest.approx(0.10)
 
     def test_basel31_cre_floor_10pct(
         self,
@@ -679,8 +679,8 @@ class TestLGDFloors:
         result = apply_irb_formulas(lf, basel31_config).collect()
         # Financial collateral: floor 0%, so lgd stays at 0.01
         assert result["lgd_floored"][0] == pytest.approx(0.01)
-        # Residential RE: floor 5%, so lgd stays at 0.05
-        assert result["lgd_floored"][1] == pytest.approx(0.05)
+        # Residential RE: floor 10%, so lgd is floored up to 0.10
+        assert result["lgd_floored"][1] == pytest.approx(0.10)
 
     def test_apply_irb_formulas_lgd_floor_basel31_mixed_approaches(
         self,
@@ -775,7 +775,7 @@ class TestLGDFloors:
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config).alias("lgd_floor")
         ).collect()
-        expected = [0.00, 0.10, 0.05, 0.10, 0.15]
+        expected = [0.00, 0.10, 0.10, 0.10, 0.15]
         for i, (coll_type, exp_floor) in enumerate(
             zip(result["collateral_type"].to_list(), expected, strict=True)
         ):
@@ -863,8 +863,8 @@ class TestLGDFloors:
                 "lgd_floor"
             )
         ).collect()
-        # Collateral floor takes precedence: RRE 5%, other physical 15%
-        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        # Collateral floor takes precedence: RRE 10%, other physical 15%
+        assert result["lgd_floor"][0] == pytest.approx(0.10)
         assert result["lgd_floor"][1] == pytest.approx(0.15)
 
     def test_apply_all_formulas_lgd_floor_airb_only(
@@ -1707,7 +1707,7 @@ class TestConfigFactoryMethods:
         assert config.lgd_floors.unsecured == Decimal("0.25")
         assert config.lgd_floors.financial_collateral == Decimal("0.0")
         assert config.lgd_floors.receivables == Decimal("0.10")
-        assert config.lgd_floors.residential_real_estate == Decimal("0.05")
+        assert config.lgd_floors.residential_real_estate == Decimal("0.10")
         assert config.lgd_floors.commercial_real_estate == Decimal("0.10")
         assert config.lgd_floors.other_physical == Decimal("0.15")
 

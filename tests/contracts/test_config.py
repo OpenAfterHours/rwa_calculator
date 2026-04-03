@@ -93,7 +93,7 @@ class TestLGDFloors:
         assert floors.financial_collateral == Decimal("0.0")  # 0%
         assert floors.receivables == Decimal("0.10")  # 10%
         assert floors.commercial_real_estate == Decimal("0.10")  # 10%
-        assert floors.residential_real_estate == Decimal("0.05")  # 5%
+        assert floors.residential_real_estate == Decimal("0.10")  # 10% (PRA Art. 161/164)
         assert floors.other_physical == Decimal("0.15")  # 15%
 
     def test_get_floor_by_collateral_type(self):
@@ -148,13 +148,11 @@ class TestOutputFloorConfig:
         """Basel 3.1 should have transitional floor schedule."""
         floor_config = OutputFloorConfig.basel_3_1()
 
-        # Check transitional percentages
-        assert floor_config.get_floor_percentage(date(2027, 6, 1)) == Decimal("0.50")
-        assert floor_config.get_floor_percentage(date(2028, 6, 1)) == Decimal("0.55")
-        assert floor_config.get_floor_percentage(date(2029, 6, 1)) == Decimal("0.60")
-        assert floor_config.get_floor_percentage(date(2030, 6, 1)) == Decimal("0.65")
-        assert floor_config.get_floor_percentage(date(2031, 6, 1)) == Decimal("0.70")
-        assert floor_config.get_floor_percentage(date(2032, 6, 1)) == Decimal("0.725")
+        # Check transitional percentages (PRA PS1/26 Art. 92(5))
+        assert floor_config.get_floor_percentage(date(2027, 6, 1)) == Decimal("0.60")
+        assert floor_config.get_floor_percentage(date(2028, 6, 1)) == Decimal("0.65")
+        assert floor_config.get_floor_percentage(date(2029, 6, 1)) == Decimal("0.70")
+        assert floor_config.get_floor_percentage(date(2030, 6, 1)) == Decimal("0.725")
 
 
 class TestIRBPermissions:
@@ -246,10 +244,10 @@ class TestCalculationConfig:
     def test_get_output_floor_percentage(self):
         """get_output_floor_percentage should use reporting date."""
         config = CalculationConfig.basel_3_1(
-            reporting_date=date(2028, 6, 1),  # Should be 55%
+            reporting_date=date(2028, 6, 1),  # Should be 65% (PRA Art. 92(5))
         )
 
-        assert config.get_output_floor_percentage() == Decimal("0.55")
+        assert config.get_output_floor_percentage() == Decimal("0.65")
 
     def test_crr_eur_gbp_rate_customizable(self):
         """CRR config should allow custom EUR/GBP rate."""

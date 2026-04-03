@@ -43,7 +43,7 @@ Under CRR, A-IRB has **no LGD floors**. Under Basel 3.1, the following floors ap
 | Financial collateral | 0% |
 | Receivables | 10% |
 | Commercial real estate | 10% |
-| Residential real estate | 5% |
+| Residential real estate | 10% |
 | Other physical | 15% |
 
 ## FI Scalar

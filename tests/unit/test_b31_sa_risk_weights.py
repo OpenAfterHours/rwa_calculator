@@ -45,7 +45,8 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_ADC_PRESOLD_RISK_WEIGHT,
     B31_ADC_RISK_WEIGHT,
-    B31_COMMERCIAL_GENERAL_PREFERENTIAL_CAP,
+    B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO,
+    B31_COMMERCIAL_GENERAL_SECURED_RW,
     B31_COMMERCIAL_INCOME_LTV_BANDS,
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_RISK_WEIGHTS,
@@ -256,26 +257,28 @@ class TestB31ResidentialIncomeProducing:
 
 
 class TestB31CommercialREGeneral:
-    """Basel 3.1 commercial RE (general) — preferential treatment.
+    """Basel 3.1 commercial RE (general) — loan-splitting (PRA Art. 124H).
 
     For CRE not materially dependent on property cash flows:
-    - LTV ≤ 60%: min(60%, counterparty risk weight)
-    - LTV > 60%: counterparty risk weight (no cap)
+    - 60% on portion up to 55% of property value
+    - Counterparty risk weight on the residual
+    - Formula: secured_share = min(1.0, 0.55/LTV)
+    -          RW = 0.60 × secured_share + cp_rw × (1 - secured_share)
     """
 
-    def test_low_ltv_unrated_corporate_capped_at_60pct(
+    def test_low_ltv_fully_secured(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Unrated corporate CRE (100% cp RW), LTV ≤ 60% → capped at 60%."""
+        """LTV ≤ 55%: entire exposure at 60% (fully within secured portion)."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRE001"],
                 "ead_final": [1000000.0],
                 "exposure_class": ["COMMERCIAL_RE"],
                 "cqs": [None],
-                "ltv": [0.55],
+                "ltv": [0.50],
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "has_income_cover": [False],
@@ -291,15 +294,15 @@ class TestB31CommercialREGeneral:
         result = sa_calculator.calculate(bundle, b31_config)
         df = result.frame.collect()
 
-        # Counterparty RW = 100% (unrated corporate fallback), min(60%, 100%) = 60%
+        # LTV 50% ≤ 55%: secured_share = 1.0, RW = 60%
         assert df["risk_weight"][0] == pytest.approx(0.60)
 
-    def test_low_ltv_rated_corporate_uses_lower_cp_rw(
+    def test_low_ltv_rated_corporate_still_60pct(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CQS 1 corporate CRE (20% cp RW), LTV ≤ 60% → min(60%, 20%) = 20%."""
+        """CQS 1 corporate CRE (20% cp RW), LTV ≤ 55% → fully secured at 60%."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRE001"],
@@ -323,15 +326,15 @@ class TestB31CommercialREGeneral:
         result = sa_calculator.calculate(bundle, b31_config)
         df = result.frame.collect()
 
-        # CQS 1 corporate RW = 20%, min(60%, 20%) = 20%
-        assert df["risk_weight"][0] == pytest.approx(0.20)
+        # LTV 50% ≤ 55%: secured_share = 1.0, RW = 60% (loan-split secured portion)
+        assert df["risk_weight"][0] == pytest.approx(0.60)
 
-    def test_high_ltv_uses_counterparty_rw(
+    def test_high_ltv_loan_split_blended(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CRE LTV > 60%, general → counterparty RW (no cap)."""
+        """CRE LTV 75% → blended loan-split RW."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRE001"],
@@ -354,22 +357,24 @@ class TestB31CommercialREGeneral:
         result = sa_calculator.calculate(bundle, b31_config)
         df = result.frame.collect()
 
-        # Unrated corporate fallback = 100%, LTV > 60% → no cap → 100%
-        assert df["risk_weight"][0] == pytest.approx(1.00)
+        # secured_share = 0.55/0.75, cp_rw = 1.00 (unrated corporate)
+        secured_share = 0.55 / 0.75
+        expected = 0.60 * secured_share + 1.00 * (1.0 - secured_share)
+        assert df["risk_weight"][0] == pytest.approx(expected)
 
-    def test_boundary_ltv_60pct_gets_preferential(
+    def test_boundary_ltv_55pct_fully_secured(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """LTV exactly 60% qualifies for preferential treatment."""
+        """LTV exactly 55%: entire exposure within secured portion → 60%."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRE001"],
                 "ead_final": [1000000.0],
                 "exposure_class": ["COMMERCIAL_RE"],
                 "cqs": [None],
-                "ltv": [0.60],
+                "ltv": [0.55],
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "has_income_cover": [False],
@@ -385,34 +390,34 @@ class TestB31CommercialREGeneral:
         result = sa_calculator.calculate(bundle, b31_config)
         df = result.frame.collect()
 
-        # LTV = 60% ≤ 60% → min(60%, 100%) = 60%
+        # LTV = 55% → secured_share = 0.55/0.55 = 1.0 → RW = 60%
         assert df["risk_weight"][0] == pytest.approx(0.60)
 
 
 # =============================================================================
-# COMMERCIAL RE — INCOME-PRODUCING (CRE20.86)
+# COMMERCIAL RE — INCOME-PRODUCING (PRA Art. 124I)
 # =============================================================================
 
 
 class TestB31CommercialREIncomeProducing:
-    """Basel 3.1 commercial RE (income-producing) — LTV bands.
+    """Basel 3.1 commercial RE (income-producing) — PRA Art. 124I.
 
-    Fixed risk weights by LTV band: 70% / 90% / 110%.
+    Fixed risk weights: 100% (LTV ≤ 80%), 110% (LTV > 80%).
     """
 
     @pytest.mark.parametrize(
         ("ltv", "expected_rw"),
         [
-            (Decimal("0.40"), Decimal("0.70")),  # LTV 40% → 70%
-            (Decimal("0.60"), Decimal("0.70")),  # LTV 60% (boundary) → 70%
-            (Decimal("0.70"), Decimal("0.90")),  # LTV 70% → 90%
-            (Decimal("0.80"), Decimal("0.90")),  # LTV 80% (boundary) → 90%
+            (Decimal("0.40"), Decimal("1.00")),  # LTV 40% → 100%
+            (Decimal("0.60"), Decimal("1.00")),  # LTV 60% → 100%
+            (Decimal("0.70"), Decimal("1.00")),  # LTV 70% → 100%
+            (Decimal("0.80"), Decimal("1.00")),  # LTV 80% (boundary) → 100%
             (Decimal("0.90"), Decimal("1.10")),  # LTV 90% → 110%
             (Decimal("1.20"), Decimal("1.10")),  # LTV 120% → 110%
         ],
         ids=[
             "ltv_40pct",
-            "ltv_60pct_boundary",
+            "ltv_60pct",
             "ltv_70pct",
             "ltv_80pct_boundary",
             "ltv_90pct",
@@ -564,32 +569,37 @@ class TestScalarLookups:
             rw, desc = lookup_b31_residential_rw(ltv, is_income_producing=True)
             assert rw == band["risk_weight"], f"LTV {ltv}: expected {band['risk_weight']}, got {rw}"
 
-    def test_commercial_general_low_ltv(self) -> None:
-        """Commercial general CRE: min(60%, counterparty RW) for LTV ≤ 60%."""
-        rw, _ = lookup_b31_commercial_rw(
+    def test_commercial_general_low_ltv_fully_secured(self) -> None:
+        """Commercial general CRE: LTV ≤ 55% → fully secured at 60%."""
+        rw, desc = lookup_b31_commercial_rw(
             Decimal("0.50"),
             counterparty_rw=Decimal("1.00"),
             is_income_producing=False,
         )
-        assert rw == B31_COMMERCIAL_GENERAL_PREFERENTIAL_CAP  # min(60%, 100%) = 60%
+        assert rw == B31_COMMERCIAL_GENERAL_SECURED_RW  # 60% (fully secured)
+        assert "loan-split" in desc
 
-    def test_commercial_general_low_ltv_lower_cp_rw(self) -> None:
-        """Commercial general CRE: min(60%, 20%) = 20% for CQS 1."""
+    def test_commercial_general_low_ltv_still_60pct(self) -> None:
+        """Commercial general CRE: LTV ≤ 55% → 60% even with low cp RW."""
         rw, _ = lookup_b31_commercial_rw(
             Decimal("0.50"),
             counterparty_rw=Decimal("0.20"),
             is_income_producing=False,
         )
-        assert rw == Decimal("0.20")
+        # Loan-splitting: LTV 50% ≤ 55% → secured_share=1.0 → 60%
+        assert rw == B31_COMMERCIAL_GENERAL_SECURED_RW
 
-    def test_commercial_general_high_ltv(self) -> None:
-        """Commercial general CRE: counterparty RW for LTV > 60%."""
+    def test_commercial_general_high_ltv_blended(self) -> None:
+        """Commercial general CRE: LTV > 55% → blended loan-split."""
         rw, _ = lookup_b31_commercial_rw(
             Decimal("0.75"),
             counterparty_rw=Decimal("1.00"),
             is_income_producing=False,
         )
-        assert rw == Decimal("1.00")
+        # secured_share = 0.55/0.75, RW = 0.60 * share + 1.00 * (1 - share)
+        secured = Decimal("0.55") / Decimal("0.75")
+        expected = Decimal("0.60") * secured + Decimal("1.00") * (1 - secured)
+        assert rw == pytest.approx(expected)
 
     def test_commercial_income_producing_lookup(self) -> None:
         """Commercial income-producing CRE uses LTV band table."""
@@ -834,9 +844,9 @@ class TestTableDataIntegrity:
         """Should have exactly 7 LTV bands for income-producing residential RE."""
         assert len(B31_RESIDENTIAL_INCOME_LTV_BANDS) == 7
 
-    def test_three_commercial_income_bands(self) -> None:
-        """Should have exactly 3 LTV bands for commercial income-producing."""
-        assert len(B31_COMMERCIAL_INCOME_LTV_BANDS) == 3
+    def test_two_commercial_income_bands(self) -> None:
+        """Should have exactly 2 LTV bands for commercial income-producing (PRA Art. 124I)."""
+        assert len(B31_COMMERCIAL_INCOME_LTV_BANDS) == 2
 
     def test_b31_corporate_cqs_table_values(self) -> None:
         """Basel 3.1 corporate CQS table should have correct values."""

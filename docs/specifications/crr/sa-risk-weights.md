@@ -84,55 +84,94 @@ avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 | LTV ≤ 50% and rental income ≥ 1.5x interest costs | 50% |
 | All other CRE | 100% |
 
-## Basel 3.1 Residential Real Estate (CRE20.73)
+## Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 
-### General Residential (CRE20.73)
+### General Residential — Loan-Splitting (Art. 124F)
 
-Whole-loan approach (PRA PS1/26):
+Not materially dependent on cash flows from the property. PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
 
-| LTV Band | Risk Weight |
-|----------|-------------|
-| ≤ 50% | 20% |
-| 50-60% | 25% |
-| 60-70% | 25% |
-| 70-80% | 30% |
-| 80-90% | 40% |
-| 90-100% | 50% |
-| > 100% | 70% |
+- **Secured portion** (up to 55% of property value): **20%** risk weight
+- **Residual portion** (above 55% of property value): **counterparty risk weight** (Art. 124L)
 
-### Income-Producing Residential (CRE20.82)
+```
+secured_share = min(1.0, 0.55 / LTV)
+RW = 0.20 × secured_share + counterparty_RW × (1.0 - secured_share)
+```
+
+**Counterparty risk weight** (Art. 124L):
+
+| Counterparty Type | RW |
+|-------------------|----|
+| Natural person (non-SME) | 75% |
+| Retail-qualifying SME | 75% |
+| Other SME (unrated) | 85% |
+| Social housing | max(75%, unsecured RW) |
+| Other | Unsecured counterparty RW |
+
+**Junior charges** (Art. 124F(2)): If a prior or pari passu charge exists, the 55% threshold is reduced by the amount of the prior charge. Not yet modelled.
+
+### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
+
+Materially dependent on cash flows from the property (e.g., buy-to-let). Whole-loan approach — single risk weight on entire exposure:
 
 | LTV Band | Risk Weight |
 |----------|-------------|
 | ≤ 50% | 30% |
 | 50-60% | 35% |
-| 60-70% | 45% |
+| 60-70% | 40% |
 | 70-80% | 50% |
 | 80-90% | 60% |
 | 90-100% | 75% |
 | > 100% | 105% |
 
-### Commercial RE — General (CRE20.85)
+**Junior charge multiplier** (Art. 124G(2)): 1.25× on income-dependent RESI RE if LTV > 50% and prior/pari passu charges exist. Not yet modelled.
 
-| Condition | Risk Weight |
-|-----------|-------------|
-| LTV ≤ 60% | min(60%, counterparty RW) |
-| LTV > 60% | Counterparty RW |
+### Commercial RE — General, Loan-Splitting (Art. 124H)
 
-### Commercial RE — Income-Producing (CRE20.86)
+Not materially dependent on cash flows:
+
+**Natural person / SME**: Split approach — **60%** on portion up to 55% of property value, counterparty RW on remainder.
+
+```
+secured_share = min(1.0, 0.55 / LTV)
+RW = 0.60 × secured_share + counterparty_RW × (1.0 - secured_share)
+```
+
+**Other counterparties**: `max(60%, min(counterparty_RW, Art 124I income-producing RW))`
+
+### Commercial RE — Income-Producing (Art. 124I)
+
+Materially dependent on cash flows:
 
 | LTV Band | Risk Weight |
 |----------|-------------|
-| ≤ 60% | 70% |
-| 60-80% | 90% |
+| ≤ 80% | 100% |
 | > 80% | 110% |
 
-### ADC Exposures (CRE20.87-88)
+**Junior charge multiplier** (Art. 124I(3)):
+
+| LTV Band | Multiplier |
+|----------|------------|
+| ≤ 60% | 1.0× (100%) |
+| 60-80% | 1.25× (125%) |
+| > 80% | 1.375× (137.5%) |
+
+### Other Real Estate (Art. 124J)
+
+Non-regulatory real estate (doesn't meet Art. 124A requirements):
+
+| Type | Risk Weight |
+|------|-------------|
+| Income-dependent | 150% |
+| RESI non-dependent | Counterparty RW |
+| CRE non-dependent | max(60%, counterparty RW) |
+
+### ADC Exposures (Art. 124K)
 
 | Condition | Risk Weight |
 |-----------|-------------|
 | Default | 150% |
-| Pre-sold/pre-let | 100% |
+| Residential with pre-sales/equity at risk | 100% |
 
 ## Basel 3.1 Corporate Exposures (CRE20.42-49)
 
@@ -168,7 +207,10 @@ ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR
 
 ## Basel 3.1 Changes Summary
 
-- **LTV-based residential RE weights** (CRE20.71): Risk weights vary by loan-to-value ratio — Done
+- **Residential RE loan-splitting** (Art. 124F): 20% on ≤55% LTV, counterparty RW on residual — Done
+- **Residential RE income-producing** (Art. 124G): Whole-loan LTV table (30%-105%) — Done
+- **Commercial RE loan-splitting** (Art. 124H): 60% on ≤55% LTV, counterparty RW on residual — Done
+- **Commercial RE income-producing** (Art. 124I): 100%/110% at ≤80%/>80% — Done
 - **Revised corporate CQS mapping** (CRE20.42): CQS 3 from 100% to 75%, CQS 5 from 150% to 100% — Done
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
 - **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done

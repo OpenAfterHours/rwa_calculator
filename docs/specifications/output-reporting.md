@@ -17,14 +17,12 @@
 ### Description
 IRB RWA must be at least X% of what SA-equivalent RWA would produce. Transitional phase-in:
 
-| Year | Floor Percentage |
-|------|-----------------|
-| 2027 | 50% |
-| 2028 | 55% |
-| 2029 | 60% |
-| 2030 | 65% |
-| 2031 | 70% |
-| 2032+ | 72.5% |
+| Year | Floor Percentage | Reference |
+|------|-----------------|-----------|
+| 2027 | 60% | PRA PS1/26 Art. 92(5) |
+| 2028 | 65% | PRA PS1/26 Art. 92(5) |
+| 2029 | 70% | PRA PS1/26 Art. 92(5) |
+| 2030+ | 72.5% | PRA PS1/26 Art. 92(5) |
 
 ### Status
 - Engine implemented — Done

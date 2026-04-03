@@ -34,7 +34,7 @@ Refer to these resources for RWA regulation context (PRA takes priority over BCB
 - Template guidance: https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app17.pdf
 - BCBS CRE standards — underlying methodology: https://www.bis.org/basel_framework/standard/CRE.htm?tldate=20260111
 
-PDFs of the above are in the `ref_docs/` folder.
+PDFs of the above are in the `docs/assets/` folder.
 
 Key topics: SA risk weights (CRE20-22), IRB approach (CRE30-36), Credit risk mitigation (CRE22), Equity (CRE60), Exposure classes and slotting criteria.
 

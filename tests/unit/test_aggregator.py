@@ -224,9 +224,8 @@ class TestOutputFloor:
 class TestOutputFloorTransitionalPhaseIn:
     """Parametrized tests sweeping the full PRA PS1/26 transitional schedule.
 
-    The output floor phases in over 6 years:
-        2027: 50%  |  2028: 55%  |  2029: 60%
-        2030: 65%  |  2031: 70%  |  2032+: 72.5%
+    The output floor phases in over 4 years:
+        2027: 60%  |  2028: 65%  |  2029: 70%  |  2030+: 72.5%
     """
 
     @pytest.fixture
@@ -271,20 +270,16 @@ class TestOutputFloorTransitionalPhaseIn:
     @pytest.mark.parametrize(
         ("year", "floor_pct", "expected_rwa"),
         [
-            (2027, 0.50, 50_000_000.0),
-            (2028, 0.55, 55_000_000.0),
-            (2029, 0.60, 60_000_000.0),
-            (2030, 0.65, 65_000_000.0),
-            (2031, 0.70, 70_000_000.0),
-            (2032, 0.725, 72_500_000.0),
+            (2027, 0.60, 60_000_000.0),
+            (2028, 0.65, 65_000_000.0),
+            (2029, 0.70, 70_000_000.0),
+            (2030, 0.725, 72_500_000.0),
         ],
         ids=[
-            "2027-50pct",
-            "2028-55pct",
-            "2029-60pct",
-            "2030-65pct",
-            "2031-70pct",
-            "2032-72.5pct-fully-phased",
+            "2027-60pct",
+            "2028-65pct",
+            "2029-70pct",
+            "2030-72.5pct-fully-phased",
         ],
     )
     def test_transitional_year(
@@ -319,32 +314,32 @@ class TestOutputFloorTransitionalPhaseIn:
         aggregator: OutputAggregator,
         _floor_data: pl.LazyFrame,
     ) -> None:
-        """Exactly on 1 Jan 2028 should use the 2028 floor (55%)."""
+        """Exactly on 1 Jan 2028 should use the 2028 floor (65%)."""
         rwa_final, _ = self._run_floor_test(aggregator, _floor_data, date(2028, 1, 1))
 
-        assert rwa_final == pytest.approx(55_000_000.0, rel=0.001)
+        assert rwa_final == pytest.approx(65_000_000.0, rel=0.001)
 
     def test_far_future_fully_phased(
         self,
         aggregator: OutputAggregator,
         _floor_data: pl.LazyFrame,
     ) -> None:
-        """Well after 2032, the floor should remain at 72.5% permanently."""
+        """Well after 2030, the floor should remain at 72.5% permanently."""
         rwa_final, _ = self._run_floor_test(aggregator, _floor_data, date(2040, 1, 1))
 
         assert rwa_final == pytest.approx(72_500_000.0, rel=0.001)
 
-    def test_2027_floor_equals_irb_not_binding(
+    def test_2027_floor_exceeds_irb_binding(
         self,
         aggregator: OutputAggregator,
         _floor_data: pl.LazyFrame,
     ) -> None:
-        """In 2027 at 50%, floor_rwa (50m) equals IRB_rwa (50m) - not binding."""
+        """In 2027 at 60%, floor_rwa (60m) exceeds IRB_rwa (50m) - binding."""
         _, floor_impact = self._run_floor_test(aggregator, _floor_data, date(2027, 6, 1))
 
         assert floor_impact is not None
         impact = floor_impact.collect()
-        assert impact["is_floor_binding"][0] is False
+        assert impact["is_floor_binding"][0] is True
 
     def test_floor_impact_rwa_calculation(
         self,
@@ -353,14 +348,14 @@ class TestOutputFloorTransitionalPhaseIn:
     ) -> None:
         """Floor impact RWA should equal max(0, floor_rwa - irb_rwa).
 
-        At 2030 (65%): floor_rwa = 65m, irb_rwa = 50m -> impact = 15m.
+        At 2030 (72.5%): floor_rwa = 72.5m, irb_rwa = 50m -> impact = 22.5m.
         """
         _, floor_impact = self._run_floor_test(aggregator, _floor_data, date(2030, 6, 1))
 
         assert floor_impact is not None
         impact = floor_impact.collect()
         assert impact["is_floor_binding"][0] is True
-        assert impact["floor_impact_rwa"][0] == pytest.approx(15_000_000.0, rel=0.001)
+        assert impact["floor_impact_rwa"][0] == pytest.approx(22_500_000.0, rel=0.001)
 
 
 # =============================================================================

@@ -187,19 +187,19 @@ class TestB31GroupA_StandardisedApproach:
             result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="B31-A6"
         )
 
-    def test_b31_a7_commercial_re_income_producing_70pct_rw(
+    def test_b31_a7_commercial_re_income_producing_100pct_rw(
         self,
         sa_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-A7: Income-producing commercial RE 40% LTV gets 70% RW (was CRR 50%).
+        B31-A7: Income-producing commercial RE 40% LTV gets 100% RW (was CRR 50%).
 
         Input: £400,000 loan at 40% LTV with income dependence
-        Expected: RWA = £280,000 (70% RW per CRE20.86 Table 18)
-        Rationale: Basel 3.1 introduces LTV-banded treatment for income-producing
-            commercial RE. At LTV ≤ 60%, the risk weight is 70%, higher than the
-            CRR Art. 126 treatment (50% for LTV ≤ 50% with income cover).
+        Expected: RWA = £400,000 (100% RW per PRA PS1/26 Art. 124I)
+        Rationale: PRA PS1/26 Art. 124I introduces a 2-band treatment for
+            income-producing commercial RE: LTV ≤ 80% = 100% RW, LTV > 80% = 110% RW.
+            At 40% LTV, the risk weight is 100%.
         """
         expected = expected_outputs_dict["B31-A7"]
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_CRE_001")

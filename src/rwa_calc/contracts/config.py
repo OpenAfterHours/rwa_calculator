@@ -113,7 +113,7 @@ class LGDFloors:
     financial_collateral: Decimal = Decimal("0.0")  # 0%
     receivables: Decimal = Decimal("0.10")  # 10%
     commercial_real_estate: Decimal = Decimal("0.10")  # 10%
-    residential_real_estate: Decimal = Decimal("0.05")  # 5%
+    residential_real_estate: Decimal = Decimal("0.10")  # 10% (PRA Art. 161/164)
     other_physical: Decimal = Decimal("0.15")  # 15%
 
     def get_floor(self, collateral_type: CollateralType) -> Decimal:
@@ -145,9 +145,9 @@ class LGDFloors:
         """
         Basel 3.1 LGD floors (CRE30.41).
 
-        Note: Values reflect PRA implementation. BCBS standard values differ
-        for some collateral types (Receivables: 15%, RRE: 10%, Other Physical: 20%).
-        TODO: Verify against PRA PS1/26 final rules when published.
+        Values reflect PRA PS1/26 Art. 161(5) / Art. 164(4) implementation.
+        Note: BCBS CRE30.41 has different values for some types (RRE: 5%).
+        PRA sets immovable property (both RESI and CRE) at 10%.
         """
         return cls(
             unsecured=Decimal("0.25"),  # 25%
@@ -155,7 +155,7 @@ class LGDFloors:
             financial_collateral=Decimal("0.0"),  # 0%
             receivables=Decimal("0.10"),  # 10%
             commercial_real_estate=Decimal("0.10"),  # 10%
-            residential_real_estate=Decimal("0.05"),  # 5%
+            residential_real_estate=Decimal("0.10"),  # 10% (PRA Art. 161/164)
             other_physical=Decimal("0.15"),  # 15%
         )
 
@@ -258,20 +258,19 @@ class OutputFloorConfig:
     @classmethod
     def basel_3_1(cls) -> OutputFloorConfig:
         """Basel 3.1 output floor configuration with transitional period."""
-        # PRA PS1/26 transitional schedule
+        # PRA PS1/26 Art. 92(5) transitional schedule
+        # NOTE: PRA compressed the BCBS 6-year phase-in to 4 years (2027-2030).
         transitional_schedule = {
-            date(2027, 1, 1): Decimal("0.50"),  # 50%
-            date(2028, 1, 1): Decimal("0.55"),  # 55%
-            date(2029, 1, 1): Decimal("0.60"),  # 60%
-            date(2030, 1, 1): Decimal("0.65"),  # 65%
-            date(2031, 1, 1): Decimal("0.70"),  # 70%
-            date(2032, 1, 1): Decimal("0.725"),  # 72.5% (fully phased)
+            date(2027, 1, 1): Decimal("0.60"),  # 60%
+            date(2028, 1, 1): Decimal("0.65"),  # 65%
+            date(2029, 1, 1): Decimal("0.70"),  # 70%
+            date(2030, 1, 1): Decimal("0.725"),  # 72.5% (fully phased)
         }
         return cls(
             enabled=True,
             floor_percentage=Decimal("0.725"),
             transitional_start_date=date(2027, 1, 1),
-            transitional_end_date=date(2032, 1, 1),
+            transitional_end_date=date(2030, 1, 1),
             transitional_floor_schedule=transitional_schedule,
         )
 

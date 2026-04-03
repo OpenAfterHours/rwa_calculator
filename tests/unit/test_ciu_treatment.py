@@ -18,13 +18,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-import polars as pl
 import pytest
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.engine.equity import EquityCalculator
-
 
 # =============================================================================
 # FIXTURES

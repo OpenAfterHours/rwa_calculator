@@ -55,6 +55,7 @@ def _(mo):
                     "/results": f"{mo.icon('table')} Results Explorer",
                     "/comparison": f"{mo.icon('git-compare')} Impact Analysis",
                     "/reference": f"{mo.icon('book')} Framework Reference",
+                    "http://localhost:8002": f"{mo.icon('code')} Workbench",
                 },
                 orientation="vertical",
             ),

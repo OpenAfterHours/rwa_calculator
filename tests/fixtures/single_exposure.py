@@ -136,6 +136,8 @@ def calculate_single_equity_exposure(
     is_speculative: bool = False,
     is_exchange_traded: bool = False,
     is_government_supported: bool = False,
+    ciu_approach: str | None = None,
+    ciu_mandate_rw: float | None = None,
 ) -> dict:
     """Calculate equity RWA for a single exposure via calculate_branch."""
     df = pl.DataFrame(
@@ -147,6 +149,8 @@ def calculate_single_equity_exposure(
             "is_speculative": [is_speculative],
             "is_exchange_traded": [is_exchange_traded],
             "is_government_supported": [is_government_supported],
+            "ciu_approach": [ciu_approach],
+            "ciu_mandate_rw": [ciu_mandate_rw],
         }
     ).lazy()
 

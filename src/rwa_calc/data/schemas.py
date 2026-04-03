@@ -254,6 +254,9 @@ EQUITY_EXPOSURE_SCHEMA = {
     "is_exchange_traded": pl.Boolean,  # Listed on recognised exchange - 100% RW
     "is_government_supported": pl.Boolean,  # Certain govt-supported programmes - reduced RW
     "is_significant_investment": pl.Boolean,  # >10% of CET1 - may require deduction
+    # CIU approach selection (Art. 132-132C)
+    "ciu_approach": pl.String,  # "look_through", "mandate_based", "fallback", or null
+    "ciu_mandate_rw": pl.Float64,  # Pre-computed mandate-based risk weight (Art. 132A)
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
 }
 
@@ -411,6 +414,7 @@ VALID_ENTITY_TYPES = {
     "retail",
     "specialised_lending",
     "equity",
+    "covered_bond",
 }
 
 VALID_SENIORITY = {"senior", "subordinated"}

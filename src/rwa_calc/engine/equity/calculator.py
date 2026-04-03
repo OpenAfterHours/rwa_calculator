@@ -304,6 +304,20 @@ class EquityCalculator:
                 ]
             )
 
+        if "ciu_approach" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Utf8).alias("ciu_approach"),
+                ]
+            )
+
+        if "ciu_mandate_rw" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("ciu_mandate_rw"),
+                ]
+            )
+
         return exposures
 
     def _apply_equity_weights_sa(
@@ -344,8 +358,19 @@ class EquityCalculator:
                 .then(pl.lit(2.50))
                 .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
                 .then(pl.lit(2.50))
+                # CIU: approach-aware risk weights (Art. 132-132C)
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "fallback")
+                )
+                .then(pl.lit(12.50))  # 1250% Art. 132B fallback
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "mandate_based")
+                )
+                .then(pl.col("ciu_mandate_rw").fill_null(12.50))  # Art. 132A
                 .when(pl.col("equity_type").str.to_lowercase() == "ciu")
-                .then(pl.lit(2.50))
+                .then(pl.lit(2.50))  # Look-through or default: 250%
                 .otherwise(pl.lit(2.50))
                 .alias("risk_weight"),
             ]

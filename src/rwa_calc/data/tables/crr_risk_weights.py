@@ -262,6 +262,48 @@ def _create_commercial_re_df() -> pl.DataFrame:
 
 
 # =============================================================================
+# COVERED BOND RISK WEIGHTS (CRR Art. 129)
+# =============================================================================
+
+COVERED_BOND_RISK_WEIGHTS: dict[CQS, Decimal] = {
+    CQS.CQS1: Decimal("0.10"),  # AAA to AA-
+    CQS.CQS2: Decimal("0.20"),  # A+ to A-
+    CQS.CQS3: Decimal("0.20"),  # BBB+ to BBB-
+    CQS.CQS4: Decimal("0.50"),  # BB+ to BB-
+    CQS.CQS5: Decimal("0.50"),  # B+ to B-
+    CQS.CQS6: Decimal("1.00"),  # CCC+ and below
+}
+
+# Unrated covered bond derivation from issuer institution risk weight
+# (CRR Art. 129(5), PRA PS1/26 Art. 129)
+COVERED_BOND_UNRATED_DERIVATION: dict[Decimal, Decimal] = {
+    Decimal("0.20"): Decimal("0.10"),
+    Decimal("0.30"): Decimal("0.15"),
+    Decimal("0.40"): Decimal("0.20"),
+    Decimal("0.50"): Decimal("0.25"),
+    Decimal("0.75"): Decimal("0.35"),
+    Decimal("1.00"): Decimal("0.50"),
+    Decimal("1.50"): Decimal("1.00"),
+}
+
+
+def _create_covered_bond_df() -> pl.DataFrame:
+    """Create covered bond risk weight lookup DataFrame (CRR Art. 129)."""
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6],
+            "risk_weight": [0.10, 0.20, 0.20, 0.50, 0.50, 1.00],
+            "exposure_class": ["COVERED_BOND"] * 6,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
+
+
+# =============================================================================
 # COMBINED RISK WEIGHT TABLE
 # =============================================================================
 
@@ -283,6 +325,7 @@ def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.Da
         "retail": _create_retail_df(),
         "residential_mortgage": _create_residential_mortgage_df(),
         "commercial_re": _create_commercial_re_df(),
+        "covered_bond": _create_covered_bond_df(),
     }
 
 
@@ -306,6 +349,7 @@ def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame
                 ["exposure_class", "cqs", "risk_weight"]
             ),
             _create_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_covered_bond_df().select(["exposure_class", "cqs", "risk_weight"]),
         ]
     )
 

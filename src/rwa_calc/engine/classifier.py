@@ -74,6 +74,7 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "retail": ExposureClass.RETAIL_OTHER.value,
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
     "equity": ExposureClass.EQUITY.value,
+    "covered_bond": ExposureClass.COVERED_BOND.value,
 }
 
 # entity_type → IRB exposure class (for IRB formula selection)
@@ -96,6 +97,7 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "retail": ExposureClass.RETAIL_OTHER.value,
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
     "equity": ExposureClass.EQUITY.value,
+    "covered_bond": ExposureClass.COVERED_BOND.value,
 }
 
 
@@ -201,6 +203,7 @@ class ExposureClassifier:
             irb_exposures=irb_exposures,
             slotting_exposures=slotting_exposures,
             equity_exposures=data.equity_exposures,
+            ciu_holdings=data.ciu_holdings,
             collateral=data.collateral,
             guarantees=data.guarantees,
             provisions=data.provisions,

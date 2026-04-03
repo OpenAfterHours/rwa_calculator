@@ -31,6 +31,7 @@ import polars as pl
 from rwa_calc.config.data_sources import DataSourceRegistry
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.schemas import (
+    CIU_HOLDINGS_SCHEMA,
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -121,6 +122,7 @@ class DataSourceConfig:
     org_mappings_file: Path | None = None
     lending_mappings_file: Path | None = None
     equity_exposures_file: Path | None = None
+    ciu_holdings_file: Path | None = None
     specialised_lending_file: Path | None = None
     fx_rates_file: Path | None = None
     model_permissions_file: Path | None = None
@@ -239,6 +241,7 @@ def _build_bundle(
         provisions=load_optional(config.provisions_file, PROVISION_SCHEMA),
         ratings=load_optional(config.ratings_file, RATINGS_SCHEMA),
         equity_exposures=load_optional(config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA),
+        ciu_holdings=load_optional(config.ciu_holdings_file, CIU_HOLDINGS_SCHEMA),
         specialised_lending=load_optional(
             config.specialised_lending_file, SPECIALISED_LENDING_SCHEMA
         ),

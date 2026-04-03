@@ -218,53 +218,63 @@ def download_documents(
         dest = assets_dir / entry.filename
 
         if entry.url is None:
-            results.append({
-                "filename": entry.filename,
-                "status": "manual",
-                "detail": entry.source,
-                "bytes": 0,
-            })
+            results.append(
+                {
+                    "filename": entry.filename,
+                    "status": "manual",
+                    "detail": entry.source,
+                    "bytes": 0,
+                }
+            )
             continue
 
         if dest.exists() and not force:
             size = dest.stat().st_size
             print(f"  skip     {entry.filename} (already exists, {_fmt_size(size)})")
-            results.append({
-                "filename": entry.filename,
-                "status": "skipped",
-                "detail": "already exists",
-                "bytes": size,
-            })
+            results.append(
+                {
+                    "filename": entry.filename,
+                    "status": "skipped",
+                    "detail": "already exists",
+                    "bytes": size,
+                }
+            )
             continue
 
         if dry_run:
             print(f"  would download  {entry.filename}")
-            results.append({
-                "filename": entry.filename,
-                "status": "dry-run",
-                "detail": entry.url,
-                "bytes": 0,
-            })
+            results.append(
+                {
+                    "filename": entry.filename,
+                    "status": "dry-run",
+                    "detail": entry.url,
+                    "bytes": 0,
+                }
+            )
             continue
 
         print(f"  fetch    {entry.filename} ...", end=" ", flush=True)
         try:
             nbytes = _download_file(entry.url, dest)
             print(f"done ({_fmt_size(nbytes)})")
-            results.append({
-                "filename": entry.filename,
-                "status": "downloaded",
-                "detail": "ok",
-                "bytes": nbytes,
-            })
+            results.append(
+                {
+                    "filename": entry.filename,
+                    "status": "downloaded",
+                    "detail": "ok",
+                    "bytes": nbytes,
+                }
+            )
         except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             print(f"FAILED ({exc})")
-            results.append({
-                "filename": entry.filename,
-                "status": "failed",
-                "detail": str(exc),
-                "bytes": 0,
-            })
+            results.append(
+                {
+                    "filename": entry.filename,
+                    "status": "failed",
+                    "detail": str(exc),
+                    "bytes": 0,
+                }
+            )
 
     return results
 

@@ -182,6 +182,7 @@ class EquityCalculator:
         approach = self._determine_approach(config)
 
         exposures = self._prepare_columns(exposures, config)
+        exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config)
 
         if approach == "irb_simple":
             exposures = self._apply_equity_weights_irb_simple(exposures, config)
@@ -304,7 +305,124 @@ class EquityCalculator:
                 ]
             )
 
+        if "ciu_approach" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Utf8).alias("ciu_approach"),
+                ]
+            )
+
+        if "ciu_mandate_rw" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("ciu_mandate_rw"),
+                ]
+            )
+
+        if "ciu_third_party_calc" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Boolean).alias("ciu_third_party_calc"),
+                ]
+            )
+
+        if "fund_reference" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Utf8).alias("fund_reference"),
+                ]
+            )
+
+        if "ciu_look_through_rw" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("ciu_look_through_rw"),
+                ]
+            )
+
         return exposures
+
+    def _resolve_look_through_rw(
+        self,
+        exposures: pl.LazyFrame,
+        ciu_holdings: pl.LazyFrame | None,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Resolve look-through risk weights for CIU exposures (Art. 132).
+
+        Joins CIU holdings to SA risk weight tables, aggregates a
+        value-weighted effective RW per fund, and sets ciu_look_through_rw.
+
+        If no holdings are available, exposures are returned unchanged
+        and the look-through CIU falls back to 250% in the when-chain.
+        """
+        if ciu_holdings is None:
+            return exposures
+
+        # Get CQS-based risk weight table for holding-level RW lookup
+        from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
+
+        use_uk_deviation = config.base_currency == "GBP"
+        if config.is_basel_3_1:
+            from rwa_calc.data.tables.b31_risk_weights import (
+                get_b31_combined_cqs_risk_weights,
+            )
+
+            rw_table = get_b31_combined_cqs_risk_weights(use_uk_deviation).lazy()
+        else:
+            rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
+
+        # Join holdings to RW table by (exposure_class, cqs)
+        # Use sentinel -1 for null CQS to allow join
+        holdings_with_rw = (
+            ciu_holdings.with_columns(
+                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
+                pl.col("exposure_class").str.to_uppercase().alias("exposure_class"),
+            )
+            .join(
+                rw_table.with_columns(
+                    pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
+                ),
+                on=["exposure_class", "cqs"],
+                how="left",
+            )
+            .with_columns(
+                pl.col("risk_weight").fill_null(1.00).alias("holding_rw"),
+            )
+        )
+
+        # Aggregate to effective RW per fund
+        fund_rw = (
+            holdings_with_rw.group_by("fund_reference")
+            .agg(
+                (pl.col("holding_value") * pl.col("holding_rw")).sum().alias("_weighted_sum"),
+                pl.col("holding_value").sum().alias("_total_value"),
+            )
+            .with_columns(
+                pl.when(pl.col("_total_value") > 0)
+                .then(pl.col("_weighted_sum") / pl.col("_total_value"))
+                .otherwise(pl.lit(2.50))
+                .alias("_fund_look_through_rw"),
+            )
+            .select(["fund_reference", "_fund_look_through_rw"])
+        )
+
+        # Join back to exposures and set ciu_look_through_rw
+        return (
+            exposures.join(fund_rw, on="fund_reference", how="left")
+            .with_columns(
+                pl.when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "look_through")
+                    & pl.col("_fund_look_through_rw").is_not_null()
+                )
+                .then(pl.col("_fund_look_through_rw"))
+                .otherwise(pl.col("ciu_look_through_rw"))
+                .alias("ciu_look_through_rw"),
+            )
+            .drop("_fund_look_through_rw")
+        )
 
     def _apply_equity_weights_sa(
         self,
@@ -344,8 +462,29 @@ class EquityCalculator:
                 .then(pl.lit(2.50))
                 .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
                 .then(pl.lit(2.50))
+                # CIU: approach-aware risk weights (Art. 132-132C)
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "fallback")
+                )
+                .then(pl.lit(12.50))  # 1250% Art. 132B fallback
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "mandate_based")
+                )
+                .then(
+                    pl.col("ciu_mandate_rw").fill_null(12.50)
+                    * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
+                    .then(pl.lit(1.2))
+                    .otherwise(pl.lit(1.0))
+                )  # Art. 132A, 1.2x for third-party (Art. 132(4))
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "look_through")
+                )
+                .then(pl.col("ciu_look_through_rw").fill_null(2.50))  # Art. 132
                 .when(pl.col("equity_type").str.to_lowercase() == "ciu")
-                .then(pl.lit(2.50))
+                .then(pl.lit(2.50))  # CIU default: 250%
                 .otherwise(pl.lit(2.50))
                 .alias("risk_weight"),
             ]

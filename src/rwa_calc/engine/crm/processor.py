@@ -456,6 +456,7 @@ class CRMProcessor:
             irb_exposures=irb_exposures,
             slotting_exposures=slotting_exposures,
             equity_exposures=data.equity_exposures,  # Pass through equity (no CRM)
+            ciu_holdings=data.ciu_holdings,
             crm_audit=self._build_crm_audit(exposures),
             collateral_allocation=None,  # Would be populated from collateral processing
             crm_errors=errors,
@@ -560,6 +561,7 @@ class CRMProcessor:
             irb_exposures=pl.LazyFrame(),
             slotting_exposures=None,
             equity_exposures=data.equity_exposures,
+            ciu_holdings=data.ciu_holdings,
             crm_audit=None,  # Audit computed at collect time if needed
             collateral_allocation=None,
             crm_errors=errors,

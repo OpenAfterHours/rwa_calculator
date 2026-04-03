@@ -375,9 +375,19 @@ class COREPGenerator:
             else:
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Section 4: Breakdown by CIU Approach — not implemented, null
+        # Section 4: Breakdown by CIU Approach (Art. 132-132C)
+        _CIU_ROW_APPROACH = {"0281": "look_through", "0282": "mandate_based", "0283": "fallback"}
+        ciu_col = _pick(cols, "ciu_approach")
         for row_def in row_sections[3].rows:
-            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            if row_def.ref in _CIU_ROW_APPROACH and ciu_col:
+                subset = class_data.filter(pl.col(ciu_col) == _CIU_ROW_APPROACH[row_def.ref])
+                if len(subset) > 0:
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            else:
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         # Section 5: Memorandum Items
         for row_def in row_sections[4].rows:

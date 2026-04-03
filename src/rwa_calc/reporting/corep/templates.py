@@ -81,6 +81,7 @@ SA_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
     "retail_other": ("0090", "Retail"),
     "retail_qrre": ("0091", "  Of which: Qualifying revolving"),
     "defaulted": ("0100", "Exposures in default"),
+    "covered_bond": ("0105", "Covered bonds"),
     "equity": ("0110", "Equity exposures"),
     "other": ("0120", "Other items"),
 }

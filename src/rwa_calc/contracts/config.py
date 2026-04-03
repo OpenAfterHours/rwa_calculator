@@ -467,9 +467,9 @@ class IRBPermissions:
                     ApproachType.AIRB,
                 },
                 ExposureClass.EQUITY: {ApproachType.SA},  # IRB for equity removed under Basel 3.1
+                ExposureClass.COVERED_BOND: {ApproachType.SA},  # SA-only (Art. 129)
             }
         )
-
 
 
 @dataclass(frozen=True)

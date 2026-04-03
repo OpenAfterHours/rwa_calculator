@@ -203,6 +203,7 @@ class ExposureClassifier:
             irb_exposures=irb_exposures,
             slotting_exposures=slotting_exposures,
             equity_exposures=data.equity_exposures,
+            ciu_holdings=data.ciu_holdings,
             collateral=data.collateral,
             guarantees=data.guarantees,
             provisions=data.provisions,

@@ -257,7 +257,18 @@ EQUITY_EXPOSURE_SCHEMA = {
     # CIU approach selection (Art. 132-132C)
     "ciu_approach": pl.String,  # "look_through", "mandate_based", "fallback", or null
     "ciu_mandate_rw": pl.Float64,  # Pre-computed mandate-based risk weight (Art. 132A)
+    "ciu_third_party_calc": pl.Boolean,  # Third-party calc → 1.2x factor (Art. 132(4))
+    "fund_reference": pl.String,  # CIU fund reference for look-through join
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
+}
+
+# CIU fund holdings for look-through approach (Art. 132)
+CIU_HOLDINGS_SCHEMA = {
+    "fund_reference": pl.String,  # Links to equity exposure fund_reference
+    "holding_reference": pl.String,  # Unique holding ID
+    "exposure_class": pl.String,  # SA class of underlying (e.g., "CORPORATE")
+    "cqs": pl.Int8,  # CQS of underlying (nullable for unrated)
+    "holding_value": pl.Float64,  # Market value of the holding
 }
 
 

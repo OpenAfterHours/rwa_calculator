@@ -138,6 +138,7 @@ def calculate_single_equity_exposure(
     is_government_supported: bool = False,
     ciu_approach: str | None = None,
     ciu_mandate_rw: float | None = None,
+    ciu_third_party_calc: bool | None = None,
 ) -> dict:
     """Calculate equity RWA for a single exposure via calculate_branch."""
     df = pl.DataFrame(
@@ -151,6 +152,7 @@ def calculate_single_equity_exposure(
             "is_government_supported": [is_government_supported],
             "ciu_approach": [ciu_approach],
             "ciu_mandate_rw": [ciu_mandate_rw],
+            "ciu_third_party_calc": [ciu_third_party_calc],
         }
     ).lazy()
 

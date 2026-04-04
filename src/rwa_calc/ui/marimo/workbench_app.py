@@ -140,20 +140,20 @@ def _(Path, refresh_trigger, datetime, mo, set_pending_delete):
             )
         # .batch() registers buttons with the frontend so on_click handlers fire
         wb_card_grid = mo.Html(
-            '<div class="wb-grid">\n'
-            + "\n".join(_card_html)
-            + "\n</div>"
+            '<div class="wb-grid">\n' + "\n".join(_card_html) + "\n</div>"
         ).batch(**_buttons)
         _listing = mo.vstack([_css, wb_card_grid])
     else:
         wb_card_grid = None
-        _listing = mo.vstack([
-            _css,
-            mo.callout(
-                mo.md("No workbooks yet. Create one below to get started."),
-                kind="info",
-            ),
-        ])
+        _listing = mo.vstack(
+            [
+                _css,
+                mo.callout(
+                    mo.md("No workbooks yet. Create one below to get started."),
+                    kind="info",
+                ),
+            ]
+        )
     mo.output.replace(_listing)
     return (wb_card_grid,)
 

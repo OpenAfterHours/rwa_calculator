@@ -16,13 +16,18 @@ from pathlib import Path
 _MARIMO_DIR = Path(__file__).parent.parent
 _WORKSPACES_DIR = _MARIMO_DIR / "workspaces" / "local"
 
+
 # Read logo at import time from project docs/assets
 def _load_logo_base64() -> str:
     import base64
-    logo_path = _MARIMO_DIR.parent.parent.parent.parent / "docs" / "assets" / "openafterhours_icon_512.png"
+
+    logo_path = (
+        _MARIMO_DIR.parent.parent.parent.parent / "docs" / "assets" / "openafterhours_icon_512.png"
+    )
     if logo_path.exists():
         return "data:image/png;base64," + base64.b64encode(logo_path.read_bytes()).decode()
     return ""
+
 
 _LOGO_URI = _load_logo_base64()
 
@@ -48,16 +53,14 @@ def create_sidebar(mo: object, *, version: str = "v1.0") -> object:
         if _WORKSPACES_DIR.exists()
         else []
     )
-    wb_links = "\n".join(
-        f"- [{n}](http://localhost:8002/?file={n}.py)" for n in workbooks
-    )
+    wb_links = "\n".join(f"- [{n}](http://localhost:8002/?file={n}.py)" for n in workbooks)
 
     _header = (
         mo.Html(
             f'<div style="display:flex;align-items:center;gap:0.6rem">'
             f'<img src="{_LOGO_URI}" alt="Logo" '
             f'style="width:36px;height:36px;border-radius:6px">'
-            f"<strong style=\"font-size:1.15rem\">RWA Calculator</strong>"
+            f'<strong style="font-size:1.15rem">RWA Calculator</strong>'
             f"</div>"
         )
         if _LOGO_URI

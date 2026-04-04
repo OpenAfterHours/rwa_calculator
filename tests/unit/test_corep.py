@@ -15,6 +15,7 @@ aggregation path with hand-calculated expected values.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -44,8 +45,6 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
-
-import importlib.util
 
 XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
     importlib.util.find_spec("xlsxwriter") is not None

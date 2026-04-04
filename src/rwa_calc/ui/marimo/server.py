@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING
 import marimo
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from starlette.requests import Request
+from starlette.responses import Response
 
 if TYPE_CHECKING:
     pass
@@ -39,6 +41,12 @@ if TYPE_CHECKING:
 # Paths
 # ---------------------------------------------------------------------------
 apps_dir = Path(__file__).parent
+
+# ---------------------------------------------------------------------------
+# Favicon — load custom icon at import time (replaces default marimo favicon)
+# ---------------------------------------------------------------------------
+_FAVICON_PATH = apps_dir.parents[3] / "docs" / "assets" / "openafterhours_icon_512.png"
+_FAVICON_BYTES = _FAVICON_PATH.read_bytes() if _FAVICON_PATH.exists() else b""
 workspaces_dir = apps_dir / "workspaces" / "local"
 workspaces_dir.mkdir(parents=True, exist_ok=True)
 (apps_dir / "workspaces" / "templates").mkdir(parents=True, exist_ok=True)
@@ -70,6 +78,14 @@ templates_asgi = (
 # FastAPI gateway
 # ---------------------------------------------------------------------------
 gateway = FastAPI(title="RWA Calculator")
+
+
+@gateway.middleware("http")
+async def _favicon_middleware(request: Request, call_next: object) -> Response:
+    """Serve custom favicon for all app paths (marimo uses relative ./favicon.ico)."""
+    if request.url.path.endswith("/favicon.ico") and _FAVICON_BYTES:
+        return Response(content=_FAVICON_BYTES, media_type="image/png")
+    return await call_next(request)  # type: ignore[operator]
 
 
 @gateway.on_event("startup")

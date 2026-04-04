@@ -24,6 +24,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -68,6 +69,12 @@ templates_asgi = (
 # FastAPI gateway
 # ---------------------------------------------------------------------------
 gateway = FastAPI(title="RWA Calculator")
+
+
+@gateway.on_event("startup")
+async def _open_browser() -> None:
+    """Open the landing page in the default browser on server start."""
+    webbrowser.open("http://localhost:8000")
 
 
 @gateway.get("/api/templates")
@@ -146,6 +153,7 @@ def main() -> None:
             "--port",
             str(EDIT_SERVER_PORT),
             "--no-token",
+            "--headless",
             str(workspaces_dir),
         ],
     )

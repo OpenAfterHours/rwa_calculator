@@ -57,7 +57,7 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    return mo.Html(
+    return mo.md(
         """
 <style>
 /* -------------------------------------------------------

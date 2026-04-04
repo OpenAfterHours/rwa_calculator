@@ -11,7 +11,7 @@ Usage (Multi-App Server - Recommended):
     uv run python src/rwa_calc/ui/marimo/server.py
 
     # Apps available at:
-    #   http://localhost:8000/           (Calculator)
+    #   http://localhost:8000/           (Landing Page)
     #   http://localhost:8000/calculator (Calculator)
     #   http://localhost:8000/results    (Results Explorer)
     #   http://localhost:8000/comparison (Impact Analysis)

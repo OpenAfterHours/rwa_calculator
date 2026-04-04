@@ -11,7 +11,7 @@ Usage:
 import marimo
 
 __generated_with = "0.19.4"
-app = marimo.App(width="medium")
+app = marimo.App(width="medium", css_file="shared/theme.css")
 
 
 @app.cell
@@ -98,27 +98,15 @@ def _(Path, refresh_trigger, datetime, mo, set_pending_delete):
   flex-direction: column;
   padding: 1.25rem;
   border-radius: 10px;
-  border: 1px solid var(--border-color, rgba(0,0,0,0.08));
-  background: var(--surface-color, rgba(255,255,255,0.6));
-  backdrop-filter: blur(8px);
-  text-decoration: none;
-  color: inherit;
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  background: var(--card, #fff);
+  color: var(--card-foreground, inherit);
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
 }
 .wb-card:hover {
   border-color: #ff9100;
   box-shadow: 0 4px 16px rgba(255, 145, 0, 0.12);
   transform: translateY(-2px);
-}
-@media (prefers-color-scheme: dark) {
-  .wb-card {
-    background: rgba(30, 30, 50, 0.6);
-    border-color: rgba(255,255,255,0.08);
-  }
-  .wb-card:hover {
-    border-color: #ff9100;
-    box-shadow: 0 4px 20px rgba(255, 145, 0, 0.18);
-  }
 }
 .wb-card-icon { font-size: 1.6rem; margin-bottom: 0.5rem; }
 .wb-card h3 {

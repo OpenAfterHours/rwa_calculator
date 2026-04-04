@@ -3,6 +3,10 @@ Shared sidebar for all RWA Calculator marimo apps.
 
 Provides a single definition of the navigation sidebar so that changes
 (new links, styling, workbook listing logic) only need to be made once.
+
+Theme is applied via css_file="shared/theme.css" in each app's marimo.App()
+config, which injects the CSS into <head> where it properly overrides
+marimo's default variables.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ def create_sidebar(mo: object, *, version: str = "v1.0") -> object:
         version: Version string shown in the footer.
 
     Returns:
-        The ``mo.sidebar`` element (must be the cell's last expression).
+        The ``mo.sidebar`` element.
     """
     workbooks = (
         sorted(f.stem for f in _WORKSPACES_DIR.glob("*.py") if f.stem != "__init__")
@@ -39,7 +43,7 @@ def create_sidebar(mo: object, *, version: str = "v1.0") -> object:
     )
 
     items = [
-        mo.md("# 🕵️🤖 RWA Calculator"),
+        mo.md("# RWA Calculator"),
         mo.nav_menu(
             {
                 "/": f"{mo.icon('home')} Home",

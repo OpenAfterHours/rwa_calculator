@@ -39,7 +39,7 @@ def create_sidebar(mo: object, *, version: str = "v1.0") -> object:
     )
 
     items = [
-        mo.md("# RWA Calculator"),
+        mo.md("# 🕵️🤖 RWA Calculator"),
         mo.nav_menu(
             {
                 "/": f"{mo.icon('home')} Home",

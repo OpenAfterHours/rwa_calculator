@@ -120,14 +120,11 @@ def _(mo):
 
     irb_approach_dropdown = mo.ui.dropdown(
         options={
-            "SA Only (No IRB)": "sa_only",
-            "Foundation IRB (F-IRB)": "firb",
-            "Advanced IRB (A-IRB)": "airb",
-            "Full IRB (A-IRB preferred)": "full_irb",
-            "Retail A-IRB / Corporate F-IRB": "retail_airb_corporate_firb",
+            "Standardised (All SA)": "standardised",
+            "IRB (Model Permissions)": "irb",
         },
-        value="SA Only (No IRB)",
-        label="IRB Approach",
+        value="Standardised (All SA)",
+        label="Permission Mode",
     )
 
     mo.output.replace(

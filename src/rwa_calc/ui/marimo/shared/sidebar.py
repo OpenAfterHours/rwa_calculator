@@ -3,6 +3,10 @@ Shared sidebar for all RWA Calculator marimo apps.
 
 Provides a single definition of the navigation sidebar so that changes
 (new links, styling, workbook listing logic) only need to be made once.
+
+Theme is applied via css_file="shared/theme.css" in each app's marimo.App()
+config, which injects the CSS into <head> where it properly overrides
+marimo's default variables.
 """
 
 from __future__ import annotations
@@ -11,6 +15,21 @@ from pathlib import Path
 
 _MARIMO_DIR = Path(__file__).parent.parent
 _WORKSPACES_DIR = _MARIMO_DIR / "workspaces" / "local"
+
+
+# Read logo at import time from project docs/assets
+def _load_logo_base64() -> str:
+    import base64
+
+    logo_path = (
+        _MARIMO_DIR.parent.parent.parent.parent / "docs" / "assets" / "openafterhours_icon_512.png"
+    )
+    if logo_path.exists():
+        return "data:image/png;base64," + base64.b64encode(logo_path.read_bytes()).decode()
+    return ""
+
+
+_LOGO_URI = _load_logo_base64()
 
 
 def create_sidebar(mo: object, *, version: str = "v1.0", base_url: str = "") -> object:
@@ -30,26 +49,36 @@ def create_sidebar(mo: object, *, version: str = "v1.0", base_url: str = "") -> 
             that sidebar links navigate back to the main template apps.
 
     Returns:
-        The ``mo.sidebar`` element (must be the cell's last expression).
+        The ``mo.sidebar`` element.
     """
     workbooks = (
         sorted(f.stem for f in _WORKSPACES_DIR.glob("*.py") if f.stem != "__init__")
         if _WORKSPACES_DIR.exists()
         else []
     )
-    wb_links = "\n".join(
-        f"- [{n}](http://localhost:8002/?file={n}.py)" for n in workbooks
+    wb_links = "\n".join(f"- [{n}](http://localhost:8002/?file={n}.py)" for n in workbooks)
+
+    _header = (
+        mo.Html(
+            f'<div style="display:flex;align-items:center;gap:0.6rem">'
+            f'<img src="{_LOGO_URI}" alt="Logo" '
+            f'style="width:36px;height:36px;border-radius:6px">'
+            f'<strong style="font-size:1.15rem">RWA Calculator</strong>'
+            f"</div>"
+        )
+        if _LOGO_URI
+        else mo.md("# RWA Calculator")
     )
 
     items = [
-        mo.md("# 🕵️🤖 RWA Calculator"),
+        _header,
         mo.nav_menu(
             {
                 f"{base_url}/": f"{mo.icon('home')} Home",
                 f"{base_url}/calculator": f"{mo.icon('calculator')} Calculator",
                 f"{base_url}/results": f"{mo.icon('table')} Results Explorer",
                 f"{base_url}/comparison": f"{mo.icon('git-compare')} Impact Analysis",
-                f"{base_url}/reference": f"{mo.icon('book')} Framework Reference",
+                "https://openafterhours.github.io/rwa_calculator/": f"{mo.icon('book')} Documentation",
                 f"{base_url}/workbench": f"{mo.icon('code')} Workbench",
             },
             orientation="vertical",

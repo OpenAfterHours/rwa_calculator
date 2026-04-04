@@ -12,6 +12,10 @@ analysis, and Excel enables stakeholder reporting with multi-sheet workbooks.
 
 from __future__ import annotations
 
+# =============================================================================
+# Fixtures
+# =============================================================================
+import importlib.util
 import sys
 from datetime import date
 from decimal import Decimal
@@ -27,12 +31,6 @@ from rwa_calc.api.models import (
     SummaryStatistics,
 )
 from rwa_calc.api.results_cache import ResultsCache
-
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-import importlib.util
 
 XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
     importlib.util.find_spec("xlsxwriter") is not None

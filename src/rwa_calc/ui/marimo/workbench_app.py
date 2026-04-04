@@ -11,7 +11,7 @@ Usage:
 import marimo
 
 __generated_with = "0.19.4"
-app = marimo.App(width="medium")
+app = marimo.App(width="medium", css_file="shared/theme.css", html_head_file="shared/head.html")
 
 
 @app.cell
@@ -64,30 +64,7 @@ def _(Path, refresh_trigger, datetime, mo, set_pending_delete):
     _files = sorted(_ws_dir.glob("*.py")) if _ws_dir.exists() else []
     _files = [f for f in _files if f.stem != "__init__"]
 
-    if _files:
-        _card_html = []
-        for _f in _files:
-            _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
-            _delete_btn = mo.ui.button(
-                label="\U0001f5d1\ufe0f Delete",
-                on_click=lambda _, n=_f.stem: set_pending_delete(n),
-                kind="danger",
-            )
-            _card_html.append(
-                f'<div class="wb-card">'
-                f'  <div class="wb-card-icon">\U0001f4d3</div>'
-                f"  <h3>{_f.stem}</h3>"
-                f'  <span class="wb-card-meta">{_mod_time:%Y-%m-%d %H:%M}</span>'
-                f'  <div class="wb-card-actions">'
-                f'    <a href="http://localhost:8002/?file={_f.name}"'
-                f'       class="wb-card-action">Open in Editor \u2192</a>'
-                f"    {_delete_btn}"
-                f"  </div>"
-                f"</div>"
-            )
-        _listing = mo.md(
-            """
-<style>
+    _css = mo.Html("""<style>
 .wb-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -98,27 +75,15 @@ def _(Path, refresh_trigger, datetime, mo, set_pending_delete):
   flex-direction: column;
   padding: 1.25rem;
   border-radius: 10px;
-  border: 1px solid var(--border-color, rgba(0,0,0,0.08));
-  background: var(--surface-color, rgba(255,255,255,0.6));
-  backdrop-filter: blur(8px);
-  text-decoration: none;
-  color: inherit;
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  background: var(--card, #fff);
+  color: var(--card-foreground, inherit);
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
 }
 .wb-card:hover {
   border-color: #ff9100;
   box-shadow: 0 4px 16px rgba(255, 145, 0, 0.12);
   transform: translateY(-2px);
-}
-@media (prefers-color-scheme: dark) {
-  .wb-card {
-    background: rgba(30, 30, 50, 0.6);
-    border-color: rgba(255,255,255,0.08);
-  }
-  .wb-card:hover {
-    border-color: #ff9100;
-    box-shadow: 0 4px 20px rgba(255, 145, 0, 0.18);
-  }
 }
 .wb-card-icon { font-size: 1.6rem; margin-bottom: 0.5rem; }
 .wb-card h3 {
@@ -148,19 +113,49 @@ def _(Path, refresh_trigger, datetime, mo, set_pending_delete):
 .wb-card-action:hover {
   text-decoration: underline;
 }
-</style>
-<div class="wb-grid">
-"""
-            + "\n".join(_card_html)
-            + "\n</div>"
-        )
+</style>""")
+
+    if _files:
+        _buttons = {}
+        _card_html = []
+        for _i, _f in enumerate(_files):
+            _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
+            _btn_key = f"btn_{_i}"
+            _buttons[_btn_key] = mo.ui.button(
+                label="\U0001f5d1\ufe0f Delete",
+                on_click=lambda _, n=_f.stem: set_pending_delete(n),
+                kind="danger",
+            )
+            _card_html.append(
+                f'<div class="wb-card">'
+                f'  <div class="wb-card-icon">\U0001f4d3</div>'
+                f"  <h3>{_f.stem}</h3>"
+                f'  <span class="wb-card-meta">{_mod_time:%Y-%m-%d %H:%M}</span>'
+                f'  <div class="wb-card-actions">'
+                f'    <a href="http://localhost:8002/?file={_f.name}"'
+                f'       class="wb-card-action">Open in Editor \u2192</a>'
+                f"    {{{_btn_key}}}"
+                f"  </div>"
+                f"</div>"
+            )
+        # .batch() registers buttons with the frontend so on_click handlers fire
+        wb_card_grid = mo.Html(
+            '<div class="wb-grid">\n' + "\n".join(_card_html) + "\n</div>"
+        ).batch(**_buttons)
+        _listing = mo.vstack([_css, wb_card_grid])
     else:
-        _listing = mo.callout(
-            mo.md("No workbooks yet. Create one below to get started."),
-            kind="info",
+        wb_card_grid = None
+        _listing = mo.vstack(
+            [
+                _css,
+                mo.callout(
+                    mo.md("No workbooks yet. Create one below to get started."),
+                    kind="info",
+                ),
+            ]
         )
     mo.output.replace(_listing)
-    return
+    return (wb_card_grid,)
 
 
 @app.cell
@@ -200,7 +195,7 @@ def _(Path, create_btn, mo, new_name, set_refresh, shutil):
 
 @app.cell
 def _(mo, pending_delete):
-    mo.stop(pending_delete is None)
+    mo.stop(pending_delete() is None)
 
     confirm_btn = mo.ui.run_button(label="Confirm Delete", kind="danger")
     cancel_btn = mo.ui.run_button(label="Cancel")
@@ -210,7 +205,7 @@ def _(mo, pending_delete):
             [
                 mo.md(
                     f"Are you sure you want to permanently delete "
-                    f"**{pending_delete}**? This cannot be undone."
+                    f"**{pending_delete()}**? This cannot be undone."
                 ),
                 mo.hstack([confirm_btn, cancel_btn], gap=1),
             ]
@@ -222,7 +217,7 @@ def _(mo, pending_delete):
 
 @app.cell
 def _(Path, cancel_btn, confirm_btn, mo, pending_delete, set_pending_delete, set_refresh):
-    mo.stop(pending_delete is None)
+    mo.stop(pending_delete() is None)
     mo.stop(not confirm_btn.value and not cancel_btn.value)
 
     if cancel_btn.value:
@@ -230,8 +225,8 @@ def _(Path, cancel_btn, confirm_btn, mo, pending_delete, set_pending_delete, set
         mo.callout(mo.md("Deletion cancelled."), kind="info")
     elif confirm_btn.value:
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
-        _target = _ws_dir / f"{pending_delete}.py"
-        _name = pending_delete
+        _target = _ws_dir / f"{pending_delete()}.py"
+        _name = pending_delete()
         if _target.exists():
             _target.unlink()
         set_refresh(lambda n: n + 1)

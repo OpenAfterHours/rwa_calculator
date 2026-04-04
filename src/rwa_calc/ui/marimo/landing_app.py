@@ -11,7 +11,7 @@ Usage:
 import marimo
 
 __generated_with = "0.19.4"
-app = marimo.App(width="full")
+app = marimo.App(width="full", css_file="shared/theme.css", html_head_file="shared/head.html")
 
 
 @app.cell
@@ -48,7 +48,7 @@ def _(mo):
   width: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
-  color: var(--text-color, #1a1a2e);
+  color: var(--foreground, #1a1a2e);
 }
 
 /* --- Formula background -------------------------------- */
@@ -68,7 +68,7 @@ def _(mo):
   white-space: nowrap;
   line-height: 1;
   opacity: 0.06;
-  color: var(--text-color, #000);
+  color: var(--foreground, #000);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -120,7 +120,7 @@ def _(mo):
   font-size: 2.4rem;
   font-weight: 700;
   margin: 0 0 0.75rem;
-  color: var(--text-color, #1a1a2e);
+  color: var(--foreground, #1a1a2e);
 }
 
 .rwa-landing .hero .tagline {
@@ -159,31 +159,18 @@ def _(mo):
   flex-direction: column;
   padding: 1.75rem;
   border-radius: 12px;
-  border: 1px solid var(--border-color, rgba(0,0,0,0.08));
-  background: var(--surface-color,
-    rgba(255,255,255,0.6));
-  backdrop-filter: blur(8px);
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  background: var(--card, #fff);
   text-decoration: none;
-  color: inherit;
+  color: var(--card-foreground, inherit);
   transition: border-color 0.2s, box-shadow 0.2s,
     transform 0.15s;
 }
 
 .rwa-landing .card:hover {
   border-color: #ff9100;
-  box-shadow: 0 4px 20px rgba(255, 145, 0, 0.15);
+  box-shadow: 0 4px 20px rgba(255, 145, 0, 0.12);
   transform: translateY(-2px);
-}
-
-@media (prefers-color-scheme: dark) {
-  .rwa-landing .card {
-    background: rgba(30, 30, 50, 0.6);
-    border-color: rgba(255,255,255,0.08);
-  }
-  .rwa-landing .card:hover {
-    border-color: #ff9100;
-    box-shadow: 0 4px 24px rgba(255, 145, 0, 0.2);
-  }
 }
 
 .rwa-landing .card .card-icon {
@@ -227,8 +214,7 @@ def _(mo):
   justify-content: space-between;
   padding: 1.25rem 1.75rem;
   border-radius: 12px;
-  border: 1px dashed var(--border-color,
-    rgba(0,0,0,0.12));
+  border: 1px dashed var(--border, rgba(0,0,0,0.12));
   text-decoration: none;
   color: inherit;
   transition: border-color 0.2s, background 0.2s;
@@ -240,9 +226,6 @@ def _(mo):
 }
 
 @media (prefers-color-scheme: dark) {
-  .rwa-landing .workbench a {
-    border-color: rgba(255,255,255,0.12);
-  }
   .rwa-landing .workbench a:hover {
     background: rgba(255, 145, 0, 0.06);
   }
@@ -373,15 +356,15 @@ N[(1\u2212R)\u207b\u2070\u00b7\u2075 \u00d7 G(PD)]</span>
       <div class="card-arrow">Open \u2192</div>
     </a>
 
-    <a class="card" href="/reference">
+    <a class="card" href="https://openafterhours.github.io/rwa_calculator/" target="_blank">
       <div class="card-icon">\U0001f4d6</div>
-      <h3>Framework Reference</h3>
+      <h3>Documentation</h3>
       <p>
-        Interactive regulatory parameters &mdash; risk
-        weights, LGD floors, CCFs, and correlation
-        factors across frameworks.
+        Regulatory reference, risk weight tables,
+        IRB parameters, and framework guides
+        on the documentation site.
       </p>
-      <div class="card-arrow">Open \u2192</div>
+      <div class="card-arrow">View Docs \u2197</div>
     </a>
   </div>
 

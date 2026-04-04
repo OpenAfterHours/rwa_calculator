@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import time
 from datetime import date
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 import polars as pl
 
@@ -51,15 +51,12 @@ if TYPE_CHECKING:
 
     from rwa_calc.contracts.bundles import ClassifiedExposuresBundle, RawDataBundle
 
-_T = TypeVar("_T")
-
-
 # ---------------------------------------------------------------------------
 # Timing helpers
 # ---------------------------------------------------------------------------
 
 
-def _time(fn: Callable[[], _T], label: str, results: list[tuple[str, float]]) -> _T:
+def _time[_T](fn: Callable[[], _T], label: str, results: list[tuple[str, float]]) -> _T:
     """Time a function call, append (label, elapsed_ms) to results, return fn result."""
     t0 = time.perf_counter()
     result = fn()

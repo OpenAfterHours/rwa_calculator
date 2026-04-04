@@ -56,7 +56,7 @@ def _(mo, project_root):
         _sys.path.insert(0, _shared)
     from sidebar import create_sidebar as _create_sidebar
 
-    _create_sidebar(mo)
+    _create_sidebar(mo, base_url="http://localhost:8000")
     return
 
 

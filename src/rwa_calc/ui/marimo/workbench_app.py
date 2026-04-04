@@ -52,12 +52,13 @@ marimo editor with pre-configured imports and access to cached calculator result
 @app.cell
 def _(mo):
     refresh_trigger, set_refresh = mo.state(0)
-    return refresh_trigger, set_refresh
+    pending_delete, set_pending_delete = mo.state(None)
+    return pending_delete, refresh_trigger, set_pending_delete, set_refresh
 
 
 @app.cell
-def _(Path, refresh_trigger, datetime, mo):
-    refresh_trigger  # reactive dependency
+def _(Path, refresh_trigger, datetime, mo, set_pending_delete):
+    refresh_trigger  # noqa: B018 — reactive dependency for marimo
 
     _ws_dir = Path(__file__).parent / "workspaces" / "local"
     _files = sorted(_ws_dir.glob("*.py")) if _ws_dir.exists() else []
@@ -67,13 +68,22 @@ def _(Path, refresh_trigger, datetime, mo):
         _card_html = []
         for _f in _files:
             _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
+            _delete_btn = mo.ui.button(
+                label="\U0001f5d1\ufe0f Delete",
+                on_click=lambda _, n=_f.stem: set_pending_delete(n),
+                kind="danger",
+            )
             _card_html.append(
-                f'<a class="wb-card" href="http://localhost:8002/?file={_f.name}">'
-                f"  <div class=\"wb-card-icon\">\U0001f4d3</div>"
+                f'<div class="wb-card">'
+                f'  <div class="wb-card-icon">\U0001f4d3</div>'
                 f"  <h3>{_f.stem}</h3>"
                 f'  <span class="wb-card-meta">{_mod_time:%Y-%m-%d %H:%M}</span>'
-                f'  <div class="wb-card-action">Open in Editor \u2192</div>'
-                f"</a>"
+                f'  <div class="wb-card-actions">'
+                f'    <a href="http://localhost:8002/?file={_f.name}"'
+                f'       class="wb-card-action">Open in Editor \u2192</a>'
+                f"    {_delete_btn}"
+                f"  </div>"
+                f"</div>"
             )
         _listing = mo.md(
             """
@@ -122,11 +132,21 @@ def _(Path, refresh_trigger, datetime, mo):
   opacity: 0.5;
   margin-bottom: auto;
 }
-.wb-card-action {
+.wb-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-top: 0.75rem;
+  gap: 0.5rem;
+}
+.wb-card-action {
   font-size: 0.85rem;
   font-weight: 600;
   color: #ff9100;
+  text-decoration: none;
+}
+.wb-card-action:hover {
+  text-decoration: underline;
 }
 </style>
 <div class="wb-grid">
@@ -136,9 +156,7 @@ def _(Path, refresh_trigger, datetime, mo):
         )
     else:
         _listing = mo.callout(
-            mo.md(
-                "No workbooks yet. Create one below to get started."
-            ),
+            mo.md("No workbooks yet. Create one below to get started."),
             kind="info",
         )
     mo.output.replace(_listing)
@@ -147,9 +165,7 @@ def _(Path, refresh_trigger, datetime, mo):
 
 @app.cell
 def _(mo):
-    new_name = mo.ui.text(
-        label="Workbook name", placeholder="my_analysis"
-    )
+    new_name = mo.ui.text(label="Workbook name", placeholder="my_analysis")
     create_btn = mo.ui.run_button(label="Create Workbook")
     mo.hstack([new_name, create_btn], gap=1)
     return create_btn, new_name
@@ -183,37 +199,44 @@ def _(Path, create_btn, mo, new_name, set_refresh, shutil):
 
 
 @app.cell
-def _(Path, mo):
-    _ws_dir = Path(__file__).parent / "workspaces" / "local"
-    _files = sorted(
-        f.stem for f in _ws_dir.glob("*.py") if f.stem != "__init__"
-    ) if _ws_dir.exists() else []
+def _(mo, pending_delete):
+    mo.stop(pending_delete is None)
 
-    if _files:
-        delete_dropdown = mo.ui.dropdown(
-            options=_files, label="Select workbook to delete"
-        )
-        delete_btn = mo.ui.run_button(label="Delete", kind="danger")
-        mo.hstack([delete_dropdown, delete_btn], gap=1)
-    else:
-        delete_dropdown = None
-        delete_btn = None
-    return delete_btn, delete_dropdown
+    confirm_btn = mo.ui.run_button(label="Confirm Delete", kind="danger")
+    cancel_btn = mo.ui.run_button(label="Cancel")
+
+    mo.callout(
+        mo.vstack(
+            [
+                mo.md(
+                    f"Are you sure you want to permanently delete "
+                    f"**{pending_delete}**? This cannot be undone."
+                ),
+                mo.hstack([confirm_btn, cancel_btn], gap=1),
+            ]
+        ),
+        kind="warn",
+    )
+    return cancel_btn, confirm_btn
 
 
 @app.cell
-def _(Path, delete_btn, delete_dropdown, mo, set_refresh):
-    mo.stop(delete_btn is None or not delete_btn.value or not delete_dropdown.value)
+def _(Path, cancel_btn, confirm_btn, mo, pending_delete, set_pending_delete, set_refresh):
+    mo.stop(pending_delete is None)
+    mo.stop(not confirm_btn.value and not cancel_btn.value)
 
-    _ws_dir = Path(__file__).parent / "workspaces" / "local"
-    _target = _ws_dir / f"{delete_dropdown.value}.py"
-    if _target.exists():
-        _target.unlink()
+    if cancel_btn.value:
+        set_pending_delete(None)
+        mo.callout(mo.md("Deletion cancelled."), kind="info")
+    elif confirm_btn.value:
+        _ws_dir = Path(__file__).parent / "workspaces" / "local"
+        _target = _ws_dir / f"{pending_delete}.py"
+        _name = pending_delete
+        if _target.exists():
+            _target.unlink()
         set_refresh(lambda n: n + 1)
-        mo.callout(
-            mo.md(f"Deleted **{delete_dropdown.value}**."),
-            kind="warn",
-        )
+        set_pending_delete(None)
+        mo.callout(mo.md(f"Deleted **{_name}**."), kind="warn")
     return
 
 

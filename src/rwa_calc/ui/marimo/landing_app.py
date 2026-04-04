@@ -23,35 +23,15 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.sidebar(
-        [
-            mo.md("# RWA Calculator"),
-            mo.nav_menu(
-                {
-                    "/": f"{mo.icon('home')} Home",
-                    "/calculator": f"{mo.icon('calculator')} Calculator",
-                    "/results": f"{mo.icon('table')} Results Explorer",
-                    "/comparison": (f"{mo.icon('git-compare')} Impact Analysis"),
-                    "/reference": (f"{mo.icon('book')} Framework Reference"),
-                    "http://localhost:8002": (f"{mo.icon('code')} Workbench"),
-                },
-                orientation="vertical",
-            ),
-            mo.md("---"),
-            mo.md(
-                "**Quick Links**\n"
-                "- [PRA PS1/26](https://www.bankofengland.co.uk/"
-                "prudential-regulation/publication/2026/january/"
-                "implementation-of-the-basel-3-1-final-rules-"
-                "policy-statement)\n"
-                "- [UK CRR](https://www.legislation.gov.uk/"
-                "eur/2013/575/contents)\n"
-                "- [BCBS Framework](https://www.bis.org/"
-                "basel_framework/)"
-            ),
-        ],
-        footer=mo.md("*RWA Calculator v1.0*"),
-    )
+    import sys as _sys
+    from pathlib import Path as _P
+
+    _shared = str(_P(__file__).parent / "shared")
+    if _shared not in _sys.path:
+        _sys.path.insert(0, _shared)
+    from sidebar import create_sidebar as _create_sidebar
+
+    _create_sidebar(mo)
     return
 
 
@@ -407,7 +387,7 @@ N[(1\u2212R)\u207b\u2070\u00b7\u2075 \u00d7 G(PD)]</span>
 
   <!-- Workbench -->
   <div class="workbench">
-    <a href="http://localhost:8002">
+    <a href="/workbench">
       <div class="wb-text">
         <strong>\U0001f4bb Workbench</strong>
         <span>

@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 apps_dir = Path(__file__).parent
 workspaces_dir = apps_dir / "workspaces" / "local"
 workspaces_dir.mkdir(parents=True, exist_ok=True)
+(apps_dir / "workspaces" / "templates").mkdir(parents=True, exist_ok=True)
 
 EDIT_SERVER_PORT = 8002
 
@@ -50,6 +51,7 @@ TEMPLATE_REGISTRY: dict[str, str] = {
     "results_explorer": "results_explorer.py",
     "comparison": "comparison_app.py",
     "reference": "framework_reference.py",
+    "workbench_starter": "workspaces/templates/starter.py",
 }
 
 # ---------------------------------------------------------------------------
@@ -62,6 +64,7 @@ templates_asgi = (
     .with_app(path="/results", root=str(apps_dir / "results_explorer.py"))
     .with_app(path="/comparison", root=str(apps_dir / "comparison_app.py"))
     .with_app(path="/reference", root=str(apps_dir / "framework_reference.py"))
+    .with_app(path="/workbench", root=str(apps_dir / "workbench_app.py"))
     .build()
 )
 
@@ -164,8 +167,9 @@ def main() -> None:
     print("  http://localhost:8000/results     (Results Explorer)")
     print("  http://localhost:8000/comparison  (Impact Analysis)")
     print("  http://localhost:8000/reference   (Framework Reference)")
+    print("  http://localhost:8000/workbench  (Workbench Hub)")
     print()
-    print(f"Workbench (editable):  http://localhost:{EDIT_SERVER_PORT}/")
+    print(f"Workbench editor:      http://localhost:{EDIT_SERVER_PORT}/")
     print()
     print("API:")
     print("  GET    /api/templates             List available templates")

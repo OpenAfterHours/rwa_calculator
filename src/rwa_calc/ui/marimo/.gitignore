@@ -1,5 +1,5 @@
 # Cache directory for sharing results between apps
 .cache/
 
-# User workspaces (duplicated workbooks)
-workspaces/
+# User workspaces (local workbooks, not templates)
+workspaces/local/

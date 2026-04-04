@@ -82,14 +82,14 @@ result.summary()
     """)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(cache_dir, mo, pl):
     _results_file = cache_dir / "last_results.parquet"
     if _results_file.exists():
         cached_results = pl.scan_parquet(_results_file)
         mo.output.replace(
             mo.md(
-                f"Cached results loaded from `{_results_file}` "
+                f"Cached (cached_results) results loaded from `{_results_file}` "
                 f"({cached_results.collect().height:,} rows)"
             )
         )

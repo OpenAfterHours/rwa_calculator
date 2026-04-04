@@ -64,17 +64,76 @@ def _(Path, refresh_trigger, datetime, mo):
     _files = [f for f in _files if f.stem != "__init__"]
 
     if _files:
-        _cards = []
+        _card_html = []
         for _f in _files:
             _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
-            _cards.append(
-                mo.md(
-                    f"### {_f.stem}\n\n"
-                    f"Last modified: {_mod_time:%Y-%m-%d %H:%M}\n\n"
-                    f"[Open in Editor](http://localhost:8002/?file={_f.name})"
-                )
+            _card_html.append(
+                f'<a class="wb-card" href="http://localhost:8002/?file={_f.name}">'
+                f"  <div class=\"wb-card-icon\">\U0001f4d3</div>"
+                f"  <h3>{_f.stem}</h3>"
+                f'  <span class="wb-card-meta">{_mod_time:%Y-%m-%d %H:%M}</span>'
+                f'  <div class="wb-card-action">Open in Editor \u2192</div>'
+                f"</a>"
             )
-        _listing = mo.hstack(_cards, wrap=True, gap=1)
+        _listing = mo.md(
+            """
+<style>
+.wb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.wb-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, rgba(0,0,0,0.08));
+  background: var(--surface-color, rgba(255,255,255,0.6));
+  backdrop-filter: blur(8px);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.wb-card:hover {
+  border-color: #ff9100;
+  box-shadow: 0 4px 16px rgba(255, 145, 0, 0.12);
+  transform: translateY(-2px);
+}
+@media (prefers-color-scheme: dark) {
+  .wb-card {
+    background: rgba(30, 30, 50, 0.6);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .wb-card:hover {
+    border-color: #ff9100;
+    box-shadow: 0 4px 20px rgba(255, 145, 0, 0.18);
+  }
+}
+.wb-card-icon { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.wb-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+  word-break: break-word;
+}
+.wb-card-meta {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  margin-bottom: auto;
+}
+.wb-card-action {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ff9100;
+}
+</style>
+<div class="wb-grid">
+"""
+            + "\n".join(_card_html)
+            + "\n</div>"
+        )
     else:
         _listing = mo.callout(
             mo.md(

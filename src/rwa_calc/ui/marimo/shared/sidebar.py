@@ -32,7 +32,7 @@ def _load_logo_base64() -> str:
 _LOGO_URI = _load_logo_base64()
 
 
-def create_sidebar(mo: object, *, version: str = "v1.0") -> object:
+def create_sidebar(mo: object, *, version: str = "v1.0", base_url: str = "") -> object:
     """Build the standard RWA Calculator sidebar.
 
     Must be used as the last expression in a marimo cell, e.g.::
@@ -44,6 +44,9 @@ def create_sidebar(mo: object, *, version: str = "v1.0") -> object:
     Args:
         mo: The marimo module (passed from the calling cell).
         version: Version string shown in the footer.
+        base_url: URL prefix for nav links. Use ``"http://localhost:8000"``
+            when rendering from the workbench edit server (port 8002) so
+            that sidebar links navigate back to the main template apps.
 
     Returns:
         The ``mo.sidebar`` element.
@@ -71,12 +74,12 @@ def create_sidebar(mo: object, *, version: str = "v1.0") -> object:
         _header,
         mo.nav_menu(
             {
-                "/": f"{mo.icon('home')} Home",
-                "/calculator": f"{mo.icon('calculator')} Calculator",
-                "/results": f"{mo.icon('table')} Results Explorer",
-                "/comparison": f"{mo.icon('git-compare')} Impact Analysis",
+                f"{base_url}/": f"{mo.icon('home')} Home",
+                f"{base_url}/calculator": f"{mo.icon('calculator')} Calculator",
+                f"{base_url}/results": f"{mo.icon('table')} Results Explorer",
+                f"{base_url}/comparison": f"{mo.icon('git-compare')} Impact Analysis",
                 "https://openafterhours.github.io/rwa_calculator/": f"{mo.icon('book')} Documentation",
-                "/workbench": f"{mo.icon('code')} Workbench",
+                f"{base_url}/workbench": f"{mo.icon('code')} Workbench",
             },
             orientation="vertical",
         ),

@@ -50,7 +50,6 @@ TEMPLATE_REGISTRY: dict[str, str] = {
     "calculator": "rwa_app.py",
     "results_explorer": "results_explorer.py",
     "comparison": "comparison_app.py",
-    "reference": "framework_reference.py",
     "workbench_starter": "workspaces/templates/starter.py",
 }
 
@@ -63,7 +62,6 @@ templates_asgi = (
     .with_app(path="/calculator", root=str(apps_dir / "rwa_app.py"))
     .with_app(path="/results", root=str(apps_dir / "results_explorer.py"))
     .with_app(path="/comparison", root=str(apps_dir / "comparison_app.py"))
-    .with_app(path="/reference", root=str(apps_dir / "framework_reference.py"))
     .with_app(path="/workbench", root=str(apps_dir / "workbench_app.py"))
     .build()
 )
@@ -166,7 +164,6 @@ def main() -> None:
     print("  http://localhost:8000/calculator  (Calculator)")
     print("  http://localhost:8000/results     (Results Explorer)")
     print("  http://localhost:8000/comparison  (Impact Analysis)")
-    print("  http://localhost:8000/reference   (Framework Reference)")
     print("  http://localhost:8000/workbench  (Workbench Hub)")
     print()
     print(f"Workbench editor:      http://localhost:{EDIT_SERVER_PORT}/")

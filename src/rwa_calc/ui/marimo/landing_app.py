@@ -356,15 +356,15 @@ N[(1\u2212R)\u207b\u2070\u00b7\u2075 \u00d7 G(PD)]</span>
       <div class="card-arrow">Open \u2192</div>
     </a>
 
-    <a class="card" href="/reference">
+    <a class="card" href="https://openafterhours.github.io/rwa_calculator/" target="_blank">
       <div class="card-icon">\U0001f4d6</div>
-      <h3>Framework Reference</h3>
+      <h3>Documentation</h3>
       <p>
-        Interactive regulatory parameters &mdash; risk
-        weights, LGD floors, CCFs, and correlation
-        factors across frameworks.
+        Regulatory reference, risk weight tables,
+        IRB parameters, and framework guides
+        on the documentation site.
       </p>
-      <div class="card-arrow">Open \u2192</div>
+      <div class="card-arrow">View Docs \u2197</div>
     </a>
   </div>
 

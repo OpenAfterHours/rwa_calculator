@@ -32,7 +32,8 @@ uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
 |-------------|-----|-------------|
 | **RWA Calculator** | `http://localhost:8000/` or `/calculator` | Run RWA calculations |
 | **Results Explorer** | `http://localhost:8000/results` | Analyze calculation results |
-| **Framework Reference** | `http://localhost:8000/reference` | Regulatory documentation |
+| **Impact Analysis** | `http://localhost:8000/comparison` | CRR vs Basel 3.1 comparison |
+| **Workbench** | `http://localhost:8000/workbench` | Custom analysis notebooks |
 
 ### RWA Calculator (`rwa_app.py`)
 
@@ -73,16 +74,6 @@ Analyze and filter calculation results:
     - Export filtered results (CSV + Parquet)
     - Summary statistics
 
-### Framework Reference (`framework_reference.py`)
-
-Interactive regulatory reference with tabbed navigation:
-
-- Overview of CRR vs Basel 3.1
-- CRR (Basel 3.0) parameters
-- Basel 3.1 parameters
-- Risk weight tables
-- IRB parameters
-
 ### Server Architecture
 
 The multi-app server uses Marimo's ASGI integration:
@@ -95,7 +86,8 @@ app = (
     .with_app(path="", root=str(apps_dir / "rwa_app.py"))
     .with_app(path="/calculator", root=str(apps_dir / "rwa_app.py"))
     .with_app(path="/results", root=str(apps_dir / "results_explorer.py"))
-    .with_app(path="/reference", root=str(apps_dir / "framework_reference.py"))
+    .with_app(path="/comparison", root=str(apps_dir / "comparison_app.py"))
+    .with_app(path="/workbench", root=str(apps_dir / "workbench_app.py"))
     .build()
 )
 ```

@@ -1,3 +1,10 @@
+# /// script
+# [tool.marimo.runtime]
+# auto_instantiate = true
+# [tool.marimo.display]
+# theme = "dark"
+# ///
+
 """
 Starter Workbook Template.
 
@@ -15,7 +22,7 @@ __generated_with = "0.19.4"
 app = marimo.App(width="medium")
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     import sys
     from datetime import date
@@ -40,7 +47,7 @@ def _():
     return Decimal, Path, cache_dir, date, mo, pl, project_root
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, project_root):
     import sys as _sys
 
@@ -53,7 +60,7 @@ def _(mo, project_root):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     return mo.md("""
 # Custom Analysis Workbook

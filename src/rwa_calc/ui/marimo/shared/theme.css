@@ -3,7 +3,7 @@
    (Material Design, orange primary/accent, slate dark mode)
 
    Injected into <head> via marimo's css_file config.
-   Uses .marimo selector to match marimo's own specificity.
+   Uses light-dark() to match marimo's color-scheme toggle.
 
    Zensical reference colours:
      Primary fg:      #ffa724 (bright orange)
@@ -16,11 +16,12 @@
      Headings:        #fff (pure white in dark)
    --------------------------------------------------------------- */
 
-/* =================================================================
-   LIGHT MODE
-   ================================================================= */
 .marimo, :root {
-  /* Primary — orange */
+  /* Page background */
+  --background: light-dark(#fff, #0d0e11);
+  --foreground: light-dark(#1a1a2e, #e2e4e8);
+
+  /* Primary — orange (same both modes) */
   --primary: #ff9100;
   --primary-foreground: #fff;
 
@@ -29,94 +30,65 @@
   --accent-foreground: #ff9100;
 
   /* Action buttons (run/execute) */
-  --action: #fff3e0;
-  --action-hover: #ffe0b2;
-  --action-foreground: #e68200;
+  --action: light-dark(#fff3e0, #3e2700);
+  --action-hover: light-dark(#ffe0b2, #5c3a00);
+  --action-foreground: light-dark(#e68200, #ffb74d);
 
   /* Links */
-  --link: #e68200;
-  --link-visited: #bf6900;
+  --link: light-dark(#e68200, #ffb74d);
+  --link-visited: light-dark(#bf6900, #ff9100);
 
   /* Focus ring */
-  --ring: #ffb74d;
+  --ring: light-dark(#ffb74d, #ff9100);
 
-  /* Borders — light grey matching Material default-fg-lightest */
-  --border: #e2e8f0;
+  /* Borders */
+  --border: light-dark(#e2e8f0, rgba(216, 222, 233, 0.12));
 
-  /* Card — similar to page bg with light border */
-  --card: #fff;
-  --card-foreground: #1a1a2e;
+  /* Card */
+  --card: light-dark(#fff, #0d0e11);
+  --card-foreground: light-dark(#1a1a2e, #e2e4e8);
 
-  /* Muted — hover bg for nav items: light grey */
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  /* Muted — hover bg for nav items */
+  --muted: light-dark(#f1f5f9, rgba(216, 222, 233, 0.12));
+  --muted-foreground: light-dark(#64748b, #a0a4ab);
 
   /* Secondary */
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1a1a2e;
+  --secondary: light-dark(#f1f5f9, rgba(216, 222, 233, 0.08));
+  --secondary-foreground: light-dark(#1a1a2e, #e2e4e8);
 
   /* Input */
-  --input: #e2e8f0;
+  --input: light-dark(#e2e8f0, rgba(216, 222, 233, 0.18));
 
   /* Popover */
-  --popover: #fff;
-  --popover-foreground: #1a1a2e;
+  --popover: light-dark(#fff, #161719);
+  --popover-foreground: light-dark(#1a1a2e, #e2e4e8);
 }
 
-
-/* =================================================================
-   DARK MODE — matches Zensical slate scheme
-   ================================================================= */
-@media (prefers-color-scheme: dark) {
-  .marimo, :root {
-    /* Primary — orange (same both modes) */
-    --primary: #ff9100;
-    --primary-foreground: #fff;
-
-    /* Accent — active nav: 10% orange bg + bright orange text
-       Matches: .md-nav__link--active { background: #ff91001a; color: #ff9100 } */
-    --accent: #ff91001a;
-    --accent-foreground: #ff9100;
-
-    /* Action buttons */
-    --action: #3e2700;
-    --action-hover: #5c3a00;
-    --action-foreground: #ffb74d;
-
-    /* Links — warm orange */
-    --link: #ffb74d;
-    --link-visited: #ff9100;
-
-    /* Focus ring */
-    --ring: #ff9100;
-
-    /* Background — matches slate bg: hsla(225, 15%, 5%, 1) */
-    --background: #0d0e11;
-    --foreground: #e2e4e8;
-
-    /* Border — matches slate fg-lightest: hsla(225, 15%, 90%, 0.12)
-       This is the thin light border on cards at rest */
-    --border: rgba(216, 222, 233, 0.12);
-
-    /* Card — blends with page bg, distinct via border only
-       Matches: .feature-card { background: var(--md-default-bg-color) } */
-    --card: #0d0e11;
-    --card-foreground: #e2e4e8;
-
-    /* Muted/hover — matches nav hover: hsla(225, 15%, 90%, 0.12)
-       Light grey that's barely visible, same as border */
-    --muted: rgba(216, 222, 233, 0.12);
-    --muted-foreground: #a0a4ab;
-
-    /* Secondary */
-    --secondary: rgba(216, 222, 233, 0.08);
-    --secondary-foreground: #e2e4e8;
-
-    /* Input border */
-    --input: rgba(216, 222, 233, 0.18);
-
-    /* Popover */
-    --popover: #161719;
-    --popover-foreground: #e2e4e8;
-  }
+/* Fallback for browsers without light-dark() support */
+.dark .marimo,
+.dark-theme .marimo,
+.marimo:is(.dark *),
+:root:is(.dark, .dark-theme) {
+  --primary: #ff9100;
+  --primary-foreground: #fff;
+  --accent: #ff91001a;
+  --accent-foreground: #ff9100;
+  --action: #3e2700;
+  --action-hover: #5c3a00;
+  --action-foreground: #ffb74d;
+  --link: #ffb74d;
+  --link-visited: #ff9100;
+  --ring: #ff9100;
+  --background: #0d0e11;
+  --foreground: #e2e4e8;
+  --border: rgba(216, 222, 233, 0.12);
+  --card: #0d0e11;
+  --card-foreground: #e2e4e8;
+  --muted: rgba(216, 222, 233, 0.12);
+  --muted-foreground: #a0a4ab;
+  --secondary: rgba(216, 222, 233, 0.08);
+  --secondary-foreground: #e2e4e8;
+  --input: rgba(216, 222, 233, 0.18);
+  --popover: #161719;
+  --popover-foreground: #e2e4e8;
 }

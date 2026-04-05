@@ -1,7 +1,8 @@
 0a. Study `docs/specifications/*` with up to 2 parallel Opus subagents to learn the application specifications.
 0b. Study @IMPLEMENTATION_PLAN.md (if present) to understand the plan so far.
 0c. Study `src/rwa_calc/contracts/` and `src/rwa_calc/domain/` with up to 2 parallel Opus subagents to understand shared protocols, bundles, enums & config.
-0d. For reference, the application source code is in `src/rwa_calc/`.
+0d. Study the pdf docs in `doc/assets/` using pymupdf to extract the text. This has all the regulatory text.
+0e. For reference, the application source code is in `src/rwa_calc/`.
 
 1. Study @IMPLEMENTATION_PLAN.md (if present; it may be incorrect) and use up to 2 Opus subagents to study existing source code in `src/rwa_calc/` and compare it against `docs/specifications/*`. Use an Opus subagent to analyze findings, prioritize tasks, and create/update @IMPLEMENTATION_PLAN.md as a bullet point list sorted in priority of items yet to be implemented. Ultrathink. Consider searching for TODO, minimal implementations, placeholders, skipped/flaky tests, and inconsistent patterns. Study @IMPLEMENTATION_PLAN.md to determine starting point for research and keep it up to date with items considered complete/incomplete using subagents.
 

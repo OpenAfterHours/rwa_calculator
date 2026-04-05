@@ -278,14 +278,16 @@ class HierarchyResolver:
         Build rating lookup with dual per-type resolution and inheritance.
 
         Resolves the best internal and best external rating separately per
-        counterparty, then inherits each type independently from the ultimate
-        parent when the entity has no own rating of that type.
+        counterparty, then inherits internal ratings from the ultimate parent
+        when the entity has no own internal rating. External ratings are NOT
+        inherited — they apply only to the counterparty explicitly rated by
+        the agency.
 
         Returns LazyFrame with columns:
         - counterparty_reference: The entity
         - internal_pd: Best internal PD (own or inherited from parent)
         - internal_model_id: Model ID for the internal rating
-        - external_cqs: Best external CQS (own or inherited from parent)
+        - external_cqs: Best external CQS (own only — not inherited)
         - cqs: Alias of external_cqs
         - pd: Alias of internal_pd
         """
@@ -368,21 +370,8 @@ class HierarchyResolver:
             how="left",
         )
 
-        # Parent's best external
-        parent_external = best_external.select(
-            [
-                pl.col("_ext_cp").alias("_p_ext_cp"),
-                pl.col("external_cqs").alias("parent_external_cqs"),
-            ]
-        )
-        result = result.join(
-            parent_external,
-            left_on="ultimate_parent_reference",
-            right_on="_p_ext_cp",
-            how="left",
-        )
-
-        # Per-type inheritance: coalesce own → parent for each type
+        # Internal-only inheritance: coalesce own → parent for internal ratings
+        # External ratings are NOT inherited — they stay as the entity's own value
         result = result.with_columns(
             [
                 pl.coalesce(pl.col("internal_pd"), pl.col("parent_internal_pd")).alias(
@@ -390,9 +379,6 @@ class HierarchyResolver:
                 ),
                 pl.coalesce(pl.col("internal_model_id"), pl.col("parent_internal_model_id")).alias(
                     "internal_model_id"
-                ),
-                pl.coalesce(pl.col("external_cqs"), pl.col("parent_external_cqs")).alias(
-                    "external_cqs"
                 ),
             ]
         )

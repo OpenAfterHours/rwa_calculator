@@ -403,11 +403,11 @@ class TestParentChildHierarchy:
     def test_parent_rating_inherited_when_own_missing(
         self, hierarchy_resolver, classifier, crr_full_irb_config
     ):
-        """Child counterparty inherits parent's rating via hierarchy resolution.
+        """Child counterparty is classified even without its own ratings.
 
-        When a child has no rating but parent does, the hierarchy resolver
-        propagates the parent's rating. The classifier then uses the
-        inherited rating for approach determination.
+        Hierarchy resolver builds parent mappings. Only internal ratings
+        inherit from parent to child; external ratings do not. The
+        classifier determines approach based on available ratings.
         """
         bundle = make_raw_data_bundle(
             counterparties=[

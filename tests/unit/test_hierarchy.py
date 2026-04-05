@@ -101,18 +101,18 @@ def multi_level_org_mappings() -> pl.LazyFrame:
 
 @pytest.fixture
 def simple_ratings() -> pl.LazyFrame:
-    """Simple ratings - only parent has rating."""
+    """Simple ratings - parent has both internal and external ratings."""
     return pl.DataFrame(
         {
-            "rating_reference": ["RAT001"],
-            "counterparty_reference": ["CP001"],
-            "rating_type": ["external"],
-            "rating_agency": ["MOODYS"],
-            "rating_value": ["A2"],
-            "cqs": [2],
-            "pd": [0.001],
-            "rating_date": [date(2024, 6, 1)],
-            "is_solicited": [True],
+            "rating_reference": ["RAT001", "RAT002"],
+            "counterparty_reference": ["CP001", "CP001"],
+            "rating_type": ["external", "internal"],
+            "rating_agency": ["MOODYS", "INT"],
+            "rating_value": ["A2", "INT_A"],
+            "cqs": [2, None],
+            "pd": [None, 0.001],
+            "rating_date": [date(2024, 6, 1), date(2024, 6, 1)],
+            "is_solicited": [True, True],
         }
     ).lazy()
 
@@ -347,7 +347,7 @@ class TestBuildRatingInheritanceLazy:
         simple_ratings: pl.LazyFrame,
         simple_org_mappings: pl.LazyFrame,
     ) -> None:
-        """Entity with own rating should not inherit."""
+        """Entity with own rating should use its own ratings."""
         ultimate_parents = resolver._build_ultimate_parent_lazy(simple_org_mappings)
 
         rating_inheritance = resolver._build_rating_inheritance_lazy(
@@ -357,18 +357,19 @@ class TestBuildRatingInheritanceLazy:
         )
         df = rating_inheritance.collect()
 
-        # CP001 has own rating
+        # CP001 has own external and internal ratings
         cp001 = df.filter(pl.col("counterparty_reference") == "CP001")
         assert cp001["cqs"][0] == 2
+        assert cp001["internal_pd"][0] == pytest.approx(0.001)
 
-    def test_entity_inherits_from_parent(
+    def test_internal_rating_inherits_from_parent(
         self,
         resolver: HierarchyResolver,
         simple_counterparties: pl.LazyFrame,
         simple_ratings: pl.LazyFrame,
         simple_org_mappings: pl.LazyFrame,
     ) -> None:
-        """Unrated child should inherit parent rating."""
+        """Unrated child inherits parent's internal rating but not external."""
         ultimate_parents = resolver._build_ultimate_parent_lazy(simple_org_mappings)
 
         rating_inheritance = resolver._build_rating_inheritance_lazy(
@@ -378,9 +379,12 @@ class TestBuildRatingInheritanceLazy:
         )
         df = rating_inheritance.collect()
 
-        # CP002 inherits from CP001
+        # CP002 inherits internal from CP001 but NOT external
         cp002 = df.filter(pl.col("counterparty_reference") == "CP002")
-        assert cp002["cqs"][0] == 2
+        assert cp002["internal_pd"][0] == pytest.approx(0.001)
+        assert cp002["pd"][0] == pytest.approx(0.001)
+        assert cp002["cqs"][0] is None
+        assert cp002["external_cqs"][0] is None
 
     def test_standalone_unrated_entity(
         self,
@@ -493,7 +497,7 @@ class TestDualRatingResolution:
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """Child has own internal, parent has external → child gets both."""
+        """Child keeps own internal; parent's external does not inherit."""
         counterparties = pl.DataFrame({"counterparty_reference": ["PARENT", "CHILD"]}).lazy()
         ratings = pl.DataFrame(
             {
@@ -520,13 +524,61 @@ class TestDualRatingResolution:
         ).collect()
 
         child = result.filter(pl.col("counterparty_reference") == "CHILD")
-        # Own internal
+        # Own internal retained
         assert child["internal_pd"][0] == pytest.approx(0.003)
-        # Inherited external from parent
-        assert child["external_cqs"][0] == 1
-        # Derived
-        assert child["cqs"][0] == 1  # External-first
-        assert child["pd"][0] == pytest.approx(0.003)  # Internal PD
+        assert child["pd"][0] == pytest.approx(0.003)
+        # External does NOT inherit from parent
+        assert child["external_cqs"][0] is None
+        assert child["cqs"][0] is None
+
+    def test_external_rating_does_not_inherit(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """External ratings must not inherit from parent to child.
+
+        External ratings (from agencies like S&P, Fitch) are specific to
+        the counterparty they were assigned to. Only internal ratings
+        inherit down the org hierarchy.
+        """
+        counterparties = pl.DataFrame(
+            {"counterparty_reference": ["PARENT", "CHILD"]}
+        ).lazy()
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["PARENT_EXT"],
+                "counterparty_reference": ["PARENT"],
+                "rating_type": ["external"],
+                "rating_agency": ["SP"],
+                "rating_value": ["A+"],
+                "cqs": [1],
+                "pd": [None],
+                "rating_date": [date(2024, 6, 1)],
+            }
+        ).lazy()
+        org_mappings = pl.DataFrame(
+            {
+                "parent_counterparty_reference": ["PARENT"],
+                "child_counterparty_reference": ["CHILD"],
+            }
+        ).lazy()
+        ultimate_parents = resolver._build_ultimate_parent_lazy(org_mappings)
+
+        result = resolver._build_rating_inheritance_lazy(
+            counterparties, ratings, ultimate_parents
+        ).collect()
+
+        # Parent keeps own external rating
+        parent = result.filter(pl.col("counterparty_reference") == "PARENT")
+        assert parent["external_cqs"][0] == 1
+        assert parent["cqs"][0] == 1
+
+        # Child must NOT inherit parent's external rating
+        child = result.filter(pl.col("counterparty_reference") == "CHILD")
+        assert child["external_cqs"][0] is None
+        assert child["cqs"][0] is None
+        assert child["internal_pd"][0] is None
+        assert child["pd"][0] is None
 
     def test_external_only_counterparty(
         self,

@@ -251,7 +251,7 @@ def _corporate_external_ratings() -> list[Rating]:
             RATING_DATE,
             True,
         ),
-        # Group 1 subsidiaries intentionally have NO external rating - test inheritance
+        # Group 1 subsidiaries have NO external rating — external ratings are not inherited
         # Group 2 Ultimate Parent - rated CQS 1 for multi-level inheritance
         Rating(
             "RTG_CORP_GRP2_ULTIMATE",
@@ -264,7 +264,7 @@ def _corporate_external_ratings() -> list[Rating]:
             RATING_DATE,
             True,
         ),
-        # Group 2 intermediate and operating subs have NO external rating - test inheritance
+        # Group 2 intermediate and operating subs have NO external rating — not inherited
         # Group 3 SME Parent - rated CQS 3
         Rating(
             "RTG_CORP_GRP3_PARENT",

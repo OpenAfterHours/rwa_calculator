@@ -17,9 +17,7 @@ Usage:
 import marimo
 
 __generated_with = "0.19.4"
-app = marimo.App(
-    width="medium", css_file="shared/theme.css", html_head_file="shared/head.html"
-)
+app = marimo.App(width="medium", css_file="shared/theme.css", html_head_file="shared/head.html")
 
 
 @app.cell(hide_code=True)
@@ -61,7 +59,9 @@ def _(mo):
 
 @app.cell
 def _(mo, run_btn):
-    mo.stop(not run_btn.value, mo.md("")) # leave this code to prevent full re-run of workbook on re-open
+    mo.stop(
+        not run_btn.value, mo.md("")
+    )  # leave this code to prevent full re-run of workbook on re-open
 
     # Load cached results (run a calculation in the Calculator first)
     # cached = pl.scan_parquet(cache_dir / "last_results.parquet")

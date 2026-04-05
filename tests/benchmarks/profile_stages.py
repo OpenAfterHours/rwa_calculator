@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _time[_T](fn: Callable[[], _T], label: str, results: list[tuple[str, float]]) -> _T:
+def _time[T](fn: Callable[[], T], label: str, results: list[tuple[str, float]]) -> T:
     """Time a function call, append (label, elapsed_ms) to results, return fn result."""
     t0 = time.perf_counter()
     result = fn()

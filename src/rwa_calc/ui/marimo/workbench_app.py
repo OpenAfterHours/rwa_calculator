@@ -230,9 +230,10 @@ def _():
 
 @app.cell
 def _(WB_STYLES, mo):
-    mo.output.replace(mo.Html(
-        WB_STYLES
-        + """
+    mo.output.replace(
+        mo.Html(
+            WB_STYLES
+            + """
 <div class="wb-page">
   <div class="wb-header">
     <h1>\U0001f4bb Workbench</h1>
@@ -241,7 +242,8 @@ def _(WB_STYLES, mo):
   </div>
 </div>
 """
-    ))
+        )
+    )
     return
 
 

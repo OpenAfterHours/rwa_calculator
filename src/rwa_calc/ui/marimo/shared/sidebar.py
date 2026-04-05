@@ -32,7 +32,17 @@ def _load_logo_base64() -> str:
 _LOGO_URI = _load_logo_base64()
 
 
-def create_sidebar(mo: object, *, version: str = "v1.0", base_url: str = "") -> object:
+def _get_version() -> str:
+    """Read version from rwa_calc package, falling back to 'dev'."""
+    try:
+        from rwa_calc import __version__
+
+        return __version__
+    except ImportError:
+        return "dev"
+
+
+def create_sidebar(mo: object, *, version: str = "", base_url: str = "") -> object:
     """Build the standard RWA Calculator sidebar.
 
     Must be used as the last expression in a marimo cell, e.g.::
@@ -43,7 +53,8 @@ def create_sidebar(mo: object, *, version: str = "v1.0", base_url: str = "") -> 
 
     Args:
         mo: The marimo module (passed from the calling cell).
-        version: Version string shown in the footer.
+        version: Version string shown in the footer. Defaults to the
+            installed rwa_calc package version prefixed with "v".
         base_url: URL prefix for nav links. Use ``"http://localhost:8000"``
             when rendering from the workbench edit server (port 8002) so
             that sidebar links navigate back to the main template apps.
@@ -51,6 +62,8 @@ def create_sidebar(mo: object, *, version: str = "v1.0", base_url: str = "") -> 
     Returns:
         The ``mo.sidebar`` element.
     """
+    if not version:
+        version = f"v{_get_version()}"
     workbooks = (
         sorted(f.stem for f in _WORKSPACES_DIR.glob("*.py") if f.stem != "__init__")
         if _WORKSPACES_DIR.exists()

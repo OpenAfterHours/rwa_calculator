@@ -68,7 +68,7 @@ def _(mo):
         _sys.path.insert(0, _shared)
     from sidebar import create_sidebar as _create_sidebar
 
-    _create_sidebar(mo, version="v1.2")
+    _create_sidebar(mo)
     return
 
 

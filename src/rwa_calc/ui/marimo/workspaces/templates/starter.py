@@ -1,8 +1,6 @@
 # /// script
 # [tool.marimo.runtime]
 # auto_instantiate = true
-# [tool.marimo.display]
-# theme = "dark"
 # ///
 
 """
@@ -20,7 +18,7 @@ import marimo
 
 __generated_with = "0.19.4"
 app = marimo.App(
-    width="medium", css_file="../../shared/theme.css", html_head_file="../../shared/head.html"
+    width="medium", css_file="shared/theme.css", html_head_file="shared/head.html"
 )
 
 

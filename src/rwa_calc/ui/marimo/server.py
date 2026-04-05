@@ -158,6 +158,12 @@ def main() -> None:
     print("Starting RWA Calculator server...")
     print()
 
+    # Sync shared assets so workbooks in the edit server can access theme/head
+    _shared_src = apps_dir / "shared"
+    _shared_dst = workspaces_dir / "shared"
+    if _shared_src.exists():
+        shutil.copytree(_shared_src, _shared_dst, dirs_exist_ok=True)
+
     # Launch marimo edit server for workbench (separate process/port)
     _edit_process = subprocess.Popen(
         [
@@ -173,6 +179,7 @@ def main() -> None:
             "--headless",
             str(workspaces_dir),
         ],
+        cwd=str(workspaces_dir),
     )
 
     print("Templates (read-only):")

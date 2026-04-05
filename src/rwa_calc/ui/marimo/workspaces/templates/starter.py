@@ -33,7 +33,6 @@ def _():
     import polars as pl
 
     project_root = Path(__file__).parent
-    # Walk up to find the project root (src/rwa_calc/ui/marimo/workspaces/local)
     for _ in range(6):
         if (project_root / "src").exists():
             break
@@ -41,73 +40,36 @@ def _():
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    # Cache directory for loading calculator results
     cache_dir = Path(__file__).parent.parent.parent / ".cache"
+
+    _shared = str(project_root / "src" / "rwa_calc" / "ui" / "marimo" / "shared")
+    if _shared not in sys.path:
+        sys.path.insert(0, _shared)
+    from sidebar import create_sidebar as _create_sidebar
+
+    _create_sidebar(mo, base_url="http://localhost:8000")
 
     return Decimal, Path, cache_dir, date, mo, pl, project_root
 
 
 @app.cell(hide_code=True)
-def _(mo, project_root):
-    import sys as _sys
-
-    _shared = str(project_root / "src" / "rwa_calc" / "ui" / "marimo" / "shared")
-    if _shared not in _sys.path:
-        _sys.path.insert(0, _shared)
-    from sidebar import create_sidebar as _create_sidebar
-
-    _create_sidebar(mo, base_url="http://localhost:8000")
-    return
-
-
-@app.cell(hide_code=True)
 def _(mo):
-    return mo.md("""
-# Custom Analysis Workbook
-
-Use this workbook for ad-hoc RWA analysis. The `CreditRiskCalc` API and cached
-results are available below.
-
-## Quick Start
-
-```python
-from rwa_calc import CreditRiskCalc
-
-calc = CreditRiskCalc.from_path("path/to/data")
-result = calc.run()
-result.summary()
-```
-    """)
-
-
-@app.cell(hide_code=True)
-def _(cache_dir, mo, pl):
-    _results_file = cache_dir / "last_results.parquet"
-    if _results_file.exists():
-        cached_results = pl.scan_parquet(_results_file)
-        mo.output.replace(
-            mo.md(
-                f"Cached (cached_results) results loaded from `{_results_file}` "
-                f"({cached_results.collect().height:,} rows)"
-            )
-        )
-    else:
-        cached_results = None
-        mo.output.replace(
-            mo.callout(
-                mo.md(
-                    "No cached results found. Run a calculation in the "
-                    "[Calculator](/calculator) first, then reload this notebook."
-                ),
-                kind="warn",
-            )
-        )
-    return (cached_results,)
+    run_btn = mo.ui.run_button(label="Run Analysis")
+    mo.hstack([run_btn, mo.md("_Click to execute analysis cells below_")], gap=1)
+    return (run_btn,)
 
 
 @app.cell
-def _():
-    # Start your analysis here
+def _(mo, run_btn):
+    mo.stop(not run_btn.value, mo.md("")) # leave this code to prevent full re-run of workbook on re-open
+
+    # Load cached results (run a calculation in the Calculator first)
+    # cached = pl.scan_parquet(cache_dir / "last_results.parquet")
+
+    # Or run a fresh calculation
+    # from rwa_calc import CreditRiskCalc
+    # calc = CreditRiskCalc.from_path("path/to/data")
+    # result = calc.run()
     return
 
 

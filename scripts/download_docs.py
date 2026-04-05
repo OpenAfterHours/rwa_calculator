@@ -96,7 +96,7 @@ MANIFEST: list[DocEntry] = [
     DocEntry(
         filename="ps1-26-annex-ii-reporting-instructions.pdf",
         description="Basel 3.1 Annex II reporting instructions",
-        url=f"{BOE_PS126_BASE}/annex-ii-reporting-instructions.pdf",
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/january/annex-ii-reporting-instructions.pdf",
         source=BOE_PS126_LANDING,
     ),
     DocEntry(

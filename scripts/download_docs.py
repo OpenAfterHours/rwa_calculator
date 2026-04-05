@@ -65,19 +65,19 @@ MANIFEST: list[DocEntry] = [
     DocEntry(
         filename="ps1-26-annex-xx-credit-risk-sa-disclosure-instructions.pdf",
         description="PRA PS1/26 Annex XX credit risk sa disclosure instructions",
-        url=f"{BOE_PS126_BASE}/annex-xx-credit-risk-sa-disclosure-instructions.pdf",
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/january/annex-xx-credit-risk-sa-disclosure-instructions.pdf",
         source=BOE_PS126_BASE,
     ),
     DocEntry(
         filename="ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf",
         description="PRA PS1/26 Annex XXII credit risk irb disclosure instructions",
-        url=f"{BOE_PS126_BASE}//annex-xxii-credit-risk-irb-disclosure-instructions.pdf",
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/january/annex-xxii-credit-risk-irb-disclosure-instructions.pdf",
         source=BOE_PS126_BASE,
     ),
     DocEntry(
         filename="ps1-26-annex-xxiv-credit-risk-irb-disclosure-instructions.pdf",
         description="PRA PS1/26 Annex XXIV credit risk irb disclosure instructions",
-        url=f"{BOE_PS126_BASE}/annex-xxiv-credit-risk-irb-disclosure-instructions.pdf",
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/january/annex-xxiv-credit-risk-irb-disclosure-instructions.pdf",
         source=BOE_PS126_BASE,
     ),
     DocEntry(

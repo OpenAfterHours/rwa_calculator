@@ -1593,6 +1593,7 @@ class TestCCFBasel31:
 
         Example: SA CCF = 50% (MR), modelled = 10%.
         Floor = 0.50 * 0.50 = 0.25. Result should be 0.25.
+        Requires is_revolving=True (Art. 166D(1)(a): own CCFs for revolving only).
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1604,6 +1605,7 @@ class TestCCFBasel31:
                 "approach": [ApproachType.AIRB.value],
                 "ccf_modelled": [0.10],  # 10% modelled < 25% floor
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()
@@ -1618,6 +1620,7 @@ class TestCCFBasel31:
 
         Example: SA CCF = 50% (MR), modelled = 40%.
         Floor = 0.50 * 0.50 = 0.25. Result should be 0.40.
+        Requires is_revolving=True (Art. 166D(1)(a): own CCFs for revolving only).
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1629,6 +1632,7 @@ class TestCCFBasel31:
                 "approach": [ApproachType.AIRB.value],
                 "ccf_modelled": [0.40],  # 40% > 25% floor
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()
@@ -1662,10 +1666,11 @@ class TestCCFBasel31:
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: A-IRB CCF floor with FR (100%) is 50%.
+        """Basel 3.1: A-IRB FR (100% SA) cannot use own-estimate per Art. 166D(1)(a).
 
-        SA CCF = 100%, floor = 50% of 100% = 50%.
-        Modelled = 30% -> floored at 50%.
+        Revolving facilities with 100% SA CCF (Table A1 Row 2 — factoring,
+        repos, forward deposits) must use SA CCF, not own-estimate.
+        Even a revolving facility gets SA 100% when risk_type=FR.
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1675,12 +1680,14 @@ class TestCCFBasel31:
                 "nominal_amount": [1_000_000.0],
                 "risk_type": ["FR"],  # SA CCF = 100%
                 "approach": [ApproachType.AIRB.value],
-                "ccf_modelled": [0.30],  # 30% < 50% floor
+                "ccf_modelled": [0.30],  # 30% — ignored, SA 100% applies
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()
-        assert result["ccf"][0] == pytest.approx(0.50)
+        # Art. 166D(1)(a): revolving with 100% SA CCF → SA 100% (not modelled)
+        assert result["ccf"][0] == pytest.approx(1.0)
 
     def test_airb_ccf_floor_with_lr_basel31(
         self,
@@ -1690,6 +1697,7 @@ class TestCCFBasel31:
 
         SA CCF = 10% (Basel 3.1 LR), floor = 50% of 10% = 5%.
         Modelled = 3% -> floored at 5%.
+        Requires is_revolving=True (Art. 166D(1)(a): own CCFs for revolving only).
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1701,6 +1709,7 @@ class TestCCFBasel31:
                 "approach": [ApproachType.AIRB.value],
                 "ccf_modelled": [0.03],  # 3% < 5% floor
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()

@@ -5,6 +5,13 @@ Calculates EAD for contingent exposures using regulatory CCFs:
 - SA: CRR Article 111 (0%, 20%, 50%, 100%)
 - F-IRB: CRR Article 166(8) (75% for undrawn commitments)
 - F-IRB Exception: CRR Article 166(9) (20% for short-term trade LCs)
+- A-IRB: Own-estimate CCFs with Basel 3.1 restrictions (Art. 166D)
+
+Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D(1)(a)):
+- Own-estimate CCFs permitted ONLY for revolving facilities
+- Non-revolving A-IRB must use SA CCFs from Table A1
+- Revolving facilities with 100% SA CCF (Table A1 Row 2) cannot use own-estimates
+- All own-estimate CCFs floored at 50% of SA CCF (CRE32.27)
 
 CCF is part of exposure measurement, not credit risk mitigation.
 It converts nominal/notional amounts to credit-equivalent EAD.
@@ -103,12 +110,13 @@ class CCFCalculator:
     - SA (Art. 111): 0%, 20%, 50%, 100% by commitment type
     - F-IRB (Art. 166(8)): 75% for undrawn commitments (except 0% for cancellable)
     - F-IRB (Art. 166(9)): 20% for short-term trade LCs arising from goods movement
+    - A-IRB: own estimates under CRR; restricted to revolving under Basel 3.1
 
-    The approach determines which CCF table to use:
-    - SA exposures use standard CCFs (0%, 20%, 50%, 100%)
-    - F-IRB exposures use 75% for most undrawn commitments
-    - F-IRB short-term trade LCs retain 20% CCF (Art. 166(9) exception)
-    - A-IRB exposures use own estimates (passed through as-is)
+    Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D(1)(a)):
+    - Own-estimate CCFs ONLY for revolving facilities with SA CCF < 100%
+    - Non-revolving A-IRB: must use SA CCFs from Table A1
+    - Revolving with 100% SA CCF: must use SA CCF (Table A1 Row 2 carve-out)
+    - All own CCFs floored at 50% of SA CCF (CRE32.27)
     """
 
     def __init__(self) -> None:
@@ -127,7 +135,8 @@ class CCFCalculator:
         - SA: FR=100%, MR=50%, MLR=20%, LR=0%
         - F-IRB: FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0%
         - F-IRB Exception: MLR with is_short_term_trade_lc=True retains 20% (Art. 166(9))
-        - A-IRB: Uses ccf_modelled if provided, otherwise falls back to SA
+        - A-IRB CRR: Uses ccf_modelled if provided, otherwise falls back to SA
+        - A-IRB B31: Own CCF only for revolving (non-100% SA); else SA CCF (Art. 166D)
 
         Args:
             exposures: Exposures with nominal_amount, risk_type, and approach columns
@@ -180,6 +189,7 @@ class CCFCalculator:
                 pl.lit(False).alias("is_short_term_trade_lc"),
             ),
             ("interest", pl.lit(0.0).alias("interest")),
+            ("is_revolving", pl.lit(False).alias("is_revolving")),
         ]
         for col_name, default_expr in defaults:
             if col_name not in names:
@@ -244,12 +254,24 @@ class CCFCalculator:
             ),
         )
 
-        # A-IRB CCF: use modelled value, with Basel 3.1 floor (CRE32.27)
+        # A-IRB CCF: use modelled value, with Basel 3.1 restrictions
         ccf_modelled_expr = pl.col("ccf_modelled").cast(pl.Float64, strict=False)
         if is_b31:
-            airb_ccf = pl.max_horizontal(
+            # Basel 3.1 Art. 166D(1)(a): own-estimate CCFs only for revolving
+            # facilities whose SA CCF is not 100% (Table A1 Row 2 carve-out).
+            # Non-revolving A-IRB must use SA CCFs from Table A1.
+            # Revolving with SA CCF < 100%: own CCF with 50% SA floor (CRE32.27).
+            airb_revolving_ccf = pl.max_horizontal(
                 ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
                 pl.col("_sa_ccf_from_risk_type") * 0.5,
+            )
+            is_eligible_for_own_ccf = pl.col("is_revolving").fill_null(False) & (
+                pl.col("_sa_ccf_from_risk_type") < 1.0
+            )
+            airb_ccf = (
+                pl.when(is_eligible_for_own_ccf)
+                .then(airb_revolving_ccf)
+                .otherwise(pl.col("_sa_ccf_from_risk_type"))
             )
         else:
             airb_ccf = ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type"))

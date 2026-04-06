@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.34 B31 SME correlation GBP-native parameters implemented)
-**Current version:** 0.1.82 | **Test suite:** ~2,623 collected (~2,126 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~12 skipped | P1.4, P1.32, P1.34 fixed.
+**Last updated:** 2026-04-06 (P1.3 A-IRB CCF revolving restriction implemented)
+**Current version:** 0.1.83 | **Test suite:** ~2,634 collected (~2,137 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.32, P1.34 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -151,13 +151,18 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 10 new unit tests in `test_basel31_engine.py` (TestLGDFloors): retail_mortgage 5%, retail_qrre 50%, retail_other 30%, RRE collateral retail vs corporate, retail financial collateral 0%, retail via namespace, retail above floor unchanged. 1 new contract test in `test_config.py` (get_floor_retail_exposure_classes). Existing QRRE test updated (senior QRRE now correctly gets 50%). Acceptance test B31-C2 updated from 25% to 30% for LOAN_RTL_AIRB_001 (retail_other). Test count: 2545 (was 2535).
 - **Limitation:** Art. 164(4)(c) blended LGD* formula for partially-collateralised retail not yet implemented — requires secured/unsecured proportion data. LGDS values applied as simple per-collateral floors for now.
 
-### P1.3 A-IRB CCF revolving restriction (CRE32.27)
-- **Status:** [ ] Not implemented
-- **Impact:** Basel 3.1 requires A-IRB own-estimate CCFs only for revolving facilities; non-revolving must use supervisory CCFs. `engine/ccf.py:245-265` applies modelled CCFs to all A-IRB exposures regardless of `is_revolving`. The `is_revolving` column exists in schema (`data/schemas.py:68`), is propagated through hierarchy (`engine/hierarchy.py:834-836,1098-1123`), and is used in the classifier (`engine/classifier.py:412,420`) -- but ccf.py never gates on it.
-- **File:Line:** `engine/ccf.py:245-265`
-- **Spec ref:** `docs/specifications/crr/credit-conversion-factors.md`
-- **Fix:** In `ccf.py`, when `is_b31=True`, check `is_revolving` column before allowing own-estimate CCF. Non-revolving A-IRB should fall back to F-IRB supervisory CCFs. Also enforce 50% floor on A-IRB own CCFs (must be >= 50% of SA CCF per CRE32.27).
-- **Tests needed:** Unit tests in `tests/unit/test_ccf.py` for revolving vs non-revolving A-IRB under Basel 3.1. Acceptance test scenario in B31-C.
+### P1.3 A-IRB CCF revolving restriction (Art. 166D(1)(a))
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Basel 3.1 Art. 166D(1)(a) now enforced: own-estimate CCFs restricted to revolving facilities only. Three-way gate in `_compute_ccf`:
+  - **Non-revolving A-IRB:** uses SA CCFs from Table A1 (not modelled)
+  - **Revolving with SA CCF = 100%:** uses SA CCF (Table A1 Row 2 carve-out — factoring, repos, forward deposits)
+  - **Revolving with SA CCF < 100%:** uses own-estimate with 50% SA floor (CRE32.27)
+  - **CRR path:** unchanged (all A-IRB use modelled CCFs regardless of is_revolving)
+  - `_ensure_columns` now adds `is_revolving=False` default when column absent (conservative: non-revolving)
+- **File:Line:** `engine/ccf.py:257-277` (A-IRB CCF gate), `engine/ccf.py:186` (is_revolving default)
+- **Spec ref:** PRA PS1/26 Art. 166D(1)(a), CRE32.27, `docs/specifications/crr/credit-conversion-factors.md`
+- **Tests:** 11 new unit tests in `test_ccf.py` (TestAIRBCCFBasel31Revolving): non-revolving MR/MLR/LR use SA, revolving uses modelled with floor, revolving FR uses SA 100%, null is_revolving defaults to non-revolving, missing column defaults to non-revolving, CRR ignores revolving flag, mixed batch test. 4 existing tests in `test_basel31_engine.py` updated (added is_revolving=True; FR test updated to expect SA 100% per Art. 166D carve-out). All 2634 tests pass. Test count: 2634 (was 2623).
 
 ### P1.4 Basel 3.1 approach restrictions not enforced (Art. 147A)
 - **Status:** [x] Complete

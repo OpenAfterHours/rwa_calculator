@@ -6,6 +6,7 @@ Tests cover:
 - F-IRB exception for short-term trade LCs (20%) per CRR Art. 166(9)
 - EAD calculation from undrawn commitments
 - Approach-specific CCF selection
+- A-IRB revolving restriction under Basel 3.1 (Art. 166D(1)(a))
 """
 
 from __future__ import annotations
@@ -1504,3 +1505,326 @@ class TestProvisionAdjustedCCF:
         # ead_pre_crm = 5k + 90k = 95k
         assert result["ead_from_ccf"][0] == pytest.approx(90_000.0)
         assert result["ead_pre_crm"][0] == pytest.approx(95_000.0)
+
+
+# =============================================================================
+# Basel 3.1 A-IRB CCF Revolving Restriction Tests (PRA PS1/26 Art. 166D)
+# =============================================================================
+
+
+class TestAIRBCCFBasel31Revolving:
+    """Tests for A-IRB CCF revolving restriction under Basel 3.1.
+
+    PRA PS1/26 Art. 166D(1)(a) restricts own-estimate CCFs to revolving
+    facilities only. Non-revolving A-IRB must use SA CCFs from Table A1.
+    Additionally, revolving facilities with 100% SA CCF (Table A1 Row 2,
+    e.g. factoring, repos) cannot use own-estimate CCFs.
+
+    All own-estimate CCFs are floored at 50% of SA CCF (CRE32.27).
+    """
+
+    @pytest.fixture
+    def b31_config(self) -> CalculationConfig:
+        """Return a Basel 3.1 configuration."""
+        return CalculationConfig.basel_3_1(reporting_date=date(2028, 1, 1))
+
+    def test_nonrevolving_airb_uses_sa_ccf_not_modelled(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-revolving A-IRB under B31 must use SA CCF, ignoring modelled value.
+
+        Art. 166D(1)(a): own-estimate CCFs only for revolving facilities.
+        A non-revolving MR facility with modelled CCF 0.30 should get SA 50%.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_NR_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [False],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Non-revolving: SA MR = 50%, modelled 30% is ignored
+        assert result["ccf"][0] == pytest.approx(0.50)
+        assert result["ead_from_ccf"][0] == pytest.approx(500_000.0)
+
+    def test_revolving_airb_uses_modelled_ccf_with_floor(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Revolving A-IRB under B31 uses modelled CCF with 50% SA floor.
+
+        Art. 166D + CRE32.27: revolving MR facility with modelled 0.40 gets
+        max(0.40, 0.50 * 0.50) = max(0.40, 0.25) = 0.40.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_REV_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.40],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Revolving, SA MR=50%: max(0.40, 0.50*0.50) = max(0.40, 0.25) = 0.40
+        assert result["ccf"][0] == pytest.approx(0.40)
+
+    def test_revolving_airb_floor_binds_when_modelled_too_low(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Revolving A-IRB modelled CCF below 50% SA floor is floored up.
+
+        CRE32.27: revolving MR facility with modelled 0.10 gets
+        max(0.10, 0.50 * 0.50) = max(0.10, 0.25) = 0.25.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_REV_FLOOR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.10],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Revolving, SA MR=50%: max(0.10, 0.25) = 0.25 (floor binds)
+        assert result["ccf"][0] == pytest.approx(0.25)
+
+    def test_revolving_fr_airb_cannot_use_own_estimate(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Revolving A-IRB with FR (100% SA CCF) cannot use own-estimate.
+
+        Art. 166D(1)(a) carve-out: revolving facilities that attract 100%
+        SA CCF (Table A1 Row 2, e.g. factoring, repos) must use SA 100%.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_REV_FR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [500_000.0],
+                "risk_type": ["FR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.60],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Revolving BUT SA CCF = 100% (FR): must use SA, modelled 60% ignored
+        assert result["ccf"][0] == pytest.approx(1.0)
+
+    def test_null_is_revolving_defaults_to_false(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null is_revolving defaults to False: SA CCF used (conservative).
+
+        Missing revolving flag should be treated as non-revolving,
+        preventing modelled CCF from being used.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_NULL_REV"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [None],
+            },
+            schema_overrides={"is_revolving": pl.Boolean},
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Null is_revolving → False → SA MR = 50%
+        assert result["ccf"][0] == pytest.approx(0.50)
+
+    def test_crr_airb_ignores_revolving_flag(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Under CRR, A-IRB always uses modelled CCF regardless of is_revolving.
+
+        The revolving restriction is Basel 3.1 only (Art. 166D).
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_CRR_NR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [False],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # CRR: non-revolving still uses modelled CCF (no Art. 166D restriction)
+        assert result["ccf"][0] == pytest.approx(0.30)
+
+    def test_nonrevolving_airb_mlr_uses_sa_20_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-revolving A-IRB MLR under B31 must use SA 20%.
+
+        Even with a modelled CCF of 0.05, non-revolving gets SA MLR = 20%.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_NR_MLR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [500_000.0],
+                "risk_type": ["MLR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.05],
+                "is_revolving": [False],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Non-revolving: SA MLR = 20%, modelled 5% is ignored
+        assert result["ccf"][0] == pytest.approx(0.20)
+
+    def test_nonrevolving_airb_lr_uses_sa_10_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-revolving A-IRB LR under B31 must use SA 10%.
+
+        Under Basel 3.1, LR (unconditionally cancellable) = 10% for SA.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_NR_LR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [300_000.0],
+                "risk_type": ["LR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.01],
+                "is_revolving": [False],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Non-revolving: SA LR = 10% (B31), modelled 1% is ignored
+        assert result["ccf"][0] == pytest.approx(0.10)
+
+    def test_revolving_airb_lr_uses_modelled_with_floor(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Revolving A-IRB LR under B31 uses modelled with 50% SA floor.
+
+        SA LR = 10% under B31. Floor = 50% * 10% = 5%.
+        Modelled 0.08 > 0.05, so modelled is used.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_REV_LR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [300_000.0],
+                "risk_type": ["LR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.08],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Revolving, SA LR=10%: max(0.08, 0.10*0.50) = max(0.08, 0.05) = 0.08
+        assert result["ccf"][0] == pytest.approx(0.08)
+
+    def test_missing_is_revolving_column_defaults_to_false(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """When is_revolving column is entirely absent, defaults to non-revolving.
+
+        _ensure_columns adds is_revolving=False when missing, so A-IRB
+        B31 exposures without the column use SA CCFs.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_NO_COL"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # No is_revolving column → default False → SA MR = 50%
+        assert result["ccf"][0] == pytest.approx(0.50)
+
+    def test_mixed_revolving_nonrevolving_batch(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Mixed batch: revolving uses modelled, non-revolving uses SA.
+
+        Tests that the per-row branching works correctly in a multi-row frame.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["REV_001", "NR_001", "REV_FR", "NR_LR"],
+                "drawn_amount": [0.0, 0.0, 0.0, 0.0],
+                "nominal_amount": [1_000_000.0, 1_000_000.0, 500_000.0, 300_000.0],
+                "risk_type": ["MR", "MR", "FR", "LR"],
+                "approach": ["advanced_irb"] * 4,
+                "ccf_modelled": [0.40, 0.30, 0.60, 0.01],
+                "is_revolving": [True, False, True, False],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        expected = {
+            "REV_001": 0.40,  # Revolving MR: max(0.40, 0.25) = 0.40
+            "NR_001": 0.50,   # Non-revolving MR: SA = 0.50
+            "REV_FR": 1.00,   # Revolving FR: SA = 1.00 (100% carve-out)
+            "NR_LR": 0.10,    # Non-revolving LR: SA = 0.10
+        }
+        for ref, exp_ccf in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(exp_ccf), f"CCF mismatch for {ref}"

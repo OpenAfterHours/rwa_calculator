@@ -11,7 +11,7 @@
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
-- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees — now fixed)
+- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
 - *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
@@ -777,13 +777,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** CRR Art. 224 Table 1 (3 bands), PRA PS1/26 Art. 224 / CRE22 (5 bands)
 
 ### P1.77 Mixed collateral pool uses pro-rata allocation, Art. 231 requires sequential fill
-- **Status:** [~] Wrong algorithm in spec (fixed) — code needs verification
-- **Impact:** Art. 231 requires sequential (waterfall) allocation of collateral: `ES_i = min(C_i, E(1+HE) - sum(ES_k))`. The spec previously used pro-rata allocation (`E_i = E × C_i / sum(C_all)`). Sequential and pro-rata give different LGD* when total collateral < total exposure. The institution may choose ordering (most favourable = lowest LGDS first). Code at `engine/crm/collateral.py` likely implements pro-rata.
+- **Status:** [x] Fixed (2026-04-06)
+- **Impact:** Art. 231 requires sequential (waterfall) allocation of collateral: `ES_i = min(C_i, E(1+HE) - sum(ES_k))`. The spec previously used pro-rata allocation (`E_i = E × C_i / sum(C_all)`). Sequential and pro-rata give different LGD* when total collateral < total exposure. The institution may choose ordering (most favourable = lowest LGDS first).
   **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected with sequential fill formula.
-- **File:Line:** `engine/crm/collateral.py`
+  **Code fix (2026-04-06):** `_apply_collateral_unified()` rewritten with cumulative-cap trick for Art. 231 sequential fill. Waterfall ordering: financial (0%) → covered_bond (11.25%) → receivables → real_estate → other_physical. Added `WATERFALL_ORDER` constant and `covered_bond` category to `collateral_category_expr()`. 12 unit tests in `tests/unit/crm/test_collateral_sequential_fill.py`.
+- **File:Line:** `engine/crm/collateral.py:599-629`, `engine/crm/constants.py:213-219`
 - **Spec ref:** PRA PS1/26 Art. 231 para 1
-- **Fix:** Verify and correct collateral allocation to use sequential fill. Allow ordering by LGDS.
-- **Tests needed:** Unit tests for mixed pools where total collateral < exposure comparing sequential vs pro-rata.
+- **Tests:** 12 tests covering overcollateralised vs undercollateralised, waterfall ordering, CRR vs B31 LGDS values, edge cases (single type, fully secured, no collateral, 30% threshold, coverage cap), all 5 categories, multi-exposure independence.
 
 ### P1.78 FX mismatch haircut not applied to guarantee/CDS amounts (Art. 233(3-4))
 - **Status:** [x] Complete
@@ -1368,7 +1368,7 @@ These items are verified complete as of 0.1.64. Items with **[!]** have known ga
 - [x] A-IRB calculation (own LGD/CCF, LGD floors, post-model adjustments; mortgage RW floor 10% -- see P1.33 [fixed])
 - [x] Slotting (CRR 4 tables + Basel 3.1 3 tables + subgrades)
 - [x] **[!]** Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback 250%; CIU look-through/mandate partial -- see P1.61; B31 equity SA weights implemented -- see P1.42 [fixed]; transitional floor applied in pipeline -- see P1.43 [fixed]; IRB equity table still exported under B31 -- see P1.59)
-- [x] **[!]** CRM (collateral haircuts CRR 3-band + Basel 3.1 5-band, FX mismatch, maturity mismatch, multi-level allocation, guarantee substitution, netting, provisions; gold haircut wrong -- P1.73; LGD* formula doesn't blend -- P1.75; mixed pool pro-rata not sequential -- P1.77; see also P1.7, P1.11, P1.30, P1.39-P1.41, P1.56)
+- [x] **[!]** CRM (collateral haircuts CRR 3-band + Basel 3.1 5-band, FX mismatch, maturity mismatch, multi-level allocation, guarantee substitution, netting, provisions; gold haircut wrong -- P1.73; LGD* formula doesn't blend -- P1.75; P1.77 sequential fill fixed; see also P1.7, P1.11, P1.30, P1.39-P1.41, P1.56)
 - [x] Basel 3.1 parameter substitution (CRE22.70-85) -- including EL adjustment for guaranteed portion
 - [x] Double default (CRR Art. 153(3), Art. 202-203)
 - [x] **[!]** Output floor with PRA transitional schedule (60%/65%/70%/72.5%) -- exposure-level only, not portfolio-level; OF-ADJ/U-TREA/S-TREA missing -- see P1.9

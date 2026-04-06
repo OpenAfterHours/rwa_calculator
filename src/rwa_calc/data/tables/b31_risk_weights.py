@@ -115,9 +115,16 @@ B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = {
     None: Decimal("1.00"),  # Unrated
 }
 
-# Investment-grade corporate: 65% (CRE20.44)
+# Investment-grade corporate: 65% (PRA PS1/26 Art. 122(6)(a))
 # Qualifying: publicly traded + investment grade external rating
+# Only applies when institution has PRA permission to use IG assessment
 B31_CORPORATE_INVESTMENT_GRADE_RW = Decimal("0.65")
+
+# Non-investment-grade corporate: 135% (PRA PS1/26 Art. 122(6)(b))
+# Applies to unrated corporates that do NOT qualify as investment-grade
+# when the institution has elected to use the IG assessment permission.
+# Without IG assessment permission, all unrated corporates get 100%.
+B31_CORPORATE_NON_INVESTMENT_GRADE_RW = Decimal("1.35")
 
 # SME corporate: 85% (CRE20.47)
 # Qualifying: turnover <= EUR 50m, unrated

@@ -494,6 +494,7 @@ class CalculationConfig:
         retail_thresholds: Retail classification thresholds
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
+        use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%
         collect_engine: Polars engine for .collect() - 'cpu' (default)
             processes in batches for lower memory usage, 'cpu' for in-memory
         spill_dir: Directory for temp parquet files during streaming materialization.
@@ -518,6 +519,7 @@ class CalculationConfig:
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
+    use_investment_grade_assessment: bool = False  # Art. 122(6): IG=65% / non-IG=135%
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
@@ -600,6 +602,7 @@ class CalculationConfig:
         reporting_date: date,
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
+        use_investment_grade_assessment: bool = False,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -618,6 +621,9 @@ class CalculationConfig:
             reporting_date: As-of date for calculation
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             post_model_adjustments: PMA configuration (optional, defaults to B3.1)
+            use_investment_grade_assessment: Art. 122(6) election — when True,
+                unrated IG corporates get 65% and non-IG get 135%. When False
+                (default), all unrated corporates get 100%.
             collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -640,6 +646,7 @@ class CalculationConfig:
             equity_transitional=EquityTransitionalConfig.basel_3_1(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
+            use_investment_grade_assessment=use_investment_grade_assessment,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
         )

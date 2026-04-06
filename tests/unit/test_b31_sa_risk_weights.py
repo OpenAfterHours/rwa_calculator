@@ -7,7 +7,8 @@ Tests cover Basel 3.1 risk weight changes from CRR:
 - ADC exposures: 150% default, 100% pre-sold
 - Revised corporate CQS weights: CQS3 = 75% (was 100%), CQS5 = 100% (was 150%)
 - SCRA-based institution weights for unrated: Grade A (40%), B (75%), C (150%)
-- Investment-grade corporate: 65% risk weight
+- Investment-grade corporate: 65% risk weight (Art. 122(6)(a))
+- Non-investment-grade corporate: 135% risk weight (Art. 122(6)(b))
 - SME corporate: 85% risk weight (was 100%)
 - Subordinated debt: flat 150% risk weight
 - CRR regression: existing CRR risk weights unchanged
@@ -48,6 +49,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_COMMERCIAL_GENERAL_SECURED_RW,
     B31_COMMERCIAL_INCOME_LTV_BANDS,
     B31_CORPORATE_INVESTMENT_GRADE_RW,
+    B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
     B31_CORPORATE_RISK_WEIGHTS,
     B31_CORPORATE_SME_RW,
     B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO,
@@ -995,6 +997,10 @@ class TestTableDataIntegrity:
         """Investment-grade corporate constant should be 65%."""
         assert Decimal("0.65") == B31_CORPORATE_INVESTMENT_GRADE_RW
 
+    def test_non_investment_grade_rw(self) -> None:
+        """Non-investment-grade corporate constant should be 135%."""
+        assert Decimal("1.35") == B31_CORPORATE_NON_INVESTMENT_GRADE_RW
+
     def test_sme_corporate_rw(self) -> None:
         """SME corporate constant should be 85%."""
         assert Decimal("0.85") == B31_CORPORATE_SME_RW
@@ -1238,27 +1244,37 @@ class TestB31InvestmentGradeCorporate:
     """Basel 3.1 investment-grade corporate risk weight: 65%.
 
     Qualifying: publicly traded + investment grade external rating.
-    This is a preferential treatment for qualifying unrated corporates.
+    Requires Art. 122(6) IG assessment election (use_investment_grade_assessment=True).
 
     Why this matters:
         The 65% weight (vs 100% unrated default) significantly reduces SA RWA
         for large, well-capitalised corporates, narrowing the gap between SA
         and IRB capital requirements for investment-grade portfolios.
+        The election is paired with a 135% weight for non-IG corporates
+        (see TestB31NonInvestmentGradeCorporate).
     """
+
+    @pytest.fixture
+    def ig_config(self) -> CalculationConfig:
+        """B31 config with investment-grade assessment elected."""
+        return CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30),
+            use_investment_grade_assessment=True,
+        )
 
     def test_investment_grade_65pct(
         self,
         sa_calculator: SACalculator,
-        b31_config: CalculationConfig,
+        ig_config: CalculationConfig,
     ) -> None:
-        """Investment-grade corporate gets 65% under Basel 3.1."""
+        """Investment-grade corporate gets 65% under Basel 3.1 with IG assessment."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="corporate",
             cqs=None,
             is_investment_grade=True,
-            config=b31_config,
+            config=ig_config,
         )
 
         assert float(result["risk_weight"]) == pytest.approx(0.65)
@@ -1317,6 +1333,162 @@ class TestB31InvestmentGradeCorporate:
 
         # CQS 1 → 20% (from CQS table, not 65%)
         assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+
+# =============================================================================
+# NON-INVESTMENT-GRADE CORPORATE RISK WEIGHT (Art. 122(6)(b), Basel 3.1)
+# =============================================================================
+
+
+class TestB31NonInvestmentGradeCorporate:
+    """Basel 3.1 non-investment-grade corporate risk weight: 135%.
+
+    When an institution has PRA permission to use the investment-grade
+    assessment (Art. 122(6)), unrated corporates are split:
+    - Investment-grade: 65% (Art. 122(6)(a))
+    - Non-investment-grade: 135% (Art. 122(6)(b))
+
+    Without the election, all unrated corporates receive 100%.
+
+    Why this matters:
+        Art. 122(6) is an opt-in election. Institutions that elect it get
+        the favorable 65% for IG corporates, but must accept the punitive
+        135% for non-IG corporates. The 35pp surcharge over the 100% default
+        prevents cherry-picking the IG benefit without the corresponding penalty.
+    """
+
+    @pytest.fixture
+    def ig_config(self) -> CalculationConfig:
+        """B31 config with investment-grade assessment elected."""
+        return CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30),
+            use_investment_grade_assessment=True,
+        )
+
+    def test_non_ig_corporate_135pct(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """Non-IG unrated corporate gets 135% when IG assessment is active."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=False,
+            config=ig_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.35)
+        assert float(result["rwa"]) == pytest.approx(2_700_000.0)  # 2M × 135%
+
+    def test_ig_corporate_65pct_with_assessment(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """IG unrated corporate gets 65% when IG assessment is active."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=True,
+            config=ig_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.65)
+        assert float(result["rwa"]) == pytest.approx(1_300_000.0)  # 2M × 65%
+
+    def test_ig_flag_ignored_without_assessment(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """IG flag is ignored when assessment is not active — gets 100%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=True,
+            config=b31_config,
+        )
+
+        # Without use_investment_grade_assessment=True, all unrated corporates → 100%
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
+
+    def test_non_ig_gets_100pct_without_assessment(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-IG corporate gets standard 100% when assessment is not active."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=False,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
+
+    def test_null_ig_flag_treated_as_non_ig(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """Null is_investment_grade is treated as non-IG → 135% with assessment."""
+        # When data doesn't include the IG flag, it defaults to False in the calculator
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=False,  # Simulates null (fill_null(False))
+            config=ig_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.35)
+
+    def test_rated_corporate_unaffected_by_assessment(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """Rated corporates use CQS table regardless of IG assessment."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=3,
+            is_investment_grade=False,
+            config=ig_config,
+        )
+
+        # CQS 3 → 75% (from B31 corporate CQS table), not 135%
+        assert float(result["risk_weight"]) == pytest.approx(0.75)
+
+    def test_sme_corporate_unaffected_by_assessment(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """SME corporates get 85% regardless of IG assessment."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate_sme",
+            cqs=None,
+            is_investment_grade=False,
+            config=ig_config,
+        )
+
+        # SME corporate → 85%, not 135% (SME branch fires before non-IG)
+        assert float(result["risk_weight"]) == pytest.approx(0.85)
 
 
 # =============================================================================

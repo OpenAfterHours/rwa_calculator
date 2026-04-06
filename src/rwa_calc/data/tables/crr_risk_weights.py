@@ -332,6 +332,14 @@ OTHER_ITEMS_COLLECTION_RW: Decimal = Decimal("0.20")  # Art. 134(3): items in co
 OTHER_ITEMS_TANGIBLE_RW: Decimal = Decimal("1.00")  # Art. 134(2): tangible assets, prepaid
 OTHER_ITEMS_DEFAULT_RW: Decimal = Decimal("1.00")  # Art. 134(2): all other items
 
+# =============================================================================
+# HIGH-RISK EXPOSURE RISK WEIGHT (CRR Art. 128)
+# Items associated with particularly high risk: venture capital, private equity,
+# speculative immovable property financing, and other PRA-designated high-risk items.
+# =============================================================================
+
+HIGH_RISK_RW: Decimal = Decimal("1.50")  # Art. 128: 150% flat
+
 
 # =============================================================================
 # DEFAULTED EXPOSURE RISK WEIGHTS (CRR Art. 127)

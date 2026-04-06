@@ -87,6 +87,9 @@ class ExposureClass(StrEnum):
     COVERED_BOND = "covered_bond"
     """Covered bonds (CRR Art. 129, PRA PS1/26 Art. 129)"""
 
+    HIGH_RISK = "high_risk"
+    """Items associated with particularly high risk (CRR Art. 112(l), Art. 128)"""
+
     OTHER = "other"
     """Other items (CRR Art. 112(q))"""
 

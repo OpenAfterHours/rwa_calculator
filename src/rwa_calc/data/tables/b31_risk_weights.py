@@ -206,6 +206,14 @@ B31_SUBORDINATED_DEBT_RW = Decimal("1.50")
 # DEFAULTED EXPOSURE RISK WEIGHTS — BASEL 3.1 (CRE20.88-90)
 # =============================================================================
 
+# =============================================================================
+# HIGH-RISK EXPOSURE RISK WEIGHT — BASEL 3.1 (Art. 128)
+# Speculative immovable property financing and other designated high-risk items.
+# Note: PE/VC may be reclassified to equity under Art. 133(5) at 400%.
+# =============================================================================
+
+B31_HIGH_RISK_RW = Decimal("1.50")  # Art. 128: 150% flat
+
 B31_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # Art. 127: provisions >= 20%
 B31_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # Art. 127: provisions < 20%
 B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # PRA PS1/26 Art. 127: 20% threshold

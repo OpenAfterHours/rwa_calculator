@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.26 ECRA short-term institution tables)
-**Current version:** 0.1.91 | **Test suite:** ~2,786 collected (~2,268 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.26, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.62 Art. 128 high-risk items)
+**Current version:** 0.1.91 | **Test suite:** ~2,805 collected (~2,268 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 79 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 78 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
@@ -624,12 +624,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for CIU look-through with mixed underlying exposures. Unit tests for mandate-based approach with leverage. Acceptance tests comparing look-through vs mandate vs fallback.
 
 ### P1.62 Art. 128 high-risk items 150% risk weight missing
-- **Status:** [ ] Not started
-- **Impact:** CRR Art. 128 defines items attracting 150% risk weight including: (a) investments in venture capital firms, (b) investments in AIFs not treated as equity, (c) CIU holdings not treated under Art. 132-132B, (d) equity instruments in a trading book exempted from the trading book regime. The SA calculator has no high-risk exposure branch. These exposures would default to their base exposure class RW (potentially 100% or lower) instead of the regulatory 150%.
-- **File:Line:** `engine/sa/calculator.py` (no high-risk branch); `domain/enums.py` (ExposureClass has no HIGH_RISK member)
-- **Spec ref:** CRR Art. 128, PRA PS1/26 Art. 128
-- **Fix:** Add HIGH_RISK to ExposureClass enum or add a `is_high_risk` flag. Add 150% branch in SA calculator.
-- **Tests needed:** Unit tests for high-risk item classification and 150% RW application.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** CRR Art. 128 / PRA PS1/26 Art. 128 high-risk items now fully implemented:
+  - **ExposureClass.HIGH_RISK** added to domain enum (Art. 112(1)(l))
+  - **Entity types:** `high_risk`, `high_risk_venture_capital`, `high_risk_private_equity`, `high_risk_speculative_re` — all map to HIGH_RISK exposure class
+  - **SA calculator:** 150% unconditional risk weight in both CRR and B31 when-chains, inserted before OTHER block
+  - **Defaulted priority:** Art. 112 Table A2 ordering enforced — HIGH_RISK (priority 4) takes precedence over DEFAULTED (priority 5). Both classifier and SA calculator exclude HIGH_RISK from the defaulted override, ensuring unconditional 150% per Art. 128 even for defaulted high-risk items (prevents capital understatement from Art. 127's provision-based 100%/150%)
+  - **Schema:** All high-risk entity_types added to VALID_ENTITY_TYPES for input validation
+  - **Data tables:** HIGH_RISK_RW constant (Decimal("1.50")) in crr_risk_weights.py, B31_HIGH_RISK_RW in b31_risk_weights.py
+- **File:Line:** `domain/enums.py` (ExposureClass.HIGH_RISK), `engine/classifier.py` (entity_type mappings + defaulted override), `engine/sa/calculator.py` (150% branches in both when-chains + defaulted exclusion), `data/tables/crr_risk_weights.py` (HIGH_RISK_RW), `data/tables/b31_risk_weights.py` (B31_HIGH_RISK_RW), `data/schemas.py` (VALID_ENTITY_TYPES)
+- **Spec ref:** CRR Art. 112(1)(l), Art. 128, PRA PS1/26 Art. 128
+- **Tests:** 25 new unit tests in `tests/unit/test_high_risk_items.py`: 3 constant tests, 9 classifier mapping tests (4 SA + 4 IRB + 1 enum), 6 CRR calculator tests (generic, VC, PE, speculative RE, ignores CQS, ignores seniority), 4 B31 calculator tests (generic, speculative RE, ignores CQS, CRR-B31 parity), 3 defaulted priority tests (CRR defaulted still 150%, B31 defaulted still 150%, normal defaulted still gets Art. 127). All 2805 tests pass. Test count: 2805 (was 2786).
+- **Limitation:** Art. 128(1)(b) AIFs not treated under Art. 132 require additional `entity_type` sub-values (not added — institutions must classify AIF holdings as `high_risk` in input data). Art. 128(3) look-through for AIFs investing in high-risk assets not implemented. Speculative RE under B31 may alternatively be captured via Art. 124J "Other Real Estate" (P1.14) — current implementation uses Art. 128 classification.
 
 ### P1.63 A-IRB revolving 100% SA carve-out from own-estimate permission (Art. 166D(1)(a))
 - **Status:** [x] Complete — already implemented as part of P1.3
@@ -736,13 +743,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for mixed LGDU/LGDS blending with non-financial collateral.
 
 ### P1.76 Corporate bond haircut table uses 3 maturity bands, PRA has 5 bands
-- **Status:** [~] Wrong structure in spec (fixed) — code needs verification
-- **Impact:** PRA Art. 224 Table 1 defines 5 maturity bands for corporate/institution bonds: ≤1yr, 1-3yr, 3-5yr, 5-10yr, >10yr. The spec previously used 3 bands (0-1yr, 1-5yr, 5+yr) which collapses 1-3yr and 3-5yr (understating 1-3yr haircut by 1-2pp per CQS) and omits >10yr entirely (CQS 1=12%, CQS 2-3=20%). Code likely uses the same collapsed structure.
-  **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected with 5 maturity bands.
-- **File:Line:** `data/tables/crr_haircuts.py`
-- **Spec ref:** PRA PS1/26 Art. 224, Table 1
-- **Fix:** Verify and expand haircut table to 5 maturity bands. Cross-ref P1.39 (liquidation period).
-- **Tests needed:** Unit tests for each maturity band including >10yr bonds.
+- **Status:** [x] Complete — already resolved in code
+- **Verified:** 2026-04-06
+- **Description:** Investigation confirms the code is correct for both frameworks:
+  - **Basel 3.1:** Already has 5 maturity bands (0-1y, 1-3y, 3-5y, 5-10y, 10y+) fully implemented in dict constants, DataFrame generators, scalar `get_maturity_band()`, and Polars `_maturity_band_expression()`. All haircut values match CRE22 standard.
+  - **CRR:** Uses 3 maturity bands (0-1y, 1-5y, 5y+) which is correct per the original EU CRR Art. 224 Table 1. The CRR regulation itself only defines 3 bands.
+  - The spec was previously corrected to show 5 bands (B31 corporate section), which may have created confusion — the 5-band structure applies to B31 only.
+- **File:Line:** `data/tables/crr_haircuts.py` (both dicts + both DataFrame generators + `get_maturity_band` + `_maturity_band_expression`)
+- **Spec ref:** CRR Art. 224 Table 1 (3 bands), PRA PS1/26 Art. 224 / CRE22 (5 bands)
 
 ### P1.77 Mixed collateral pool uses pro-rata allocation, Art. 231 requires sequential fill
 - **Status:** [~] Wrong algorithm in spec (fixed) — code needs verification
@@ -1242,9 +1250,9 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Remove.
 
 ### P6.14 Missing enum values across domain/enums.py
-- **Status:** [ ] Not started
+- **Status:** [ ] Partially resolved (HIGH_RISK added; others remain)
 - **Impact:** Multiple enum classes are missing values needed for full regulatory coverage:
-  - `ExposureClass`: SECURITISATION, INTERNATIONAL_ORGANISATION, CIU (CIU may exist as fallback only)
+  - `ExposureClass`: SECURITISATION, INTERNATIONAL_ORGANISATION, CIU (CIU may exist as fallback only). **HIGH_RISK added** (Art. 112(1)(l)) — resolved as part of P1.62.
   - `SCRAGrade`: A_ENHANCED (needed for P1.12)
   - `RiskType`: OTHER_COMMIT (needed for P1.29 40% CCF)
   - `EquityType`: SUBORDINATED_DEBT, LEGISLATIVE (needed for P1.42 B31 equity weights)

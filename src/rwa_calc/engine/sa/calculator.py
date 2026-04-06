@@ -58,6 +58,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_DEFAULTED_RW_HIGH_PROVISION,
     B31_DEFAULTED_RW_LOW_PROVISION,
     B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
+    B31_HIGH_RISK_RW,
     B31_SCRA_RISK_WEIGHTS,
     B31_SCRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
@@ -72,6 +73,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
+    HIGH_RISK_RW,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
@@ -492,9 +494,13 @@ class SACalculator:
                     pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
                     # 1. Defaulted exposures: 150% or 100% (PRA PS1/26 Art. 127)
+                    # HIGH_RISK excluded: Art. 128 (150%) takes priority over
+                    # Art. 127 per Art. 112 Table A2 classification ordering.
                     # B31 provision ratio = provision_allocated / ead (exposure value)
                     # NOT (ead + provision_deducted) — that is the CRR denominator
-                    .when(pl.col("is_defaulted").fill_null(False))
+                    .when(
+                        pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
+                    )
                     .then(
                         pl.when(
                             pl.col("provision_allocated") >= b31_def_threshold * pl.col(_ead_col)
@@ -731,6 +737,11 @@ class SACalculator:
                         .then(pl.lit(1.00))
                         .otherwise(pl.lit(1.00))  # Default: assume Grade C (conservative)
                     )
+                    # 11a. High-risk items → 150% (Art. 128)
+                    # Venture capital, private equity, speculative RE financing,
+                    # and other PRA-designated high-risk items.
+                    .when(_uc == "HIGH_RISK")
+                    .then(pl.lit(float(B31_HIGH_RISK_RW)))
                     # 12. Other Items (Art. 134): sub-type-specific risk weights
                     # 12a. Cash/gold → 0% (Art. 134(1)/(4))
                     .when(
@@ -795,9 +806,13 @@ class SACalculator:
                     pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
                     # 1. Defaulted exposures: 100% or 150% (CRR Art. 127)
+                    # HIGH_RISK excluded: Art. 128 (150%) takes priority over
+                    # Art. 127 per Art. 112 Table A2 classification ordering.
                     # Provision ratio = provision_allocated / (ead + provision_deducted)
                     # where denominator reconstructs pre-provision unsecured EAD
-                    .when(pl.col("is_defaulted").fill_null(False))
+                    .when(
+                        pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
+                    )
                     .then(
                         pl.when(
                             pl.col("provision_allocated")
@@ -931,6 +946,11 @@ class SACalculator:
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
                     .then(pl.lit(0.20))
+                    # 7a. High-risk items → 150% (Art. 128)
+                    # Venture capital, private equity, speculative RE financing,
+                    # and other PRA-designated high-risk items.
+                    .when(_uc == "HIGH_RISK")
+                    .then(pl.lit(float(HIGH_RISK_RW)))
                     # 8. Other Items (Art. 134): sub-type-specific risk weights
                     # 8a. Cash/gold → 0% (Art. 134(1)/(4))
                     .when(

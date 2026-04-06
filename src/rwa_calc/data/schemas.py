@@ -441,6 +441,10 @@ VALID_ENTITY_TYPES = {
     "other_items_in_collection",
     "other_tangible",
     "other_residual_lease",
+    "high_risk",
+    "high_risk_venture_capital",
+    "high_risk_private_equity",
+    "high_risk_speculative_re",
 }
 
 VALID_SENIORITY = {"senior", "subordinated"}

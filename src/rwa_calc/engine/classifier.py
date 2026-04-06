@@ -82,11 +82,16 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "other_items_in_collection": ExposureClass.OTHER.value,
     "other_tangible": ExposureClass.OTHER.value,
     "other_residual_lease": ExposureClass.OTHER.value,
+    # High-risk items (CRR Art. 128): 150% unconditional
+    "high_risk": ExposureClass.HIGH_RISK.value,
+    "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
+    "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
+    "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
 }
 
 # entity_type → IRB exposure class (for IRB formula selection)
 # Other Items (Art. 134) are SA-only — no IRB class exists for these.
-# They map to OTHER which will be treated under SA.
+# High-risk items (Art. 128) are SA-only — they map to HIGH_RISK for SA treatment.
 ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
     "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
@@ -113,6 +118,12 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "other_items_in_collection": ExposureClass.OTHER.value,
     "other_tangible": ExposureClass.OTHER.value,
     "other_residual_lease": ExposureClass.OTHER.value,
+    # High-risk items (Art. 128) are SA-only — they map to OTHER for IRB
+    # (no separate IRB treatment; HIGH_RISK is an SA exposure class).
+    "high_risk": ExposureClass.HIGH_RISK.value,
+    "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
+    "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
+    "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
 }
 
 # PRA PS1/26 Art. 147A(1)(d): Large corporate revenue threshold (GBP)
@@ -369,7 +380,13 @@ class ExposureClassifier:
                 # --- Default flags ---
                 (pl.col("cp_default_status") == True)  # noqa: E712
                 .alias("is_defaulted"),
-                pl.when(pl.col("cp_default_status") == True)  # noqa: E712
+                # Art. 112 Table A2: HIGH_RISK (priority 4) takes precedence over
+                # DEFAULTED (priority 5). A defaulted high-risk item retains 150% per
+                # Art. 128, not the provision-based 100%/150% of Art. 127.
+                pl.when(
+                    (pl.col("cp_default_status") == True)  # noqa: E712
+                    & (pl.col("_sa_class") != ExposureClass.HIGH_RISK.value)
+                )
                 .then(pl.lit(ExposureClass.DEFAULTED.value))
                 .when(sl_override)
                 .then(sl_class)

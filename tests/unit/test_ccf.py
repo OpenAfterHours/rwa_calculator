@@ -2067,3 +2067,412 @@ class TestAIRBCCFBasel31Revolving:
         for ref, exp_ccf in expected.items():
             row = result.filter(pl.col("exposure_reference") == ref)
             assert row["ccf"][0] == pytest.approx(exp_ccf), f"CCF mismatch for {ref}"
+
+
+# =============================================================================
+# Art. 166D(5) EAD Floor Tests (b) and (c) — Basel 3.1 A-IRB
+# =============================================================================
+
+
+class TestAIRBEADFloorBasel31:
+    """Tests for Art. 166D(5) EAD floors (b) and (c) under Basel 3.1.
+
+    Floor (b): When ead_modelled is provided (Art. 166D(3) single-EAD approach),
+        EAD >= on-BS EAD + 50% x F-IRB off-BS EAD
+        Under B31, F-IRB uses SA CCFs (Art. 166C).
+    Floor (c): EAD >= on-balance-sheet EAD (ignoring Art. 166D).
+
+    Floor (a) (CCF >= 50% x SA CCF) is tested in TestAIRBCCFBasel31Revolving.
+    """
+
+    @pytest.fixture
+    def b31_config(self) -> CalculationConfig:
+        return CalculationConfig.basel_3_1(reporting_date=date(2028, 1, 1))
+
+    @pytest.fixture
+    def ccf_calculator(self) -> CCFCalculator:
+        return CCFCalculator()
+
+    # ----- Floor (b): facility-level EAD floor -----
+
+    def test_floor_b_binds_modelled_ead_below_floor(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (b) raises EAD when ead_modelled is below the floor.
+
+        Scenario: drawn=100k, nominal=200k, risk_type=MR (SA CCF=50%)
+        Floor (b) = 100k + 0.5 * (200k * 0.50) = 100k + 50k = 150k
+        ead_modelled = 120k < 150k → floor binds, ead_pre_crm = 150k
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_FLOOR_B_001"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [120_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        # Floor (b) = 100k + 0.5 * 200k * 0.50 = 150k
+        assert result["ead_pre_crm"][0] == pytest.approx(150_000.0)
+
+    def test_floor_b_does_not_bind_modelled_above_floor(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (b) does not bind when ead_modelled exceeds the floor.
+
+        Scenario: drawn=100k, nominal=200k, risk_type=MR (SA CCF=50%)
+        Floor (b) = 100k + 0.5 * (200k * 0.50) = 150k
+        ead_modelled = 250k > 150k → ead_modelled passes through
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_FLOOR_B_002"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [250_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(250_000.0)
+
+    def test_floor_b_with_lr_risk_type(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (b) uses SA CCF for the risk type — LR = 10% under B31.
+
+        Scenario: drawn=50k, nominal=500k, risk_type=LR (SA CCF=10%)
+        Floor (b) = 50k + 0.5 * (500k * 0.10) = 50k + 25k = 75k
+        ead_modelled = 60k < 75k → floor binds
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_FLOOR_B_LR"],
+                "drawn_amount": [50_000.0],
+                "nominal_amount": [500_000.0],
+                "risk_type": ["LR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.05],
+                "is_revolving": [True],
+                "ead_modelled": [60_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(75_000.0)
+
+    def test_floor_b_with_interest(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (b) includes accrued interest in on-balance-sheet component.
+
+        Scenario: drawn=100k, interest=5k, nominal=200k, MR (SA CCF=50%)
+        on_bal = 100k + 5k = 105k
+        Floor (b) = 105k + 0.5 * (200k * 0.50) = 105k + 50k = 155k
+        ead_modelled = 130k < 155k → floor binds
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_FLOOR_B_INT"],
+                "drawn_amount": [100_000.0],
+                "interest": [5_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [130_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(155_000.0)
+
+    # ----- Floor (c): fully-drawn EAD floor -----
+
+    def test_floor_c_binds_modelled_below_on_balance(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (c) raises EAD when modelled EAD is below on-balance amount.
+
+        Scenario: drawn=200k, nominal=0 (fully drawn), risk_type=MR
+        on_bal = 200k, Floor (b) = 200k + 0 = 200k, Floor (c) = 200k
+        ead_modelled = 150k < 200k → floor (c) binds
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_FLOOR_C_001"],
+                "drawn_amount": [200_000.0],
+                "nominal_amount": [0.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [150_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(200_000.0)
+
+    def test_floor_c_with_interest_included(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (c) includes interest in the on-balance-sheet amount.
+
+        Scenario: drawn=200k, interest=10k, nominal=0 (fully drawn)
+        on_bal = 210k
+        ead_modelled = 180k < 210k → floor (c) binds, ead_pre_crm = 210k
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_FLOOR_C_INT"],
+                "drawn_amount": [200_000.0],
+                "interest": [10_000.0],
+                "nominal_amount": [0.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [180_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(210_000.0)
+
+    # ----- No ead_modelled: standard CCF approach unchanged -----
+
+    def test_null_ead_modelled_uses_standard_ccf_path(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """When ead_modelled is null, standard CCF approach is used.
+
+        Scenario: drawn=100k, nominal=200k, MR, revolving, ccf_modelled=0.40
+        Standard: ead_pre_crm = 100k + 200k * max(0.40, 0.25) = 100k + 80k = 180k
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_STD_001"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.40],
+                "is_revolving": [True],
+                "ead_modelled": [None],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(180_000.0)
+
+    def test_missing_ead_modelled_column_backward_compatible(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """When ead_modelled column is entirely absent, standard CCF path works.
+
+        This ensures backward compatibility with existing data.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_NO_COL"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.40],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        # Standard: 100k + 200k * max(0.40, 0.25) = 180k
+        assert result["ead_pre_crm"][0] == pytest.approx(180_000.0)
+
+    # ----- CRR: no Art. 166D floors -----
+
+    def test_crr_no_ead_floors_applied(
+        self, ccf_calculator: CCFCalculator
+    ) -> None:
+        """Under CRR, ead_modelled is ignored — standard CCF approach only.
+
+        Art. 166D floors are Basel 3.1 only. CRR A-IRB uses modelled CCF directly.
+        """
+        crr_config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_CRR_001"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.10],
+                "is_revolving": [True],
+                "ead_modelled": [50_000.0],  # Would be below floor under B31
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+        # CRR: ead_pre_crm = 100k + 200k * 0.10 = 120k (modelled CCF, no floor)
+        assert result["ead_pre_crm"][0] == pytest.approx(120_000.0)
+
+    # ----- SA/FIRB exposures: floors don't apply -----
+
+    def test_sa_exposure_no_ead_floor(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """SA exposures are unaffected by A-IRB EAD floors."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SA_001"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["standardised"],
+                "ccf_modelled": [None],
+                "is_revolving": [False],
+                "ead_modelled": [50_000.0],  # Should be ignored for SA
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        # SA: ead_pre_crm = 100k + 200k * 0.50 = 200k
+        assert result["ead_pre_crm"][0] == pytest.approx(200_000.0)
+
+    # ----- Combined floor (b) and (c) interaction -----
+
+    def test_floor_b_dominates_when_undrawn_exists(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (b) > floor (c) when there is an off-balance component.
+
+        Scenario: drawn=100k, nominal=400k, MR (SA CCF=50%)
+        Floor (b) = 100k + 0.5 * (400k * 0.50) = 100k + 100k = 200k
+        Floor (c) = 100k
+        ead_modelled = 80k → floor (b) binds at 200k
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_COMBINED_001"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [400_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [80_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(200_000.0)
+
+    # ----- Mixed batch test -----
+
+    def test_mixed_batch_modelled_and_standard(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Mixed batch: some with ead_modelled, some without, different approaches."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": [
+                    "AIRB_MOD_LOW",   # ead_modelled below floor → floor binds
+                    "AIRB_MOD_HIGH",  # ead_modelled above floor → passes through
+                    "AIRB_STD",       # no ead_modelled → standard CCF path
+                    "SA_IGNORE",      # SA → ead_modelled ignored
+                ],
+                "drawn_amount": [100_000.0, 100_000.0, 100_000.0, 100_000.0],
+                "nominal_amount": [200_000.0, 200_000.0, 200_000.0, 200_000.0],
+                "risk_type": ["MR", "MR", "MR", "MR"],
+                "approach": ["advanced_irb", "advanced_irb", "advanced_irb", "standardised"],
+                "ccf_modelled": [0.30, 0.30, 0.40, None],
+                "is_revolving": [True, True, True, False],
+                "ead_modelled": [120_000.0, 300_000.0, None, 50_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Floor (b) = 100k + 0.5 * 200k * 0.50 = 150k for all MR A-IRB
+        expected = {
+            "AIRB_MOD_LOW": 150_000.0,   # floor (b) binds: 120k → 150k
+            "AIRB_MOD_HIGH": 300_000.0,  # ead_modelled passes: 300k > 150k
+            "AIRB_STD": 180_000.0,       # standard: 100k + 200k*0.40 = 180k
+            "SA_IGNORE": 200_000.0,      # SA: 100k + 200k*0.50 = 200k
+        }
+        for ref, exp_ead in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ead_pre_crm"][0] == pytest.approx(exp_ead), (
+                f"EAD mismatch for {ref}: got {row['ead_pre_crm'][0]}, expected {exp_ead}"
+            )
+
+    # ----- EAD floor with provision-adjusted amounts -----
+
+    def test_floor_b_uses_provision_adjusted_nominal(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Floor (b) uses nominal_after_provision, not raw nominal.
+
+        Scenario: drawn=100k, nominal=200k, provision_on_nominal=20k
+        nominal_after_provision = 180k
+        Floor (b) = 100k + 0.5 * (180k * 0.50) = 100k + 45k = 145k
+        ead_modelled = 110k < 145k → floor binds
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_PROV_001"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "nominal_after_provision": [180_000.0],
+                "provision_on_drawn": [0.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [110_000.0],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        assert result["ead_pre_crm"][0] == pytest.approx(145_000.0)
+
+    def test_standard_ccf_ead_not_below_on_balance(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Under standard CCF path, ead_pre_crm is floored at on-balance amount.
+
+        Floor (c) belt-and-suspenders: even without ead_modelled, A-IRB B31
+        ead_pre_crm >= on_bal. Normally redundant (CCF >= 0 ensures this),
+        but tests the guard.
+
+        Scenario: drawn=100k, nominal=200k, MR, revolving
+        Standard CCF approach: ccf = max(0.30, 0.25) = 0.30
+        ead_pre_crm = 100k + 200k * 0.30 = 160k > 100k (on_bal) — doesn't bind
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_STD_FLOOR_C"],
+                "drawn_amount": [100_000.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+                "ead_modelled": [None],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+        # Standard: 100k + 200k * 0.30 = 160k > 100k, so floor doesn't bind
+        assert result["ead_pre_crm"][0] == pytest.approx(160_000.0)

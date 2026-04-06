@@ -7,11 +7,15 @@ Calculates EAD for contingent exposures using regulatory CCFs:
 - F-IRB Exception: CRR Article 166(9) (20% for short-term trade LCs)
 - A-IRB: Own-estimate CCFs with Basel 3.1 restrictions (Art. 166D)
 
-Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D(1)(a)):
-- Own-estimate CCFs permitted ONLY for revolving facilities
+Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D):
+- Art. 166D(1)(a): Own-estimate CCFs permitted ONLY for revolving facilities
 - Non-revolving A-IRB must use SA CCFs from Table A1
 - Revolving facilities with 100% SA CCF (Table A1 Row 2) cannot use own-estimates
 - All own-estimate CCFs floored at 50% of SA CCF (CRE32.27)
+- Art. 166D(5): Three EAD floor tests for A-IRB:
+  (a) CCF floor = 50% x SA CCF (implemented in _compute_ccf)
+  (b) Facility-level EAD floor = on-BS EAD + 50% x F-IRB off-BS EAD (Art. 166D(3))
+  (c) Fully-drawn EAD floor = on-BS EAD ignoring Art. 166D (Art. 166D(4))
 
 CCF is part of exposure measurement, not credit risk mitigation.
 It converts nominal/notional amounts to credit-equivalent EAD.
@@ -161,7 +165,7 @@ class CCFCalculator:
 
         exposures, added_cols = self._ensure_columns(exposures, names, has_provision_cols)
         exposures = self._compute_ccf(exposures, config)
-        exposures = self._compute_ead(exposures, has_provision_cols)
+        exposures = self._compute_ead(exposures, has_provision_cols, config)
         exposures = self._build_audit_trail(
             exposures, original_has_risk_type, original_has_interest
         )
@@ -198,6 +202,7 @@ class CCFCalculator:
             ),
             ("interest", pl.lit(0.0).alias("interest")),
             ("is_revolving", pl.lit(False).alias("is_revolving")),
+            ("ead_modelled", pl.lit(None).cast(pl.Float64).alias("ead_modelled")),
         ]
         for col_name, default_expr in defaults:
             if col_name not in names:
@@ -300,11 +305,19 @@ class CCFCalculator:
         self,
         exposures: pl.LazyFrame,
         has_provision_cols: bool,
+        config: CalculationConfig,
     ) -> pl.LazyFrame:
         """Calculate EAD from CCF-adjusted undrawn and on-balance-sheet components.
 
         Provision deduction (CRR Art. 111(2)) is applied only when both
         provision columns were present in the original input.
+
+        For A-IRB under Basel 3.1, applies Art. 166D(5) EAD floors:
+        (b) When ead_modelled is provided (Art. 166D(3) single-EAD approach):
+            EAD >= on-BS EAD + 50% x F-IRB off-BS EAD
+            (Under B31, F-IRB uses SA CCFs per Art. 166C)
+        (c) Fully-drawn EAD floor (Art. 166D(4)/(5)(c)):
+            EAD >= on-balance-sheet EAD (ignoring Art. 166D)
         """
         if has_provision_cols:
             on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(lower_bound=0.0)
@@ -312,11 +325,49 @@ class CCFCalculator:
             on_bal = drawn_for_ead()
         on_bal = on_bal + interest_for_ead()
 
-        return exposures.with_columns(
+        exposures = exposures.with_columns(
             (pl.col("nominal_after_provision") * pl.col("ccf")).alias("ead_from_ccf"),
         ).with_columns(
             (on_bal + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
         )
+
+        # Art. 166D(5) EAD floors — Basel 3.1 A-IRB only
+        if config.is_basel_3_1:
+            is_airb = pl.col("approach") == ApproachType.AIRB.value
+            has_modelled_ead = pl.col("ead_modelled").is_not_null()
+
+            # Floor (b): facility-level EAD floor for Art. 166D(3) single-EAD approach
+            # EAD >= on-BS EAD + 50% x (nominal x SA_CCF)
+            # Under B31, F-IRB CCFs = SA CCFs (Art. 166C)
+            floor_b = on_bal + pl.col("nominal_after_provision") * pl.col(
+                "_sa_ccf_from_risk_type"
+            ) * 0.5
+
+            # Floor (c): fully-drawn EAD floor — Art. 166D(5)(c)
+            # EAD >= on-balance-sheet EAD (ignoring Art. 166D)
+            floor_c = on_bal
+
+            exposures = exposures.with_columns(
+                pl.when(is_airb & has_modelled_ead)
+                .then(
+                    # Art. 166D(3)/(4): use modelled EAD, floored by (b) and (c)
+                    pl.max_horizontal(
+                        pl.col("ead_modelled"),
+                        floor_b,
+                        floor_c,
+                    )
+                )
+                .when(is_airb)
+                .then(
+                    # Standard CCF approach: floor (c) as belt-and-suspenders
+                    # (redundant when CCF >= 0, but guards edge cases)
+                    pl.max_horizontal(pl.col("ead_pre_crm"), floor_c)
+                )
+                .otherwise(pl.col("ead_pre_crm"))
+                .alias("ead_pre_crm"),
+            )
+
+        return exposures
 
     def _build_audit_trail(
         self,

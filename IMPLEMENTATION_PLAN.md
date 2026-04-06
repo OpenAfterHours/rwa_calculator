@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.40 Art. 237(2) maturity mismatch ineligibility implemented)
-**Current version:** 0.1.97 | **Test suite:** ~2,923 collected (~2,399 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.62, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-06 (P1.64 Art. 166D(5) EAD floors (b) and (c) implemented)
+**Current version:** 0.1.102 | **Test suite:** ~2,937 collected (~2,413 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -677,12 +677,21 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `engine/ccf.py:257-277` (three-way gate in A-IRB CCF path)
 
 ### P1.64 A-IRB EAD floor tests incomplete — 2 of 3 tests missing (Art. 166D(5))
-- **Status:** [ ] Not started
-- **Impact:** Art. 166D(5) defines three EAD floor tests for A-IRB: (a) CCF floor = 50% × SA CCF, (b) facility-level EAD floor = on-BS EAD + 50% × F-IRB off-BS EAD, (c) fully-drawn EAD floor = on-BS EAD ignoring Art. 166D. Only floor (a) is documented in the spec and partially implemented. Floors (b) and (c) are entirely absent. Without these, A-IRB models could produce EADs below regulatory minimums for partially or fully drawn revolving facilities.
-- **File:Line:** `engine/ccf.py` (no facility-level EAD floor)
-- **Spec ref:** PRA PS1/26 Art. 166D(5)(b)-(c)
-- **Fix:** Implement facility-level EAD floor (b) and fully-drawn EAD floor (c) in the A-IRB EAD computation path.
-- **Tests needed:** Unit tests for each of the three floor conditions.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Art. 166D(5) EAD floors (b) and (c) now fully implemented for Basel 3.1 A-IRB:
+  - **Floor (b) — facility-level EAD floor (Art. 166D(3)):** When `ead_modelled` is provided (bank uses single-EAD approach), `EAD >= on-BS EAD + 50% × (nominal_after_provision × SA_CCF)`. Under B31, F-IRB uses SA CCFs per Art. 166C.
+  - **Floor (c) — fully-drawn EAD floor (Art. 166D(4)/(5)(c)):** EAD cannot fall below on-balance-sheet amount (`max(0, drawn) + max(0, interest)`). Applied to both modelled-EAD and standard-CCF paths as a belt-and-suspenders guard.
+  - **Schema:** `ead_modelled` (Float64, optional) added to FACILITY_SCHEMA, CONTINGENTS_SCHEMA, RAW_EXPOSURE_SCHEMA, RESOLVED_HIERARCHY_SCHEMA, CLASSIFIED_EXPOSURE_SCHEMA. Represents Art. 166D(3)/(4) own facility-level EAD estimate.
+  - **Hierarchy:** `ead_modelled` propagated through `_calculate_facility_undrawn` and `_unify_exposures` (nullified for drawn loans/ONB contingents, preserved for OFB contingents and facility undrawn).
+  - **CCF calculator:** `_compute_ead` now accepts `config` parameter. After standard EAD computation, applies floors (b) and (c) for B31 A-IRB: `ead_modelled` path uses `max(ead_modelled, floor_b, floor_c)`; standard CCF path uses `max(ead_pre_crm, floor_c)`.
+  - **CRR path:** Unchanged — no Art. 166D floors under CRR. `ead_modelled` is ignored.
+  - **SA/FIRB paths:** Unaffected — floors only apply to A-IRB.
+  - **Backward compatible:** When `ead_modelled` column is absent, `_ensure_columns` defaults to null → standard CCF path unchanged.
+- **File:Line:** `engine/ccf.py:302-350` (EAD floor logic in `_compute_ead`), `data/schemas.py` (ead_modelled in 5 schemas), `engine/hierarchy.py` (ead_modelled propagation in 3 paths)
+- **Spec ref:** PRA PS1/26 Art. 166D(5)(b)-(c), Art. 166D(3)/(4)
+- **Tests:** 14 new unit tests in `tests/unit/test_ccf.py` (TestAIRBEADFloorBasel31): floor (b) binds, floor (b) doesn't bind, floor (b) with LR risk type, floor (b) with interest, floor (c) binds modelled below on-balance, floor (c) with interest, null ead_modelled standard path, missing column backward compat, CRR no floors, SA exposure unaffected, floor (b) dominates floor (c), mixed batch (4 rows), provision-adjusted floor (b), standard CCF floor (c) guard. All 2937 tests pass. Test count: 2937 (was 2923).
+- **Limitation:** Art. 166D(6) "unrecognised exposure adjustment" (COREP column 0254 reporting for when floors bind) is not yet reported. The adjustment amount (floor EAD - modelled EAD) could be tracked as an audit column in a future increment.
 
 ### P1.65 SA Table A1 Row 2 (100% CCF) instrument types incomplete
 - **Status:** [ ] Not started

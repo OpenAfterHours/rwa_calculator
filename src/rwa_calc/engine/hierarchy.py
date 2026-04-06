@@ -594,6 +594,7 @@ class HierarchyResolver:
                     "seniority": pl.String,
                     "risk_type": pl.String,
                     "ccf_modelled": pl.Float64,
+                    "ead_modelled": pl.Float64,
                     "is_short_term_trade_lc": pl.Boolean,
                     "is_payroll_loan": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
@@ -806,6 +807,9 @@ class HierarchyResolver:
             pl.col("ccf_modelled").cast(pl.Float64, strict=False)
             if "ccf_modelled" in facility_cols
             else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
+            pl.col("ead_modelled").cast(pl.Float64, strict=False)
+            if "ead_modelled" in facility_cols
+            else pl.lit(None).cast(pl.Float64).alias("ead_modelled"),
             (
                 pl.col("is_short_term_trade_lc").fill_null(False)
                 if "is_short_term_trade_lc" in facility_cols
@@ -906,6 +910,7 @@ class HierarchyResolver:
             pl.col("seniority"),
             pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
+            pl.lit(None).cast(pl.Float64).alias("ead_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
             (
                 pl.col("is_payroll_loan").fill_null(False)
@@ -980,6 +985,14 @@ class HierarchyResolver:
                     .then(pl.lit(None).cast(pl.Float64))
                     .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))
                     .alias("ccf_modelled"),
+                    pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.Float64))
+                    .otherwise(
+                        pl.col("ead_modelled").cast(pl.Float64, strict=False)
+                        if "ead_modelled" in cont_cols
+                        else pl.lit(None).cast(pl.Float64)
+                    )
+                    .alias("ead_modelled"),
                     pl.when(is_drawn)
                     .then(pl.lit(None).cast(pl.Boolean))
                     .otherwise(pl.col("is_short_term_trade_lc"))

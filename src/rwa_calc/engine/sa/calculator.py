@@ -416,6 +416,9 @@ class SACalculator:
                 .then(pl.lit("INSTITUTION"))
                 .when(_upper.str.contains("CORPORATE", literal=True))
                 .then(pl.lit("CORPORATE"))
+                # Rated SL uses corporate CQS table (Art. 122A(3))
+                .when(_upper.str.contains("SPECIALISED", literal=True))
+                .then(pl.lit("CORPORATE"))
                 .when(_upper.str.contains("COVERED_BOND", literal=True))
                 .then(pl.lit("COVERED_BOND"))
                 .otherwise(_upper)
@@ -652,10 +655,14 @@ class SACalculator:
                         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
                     )
                     .then(pl.lit(retail_rw))
-                    # 7. SA Specialised Lending: Art. 122A-122B
+                    # 7. SA Specialised Lending (unrated only): Art. 122A-122B
+                    # Rated SL exposures use the corporate CQS table (Art. 122A(3))
                     .when(
-                        _uc.str.contains("SPECIALISED", literal=True)
-                        | (pl.col("sl_type").fill_null("").str.len_chars() > 0)
+                        (
+                            _uc.str.contains("SPECIALISED", literal=True)
+                            | (pl.col("sl_type").fill_null("").str.len_chars() > 0)
+                        )
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
                     .then(b31_sa_sl_rw_expr())
                     # 8. Corporate SME: 85% (CRE20.47-49, Basel 3.1)

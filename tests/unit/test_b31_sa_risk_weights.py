@@ -884,6 +884,201 @@ class TestB31SASpecialisedLending:
 
 
 # =============================================================================
+# RATED SA SPECIALISED LENDING — Art. 122A(3)
+# =============================================================================
+
+
+class TestRatedSASpecialisedLending:
+    """Rated SL exposures use the corporate CQS table (Art. 122A(3)).
+
+    Why these tests matter:
+        Art. 122A(3) mandates that rated specialised lending exposures under
+        SA use the corporate CQS risk weight table, not the SL-specific type
+        weights (OF/CF=100%, PF pre-op=130%, PF high-quality=80%). Without
+        this, a rated PF exposure with CQS 1 (AAA) would incorrectly receive
+        100% instead of 20%, overstating capital for highly-rated SL exposures.
+    """
+
+    @pytest.mark.parametrize(
+        ("sl_type", "cqs", "expected_rw"),
+        [
+            ("project_finance", 1, 0.20),   # AAA-AA-: corporate CQS 1 = 20%
+            ("project_finance", 2, 0.50),   # A+-A-: corporate CQS 2 = 50%
+            ("project_finance", 3, 0.75),   # BBB+-BBB-: corporate CQS 3 = 75% (B31)
+            ("project_finance", 4, 1.00),   # BB+-BB-: corporate CQS 4 = 100%
+            ("project_finance", 5, 1.50),   # B+-B-: corporate CQS 5 = 150%
+            ("object_finance", 1, 0.20),    # Rated OF also uses corporate table
+            ("commodities_finance", 2, 0.50),  # Rated CF also uses corporate table
+        ],
+        ids=[
+            "pf_cqs1_20pct",
+            "pf_cqs2_50pct",
+            "pf_cqs3_75pct",
+            "pf_cqs4_100pct",
+            "pf_cqs5_150pct",
+            "of_cqs1_20pct",
+            "cf_cqs2_50pct",
+        ],
+    )
+    def test_rated_sl_uses_corporate_cqs_table(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        sl_type: str,
+        cqs: int,
+        expected_rw: float,
+    ) -> None:
+        """Rated SL exposure should get corporate CQS risk weight, not SL type weight."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [cqs],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": [sl_type],
+                "sl_project_phase": [None],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(expected_rw)
+
+    def test_unrated_sl_still_uses_type_specific_weights(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Unrated SL (null CQS) should still use Art. 122A-122B type-specific weights."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_UNRATED_001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["high_quality"],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.80)  # PF high-quality = 80%
+
+    def test_rated_sl_rwa_correct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated SL RWA = EAD × corporate CQS RW."""
+        ead = 5000000.0
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_002"],
+                "ead_final": [ead],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [1],  # CQS 1 = 20% under B31 corporate
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["operational"],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.20)
+        assert df["rwa_pre_factor"][0] == pytest.approx(ead * 0.20)
+
+    def test_rated_pf_high_quality_ignores_phase(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated PF with high_quality phase still uses corporate CQS, not 80%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_003"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [3],  # CQS 3 = 75% under B31 corporate
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["high_quality"],  # Would be 80% if unrated
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # Rated: 75% (corporate CQS 3), not 80% (SL PF high-quality)
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_rated_pf_preop_ignores_phase(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated PF with pre_operational phase still uses corporate CQS, not 130%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_004"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [2],  # CQS 2 = 50% under B31 corporate
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["pre_operational"],  # Would be 130% if unrated
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # Rated: 50% (corporate CQS 2), not 130% (SL PF pre-operational)
+        assert df["risk_weight"][0] == pytest.approx(0.50)
+
+
+# =============================================================================
 # CRR REGRESSION — existing risk weights unchanged
 # =============================================================================
 

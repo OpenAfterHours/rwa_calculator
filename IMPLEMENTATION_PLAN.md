@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.11 CRM maturity mismatch fixed)
-**Current version:** 0.1.89 | **Test suite:** ~2,756 collected (~2,251 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.15 rated SL fallback to corporate CQS)
+**Current version:** 0.1.90 | **Test suite:** ~2,767 collected (~2,251 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -290,12 +290,15 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit and acceptance tests.
 
 ### P1.15 Rated SA specialised lending fallback (Art. 122A(3))
-- **Status:** [ ] Not implemented
-- **Impact:** Rated specialised lending exposures under SA should use the **corporate CQS table** (Art. 122A(3)), not the SL-specific weights. Code at `calculator.py:528-533` enters the SL branch whenever `sl_type` is non-null, and `b31_sa_sl_rw_expr()` always returns type-specific weights regardless of CQS. A rated SL exposure with CQS 3 gets 100% (SL weight) instead of 75% (corporate CQS 3).
-- **File:Line:** `engine/sa/calculator.py:528-533`
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** PRA PS1/26 Art. 122A(3) now enforced: rated SL exposures use the corporate CQS table instead of SL-specific type weights. Two changes:
+  - **CQS lookup class mapping** (`calculator.py:419-420`): SPECIALISED_LENDING mapped to CORPORATE in `_lookup_class`, so the CQS join picks up corporate risk weights for rated SL exposures
+  - **B31 SL branch gating** (`calculator.py:657-664`): SL type-specific weights (OF/CF=100%, PF pre-op=130%, PF high-quality=80%) only apply when CQS is null. Rated SL falls through to corporate CQS table via the default CQS join
+  - Under CRR, the fix also corrects rated SL (previously 100% default; now uses corporate CQS table)
+- **File:Line:** `engine/sa/calculator.py:419-420` (lookup class), `engine/sa/calculator.py:657-664` (SL branch gating)
 - **Spec ref:** PRA PS1/26 Art. 122A(3)
-- **Fix:** In SA calculator, check if exposure has a valid CQS before entering the SL-specific branch. If rated, use corporate CQS table.
-- **Tests needed:** Unit tests for rated vs unrated SL exposures.
+- **Tests:** 11 new unit tests in `test_b31_sa_risk_weights.py` (TestRatedSASpecialisedLending): 7 parametrized CQS-to-RW tests (PF CQS 1-5, OF CQS 1, CF CQS 2), 1 unrated-still-uses-type-weights, 1 rated RWA correctness, 1 rated PF high-quality ignores phase, 1 rated PF pre-op ignores phase. All 2767 tests pass. Test count: 2767 (was 2756).
 
 ### P1.16 CRR unrated institution standard risk weight (Art. 120)
 - **Status:** [~] UK treatment correct; EU standard wrong

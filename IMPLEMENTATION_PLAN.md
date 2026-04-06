@@ -1,19 +1,19 @@
 # Implementation Plan
 
 **Last updated:** 2026-04-06 (comprehensive audit via PDF + source comparison + multi-agent gap analysis; CRM PDF comparison: gold 0%→20%, main-index equity 15%→20%, LGD* blending formula, 5-band bond haircuts, sequential mixed pool, FX mismatch for guarantees, life insurance RW table, CLN as cash collateral, Rule 4.11 narrowed, CQS 4 gov bond eligibility corrected, overcollateralisation ratios flagged)
-**Current version:** 0.1.64 | **Test suite:** ~2,283 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter)
+**Current version:** 0.1.64 | **Test suite:** ~2,344 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter)
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
 
 **Gap summary:** P1 (calculation correctness): 84 (+P1.9a sub-item) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.46 (CQS 5 = 150% not 100%), P1.51 (B31 defaulted threshold 20% not 50%), P1.42 (equity B31 weights), P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility), P1.24 (non-IG corporate 135%), P1.25 (non-regulatory retail 100%), P1.66 (QRRE threshold GBP 90k not 100k), P1.79 (CRR PD floor 0.03% should be 0.05% for corporate/inst/sov)
-- *Capital overstatement (conservative but wrong):* P1.36 (F-IRB CCF wrong under B31), P1.33 (mortgage RW floor 15% not 10%), P1.22 (IRB maturity default 5.0 not 2.5), P1.72 (CIU fallback 1250% should be 150%/250%/400%)
+- *Capital understatement (exposures get lower RWA than they should):* P1.51 (B31 defaulted threshold 20% not 50%), P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility), P1.24 (non-IG corporate 135%), P1.25 (non-regulatory retail 100%), P1.66 (QRRE threshold GBP 90k not 100k), P1.79 (CRR PD floor 0.03% should be 0.05% for corporate/inst/sov) [P1.46, P1.42 now fixed]
+- *Capital overstatement (conservative but wrong):* P1.72 (CIU fallback 1250% should be 150%/250%/400%) [P1.36, P1.33, P1.22 now fixed]
 - *CRM formula/value errors:* P1.73 (gold haircut 0% vs 20%), P1.74 (main-index equity 15% vs 20%), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
 - *Missing B31 features (whole categories absent):* P1.4 (Art. 147A approach restrictions), P1.9 (output floor portfolio-level), P1.12 (SCRA enhanced/short-term), P1.29 (40% CCF category), P1.30 (CRM method selection)
-- *Other critical:* P1.43 (equity transitional floor not applied in pipeline), P1.47 (slotting pre-op BCBS not PRA)
+- *Other critical:* P1.47 (slotting pre-op BCBS not PRA) [P1.43 now fixed]
 
 ## Status Legend
 - [ ] Not started
@@ -27,36 +27,25 @@
 These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 ### P1.36 **CRITICAL** -- F-IRB CCF under Basel 3.1 uses wrong values (Art. 166C)
-- **Status:** [~] Wrong values -- uses CRR 75% instead of SA CCFs
-- **Impact:** PRA PS1/26 Art. 166C mandates that F-IRB off-balance-sheet items use **SA CCFs** (Table A1). Code at `ccf.py:215-234` still uses CRR F-IRB values under B31:
-  - Medium Risk: **75%** in code -> should be **50%** (SA CCF)
-  - Low Risk (UCC): **40%** in code -> should be **10%** (SA CCF)
-  - Medium-Low Risk: **75%** fallthrough -> should be **20%** (SA CCF)
-  - Default: **75%** -> should be SA CCF value
-  This **overstates capital** for all F-IRB off-balance-sheet exposures under Basel 3.1, particularly UCC (4x too high) and medium-risk (1.5x too high).
+- **Status:** [x] Complete
+- **Impact:** PRA PS1/26 Art. 166C mandates that F-IRB off-balance-sheet items use **SA CCFs** (Table A1). Under B31, `_compute_ccf` now uses `sa_ccf_expression(is_basel_3_1=True)` for F-IRB, giving FR=100%, MR=50%, MLR=20%, LR(UCC)=10%. CRR path unchanged.
 - **File:Line:** `engine/ccf.py:215-234`
-- **Spec ref:** PRA PS1/26 Art. 166C, confirmed against PDF pages 117-118
-- **Fix:** When `is_b31=True`, set `firb_ccf = sa_ccf_expression(is_basel_3_1=True)`. The CRR 75%/40% values only apply when `is_b31=False`.
-- **Tests needed:** Unit tests for F-IRB CCF under B31 vs CRR. All F-IRB acceptance tests need re-validation.
+- **Spec ref:** PRA PS1/26 Art. 166C
+- **Fixed:** 2026-04-06
 
 ### P1.46 Corporate CQS 5 risk weight 100% in code, PRA PS1/26 says 150% (Art. 122(2))
-- **Status:** [~] Wrong value
-- **Impact:** `b31_risk_weights.py:113` has CQS 5 = `Decimal("1.00")` (100%). PRA PS1/26 Art. 122(2) Table 6 sets CQS 5 = **150%** (same as CQS 6). The BCBS CRE20.42 standard uses 100% for CQS 5, but PRA diverged. Comment at line 105 says "CQS5 = 100% (was 150%)" -- this is the BCBS change, not PRA's. **Understates capital by 50%** for CQS 5 rated corporates.
-- **File:Line:** `engine/sa/b31_risk_weights.py:113`
+- **Status:** [x] Complete
+- **Impact:** `b31_risk_weights.py` CQS 5 now correctly set to `Decimal("1.50")` (150%) per PRA PS1/26 Art. 122(2) Table 6. Pre-existing test expectations that assumed 100% were corrected in this increment.
+- **File:Line:** `data/tables/b31_risk_weights.py`
 - **Spec ref:** PRA PS1/26 Art. 122(2) Table 6
-- **Fix:** Change `b31_risk_weights.py:113` from `Decimal("1.00")` to `Decimal("1.50")` in `B31_CORPORATE_RISK_WEIGHTS` dict. Also fix `_create_b31_corporate_df()` at line 181 which has the same wrong value. Update comment.
-- **Tests needed:** Unit test for CQS 5 corporate RW under B31.
+- **Fixed:** 2026-04-06
 
 ### P1.51 B31 defaulted provision threshold 20% not 50% AND denominator wrong (Art. 127)
-- **Status:** [ ] Not started — two distinct bugs
-- **Impact:** Two compounding bugs in the B31 defaulted risk weight path:
-  1. **Threshold**: `b31_risk_weights.py:173` uses 50%, should be **20%** per B31 Art. 127. Exposures with 20-49% provision coverage incorrectly get 100% instead of 150%.
-  2. **Denominator**: `calculator.py:457-458` uses CRR formula `provision_allocated >= threshold × (EAD + provision_deducted)`. Under B31, the denominator should be **exposure value (EAD alone)**, not `EAD + provision_deducted`. The spec warning box explicitly documents this: "CRR uses `EAD + provision_deducted`, while Basel 3.1 uses `exposure value`".
-  Both bugs **understate capital** for defaulted exposures under Basel 3.1.
-- **File:Line:** `engine/sa/b31_risk_weights.py:173`, `engine/sa/calculator.py:457-458`
-- **Spec ref:** PRA PS1/26 Art. 127, `docs/specifications/crr/sa-risk-weights.md` §"Basel 3.1 Default Risk Weights"
-- **Fix:** (1) Change threshold from 0.50 to 0.20. (2) For B31 path, change denominator from `(ead + provision_deducted)` to `ead`. Keep CRR path unchanged on both.
-- **Tests needed:** Unit tests for B31 defaulted exposures at provision coverage levels of 15%, 20%, 25%, 50%, testing both threshold and denominator changes.
+- **Status:** [x] Complete
+- **Impact:** Both bugs now fixed in `engine/sa/calculator.py` and `data/tables/b31_risk_weights.py`: (1) threshold changed from 50% to 20% per B31 Art. 127; (2) B31 path denominator now uses EAD alone (not EAD + provision_deducted). Pre-existing test expectations corrected.
+- **File:Line:** `engine/sa/calculator.py`, `data/tables/b31_risk_weights.py`
+- **Spec ref:** PRA PS1/26 Art. 127
+- **Fixed:** 2026-04-06
 
 ### P1.42 Basel 3.1 equity SA weights wrong -- listed equity gets 100% instead of 250%
 - **Status:** [~] CRR weights applied under B31

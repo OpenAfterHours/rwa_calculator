@@ -244,18 +244,40 @@ class IRBLazyFrame:
                 exprs.append(pl.lit(0.0).alias("ead_final"))
 
         # Maturity
+        # Basel 3.1 Art. 162(2A)(k): revolving exposures use facility_termination_date
+        # for M instead of the drawing's maturity_date. CRR path is unchanged.
         if "maturity" not in names:
             if "maturity_date" in names:
-                exprs.append(
+                maturity_from_date = (
                     pl.when(pl.col("maturity_date").is_not_null())
                     .then(
-                        _exact_fractional_years_expr(config.reporting_date, "maturity_date").clip(
-                            1.0, 5.0
-                        )
+                        _exact_fractional_years_expr(
+                            config.reporting_date, "maturity_date"
+                        ).clip(1.0, 5.0)
                     )
                     .otherwise(pl.lit(2.5))
-                    .alias("maturity"),
                 )
+                has_termination = "facility_termination_date" in names
+                has_revolving = "is_revolving" in names
+                if config.is_basel_3_1 and has_termination and has_revolving:
+                    # Revolving + non-null termination date → use termination date
+                    maturity_from_termination = (
+                        pl.when(pl.col("facility_termination_date").is_not_null())
+                        .then(
+                            _exact_fractional_years_expr(
+                                config.reporting_date, "facility_termination_date"
+                            ).clip(1.0, 5.0)
+                        )
+                        .otherwise(maturity_from_date)
+                    )
+                    exprs.append(
+                        pl.when(pl.col("is_revolving").fill_null(False))
+                        .then(maturity_from_termination)
+                        .otherwise(maturity_from_date)
+                        .alias("maturity"),
+                    )
+                else:
+                    exprs.append(maturity_from_date.alias("maturity"))
             else:
                 exprs.append(pl.lit(2.5).alias("maturity"))
 

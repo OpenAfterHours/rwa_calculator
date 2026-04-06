@@ -604,6 +604,7 @@ class HierarchyResolver:
                     "is_qrre_transactor": pl.Boolean,
                     "facility_limit": pl.Float64,
                     "source_facility_reference": pl.String,
+                    "facility_termination_date": pl.Date,
                 }
             )
 
@@ -847,6 +848,12 @@ class HierarchyResolver:
                 if "limit" in facility_cols
                 else pl.lit(None).cast(pl.Float64).alias("facility_limit")
             ),
+            # Art. 162(2A)(k): max contractual termination date for revolving M under B31
+            (
+                pl.col("facility_termination_date")
+                if "facility_termination_date" in facility_cols
+                else pl.lit(None).cast(pl.Date).alias("facility_termination_date")
+            ),
             # Propagate facility reference for collateral allocation
             # This allows facility-level collateral to be linked to undrawn exposures
             pl.col("facility_reference").alias("source_facility_reference"),
@@ -932,6 +939,8 @@ class HierarchyResolver:
                 if "has_netting_agreement" in loan_cols
                 else pl.lit(False).alias("has_netting_agreement")
             ),
+            # facility_termination_date is facility-level; inherited via facility join later
+            pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
         ]
         loans_unified = loans.select(loan_select_exprs)
 
@@ -1009,6 +1018,8 @@ class HierarchyResolver:
                         else pl.lit(False).alias("has_one_day_maturity_floor")
                     ),
                     pl.lit(False).alias("has_netting_agreement"),
+                    # facility_termination_date is facility-level; inherited via facility join later
+                    pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
                 ]
             )
             exposure_frames.append(contingents_unified)
@@ -1132,6 +1143,10 @@ class HierarchyResolver:
                 )
             if "limit" in fac_cols:
                 fac_select.append(pl.col("limit").alias("_fac_limit"))
+            if "facility_termination_date" in fac_cols:
+                fac_select.append(
+                    pl.col("facility_termination_date").alias("_fac_termination_date")
+                )
 
             fac_lookup = facilities.select(fac_select)
             exposures = exposures.join(
@@ -1167,6 +1182,15 @@ class HierarchyResolver:
                     if "facility_limit" in exp_schema
                     else pl.col("_fac_limit").alias("facility_limit")
                 )
+            if "_fac_termination_date" in exp_schema:
+                coalesce_cols.append(
+                    pl.coalesce(
+                        pl.col("facility_termination_date"),
+                        pl.col("_fac_termination_date"),
+                    ).alias("facility_termination_date")
+                    if "facility_termination_date" in exp_schema
+                    else pl.col("_fac_termination_date").alias("facility_termination_date")
+                )
 
             if coalesce_cols:
                 exposures = exposures.with_columns(coalesce_cols)
@@ -1178,6 +1202,8 @@ class HierarchyResolver:
                 temp_cols.append("_fac_transactor")
             if "limit" in fac_cols:
                 temp_cols.append("_fac_limit")
+            if "facility_termination_date" in fac_cols:
+                temp_cols.append("_fac_termination_date")
             if temp_cols:
                 exposures = exposures.drop(temp_cols)
 

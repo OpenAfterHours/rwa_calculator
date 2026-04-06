@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.44 slotting supporting factors implemented)
-**Current version:** 0.1.103 | **Test suite:** ~2,948 collected (~2,424 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.20 revolving maturity implemented)
+**Current version:** 0.1.104 | **Test suite:** ~2,960 collected (~2,436 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -350,13 +350,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 8 new unit tests in `tests/unit/test_b31_sa_risk_weights.py` (TestB31PayrollPensionLoan): payroll 35%, RWA correctness, non-payroll 75%, QRRE transactor priority, null defaults, missing column defaults, CRR no payroll, constant value. All 2886 tests pass. Test count: 2886 (was 2878).
 
 ### P1.20 Revolving maturity change (Basel 3.1 Art. 162(2A)(k))
-- **Status:** [ ] Not implemented
-- **Impact:** Under Basel 3.1, IRB effective maturity (M) for revolving exposures must use the **maximum contractual termination date** of the facility, not the repayment date of the current drawing (CRR approach). This typically increases M, leading to higher maturity adjustments and capital. The current maturity calculation in `engine/irb/formulas.py` does not distinguish revolving from non-revolving for maturity purposes. PRA PS1/26 Art. 162(2A)(k) is explicit: "for revolving exposures, M shall be determined using the maximum contractual termination date of the facility."
-  **Spec fix (2026-04-06):** firb-calculation.md corrected — removed incorrect "1 year" maturity default, replaced with "maximum contractual termination date" per Art. 162(2A)(k).
-- **File:Line:** `engine/irb/formulas.py`
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** PRA PS1/26 Art. 162(2A)(k) now enforced: revolving exposures under Basel 3.1 use `facility_termination_date` for effective maturity M instead of the drawing's `maturity_date`. This typically increases M, leading to higher maturity adjustments and capital.
+  **Implementation:**
+  - **Schema:** `facility_termination_date` (pl.Date) added to `FACILITY_SCHEMA`, `RAW_EXPOSURE_SCHEMA` — represents the maximum contractual termination date of the facility
+  - **Hierarchy:** `facility_termination_date` propagated through `_build_facility_undrawn_exposures` (carries directly), loan/contingent paths (null default), and facility join (coalesce with parent facility value) — same pattern as `is_revolving`
+  - **IRB namespace:** `prepare_columns()` maturity block now has three-way logic under Basel 3.1: (1) revolving + non-null termination date → use termination date, (2) revolving + null termination date → fall back to maturity_date, (3) non-revolving → use maturity_date. Null `is_revolving` defaults to False (non-revolving, conservative). M still clamped to [1.0, 5.0].
+  - **CRR path:** Unchanged — all exposures use `maturity_date` regardless of revolving status
+  - **Backward compatible:** When `facility_termination_date` or `is_revolving` columns are absent, behaviour is identical to before (maturity_date used)
+  - **Empty schema fallback:** Updated with `facility_termination_date: pl.Date`
+- **File:Line:** `data/schemas.py` (FACILITY_SCHEMA, RAW_EXPOSURE_SCHEMA), `engine/hierarchy.py` (empty schema, facility_undrawn, loan, contingent, facility join), `engine/irb/namespace.py:247-281` (prepare_columns maturity logic)
 - **Spec ref:** PRA PS1/26 Art. 162(2A)(k), `docs/specifications/crr/firb-calculation.md`
-- **Fix:** Add `contractual_termination_date` to facility schema. In IRB maturity calculation, when `is_b31=True` and `is_revolving=True`, use termination date to derive M instead of drawing repayment date.
-- **Tests needed:** Unit tests for revolving vs non-revolving maturity under Basel 3.1.
+- **Tests:** 12 new unit tests in `tests/unit/test_b31_revolving_maturity.py`: revolving uses termination date (M=5yr), non-revolving uses maturity_date (M=1yr), CRR ignores termination date, null termination falls back to maturity_date, missing termination column backward compat, capped at 5yr, floored at 1yr, mixed batch 3 exposures, null is_revolving defaults non-revolving, RWA comparison (revolving > non-revolving), retail still MA=1.0, missing is_revolving column. All 2960 tests pass. Test count: 2960 (was 2948).
+- **Limitation:** The `facility_termination_date` must be set by the institution in input data. The calculator does not auto-derive it from product type or facility terms. The `apply_all_formulas()` batch 1 fallback (`maturity` default 2.5) is NOT updated with revolving logic — it only fires when `prepare_columns()` is skipped, which is uncommon in the pipeline.
 
 ### P1.21 A-IRB CCF floor enforcement (CRE32.27 -- 50% of SA CCF)
 - **Status:** [x] Implemented

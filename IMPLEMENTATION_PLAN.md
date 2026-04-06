@@ -1,20 +1,20 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.2 retail LGD floors implemented)
-**Current version:** 0.1.78 | **Test suite:** ~2,545 collected (~2,041 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.2 fixed.
+**Last updated:** 2026-04-06 (P1.4 Art. 147A approach restrictions implemented)
+**Current version:** 0.1.78 | **Test suite:** ~2,591 collected (~2,094 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.4 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 80 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
-- *Missing B31 features (whole categories absent):* P1.4 (Art. 147A approach restrictions), P1.9 (output floor portfolio-level), P1.12 (SCRA enhanced/short-term), P1.29 (40% CCF category), P1.30 (CRM method selection)
+- *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.12 (SCRA enhanced/short-term), P1.29 (40% CCF category), P1.30 (CRM method selection)
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -160,30 +160,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests in `tests/unit/test_ccf.py` for revolving vs non-revolving A-IRB under Basel 3.1. Acceptance test scenario in B31-C.
 
 ### P1.4 Basel 3.1 approach restrictions not enforced (Art. 147A)
-- **Status:** [ ] Not implemented
-- **Impact:** PRA PS1/26 Art. 147A mandates approach restrictions under Basel 3.1:
-  - Sovereigns/central banks (incl. quasi-sovereigns with 0% SA RW) -> **SA only**
-  - Institutions -> **F-IRB only** (no A-IRB)
-  - IPRE/HVCRE -> **Slotting only**
-  - Financial sector entities -> **F-IRB only**
-  - Large corporates (>GBP 440m revenue) -> **F-IRB only**
-  - Equity -> **SA only** (already correct in `IRBPermissions.full_irb()` line 469)
-  Currently `IRBPermissions.full_irb()` at `config.py:444-472` gives CRR-level permissions to all classes regardless of framework. The classifier at `classifier.py:757` only enforces domestic sovereign SA for CRR Art. 114(3), not the broader Art. 147A restrictions.
-  **Additional findings from agent analysis:**
-  - (a) `is_financial_sector_entity` flag absent from schema and classifier entirely (`classifier.py:230,244` -- `cp_total_assets` joined but never used). **Critical correction from PDF comparison:** Art. 147A(1)(e) applies to **ALL** FSEs (regardless of size), not just "large FSEs" > GBP 79bn. The GBP 79bn threshold is for the FI scalar correlation adjustment (Art. 153), not the approach restriction. A small FSE with £1bn assets is still F-IRB only.
-  - (b) Large corporate revenue threshold (>GBP 440m / EUR 500m -> FIRB only) not implemented
-  - (c) IPRE/HVCRE slotting-only enforcement: `sl_type`/`is_hvcre` flags exist but no restriction in approach expression (`classifier.py:776-787`)
-  - (d) Classifier has zero framework check -- cannot distinguish CRR vs B3.1 approaches
-  - (e) Quasi-sovereigns (RGLA, PSE, MDB, Int'l Org with 0% RW) fall into the sovereign SA-only restriction via Art. 147(3) — spec and code do not document this consolidation
-  - (f) OF/PF/CF default approach is Slotting, not free choice — A-IRB requires Art. 143(2A)/(2B) permission
-  - (g) Other general corporates default to F-IRB — A-IRB requires explicit permission, not a "firm choice"
-- **File:Line:** `contracts/config.py:444-472` (IRBPermissions.full_irb), `engine/classifier.py:767-796` (approach assignment), `engine/classifier.py:230,244` (FSE flag absent)
-- **Spec ref:** `docs/framework-comparison/key-differences.md` (IRB Approach Restrictions table)
-- **Fix:** Either:
-  - (a) Add `IRBPermissions.full_irb_b31()` factory that encodes Art. 147A restrictions, and call it in `CalculationConfig.basel_3_1()`; OR
-  - (b) Add framework-aware enforcement in the classifier when `is_b31=True`
-  Option (a) is preferred as it keeps the restriction logic in configuration rather than scattered through the classifier. Also requires: adding `is_financial_sector_entity` to schema, implementing large corporate revenue threshold, and adding framework parameter to classifier.
-- **Tests needed:** Unit tests verifying approach assignment under B31 for each restricted class. Acceptance tests.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** PRA PS1/26 Art. 147A approach restrictions now enforced at two levels:
+  - **Permission level** (`IRBPermissions.full_irb_b31()`): Sovereign/PSE/MDB/RGLA → SA only, Institution → FIRB only, Equity → SA only. `CalculationConfig.basel_3_1()` now automatically selects B31 permissions when `permission_mode=IRB`.
+  - **Classifier level** (`_determine_approach_and_finalize()`): IPRE/HVCRE → Slotting only (overrides model permissions), FSE corporate → FIRB only (no A-IRB), Large corporate (>GBP 440m) → FIRB only (no A-IRB). Null `is_financial_sector_entity` defaults to non-FSE (permissive).
+  - **Schema**: Added `is_financial_sector_entity` boolean to counterparty schema
+  - **Fixture**: `CORP_AIRB_001` revenue reduced from GBP 800m to GBP 200m (below B31 large corporate threshold) so A-IRB acceptance tests correctly test non-large-corporate behavior
+- **File:Line:** `contracts/config.py:527-583` (full_irb_b31), `contracts/config.py:598-603` (__post_init__), `engine/classifier.py:118-127` (constants), `engine/classifier.py:805-830` (B31 restrictions), `data/schemas.py:162` (FSE field)
+- **Spec ref:** PRA PS1/26 Art. 147A
+- **Tests:** 44 new unit tests in `test_b31_approach_restrictions.py`: 11 permission tests, 4 config integration tests, 2 sovereign SA-only, 3 quasi-sovereign SA-only, 4 institution FIRB-only, 5 IPRE/HVCRE slotting-only, 5 FSE FIRB-only, 6 large corporate FIRB-only, 2 no-IRB-data fallback, 2 absent FSE column. Test count: 2591 (was 2545).
+- **Limitation:** Art. 147A(1)(d) quasi-sovereign consolidation (RGLA/PSE/MDB with 0% RW classified as sovereign) is handled at permission level (SA-only for all quasi-sovereign classes), not by dynamic 0% RW check. Institutions with financial_institution entity_type are already routed to INSTITUTION exposure class (FIRB-only); FSE restriction catches corporates that are financial sector entities.
 
 ### P1.5 IRB guarantor PD substitution for expected loss (CRR path)
 - **Status:** [~] Basel 3.1 implemented; CRR not implemented

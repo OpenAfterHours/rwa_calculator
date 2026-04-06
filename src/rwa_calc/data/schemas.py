@@ -160,6 +160,7 @@ COUNTERPARTY_SCHEMA = {
     # Retained boolean flags - orthogonal to entity_type classification
     "apply_fi_scalar": pl.Boolean,  # 1.25x IRB correlation for LFSE/unregulated FSE (CRR Art. 153(2))
     "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
+    "is_financial_sector_entity": pl.Boolean,  # All FSEs → F-IRB only under B31 (Art. 147A(1)(e))
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
     "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)

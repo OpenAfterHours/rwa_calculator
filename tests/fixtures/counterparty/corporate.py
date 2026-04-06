@@ -213,8 +213,8 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "counterparty_name": "Advanced IRB Corporate PLC",
             "entity_type": "corporate",
             "country_code": "GB",
-            "annual_revenue": 800_000_000.0,
-            "total_assets": 1_200_000_000.0,
+            "annual_revenue": 200_000_000.0,  # GBP 200m — below B31 large corporate threshold (440m)
+            "total_assets": 400_000_000.0,
             "default_status": False,
             "sector_code": "64.19",
             "apply_fi_scalar": False,

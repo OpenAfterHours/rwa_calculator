@@ -44,6 +44,7 @@ from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
+    SpecialisedLendingType,
 )
 
 if TYPE_CHECKING:
@@ -112,6 +113,16 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "other_items_in_collection": ExposureClass.OTHER.value,
     "other_tangible": ExposureClass.OTHER.value,
     "other_residual_lease": ExposureClass.OTHER.value,
+}
+
+# PRA PS1/26 Art. 147A(1)(d): Large corporate revenue threshold (GBP)
+# Corporates with consolidated annual revenue > GBP 440m → F-IRB only (no A-IRB)
+B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP = 440_000_000.0
+
+# SL types restricted to slotting-only under B31 Art. 147A(1)(c)
+_B31_SLOTTING_ONLY_SL_TYPES = {
+    SpecialisedLendingType.IPRE.value,
+    SpecialisedLendingType.HVCRE.value,
 }
 
 
@@ -260,6 +271,12 @@ class ExposureClassifier:
             pl.col("apply_fi_scalar").alias("cp_apply_fi_scalar"),
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ]
+
+        # FSE flag — Art. 147A(1)(e) approach restriction (optional in input data)
+        if "is_financial_sector_entity" in cp_col_names:
+            select_cols.append(
+                pl.col("is_financial_sector_entity").alias("cp_is_financial_sector_entity")
+            )
 
         # Basel 3.1 fields — propagate if present (optional in input data)
         if "scra_grade" in cp_col_names:
@@ -774,6 +791,35 @@ class ExposureClassifier:
             pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
         ) & build_eu_domestic_currency_expr("cp_country_code", "currency")
 
+        # --- B31 Art. 147A classifier-level approach restrictions ---
+        # These supplement the permissions-level restrictions in full_irb_b31()
+        # with data-dependent checks that cannot be encoded in the permission map.
+        _b31_ipre_hvcre_forced_slotting = pl.lit(False)
+        if config.is_basel_3_1:
+            # Art. 147A(1)(c): IPRE/HVCRE → slotting only
+            _b31_ipre_hvcre_forced_slotting = (
+                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
+                & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
+            )
+
+            # Art. 147A(1)(d)/(e): FSE and large corporates → F-IRB only (no A-IRB)
+            _is_fse = pl.lit(False)
+            if "cp_is_financial_sector_entity" in schema_names:
+                _is_fse = (
+                    (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
+                    .fill_null(False)
+                )
+            _is_large_corp = (
+                pl.col("cp_annual_revenue") > B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
+            ).fill_null(False)
+
+            _b31_airb_blocked = _is_fse | _is_large_corp
+
+            # Remove AIRB eligibility for B31-restricted exposures
+            airb_permitted_expr = airb_permitted_expr & ~_b31_airb_blocked
+            # Expand FIRB LGD clearing to include exposures whose AIRB was blocked
+            firb_clear_expr = firb_clear_expr | (firb_permitted_expr & _b31_airb_blocked)
+
         # --- Approach expression ---
         # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
         is_ccp = pl.col("cp_entity_type") == "ccp"
@@ -787,7 +833,10 @@ class ExposureClassifier:
             # Qualifying CCP trade exposures — always SA with prescribed RW (CRE54.14-15)
             .when(is_ccp)
             .then(pl.lit(ApproachType.SA.value))
-            # SL A-IRB takes precedence over slotting
+            # B31 Art. 147A(1)(c): IPRE/HVCRE → slotting only (overrides model perms)
+            .when(_b31_ipre_hvcre_forced_slotting)
+            .then(pl.lit(ApproachType.SLOTTING.value))
+            # SL A-IRB takes precedence over slotting (non-IPRE/HVCRE under B31)
             .when(
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
                 & sl_airb
@@ -799,7 +848,7 @@ class ExposureClassifier:
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_slotting
             )
             .then(pl.lit(ApproachType.SLOTTING.value))
-            # A-IRB (model or org-wide)
+            # A-IRB (model or org-wide, with B31 FSE/large-corp restriction applied)
             .when(airb_permitted_expr)
             .then(pl.lit(ApproachType.AIRB.value))
             # F-IRB (model or org-wide)

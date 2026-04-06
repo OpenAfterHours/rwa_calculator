@@ -525,6 +525,64 @@ class IRBPermissions:
             }
         )
 
+    @classmethod
+    def full_irb_b31(cls) -> IRBPermissions:
+        """Full IRB permissions with Basel 3.1 Art. 147A approach restrictions.
+
+        Art. 147A mandates:
+        - Sovereign/quasi-sovereign (RGLA, PSE, MDB): SA only
+        - Institution: F-IRB only (no A-IRB)
+        - IPRE/HVCRE: Slotting only (enforced at classifier level)
+        - FSE corporate: F-IRB only (enforced at classifier level)
+        - Large corporate (>GBP 440m): F-IRB only (enforced at classifier level)
+        - Equity: SA only
+        - Other SL (PF/OF/CF): Slotting default, F-IRB/A-IRB with permission
+        - Other corporate: F-IRB default, A-IRB with explicit permission
+        - Retail: A-IRB (if approved)
+
+        Note: FSE and large corporate AIRB restrictions are enforced at
+        classifier level using counterparty attributes, not here, because
+        they depend on per-exposure data (revenue, entity flags).
+        """
+        return cls(
+            permissions={
+                # SA only — Art. 147A(1)(a): sovereign and quasi-sovereigns
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA},
+                ExposureClass.PSE: {ApproachType.SA},
+                ExposureClass.MDB: {ApproachType.SA},
+                ExposureClass.RGLA: {ApproachType.SA},
+                # F-IRB only — Art. 147A(1)(b): institutions
+                ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB},
+                # Corporate — Art. 147A(1)(f): F-IRB default, A-IRB with permission
+                # (FSE/large corp AIRB restriction enforced at classifier level)
+                ExposureClass.CORPORATE: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
+                ExposureClass.CORPORATE_SME: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
+                # Retail — Art. 147A(3): A-IRB (if approved)
+                ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
+                ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
+                ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
+                # SL — Art. 147A(1)(c)/(d): IPRE/HVCRE slotting-only at classifier
+                # Other SL (PF/OF/CF) may use F-IRB/A-IRB with explicit permission
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
+                # SA only
+                ExposureClass.EQUITY: {ApproachType.SA},
+                ExposureClass.COVERED_BOND: {ApproachType.SA},
+            }
+        )
+
 
 @dataclass(frozen=True)
 class CalculationConfig:
@@ -578,9 +636,12 @@ class CalculationConfig:
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
     def __post_init__(self) -> None:
-        """Derive internal irb_permissions from permission_mode."""
+        """Derive internal irb_permissions from permission_mode and framework."""
         if self.permission_mode == PermissionMode.IRB:
-            object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb())
+            if self.framework == RegulatoryFramework.BASEL_3_1:
+                object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb_b31())
+            else:
+                object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb())
         else:
             object.__setattr__(self, "irb_permissions", IRBPermissions.sa_only())
 

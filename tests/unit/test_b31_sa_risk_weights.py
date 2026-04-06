@@ -52,6 +52,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
     B31_CORPORATE_RISK_WEIGHTS,
     B31_CORPORATE_SME_RW,
+    B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
     B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO,
     B31_RESIDENTIAL_GENERAL_SECURED_RW,
     B31_RESIDENTIAL_INCOME_LTV_BANDS,
@@ -1341,6 +1342,16 @@ class TestTableDataIntegrity:
         assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["B"] == Decimal("0.50")
         assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"] == Decimal("1.50")
 
+    def test_ecra_short_term_risk_weight_values(self) -> None:
+        """ECRA short-term (≤3m, Table 4): CQS 1-5 = 20%, CQS 6 = 150%."""
+        for cqs_step in range(1, 6):
+            assert B31_ECRA_SHORT_TERM_RISK_WEIGHTS[cqs_step] == Decimal("0.20")
+        assert B31_ECRA_SHORT_TERM_RISK_WEIGHTS[6] == Decimal("1.50")
+
+    def test_ecra_short_term_table_has_6_entries(self) -> None:
+        """ECRA short-term table should have exactly 6 CQS entries."""
+        assert len(B31_ECRA_SHORT_TERM_RISK_WEIGHTS) == 6
+
     def test_investment_grade_rw(self) -> None:
         """Investment-grade corporate constant should be 65%."""
         assert Decimal("0.65") == B31_CORPORATE_INVESTMENT_GRADE_RW
@@ -1892,6 +1903,267 @@ class TestB31SCRAShortTermMaturity:
         )
 
         assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+
+# =============================================================================
+# ECRA SHORT-TERM RATED INSTITUTIONS (PRA PS1/26 Art. 120, Table 4)
+# =============================================================================
+
+
+class TestB31ECRAShortTermInstitution:
+    """Basel 3.1 ECRA short-term risk weights for rated institutions.
+
+    Under Basel 3.1, rated institution exposures with residual maturity ≤ 3
+    months receive preferential weights per Table 4: CQS 1-5 = 20%, CQS 6 =
+    150%. Trade finance exposures qualify up to 6 months (Art. 121(5)).
+
+    Why this matters:
+        Without the short-term ECRA table, a CQS 3 institution exposure at 2
+        months maturity incorrectly receives 50% RW (the long-term ECRA weight)
+        instead of 20%. For CQS 4, the overstatement is 5x (100% vs 20%). This
+        systematically overstates capital on short-term interbank lending, which
+        is a large volume for most banks.
+    """
+
+    @pytest.mark.parametrize(
+        ("cqs", "expected_rw"),
+        [
+            (1, 0.20),
+            (2, 0.20),
+            (3, 0.20),
+            (4, 0.20),
+            (5, 0.20),
+            (6, 1.50),
+        ],
+        ids=["CQS1", "CQS2", "CQS3", "CQS4", "CQS5", "CQS6"],
+    )
+    def test_short_term_ecra_risk_weight(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        cqs: int,
+        expected_rw: float,
+    ) -> None:
+        """ECRA Table 4: CQS 1-5 all get 20%, CQS 6 gets 150% at ≤3m."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=cqs,
+            residual_maturity_years=0.20,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(expected_rw)
+
+    def test_short_term_ecra_rwa(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """End-to-end RWA for short-term CQS 3: 10M × 20% = 2M."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+        assert float(result["rwa"]) == pytest.approx(2_000_000.0)
+
+    def test_boundary_exactly_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Exactly 3 months (0.25y) qualifies as short-term → 20%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.25,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_boundary_just_over_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Just over 3 months (0.26y) uses long-term ECRA CQS table → 50%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.26,
+            config=b31_config,
+        )
+
+        # CQS 3 long-term = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_null_maturity_defaults_to_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null maturity defaults to 1.0y (long-term) → standard CQS weight."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=None,
+            config=b31_config,
+        )
+
+        # CQS 3 long-term = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_cqs2_long_term_unchanged(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """CQS 2 long-term still uses standard ECRA weight (30% UK deviation)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=2,
+            residual_maturity_years=1.0,
+            config=b31_config,
+        )
+
+        # CQS 2 UK deviation long-term = 30%
+        assert float(result["risk_weight"]) == pytest.approx(0.30)
+
+    def test_cqs4_short_vs_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """CQS 4 short-term = 20% vs long-term = 100% — largest reduction."""
+        short = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=4,
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+        long = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=4,
+            residual_maturity_years=1.0,
+            config=b31_config,
+        )
+
+        assert float(short["risk_weight"]) == pytest.approx(0.20)
+        assert float(long["risk_weight"]) == pytest.approx(1.00)
+
+    def test_trade_finance_6m_qualifies(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Trade finance at 5 months (0.42y) qualifies for short-term via Art. 121(5)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.42,
+            is_short_term_trade_lc=True,
+            config=b31_config,
+        )
+
+        # Trade finance ≤6m → short-term ECRA Table 4 → 20%
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_trade_finance_over_6m_uses_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Trade finance at 7 months (0.58y) does not qualify for short-term."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.58,
+            is_short_term_trade_lc=True,
+            config=b31_config,
+        )
+
+        # Over 6m → long-term CQS 3 = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_non_trade_finance_at_4m_uses_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-trade-finance at 4 months does not qualify (>3m threshold)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.33,
+            is_short_term_trade_lc=False,
+            config=b31_config,
+        )
+
+        # 4 months > 3m threshold, not trade finance → long-term CQS 3 = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_ecra_short_term_not_applied_under_crr(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no ECRA short-term Table 4 — rated institution uses standard CQS."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            config=crr_config,
+        )
+
+        # CRR CQS 3 institution = 50% regardless of maturity
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_unrated_short_term_still_uses_scra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Unrated institution at ≤3m uses SCRA short-term, not ECRA."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="B",
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        # SCRA short-term Grade B = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
 
 
 # =============================================================================

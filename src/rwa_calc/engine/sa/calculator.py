@@ -57,6 +57,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_DEFAULTED_PROVISION_THRESHOLD,
     B31_DEFAULTED_RW_HIGH_PROVISION,
     B31_DEFAULTED_RW_LOW_PROVISION,
+    B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SCRA_RISK_WEIGHTS,
     B31_SCRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
@@ -386,6 +387,8 @@ class SACalculator:
             missing_cols.append(
                 pl.lit(None).cast(pl.Float64).alias("residual_maturity_years")
             )
+        if "is_short_term_trade_lc" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_short_term_trade_lc"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -457,6 +460,9 @@ class SACalculator:
                 pl.col("risk_weight").fill_null(1.0).alias("_cqs_risk_weight")
             )
 
+            # Basel 3.1 ECRA short-term risk weights for rated institutions (Table 4)
+            ecra_st_low_rw = float(B31_ECRA_SHORT_TERM_RISK_WEIGHTS[1])  # CQS 1-5: 20%
+            ecra_st_high_rw = float(B31_ECRA_SHORT_TERM_RISK_WEIGHTS[6])  # CQS 6: 150%
             # Basel 3.1 SCRA risk weights for unrated institutions (CRE20.16-21)
             # Long-term (>3m)
             scra_a_rw = float(B31_SCRA_RISK_WEIGHTS["A"])
@@ -595,6 +601,29 @@ class SACalculator:
                     )
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
+                    # 4b-ecra. ECRA short-term rated institutions (Table 4, Art. 120)
+                    # Rated institutions with residual maturity ≤ 3m get preferential
+                    # weights: CQS 1-5 = 20%, CQS 6 = 150%. Also applies to trade
+                    # finance exposures with residual maturity ≤ 6m (Art. 121(5)).
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_not_null() & (pl.col("cqs") > 0))
+                        & (
+                            (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                            | (
+                                pl.col("is_short_term_trade_lc").fill_null(False)
+                                & (
+                                    pl.col("residual_maturity_years").fill_null(1.0)
+                                    <= 0.5
+                                )
+                            )
+                        )
+                    )
+                    .then(
+                        pl.when(pl.col("cqs") <= 5)
+                        .then(pl.lit(ecra_st_low_rw))
+                        .otherwise(pl.lit(ecra_st_high_rw))
+                    )
                     # 4c. SCRA-based unrated institutions (CRE20.16-21)
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
                     # Null SCRA grade defaults to Grade C (150%) — conservative treatment

@@ -154,6 +154,26 @@ B31_SCRA_SHORT_TERM_RISK_WEIGHTS: dict[str, Decimal] = {
 }
 
 # =============================================================================
+# ECRA SHORT-TERM INSTITUTION RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 120)
+# For RATED institutions with residual maturity ≤ 3 months (Table 4).
+# Long-term ECAI applied to short-term exposure: CQS 1-5 all receive 20%.
+# Trade finance ≤ 6 months also qualifies for short-term treatment (Art. 121(5)).
+#
+# NOTE: Table 4A (short-term ECAI assessment) uses different weights:
+# CQS 1=20%, CQS 2=50%, CQS 3=100%, other=150%.
+# Table 4A requires a `has_short_term_ecai` flag not yet in schema.
+# =============================================================================
+
+B31_ECRA_SHORT_TERM_RISK_WEIGHTS: dict[int, Decimal] = {
+    1: Decimal("0.20"),  # CQS 1 short-term (Table 4)
+    2: Decimal("0.20"),  # CQS 2 short-term (Table 4)
+    3: Decimal("0.20"),  # CQS 3 short-term (Table 4)
+    4: Decimal("0.20"),  # CQS 4 short-term (Table 4)
+    5: Decimal("0.20"),  # CQS 5 short-term (Table 4)
+    6: Decimal("1.50"),  # CQS 6 short-term (Table 4) — unchanged
+}
+
+# =============================================================================
 # RETAIL TRANSACTOR RISK WEIGHT — BASEL 3.1 (PRA PS1/26 Art. 123)
 # Qualifying revolving retail exposures where obligor repays in full each period
 # =============================================================================

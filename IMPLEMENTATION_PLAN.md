@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.15 rated SL fallback to corporate CQS)
-**Current version:** 0.1.90 | **Test suite:** ~2,767 collected (~2,251 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.26 ECRA short-term institution tables)
+**Current version:** 0.1.91 | **Test suite:** ~2,786 collected (~2,268 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.26, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -379,17 +379,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** PRA PS1/26 Art. 123(3)(c), Art. 123A
 
 ### P1.26 Short-term institution ECRA/SCRA tables (Art. 120/121)
-- **Status:** [ ] Not implemented
-- **Impact:** Institutions with residual maturity <=3 months get reduced risk weights under both ECRA and SCRA:
-  - ECRA rated <=3m (Table 4): CQS 1-5 all = 20%, CQS 6 = 150%
-  - Short-term ECAI (Table 4A): CQS 1=20%, 2=50%, 3=100%, other=150%
-  - SCRA <=3m: Grade A=20%, Grade B=50% (already noted in P1.12 for SCRA)
-  - Trade finance <=6m: same as <=3m treatment
-  No residual maturity check exists anywhere in the SA calculator for institution exposures.
-- **File:Line:** `engine/sa/calculator.py` (no maturity check for institutions)
-- **Spec ref:** PRA PS1/26 Art. 120 Tables 4/4A, Art. 121(5)
-- **Fix:** Add `residual_maturity` column check in institution risk weight logic. Apply short-term tables when <=3m (or <=6m for trade finance).
-- **Tests needed:** Unit tests for short-term vs long-term institution exposures.
+- **Status:** [x] Complete (ECRA Table 4 + SCRA from P1.12; Table 4A deferred)
+- **Fixed:** 2026-04-06
+- **Impact:** Basel 3.1 ECRA short-term risk weights now implemented for rated institutions:
+  - **ECRA Table 4** (long-term ECAI, short-term exposure): CQS 1-5 = 20%, CQS 6 = 150%
+  - **Trade finance ≤6m** (Art. 121(5)): Same short-term treatment via `is_short_term_trade_lc` flag
+  - **SCRA ≤3m** (unrated): Already implemented in P1.12 (Grade A=20%, B=50%, C=150%)
+  - CRR path unchanged (no ECRA short-term under CRR)
+  - Null maturity defaults to 1.0y (long-term, conservative)
+  - `is_short_term_trade_lc` default added to `_ensure_columns` for backward compatibility
+- **File:Line:** `data/tables/b31_risk_weights.py` (B31_ECRA_SHORT_TERM_RISK_WEIGHTS dict), `engine/sa/calculator.py:604-626` (ECRA short-term when-chain branch + `_ensure_columns`)
+- **Spec ref:** PRA PS1/26 Art. 120 Table 4, Art. 121(5)
+- **Tests:** 19 new tests: 6 parametrized CQS-to-RW (CQS 1-6), 1 RWA correctness, 2 boundary tests (exactly 3m, just over 3m), 1 null maturity default, 1 CQS 2 long-term unchanged, 1 CQS 4 short vs long comparison, 1 trade finance ≤6m qualifies, 1 trade finance >6m uses long-term, 1 non-trade-finance at 4m uses long-term, 1 CRR no short-term ECRA, 1 unrated still uses SCRA, 2 data table integrity tests (values + count). All 2786 tests pass. Test count: 2786 (was 2767).
+- **Limitation:** Table 4A (short-term ECAI assessment: CQS 1=20%, 2=50%, 3=100%, other=150%) not yet implemented — requires a `has_short_term_ecai` flag in the schema to distinguish long-term vs short-term ECAI assessments. CRR short-term institution treatment (Art. 120(2), domestic currency only) not implemented — requires separate treatment with sovereign floor.
 
 ### P1.27 Sovereign RW floor for FX unrated institution exposures (Art. 121(6))
 - **Status:** [ ] Not implemented
@@ -630,12 +632,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for high-risk item classification and 150% RW application.
 
 ### P1.63 A-IRB revolving 100% SA carve-out from own-estimate permission (Art. 166D(1)(a))
-- **Status:** [ ] Not started
-- **Impact:** PRA PS1/26 Art. 166D(1)(a) permits A-IRB own CCF estimates only for revolving commitments "which would not be subject to a 100% conversion factor" under SA Table A1. This means revolving facilities that fall under SA Table A1 Row 2 (100% CCF — factoring, repos, forward deposits) cannot use own-estimate CCFs even though they are revolving. No code checks for this 100% SA carve-out when applying A-IRB CCF permission. Without this, a revolving documentary LC or revolving repo-like facility at 100% SA could be incorrectly modelled under A-IRB with a lower own-estimate CCF, **understating capital**.
-- **File:Line:** `engine/ccf.py` (A-IRB CCF path)
-- **Spec ref:** PRA PS1/26 Art. 166D(1)(a)
-- **Fix:** In A-IRB CCF path, when `is_revolving=True`, check if the SA CCF for the item type is 100%. If so, do not permit own-estimate CCF — use SA 100% instead.
-- **Tests needed:** Unit tests for revolving items with 100% SA CCF carve-out.
+- **Status:** [x] Complete — already implemented as part of P1.3
+- **Verified:** 2026-04-06
+- **Description:** P1.3 implemented a three-way gate in `_compute_ccf` that explicitly handles this case: "Revolving with SA CCF = 100%: uses SA CCF (Table A1 Row 2 carve-out — factoring, repos, forward deposits)". When `is_revolving=True` and the SA CCF for the item type is 100%, the code uses SA 100% instead of own-estimate CCF. This is the exact requirement of Art. 166D(1)(a).
+- **File:Line:** `engine/ccf.py:257-277` (three-way gate in A-IRB CCF path)
 
 ### P1.64 A-IRB EAD floor tests incomplete — 2 of 3 tests missing (Art. 166D(5))
 - **Status:** [ ] Not started

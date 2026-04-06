@@ -10,6 +10,8 @@ Reference:
     CRE32.9-12: Basel 3.1 overcollateralisation and minimum thresholds
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
 
 import polars as pl

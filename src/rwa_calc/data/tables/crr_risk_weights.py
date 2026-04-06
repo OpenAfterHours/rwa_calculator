@@ -8,6 +8,8 @@ References:
     - CRR Art. 114: Central govt/central bank risk weights
     - CRR Art. 115: Regional govt/local authority risk weights
     - CRR Art. 116: Public sector entity risk weights
+    - CRR Art. 117: Multilateral development bank risk weights
+    - CRR Art. 118: International organisation risk weights
     - CRR Art. 120-121: Institution risk weights
     - CRR Art. 122: Corporate risk weights
     - CRR Art. 123: Retail risk weights
@@ -218,6 +220,60 @@ def _create_rgla_df() -> pl.DataFrame:
             pl.col("risk_weight").cast(pl.Float64),
         ]
     )
+
+
+# =============================================================================
+# MULTILATERAL DEVELOPMENT BANK RISK WEIGHTS (CRR Art. 117 / PRA PS1/26 Art. 117)
+# =============================================================================
+
+# Art. 117(1), Table 2B: Rated MDB risk weights (own CQS).
+# Differs from institution table: CQS 2 = 30% (same as UK inst), unrated = 50% (not 40%).
+MDB_RISK_WEIGHTS_TABLE_2B: dict[CQS, Decimal] = {
+    CQS.CQS1: Decimal("0.20"),
+    CQS.CQS2: Decimal("0.30"),
+    CQS.CQS3: Decimal("0.50"),
+    CQS.CQS4: Decimal("1.00"),
+    CQS.CQS5: Decimal("1.00"),
+    CQS.CQS6: Decimal("1.50"),
+    CQS.UNRATED: Decimal("0.50"),
+}
+
+# Art. 117(2): Named MDBs receiving 0% risk weight unconditionally.
+# These 16 MDBs get 0% regardless of CQS rating.
+MDB_NAMED_ZERO_RW = Decimal("0.00")
+
+# Default for unrated non-named MDBs (Art. 117(1), Table 2B unrated row)
+MDB_UNRATED_RW = Decimal("0.50")
+
+
+def _create_mdb_df() -> pl.DataFrame:
+    """Create MDB risk weight lookup DataFrame (Art. 117(1), Table 2B).
+
+    Named MDBs (Art. 117(2)) get 0% regardless of CQS — handled in the SA calculator.
+    Rated non-named MDBs join against this table via their own CQS.
+    Unrated non-named MDBs get 50% (Table 2B unrated row).
+    """
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6, None],
+            "risk_weight": [0.20, 0.30, 0.50, 1.00, 1.00, 1.50, 0.50],
+            "exposure_class": ["MDB"] * 7,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
+
+
+# =============================================================================
+# INTERNATIONAL ORGANISATION RISK WEIGHTS (CRR Art. 118 / PRA PS1/26 Art. 118)
+# =============================================================================
+
+# Art. 118: Named international organisations receiving 0% risk weight.
+# EU, IMF, BIS, EFSF, ESM — no rated table exists (all IOs in Art. 118 are 0%).
+IO_ZERO_RW = Decimal("0.00")
 
 
 # =============================================================================
@@ -443,6 +499,7 @@ def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.Da
         "central_govt_central_bank": _create_cgcb_df(),
         "rgla": _create_rgla_df(),
         "pse": _create_pse_df(),
+        "mdb": _create_mdb_df(),
         "institution": _create_institution_df(use_uk_deviation),
         "corporate": _create_corporate_df(),
         "retail": _create_retail_df(),
@@ -470,6 +527,7 @@ def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame
             _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_rgla_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_pse_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_mdb_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_institution_df(use_uk_deviation).select(
                 ["exposure_class", "cqs", "risk_weight"]
             ),
@@ -527,6 +585,10 @@ def lookup_risk_weight(
             # Returns 100% as conservative default (caller should use sovereign CQS)
             return RGLA_UNRATED_DEFAULT_RW
         return RGLA_RISK_WEIGHTS_OWN_RATING.get(cqs_enum, RGLA_UNRATED_DEFAULT_RW)
+
+    if exposure_upper == "MDB":
+        cqs_enum = _get_cqs_enum(cqs)
+        return MDB_RISK_WEIGHTS_TABLE_2B.get(cqs_enum, MDB_RISK_WEIGHTS_TABLE_2B[CQS.UNRATED])
 
     if exposure_upper == "INSTITUTION":
         table = (

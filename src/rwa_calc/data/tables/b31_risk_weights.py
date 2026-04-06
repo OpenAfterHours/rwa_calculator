@@ -214,6 +214,7 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
         _create_cgcb_df,
         _create_covered_bond_df,
         _create_institution_df,
+        _create_mdb_df,
         _create_pse_df,
         _create_rgla_df,
     )
@@ -223,6 +224,7 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
             _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_rgla_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_pse_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_mdb_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_institution_df(use_uk_deviation).select(
                 ["exposure_class", "cqs", "risk_weight"]
             ),

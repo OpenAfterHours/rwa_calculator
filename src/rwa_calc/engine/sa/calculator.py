@@ -70,6 +70,9 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
+    IO_ZERO_RW,
+    MDB_NAMED_ZERO_RW,
+    MDB_UNRATED_RW,
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
@@ -401,6 +404,8 @@ class SACalculator:
                 .then(pl.lit("RGLA"))
                 .when(_upper == "PSE")
                 .then(pl.lit("PSE"))
+                .when(_upper == "MDB")
+                .then(pl.lit("MDB"))
                 .when(_upper.str.contains("INSTITUTION", literal=True))
                 .then(pl.lit("INSTITUTION"))
                 .when(_upper.str.contains("CORPORATE", literal=True))
@@ -553,6 +558,27 @@ class SACalculator:
                         .otherwise(pl.lit(float(RGLA_UNRATED_DEFAULT_RW)))
                     )
                     # Rated RGLA: falls through to CQS join (Table 1B) via default
+                    # 4f-mdb. Named MDB → 0% (Art. 117(2))
+                    # 16 named MDBs get 0% unconditionally, identified by mdb_named entity_type.
+                    .when(
+                        (_uc == "MDB")
+                        & (pl.col("cp_entity_type").fill_null("") == "mdb_named")
+                    )
+                    .then(pl.lit(float(MDB_NAMED_ZERO_RW)))
+                    # 4g-io. International Organisation → 0% (Art. 118)
+                    # EU, IMF, BIS, EFSF, ESM — always 0%.
+                    .when(
+                        (_uc == "MDB")
+                        & (pl.col("cp_entity_type").fill_null("") == "international_org")
+                    )
+                    .then(pl.lit(float(IO_ZERO_RW)))
+                    # 4h-mdb. Unrated non-named MDB → 50% (Art. 117(1), Table 2B)
+                    .when(
+                        (_uc == "MDB")
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(pl.lit(float(MDB_UNRATED_RW)))
+                    # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 4c. SCRA-based unrated institutions (CRE20.16-21)
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
                     # Null SCRA grade defaults to Grade C (150%) — conservative treatment
@@ -777,6 +803,25 @@ class SACalculator:
                         .otherwise(pl.lit(float(RGLA_UNRATED_DEFAULT_RW)))
                     )
                     # Rated RGLA: falls through to CQS join (Table 1B) via default
+                    # 6f-mdb. Named MDB → 0% (Art. 117(2))
+                    .when(
+                        (_uc == "MDB")
+                        & (pl.col("cp_entity_type").fill_null("") == "mdb_named")
+                    )
+                    .then(pl.lit(float(MDB_NAMED_ZERO_RW)))
+                    # 6g-io. International Organisation → 0% (Art. 118)
+                    .when(
+                        (_uc == "MDB")
+                        & (pl.col("cp_entity_type").fill_null("") == "international_org")
+                    )
+                    .then(pl.lit(float(IO_ZERO_RW)))
+                    # 6h-mdb. Unrated non-named MDB �� 50% (Art. 117(1), Table 2B)
+                    .when(
+                        (_uc == "MDB")
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(pl.lit(float(MDB_UNRATED_RW)))
+                    # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 7. Unrated covered bonds: derive from issuer institution RW
                     # (CRR Art. 129(5)) — unrated institution = 40% → covered bond = 20%
                     .when(
@@ -894,7 +939,9 @@ class SACalculator:
 
         # Guarantor risk weights by exposure class and CQS
         # CGCB: 0%, 20%, 50%, 100%, 100%, 150% (unrated 100%)
-        # Institution/MDB: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated 40%)
+        # Institution: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated 40%)
+        # MDB named/IO: 0% unconditional
+        # MDB rated (Table 2B): 20%, 30%, 50%, 100%, 100%, 150% (unrated 50%)
         # Corporate: 20%, 50%, 100%, 100%, 150%, 150% (unrated 100%)
         exposures = exposures.with_columns(
             [
@@ -926,8 +973,35 @@ class SACalculator:
                     .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
                     .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
                 )
-                # Institution/MDB guarantors (institution, bank, mdb, etc.)
-                .when(_gec.is_in(["institution", "mdb"]))
+                # Named MDB guarantors (Art. 117(2)): 0% unconditional
+                .when(
+                    (_gec == "mdb")
+                    & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named")
+                )
+                .then(pl.lit(0.0))
+                # International Organisation guarantors (Art. 118): 0% unconditional
+                .when(
+                    (_gec == "mdb")
+                    & (pl.col("guarantor_entity_type").fill_null("") == "international_org")
+                )
+                .then(pl.lit(0.0))
+                # MDB guarantors — Table 2B (Art. 117(1))
+                .when(_gec == "mdb")
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.30))  # Table 2B: CQS 2 = 30%
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    .otherwise(pl.lit(0.50))  # Unrated MDB = 50% (Table 2B)
+                )
+                # Institution guarantors (institution, bank, etc.)
+                .when(_gec == "institution")
                 .then(
                     pl.when(pl.col("guarantor_cqs") == 1)
                     .then(pl.lit(0.20))
@@ -939,7 +1013,7 @@ class SACalculator:
                     .then(pl.lit(1.0))
                     .when(pl.col("guarantor_cqs") == 6)
                     .then(pl.lit(1.50))
-                    .otherwise(pl.lit(0.40))  # Unrated
+                    .otherwise(pl.lit(0.40))  # Unrated institution = 40%
                 )
                 # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
                 .when(_gec == "pse")

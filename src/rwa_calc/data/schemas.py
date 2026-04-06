@@ -416,6 +416,7 @@ VALID_ENTITY_TYPES = {
     "pse_sovereign",
     "pse_institution",
     "mdb",
+    "mdb_named",
     "international_org",
     "institution",
     "bank",

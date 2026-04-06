@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.53 RGLA risk weights implemented)
-**Current version:** 0.1.73 | **Test suite:** ~2,419 collected (1,925 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~14 skipped | P1.53 fixed.
+**Last updated:** 2026-04-06 (P1.54 MDB/IO risk weights implemented)
+**Current version:** 0.1.73 | **Test suite:** ~2,449 collected (1,955 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~14 skipped | P1.54 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.54-P1.55 (MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* P1.55 (Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
 - *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
@@ -100,12 +100,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Non-UK unrated RGLAs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (not yet in schema). UK RGLAs are the primary use case for a PRA-regulated calculator.
 
 ### P1.54 MDB 0% risk weight lookup missing from code (Art. 117-118)
-- **Status:** [ ] Not started
-- **Impact:** Multilateral Development Banks qualifying for 0% RW have no lookup table. The classifier maps MDB to CENTRAL_GOVT as a workaround, which means MDBs get sovereign treatment rather than their own Art. 117 table (which includes CQS 2 = 30%, not 50% like institutions; unrated = 50%; and a named 0% list of 16 MDBs). International Organisations (Art. 118) similarly missing -- should be 0% for EU, IMF, BIS, EFSF, ESM.
-- **File:Line:** `data/tables/crr_risk_weights.py` (no MDB/IO tables); `engine/classifier.py` (MDB->CENTRAL_GOVT workaround)
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** MDB and International Organisation risk weights now fully implemented:
+  - Named MDBs (Art. 117(2)): 0% unconditional via `mdb_named` entity_type (16 named MDBs: World Bank, EIB, EBRD, etc.)
+  - Rated non-named MDBs (Art. 117(1)): Table 2B CQS lookup (CQS 2=30%, unrated=50%)
+  - International Organisations (Art. 118): 0% unconditional (EU, IMF, BIS, EFSF, ESM)
+  - MDB CQS table added to both CRR and B31 combined risk weight tables
+  - MDB/IO branches added to SA calculator when-chains (both frameworks)
+  - Guarantor substitution: MDB separated from institution (MDB unrated=50%, institution unrated=40%)
+  - Named MDB/IO guarantors: 0% unconditional
+- **File:Line:** `data/tables/crr_risk_weights.py` (MDB_RISK_WEIGHTS_TABLE_2B, _create_mdb_df), `data/tables/b31_risk_weights.py` (combined table), `engine/sa/calculator.py` (MDB/IO branches + guarantor substitution), `data/schemas.py` (mdb_named entity_type), `engine/classifier.py` (mdb_named mapping)
 - **Spec ref:** CRR Art. 117-118, PRA PS1/26 Art. 117-118
-- **Fix:** Add MDB risk weight table with 0% list and rated CQS table. Add International Organisation 0% list. Remove MDB->CENTRAL_GOVT classifier workaround. Add INTERNATIONAL_ORGANISATION to ExposureClass enum.
-- **Tests needed:** Unit tests for named-list MDB 0%, rated MDB CQS table, international org 0%.
+- **Tests:** 30 new unit tests: 10 data table tests, 11 CRR calculator tests, 9 B31 calculator tests. All pass. Test count: 1955 unit (was 1925).
+- **Limitation:** Named MDB identification relies on `mdb_named` entity_type. The 16-MDB list is not hardcoded in the calculator — institutions must classify their MDB counterparties correctly in input data.
 
 ### P1.56 CQS 5-6 bond ineligibility + CQS 4 government bond eligibility (Art. 197)
 - **Status:** [ ] Not started

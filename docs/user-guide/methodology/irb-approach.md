@@ -55,19 +55,7 @@ The IRB formulas require statistical functions (normal CDF and inverse CDF). The
 
 ### Probability of Default (PD)
 
-PD is the likelihood of default within one year.
-
-**Floors:**
-
-| Exposure Class | CRR | Basel 3.1 |
-|----------------|-----|-----------|
-| Corporate | 0.03% | 0.05% |
-| Large Corporate | 0.03% | 0.05% |
-| Bank/Institution | 0.03% | 0.05% |
-| Retail Mortgage | 0.03% | 0.05% |
-| Retail QRRE (Transactor) | 0.03% | 0.03% |
-| Retail QRRE (Revolver) | 0.03% | 0.10% |
-| Retail Other | 0.03% | 0.05% |
+PD is the likelihood of default within one year. CRR uses a uniform 0.03% floor; Basel 3.1 introduces differentiated floors (0.03%–0.10%) by exposure class.
 
 ```python
 PD_effective = max(PD_estimated, PD_floor)
@@ -75,53 +63,15 @@ PD_effective = max(PD_estimated, PD_floor)
 
 ### Loss Given Default (LGD)
 
-LGD is the percentage of exposure lost after recoveries.
-
-**F-IRB Supervisory LGD:**
-
-| Exposure Type | CRR | Basel 3.1 |
-|---------------|-----|-----------|
-| Senior Unsecured | 45% | 40% |
-| Subordinated | 75% | 75% |
-| Secured by Financial Collateral | 0% | 0% |
-| Secured by Receivables | 35% | 20% |
-| Secured by CRE/RRE | 35% | 20% |
-| Secured by Other Collateral | 40% | 25% |
-
-**A-IRB LGD Floors (Basel 3.1 only, PRA PS1/26):**
-
-| Collateral Type | LGD Floor |
-|-----------------|-----------|
-| Unsecured Senior | 25% |
-| Unsecured Subordinated | 50% |
-| Financial Collateral | 0% |
-| Receivables | 10% |
-| Commercial Real Estate | 10% |
-| Residential Real Estate | 5% |
-| Other Physical | 15% |
+LGD is the percentage of exposure lost after recoveries. F-IRB uses supervisory values (0%–75% depending on collateral); A-IRB uses bank estimates subject to floors under Basel 3.1.
 
 ### Exposure at Default (EAD)
 
-**F-IRB:**
-- On-Balance Sheet: Gross carrying amount
-- Off-Balance Sheet: Regulatory CCFs apply based on `risk_type`:
-
-| Risk Type | SA CCF | F-IRB CCF | Notes |
-|-----------|--------|-----------|-------|
-| FR (full_risk) | 100% | 100% | Guarantees, credit substitutes |
-| MR (medium_risk) | 50% | 75% | Committed undrawn, NIFs, RUFs |
-| MLR (medium_low_risk) | 20% | 75% | Documentary credits, trade finance |
-| LR (low_risk) | 0% | 0% | Unconditionally cancellable |
-
-**CRR Art. 166(8):** Under F-IRB, MR and MLR categories both use 75% CCF.
+F-IRB uses regulatory CCFs based on `risk_type` (FR=100%, MR/MLR=75%, LR=0%). A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to CCF floors under Basel 3.1.
 
 **CRR Art. 166(9) Exception:** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. Flag these exposures with `is_short_term_trade_lc = True`.
 
-**A-IRB:**
-- Bank estimates EAD using internal models
-- Provide modelled CCF in `ccf_modelled` column (0.0-1.5, can exceed 100% for Retail IRB)
-- When `ccf_modelled` is provided, it takes precedence over risk_type lookup
-- Subject to CCF floors under Basel 3.1
+> **Details:** See [Key Differences](../../framework-comparison/key-differences.md#pd-floors) for the complete PD floor, LGD floor, supervisory LGD, and CCF comparison tables across CRR and Basel 3.1.
 
 ### Maturity (M)
 

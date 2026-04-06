@@ -73,43 +73,9 @@ Applies haircuts to both exposure and collateral. See [`crm/haircuts.py`](https:
 
 ### Supervisory Haircuts
 
-| Collateral Type | Residual Maturity | Haircut (H_c) |
-|-----------------|-------------------|---------------|
-| **Cash** | Any | 0% |
-| **Government/PSE CQS1** | ≤1 year | 0.5% |
-| | 1-5 years | 2% |
-| | >5 years | 4% |
-| **Government/PSE CQS2-3** | ≤1 year | 1% |
-| | 1-5 years | 3% |
-| | >5 years | 6% |
-| **Corporate CQS1** | ≤1 year | 1% |
-| | 1-5 years | 4% |
-| | >5 years | 8% |
-| **Corporate CQS2-3** | ≤1 year | 2% |
-| | 1-5 years | 6% |
-| | >5 years | 12% |
-| **Main Index Equity** | Any | 15% |
-| **Other Listed Equity** | Any | 25% |
-| **Gold** | Any | 15% |
+Haircuts depend on collateral type, credit quality, and residual maturity. Cash has 0% haircut; government bonds range from 0.5% to 4% (CQS 1); equities are 15%-25%. A currency mismatch adds 8%.
 
-**Currency Mismatch (H_fx):**
-```python
-# Add 8% if collateral currency ≠ exposure currency
-if collateral_currency != exposure_currency:
-    H_fx = 0.08
-else:
-    H_fx = 0.00
-```
-
-### Exposure Haircut (H_e)
-
-For repos and similar transactions:
-
-| Exposure Type | Haircut (H_e) |
-|---------------|---------------|
-| Government bonds CQS1 | Same as H_c table |
-| Corporate bonds | Same as H_c table |
-| Equity | 0% (exposure side) |
+> **Details:** See [CRM Specification](../../specifications/crr/credit-risk-mitigation.md) for the complete haircut tables including Basel 3.1 changes (expanded maturity bands, increased equity haircuts).
 
 ### Collateral Calculation Example
 
@@ -147,15 +113,9 @@ Gross_RWA = 10,000,000 × 100% = £10,000,000
 
 ### Physical Collateral
 
-Physical collateral (real estate, equipment) provides CRM for IRB:
+Physical collateral (real estate, equipment) provides CRM for IRB by reducing the supervisory LGD. Basel 3.1 significantly reduces F-IRB supervisory LGD values (e.g. CRE/RRE from 35% to 20%).
 
-| Collateral Type | CRR F-IRB LGD | Basel 3.1 F-IRB LGD |
-|-----------------|---------------|---------------------|
-| Residential Real Estate | 35% | 20% |
-| Commercial Real Estate | 35% | 20% |
-| Receivables | 35% | 20% |
-| Other Physical | 40% | 25% |
-| Unsecured | 45% | 40% |
+> **Details:** See [Key Differences — F-IRB Supervisory LGD](../../framework-comparison/key-differences.md#f-irb-supervisory-lgd) for the complete CRR vs Basel 3.1 comparison.
 
 **Eligibility Requirements:**
 - Legal certainty of enforcement

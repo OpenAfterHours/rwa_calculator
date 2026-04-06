@@ -33,101 +33,24 @@ def is_sme(counterparty):
 
 ## Risk Weights (SA)
 
-### Rated Corporates
+Corporate risk weights range from 20% (CQS 1) to 150% (CQS 6), with 100% for unrated. Basel 3.1 reduces CQS 3 from 100% to 75% and CQS 5 from 150% to 100%. Basel 3.1 also introduces new sub-categories: investment grade (65%) and SME corporate (85%).
 
-| CQS | S&P/Fitch | Moody's | CRR | Basel 3.1 |
-|-----|-----------|---------|-----|-----------|
-| CQS 1 | AAA to AA- | Aaa to Aa3 | **20%** | 20% |
-| CQS 2 | A+ to A- | A1 to A3 | **50%** | 50% |
-| CQS 3 | BBB+ to BBB- | Baa1 to Baa3 | **100%** | 75% |
-| CQS 4 | BB+ to BB- | Ba1 to Ba3 | **100%** | 100% |
-| CQS 5 | B+ to B- | B1 to B3 | **150%** | **100%** |
-| CQS 6 | CCC+ and below | Caa1 and below | **150%** | 150% |
-
-### Unrated Corporates
-
-| Framework | Risk Weight |
-|-----------|-------------|
-| CRR | 100% |
-| Basel 3.1 | 100% |
-
-!!! note "Investment Grade"
-    Basel 3.1 introduces an "investment grade" corporate category with potentially lower risk weights for qualifying unrated corporates meeting specific criteria.
+> **Details:** See [Key Differences — Corporate](../../framework-comparison/key-differences.md#corporate) for the complete CRR vs Basel 3.1 comparison and new sub-categories.
 
 ## IRB Treatment
 
-### F-IRB Parameters
-
-| Parameter | Source | Value |
-|-----------|--------|-------|
-| PD | Bank estimate | Floor 0.03% (CRR) / 0.05% (Basel 3.1) |
-| LGD | Supervisory | 45% (senior), 75% (subordinated) |
-| M | Effective maturity | 1-5 years |
-
-### A-IRB Parameters
-
-| Parameter | Source | Basel 3.1 Restrictions |
-|-----------|--------|------------------------|
-| PD | Bank estimate | Floor 0.05% |
-| LGD | Bank estimate | Floor 25% (unsecured) |
-| EAD | Bank estimate | CCF floors apply |
+F-IRB uses supervisory LGD (45% senior, 75% subordinated) with PD floors of 0.03% (CRR) / 0.05% (Basel 3.1). SME corporates (turnover €5m–€50m) benefit from a correlation reduction of up to 4 percentage points.
 
 !!! warning "Large Corporate Restriction"
     Under Basel 3.1, corporates with consolidated revenues > EUR 500m (GBP 440m) are restricted to **F-IRB only**. A-IRB is no longer permitted for these exposures.
 
-### Correlation
-
-**Standard Corporate:**
-```python
-R = 0.12 × (1 - exp(-50 × PD)) / (1 - exp(-50)) +
-    0.24 × [1 - (1 - exp(-50 × PD)) / (1 - exp(-50))]
-```
-
-**SME Correlation Adjustment:**
-```python
-# Size adjustment for corporates with turnover £5m-£50m
-S = min(50, max(5, turnover_millions))
-adjustment = 0.04 × (1 - (S - 5) / 45)
-R_sme = R - adjustment
-```
-
-| Turnover (£m) | Correlation Reduction |
-|---------------|----------------------|
-| 5 | 4.0 pp |
-| 15 | 3.1 pp |
-| 25 | 2.2 pp |
-| 35 | 1.3 pp |
-| 45 | 0.4 pp |
-| ≥50 | 0.0 pp |
+> **Details:** See [IRB Approach](../methodology/irb-approach.md) for the full formula, correlation, maturity adjustment, and SME size adjustment details.
 
 ## SME Supporting Factor (CRR Only)
 
-### Eligibility
+Eligible SME corporates (turnover ≤ EUR 50m, not in default) receive a tiered RWA reduction: 0.7619 for the first ~GBP 2.2m of exposure, 0.85 for the remainder. This factor is **removed** under Basel 3.1.
 
-- Counterparty is SME (turnover ≤ EUR 50m)
-- Exposure class: Corporate, Corporate SME, or secured by RE
-- Not in default
-
-### Tiered Calculation
-
-```python
-threshold = EUR_2_500_000  # GBP 2,200,000
-
-if total_exposure <= threshold:
-    factor = 0.7619  # 23.81% reduction
-else:
-    factor = (threshold × 0.7619 + (total_exposure - threshold) × 0.85) / total_exposure
-```
-
-### Factor Examples
-
-| Total Exposure | Factor | RWA Reduction |
-|----------------|--------|---------------|
-| GBP 1m | 0.7619 | 23.81% |
-| GBP 2.2m | 0.7619 | 23.81% |
-| GBP 5m | 0.811 | 18.9% |
-| GBP 10m | 0.831 | 16.9% |
-| GBP 50m | 0.843 | 15.7% |
+> **Details:** See [Supporting Factors](../methodology/supporting-factors.md) for the full eligibility criteria, calculation formula, and worked examples.
 
 ## Calculation Examples
 

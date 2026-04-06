@@ -90,6 +90,30 @@ Use collapsible sections to show lengthy actual code without cluttering the page
     --8<-- "src/rwa_calc/engine/hierarchy.py:60:100"
     ```
 
+### 6. Cross-Reference Convention
+
+When a concept is explained in detail elsewhere, use a `> **Details:**` callout to link to the canonical source:
+
+```markdown
+> **Details:** See [Pipeline Architecture](../architecture/pipeline.md) for the full stage-by-stage walkthrough.
+```
+
+This pattern avoids duplicating content across multiple pages. Each concept should have **one canonical location** with full detail; other pages provide a brief (2-3 sentence) audience-appropriate summary and link to the canonical source.
+
+**Canonical locations for key concepts:**
+
+| Concept | Canonical Location |
+|---|---|
+| Pipeline architecture | `docs/architecture/pipeline.md` |
+| Design principles | `docs/architecture/design-principles.md` |
+| SA risk weights | `docs/specifications/crr/sa-risk-weights.md` |
+| IRB formulas | `docs/specifications/crr/firb-calculation.md` + `airb-calculation.md` |
+| CRM mechanics | `docs/specifications/crr/credit-risk-mitigation.md` |
+| Exposure classification | `docs/features/classification.md` |
+| Framework comparison | `docs/framework-comparison/key-differences.md` |
+| Coding conventions | `docs/development/code-style.md` |
+| Testing standards | `docs/development/testing.md` |
+
 ## Best Practices
 
 ### When Writing New Documentation

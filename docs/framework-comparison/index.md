@@ -52,23 +52,9 @@ maintain credibility and competitiveness.
 
 ## At a Glance
 
-| Area | CRR (until 31 Dec 2026) | Basel 3.1 (from 1 Jan 2027) |
-|------|-------------------------|----------------------------|
-| **1.06 Scaling Factor** | Applied to all IRB RWA | Removed |
-| **Output Floor** | None | 72.5% of SA (phased from 50%) |
-| **SME Supporting Factor** | 0.7619 / 0.85 tiered | Removed |
-| **Infrastructure Factor** | 0.75 | Removed |
-| **PD Floors** | 0.03% uniform | Differentiated (0.03%–0.10%) |
-| **A-IRB LGD Floors** | None | Yes (5%–50% by collateral) |
-| **IRB Restrictions** | F-IRB or A-IRB for all | Large corp/bank/financial sector: F-IRB only; equity: SA only |
-| **SA Risk Weights** | Flat per CQS | LTV-based RE, revised corporate weights |
-| **Retail Risk Weights** | Flat 75% | Differentiated: 45% transactor, 35% payroll/pension |
-| **Equity Risk Weights** | 100% (standard) | 250%/400% (with transitional phase-in) |
-| **CCF (Unconditionally Cancellable)** | 0% | 10% |
-| **Haircuts (Equities)** | 15% / 25% | 25% / 35% |
-| **Currency Mismatch** | None | 1.5x RW multiplier for unhedged FX retail/RE |
-| **CRM Methods** | Scattered provisions | Foundation Collateral Method, Parameter Substitution |
-| **COREP Templates** | C prefix (C 07.00, C 08.01–08.07, C 09.01–09.02) | OF prefix (OF 07.00, OF 08.01–08.07, OF 09.01–09.02) |
+> **Details:** See [Key Differences](key-differences.md) for the comprehensive side-by-side comparison of all regulatory parameters.
+
+The most impactful changes include removal of the 1.06 scaling factor and supporting factors, introduction of a 72.5% output floor, differentiated PD/LGD floors, and revised SA risk weights (particularly for real estate and retail).
 
 ## In This Section
 

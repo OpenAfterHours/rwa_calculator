@@ -48,53 +48,17 @@ Exposures secured by residential property that is or will be:
 - Occupied by the borrower, OR
 - Rented out
 
-### SA Risk Weights (CRR)
+### SA Risk Weights
 
-| Criterion | Risk Weight |
-|-----------|-------------|
-| LTV ≤ 80%, performing | **35%** |
-| LTV > 80% | **75%** |
-| Non-performing | **100%** |
+CRR uses a flat 35% (LTV ≤ 80%) or 75% (LTV > 80%). Basel 3.1 introduces LTV-based bands from 20% to 70%+ for general mortgages, and 30% to 105% for income-producing (buy-to-let).
 
-### SA Risk Weights (Basel 3.1)
-
-**Whole Loan Approach:**
-
-| LTV | Risk Weight |
-|-----|-------------|
-| ≤ 50% | **20%** |
-| 50-60% | **25%** |
-| 60-70% | **30%** |
-| 70-80% | **40%** |
-| 80-90% | **50%** |
-| 90-100% | **70%** |
-| > 100% | Counterparty RW |
-
-**Income-Producing (Buy-to-Let):**
-
-| LTV | Risk Weight |
-|-----|-------------|
-| ≤ 50% | **30%** |
-| 50-60% | **35%** |
-| 60-70% | **45%** |
-| 70-80% | **60%** |
-| 80-90% | **75%** |
-| 90-100% | **105%** |
-| > 100% | Counterparty RW |
+> **Details:** See [Key Differences — Residential Real Estate](../../framework-comparison/key-differences.md#residential-real-estate) for the complete LTV tables.
 
 ### IRB Treatment
 
-**Parameters:**
-- PD: Bank estimate (floor 0.03% CRR / 0.05% Basel 3.1)
-- LGD: Bank estimate (floor 10% Basel 3.1)
-- Correlation: **15%** (fixed)
+Retail mortgage correlation is fixed at 15% with no maturity adjustment. PD floors: 0.03% (CRR) / 0.05% (Basel 3.1). Basel 3.1 introduces a 5% LGD floor for residential RE.
 
-```python
-# Retail mortgage correlation (fixed)
-R = 0.15
-```
-
-**No maturity adjustment** for retail exposures.
+> **Details:** See [IRB Approach](../methodology/irb-approach.md) for the full formula and parameter details.
 
 ## QRRE (Qualifying Revolving Retail Exposures)
 
@@ -124,17 +88,7 @@ Examples:
 
 ### IRB Treatment
 
-**Parameters:**
-- PD: Bank estimate
-  - Floor: 0.03% (CRR/Basel 3.1 transactor)
-  - Floor: 0.10% (Basel 3.1 revolver)
-- LGD: Bank estimate
-- Correlation: **4%** (fixed)
-
-```python
-# QRRE correlation (fixed, low due to diversification)
-R = 0.04
-```
+QRRE correlation is fixed at 4%. PD floors: 0.03% for CRR/transactors, 0.10% for Basel 3.1 revolvers. Bank-estimated LGD subject to 50% floor (Basel 3.1 unsecured).
 
 ## Retail Other
 
@@ -155,24 +109,9 @@ All retail exposures not qualifying as mortgage or QRRE:
 
 ### IRB Treatment
 
-**Parameters:**
-- PD: Bank estimate (floor 0.03% CRR / 0.05% Basel 3.1)
-- LGD: Bank estimate (floor varies by collateral)
-- Correlation: **PD-dependent** (3% to 16%)
+Other retail correlation is PD-dependent (3%–16%), decreasing as PD increases. No maturity adjustment for retail.
 
-```python
-# Other retail correlation formula
-R = 0.03 × (1 - exp(-35 × PD)) / (1 - exp(-35)) +
-    0.16 × [1 - (1 - exp(-35 × PD)) / (1 - exp(-35))]
-```
-
-| PD | Correlation |
-|----|-------------|
-| 0.03% | 16% |
-| 0.5% | 12.4% |
-| 2% | 7.2% |
-| 10% | 3.6% |
-| 20%+ | 3% |
+> **Details:** See [IRB Approach — Retail Correlations](../methodology/irb-approach.md#retail-correlations) for the formula and correlation values by PD.
 
 ## Calculation Examples
 

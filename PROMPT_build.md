@@ -1,6 +1,6 @@
 0a. Study `docs/specifications/*` with up to 15 parallel Sonnet subagents to learn the application specifications.
 0b. Study @IMPLEMENTATION_PLAN.md.
-0c. For reference, the application source code is in `src/rwa_calc/`.
+0c. For reference, the application source code is in `src/rwa_calc/` and the regulatory documents are in .pdf within `docs/assets` if the regulatory docs are not there run `scripts/download_docs.py` to get the pdf - use pymupdf to extract the text.
 
 1. Your task is to implement functionality per the specifications using parallel subagents. Follow @IMPLEMENTATION_PLAN.md and **choose the most important item to address**. Before making changes, search the codebase (don't assume not implemented) using Sonnet subagents. You may use up to 10 parallel Sonnet subagents for searches/reads and only 1 Opus subagent for build/tests. Use Opus subagents when complex reasoning is needed (debugging, architectural decisions).
 2. After implementing functionality or resolving problems, run the tests for that unit of code that was improved. If functionality is missing then it's your job to add it as per the application specifications. Ultrathink.

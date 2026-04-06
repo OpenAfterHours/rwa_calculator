@@ -454,11 +454,11 @@ Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):
 | CQS | CRR | Basel 3.1 |
 |-----|-----|-----------|
 | CQS 1 | 10% | 10% |
-| CQS 2 | 20% | 20% |
+| CQS 2 | 20% | **15%** (Art. 129A) |
 | CQS 3 | 20% | 20% |
 | CQS 4-5 | 50% | 50% |
-| CQS 6 | 100% | 100% |
-| Unrated | Derived from issuer | Derived from issuer (20%→10%, 50%→25%, 100%→50%) |
+| CQS 6 | 100% | **50%** (Art. 129A) |
+| Unrated | Derived from issuer (40%→20% UK) | Derived from issuer via SCRA (A_ENHANCED→15%, A→20%, B→35%, C→100%) |
 
 ## Credit Conversion Factors
 

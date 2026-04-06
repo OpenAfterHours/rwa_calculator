@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.18 defaulted RESI RE always-100%)
-**Current version:** 0.1.93 | **Test suite:** ~2,821 collected (~2,278 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.17 covered bond derivation)
+**Current version:** 0.1.93 | **Test suite:** ~2,842 collected (~2,278 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -309,12 +309,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit test for EU-standard unrated institution RW.
 
 ### P1.17 Unrated covered bond derivation table not wired (CRR Art. 129)
-- **Status:** [~] Table defined but unused
-- **Impact:** `COVERED_BOND_UNRATED_DERIVATION` table at `crr_risk_weights.py:279-287` maps issuer institution RW to covered bond RW (20%->10%, 50%->25%, 100%->50%). But `calculator.py:551-563` uses SCRA grade shortcut and defaults to 20% when no grade exists. The derivation table is never used. SA calculator agent confirms: hardcoded 20% at `calculator.py:662`.
-- **File:Line:** `data/tables/crr_risk_weights.py:279-287`, `engine/sa/calculator.py:551-563,662`
-- **Spec ref:** CRR Art. 129(5)
-- **Fix:** Wire derivation table into covered bond RW calculation. Look up issuer institution RW and derive covered bond RW per the table.
-- **Tests needed:** Unit tests for unrated covered bond derivation.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Covered bond risk weights now properly implement the derivation table (Art. 129(5)) and Basel 3.1 Art. 129A changes:
+  - **B31 rated CQS table (Art. 129A):** New `B31_COVERED_BOND_RISK_WEIGHTS` dict and `_create_b31_covered_bond_df()` with CQS 2 = 15% (CRR: 20%) and CQS 6 = 50% (CRR: 100%). `get_b31_combined_cqs_risk_weights()` now uses B31-specific table instead of importing CRR table.
+  - **B31 unrated derivation via SCRA (Art. 129(5)):** New `B31_COVERED_BOND_UNRATED_FROM_SCRA` dict traces SCRA grade → institution RW → CB RW through `COVERED_BOND_UNRATED_DERIVATION`: A_ENHANCED (inst 30%) → CB 15%, A (inst 40%) → CB 20%, B (inst 75%) → CB 35%, C (inst 150%) → CB 100%. **Fixed A_ENHANCED bug:** was 20% (same as A), now correctly 15%.
+  - **CRR unrated path:** Unchanged at 20% (correct for UK institutions: sovereign CQS 1 → institution 40% → CB 20%). Limitation: non-UK issuers with different institution RW not handled.
+  - **Calculator comments:** Updated to trace each hardcoded value back to the derivation table chain.
+- **File:Line:** `data/tables/b31_risk_weights.py` (B31_COVERED_BOND_RISK_WEIGHTS, B31_COVERED_BOND_UNRATED_FROM_SCRA, _create_b31_covered_bond_df), `engine/sa/calculator.py` (B31 unrated CB when-chain with A_ENHANCED split)
+- **Spec ref:** PRA PS1/26 Art. 129A, Art. 129(5), CRR Art. 129(4)-(5)
+- **Tests:** 21 new tests added to `test_covered_bonds.py` (was 38, now 59): 8 B31 CQS table constants, 3 B31 DataFrame generator, 6 derivation traceability (4 SCRA→table parametrized + all-grades-covered + A_ENHANCED-differs-from-A), 3 RWA edge cases (A_ENHANCED RWA, CQS 2 B31-vs-CRR, CQS 6 B31-vs-CRR). 1 test updated in `test_b31_sa_risk_weights.py` (A_ENHANCED 20%→15%). All 2842 tests pass. Test count: 2842 (was 2821).
+- **Limitation:** CRR unrated derivation assumes UK institution RW (40%→20%). Non-UK issuers with different sovereign-derived RW would need an `issuer_institution_rw` schema field. B31 Art. 129A CQS values need final verification against PRA PS1/26 PDF (spec says CQS 2=15% but PDF access was blocked during implementation).
 
 ### P1.18 Defaulted RESI RE always-100% exception (Basel 3.1 Art. 127 / CRE20.88)
 - **Status:** [x] Complete

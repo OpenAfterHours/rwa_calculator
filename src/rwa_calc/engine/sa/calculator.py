@@ -711,13 +711,20 @@ class SACalculator:
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
                     # 11. Unrated covered bonds: derive from issuer institution RW
-                    # (Art. 129(5)) — SCRA A/A_ENHANCED→20%, B→35%, C/null→100%
+                    # (Art. 129(5)) — SCRA grade → institution RW → CB RW via
+                    # COVERED_BOND_UNRATED_DERIVATION table:
+                    #   A_ENHANCED (inst 30%) → CB 15%
+                    #   A (inst 40%) → CB 20%
+                    #   B (inst 75%) → CB 35%
+                    #   C (inst 150%) → CB 100%
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
                     .then(
-                        pl.when(pl.col("cp_scra_grade").is_in(["A", "A_ENHANCED"]))
+                        pl.when(pl.col("cp_scra_grade") == "A_ENHANCED")
+                        .then(pl.lit(0.15))
+                        .when(pl.col("cp_scra_grade") == "A")
                         .then(pl.lit(0.20))
                         .when(pl.col("cp_scra_grade") == "B")
                         .then(pl.lit(0.35))

@@ -260,10 +260,13 @@ Under Basel 3.1, covered bond risk weights are reduced and the CQS mapping is si
 | 2 | 15% |
 | 3 | 20% |
 | 4-6 | 50% |
-| Unrated | Pending — verification needed |
+| Unrated | Derived from issuer (A_ENHANCED→15%, A→20%, B→35%, C→100%) |
 
 !!! note "Implementation Status"
-    Covered bonds are tracked as a separate exposure class under Art. 112(m) but are not yet implemented in the calculator. This is a future enhancement.
+    Covered bonds are implemented as a separate exposure class under Art. 112(m).
+    Both CRR and Basel 3.1 rated risk weights are wired via CQS join tables.
+    B31 unrated derivation uses SCRA grade → institution RW → CB RW chain
+    per Art. 129(5) with values traced to COVERED_BOND_UNRATED_DERIVATION table.
 
 ## High-Risk Exposures (CRR Art. 128)
 

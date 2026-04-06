@@ -1704,12 +1704,16 @@ class TestB31SCRAEnhancedGradeA:
         # ECRA CQS 2 → 30% (UK deviation), not SCRA enhanced A 30%
         assert float(result["risk_weight"]) == pytest.approx(0.30)
 
-    def test_enhanced_a_covered_bond_derives_20pct(
+    def test_enhanced_a_covered_bond_derives_15pct(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Unrated covered bond with enhanced-A issuer derives 20% RW (same as standard A)."""
+        """Unrated covered bond with enhanced-A issuer derives 15% RW (Art. 129(5)).
+
+        Derivation chain: SCRA A_ENHANCED → institution 30% → CB 15%
+        (differs from standard A: institution 40% → CB 20%).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
@@ -1719,7 +1723,7 @@ class TestB31SCRAEnhancedGradeA:
             config=b31_config,
         )
 
-        assert float(result["risk_weight"]) == pytest.approx(0.20)
+        assert float(result["risk_weight"]) == pytest.approx(0.15)
 
 
 # =============================================================================

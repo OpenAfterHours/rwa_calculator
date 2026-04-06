@@ -2,68 +2,9 @@
 
 ## Pipeline Architecture
 
-```
-Input Data (Parquet/CSV/DataFrames)
-  │
-  ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 1: Loader                                    │
-│  Parse & validate raw input tables                  │
-│  → RawDataBundle                                    │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 2: Hierarchy Resolver                        │
-│  Resolve counterparty trees, facility trees,        │
-│  inherit ratings, unify drawn/undrawn exposures     │
-│  → ResolvedHierarchyBundle                          │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 3: Classifier                                │
-│  Assign exposure class + calculation approach        │
-│  (SA / F-IRB / A-IRB / Slotting / Equity)           │
-│  → ClassifiedExposuresBundle                        │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 4: CRM Processor                             │
-│  Provisions → CCF → EAD → Collateral → Guarantees  │
-│  → CRMAdjustedBundle                                │
-└─────────────────────┬───────────────────────────────┘
-                      │
-           ┌──────────┼──────────┐
-           ▼          ▼          ▼
-  Stage 5: Calculators (branch by approach)
-┌────────────┐ ┌───────────┐ ┌──────────┐
-│ SA Calc    │ │ IRB Calc  │ │ Slotting │
-│            │ │ (F/A-IRB) │ │ Calc     │
-└─────┬──────┘ └─────┬─────┘ └────┬─────┘
-      │               │            │
-      └───────────────┼────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 6: Aggregator                                │
-│  Combine results, apply output floor (Basel 3.1),   │
-│  produce summary views                              │
-│  → AggregatedResultBundle                           │
-└─────────────────────────────────────────────────────┘
-```
+The calculator uses a six-stage immutable pipeline: Load → Hierarchy → Classify → CRM → Calculate → Aggregate.
 
-## Key Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| **Polars LazyFrame throughout** | Vectorised operations, query optimisation, parallel execution — 50–100x faster than row-by-row Python |
-| **Immutable frozen dataclass bundles** | Prevents accidental mutation between stages; enables safe parallelism |
-| **Protocol interfaces (not ABC)** | Structural typing allows loose coupling; components satisfy contracts without inheritance |
-| **Error accumulation (not exceptions)** | Data quality issues reported, not crash the pipeline; enables partial results |
-| **Single codebase, dual framework** | CRR→Basel 3.1 transition requires running both in parallel; avoids code duplication |
-| **Polars namespace extensions** | Domain-specific operations (`.sa.calculate()`, `.irb.calculate_k()`) read naturally |
+> **Details:** See [Pipeline Architecture](../architecture/pipeline.md) for the full stage-by-stage walkthrough with Mermaid diagrams and orchestration details. See [Design Principles](../architecture/design-principles.md) for the rationale behind key design decisions.
 
 ## Pipeline & Data Flow Requirements
 

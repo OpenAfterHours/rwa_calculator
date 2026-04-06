@@ -15,33 +15,12 @@ Equity exposures include:
 
 ### SA Risk Weights
 
-| Type | CRR | Basel 3.1 |
-|------|-----|-----------|
-| Exchange-traded equities | 100% | 100% |
-| Other listed equities | 100% | 100% |
-| Private equity / Venture capital | 150% | **400%** |
-| Speculative investments | 150% | 400% |
-
-### IRB Treatment
+CRR uses 100% for listed equities and 150% for private equity. Basel 3.1 significantly increases weights to 250% (listed) and 400% (private equity/venture capital), with a transitional phase-in schedule.
 
 !!! warning "Basel 3.1"
     IRB approaches for equity are **removed** under Basel 3.1. Only SA is permitted.
 
-**CRR IRB Options:**
-
-| Approach | Description | Minimum RW |
-|----------|-------------|------------|
-| Simple | Fixed risk weights | 190-370% |
-| PD/LGD | Use corporate formula | 200% |
-| Internal models | VaR-based | 200% |
-
-**Simple Risk Weight Approach:**
-
-| Equity Type | Risk Weight |
-|-------------|-------------|
-| Exchange-traded | 190% |
-| Other | 290% |
-| Private equity | 370% |
+> **Details:** See [Key Differences — Equity Exposures](../../framework-comparison/key-differences.md#equity-exposures) for the complete risk weight tables and transitional schedule.
 
 ### Calculation Example
 
@@ -86,32 +65,13 @@ An exposure is classified as defaulted when:
 
 ### SA Risk Weights
 
-| Provision Coverage | CRR | Basel 3.1 |
-|--------------------|-----|-----------|
-| < 20% | **150%** | 150% |
-| 20% - 50% | **100%** | 100% |
-| ≥ 50% | **100%** | **50-100%** |
-
-**Basel 3.1 High Coverage:**
-- ≥50% specific provisions: 50% RW for secured portion
-- Unsecured portion: 100% RW
+Defaulted exposures receive 100%–150% depending on provision coverage. Basel 3.1 introduces a 50% RW for the secured portion of exposures with ≥50% specific provisions.
 
 ### IRB Treatment
 
-For defaulted exposures under IRB:
-- PD = **100%**
-- LGD = "best estimate LGD" (ELGD)
-- Expected Loss = LGD × EAD
+Under IRB, defaulted exposures use PD = 100% and "best estimate LGD" (ELGD). The K formula still applies, producing RWA reflecting unexpected loss only.
 
-```python
-# Defaulted exposure IRB
-PD = 1.00  # 100%
-LGD = best_estimate_lgd  # Bank's expectation of loss
-EL = LGD × EAD
-
-# K formula still applies but with PD = 100%
-# Results in RWA reflecting unexpected loss only
-```
+> **Details:** See [Key Differences — Defaulted Exposures](../../framework-comparison/key-differences.md#defaulted-exposures) for the full CRR vs Basel 3.1 comparison.
 
 ### Calculation Example
 
@@ -260,20 +220,9 @@ Debt securities secured by a dedicated pool of assets (cover pool):
 
 ### Risk Weights
 
-| CQS of Covered Bond | Risk Weight |
-|---------------------|-------------|
-| CQS 1 | 10% |
-| CQS 2 | 20% |
-| CQS 3 | 20% |
-| CQS 4-6 | 50% |
-| Unrated | 50% |
+Covered bond risk weights range from 10% (CQS 1) to 50% (CQS 4-6 / unrated). Eligibility requires the issuer to be a regulated credit institution with special public supervision, qualifying cover pool, and at least 5% overcollateralisation.
 
-### Eligibility Requirements
-
-- Issued by credit institution in EEA/equivalent
-- Subject to special public supervision
-- Cover pool meets quality requirements
-- Overcollateralization of at least 5%
+> **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds) for the full CQS table.
 
 ## Securitisation Positions
 

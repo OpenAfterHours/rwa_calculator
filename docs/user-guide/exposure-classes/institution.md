@@ -16,67 +16,20 @@ Institution exposures include:
 
 ## Risk Weights (SA)
 
-### External Credit Risk Assessment Approach (ECRA)
+Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). UK deviation: CQS 2 receives 30% instead of the standard Basel 50%.
 
-| CQS | S&P/Fitch | Moody's | CRR Risk Weight | Basel 3.1 |
-|-----|-----------|---------|-----------------|-----------|
-| CQS 1 | AAA to AA- | Aaa to Aa3 | **20%** | 20% |
-| CQS 2 | A+ to A- | A1 to A3 | **30%*** | 30% |
-| CQS 3 | BBB+ to BBB- | Baa1 to Baa3 | **50%** | 50% |
-| CQS 4 | BB+ to BB- | Ba1 to Ba3 | **100%** | 100% |
-| CQS 5 | B+ to B- | B1 to B3 | **100%** | 100% |
-| CQS 6 | CCC+ and below | Caa1 and below | **150%** | 150% |
+Under Basel 3.1, unrated institutions use the **Standardised Credit Risk Assessment Approach (SCRA)** based on CET1 and leverage ratios (Grade A: 40%, Grade B: 75%, Grade C: 150%), replacing the CRR due diligence approach.
 
-*UK deviation: CQS 2 receives 30% RW instead of standard Basel 50%
-
-### Unrated Institutions
-
-**CRR:** Apply due diligence assessment
-**Basel 3.1:** Use Standardised Credit Risk Assessment Approach (SCRA)
-
-### SCRA (Basel 3.1)
-
-| Grade | Criteria | Risk Weight |
-|-------|----------|-------------|
-| A | CET1 > 14%, Leverage > 5%, meets requirements | **40%** |
-| B | CET1 > 5.5%, Leverage > 3%, meets minimums | **75%** |
-| C | Below minimum requirements | **150%** |
-
-```python
-# SCRA classification
-if cet1_ratio > 0.14 and leverage_ratio > 0.05:
-    scra_grade = "A"
-    risk_weight = 0.40
-elif cet1_ratio > 0.055 and leverage_ratio > 0.03:
-    scra_grade = "B"
-    risk_weight = 0.75
-else:
-    scra_grade = "C"
-    risk_weight = 1.50
-```
+> **Details:** See [Key Differences — Institution Exposures](../../framework-comparison/key-differences.md#institution-exposures) for the complete ECRA/SCRA comparison tables.
 
 ## IRB Treatment
 
-### F-IRB Parameters
-
-| Parameter | Source | Value |
-|-----------|--------|-------|
-| PD | Bank estimate | Floor 0.03% (CRR) / 0.05% (Basel 3.1) |
-| LGD | Supervisory | 45% (senior), 75% (subordinated) |
-| M | Effective maturity | 1-5 years |
-
-### A-IRB Restrictions
+F-IRB uses supervisory LGD (45% senior, 75% subordinated) with PD floors of 0.03% (CRR) / 0.05% (Basel 3.1). Institution correlation uses the corporate formula.
 
 !!! warning "Basel 3.1"
     A-IRB is **no longer permitted** for institution exposures under Basel 3.1. Only SA or F-IRB may be used.
 
-### Correlation
-
-```python
-# Institution correlation (same as corporate)
-R = 0.12 × (1 - exp(-50 × PD)) / (1 - exp(-50)) +
-    0.24 × [1 - (1 - exp(-50 × PD)) / (1 - exp(-50))]
-```
+> **Details:** See [IRB Approach](../methodology/irb-approach.md) for the full formula and parameter details.
 
 ## Short-Term Exposures
 
@@ -115,21 +68,9 @@ Exposures with original maturity ≤ 3 months may receive preferential treatment
 
 ## Covered Bonds
 
-Covered bonds issued by institutions receive preferential treatment:
+Covered bonds issued by institutions receive preferential treatment, ranging from 10% (CQS 1) to 50% (CQS 4-6 / unrated). Eligibility requires the issuer to be a regulated credit institution, with the bonds subject to special public supervision and backed by qualifying assets.
 
-| CQS of Covered Bond | Risk Weight |
-|---------------------|-------------|
-| CQS 1 | 10% |
-| CQS 2 | 20% |
-| CQS 3 | 20% |
-| CQS 4-6 | 50% |
-| Unrated | 50% |
-
-**Eligibility criteria:**
-- Issued by eligible credit institution
-- Subject to special public supervision
-- Backed by qualifying assets (mortgages, PSE exposures)
-- Overcollateralization requirements met
+> **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds) for the full CQS table and CRR vs Basel 3.1 comparison.
 
 ## Central Counterparties (CCPs)
 

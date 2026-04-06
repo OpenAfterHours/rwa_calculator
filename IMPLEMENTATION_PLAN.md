@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.56 CQS bond ineligibility enforcement implemented)
-**Current version:** 0.1.76 | **Test suite:** ~2,519 collected (2,025 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.56 fixed.
+**Last updated:** 2026-04-06 (P1.69 receivables haircut fix implemented)
+**Current version:** 0.1.77 | **Test suite:** ~2,531 collected (~2,037 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.69 fixed. (unit tests increased from 2,025 to ~2,037)
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,9 +9,9 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
-- *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
+- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
 - *Missing B31 features (whole categories absent):* P1.4 (Art. 147A approach restrictions), P1.9 (output floor portfolio-level), P1.12 (SCRA enhanced/short-term), P1.29 (40% CCF category), P1.30 (CRM method selection)
@@ -653,14 +653,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for IRB guarantee LGD substitution under F-IRB and A-IRB.
 
 ### P1.69 Receivables haircut 20% in code, should be 40% (Art. 230); equity_other 25% vs 30%
-- **Status:** [~] Wrong values
-- **Impact:** Two haircut values in `data/tables/crr_haircuts.py` do not match the PRA regulatory tables:
-  - **Receivables**: Code has 20% (`COLLATERAL_HAIRCUTS["receivables"]` at `crr_haircuts.py:56`), PRA Art. 230 specifies **40%** for receivables collateral. This **understates** the haircut, giving too much CRM benefit.
-  - **Equity other (non-main-index)**: Code has 25% (CRR, `crr_haircuts.py:52`) and 35% (B31, `crr_haircuts.py:94`). PRA PDF 10-day column shows **30%**. The CRR 25% may be correct for a different liquidation period; B31 35% doesn't match any column.
-- **File:Line:** `data/tables/crr_haircuts.py:52,56,94`
-- **Spec ref:** PRA PS1/26 Art. 224 Tables 1-4, Art. 230
-- **Fix:** Change receivables haircut from 20% to 40%. Verify equity_other against the correct liquidation period column. Cross-ref P1.39 (liquidation period dependency).
-- **Tests needed:** Unit tests for receivables and equity haircut values.
+- **Status:** [x] Complete (receivables fixed; equity_other deferred pending liquidation period verification)
+- **Fixed:** 2026-04-06
+- **Impact:** Basel 3.1 receivables haircut corrected from 20% to 40% per PRA PS1/26 Art. 230(2) explicit HC table. The code confused HC (collateral haircut = 40%) with LGDS (secured LGD = 20%). CRR value kept at 20% as an approximation of the C*/C** threshold mechanism (Table 5) since CRR Art. 230 does not use HC-based formula.
+- **File:Line:** `data/tables/crr_haircuts.py` (B31 dict line 108, B31 DataFrame line 635)
+- **Spec ref:** PRA PS1/26 Art. 230(2)
+- **Tests:** 13 new unit tests: 11 in `test_crm_basel31.py` (TestBasel31ReceivablesHaircut class), 2 in `test_crr_tables.py` (receivables + other_physical dict assertions). All pass. Test count: 2531 (was 2519).
+- **Equity_other deferred:** CRR equity_other (25%) and B31 equity_other (35%) discrepancy vs spec (30%) needs regulatory PDF verification per different liquidation periods (Art. 224 Tables 1-4). Cross-ref P1.39.
+- **Note:** Under B31, the code still applies BOTH the 40% haircut AND the 1.25x overcollateralisation ratio, which is double-counting — PRA PS1/26 Art. 230 replaced the CRR C*/C** threshold mechanism with the HC-based formula. The OC ratio should not apply under B31. This is tracked separately (see spec warning in credit-risk-mitigation.md line 170-171).
 
 ### P1.70 Overcollateralisation 30% threshold applied globally, not per collateral type (Art. 230)
 - **Status:** [~] Wrong aggregation level

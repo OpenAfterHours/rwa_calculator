@@ -171,6 +171,97 @@ class TestBasel31EquityHaircuts:
         ) == Decimal("0.35")
 
 
+class TestBasel31ReceivablesHaircut:
+    """Receivables HC increases from ~20% (CRR ad-hoc) to 40% (B31 Art. 230(2)).
+
+    Why this matters:
+        PRA PS1/26 Art. 230(2) explicitly defines HC=40% for receivables in the
+        LGD* formula: ES = min(C(1-HC-Hfx), E(1+HE)). The HC reduces the
+        collateral value before determining the secured portion. The previous
+        code value of 20% confused HC with LGDS (secured LGD), which is also 20%
+        for receivables but serves a different purpose in the formula.
+        HC=20% understates the haircut and overstates CRM benefit.
+
+    References:
+        PRA PS1/26 Art. 230(2) table: HC=40% for receivables
+        CRR Art. 230: uses C*/C** threshold mechanism (no HC concept)
+    """
+
+    def test_crr_receivables_haircut_20pct(self) -> None:
+        """CRR receivables haircut stays at 20% (OC-ratio-derived approximation)."""
+        assert COLLATERAL_HAIRCUTS["receivables"] == Decimal("0.20")
+
+    def test_b31_receivables_haircut_40pct(self) -> None:
+        """Basel 3.1 receivables haircut is 40% per Art. 230(2)."""
+        assert BASEL31_COLLATERAL_HAIRCUTS["receivables"] == Decimal("0.40")
+
+    def test_lookup_receivables_haircut_crr(self) -> None:
+        """lookup_collateral_haircut returns 20% for CRR receivables."""
+        result = lookup_collateral_haircut("receivables", is_basel_3_1=False)
+        assert result == Decimal("0.20")
+
+    def test_lookup_receivables_haircut_b31(self) -> None:
+        """lookup_collateral_haircut returns 40% for B31 receivables."""
+        result = lookup_collateral_haircut("receivables", is_basel_3_1=True)
+        assert result == Decimal("0.40")
+
+    def test_lookup_trade_receivables_haircut_b31(self) -> None:
+        """trade_receivables alias also returns 40% under B31."""
+        result = lookup_collateral_haircut("trade_receivables", is_basel_3_1=True)
+        assert result == Decimal("0.40")
+
+    def test_b31_receivables_haircut_in_dataframe(self) -> None:
+        """B31 haircut DataFrame has 40% for receivables row."""
+        df = get_haircut_table(is_basel_3_1=True)
+        rec_row = df.filter(pl.col("collateral_type") == "receivables")
+        assert rec_row.shape[0] == 1
+        assert rec_row["haircut"][0] == pytest.approx(0.40)
+
+    def test_crr_receivables_haircut_in_dataframe(self) -> None:
+        """CRR haircut DataFrame has 20% for receivables row."""
+        df = get_haircut_table(is_basel_3_1=False)
+        rec_row = df.filter(pl.col("collateral_type") == "receivables")
+        assert rec_row.shape[0] == 1
+        assert rec_row["haircut"][0] == pytest.approx(0.20)
+
+    def test_b31_single_haircut_receivables_40pct(self) -> None:
+        """HaircutCalculator.calculate_single_haircut applies 40% for B31 receivables."""
+        calc = HaircutCalculator(is_basel_3_1=True)
+        result = calc.calculate_single_haircut(
+            collateral_type="receivables",
+            market_value=Decimal("1000000"),
+            collateral_currency="GBP",
+            exposure_currency="GBP",
+        )
+        assert result.collateral_haircut == Decimal("0.40")
+        assert result.adjusted_value == Decimal("600000")
+
+    def test_crr_single_haircut_receivables_20pct(self) -> None:
+        """HaircutCalculator.calculate_single_haircut applies 20% for CRR receivables."""
+        calc = HaircutCalculator(is_basel_3_1=False)
+        result = calc.calculate_single_haircut(
+            collateral_type="receivables",
+            market_value=Decimal("1000000"),
+            collateral_currency="GBP",
+            exposure_currency="GBP",
+        )
+        assert result.collateral_haircut == Decimal("0.20")
+        assert result.adjusted_value == Decimal("800000")
+
+    def test_b31_receivables_with_fx_mismatch(self) -> None:
+        """B31 receivables: 40% HC + 8% FX = 48% total, adjusted = 520,000."""
+        calc = HaircutCalculator(is_basel_3_1=True)
+        result = calc.calculate_single_haircut(
+            collateral_type="receivables",
+            market_value=Decimal("1000000"),
+            collateral_currency="USD",
+            exposure_currency="GBP",
+        )
+        assert result.collateral_haircut == Decimal("0.40")
+        assert result.fx_haircut == Decimal("0.08")
+        assert result.adjusted_value == Decimal("520000")
+
+
 class TestBasel31BondHaircuts:
     """Bond haircuts differ for long-dated maturities under Basel 3.1."""
 

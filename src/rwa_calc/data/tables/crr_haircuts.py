@@ -55,7 +55,10 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     # Equity
     "equity_main_index": Decimal("0.15"),
     "equity_other": Decimal("0.25"),
-    # Other
+    # Non-financial collateral
+    # CRR Art. 230 uses C*/C** threshold mechanism (Table 5), not HC-based formula.
+    # These values are ad-hoc approximations since the code applies haircuts uniformly.
+    # Receivables: effective discount from 1.25x OC ratio ≈ 20%.
     "real_estate": Decimal("0.00"),
     "receivables": Decimal("0.20"),
     "other_physical": Decimal("0.40"),
@@ -103,9 +106,11 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     # Equity — increased under Basel 3.1
     "equity_main_index": Decimal("0.25"),  # CRR: 15%
     "equity_other": Decimal("0.35"),  # CRR: 25%
-    # Other (unchanged)
-    "real_estate": Decimal("0.00"),
-    "receivables": Decimal("0.20"),
+    # Non-financial collateral — Art. 230(2) HC values (PRA PS1/26)
+    # B31 Art. 230 uses HC in LGD* formula: ES = min(C(1-HC-Hfx), E(1+HE))
+    # HC=40% for all non-financial types; only LGDS differs (20% rec/RE, 25% other)
+    "real_estate": Decimal("0.00"),  # Handled via LTV, not HC haircut
+    "receivables": Decimal("0.40"),  # Art. 230(2): HC=40% (not LGDS=20%)
     "other_physical": Decimal("0.40"),
 }
 
@@ -620,7 +625,8 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "haircut": 0.35,
             "is_main_index": False,
         },
-        # Other (unchanged)
+        # Non-financial collateral — Art. 230(2) HC values (PRA PS1/26)
+        # HC=40% for receivables, RE, and other physical in the LGD* formula
         {
             "collateral_type": "real_estate",
             "cqs": None,
@@ -632,7 +638,7 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "collateral_type": "receivables",
             "cqs": None,
             "maturity_band": None,
-            "haircut": 0.20,
+            "haircut": 0.40,
             "is_main_index": None,
         },
         {

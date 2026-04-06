@@ -126,8 +126,8 @@ class IRBLazyFrame:
         """
         Apply F-IRB supervisory LGD for Foundation IRB exposures.
 
-        CRR (Art. 161): Senior unsecured 45%, subordinated 75%
-        Basel 3.1 (CRE32.9-12): Senior unsecured 40%, subordinated 75%
+        CRR Art. 161(1)(a): Senior unsecured 45%, subordinated 75%
+        Basel 3.1 Art. 161(1)(a)/(aa): FSE senior 45%, non-FSE senior 40%, sub 75%
 
         For F-IRB exposures with collateral, the CRM processor calculates
         the effective LGD (lgd_post_crm) based on collateral type and coverage.
@@ -142,11 +142,12 @@ class IRBLazyFrame:
             LazyFrame with F-IRB LGD applied
         """
         schema = self._lf.collect_schema()
-        has_seniority = "seniority" in schema.names()
-        has_lgd_post_crm = "lgd_post_crm" in schema.names()
+        schema_names = schema.names()
+        has_seniority = "seniority" in schema_names
+        has_lgd_post_crm = "lgd_post_crm" in schema_names
 
         lf = self._lf
-        if "lgd" not in schema.names():
+        if "lgd" not in schema_names:
             lf = lf.with_columns(
                 [
                     pl.lit(None).cast(pl.Float64).alias("lgd"),
@@ -165,6 +166,21 @@ class IRBLazyFrame:
         default_lgd = float(lgd_table["unsecured_senior"])
         sub_lgd = float(lgd_table["subordinated"])
 
+        # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
+        # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
+        has_fse_col = (
+            config.is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names
+        )
+        if has_fse_col:
+            fse_lgd = float(lgd_table["unsecured_senior_fse"])
+            default_lgd_expr = (
+                pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
+                .then(pl.lit(fse_lgd))
+                .otherwise(pl.lit(default_lgd))
+            )
+        else:
+            default_lgd_expr = pl.lit(default_lgd)
+
         lf = lf.with_columns(
             [
                 pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
@@ -177,7 +193,7 @@ class IRBLazyFrame:
                         .str.contains("sub")
                     )
                     .then(pl.lit(sub_lgd))
-                    .otherwise(pl.lit(default_lgd))
+                    .otherwise(default_lgd_expr)
                 )
                 .otherwise(pl.col("lgd").fill_null(default_lgd))
                 .alias("lgd"),

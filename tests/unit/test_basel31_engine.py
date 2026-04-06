@@ -1448,6 +1448,75 @@ class TestFIRBSupervisoryLGD:
         result = lf.irb.apply_firb_lgd(basel31_config).collect()
         assert result["lgd"][0] == pytest.approx(0.30)
 
+    # --- FSE vs non-FSE LGD (Art. 161(1)(a) vs (aa)) ---
+
+    def test_namespace_b31_fse_firb_lgd_45pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 namespace: FSE FIRB gets 45% LGD (Art. 161(1)(a))."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [None],
+                "approach": [ApproachType.FIRB.value],
+                "cp_is_financial_sector_entity": [True],
+            }
+        )
+        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        assert result["lgd"][0] == pytest.approx(0.45)
+
+    def test_namespace_b31_non_fse_firb_lgd_40pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 namespace: non-FSE FIRB gets 40% LGD (Art. 161(1)(aa))."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [None],
+                "approach": [ApproachType.FIRB.value],
+                "cp_is_financial_sector_entity": [False],
+            }
+        )
+        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        assert result["lgd"][0] == pytest.approx(0.40)
+
+    def test_namespace_crr_fse_ignored(
+        self,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR namespace: FSE flag is irrelevant — FIRB always gets 45%."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [None],
+                "approach": [ApproachType.FIRB.value],
+                "cp_is_financial_sector_entity": [True],
+            }
+        )
+        result = lf.irb.apply_firb_lgd(crr_config).collect()
+        assert result["lgd"][0] == pytest.approx(0.45)
+
+    # --- Covered bond LGD ---
+
+    def test_b31_covered_bond_dict_value(self) -> None:
+        """Basel 3.1 covered bond LGD = 11.25% in dict (Art. 161(1)(d))."""
+        assert BASEL31_FIRB_SUPERVISORY_LGD["covered_bond"] == Decimal("0.1125")
+
+    def test_crr_covered_bond_dict_value(self) -> None:
+        """CRR covered bond LGD = 11.25% in dict (Art. 161(1)(d))."""
+        assert FIRB_SUPERVISORY_LGD["covered_bond"] == Decimal("0.1125")
+
+    # --- B31 FSE key exists ---
+
+    def test_b31_fse_unsecured_key_exists(self) -> None:
+        """Basel 3.1 dict has separate unsecured_senior_fse key = 45%."""
+        assert BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior_fse"] == Decimal("0.45")
+
 
 # =============================================================================
 # CCF TESTS (CRE20.88, CRE32.27)

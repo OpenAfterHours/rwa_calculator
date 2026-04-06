@@ -23,9 +23,11 @@ import polars as pl
 # Supervisory LGD values by seniority and collateral type
 # CRR values (Art. 161)
 FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
-    # Unsecured exposures
+    # Unsecured exposures — Art. 161(1)(a): all senior unsecured (no FSE split under CRR)
     "unsecured_senior": Decimal("0.45"),  # 45% for senior unsecured
     "subordinated": Decimal("0.75"),  # 75% for subordinated
+    # Covered bonds — Art. 161(1)(d)
+    "covered_bond": Decimal("0.1125"),  # 11.25%
     # Fully secured by eligible financial collateral
     "financial_collateral": Decimal("0.00"),  # 0% (after haircuts)
     # Secured by receivables
@@ -38,12 +40,17 @@ FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
 }
 
 # Basel 3.1 revised supervisory LGD values (CRE32.9-12, PRA PS1/26)
-# Key changes from CRR: senior 45%→40%, receivables 35%→20%, RE 35%→20%,
-# other physical 40%→25%
+# Key changes from CRR: non-FSE senior 45%→40%, FSE senior stays 45%,
+# receivables 35%→20%, RE 35%→20%, other physical 40%→25%,
+# covered bonds added at 11.25%
 BASEL31_FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
-    # Unsecured exposures
+    # Unsecured exposures — Art. 161(1)(aa): non-FSE corporates
     "unsecured_senior": Decimal("0.40"),  # 40% (CRR: 45%)
+    # Unsecured exposures — Art. 161(1)(a): financial sector entities (FSE)
+    "unsecured_senior_fse": Decimal("0.45"),  # 45% (unchanged from CRR)
     "subordinated": Decimal("0.75"),  # 75% (unchanged)
+    # Covered bonds — Art. 161(1)(d)
+    "covered_bond": Decimal("0.1125"),  # 11.25%
     # Fully secured by eligible financial collateral
     "financial_collateral": Decimal("0.00"),  # 0% (unchanged)
     # Secured by receivables
@@ -206,6 +213,7 @@ def lookup_firb_lgd(
     collateral_type: str | None = None,
     is_subordinated: bool = False,
     is_basel_3_1: bool = False,
+    is_financial_sector_entity: bool = False,
 ) -> Decimal:
     """
     Look up F-IRB supervisory LGD.
@@ -213,10 +221,16 @@ def lookup_firb_lgd(
     This is a convenience function for single lookups. For bulk processing,
     use the DataFrame tables with joins.
 
+    Under Basel 3.1, Art. 161(1)(a) vs (aa) distinguishes:
+    - Financial sector entities (FSE): senior unsecured = 45%
+    - Non-FSE corporates: senior unsecured = 40%
+
     Args:
         collateral_type: Type of collateral securing the exposure (None = unsecured)
         is_subordinated: Whether the exposure is subordinated
         is_basel_3_1: Whether to use Basel 3.1 revised values (CRE32.9-12)
+        is_financial_sector_entity: Whether the obligor is a financial sector entity
+            (only affects unsecured LGD under Basel 3.1)
 
     Returns:
         Supervisory LGD as Decimal
@@ -227,11 +241,17 @@ def lookup_firb_lgd(
     if is_subordinated:
         return table["subordinated"]
 
-    # No collateral - senior unsecured
+    # No collateral - senior unsecured (with FSE distinction under B31)
     if collateral_type is None:
+        if is_basel_3_1 and is_financial_sector_entity:
+            return table["unsecured_senior_fse"]
         return table["unsecured_senior"]
 
     coll_lower = collateral_type.lower()
+
+    # Covered bonds — Art. 161(1)(d)
+    if coll_lower in ("covered_bond", "covered_bonds"):
+        return table["covered_bond"]
 
     # Financial collateral
     if coll_lower in ("financial_collateral", "cash", "deposit", "gold"):
@@ -255,7 +275,9 @@ def lookup_firb_lgd(
     if coll_lower in ("other_physical", "equipment", "inventory"):
         return table["other_physical"]
 
-    # Unknown - treat as unsecured
+    # Unknown - treat as unsecured (with FSE distinction under B31)
+    if is_basel_3_1 and is_financial_sector_entity:
+        return table["unsecured_senior_fse"]
     return table["unsecured_senior"]
 
 

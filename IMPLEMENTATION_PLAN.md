@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.4 Art. 147A approach restrictions implemented)
-**Current version:** 0.1.78 | **Test suite:** ~2,591 collected (~2,094 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.4 fixed.
+**Last updated:** 2026-04-06 (P1.32 FSE vs non-FSE F-IRB supervisory LGD implemented)
+**Current version:** 0.1.78 | **Test suite:** ~2,613 collected (~2,094 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.4, P1.32 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -10,7 +10,7 @@
 **Gap summary:** P1 (calculation correctness): 80 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
-- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
+- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
@@ -417,16 +417,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit test for missing counterparty_reference with aggregate above threshold.
 
 ### P1.32 F-IRB supervisory LGD: FSE 45% vs non-FSE corporate 40% (Art. 161(1))
-- **Status:** [~] Not distinguished
-- **Impact:** PRA PS1/26 Art. 161(1) differentiates F-IRB unsecured LGD:
-  - (a) Senior to **financial sector entities**: **45%**
-  - (aa) Senior to **corporates not FSEs**: **40%**
-  - Also missing: covered bonds LGD = **11.25%** (Art. 161(1)(d))
-  Code at `constants.py:83` (`BASEL31_SUPERVISORY_LGD["unsecured"] = 0.40`) and `crr_firb_lgd.py:43` applies 40% to all unsecured under B31. FSEs should still get 45%.
-- **File:Line:** `engine/irb/constants.py:83`, `data/tables/crr_firb_lgd.py:43`
-- **Spec ref:** PRA PS1/26 Art. 161(1)(a) vs (aa)
-- **Fix:** Split `unsecured` LGD into `unsecured_fse` (0.45) and `unsecured_non_fse` (0.40) in both `constants.py` and `crr_firb_lgd.py`. Add covered bond LGD 0.1125. Route based on `is_financial_sector_entity` flag. Requires FSE flag from P1.4.
-- **Tests needed:** Unit tests for FSE vs non-FSE LGD assignment.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** PRA PS1/26 Art. 161(1)(a) vs (aa) FSE/non-FSE distinction now implemented:
+  - **FSE senior unsecured:** 45% under Basel 3.1 (Art. 161(1)(a)) — unchanged from CRR
+  - **Non-FSE corporate senior unsecured:** 40% under Basel 3.1 (Art. 161(1)(aa))
+  - **Covered bonds:** 11.25% (Art. 161(1)(d)) added to both CRR and Basel 3.1 tables
+  - Under CRR, all senior unsecured remains 45% (no FSE distinction)
+  - `cp_is_financial_sector_entity` column (from P1.4) now used for LGD routing
+  - Null FSE flag defaults to non-FSE (40% — permissive/conservative)
+  Three layers updated: data tables (`crr_firb_lgd.py`, `constants.py`), CRM collateral (`collateral.py` both no-collateral and collateralised paths), IRB namespace (`namespace.py` apply_firb_lgd)
+- **File:Line:** `data/tables/crr_firb_lgd.py` (FSE key + covered_bond + lookup), `engine/crm/constants.py` (FSE + covered_bond + COVERED_BOND_TYPES), `engine/crm/collateral.py` (FSE-aware LGDU in both paths), `engine/irb/namespace.py` (FSE-aware apply_firb_lgd)
+- **Spec ref:** PRA PS1/26 Art. 161(1)(a), (aa), (d)
+- **Tests:** 22 new unit tests: 7 FSE CRM processor tests (TestFSESupervisoryLGD), 4 covered bond tests (TestCoveredBondLGD), 5 lookup dispatch tests (TestLookupFIRBLGDFSE), 6 namespace tests (B31 FSE/non-FSE/CRR + covered bond dict + FSE key). All pass. Test count: 2613 (was 2591).
+- **Limitation:** Covered bond F-IRB LGD 11.25% is in the data tables and lookup functions but not yet wired into the pipeline for exposure-level covered bond classification (covered bonds are currently SA-only per Art. 147A). FSE routing in the collateralised path uses the same `cp_is_financial_sector_entity` column for LGDU blending.
 
 ### P1.33 Mortgage RW floor is 10%, not 15% (Art. 154(4A)(b))
 - **Status:** [x] Complete

@@ -279,8 +279,8 @@ def apply_firb_supervisory_lgd_no_collateral(
     Apply F-IRB supervisory LGD when no collateral is available.
 
     For F-IRB exposures without collateral, uses supervisory LGD values:
-    - CRR Art. 161: Senior unsecured 45%, Subordinated 75%
-    - Basel 3.1 CRE32.9-12: Senior unsecured 40%, Subordinated 75%
+    - CRR Art. 161(1)(a): Senior unsecured 45%, Subordinated 75%
+    - Basel 3.1 Art. 161(1)(a)/(aa): FSE senior 45%, non-FSE senior 40%, Sub 75%
 
     A-IRB exposures keep their modelled LGD.
 
@@ -309,12 +309,26 @@ def apply_firb_supervisory_lgd_no_collateral(
         if "seniority" in schema_names
         else pl.lit(False)
     )
+
+    # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
+    # non-FSE senior unsecured = 40% (Art. 161(1)(aa)).
+    # Under CRR, all senior unsecured = 45% (no FSE distinction).
+    if is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names:
+        lgd_senior_fse = lgd_values["unsecured_fse"]
+        lgd_senior_expr = (
+            pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
+            .then(pl.lit(lgd_senior_fse))
+            .otherwise(pl.lit(lgd_senior))
+        )
+    else:
+        lgd_senior_expr = pl.lit(lgd_senior)
+
     exposures = exposures.with_columns(
         [
             pl.when((pl.col("approach") == ApproachType.FIRB.value) & is_subordinated)
             .then(pl.lit(0.75))  # Subordinated (same both frameworks)
             .when(pl.col("approach") == ApproachType.FIRB.value)
-            .then(pl.lit(lgd_senior))  # Senior unsecured
+            .then(lgd_senior_expr)  # Senior unsecured (FSE-aware under B31)
             .otherwise(pl.col("lgd_pre_crm"))  # A-IRB or SA: keep existing
             .alias("lgd_post_crm"),
         ]
@@ -345,6 +359,13 @@ def _apply_collateral_unified(
     """
     lgd_values = supervisory_lgd_values(is_basel_3_1)
     lgd_unsecured = lgd_values["unsecured"]
+
+    # Under Basel 3.1, FSE senior unsecured LGDU = 45% (Art. 161(1)(a));
+    # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
+    exposure_schema = exposures.collect_schema()
+    _has_fse_col = is_basel_3_1 and "cp_is_financial_sector_entity" in exposure_schema.names()
+    if _has_fse_col:
+        lgd_unsecured_fse = lgd_values["unsecured_fse"]
 
     collateral_schema = adjusted_collateral.collect_schema()
 
@@ -598,6 +619,16 @@ def _apply_collateral_unified(
     exposures = exposures.drop(drop_cols)
 
     # --- Apply EAD reduction + determine seniority-based LGD ---
+    # LGDU for unsecured portion: FSE-aware under Basel 3.1 (Art. 161(1)(a) vs (aa))
+    if _has_fse_col:
+        lgd_unsecured_expr = (
+            pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
+            .then(pl.lit(lgd_unsecured_fse))
+            .otherwise(pl.lit(lgd_unsecured))
+        )
+    else:
+        lgd_unsecured_expr = pl.lit(lgd_unsecured)
+
     exposures = exposures.with_columns(
         [
             pl.when(pl.col("approach") == ApproachType.SA.value)
@@ -606,7 +637,7 @@ def _apply_collateral_unified(
             .alias("ead_after_collateral"),
             pl.when(pl.col("seniority").str.to_lowercase().is_in(["subordinated", "junior"]))
             .then(pl.lit(0.75))
-            .otherwise(pl.lit(lgd_unsecured))
+            .otherwise(lgd_unsecured_expr)
             .alias("lgd_unsecured"),
         ]
     )

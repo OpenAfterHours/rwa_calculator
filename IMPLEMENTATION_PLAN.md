@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.71 CRR equity SA weights)
-**Current version:** 0.1.94 | **Test suite:** ~2,842 collected (~2,345 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.71, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.81 Art. 159(3) two-branch EL shortfall/excess)
+**Current version:** 0.1.95 | **Test suite:** ~2,878 collected (~2,362 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.70, P1.71, P1.78, P1.81 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -11,7 +11,7 @@
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
-- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees — now fixed)
+- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
 - *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
@@ -704,12 +704,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Note:** Under B31, the code still applies BOTH the 40% haircut AND the 1.25x overcollateralisation ratio, which is double-counting — PRA PS1/26 Art. 230 replaced the CRR C*/C** threshold mechanism with the HC-based formula. The OC ratio should not apply under B31. This is tracked separately (see spec warning in credit-risk-mitigation.md line 170-171).
 
 ### P1.70 Overcollateralisation 30% threshold applied globally, not per collateral type (Art. 230)
-- **Status:** [~] Wrong aggregation level
-- **Impact:** `engine/crm/collateral.py:557-569` checks `_raw_nf_a >= 0.30 * ead_gross` treating all non-financial collateral as one pool. Art. 230 requires the 30% minimum threshold to apply **per collateral type** (real estate separately, other physical separately, receivables separately). A mix of small RE + large other-physical could pass the combined test when individual types each fail their 30% threshold, allowing ineligible collateral to reduce EAD.
-- **File:Line:** `engine/crm/collateral.py:557-569`
-- **Spec ref:** PRA PS1/26 Art. 230
-- **Fix:** Split the 30% threshold check to apply per non-financial collateral type rather than across the aggregated pool.
-- **Tests needed:** Unit tests for mixed non-financial collateral pools where individual types fail the threshold.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Art. 230 minimum collateralisation threshold now applied per collateral type instead of across the combined non-financial pool. Previously, a mix of small real_estate + small other_physical could pass the combined 30% check when each individually failed, allowing ineligible collateral to reduce capital requirements.
+  **Changes:**
+  - `_apply_collateral_unified()` threshold check now uses per-type raw value columns (`collateral_re_value`, `collateral_other_physical_value`) with `MIN_COLLATERALISATION_THRESHOLDS` per-type lookup
+  - Real estate: must independently ≥ 30% of EAD
+  - Other physical: must independently ≥ 30% of EAD
+  - Receivables: no threshold (0%), never zeroed
+  - Covered bonds: no threshold, never zeroed
+  - Financial: no threshold, never zeroed
+  - 3 existing sequential fill tests updated with sufficient per-type collateral values
+- **File:Line:** `engine/crm/collateral.py:584-611` (per-type threshold check)
+- **Spec ref:** PRA PS1/26 Art. 230, CRR Art. 230, CRE32.9-12
+- **Tests:** 7 new unit tests in `tests/unit/crm/test_collateral_sequential_fill.py` (TestPerTypeMinThreshold): mixed RE+OP combined passes individually fails, RE passes OP fails, receivables no threshold, covered bonds no threshold, financial plus failing RE, CRR same behavior, RE at exactly 30% passes. 3 existing tests updated. All 2861 tests pass. Test count: 2861 (was 2842).
 
 ### P1.71 CRR SA equity weights wrong — all used Basel 3.1 values instead of Art. 133(2) flat 100%
 - **Status:** [x] Complete
@@ -777,13 +785,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** CRR Art. 224 Table 1 (3 bands), PRA PS1/26 Art. 224 / CRE22 (5 bands)
 
 ### P1.77 Mixed collateral pool uses pro-rata allocation, Art. 231 requires sequential fill
-- **Status:** [~] Wrong algorithm in spec (fixed) — code needs verification
-- **Impact:** Art. 231 requires sequential (waterfall) allocation of collateral: `ES_i = min(C_i, E(1+HE) - sum(ES_k))`. The spec previously used pro-rata allocation (`E_i = E × C_i / sum(C_all)`). Sequential and pro-rata give different LGD* when total collateral < total exposure. The institution may choose ordering (most favourable = lowest LGDS first). Code at `engine/crm/collateral.py` likely implements pro-rata.
+- **Status:** [x] Fixed (2026-04-06)
+- **Impact:** Art. 231 requires sequential (waterfall) allocation of collateral: `ES_i = min(C_i, E(1+HE) - sum(ES_k))`. The spec previously used pro-rata allocation (`E_i = E × C_i / sum(C_all)`). Sequential and pro-rata give different LGD* when total collateral < total exposure. The institution may choose ordering (most favourable = lowest LGDS first).
   **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected with sequential fill formula.
-- **File:Line:** `engine/crm/collateral.py`
+  **Code fix (2026-04-06):** `_apply_collateral_unified()` rewritten with cumulative-cap trick for Art. 231 sequential fill. Waterfall ordering: financial (0%) → covered_bond (11.25%) → receivables → real_estate → other_physical. Added `WATERFALL_ORDER` constant and `covered_bond` category to `collateral_category_expr()`. 12 unit tests in `tests/unit/crm/test_collateral_sequential_fill.py`.
+- **File:Line:** `engine/crm/collateral.py:599-629`, `engine/crm/constants.py:213-219`
 - **Spec ref:** PRA PS1/26 Art. 231 para 1
-- **Fix:** Verify and correct collateral allocation to use sequential fill. Allow ordering by LGDS.
-- **Tests needed:** Unit tests for mixed pools where total collateral < exposure comparing sequential vs pro-rata.
+- **Tests:** 12 tests covering overcollateralised vs undercollateralised, waterfall ordering, CRR vs B31 LGDS values, edge cases (single type, fully secured, no collateral, 30% threshold, coverage cap), all 5 categories, multi-exposure independence.
 
 ### P1.78 FX mismatch haircut not applied to guarantee/CDS amounts (Art. 233(3-4))
 - **Status:** [x] Complete
@@ -803,13 +811,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Art. 226(1) liquidation period scaling not yet implemented (standard 10-day/8% used for all). Art. 227 zero-haircut conditions for qualifying repos not checked. These are shared limitations with the collateral FX haircut path.
 
 ### P1.81 Art. 159(3) two-branch EL shortfall/excess comparison not implemented
-- **Status:** [ ] Not started
-- **Impact:** Art. 159(3) requires that when non-defaulted EL exceeds non-defaulted provisions (A>B) AND defaulted provisions exceed defaulted EL (D>C) simultaneously, the shortfall and excess must be computed **separately**. The defaulted excess must NOT offset the non-defaulted shortfall. The current implementation uses a single combined comparison (`sum(el_shortfall)` vs `sum(el_excess)` across all exposures), which allows cross-subsidisation between defaulted and non-defaulted books. This **understates CET1 deductions** when both conditions hold simultaneously.
-  **Spec fix (2026-04-06):** provisions.md updated with Art. 159(3) two-branch rule and warning.
-- **File:Line:** `engine/irb/adjustments.py`, `engine/aggregator/`
-- **Spec ref:** CRR Art. 159(3), `docs/specifications/crr/provisions.md`
-- **Fix:** Split EL comparison into non-defaulted and defaulted pools. When A>B AND D>C, compute shortfall from non-defaulted pool only and excess from defaulted pool only.
-- **Tests needed:** Unit tests for: (a) combined pool where only one condition holds, (b) simultaneous A>B AND D>C where cross-subsidisation would occur.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Art. 159(3) two-branch no-cross-offset rule now implemented:
+  - When non-defaulted EL exceeds non-defaulted provisions (A > B) AND defaulted provisions exceed defaulted EL (D > C) simultaneously, shortfall and excess are computed separately for each pool
+  - Defaulted excess cannot offset non-defaulted shortfall (prevents CET1 deduction understatement)
+  - `compute_el_portfolio_summary()` now splits aggregation by `is_defaulted` flag, with fallback to all-non-defaulted when column absent (conservative)
+  - `ELPortfolioSummary` dataclass extended with: `non_defaulted_el_shortfall`, `non_defaulted_el_excess`, `defaulted_el_shortfall`, `defaulted_el_excess`, `art_159_3_applies`
+  - Backward compatible: when `is_defaulted` column absent, all exposures treated as non-defaulted (Art. 159(3) cannot trigger)
+  - Null `is_defaulted` values default to `False` (non-defaulted, conservative)
+  - Works across combined IRB + slotting portfolios
+- **File:Line:** `engine/aggregator/_el_summary.py` (two-branch logic + `_aggregate_by_default_status`), `contracts/bundles.py` (ELPortfolioSummary extended fields)
+- **Spec ref:** CRR Art. 159(3), Art. 36(1)(d), Art. 62(d)
+- **Tests:** 17 new unit tests in `tests/unit/test_el_two_branch.py`: 3 two-branch triggering tests (trigger + CET1/T2 deductions + T2 credit), 5 non-triggering tests (all non-defaulted shortfall, all defaulted excess, both pools shortfall, both pools excess, reverse direction), 3 backward compatibility tests (no is_defaulted column, mixed without is_defaulted, null is_defaulted), 4 pool breakdown tests (fields populated, RWA totals, T2 cap with two-branch, slotting + IRB combined), 2 capital impact tests (prevents understatement, flag false when no cross-offset). All 2878 tests pass. Test count: 2878 (was 2861).
 
 ### P1.82 BEEL exception for A-IRB defaulted EL not implemented (Art. 158(5))
 - **Status:** [ ] Not started
@@ -1368,7 +1382,7 @@ These items are verified complete as of 0.1.64. Items with **[!]** have known ga
 - [x] A-IRB calculation (own LGD/CCF, LGD floors, post-model adjustments; mortgage RW floor 10% -- see P1.33 [fixed])
 - [x] Slotting (CRR 4 tables + Basel 3.1 3 tables + subgrades)
 - [x] **[!]** Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback 250%; CIU look-through/mandate partial -- see P1.61; B31 equity SA weights implemented -- see P1.42 [fixed]; transitional floor applied in pipeline -- see P1.43 [fixed]; IRB equity table still exported under B31 -- see P1.59)
-- [x] **[!]** CRM (collateral haircuts CRR 3-band + Basel 3.1 5-band, FX mismatch, maturity mismatch, multi-level allocation, guarantee substitution, netting, provisions; gold haircut wrong -- P1.73; LGD* formula doesn't blend -- P1.75; mixed pool pro-rata not sequential -- P1.77; see also P1.7, P1.11, P1.30, P1.39-P1.41, P1.56)
+- [x] **[!]** CRM (collateral haircuts CRR 3-band + Basel 3.1 5-band, FX mismatch, maturity mismatch, multi-level allocation, guarantee substitution, netting, provisions; gold haircut wrong -- P1.73; LGD* formula doesn't blend -- P1.75; P1.77 sequential fill fixed; P1.70 per-type OC threshold fixed; see also P1.7, P1.11, P1.30, P1.39-P1.41, P1.56)
 - [x] Basel 3.1 parameter substitution (CRE22.70-85) -- including EL adjustment for guaranteed portion
 - [x] Double default (CRR Art. 153(3), Art. 202-203)
 - [x] **[!]** Output floor with PRA transitional schedule (60%/65%/70%/72.5%) -- exposure-level only, not portfolio-level; OF-ADJ/U-TREA/S-TREA missing -- see P1.9

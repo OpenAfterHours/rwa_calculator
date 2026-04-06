@@ -27,7 +27,9 @@ import polars as pl
 
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.constants import (
+    MIN_COLLATERALISATION_THRESHOLDS,
     NON_ELIGIBLE_RE_TYPES,
+    WATERFALL_ORDER,
     beneficiary_level_expr,
     collateral_category_expr,
     collateral_lgd_expr,
@@ -356,9 +358,18 @@ def _apply_collateral_unified(
     Performs a single group_by over all collateral levels (direct, facility,
     counterparty) and joins back to exposures for both SA EAD reduction and
     F-IRB LGD calculation.
+
+    Art. 231 sequential fill: when multiple collateral types secure an
+    exposure, each type absorbs exposure starting from the lowest LGDS.
+    The institution receives the most favourable ordering (lowest LGDS first):
+    financial (0%) -> covered_bond (11.25%) -> receivables -> real_estate
+    -> other_physical.  This replaces the former pro-rata allocation.
     """
     lgd_values = supervisory_lgd_values(is_basel_3_1)
     lgd_unsecured = lgd_values["unsecured"]
+
+    # LGDS values per waterfall category (Art. 230/231)
+    lgds = {key: lgd_values[key] for _, key, _ in WATERFALL_ORDER}
 
     # Under Basel 3.1, FSE senior unsecured LGDU = 45% (Art. 161(1)(a));
     # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
@@ -405,6 +416,17 @@ def _apply_collateral_unified(
         pl.col("value_after_haircut"),
     )
     is_fin = pl.col("is_financial_collateral_type")
+    cat = pl.col("_coll_category")
+
+    # Build per-category effectively_secured aggregates for Art. 231 waterfall
+    waterfall_aggs = []
+    for cat_values, _lgds_key, suffix in WATERFALL_ORDER:
+        waterfall_aggs.append(
+            pl.col("effectively_secured")
+            .filter(cat.is_in(cat_values))
+            .sum()
+            .alias(f"_e{suffix}")
+        )
 
     all_coll = (
         annotated.with_columns(
@@ -416,58 +438,45 @@ def _apply_collateral_unified(
                 # EAD aggregates (eligible financial only)
                 val_expr.filter(is_eligible).sum().alias("_cv"),
                 pl.col("market_value").filter(is_eligible).sum().alias("_mv"),
-                # LGD aggregates: financial
-                pl.col("effectively_secured").filter(is_fin).sum().alias("_ef"),
-                (pl.col("effectively_secured") * pl.col("collateral_lgd"))
-                .filter(is_fin)
-                .sum()
-                .alias("_wf"),
-                # LGD aggregates: non-financial
-                pl.col("effectively_secured").filter(~is_fin).sum().alias("_en"),
-                (pl.col("effectively_secured") * pl.col("collateral_lgd"))
-                .filter(~is_fin)
-                .sum()
-                .alias("_wn"),
+                # Raw non-financial adjusted_value for 30% threshold
                 pl.col("adjusted_value").filter(~is_fin).sum().alias("_rn"),
                 # Per-type collateral values for COREP
                 pl.col("adjusted_value")
-                .filter(pl.col("_coll_category") == "financial")
+                .filter(cat == "financial")
                 .sum()
                 .alias("_adj_fin"),
                 pl.col("adjusted_value")
-                .filter(pl.col("_coll_category") == "cash")
+                .filter(cat == "cash")
                 .sum()
                 .alias("_adj_cash"),
                 pl.col("adjusted_value")
-                .filter(pl.col("_coll_category") == "real_estate")
+                .filter(cat == "real_estate")
                 .sum()
                 .alias("_adj_re"),
                 pl.col("adjusted_value")
-                .filter(pl.col("_coll_category") == "receivables")
+                .filter(cat == "receivables")
                 .sum()
                 .alias("_adj_rec"),
                 pl.col("adjusted_value")
-                .filter(pl.col("_coll_category") == "other_physical")
+                .filter(cat == "other_physical")
                 .sum()
                 .alias("_adj_oth"),
             ]
+            + waterfall_aggs
         )
     )
 
+    _wf_suffixes = [suffix for _, _, suffix in WATERFALL_ORDER]
     _agg = [
         "_cv",
         "_mv",
-        "_ef",
-        "_wf",
-        "_en",
-        "_wn",
         "_rn",
         "_adj_fin",
         "_adj_cash",
         "_adj_re",
         "_adj_rec",
         "_adj_oth",
-    ]
+    ] + [f"_e{s}" for s in _wf_suffixes]
 
     # Split the small aggregated result for per-level joins
     coll_direct = (
@@ -557,65 +566,89 @@ def _apply_collateral_unified(
             + pl.col(f"{col}_c") * pl.col("_cw")
         )
 
-    exposures = exposures.with_columns(
-        [
-            _sum3("_cv").alias("collateral_adjusted_value"),
-            _sum3("_mv").alias("collateral_market_value"),
-            _sum3("_adj_fin").alias("collateral_financial_value"),
-            _sum3("_adj_cash").alias("collateral_cash_value"),
-            _sum3("_adj_re").alias("collateral_re_value"),
-            _sum3("_adj_rec").alias("collateral_receivables_value"),
-            _sum3("_adj_oth").alias("collateral_other_physical_value"),
-            _sum3("_ef").alias("_eff_fin_a"),
-            _sum3("_wf").alias("_wlgd_fin_a"),
-            _sum3("_en").alias("_eff_nf_a"),
-            _sum3("_wn").alias("_wlgd_nf_a"),
-            _sum3("_rn").alias("_raw_nf_a"),
-        ]
-    )
+    combine_exprs = [
+        _sum3("_cv").alias("collateral_adjusted_value"),
+        _sum3("_mv").alias("collateral_market_value"),
+        _sum3("_adj_fin").alias("collateral_financial_value"),
+        _sum3("_adj_cash").alias("collateral_cash_value"),
+        _sum3("_adj_re").alias("collateral_re_value"),
+        _sum3("_adj_rec").alias("collateral_receivables_value"),
+        _sum3("_adj_oth").alias("collateral_other_physical_value"),
+        _sum3("_rn").alias("_raw_nf_a"),
+    ]
+    # Per-category effectively_secured after multi-level combination
+    for suffix in _wf_suffixes:
+        combine_exprs.append(_sum3(f"_e{suffix}").alias(f"_eff_{suffix}_a"))
+    exposures = exposures.with_columns(combine_exprs)
 
-    # Min threshold: zero non-financial if raw < 30% of EAD
-    exposures = exposures.with_columns(
-        [
-            pl.when(pl.col("_raw_nf_a") >= 0.30 * pl.col("ead_gross"))
-            .then(pl.col("_eff_nf_a"))
+    # Per-type minimum collateralisation thresholds (Art. 230)
+    # Art. 230 requires the threshold to apply per collateral type, not across
+    # the combined non-financial pool.  Each type (real_estate, other_physical)
+    # must independently meet its 30% threshold to be eligible for LGDS
+    # reduction.  Financial, covered_bond, and receivables have no threshold.
+    _type_threshold: dict[str, tuple[float, str]] = {
+        "re": (MIN_COLLATERALISATION_THRESHOLDS["real_estate"], "collateral_re_value"),
+        "op": (
+            MIN_COLLATERALISATION_THRESHOLDS["other_physical"],
+            "collateral_other_physical_value",
+        ),
+    }
+    nf_threshold_exprs = []
+    for suffix in _wf_suffixes:
+        if suffix not in _type_threshold:
+            continue  # No threshold for fin/cb/rec
+        threshold, raw_col = _type_threshold[suffix]
+        if threshold <= 0:
+            continue
+        col_name = f"_eff_{suffix}_a"
+        nf_threshold_exprs.append(
+            pl.when(pl.col(raw_col) >= threshold * pl.col("ead_gross"))
+            .then(pl.col(col_name))
             .otherwise(pl.lit(0.0))
-            .alias("_eff_nf_final"),
-            pl.when(pl.col("_raw_nf_a") >= 0.30 * pl.col("ead_gross"))
-            .then(pl.col("_wlgd_nf_a"))
-            .otherwise(pl.lit(0.0))
-            .alias("_wlgd_nf_final"),
-        ]
-    )
+            .alias(col_name)
+        )
+    if nf_threshold_exprs:
+        exposures = exposures.with_columns(nf_threshold_exprs)
 
-    # total_collateral_for_lgd + lgd_secured (combined)
+    # --- Art. 231 sequential fill (waterfall) ---
+    # Allocate from lowest LGDS to highest. Each category absorbs up to
+    # min(category_total, remaining_exposure). Uses the cumulative-cap
+    # trick: es_i = min(cum_through_i, EAD) - min(cum_through_i-1, EAD).
+    ead = pl.col("ead_gross")
+    cum = pl.lit(0.0)
+    es_exprs: list[pl.Expr] = []
+    for suffix in _wf_suffixes:
+        prev_cum = cum
+        cum = cum + pl.col(f"_eff_{suffix}_a")
+        es_i = pl.min_horizontal(cum, ead) - pl.min_horizontal(prev_cum, ead)
+        es_exprs.append(es_i.alias(f"_es_{suffix}"))
+
+    total_secured_expr = pl.min_horizontal(cum, ead)
+
+    # Blended lgd_secured = sum(lgds_i * es_i) / total_secured
+    lgd_num = pl.lit(0.0)
+    for (_, lgds_key, suffix) in WATERFALL_ORDER:
+        lgd_num = lgd_num + pl.lit(lgds[lgds_key]) * pl.col(f"_es_{suffix}")
+
+    # Compute sequential allocations, then total + lgd_secured
+    exposures = exposures.with_columns(es_exprs)
     exposures = exposures.with_columns(
         [
-            (pl.col("_eff_fin_a") + pl.col("_eff_nf_final")).alias("total_collateral_for_lgd"),
-            pl.when(pl.col("_eff_fin_a") + pl.col("_eff_nf_final") > 0)
-            .then(
-                (pl.col("_wlgd_fin_a") + pl.col("_wlgd_nf_final"))
-                / (pl.col("_eff_fin_a") + pl.col("_eff_nf_final"))
-            )
+            total_secured_expr.alias("total_collateral_for_lgd"),
+            pl.when(total_secured_expr > 0)
+            .then(lgd_num / total_secured_expr)
             .otherwise(pl.lit(lgd_unsecured))
             .alias("lgd_secured"),
         ]
     )
 
     # --- Drop intermediate allocation columns ---
-    drop_cols = [f"{c}_{sfx}" for sfx in ["d", "f", "c"] for c in _agg] + [
-        "_fac_ead_total",
-        "_cp_ead_total",
-        "_fw",
-        "_cw",
-        "_eff_fin_a",
-        "_wlgd_fin_a",
-        "_eff_nf_a",
-        "_wlgd_nf_a",
-        "_raw_nf_a",
-        "_eff_nf_final",
-        "_wlgd_nf_final",
-    ]
+    drop_cols = (
+        [f"{c}_{sfx}" for sfx in ["d", "f", "c"] for c in _agg]
+        + ["_fac_ead_total", "_cp_ead_total", "_fw", "_cw", "_raw_nf_a"]
+        + [f"_eff_{s}_a" for s in _wf_suffixes]
+        + [f"_es_{s}" for s in _wf_suffixes]
+    )
     exposures = exposures.drop(drop_cols)
 
     # --- Apply EAD reduction + determine seniority-based LGD ---

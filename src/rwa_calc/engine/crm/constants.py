@@ -194,6 +194,8 @@ def collateral_category_expr() -> pl.Expr:
     return (
         pl.when(ct.is_in(["cash", "deposit"]))
         .then(pl.lit("cash"))
+        .when(ct.is_in(COVERED_BOND_TYPES))
+        .then(pl.lit("covered_bond"))
         .when(ct.is_in(FINANCIAL_TYPES))
         .then(pl.lit("financial"))
         .when(ct.is_in(RECEIVABLE_TYPES))
@@ -204,6 +206,17 @@ def collateral_category_expr() -> pl.Expr:
         .then(pl.lit("other_physical"))
         .otherwise(pl.lit("other"))
     )
+
+
+# Waterfall ordering for Art. 231 sequential fill (lowest LGDS first).
+# Each tuple: (category_filter_values, lgds_key, aggregate_suffix)
+WATERFALL_ORDER: list[tuple[list[str], str, str]] = [
+    (["cash", "financial"], "financial", "fin"),
+    (["covered_bond"], "covered_bond", "cb"),
+    (["receivables"], "receivables", "rec"),
+    (["real_estate"], "real_estate", "re"),
+    (["other_physical", "other"], "other_physical", "op"),
+]
 
 
 def beneficiary_level_expr(bt_col: str = "beneficiary_type") -> pl.Expr:

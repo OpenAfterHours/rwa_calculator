@@ -448,14 +448,13 @@ class SACalculator:
                     # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
                     pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
-                    # 1. Defaulted exposures: 150% or 100% (CRE20.88-90)
-                    # Provision ratio = provision_allocated / (ead + provision_deducted)
-                    # where denominator reconstructs pre-provision unsecured EAD
+                    # 1. Defaulted exposures: 150% or 100% (PRA PS1/26 Art. 127)
+                    # B31 provision ratio = provision_allocated / ead (exposure value)
+                    # NOT (ead + provision_deducted) — that is the CRR denominator
                     .when(pl.col("is_defaulted").fill_null(False))
                     .then(
                         pl.when(
-                            pl.col("provision_allocated")
-                            >= b31_def_threshold * (pl.col(_ead_col) + pl.col("provision_deducted"))
+                            pl.col("provision_allocated") >= b31_def_threshold * pl.col(_ead_col)
                         )
                         .then(pl.lit(b31_def_high_rw))
                         .otherwise(pl.lit(b31_def_low_rw))
@@ -559,7 +558,7 @@ class SACalculator:
                         .then(pl.lit(0.35))
                         .when(pl.col("cp_scra_grade") == "C")
                         .then(pl.lit(1.00))
-                        .otherwise(pl.lit(0.20))  # Default: assume Grade A
+                        .otherwise(pl.lit(1.00))  # Default: assume Grade C (conservative)
                     )
                     # Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))

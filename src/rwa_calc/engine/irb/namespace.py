@@ -239,11 +239,11 @@ class IRBLazyFrame:
                             1.0, 5.0
                         )
                     )
-                    .otherwise(pl.lit(5.0))
+                    .otherwise(pl.lit(2.5))
                     .alias("maturity"),
                 )
             else:
-                exprs.append(pl.lit(5.0).alias("maturity"))
+                exprs.append(pl.lit(2.5).alias("maturity"))
 
         # Turnover for SME correlation adjustment
         if "turnover_m" not in names:

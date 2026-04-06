@@ -87,14 +87,14 @@ class PDFloors:
 
     @classmethod
     def basel_3_1(cls) -> PDFloors:
-        """Basel 3.1 PD floors: differentiated by class (CRE30.55)."""
+        """Basel 3.1 PD floors: differentiated by class (PRA PS1/26 Art. 160/163)."""
         return cls(
-            corporate=Decimal("0.0005"),  # 0.05%
-            corporate_sme=Decimal("0.0005"),  # 0.05%
-            retail_mortgage=Decimal("0.0005"),  # 0.05%
-            retail_other=Decimal("0.0005"),  # 0.05%
-            retail_qrre_transactor=Decimal("0.0003"),  # 0.03%
-            retail_qrre_revolver=Decimal("0.0010"),  # 0.10%
+            corporate=Decimal("0.0005"),  # 0.05% Art. 160(1)
+            corporate_sme=Decimal("0.0005"),  # 0.05% Art. 160(1)
+            retail_mortgage=Decimal("0.0010"),  # 0.10% Art. 163(1)(b) secured by UK RRE
+            retail_other=Decimal("0.0005"),  # 0.05% Art. 163(1)(c) all other retail
+            retail_qrre_transactor=Decimal("0.0005"),  # 0.05% Art. 163(1)(c) all other retail
+            retail_qrre_revolver=Decimal("0.0010"),  # 0.10% Art. 163(1)(a) QRRE revolvers
         )
 
 
@@ -356,7 +356,7 @@ class PostModelAdjustmentConfig:
         cls,
         pma_rwa_scalar: Decimal = Decimal("0.0"),
         pma_el_scalar: Decimal = Decimal("0.0"),
-        mortgage_rw_floor: Decimal = Decimal("0.15"),
+        mortgage_rw_floor: Decimal = Decimal("0.10"),
         unrecognised_exposure_scalar: Decimal = Decimal("0.0"),
     ) -> PostModelAdjustmentConfig:
         """
@@ -365,7 +365,7 @@ class PostModelAdjustmentConfig:
         Args:
             pma_rwa_scalar: General PMA as fraction of base RWEA (default 0%)
             pma_el_scalar: General PMA as fraction of base EL (default 0%)
-            mortgage_rw_floor: Minimum RW for residential mortgages (default 15%)
+            mortgage_rw_floor: Minimum RW for residential mortgages (default 10%, Art. 154(4A)(b))
             unrecognised_exposure_scalar: Unrecognised exposure add-on (default 0%)
         """
         return cls(
@@ -409,7 +409,7 @@ class RetailThresholds:
         """Basel 3.1 retail thresholds (GBP)."""
         return cls(
             max_exposure_threshold=Decimal("880000"),  # GBP 880k
-            qrre_max_limit=Decimal("100000"),  # GBP 100k
+            qrre_max_limit=Decimal("90000"),  # GBP 90k per Art. 147(5A)(c)
         )
 
 

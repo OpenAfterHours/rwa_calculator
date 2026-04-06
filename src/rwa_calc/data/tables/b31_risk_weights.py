@@ -101,8 +101,8 @@ B31_ADC_RISK_WEIGHT = Decimal("1.50")
 B31_ADC_PRESOLD_RISK_WEIGHT = Decimal("1.00")
 
 # =============================================================================
-# CORPORATE CQS-BASED RISK WEIGHTS — BASEL 3.1 (CRE20.22-26)
-# Differs from CRR: CQS3 = 75% (was 100%), CQS5 = 100% (was 150%)
+# CORPORATE CQS-BASED RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 122(2) Table 6)
+# Differs from CRR: CQS3 = 75% (was 100%). PRA retains CQS5 = 150% (BCBS: 100%).
 # =============================================================================
 
 B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = {
@@ -110,7 +110,7 @@ B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = {
     2: Decimal("0.50"),  # A+ to A-
     3: Decimal("0.75"),  # BBB+ to BBB- (CRR: 100%)
     4: Decimal("1.00"),  # BB+ to BB-
-    5: Decimal("1.00"),  # B+ to B- (CRR: 150%)
+    5: Decimal("1.50"),  # B+ to B- (PRA retains 150%, BCBS reduced to 100%)
     6: Decimal("1.50"),  # CCC+ and below
     None: Decimal("1.00"),  # Unrated
 }
@@ -168,9 +168,9 @@ B31_SUBORDINATED_DEBT_RW = Decimal("1.50")
 # DEFAULTED EXPOSURE RISK WEIGHTS — BASEL 3.1 (CRE20.88-90)
 # =============================================================================
 
-B31_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # CRE20.89: provisions >= 50%
-B31_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # CRE20.88: provisions < 50%
-B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.50")  # 50% threshold
+B31_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # Art. 127: provisions >= 20%
+B31_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # Art. 127: provisions < 20%
+B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # PRA PS1/26 Art. 127: 20% threshold
 
 
 def _create_b31_corporate_df() -> pl.DataFrame:
@@ -178,7 +178,7 @@ def _create_b31_corporate_df() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "cqs": [1, 2, 3, 4, 5, 6, None],
-            "risk_weight": [0.20, 0.50, 0.75, 1.00, 1.00, 1.50, 1.00],
+            "risk_weight": [0.20, 0.50, 0.75, 1.00, 1.50, 1.50, 1.00],
             "exposure_class": ["CORPORATE"] * 7,
         }
     ).with_columns(

@@ -5,10 +5,11 @@
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
+**Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
 **Gap summary:** P1 (calculation correctness): 84 (+P1.9a sub-item) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.51 (B31 defaulted threshold 20% not 50%), P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility), P1.24 (non-IG corporate 135%), P1.25 (non-regulatory retail 100%), P1.66 (QRRE threshold GBP 90k not 100k), P1.79 (CRR PD floor 0.03% should be 0.05% for corporate/inst/sov) [P1.46, P1.42 now fixed]
+- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility), P1.24 (non-IG corporate 135%), P1.25 (non-regulatory retail 100%), P1.66 (QRRE threshold GBP 90k not 100k), P1.79 (CRR PD floor 0.03% should be 0.05% for corporate/inst/sov) [P1.46, P1.42, P1.51 now fixed]
 - *Capital overstatement (conservative but wrong):* P1.72 (CIU fallback 1250% should be 150%/250%/400%) [P1.36, P1.33, P1.22 now fixed]
 - *CRM formula/value errors:* P1.73 (gold haircut 0% vs 20%), P1.74 (main-index equity 15% vs 20%), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
@@ -48,25 +49,18 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fixed:** 2026-04-06
 
 ### P1.42 Basel 3.1 equity SA weights wrong -- listed equity gets 100% instead of 250%
-- **Status:** [~] CRR weights applied under B31
-- **Impact:** `equity/calculator.py:427-491` (`_apply_equity_weights_sa`) applies CRR-era weights regardless of framework:
-  - Listed equity: **100%** in code -> should be **250%** under B31 Art. 133(3)
-  - Transitional floor partially compensates (160% rising to 250%), but post-2030 or with transitional disabled, 100% applies
-  - Missing B31 categories: subordinated debt / non-equity own funds = **150%** (Art. 133(5)), speculative unlisted CQS 1-2 = **100%**, CQS 3-6/unrated = **150%** (Art. 133(4))
-  - No `config.is_basel_3_1` branching in `_apply_equity_weights_sa`
-  - **Additional finding:** EquityTransitionalConfig schedule exists in config but is never applied in calculator (dead config). IRB_SIMPLE_EQUITY_RISK_WEIGHTS still exported under B31 config (equity IRB removed under B31).
-- **File:Line:** `engine/equity/calculator.py:427-491`, `data/tables/crr_equity_rw.py`
+- **Status:** [x] Complete
+- **Impact:** B31 SA equity weights now implemented with framework branching in `_apply_equity_weights_sa` → `_apply_b31_equity_weights_sa`. New data table at `data/tables/b31_equity_rw.py`. Weights applied: listed/exchange-traded = 250%, speculative unlisted = 400%, government-supported = 100%, CIU fallback = 250%. Note: subordinated debt (150%) is deferred pending `EquityType.SUBORDINATED_DEBT` enum addition (see P1.59).
+- **File:Line:** `engine/equity/calculator.py`, `data/tables/b31_equity_rw.py`
 - **Spec ref:** PRA PS1/26 Art. 133(3)-(5)
-- **Fix:** Add B31 branch in `_apply_equity_weights_sa`. Create `b31_equity_rw.py` data table with B31 weights (250%/400%/150%/100%). Add `EquityType` enum members for subordinated debt and speculative CQS categories. Wire EquityTransitionalConfig into calculator. Gate IRB_SIMPLE_EQUITY_RISK_WEIGHTS behind CRR-only check.
-- **Tests needed:** Unit tests for B31 equity SA weights by category.
+- **Fixed:** 2026-04-06
 
 ### P1.43 Equity `get_equity_result_bundle` skips transitional floor (bug)
-- **Status:** [~] Divergent code paths
-- **Impact:** `equity/calculator.py:146-201` (`get_equity_result_bundle`) -- the main pipeline entry point -- skips `_apply_transitional_floor` entirely. Goes directly from weight application to `_calculate_rwa`. The alternative entry point `calculate_branch` (lines 86-112) correctly calls `_apply_transitional_floor`. This means the pipeline path produces **unfloored equity RWA** for 2027-2030 transitional period.
-- **File:Line:** `engine/equity/calculator.py:146-201`
+- **Status:** [x] Complete
+- **Impact:** `get_equity_result_bundle` now calls `_apply_transitional_floor` before `_calculate_rwa`, matching `calculate_branch` behaviour. Both entry points now produce identical results.
+- **File:Line:** `engine/equity/calculator.py`
 - **Spec ref:** PRA PS1/26 equity transitional schedule
-- **Fix:** Add `_apply_transitional_floor` call in `get_equity_result_bundle` after weight application.
-- **Tests needed:** Unit test verifying both entry points produce identical results.
+- **Fixed:** 2026-04-06
 
 ### P1.47 Slotting PF pre-operational table uses BCBS values not in PRA PS1/26
 - **Status:** [~] BCBS table, not PRA
@@ -111,20 +105,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for CQS 4 gov bond eligibility (15%), CQS 5-6 gov bond ineligibility, CQS 4 corp bond ineligibility.
 
 ### P1.1 PD floor values incorrect for Basel 3.1 (PRA Art. 160/163)
-- **Status:** [~] Two values wrong, two fields missing
-- **Impact:** PRA PS1/26 Art. 163(1) specifies retail PD floors that differ from what's coded:
-  - `retail_mortgage` = 0.05% in code -> should be **0.10%** per Art. 163(1)(b) "retail exposures secured by residential immovable property located in the UK"
-  - `retail_qrre_transactor` = 0.03% in code -> should be **0.05%** per Art. 163(1)(c) "all other retail exposures" (transactors are not singled out)
-  - No `sovereign` field -- falls through to `self.corporate` (0.05%). Under Basel 3.1, sovereigns must use SA (Art. 147A), so PD floor is moot, but should be explicit.
-  - No `institution` field -- falls through to `self.corporate` (0.05%). Art. 160(1) confirms institution PD floor = 0.05%, so default is coincidentally correct but implicit.
-- **File:Line:** `contracts/config.py:91-98` (PDFloors.basel_3_1)
-- **Spec ref:** PRA PS1/26 Art. 163(1), Art. 160(1). `docs/specifications/crr/firb-calculation.md`
-- **Fix:** In `PDFloors.basel_3_1()` at `config.py:91-98`:
-  - Change `retail_mortgage` to `Decimal("0.0010")` (0.10%)
-  - Change `retail_qrre_transactor` to `Decimal("0.0005")` (0.05%)
-  - Add `sovereign` and `institution` fields to PDFloors for explicit routing in `get_floor()`
-  - Update `get_floor()` to handle all exposure classes explicitly
-- **Tests needed:** Unit tests in `tests/contracts/test_config.py`. Verify IRB formula tests use correct floors.
+- **Status:** [x] Complete
+- **Impact:** `PDFloors.basel_3_1()` now uses correct values: `retail_mortgage` = 0.10% and `retail_qrre_transactor` = 0.05% per PRA PS1/26 Art. 163(1). Pre-existing test expectations that assumed old values were corrected in this increment.
+- **File:Line:** `contracts/config.py`
+- **Spec ref:** PRA PS1/26 Art. 163(1), Art. 160(1)
+- **Fixed:** 2026-04-06
 - **Doc fix:** Update `docs/framework-comparison/technical-reference.md` PD floor table (line 33 shows 0.05% for retail mortgage -- should be 0.10%). Fix `docs/specifications/crr/firb-calculation.md` if it references specific values.
 
 ### P1.2 Retail LGD floors missing (PRA Art. 164(4))
@@ -333,15 +318,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Verified:** 2026-04-06 by code audit agent.
 
 ### P1.22 IRB maturity default inconsistency (5.0 vs 2.5)
-- **Status:** [~] Inconsistent defaults
-- **Impact:** Two different default maturity values exist in `engine/irb/namespace.py`:
-  - `prepare_columns()` line 246: defaults to **5.0** when no maturity column
-  - `apply_all_formulas()` line 541: defaults to **2.5** when column absent
-  CRR Art. 162(2) allows 2.5 as supervisory default for wholesale. In practice, `prepare_columns()` runs first in the pipeline chain so 5.0 wins -- this is over-conservative (produces higher capital). If `apply_all_formulas()` is called independently, 2.5 applies. IRB engine agent confirms: default maturity in pipeline is 5.0 years, should be FIRB supervisory 2.5 years for exposures with no maturity date.
-- **File:Line:** `engine/irb/namespace.py:246,541`
-- **Spec ref:** CRR Art. 162(2). `docs/specifications/crr/firb-calculation.md` line 106
-- **Fix:** Align both defaults to 2.5 (regulatory supervisory default) or make the default configurable.
-- **Tests needed:** Unit test verifying default maturity behavior.
+- **Status:** [x] Complete
+- **Impact:** Both locations in `engine/irb/namespace.py` now default to 2.5 years (CRR Art. 162(2) supervisory default). Pre-existing test expectations corrected.
+- **File:Line:** `engine/irb/namespace.py`
+- **Spec ref:** CRR Art. 162(2)
+- **Fixed:** 2026-04-06
 
 ### P1.23 Duplicated IRB defaulted treatment code
 - **Status:** [~] Divergence risk
@@ -440,12 +421,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for FSE vs non-FSE LGD assignment.
 
 ### P1.33 Mortgage RW floor is 10%, not 15% (Art. 154(4A)(b))
-- **Status:** [~] Wrong default value
-- **Impact:** PRA PS1/26 Art. 154(4A)(b) specifies the A-IRB mortgage RW floor at **10%** of exposure value. `PostModelAdjustmentConfig.basel_3_1()` at `config.py:359` defaults to `Decimal("0.15")` (15%). This **overstates** capital by 50% for floored mortgage exposures. IRB engine agent notes: verified correct in post-model adjustments at "default 15%".
-- **File:Line:** `contracts/config.py:359` (PostModelAdjustmentConfig.basel_3_1)
+- **Status:** [x] Complete
+- **Impact:** `PostModelAdjustmentConfig.basel_3_1()` now defaults `mortgage_rw_floor` to `Decimal("0.10")` (10%) per PRA PS1/26 Art. 154(4A)(b). Pre-existing test expectations corrected.
+- **File:Line:** `contracts/config.py`
 - **Spec ref:** PRA PS1/26 Art. 154(4A)(b)
-- **Fix:** Change `mortgage_rw_floor` default from `Decimal("0.15")` to `Decimal("0.10")` in `PostModelAdjustmentConfig.basel_3_1()`.
-- **Tests needed:** Update acceptance tests expecting 15% floor.
+- **Fixed:** 2026-04-06
 
 ### P1.34 SME correlation adjustment uses EUR parameters under B31 (Art. 153(4))
 - **Status:** [~] EUR-based formula, should be GBP
@@ -563,12 +543,12 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for each sub-category.
 
 ### P1.59 IRB_SIMPLE_EQUITY_RISK_WEIGHTS exported under B31 config
-- **Status:** [ ] Not started
-- **Impact:** Under Basel 3.1, equity exposures must use SA only (Art. 147A removes IRB for equity). The IRB Simple equity risk weight table (`crr_equity_rw.py`) is still exported and available under B31 configuration. While the equity calculator may not invoke it for B31, the presence of the export is misleading and could lead to incorrect usage.
+- **Status:** [ ] Not started (deferred)
+- **Impact:** Under Basel 3.1, equity exposures must use SA only (Art. 147A removes IRB for equity). The IRB Simple equity risk weight table (`crr_equity_rw.py`) is still exported and available under B31 configuration. While the equity calculator does not invoke it for B31 (P1.42 now implements B31 SA weights), the presence of the export is misleading and could lead to incorrect usage. Additionally, the `EquityType.SUBORDINATED_DEBT` enum member needed for the 150% subordinated debt weight (Art. 133(5)) is not yet added -- deferred from P1.42.
 - **File:Line:** `data/tables/crr_equity_rw.py`, `contracts/config.py`
-- **Spec ref:** PRA PS1/26 Art. 147A
-- **Fix:** Gate the IRB_SIMPLE_EQUITY_RISK_WEIGHTS export behind a CRR-only check, or remove from B31 config namespace. Add a CalculationError if IRB equity is attempted under B31.
-- **Tests needed:** Unit test that B31 config does not expose IRB equity weights.
+- **Spec ref:** PRA PS1/26 Art. 147A, Art. 133(5)
+- **Fix:** Gate the IRB_SIMPLE_EQUITY_RISK_WEIGHTS export behind a CRR-only check, or remove from B31 config namespace. Add a CalculationError if IRB equity is attempted under B31. Add `EquityType.SUBORDINATED_DEBT` enum member and wire 150% weight.
+- **Tests needed:** Unit test that B31 config does not expose IRB equity weights. Unit test for subordinated debt 150% RW.
 
 ### P1.60 No B31 FIRB LGD DataFrame generator
 - **Status:** [ ] Not started
@@ -1291,20 +1271,20 @@ These items are verified complete as of 0.1.64. Items with **[!]** have known ga
 
 - [x] All 8 pipeline stages (loader, hierarchy, classifier, CRM, SA/IRB/slotting/equity, aggregator)
 - [x] **[!]** CRR SA risk weights (core classes: sovereign, institution, corporate, retail, RE, defaulted, equity; PSE/RGLA/MDB/Int.Org/Other Items pending -- see P1.52-P1.55)
-- [x] **[!]** Basel 3.1 SA risk weights (residential/commercial RE loan-splitting, ECRA/SCRA, corporate sub-categories, ADC, equity transitional; SCRA enhanced sub-grade/short-term missing -- see P1.12, P1.26; equity B31 weights wrong -- see P1.42)
+- [x] **[!]** Basel 3.1 SA risk weights (residential/commercial RE loan-splitting, ECRA/SCRA, corporate sub-categories, ADC, equity transitional; SCRA enhanced sub-grade/short-term missing -- see P1.12, P1.26; equity B31 weights now implemented -- see P1.42 [fixed])
 - [x] Basel 3.1 SA specialised lending (Art. 122A-122B) -- OF/CF=100%, PF pre-op=130%, PF op=100%, PF high-quality=80%
-- [x] **[!]** Basel 3.1 provision-coverage-based defaulted treatment (CRE20.87-90) -- 100% RW / 150% RW (but provision threshold uses 50% instead of B31 20% -- see P1.51)
+- [x] Basel 3.1 provision-coverage-based defaulted treatment (CRE20.87-90) -- 100% RW / 150% RW; threshold 20%, denominator EAD only -- see P1.51 [fixed]
 - [x] Currency mismatch 1.5x RW multiplier (Art. 123B / CRE20.93) -- Basel 3.1 only, retail + RE classes
 - [x] F-IRB calculation (supervisory LGD, PD floors, correlation, maturity adjustment, FI scalar)
-- [x] **[!]** A-IRB calculation (own LGD/CCF, LGD floors, post-model adjustments; mortgage RW floor is 15% but should be 10% -- see P1.33)
+- [x] A-IRB calculation (own LGD/CCF, LGD floors, post-model adjustments; mortgage RW floor 10% -- see P1.33 [fixed])
 - [x] Slotting (CRR 4 tables + Basel 3.1 3 tables + subgrades)
-- [x] **[!]** Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback 250%; CIU look-through/mandate partial -- see P1.61; B31 equity weights not implemented -- see P1.42; transitional floor not applied in pipeline -- see P1.43)
+- [x] **[!]** Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback 250%; CIU look-through/mandate partial -- see P1.61; B31 equity SA weights implemented -- see P1.42 [fixed]; transitional floor applied in pipeline -- see P1.43 [fixed]; IRB equity table still exported under B31 -- see P1.59)
 - [x] **[!]** CRM (collateral haircuts CRR 3-band + Basel 3.1 5-band, FX mismatch, maturity mismatch, multi-level allocation, guarantee substitution, netting, provisions; gold haircut wrong -- P1.73; LGD* formula doesn't blend -- P1.75; mixed pool pro-rata not sequential -- P1.77; see also P1.7, P1.11, P1.30, P1.39-P1.41, P1.56)
 - [x] Basel 3.1 parameter substitution (CRE22.70-85) -- including EL adjustment for guaranteed portion
 - [x] Double default (CRR Art. 153(3), Art. 202-203)
 - [x] **[!]** Output floor with PRA transitional schedule (60%/65%/70%/72.5%) -- exposure-level only, not portfolio-level; OF-ADJ/U-TREA/S-TREA missing -- see P1.9
 - [x] Supporting factors (CRR SME + infrastructure, removed under Basel 3.1)
-- [x] **[!]** CCF (SA/FIRB/AIRB, Basel 3.1 UCC changes; F-IRB B31 CCF uses CRR 75% not SA CCFs -- P1.36 CRITICAL; A-IRB revolving gate missing -- P1.3; 40% CCF category missing -- P1.29)
+- [x] **[!]** CCF (SA/FIRB/AIRB, Basel 3.1 UCC changes; F-IRB B31 CCF now uses SA CCFs -- P1.36 [fixed]; A-IRB revolving gate missing -- P1.3; 40% CCF category missing -- P1.29)
 - [x] Provisions (multi-level, SA drawn-first deduction, IRB EL comparison, T2 credit cap)
 - [x] Dual-framework comparison (DualFrameworkRunner, CapitalImpactAnalyzer, TransitionalScheduleRunner)
 - [x] COREP C 07.00 / C 08.01 / C 08.02 (basic structure, CRR + Basel 3.1 OF variants)

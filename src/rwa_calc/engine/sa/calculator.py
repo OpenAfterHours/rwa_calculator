@@ -70,6 +70,9 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
+    PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
+    PSE_SHORT_TERM_RW,
+    PSE_UNRATED_DEFAULT_RW,
     QCCP_CLIENT_CLEARED_RW,
     QCCP_PROPRIETARY_RW,
     RESIDENTIAL_MORTGAGE_PARAMS,
@@ -367,6 +370,10 @@ class SACalculator:
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("sl_project_phase"))
         if "is_qrre_transactor" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_qrre_transactor"))
+        if "residual_maturity_years" not in schema.names():
+            missing_cols.append(
+                pl.lit(None).cast(pl.Float64).alias("residual_maturity_years")
+            )
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -387,6 +394,8 @@ class SACalculator:
                 # Map detailed classes to lookup classes
                 pl.when(_upper.str.contains("CENTRAL_GOVT", literal=True))
                 .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
+                .when(_upper == "PSE")
+                .then(pl.lit("PSE"))
                 .when(_upper.str.contains("INSTITUTION", literal=True))
                 .then(pl.lit("INSTITUTION"))
                 .when(_upper.str.contains("CORPORATE", literal=True))
@@ -495,7 +504,27 @@ class SACalculator:
                         | (pl.col("property_type").fill_null("") == "commercial")
                     )
                     .then(b31_commercial_rw_expr("_cqs_risk_weight"))
-                    # 4. SCRA-based unrated institutions (CRE20.16-21)
+                    # 4a. PSE short-term (Art. 116(3)): ≤3m → 20% flat
+                    # No domestic currency condition. Overrides all CQS-based weights.
+                    .when(
+                        (_uc == "PSE")
+                        & pl.col("residual_maturity_years").is_not_null()
+                        & (pl.col("residual_maturity_years") <= 0.25)
+                    )
+                    .then(pl.lit(float(PSE_SHORT_TERM_RW)))
+                    # 4b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
+                    # Rated PSEs use Table 2A from CQS join; unrated need sovereign CQS.
+                    # UK sovereign CQS=1 → 20%. Non-UK: conservative 100%.
+                    .when(
+                        (_uc == "PSE")
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(
+                        pl.when(pl.col("cp_country_code") == "GB")
+                        .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
+                        .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
+                    )
+                    # 4c. SCRA-based unrated institutions (CRE20.16-21)
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
                     # Null SCRA grade defaults to Grade C (150%) — conservative treatment
                     # per PRA PS1/26 Art. 120A (missing data must not produce favourable RW)
@@ -681,14 +710,31 @@ class SACalculator:
                     # 5a. Regulatory retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
-                    # 6. Unrated covered bonds: derive from issuer institution RW
+                    # 6a. PSE short-term (Art. 116(3)): ≤3m → 20% flat
+                    .when(
+                        (_uc == "PSE")
+                        & pl.col("residual_maturity_years").is_not_null()
+                        & (pl.col("residual_maturity_years") <= 0.25)
+                    )
+                    .then(pl.lit(float(PSE_SHORT_TERM_RW)))
+                    # 6b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
+                    .when(
+                        (_uc == "PSE")
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(
+                        pl.when(pl.col("cp_country_code") == "GB")
+                        .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
+                        .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
+                    )
+                    # 7. Unrated covered bonds: derive from issuer institution RW
                     # (CRR Art. 129(5)) — unrated institution = 40% → covered bond = 20%
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
                     .then(pl.lit(0.20))
-                    # 7. Default: CQS-based or 100%
+                    # 8. Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
                 ]
@@ -844,6 +890,26 @@ class SACalculator:
                     .when(pl.col("guarantor_cqs") == 6)
                     .then(pl.lit(1.50))
                     .otherwise(pl.lit(0.40))  # Unrated
+                )
+                # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
+                .when(_gec == "pse")
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))  # Table 2A: CQS 3 = 50% (differs from institutions)
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    # Unrated: sovereign-derived; UK → 20%, otherwise 100%
+                    .otherwise(
+                        pl.when(pl.col("guarantor_country_code").fill_null("") == "GB")
+                        .then(pl.lit(0.20))
+                        .otherwise(pl.lit(1.0))
+                    )
                 )
                 # Corporate guarantors (corporate, company)
                 .when(_gec.is_in(["corporate", "corporate_sme"]))

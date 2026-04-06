@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (comprehensive audit via PDF + source comparison + multi-agent gap analysis; CRM PDF comparison: gold 0%→20%, main-index equity 15%→20%, LGD* blending formula, 5-band bond haircuts, sequential mixed pool, FX mismatch for guarantees, life insurance RW table, CLN as cash collateral, Rule 4.11 narrowed, CQS 4 gov bond eligibility corrected, overcollateralisation ratios flagged)
-**Current version:** 0.1.71 | **Test suite:** ~2,360 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter) | P1.47 fixed, P1.79/P1.66 verified as false positives.
+**Last updated:** 2026-04-06 (P1.52 PSE risk weights implemented; comprehensive audit via PDF + source comparison + multi-agent gap analysis)
+**Current version:** 0.1.72 | **Test suite:** ~2,389 collected (1,775 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~42 skipped (benchmarks + xlsxwriter) | P1.52 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* P1.53-P1.55 (RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
 - *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
@@ -71,12 +71,18 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** PRA PS1/26 Art. 153(5) Table A
 
 ### P1.52 PSE risk weight tables missing from code (Art. 116)
-- **Status:** [ ] Not started
-- **Impact:** Public Sector Entities have no risk weight lookup table in code. All PSE exposures default to 100%. Art. 116 defines three sub-treatments: (a) unrated PSEs treated like institution of their sovereign (sovereign-derived), (b) rated PSEs use institution CQS table, (c) short-term <= 3m exposures get 20%. PSE is a valid ExposureClass enum member but has no corresponding risk weight table in `data/tables/`.
-- **File:Line:** `data/tables/crr_risk_weights.py` (no PSE table exists); `engine/sa/calculator.py` (no PSE branch)
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** PSE risk weights now implemented with full Art. 116 treatment:
+  - Rated PSEs (CQS 1-6): Table 2A own-rating weights via CQS join (CQS 3 = 50%)
+  - Unrated UK PSEs: 20% sovereign-derived (UK sovereign CQS=1, Table 2)
+  - Unrated non-UK PSEs: 100% conservative default (sovereign CQS unknown)
+  - Short-term (≤3m): 20% flat (Art. 116(3)), overrides all CQS-based weights
+  - PSE guarantor substitution: Table 2A for rated, sovereign-derived for unrated
+- **File:Line:** `data/tables/crr_risk_weights.py` (PSE tables + _create_pse_df), `engine/sa/calculator.py` (PSE branches in both B31 and CRR when-chains + guarantee substitution)
 - **Spec ref:** CRR Art. 116, PRA PS1/26 Art. 116
-- **Fix:** Add PSE risk weight tables (sovereign-derived + rated). Add PSE branch in SA calculator with sovereign lookup for unrated and CQS table for rated. Add 3m short-term exception.
-- **Tests needed:** Unit tests for PSE sovereign-derived, rated, and short-term paths.
+- **Tests:** 29 new unit tests: 9 data table tests, 11 CRR calculator tests, 9 B31 calculator tests. All pass. Test count: 2389 (was 2360).
+- **Limitation:** Non-UK unrated PSEs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (not yet in schema). UK PSEs are the primary use case for a PRA-regulated calculator.
 
 ### P1.53 RGLA risk weight tables missing from code (Art. 115)
 - **Status:** [ ] Not started

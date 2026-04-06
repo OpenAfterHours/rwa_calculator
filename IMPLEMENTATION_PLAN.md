@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.80 corporate subordinated LGD floor fix implemented)
-**Current version:** 0.1.78 | **Test suite:** ~2,535 collected (~2,041 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.80 fixed.
+**Last updated:** 2026-04-06 (P1.2 retail LGD floors implemented)
+**Current version:** 0.1.78 | **Test suite:** ~2,545 collected (~2,041 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.2 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,8 +9,8 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69 now fixed/verified]
-- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
+- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
@@ -137,21 +137,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Doc fix:** Update `docs/framework-comparison/technical-reference.md` PD floor table (line 33 shows 0.05% for retail mortgage -- should be 0.10%). Fix `docs/specifications/crr/firb-calculation.md` if it references specific values.
 
 ### P1.2 Retail LGD floors missing (PRA Art. 164(4))
-- **Status:** [ ] Not distinguished from corporate LGD floors
-- **Impact:** PRA PS1/26 Art. 164(4) defines retail-specific LGD floors that differ significantly from corporate (Art. 161(5)):
-  - (a) Retail secured by residential RE: **5% flat** (code uses corporate 10% -- wrong for retail)
-  - (b)(i) QRRE unsecured: **50% flat** (not in code)
-  - (b)(ii) Other unsecured retail: **30% flat** (not in code)
-  - (c) Other secured retail: LGD* formula with **LGDU=30%** (code uses corporate LGDU=25%)
-  - (c)(iv) LGDS values for retail secured: same as corporate (0%, 10%, 10%, 15%)
-  The current `LGDFloors` dataclass has a single set of collateral-type-based floors that apply to all exposure classes. It cannot represent the retail/corporate distinction.
-- **File:Line:** `contracts/config.py:110-130` (LGDFloors)
-- **Spec ref:** PRA PS1/26 Art. 164(4), Art. 161(5). `docs/specifications/crr/airb-calculation.md`
-- **Fix:** Either:
-  - (a) Add retail-specific fields to `LGDFloors` (e.g., `retail_rre`, `retail_qrre_unsecured`, `retail_other_unsecured`, `retail_lgdu`) and update `get_floor()` to accept an `exposure_class` parameter; OR
-  - (b) Create a separate `RetailLGDFloors` dataclass
-  Update IRB calculator to use the correct floor based on exposure class.
-- **Tests needed:** Unit tests for retail vs corporate LGD floor selection. Acceptance tests in B31-C (AIRB).
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Retail-specific LGD floors now implemented per PRA PS1/26 Art. 164(4):
+  - (a) RRE-secured retail: **5%** floor (Art. 164(4)(a)) — new `retail_rre` field
+  - (b)(i) QRRE unsecured: **50%** floor (Art. 164(4)(b)(i)) — new `retail_qrre_unsecured` field
+  - (b)(ii) Other retail unsecured: **30%** floor (Art. 164(4)(b)(ii)) — new `retail_other_unsecured` field
+  - (c) LGDU for secured retail formula: **30%** (Art. 164(4)(c)) — new `retail_lgdu` field
+  - LGDS values for retail same as corporate (0%/10%/10%/15%)
+  Both `_lgd_floor_expression` and `_lgd_floor_expression_with_collateral` now route by exposure_class when available, returning retail-specific floors for retail_mortgage/retail_qrre/retail_other. `get_floor()` accepts optional `exposure_class` parameter. All QRRE exposures get 50% regardless of seniority (not just subordinated). Retail_mortgage with RRE collateral gets 5% (corporate gets 10%). Factory methods updated with retail fields.
+- **File:Line:** `contracts/config.py:101-210` (LGDFloors), `engine/irb/formulas.py:117-242` (expressions)
+- **Spec ref:** PRA PS1/26 Art. 164(4), Art. 161(5)
+- **Tests:** 10 new unit tests in `test_basel31_engine.py` (TestLGDFloors): retail_mortgage 5%, retail_qrre 50%, retail_other 30%, RRE collateral retail vs corporate, retail financial collateral 0%, retail via namespace, retail above floor unchanged. 1 new contract test in `test_config.py` (get_floor_retail_exposure_classes). Existing QRRE test updated (senior QRRE now correctly gets 50%). Acceptance test B31-C2 updated from 25% to 30% for LOAN_RTL_AIRB_001 (retail_other). Test count: 2545 (was 2535).
+- **Limitation:** Art. 164(4)(c) blended LGD* formula for partially-collateralised retail not yet implemented — requires secured/unsecured proportion data. LGDS values applied as simple per-collateral floors for now.
 
 ### P1.3 A-IRB CCF revolving restriction (CRE32.27)
 - **Status:** [ ] Not implemented

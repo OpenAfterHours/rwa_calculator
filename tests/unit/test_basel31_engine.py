@@ -919,14 +919,14 @@ class TestLGDFloors:
         # Corporate senior: 25%
         assert result["lgd_floor"][1] == pytest.approx(0.25)
 
-    def test_retail_qrre_subordinated_floor_50pct_with_exposure_class(
+    def test_retail_qrre_floor_50pct_with_exposure_class(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Art. 164(4)(b)(i): Retail QRRE subordinated unsecured LGD floor is 50%.
+        """Art. 164(4)(b)(i): ALL retail QRRE unsecured exposures get 50% LGD floor.
 
-        Only retail QRRE exposures get the 50% subordinated unsecured floor.
-        Corporate subordinated gets 25%.
+        The 50% floor applies to all QRRE exposures regardless of seniority.
+        Corporate exposures get 25% regardless of seniority (Art. 161(5)).
         """
         lf = pl.LazyFrame(
             {
@@ -945,8 +945,8 @@ class TestLGDFloors:
         assert result["lgd_floor"][0] == pytest.approx(0.50)
         # Corporate subordinated: 25% (Art. 161(5))
         assert result["lgd_floor"][1] == pytest.approx(0.25)
-        # Retail QRRE senior: 25% (only subordinated QRRE gets 50%)
-        assert result["lgd_floor"][2] == pytest.approx(0.25)
+        # Retail QRRE senior: 50% (ALL QRRE gets 50%, Art. 164(4)(b)(i))
+        assert result["lgd_floor"][2] == pytest.approx(0.50)
 
     def test_corporate_subordinated_via_namespace(
         self,
@@ -970,6 +970,199 @@ class TestLGDFloors:
         # Both get 25% floor — corporate subordinated same as senior (Art. 161(5))
         assert result["lgd_floored"][0] == pytest.approx(0.25)
         assert result["lgd_floored"][1] == pytest.approx(0.25)
+
+    # --- Retail LGD floor tests (Art. 164(4)) ---
+
+    def test_retail_mortgage_floor_5pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(a): Retail mortgage LGD floor is 5% (RRE-secured).
+
+        Without collateral_type column, retail_mortgage is assumed RRE-secured
+        and gets the 5% floor, not the corporate 25%.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02, 0.02],
+                "exposure_class": ["retail_mortgage", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(
+                basel31_config, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Retail mortgage: 5% (Art. 164(4)(a))
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        # Corporate: 25% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_retail_qrre_floor_50pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(i): QRRE unsecured LGD floor is 50%.
+
+        Applies regardless of seniority when exposure_class is available.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "exposure_class": ["retail_qrre", "retail_qrre"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(
+                basel31_config, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.50)
+        assert result["lgd_floor"][1] == pytest.approx(0.50)
+
+    def test_retail_other_floor_30pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(ii): Other retail unsecured LGD floor is 30%."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10],
+                "exposure_class": ["retail_other"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(
+                basel31_config, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.30)
+
+    def test_retail_mortgage_rre_collateral_floor_5pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(a): Retail mortgage with RRE collateral gets 5% floor.
+
+        Corporate with RRE collateral gets 10% (Art. 161(5)).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02, 0.02],
+                "collateral_type": ["residential_re", "residential_re"],
+                "exposure_class": ["retail_mortgage", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Retail mortgage + RRE: 5% (Art. 164(4)(a))
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        # Corporate + RRE: 10% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.10)
+
+    def test_retail_other_unsecured_floor_30pct_with_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(ii): Other retail unsecured gets 30% floor.
+
+        Corporate unsecured gets 25% (Art. 161(5)).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "collateral_type": ["unsecured", "unsecured"],
+                "exposure_class": ["retail_other", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Retail other unsecured: 30% (Art. 164(4)(b)(ii))
+        assert result["lgd_floor"][0] == pytest.approx(0.30)
+        # Corporate unsecured: 25% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_retail_with_financial_collateral_floor_0pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Retail with financial collateral gets 0% floor (same LGDS as corporate)."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10],
+                "collateral_type": ["financial_collateral"],
+                "exposure_class": ["retail_other"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.0)
+
+    def test_retail_via_namespace_apply_lgd_floor(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Pipeline: apply_lgd_floor() applies retail-specific floors.
+
+        Verifies retail_other gets 30% and retail_qrre gets 50% through
+        the namespace pipeline.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_other", "retail_qrre", "CORPORATE"],
+                "lgd_input": [0.10, 0.10, 0.10],
+                "is_airb": [True, True, True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        # Retail other: 30% (Art. 164(4)(b)(ii))
+        assert result["lgd_floored"][0] == pytest.approx(0.30)
+        # Retail QRRE: 50% (Art. 164(4)(b)(i))
+        assert result["lgd_floored"][1] == pytest.approx(0.50)
+        # Corporate: 25% (Art. 161(5))
+        assert result["lgd_floored"][2] == pytest.approx(0.25)
+
+    def test_retail_mortgage_via_namespace_apply_lgd_floor(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Pipeline: apply_lgd_floor() applies 5% floor for retail_mortgage."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_mortgage"],
+                "lgd_input": [0.02],
+                "is_airb": [True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        assert result["lgd_floored"][0] == pytest.approx(0.05)
+
+    def test_retail_lgd_above_floor_unchanged(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Retail A-IRB LGD above floor is not modified.
+
+        Retail other with LGD=0.40 above the 30% floor stays at 0.40.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_other"],
+                "lgd_input": [0.40],
+                "is_airb": [True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        assert result["lgd_floored"][0] == pytest.approx(0.40)
 
     def test_apply_all_formulas_lgd_floor_airb_only(
         self,

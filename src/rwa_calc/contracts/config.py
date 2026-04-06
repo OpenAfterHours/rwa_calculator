@@ -101,28 +101,71 @@ class PDFloors:
 @dataclass(frozen=True)
 class LGDFloors:
     """
-    LGD floor values by collateral type for A-IRB.
+    LGD floor values by collateral type and exposure class for A-IRB.
 
     Only applicable under Basel 3.1 (CRE30.41, PS1/26 Ch.5).
     CRR has no LGD floors for A-IRB.
 
+    Corporate floors (Art. 161(5)):
+        - Unsecured (senior & subordinated): 25%
+        - Financial collateral: 0%, Receivables: 10%, CRE: 10%, RRE: 10%, Other: 15%
+
+    Retail floors (Art. 164(4)):
+        - (a) RRE-secured retail: 5%
+        - (b)(i) QRRE unsecured: 50%
+        - (b)(ii) Other retail unsecured: 30%
+        - (c) Other secured retail: blended formula with LGDU=30%, LGDS per collateral type
+
     All values expressed as decimals (e.g., 0.25 = 25%)
     """
 
+    # Corporate LGD floors — Art. 161(5)
     unsecured: Decimal = Decimal("0.25")  # 25%
-    subordinated_unsecured: Decimal = Decimal("0.50")  # 50%
+    subordinated_unsecured: Decimal = Decimal("0.50")  # 50% conservative fallback
     financial_collateral: Decimal = Decimal("0.0")  # 0%
     receivables: Decimal = Decimal("0.10")  # 10%
     commercial_real_estate: Decimal = Decimal("0.10")  # 10%
-    residential_real_estate: Decimal = Decimal("0.10")  # 10% (PRA Art. 161/164)
+    residential_real_estate: Decimal = Decimal("0.10")  # 10% (PRA Art. 161(5))
     other_physical: Decimal = Decimal("0.15")  # 15%
 
-    def get_floor(self, collateral_type: CollateralType) -> Decimal:
-        """Get the LGD floor for a given collateral type."""
+    # Retail LGD floors — Art. 164(4)
+    retail_rre: Decimal = Decimal("0.05")  # 5% Art. 164(4)(a) RRE-secured retail
+    retail_qrre_unsecured: Decimal = Decimal("0.50")  # 50% Art. 164(4)(b)(i)
+    retail_other_unsecured: Decimal = Decimal("0.30")  # 30% Art. 164(4)(b)(ii)
+    retail_lgdu: Decimal = Decimal("0.30")  # 30% Art. 164(4)(c) LGDU for blended formula
+
+    def get_floor(
+        self,
+        collateral_type: CollateralType,
+        exposure_class: str | None = None,
+    ) -> Decimal:
+        """Get the LGD floor for a given collateral type and optional exposure class.
+
+        When exposure_class is a retail class, returns Art. 164(4) retail floors.
+        Otherwise returns Art. 161(5) corporate floors.
+        """
+        is_retail_mortgage = exposure_class in ("retail_mortgage", "RETAIL_MORTGAGE")
+        is_retail_qrre = exposure_class in ("retail_qrre", "RETAIL_QRRE")
+        is_retail_other = exposure_class in ("retail_other", "RETAIL_OTHER")
+        is_retail = is_retail_mortgage or is_retail_qrre or is_retail_other
+
+        if is_retail and collateral_type == CollateralType.OTHER:
+            # Unsecured retail — return exposure-class-specific floor
+            if is_retail_qrre:
+                return self.retail_qrre_unsecured
+            if is_retail_other:
+                return self.retail_other_unsecured
+            # Retail mortgage unsecured (unusual) — use other retail floor
+            return self.retail_other_unsecured
+
+        if is_retail_mortgage and collateral_type == CollateralType.IMMOVABLE:
+            return self.retail_rre
+
+        # Collateral-type-based floor (same LGDS for corporate and retail)
         mapping = {
             CollateralType.FINANCIAL: self.financial_collateral,
             CollateralType.RECEIVABLES: self.receivables,
-            CollateralType.IMMOVABLE: self.commercial_real_estate,  # Default to CRE
+            CollateralType.IMMOVABLE: self.commercial_real_estate,
             CollateralType.OTHER_PHYSICAL: self.other_physical,
             CollateralType.OTHER: self.unsecured,
         }
@@ -139,6 +182,10 @@ class LGDFloors:
             commercial_real_estate=Decimal("0.0"),
             residential_real_estate=Decimal("0.0"),
             other_physical=Decimal("0.0"),
+            retail_rre=Decimal("0.0"),
+            retail_qrre_unsecured=Decimal("0.0"),
+            retail_other_unsecured=Decimal("0.0"),
+            retail_lgdu=Decimal("0.0"),
         )
 
     @classmethod
@@ -146,18 +193,25 @@ class LGDFloors:
         """
         Basel 3.1 LGD floors (CRE30.41).
 
-        Values reflect PRA PS1/26 Art. 161(5) / Art. 164(4) implementation.
-        Note: BCBS CRE30.41 has different values for some types (RRE: 5%).
-        PRA sets immovable property (both RESI and CRE) at 10%.
+        Corporate floors: PRA PS1/26 Art. 161(5).
+        Retail floors: PRA PS1/26 Art. 164(4).
+        Note: BCBS CRE30.41 RRE = 5% for retail; PRA Art. 161(5) sets corporate
+        RRE at 10%. Both are now correctly distinguished.
         """
         return cls(
+            # Corporate — Art. 161(5)
             unsecured=Decimal("0.25"),  # 25%
-            subordinated_unsecured=Decimal("0.50"),  # 50%
+            subordinated_unsecured=Decimal("0.50"),  # 50% conservative fallback
             financial_collateral=Decimal("0.0"),  # 0%
             receivables=Decimal("0.10"),  # 10%
             commercial_real_estate=Decimal("0.10"),  # 10%
-            residential_real_estate=Decimal("0.10"),  # 10% (PRA Art. 161/164)
+            residential_real_estate=Decimal("0.10"),  # 10% (PRA Art. 161(5))
             other_physical=Decimal("0.15"),  # 15%
+            # Retail — Art. 164(4)
+            retail_rre=Decimal("0.05"),  # 5% Art. 164(4)(a)
+            retail_qrre_unsecured=Decimal("0.50"),  # 50% Art. 164(4)(b)(i)
+            retail_other_unsecured=Decimal("0.30"),  # 30% Art. 164(4)(b)(ii)
+            retail_lgdu=Decimal("0.30"),  # 30% Art. 164(4)(c) LGDU
         )
 
 

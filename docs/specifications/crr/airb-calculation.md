@@ -55,28 +55,47 @@ Under CRR, A-IRB has **no LGD floors**. Under Basel 3.1, the following floors ap
 | Retail Sub-Class | Collateral | LGD Floor | Reference |
 |-----------------|-----------|-----------|-----------|
 | Residential real estate (RRE) | RRE secured | **5%** | Art. 164(4)(a) |
-| QRRE (unsecured) | None | **50%** | Art. 164(4)(b) |
-| Other retail (unsecured) | None | **30%** | Art. 164(4)(c) |
-| LGDU (loss given default unsecured) | None | **30%** | Art. 164(4)(c) |
+| QRRE (unsecured) | None | **50%** | Art. 164(4)(b)(i) |
+| Other retail (unsecured) | None | **30%** | Art. 164(4)(b)(ii) |
+| Any retail (non-RRE collateral) | Other collateral | Blended (see below) | Art. 164(4)(c) |
 
-### Retail "Other Secured" LGD Floor (Art. 164(4)(c))
+### Retail "Other Secured" LGD Floor — Art. 164(4)(c)
 
-For retail exposures secured by collateral other than RRE, the LGD floor uses a variable formula with LGDS values:
+For retail exposures secured by collateral other than RRE, the LGD floor is a blended value
+combining the secured collateral floor (LGDS) and the unsecured floor (LGDU = **30%**), weighted
+by the secured and unsecured portions of the exposure — the same structure as the Foundation
+Collateral Method in Art. 230.
 
-| Collateral Type | LGDS for Floor |
-|----------------|---------------|
+The LGDS values by collateral type are:
+
+| Collateral Type | LGDS (Secured Floor) |
+|----------------|----------------------|
 | Financial collateral | 0% |
 | Receivables | 10% |
-| Immovable property | 10% |
+| Immovable property (non-RRE) | 10% |
 | Other physical | 15% |
 
-The floor formula blends LGDS and LGDU (30%) across the secured and unsecured portions, analogous to the Foundation Collateral Method formula in Art. 230.
+Where no split between secured/unsecured portions is available, the conservative approach is
+to apply the relevant collateral-type LGDS directly (or LGDU=30% if unsecured).
+
+**Implementation:** `src/rwa_calc/engine/irb/formulas.py` — `_lgd_floor_expression()` and
+`_lgd_floor_expression_with_collateral()`. The collateral-type LGDS lookup is applied
+directly per row; the weighted blended formula requires exposure-level secured/unsecured
+split data that is not currently available in the pipeline — this is a known gap.
 
 !!! note "Scope of Corporate vs Institution LGD Floors"
     Art. 161(5) specifies the 25% unsecured LGD floor for "unsecured exposures to **corporates**". Institution exposures are restricted to F-IRB under Art. 147A(1)(b), so A-IRB LGD floors are not applicable to institutions. Art. 161(4) is "[Note: Provision left blank]" in PRA PS1/26 — only Art. 161(5) is active.
 
 !!! note "RRE LGD Floor"
     The PRA PS1/26 retail RRE LGD floor is **5%** per Art. 164(4)(a). This was changed from 10% in the near-final rules to 5% in the final PS1/26 rules. BCBS CRE32.25 also specifies 5%.
+
+!!! note "Implementation Status"
+    All four Art. 164(4) retail LGD floors are implemented. Floor values are configured in
+    `src/rwa_calc/contracts/config.py` (`LGDFloorConfig`, `basel_3_1()` factory). Floor logic is
+    applied per-row in `src/rwa_calc/engine/irb/formulas.py` via `_lgd_floor_expression()` and
+    `_lgd_floor_expression_with_collateral()`. The Art. 164(4)(c) blended formula is a known
+    partial gap: the per-collateral LGDS is applied but the weighted blend requires the
+    secured/unsecured split to be present in exposure data.
 
 ## FI Scalar
 

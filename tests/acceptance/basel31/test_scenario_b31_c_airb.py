@@ -109,17 +109,17 @@ class TestB31GroupC_AdvancedIRB:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-C2: Retail A-IRB with own LGD 15% floored to 25%.
+        B31-C2: Retail A-IRB with own LGD 15% floored to 30%.
 
-        Input: £100k loan, PD 0.30%, LGD 15% (own estimate, floored to 25%)
-        Expected: LGD floor binding — risk weight uses floored LGD 25%
+        Input: £100k loan, PD 0.30%, LGD 15% (own estimate, floored to 30%)
+        Expected: LGD floor binding — risk weight uses floored LGD 30%
 
-        Key regulatory test: CRE30.41 mandates a 25% LGD floor for unsecured
-        exposures. The bank's own estimate (15%) is below this floor, so 25%
-        is used in the IRB formula. No maturity adjustment for retail (CRE31.8).
+        Key regulatory test: Art. 164(4)(b)(ii) mandates a 30% LGD floor for
+        other retail unsecured exposures. The bank's own estimate (15%) is
+        below this floor, so 30% is used in the IRB formula. No maturity
+        adjustment for retail (CRE31.8).
 
         Under CRR, there was no LGD floor, so this exposure used LGD=15%.
-        Basel 3.1 RWA is 57% HIGHER than CRR for this exposure.
         """
         expected = expected_outputs_dict["B31-C2"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["B31-C2"]
@@ -192,8 +192,9 @@ class TestB31GroupC_FrameworkDifferences:
     ) -> None:
         """Verify LGD floor is applied to retail A-IRB (C2).
 
-        Bank's own LGD estimate is 15%, but CRE30.41 mandates a 25%
-        unsecured floor. The lgd_floored column should show 25%.
+        Bank's own LGD estimate is 15%, but Art. 164(4)(b)(ii) mandates a 30%
+        floor for other retail unsecured exposures. The lgd_floored column
+        should show 30%.
         """
         result = get_result_for_exposure(airb_results_df, "LOAN_RTL_AIRB_001")
         if result is None:
@@ -206,9 +207,9 @@ class TestB31GroupC_FrameworkDifferences:
         assert lgd_input is not None and lgd_input == pytest.approx(0.15, abs=0.01), (
             f"C2: Input LGD should be 0.15 (bank estimate), got {lgd_input}"
         )
-        # Floored LGD should be 25% (unsecured floor)
-        assert lgd_floored is not None and lgd_floored == pytest.approx(0.25, abs=0.01), (
-            f"C2: Floored LGD should be 0.25 (unsecured floor), got {lgd_floored}"
+        # Floored LGD should be 30% (retail other unsecured floor, Art. 164(4)(b)(ii))
+        assert lgd_floored is not None and lgd_floored == pytest.approx(0.30, abs=0.01), (
+            f"C2: Floored LGD should be 0.30 (retail other unsecured floor), got {lgd_floored}"
         )
 
     def test_b31_c_own_lgd_preserved_when_above_floor(

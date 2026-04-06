@@ -111,6 +111,12 @@ MANIFEST: list[DocEntry] = [
         url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2024/march/annex-xx-instructions-regarding-disclosure.pdf",
         source=PRA_RULEBOOK,
     ),
+    DocEntry(
+        filename="crr.pdf",
+        description="Current CRR rules when onshoring",
+        url="https://www.legislation.gov.uk/eur/2013/575/data.pdf",
+        source=PRA_RULEBOOK,
+    ),
     # DocEntry(
     #     filename="crr-pillar3-irb-credit-risk-instructions.pdf",
     #     description="CRR Pillar 3 IRB credit risk instructions",

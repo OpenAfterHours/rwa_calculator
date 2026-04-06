@@ -1,8 +1,8 @@
-0a. Study `docs/specifications/*` with up to 2 parallel Opus subagents to learn the application specifications.
+0a. Study `docs/specifications/*` with up to 15 parallel Sonnet subagents to learn the application specifications.
 0b. Study @IMPLEMENTATION_PLAN.md.
 0c. For reference, the application source code is in `src/rwa_calc/`.
 
-1. Your task is to implement functionality per the specifications using parallel subagents. Follow @IMPLEMENTATION_PLAN.md and choose the most important item to address. Before making changes, search the codebase (don't assume not implemented) using Opus subagents. You may use up to 2 parallel Opus subagents for searches/reads and only 1 Opus subagent for build/tests. Use Opus subagents when complex reasoning is needed (debugging, architectural decisions).
+1. Your task is to implement functionality per the specifications using parallel subagents. Follow @IMPLEMENTATION_PLAN.md and **choose the most important item to address**. Before making changes, search the codebase (don't assume not implemented) using Sonnet subagents. You may use up to 10 parallel Sonnet subagents for searches/reads and only 1 Opus subagent for build/tests. Use Opus subagents when complex reasoning is needed (debugging, architectural decisions).
 2. After implementing functionality or resolving problems, run the tests for that unit of code that was improved. If functionality is missing then it's your job to add it as per the application specifications. Ultrathink.
 3. When you discover issues, immediately update @IMPLEMENTATION_PLAN.md with your findings using a subagent. When resolved, update and remove the item.
 4. When the tests pass, update @IMPLEMENTATION_PLAN.md, then `git add -A` then `git commit` with a message describing the changes. After the commit, `git push`.

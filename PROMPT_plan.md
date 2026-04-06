@@ -1,7 +1,7 @@
-0a. Study `docs/specifications/*` with up to 2 parallel Opus subagents to learn the application specifications.
+0a. Study `docs/specifications/*` with up to 10 parallel Sonnet subagents to learn the application specifications.
 0b. Study @IMPLEMENTATION_PLAN.md (if present) to understand the plan so far.
-0c. Study `src/rwa_calc/contracts/` and `src/rwa_calc/domain/` with up to 2 parallel Opus subagents to understand shared protocols, bundles, enums & config.
-0d. Study the pdf docs in `doc/assets/` using pymupdf to extract the text. This has all the regulatory text.
+0c. Study `src/rwa_calc/contracts/` and `src/rwa_calc/domain/` with up to 10 parallel Sonnet subagents to understand shared protocols, bundles, enums & config.
+0d. Study the pdf docs in `doc/assets/` using pymupdf to extract the text with up to 10 parallel Sonnet subagents. This has all the regulatory text.
 0e. For reference, the application source code is in `src/rwa_calc/`.
 
 1. Study the `docs/specifications/*` and use up to 15 Sonnet subagents to study the regulatory text (pdf - using pymupdf) within the `doc/assets/` and compare against `docs/specifications/*`. Use 3 Opus subagents to analyze findings, priorize tasks, and update the files in `doc/specifications/*`

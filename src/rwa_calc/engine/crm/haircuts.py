@@ -28,6 +28,7 @@ from rwa_calc.data.tables.crr_haircuts import (
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
     get_haircut_table,
+    is_bond_eligible_as_financial_collateral,
     lookup_collateral_haircut,
     lookup_fx_haircut,
 )
@@ -121,9 +122,29 @@ class HaircutCalculator:
                 (
                     pl.col("market_value")
                     * (1.0 - pl.col("collateral_haircut") - pl.col("fx_haircut"))
-                ).alias("value_after_haircut"),
+                )
+                .clip(lower_bound=0.0)
+                .alias("value_after_haircut"),
             ]
         )
+
+        # Zero out value for ineligible bonds (Art. 197 — CQS 5-6 govt, CQS 4-6 corp)
+        if "_bond_ineligible" in collateral.collect_schema().names():
+            collateral = collateral.with_columns(
+                pl.when(pl.col("_bond_ineligible"))
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("value_after_haircut"))
+                .alias("value_after_haircut")
+            )
+            # Also enforce is_eligible_financial_collateral = False for ineligible bonds
+            if "is_eligible_financial_collateral" in collateral.collect_schema().names():
+                collateral = collateral.with_columns(
+                    pl.when(pl.col("_bond_ineligible"))
+                    .then(pl.lit(False))
+                    .otherwise(pl.col("is_eligible_financial_collateral"))
+                    .alias("is_eligible_financial_collateral")
+                )
+            collateral = collateral.drop("_bond_ineligible")
 
         # Add haircut audit trail
         collateral = collateral.with_columns(
@@ -235,9 +256,26 @@ class HaircutCalculator:
             suffix="_ht",
         )
 
-        # Unmatched rows default to other_physical (40%)
+        # Bond eligibility check per CRR Art. 197
+        # Govt bonds: CQS 1-4 eligible (Art. 197(1)(b)), CQS 5-6/unrated ineligible
+        # Corp/institution bonds: CQS 1-3 eligible (Art. 197(1)(d)), CQS 4-6/unrated ineligible
+        is_govt = pl.col("_lookup_type") == "govt_bond"
+        is_corp = pl.col("_lookup_type") == "corp_bond"
+        cqs_val = pl.col("issuer_cqs")
+        _ineligible_bond = (
+            (is_govt & ((cqs_val >= 5) | cqs_val.is_null()))
+            | (is_corp & ((cqs_val >= 4) | cqs_val.is_null()))
+        )
+
+        # Ineligible bonds: zero value; unmatched non-bonds: 40% default (other_physical)
         collateral = collateral.with_columns(
-            [pl.col("haircut").fill_null(0.40).alias("collateral_haircut")]
+            [
+                _ineligible_bond.alias("_bond_ineligible"),
+                pl.when(_ineligible_bond)
+                .then(pl.lit(1.0))
+                .otherwise(pl.col("haircut").fill_null(0.40))
+                .alias("collateral_haircut"),
+            ]
         ).drop(
             [
                 "_lookup_type",
@@ -355,7 +393,7 @@ class HaircutCalculator:
         Returns:
             HaircutResult with all haircut details
         """
-        # Get collateral haircut
+        # Get collateral haircut (None means ineligible per Art. 197)
         coll_haircut = lookup_collateral_haircut(
             collateral_type=collateral_type,
             cqs=cqs,
@@ -363,6 +401,20 @@ class HaircutCalculator:
             is_main_index=is_main_index,
             is_basel_3_1=self._is_basel_3_1,
         )
+
+        # Ineligible bonds: zero adjusted value
+        if coll_haircut is None:
+            return HaircutResult(
+                original_value=market_value,
+                collateral_haircut=Decimal("1.0"),
+                fx_haircut=Decimal("0.0"),
+                maturity_adjustment=Decimal("0.0"),
+                adjusted_value=Decimal("0"),
+                description=(
+                    f"MV={market_value:,.0f}; INELIGIBLE per Art. 197 "
+                    f"(type={collateral_type}, CQS={cqs})"
+                ),
+            )
 
         # Get FX haircut
         fx_haircut = lookup_fx_haircut(exposure_currency, collateral_currency)

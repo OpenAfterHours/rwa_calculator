@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.55 Other Items risk weights implemented)
-**Current version:** 0.1.74 | **Test suite:** ~2,473 collected (1,979 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~14 skipped | P1.55 fixed.
+**Last updated:** 2026-04-06 (P1.56 CQS bond ineligibility enforcement implemented)
+**Current version:** 0.1.76 | **Test suite:** ~2,519 collected (2,025 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.56 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.56 (CQS 5-6 bond ineligibility) [P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
 - *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
@@ -116,14 +116,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Named MDB identification relies on `mdb_named` entity_type. The 16-MDB list is not hardcoded in the calculator — institutions must classify their MDB counterparties correctly in input data.
 
 ### P1.56 CQS 5-6 bond ineligibility + CQS 4 government bond eligibility (Art. 197)
-- **Status:** [ ] Not started
-- **Impact:** Two issues:
-  - **CQS 5-6 government bonds** and **CQS 4-6 institution/corporate bonds** are ineligible as financial collateral per Art. 197. Code at `crr_haircuts.py` silently returns a 20% haircut fallback instead of flagging as ineligible.
-  - **CQS 4 government bonds ARE eligible** (Art. 197(1)(b): "credit quality step 4 or above" = CQS 1–4, with 15% haircut per Art. 224 Table 1). Previous description incorrectly included CQS 4 government bonds as ineligible.
-- **File:Line:** `data/tables/crr_haircuts.py` (haircut lookup fallback)
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Bond collateral eligibility now enforced per CRR Art. 197 at three levels:
+  - **Scalar lookup** (`lookup_collateral_haircut`): Returns `None` for ineligible bonds (CQS 5-6 govt, CQS 4-6 corp/institution, unrated bonds). CQS 4 govt bonds now explicitly return 15% haircut.
+  - **Pipeline** (`HaircutCalculator._apply_collateral_haircuts`): Ineligible bonds detected via CQS expression; `value_after_haircut` zeroed out; `is_eligible_financial_collateral` set to `False`.
+  - **Single-item calculator** (`calculate_single_haircut`): Returns `adjusted_value=0` with `INELIGIBLE` description.
+  - **Data tables**: CQS 4 govt bond rows added to both CRR (3 bands) and Basel 3.1 (5 bands) haircut DataFrames.
+  - New `is_bond_eligible_as_financial_collateral()` function encapsulates Art. 197 eligibility rules.
+- **File:Line:** `data/tables/crr_haircuts.py` (CQS 4 rows + eligibility function + scalar lookup fix), `engine/crm/haircuts.py` (pipeline ineligibility enforcement + single-item handling)
 - **Spec ref:** CRR Art. 197(1)(b)-(d), Art. 224 Table 1
-- **Fix:** (1) CQS 5-6 gov bonds and CQS 4-6 inst/corp bonds → return ineligibility error. (2) CQS 4 gov bonds → return 15% haircut (eligible). (3) Ensure CRM processor does not reduce EAD for ineligible collateral.
-- **Tests needed:** Unit tests for CQS 4 gov bond eligibility (15%), CQS 5-6 gov bond ineligibility, CQS 4 corp bond ineligibility.
+- **Tests:** 46 new unit tests in `tests/unit/crm/test_bond_eligibility.py`: 15 eligibility function tests, 12 scalar lookup tests, 4 DataFrame table tests, 5 single-item calculator tests, 10 pipeline LazyFrame tests. All pass. Test count: 2519 (was 2473).
 
 ### P1.1 PD floor values incorrect for Basel 3.1 (PRA Art. 160/163)
 - **Status:** [x] Complete

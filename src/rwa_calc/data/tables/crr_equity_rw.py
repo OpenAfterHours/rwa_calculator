@@ -1,13 +1,13 @@
 """
-CRR equity risk weight tables (CRR Art. 133, 155).
+CRR equity risk weight tables (CRR Art. 133, Art. 132, Art. 155).
 
 Provides risk weight lookup tables for equity exposures under two approaches:
 
 1. Article 133 - Standardised Approach (SA):
-   - Central bank: 0%
-   - Listed/Exchange-traded/Government-supported: 100%
-   - Unlisted: 250%
-   - Speculative: 400%
+   - Central bank: 0% (sovereign treatment)
+   - All other equity: 100% (Art. 133(2) flat)
+   - CIU: governed by Art. 132 (150% fallback for regulated-exchange CIU)
+   - Note: PE/VC that qualifies as high-risk goes to Art. 128 (150%), not Art. 133
 
 2. Article 155 - IRB Simple Risk Weight Method:
    - Private equity (diversified portfolio): 190%
@@ -15,9 +15,10 @@ Provides risk weight lookup tables for equity exposures under two approaches:
    - Other equity: 370%
 
 References:
-    - CRR Art. 133: Equity exposures under SA
+    - CRR Art. 133(2): Equity = 100% unless deducted (Art. 48(4) 250%,
+      Art. 89(3) 1250%) or high-risk (Art. 128 150%)
+    - CRR Art. 132: CIU treatment (look-through, mandate-based, fallback)
     - CRR Art. 155: Simple risk weight approach under IRB
-    - EBA Q&A 2023_6716: Strategic equity treatment
 """
 
 from __future__ import annotations
@@ -33,16 +34,18 @@ from rwa_calc.domain.enums import EquityType
 # =============================================================================
 
 SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
-    EquityType.CENTRAL_BANK: Decimal("0.00"),
+    # Art. 133(2): "Equity exposures shall be assigned a risk weight of 100%"
+    # Only exceptions: Art. 48(4) -> 250%, Art. 89(3) -> 1250%, Art. 128 -> 150%
+    EquityType.CENTRAL_BANK: Decimal("0.00"),  # Sovereign treatment
     EquityType.LISTED: Decimal("1.00"),
     EquityType.EXCHANGE_TRADED: Decimal("1.00"),
     EquityType.GOVERNMENT_SUPPORTED: Decimal("1.00"),
-    EquityType.UNLISTED: Decimal("2.50"),
-    EquityType.SPECULATIVE: Decimal("4.00"),
-    EquityType.PRIVATE_EQUITY: Decimal("2.50"),
-    EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("2.50"),
-    EquityType.CIU: Decimal("2.50"),
-    EquityType.OTHER: Decimal("2.50"),
+    EquityType.UNLISTED: Decimal("1.00"),  # Art. 133(2) flat 100%
+    EquityType.SPECULATIVE: Decimal("1.00"),  # Art. 133(2); if high-risk -> Art. 128 150%
+    EquityType.PRIVATE_EQUITY: Decimal("1.00"),  # Art. 133(2); if VC -> Art. 128 150%
+    EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("1.00"),
+    EquityType.CIU: Decimal("1.50"),  # Art. 132(2) fallback for regulated-exchange CIU
+    EquityType.OTHER: Decimal("1.00"),
 }
 
 

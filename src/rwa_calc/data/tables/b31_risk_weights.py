@@ -221,6 +221,57 @@ B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # PRA PS1/26 Art. 127: 20% 
 # PRA PS1/26 Art. 127 / CRE20.88 — Basel 3.1 simplification for owner-occupied housing
 B31_DEFAULTED_RESI_RE_NON_INCOME_RW = Decimal("1.00")
 
+# =============================================================================
+# COVERED BOND RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 129A)
+# Art. 129A simplifies the CQS bands vs CRR Art. 129(4):
+#   CQS 2: 15% (CRR: 20%), CQS 4-6 collapsed to 50% (CRR: 4-5=50%, 6=100%)
+# =============================================================================
+
+B31_COVERED_BOND_RISK_WEIGHTS: dict[int, Decimal] = {
+    1: Decimal("0.10"),  # AAA to AA-
+    2: Decimal("0.15"),  # A+ to A- (CRR: 20%)
+    3: Decimal("0.20"),  # BBB+ to BBB-
+    4: Decimal("0.50"),  # BB+ to BB-
+    5: Decimal("0.50"),  # B+ to B-
+    6: Decimal("0.50"),  # CCC+ and below (CRR: 100%)
+}
+
+# Unrated covered bond derivation from issuer SCRA grade via institution RW.
+# Art. 129(5): unrated CB RW is derived from the issuing institution's own RW.
+# Under B31, unrated institutions use SCRA grades which map to institution RWs.
+# The derivation chain is: SCRA grade → institution RW → CB RW
+# using the COVERED_BOND_UNRATED_DERIVATION table in crr_risk_weights.py.
+#
+# SCRA A_ENHANCED → institution 30% → CB 15% (derivation table: 0.30 → 0.15)
+# SCRA A          → institution 40% → CB 20% (derivation table: 0.40 → 0.20)
+# SCRA B          → institution 75% → CB 35% (derivation table: 0.75 → 0.35)
+# SCRA C          → institution 150% → CB 100% (derivation table: 1.50 → 1.00)
+B31_COVERED_BOND_UNRATED_FROM_SCRA: dict[str, Decimal] = {
+    "A_ENHANCED": Decimal("0.15"),  # inst 30% → CB 15% (Art. 129(5))
+    "A": Decimal("0.20"),  # inst 40% → CB 20%
+    "B": Decimal("0.35"),  # inst 75% → CB 35%
+    "C": Decimal("1.00"),  # inst 150% → CB 100%
+}
+
+
+def _create_b31_covered_bond_df() -> pl.DataFrame:
+    """Create Basel 3.1 covered bond risk weight lookup DataFrame (Art. 129A).
+
+    Differs from CRR: CQS 2 = 15% (CRR: 20%), CQS 6 = 50% (CRR: 100%).
+    """
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6],
+            "risk_weight": [0.10, 0.15, 0.20, 0.50, 0.50, 0.50],
+            "exposure_class": ["COVERED_BOND"] * 6,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
+
 
 def _create_b31_corporate_df() -> pl.DataFrame:
     """Create Basel 3.1 corporate risk weight lookup DataFrame."""
@@ -253,7 +304,6 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
     """
     from rwa_calc.data.tables.crr_risk_weights import (
         _create_cgcb_df,
-        _create_covered_bond_df,
         _create_institution_df,
         _create_mdb_df,
         _create_pse_df,
@@ -270,7 +320,7 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
                 ["exposure_class", "cqs", "risk_weight"]
             ),
             _create_b31_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
-            _create_covered_bond_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_b31_covered_bond_df().select(["exposure_class", "cqs", "risk_weight"]),
         ]
     )
 

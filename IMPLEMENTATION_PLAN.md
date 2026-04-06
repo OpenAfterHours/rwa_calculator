@@ -1,19 +1,19 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.18 defaulted RESI RE always-100%)
-**Current version:** 0.1.93 | **Test suite:** ~2,821 collected (~2,278 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.71 CRR equity SA weights)
+**Current version:** 0.1.94 | **Test suite:** ~2,842 collected (~2,345 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.71, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
-**Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
+**Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
 **Gap summary:** P1 (calculation correctness): 78 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
-- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
+- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
-- *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
+- *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
 - *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
@@ -309,12 +309,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit test for EU-standard unrated institution RW.
 
 ### P1.17 Unrated covered bond derivation table not wired (CRR Art. 129)
-- **Status:** [~] Table defined but unused
-- **Impact:** `COVERED_BOND_UNRATED_DERIVATION` table at `crr_risk_weights.py:279-287` maps issuer institution RW to covered bond RW (20%->10%, 50%->25%, 100%->50%). But `calculator.py:551-563` uses SCRA grade shortcut and defaults to 20% when no grade exists. The derivation table is never used. SA calculator agent confirms: hardcoded 20% at `calculator.py:662`.
-- **File:Line:** `data/tables/crr_risk_weights.py:279-287`, `engine/sa/calculator.py:551-563,662`
-- **Spec ref:** CRR Art. 129(5)
-- **Fix:** Wire derivation table into covered bond RW calculation. Look up issuer institution RW and derive covered bond RW per the table.
-- **Tests needed:** Unit tests for unrated covered bond derivation.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Covered bond risk weights now properly implement the derivation table (Art. 129(5)) and Basel 3.1 Art. 129A changes:
+  - **B31 rated CQS table (Art. 129A):** New `B31_COVERED_BOND_RISK_WEIGHTS` dict and `_create_b31_covered_bond_df()` with CQS 2 = 15% (CRR: 20%) and CQS 6 = 50% (CRR: 100%). `get_b31_combined_cqs_risk_weights()` now uses B31-specific table instead of importing CRR table.
+  - **B31 unrated derivation via SCRA (Art. 129(5)):** New `B31_COVERED_BOND_UNRATED_FROM_SCRA` dict traces SCRA grade → institution RW → CB RW through `COVERED_BOND_UNRATED_DERIVATION`: A_ENHANCED (inst 30%) → CB 15%, A (inst 40%) → CB 20%, B (inst 75%) → CB 35%, C (inst 150%) → CB 100%. **Fixed A_ENHANCED bug:** was 20% (same as A), now correctly 15%.
+  - **CRR unrated path:** Unchanged at 20% (correct for UK institutions: sovereign CQS 1 → institution 40% → CB 20%). Limitation: non-UK issuers with different institution RW not handled.
+  - **Calculator comments:** Updated to trace each hardcoded value back to the derivation table chain.
+- **File:Line:** `data/tables/b31_risk_weights.py` (B31_COVERED_BOND_RISK_WEIGHTS, B31_COVERED_BOND_UNRATED_FROM_SCRA, _create_b31_covered_bond_df), `engine/sa/calculator.py` (B31 unrated CB when-chain with A_ENHANCED split)
+- **Spec ref:** PRA PS1/26 Art. 129A, Art. 129(5), CRR Art. 129(4)-(5)
+- **Tests:** 21 new tests added to `test_covered_bonds.py` (was 38, now 59): 8 B31 CQS table constants, 3 B31 DataFrame generator, 6 derivation traceability (4 SCRA→table parametrized + all-grades-covered + A_ENHANCED-differs-from-A), 3 RWA edge cases (A_ENHANCED RWA, CQS 2 B31-vs-CRR, CQS 6 B31-vs-CRR). 1 test updated in `test_b31_sa_risk_weights.py` (A_ENHANCED 20%→15%). All 2842 tests pass. Test count: 2842 (was 2821).
+- **Limitation:** CRR unrated derivation assumes UK institution RW (40%→20%). Non-UK issuers with different sovereign-derived RW would need an `issuer_institution_rw` schema field. B31 Art. 129A CQS values need final verification against PRA PS1/26 PDF (spec says CQS 2=15% but PDF access was blocked during implementation).
 
 ### P1.18 Defaulted RESI RE always-100% exception (Basel 3.1 Art. 127 / CRE20.88)
 - **Status:** [x] Complete
@@ -706,13 +711,28 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Split the 30% threshold check to apply per non-financial collateral type rather than across the aggregated pool.
 - **Tests needed:** Unit tests for mixed non-financial collateral pools where individual types fail the threshold.
 
-### P1.71 CRR SA equity unlisted=250% and PE=250% in code, CRR Art. 133 says 150%/190%
-- **Status:** [~] Needs regulatory verification
-- **Impact:** `data/tables/crr_equity_rw.py:40-41` defines unlisted equity = 250% and PE/VC = 250%. CRR Art. 133 specifies unlisted = **150%** (Art. 133(3)) and PE/VC = **190%** (Art. 133(4)). The 250% values are Basel 3.1 standard equity weights, not CRR. Acceptance tests (`test_unlisted_250_percent`, `test_private_equity_250_percent`) are written to match the code, so they would also need updating. **Needs verification against UK-onshored CRR Art. 133 text** before confirming as a code bug vs spec error.
-- **File:Line:** `data/tables/crr_equity_rw.py:40-41`, `engine/equity/calculator.py:459-463`
-- **Spec ref:** CRR Art. 133(3)-(4), `docs/specifications/crr/equity-approach.md` lines 28-30
-- **Fix:** If spec is correct (150%/190%): update `crr_equity_rw.py` and acceptance tests. If code is correct: update spec. Regulatory PDF verification required.
-- **Tests needed:** Verify against CRR legislation. Update whichever is wrong.
+### P1.71 CRR SA equity weights wrong — all used Basel 3.1 values instead of Art. 133(2) flat 100%
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** CRR Art. 133(2) specifies a **flat 100%** risk weight for all equity ("Equity exposures shall be assigned a risk weight of 100%, unless...deducted/Art.48(4)/Art.89(3)/Art.128"). Both the code AND the spec were wrong:
+  - **Code had:** unlisted=250%, PE=250%, speculative=400%, CIU default=250%, other=250% (these were B31 values)
+  - **Spec had:** unlisted=150%, PE=190% (these were Art. 155 IRB Simple values, not Art. 133 SA)
+  - **Correct values:** all non-CB equity = 100% under CRR SA; CIU governed by Art. 132 (150% fallback)
+  - The spec's claimed Art. 133 paragraph numbers (3) and (4) were fabricated — CRR Art. 133 has only 3 paragraphs
+  - The previous capital **overstatement** was 1.5x-4x for affected equity types (unlisted/PE/speculative)
+  **Changes made:**
+  - `SA_EQUITY_RISK_WEIGHTS`: unlisted 2.50→1.00, speculative 4.00→1.00, PE 2.50→1.00, PE_diversified 2.50→1.00, CIU 2.50→1.50, other 2.50→1.00
+  - `_apply_crr_equity_weights_sa`: simplified when-chain — central_bank=0%, CIU special paths (Art.132), otherwise=1.00
+  - CIU look-through null fallback: 2.50→1.50 (Art. 132(2))
+  - `equity-approach.md`: corrected CRR table with Art. 133(2) flat 100% and Art. 132 CIU treatment
+  - `key-differences.md`: corrected CRR equity column
+  - `EquityType` enum docstrings: updated with correct CRR/B31/IRB values
+  - IRB Simple weights unchanged (290%/190%/370% are correct per Art. 155)
+  - B31 SA weights unchanged (250%/400% correct per PRA PS1/26 Art. 133)
+- **File:Line:** `data/tables/crr_equity_rw.py` (SA dict), `engine/equity/calculator.py` (_apply_crr_equity_weights_sa), `domain/enums.py` (EquityType docstrings)
+- **Spec ref:** CRR Art. 133(2), Art. 132(2)
+- **Tests:** 49 unit tests updated in `test_crr_equity.py` (RW values corrected), 4 CIU tests updated in `test_ciu_treatment.py` (CIU defaults 250%→150%), 3 integration tests updated in `test_equity_flow.py`. All 2842 tests pass.
+- **Limitation:** PE/VC that qualifies as high-risk under Art. 128 gets 150% via the HIGH_RISK exposure class in the SA calculator (not through the equity calculator). The equity calculator's 100% for PE types is correct for equity-classified PE that is NOT high-risk.
 
 ### P1.72 CIU fallback 1250% in code, should be 150% (CRR) / 250%-400% (B31)
 - **Status:** [x] Complete — already resolved

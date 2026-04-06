@@ -413,34 +413,34 @@ class EquityType(StrEnum):
     """
 
     CENTRAL_BANK = "central_bank"
-    """Central bank equity - 0% SA (Art. 133(6))"""
+    """Central bank equity - 0% CRR SA (sovereign treatment)"""
 
     LISTED = "listed"
-    """Listed equity on recognised exchange - 100% SA / 290% IRB"""
+    """Listed equity on recognised exchange - 100% CRR SA / 250% B31 SA / 290% IRB Simple"""
 
     EXCHANGE_TRADED = "exchange_traded"
-    """Explicitly exchange-traded - 100% SA / 290% IRB"""
+    """Explicitly exchange-traded - 100% CRR SA / 250% B31 SA / 290% IRB Simple"""
 
     GOVERNMENT_SUPPORTED = "government_supported"
-    """Government programme equity - 100% SA / 190% IRB"""
+    """Government programme equity - 100% CRR SA / 100% B31 SA / 190% IRB Simple"""
 
     UNLISTED = "unlisted"
-    """Unlisted equity - 250% SA / 370% IRB"""
+    """Unlisted equity - 100% CRR SA (Art. 133(2)) / 250% B31 SA / 370% IRB Simple"""
 
     SPECULATIVE = "speculative"
-    """Speculative unlisted/venture capital - 400% SA / 370% IRB"""
+    """Speculative unlisted - 100% CRR SA (Art. 133(2)) / 400% B31 SA / 370% IRB Simple"""
 
     PRIVATE_EQUITY = "private_equity"
-    """Private equity holdings - 250% SA / 370% IRB"""
+    """Private equity holdings - 100% CRR SA (Art. 133(2)) / 250% B31 SA / 370% IRB Simple"""
 
     PRIVATE_EQUITY_DIVERSIFIED = "private_equity_diversified"
-    """Private equity in diversified portfolio - 250% SA / 190% IRB"""
+    """PE in diversified portfolio - 100% CRR SA / 250% B31 SA / 190% IRB Simple"""
 
     CIU = "ciu"
-    """Collective investment undertakings - 250% SA / 370% IRB (or look-through)"""
+    """Collective investment undertakings - 150% CRR SA (Art. 132(2)) / 250% B31 SA"""
 
     OTHER = "other"
-    """Other equity exposures - 250% SA / 370% IRB"""
+    """Other equity exposures - 100% CRR SA (Art. 133(2)) / 250% B31 SA / 370% IRB Simple"""
 
 
 class EquityApproach(StrEnum):
@@ -451,10 +451,8 @@ class EquityApproach(StrEnum):
     SA = "sa"
     """
     Article 133 Standardised Approach:
-    - 0% for central bank
-    - 100% for listed/government-supported
-    - 250% for unlisted
-    - 400% for speculative
+    - CRR: 0% central bank, 100% all other equity (Art. 133(2) flat)
+    - B31: 0% central bank, 100% govt-supported, 250% standard, 400% higher-risk
     """
 
     IRB_SIMPLE = "irb_simple"

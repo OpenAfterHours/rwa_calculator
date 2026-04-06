@@ -159,12 +159,12 @@ class TestEquityRiskWeights:
         assert df["risk_weight"][0] == pytest.approx(1.00)
         assert df["rwa"][0] == pytest.approx(200_000.0)
 
-    def test_speculative_equity_400_percent_sa(
+    def test_speculative_equity_100_percent_sa(
         self,
         equity_calculator: EquityCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """Speculative equity under SA → 400% risk weight (Art. 133)."""
+        """Speculative equity under CRR SA → 100% risk weight (Art. 133(2) flat)."""
         crm_bundle = _build_crm_adjusted_with_equity(
             [
                 make_equity_exposure(
@@ -177,23 +177,23 @@ class TestEquityRiskWeights:
         result = equity_calculator.get_equity_result_bundle(crm_bundle, crr_config)
         df = result.results.collect()
 
-        assert df["risk_weight"][0] == pytest.approx(4.00)
-        assert df["rwa"][0] == pytest.approx(200_000.0)
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+        assert df["rwa"][0] == pytest.approx(50_000.0)
 
-    def test_unlisted_equity_250_percent_sa(
+    def test_unlisted_equity_100_percent_sa(
         self,
         equity_calculator: EquityCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """Unlisted equity under SA → 250% risk weight (Art. 133)."""
+        """Unlisted equity under CRR SA → 100% risk weight (Art. 133(2) flat)."""
         crm_bundle = _build_crm_adjusted_with_equity(
             [make_equity_exposure(equity_type="unlisted", fair_value=100_000.0)]
         )
         result = equity_calculator.get_equity_result_bundle(crm_bundle, crr_config)
         df = result.results.collect()
 
-        assert df["risk_weight"][0] == pytest.approx(2.50)
-        assert df["rwa"][0] == pytest.approx(250_000.0)
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+        assert df["rwa"][0] == pytest.approx(100_000.0)
 
     def test_irb_simple_listed_290_percent(
         self,
@@ -452,5 +452,5 @@ class TestEquityPipelinePassThrough:
             zip(df["exposure_reference"].to_list(), df["risk_weight"].to_list(), strict=True)
         )
         assert rw_by_ref["EQ_LIST"] == pytest.approx(1.00)
-        assert rw_by_ref["EQ_SPEC"] == pytest.approx(4.00)
-        assert rw_by_ref["EQ_UNLIST"] == pytest.approx(2.50)
+        assert rw_by_ref["EQ_SPEC"] == pytest.approx(1.00)  # CRR SA Art. 133(2) flat 100%
+        assert rw_by_ref["EQ_UNLIST"] == pytest.approx(1.00)  # CRR SA Art. 133(2) flat 100%

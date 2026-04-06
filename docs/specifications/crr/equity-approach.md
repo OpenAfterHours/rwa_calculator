@@ -21,12 +21,25 @@ Equity exposure treatment under SA and IRB, including CIU look-through and Basel
 
 ## CRR SA Equity Risk Weights (Art. 133)
 
+Art. 133(2): "Equity exposures shall be assigned a risk weight of **100%**, unless they are
+required to be deducted in accordance with Part Two, assigned a 250% risk weight in accordance
+with Article 48(4), assigned a 1250% risk weight in accordance with Article 89(3) or treated
+as high risk items in accordance with Article 128."
+
 | Equity Type | Risk Weight | Reference |
 |-------------|-------------|-----------|
-| Central bank / sovereign equity | 0% | Art. 133(1) |
-| Listed / exchange-traded | 100% | Art. 133(2) |
-| Unlisted / other | 150% | Art. 133(3) |
-| Private equity / venture capital | 190% | Art. 133(4) |
+| Central bank / sovereign equity | 0% | Sovereign treatment |
+| All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
+| CIU (fallback) | 150% | Art. 132(2) |
+| CIU (look-through) | Underlying RW | Art. 132(1) |
+| CIU (mandate-based) | Mandate RW | Art. 132A |
+
+!!! warning "Previous Spec Error Corrected"
+    This table previously claimed CRR Art. 133 had differentiated weights: unlisted=150%
+    (Art. 133(3)) and PE/VC=190% (Art. 133(4)). These paragraph numbers and values were
+    fabricated. CRR Art. 133 has only 3 paragraphs and assigns a **flat 100%** to all equity.
+    The 150%/190% values are from Art. 155 (IRB Simple Method), not Art. 133.
+    PE/VC that qualifies as high-risk is treated under Art. 128 (150%), not Art. 133.
 
 ## Basel 3.1 SA Equity Risk Weights (PRA PS1/26 Art. 133)
 

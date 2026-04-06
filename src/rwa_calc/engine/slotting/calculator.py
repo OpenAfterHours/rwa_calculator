@@ -52,10 +52,10 @@ class SlottingCalculator:
     - Non-HVCRE: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
     - HVCRE: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
 
-    Basel 3.1 (BCBS CRE33):
-    - Operational: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
-    - PF Pre-op: Strong=80%, Good=100%, Satisfactory=120%, Weak=350%, Default=0%
+    Basel 3.1 (PRA PS1/26 Art. 153(5) Table A):
+    - All SL (incl. PF pre-op): Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
     - HVCRE: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
+    Note: PRA did not adopt the BCBS CRE33 separate pre-operational PF table.
 
     Usage:
         calculator = SlottingCalculator()

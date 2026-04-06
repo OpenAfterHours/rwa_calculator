@@ -1,17 +1,21 @@
 """
-Basel 3.1 Specialised Lending Slotting risk weights (BCBS CRE33).
+Basel 3.1 Specialised Lending Slotting risk weights.
 
 Provides slotting risk weight constants and scalar lookup functions for the
 Basel 3.1 framework as implemented by PRA PS1/26.
 
-Basel 3.1 defines three weight tables:
-    Table 1 - Non-HVCRE operational specialised lending
-    Table 2 - Project finance pre-operational phase
-    Table 3 - HVCRE
+PRA PS1/26 Art. 153(5) Table A defines two weight tables:
+    Table A - All specialised lending (OF, PF, CF, IPRE) incl. pre-operational PF
+    Table A (HVCRE) - High-volatility commercial real estate
+
+Note: BCBS CRE33 defines a separate pre-operational PF table with higher weights
+(Strong=80%, Good=100%, Satisfactory=120%, Weak=350%). PRA PS1/26 does NOT adopt
+this distinction — all PF uses the standard Table A weights regardless of operational
+status. The SA calculator handles pre-operational PF separately via Art. 122B(2)(c).
 
 References:
-    BCBS CRE33.5-8: Supervisory slotting criteria for specialised lending
-    PRA PS1/26 Appendix 1: UK implementation
+    PRA PS1/26 Art. 153(5), Table A: Slotting risk weights
+    BCBS CRE33.5-8: Supervisory slotting criteria (pre-op distinction not in PRA)
 """
 
 from __future__ import annotations
@@ -33,12 +37,14 @@ B31_SLOTTING_RISK_WEIGHTS: dict[SlottingCategory, Decimal] = {
     SlottingCategory.DEFAULT: Decimal("0.00"),
 }
 
-# Project finance pre-operational phase
+# Project finance pre-operational phase — PRA PS1/26 Art. 153(5) Table A
+# uses the SAME weights as operational PF. BCBS CRE33 had separate higher weights
+# (80/100/120/350%) but PRA did not adopt this distinction.
 B31_SLOTTING_RISK_WEIGHTS_PREOP: dict[SlottingCategory, Decimal] = {
-    SlottingCategory.STRONG: Decimal("0.80"),
-    SlottingCategory.GOOD: Decimal("1.00"),
-    SlottingCategory.SATISFACTORY: Decimal("1.20"),
-    SlottingCategory.WEAK: Decimal("3.50"),
+    SlottingCategory.STRONG: Decimal("0.70"),
+    SlottingCategory.GOOD: Decimal("0.90"),
+    SlottingCategory.SATISFACTORY: Decimal("1.15"),
+    SlottingCategory.WEAK: Decimal("2.50"),
     SlottingCategory.DEFAULT: Decimal("0.00"),
 }
 

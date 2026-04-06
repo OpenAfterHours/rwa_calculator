@@ -76,16 +76,15 @@ the < 2.5yr / >= 2.5yr distinction.
 
 ### Project Finance Pre-Operational
 
-!!! warning "BCBS Values — PRA Verification Required"
-    The pre-operational PF slotting table below is from **BCBS CRE33**. PRA PS1/26 Art. 153(5) Table A may **not** contain a separate pre-operational PF table — the pre-operational distinction may only apply under **SA** (Art. 122B(2)(c): 130%/100%/80%), not under slotting. If PRA does not define a separate slotting pre-op table, PF pre-operational exposures should use the standard Non-HVCRE Operational weights above. This requires PDF verification.
+!!! info "PRA Has No Separate Pre-Operational Slotting Table"
+    PRA PS1/26 Art. 153(5) Table A does **not** contain a separate pre-operational PF
+    table. All PF (including pre-operational) uses the standard Non-HVCRE weights above.
+    The pre-operational distinction in PRA only applies under **SA** (Art. 122B(2)(c):
+    130%/100%/80%), not under slotting. BCBS CRE33 had separate higher weights
+    (Strong=80%, Good=100%, Satisfactory=120%, Weak=350%) but PRA did not adopt this.
 
-| Category | Risk Weight (BCBS CRE33) |
-|----------|--------------------------|
-| Strong | 80% |
-| Good | 100% |
-| Satisfactory | 120% |
-| Weak | 350% |
-| Default | 0% (EL) |
+Pre-operational PF under PRA slotting uses the **standard table**: Strong=70%, Good=90%,
+Satisfactory=115%, Weak=250%, Default=0%.
 
 ### HVCRE — Table A
 
@@ -128,8 +127,8 @@ These EL rates are used when calculating the IRB EL shortfall/excess for slottin
 
 ### PRA vs BCBS Slotting Differences
 
-!!! note "No Separate PRA Pre-Operational Table"
-    BCBS CRE33 defines a separate pre-operational PF table for both CRR-era and Basel 3.1 slotting. However, **PRA does not have a separate CRR-era pre-operational slotting table** — CRR Art. 153(5) uses a single table for all non-HVCRE SL types. The pre-operational PF differentiation only applies under Basel 3.1 (see Basel 3.1 tables above).
+!!! note "No Separate PRA Pre-Operational Table (CRR or Basel 3.1)"
+    BCBS CRE33 defines a separate pre-operational PF table, but **PRA does not adopt this distinction** under either CRR or Basel 3.1. PRA PS1/26 Art. 153(5) Table A uses a single table for all non-HVCRE SL types regardless of operational status. The pre-operational PF differentiation in PRA only applies under SA (Art. 122B(2)(c): 130%/100%/80% by quality).
 
 ### Large FSE Threshold
 

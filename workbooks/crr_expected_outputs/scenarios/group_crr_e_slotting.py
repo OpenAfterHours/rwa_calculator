@@ -253,7 +253,7 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         rwa=float(rwa_e1),
         calculation_details={
             "crr_rw": "70% (>=2.5yr), 50% (<2.5yr)",
-            "basel31_rw": "70% operational, 80% PF pre-op",
+            "basel31_rw": "70% (PRA PS1/26 — no separate pre-op table)",
             "formula": "RWA = EAD × RW",
             "calculation": f"RWA = £{ead_e1:,.0f} × 70% = £{rwa_e1:,.0f}",
             "note": "CRR Strong=70% for non-HVCRE with >=2.5yr maturity",

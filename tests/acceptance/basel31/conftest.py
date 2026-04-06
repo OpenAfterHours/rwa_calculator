@@ -196,8 +196,8 @@ def b31_slotting_calculation_config():
     This ensures SL exposures route to slotting, not A-IRB.
 
     Key Basel 3.1 slotting differences from CRR:
-    - Uses operational/pre-operational split (not maturity split)
-    - PF pre-operational: higher weights (80/100/120/350 vs 70/90/115/250)
+    - Maturity split removed; all SL uses single Table A (PRA PS1/26 Art. 153(5))
+    - PRA has NO separate pre-operational PF weights (unlike BCBS CRE33)
     - HVCRE weights unchanged
     """
     from rwa_calc.contracts.config import CalculationConfig

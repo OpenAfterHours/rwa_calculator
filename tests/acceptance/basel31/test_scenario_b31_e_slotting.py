@@ -6,20 +6,19 @@ outputs for specialised lending exposures using the slotting approach
 under the Basel 3.1 framework (PRA PS1/26).
 
 Key Basel 3.1 Slotting Changes from CRR:
-- Table structure: operational/pre-operational split replaces maturity split
+- Table structure: maturity split removed, HVCRE separate table
   - CRR: 2 tables per type (>=2.5yr and <2.5yr maturity)
-  - Basel 3.1: 3 tables (base/operational, PF pre-operational, HVCRE)
-- PF pre-operational penalty: 80/100/120/350% (vs operational 70/90/115/250%)
+  - Basel 3.1: 2 tables (base/all SL, HVCRE)
+- PRA PS1/26 Art. 153(5) Table A has NO separate pre-operational PF row
+  (BCBS CRE33 had 80/100/120/350% but PRA did not adopt this distinction)
 - HVCRE weights: unchanged at 95/120/140/250/0%
-- Base (operational non-HVCRE) weights: same as CRR >=2.5yr table
+- Base weights: same as CRR >=2.5yr table (70/90/115/250/0%)
 
 Why these tests matter:
 - Slotting is the primary approach for specialised lending when A-IRB
   permission is not granted
-- Basel 3.1 pre-operational PF penalty can increase capital by 14-40%
-  for project finance during construction/development phase
-- Current fixtures are all operational, so weights match CRR —
-  the tests verify the Basel 3.1 code path produces correct results
+- Current fixtures are all operational — the tests verify the Basel 3.1
+  code path produces correct results
 
 Regulatory References:
 - CRE33.5: Slotting risk weight tables
@@ -69,7 +68,7 @@ class TestB31GroupE_SlottingApproach:
         Expected: 70% RW (same as CRR >=2.5yr non-HVCRE)
 
         Basel 3.1 base/operational table matches CRR >=2.5yr for Strong.
-        Pre-operational PF would be 80% — but this exposure is operational.
+        PRA PS1/26 uses same weights for pre-operational and operational PF.
         """
         expected = expected_outputs_dict["B31-E1"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["B31-E1"]
@@ -100,7 +99,7 @@ class TestB31GroupE_SlottingApproach:
         Input: £10M project finance, Good category, operational phase
         Expected: 90% RW (same as CRR >=2.5yr non-HVCRE)
 
-        Basel 3.1 pre-operational Good would be 100% — 11% penalty.
+        PRA PS1/26 uses same weights for pre-operational and operational PF.
         """
         expected = expected_outputs_dict["B31-E2"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["B31-E2"]
@@ -132,8 +131,7 @@ class TestB31GroupE_SlottingApproach:
         Expected: 250% RW — punitive for poor-quality IPRE
 
         Weak category risk weight is 250% across all slotting tables
-        (CRR and Basel 3.1), except Basel 3.1 pre-operational PF Weak
-        which is 350%.
+        (CRR and Basel 3.1). PRA PS1/26 uses same weights for all PF.
         """
         expected = expected_outputs_dict["B31-E3"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["B31-E3"]
@@ -289,20 +287,23 @@ class TestB31GroupE_ParameterizedValidation:
         self,
         b31_e_scenarios: list[dict[str, Any]],
     ) -> None:
-        """Verify risk weights are valid Basel 3.1 slotting values."""
-        # All valid Basel 3.1 slotting risk weights
+        """Verify risk weights are valid Basel 3.1 slotting values.
+
+        PRA PS1/26 Art. 153(5) Table A: two tables (standard + HVCRE).
+        Pre-operational PF uses standard table (no separate PRA pre-op table).
+        """
+        # All valid PRA PS1/26 slotting risk weights:
+        # Standard: 70/90/115/250/0%, HVCRE: 95/120/140/250/0%
+        # Short-maturity: 50% (Strong <2.5yr)
         valid_rws = {
             0.50,
             0.70,
-            0.80,
             0.90,
             0.95,
-            1.00,
             1.15,
             1.20,
             1.40,
             2.50,
-            3.50,
             0.00,
         }
         for scenario in b31_e_scenarios:

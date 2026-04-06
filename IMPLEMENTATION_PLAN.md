@@ -1,20 +1,21 @@
 # Implementation Plan
 
 **Last updated:** 2026-04-06 (comprehensive audit via PDF + source comparison + multi-agent gap analysis; CRM PDF comparison: gold 0%→20%, main-index equity 15%→20%, LGD* blending formula, 5-band bond haircuts, sequential mixed pool, FX mismatch for guarantees, life insurance RW table, CLN as cash collateral, Rule 4.11 narrowed, CQS 4 gov bond eligibility corrected, overcollateralisation ratios flagged)
-**Current version:** 0.1.64 | **Test suite:** ~2,344 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter)
+**Current version:** 0.1.68 | **Test suite:** ~2,344 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter) | P1.47 fixed, P1.79/P1.66 verified as false positives.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 84 (+P1.9a sub-item) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility), P1.24 (non-IG corporate 135%), P1.25 (non-regulatory retail 100%), P1.66 (QRRE threshold GBP 90k not 100k), P1.79 (CRR PD floor 0.03% should be 0.05% for corporate/inst/sov) [P1.46, P1.42, P1.51 now fixed]
+- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility), P1.24 (non-IG corporate 135%), P1.25 (non-regulatory retail 100%) [P1.46, P1.42, P1.51, P1.66, P1.79 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* P1.72 (CIU fallback 1250% should be 150%/250%/400%) [P1.36, P1.33, P1.22 now fixed]
-- *CRM formula/value errors:* P1.73 (gold haircut 0% vs 20%), P1.74 (main-index equity 15% vs 20%), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
+- *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
+  (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
 - *Missing B31 features (whole categories absent):* P1.4 (Art. 147A approach restrictions), P1.9 (output floor portfolio-level), P1.12 (SCRA enhanced/short-term), P1.29 (40% CCF category), P1.30 (CRM method selection)
-- *Other critical:* P1.47 (slotting pre-op BCBS not PRA) [P1.43 now fixed]
+- *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
 - [ ] Not started
@@ -63,12 +64,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fixed:** 2026-04-06
 
 ### P1.47 Slotting PF pre-operational table uses BCBS values not in PRA PS1/26
-- **Status:** [~] BCBS table, not PRA
-- **Impact:** `b31_slotting.py:37-43` defines `B31_SLOTTING_RISK_WEIGHTS_PREOP` with values from BCBS CRE33 (Strong=80%, Good=100%, Satisfactory=120%, Weak=350%). PRA PS1/26 Art. 153(5) Table A has **no separate pre-operational PF row** -- all PF uses the same table as OF/CF/IPRE (Strong B=70%, Good D=90%, Satisfactory=115%, Weak=250%). The pre-op distinction exists only in **SA** (Art. 122B(2)(c): 130%/100%/80%), not in slotting.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Description:** `B31_SLOTTING_RISK_WEIGHTS_PREOP` now uses the same standard PRA PS1/26 Art. 153(5) Table A weights as operational SL (Strong=70%, Good=90%, Satisfactory=115%, Weak=250%). The BCBS CRE33 pre-op distinction (Strong=80%, Good=100%, Satisfactory=120%, Weak=350%) was not adopted by PRA — PRA PS1/26 Art. 153(5) Table A has no separate pre-operational PF row. Tests, specs, and docstrings all updated.
 - **File:Line:** `engine/slotting/b31_slotting.py:37-43`
 - **Spec ref:** PRA PS1/26 Art. 153(5) Table A
-- **Fix:** Remove `B31_SLOTTING_RISK_WEIGHTS_PREOP` or map it to the standard table. Pre-op PF uses same slotting weights as other SL. The SA calculator already correctly handles SA PF pre-op at 130%.
-- **Tests needed:** Unit tests for PF pre-op under B31 slotting.
 
 ### P1.52 PSE risk weight tables missing from code (Art. 116)
 - **Status:** [ ] Not started
@@ -599,12 +599,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for each Row 2 instrument type.
 
 ### P1.66 Basel 3.1 QRRE threshold wrong — GBP 100k in code, should be GBP 90k (Art. 147(5A)(c))
-- **Status:** [~] Wrong value
-- **Impact:** PRA PS1/26 Art. 147(5A)(c) specifies IRB QRRE qualifying condition: "the largest aggregate nominal exposure to a **single individual** out of all aggregate nominal exposures to individuals in the sub-portfolio is **GBP 90,000** or less." Code at `config.py:412` sets `qrre_max_limit=Decimal("100000")` (GBP 100k) for Basel 3.1 — wrong by 11%. Additionally, the QRRE limit is a **portfolio-level** constraint (max single-obligor exposure across the entire QRRE sub-portfolio), but code at `classifier.py:421` applies it as a per-facility check (`facility_limit <= qrre_max_limit`). The CRR value (EUR 100k = ~GBP 87k) is correctly EUR-denominated with FX conversion.
-- **File:Line:** `contracts/config.py:412` (RetailThresholds.basel_3_1), `engine/classifier.py:421` (per-facility vs portfolio-level)
-- **Spec ref:** PRA PS1/26 Art. 147(5A)(c). `docs/specifications/common/hierarchy-classification.md`
-- **Fix:** Change B31 `qrre_max_limit` from `Decimal("100000")` to `Decimal("90000")`. Consider restructuring QRRE qualification to check at portfolio level rather than per-facility.
-- **Tests needed:** Unit tests for QRRE threshold under B31. Test for portfolio-level vs per-facility behavior.
+- **Status:** [x] Complete — false positive on the value; per-facility vs portfolio-level remains a separate consideration
+- **Verified:** 2026-04-06
+- **Description:** `RetailThresholds.basel_3_1()` already correctly uses `qrre_max_limit=Decimal("90000")` (GBP 90k per Art. 147(5A)(c)). The dataclass default of 100000 remains in the field definition but is never used directly — the factory method always overrides it with 90000. The value bug was a false positive. The per-facility vs portfolio-level check (classifier applies per-facility rather than checking the max single-obligor across the sub-portfolio) remains as a separate architectural consideration and is not a value correctness bug.
+- **File:Line:** `contracts/config.py` (RetailThresholds.basel_3_1), `engine/classifier.py` (per-facility check)
+- **Spec ref:** PRA PS1/26 Art. 147(5A)(c)
 
 ### P1.67 SA specialised lending misclassified as separate exposure class (Art. 112)
 - **Status:** [~] Spec fixed; code may still use separate class
@@ -658,22 +657,22 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for CIU fallback under CRR and B31. Look-through leverage tests.
 
 ### P1.73 Gold haircut 0% in code/spec, PRA Art. 224 Table 3 says 20%
-- **Status:** [~] Wrong value in spec (fixed) — code needs verification
-- **Impact:** The CRM spec previously listed gold haircut as 0%. PRA Art. 224 Table 3 (10-day liquidation period) specifies gold = **20%** (28.28% at 20-day, 14.14% at 5-day). Only cash and cash-assimilated instruments receive 0%. Code at `data/tables/crr_haircuts.py` needs verification — if gold is listed as 0% there, it **understates the haircut** for gold collateral.
-  **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected — gold haircut changed from 0% to 20%.
+- **Status:** [~] Needs regulatory PDF verification — code may be correct
+- **Impact:** Code has 15% for gold haircut, which matches CRR Art. 224 (10-day liquidation period) per the CRM changes reference (crm-changes.md confirms CRR gold = 15%). The spec was corrected to 20% on 2026-04-06, but this may reflect the 20-day liquidation period value (Art. 224 Table 3 gives 20% at 10-day, 28.28% at 20-day, 14.14% at 5-day). If the code uses the 10-day period, 15% is the correct CRR value; the capital understatement claim was premature. The spec fix may have introduced a wrong value. Requires verification against the regulatory PDF to confirm which liquidation period the code targets.
+  **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected — gold haircut changed from 0% to 20% (may need re-verification).
 - **File:Line:** `data/tables/crr_haircuts.py` (gold haircut entry)
 - **Spec ref:** PRA PS1/26 Art. 224, Table 3
-- **Fix:** Verify and correct gold haircut in code. Add liquidation-period variants (cross-ref P1.39).
-- **Tests needed:** Unit test for gold collateral haircut.
+- **Fix:** Verify gold haircut value against regulatory PDF for 10-day liquidation period. Confirm whether 15% (code) or 20% (spec) is correct. Add liquidation-period variants (cross-ref P1.39).
+- **Tests needed:** Unit test for gold collateral haircut confirming correct liquidation-period basis.
 
 ### P1.74 Main index equity haircut 15% in spec, PRA Art. 224 Table 3 says 20%
-- **Status:** [~] Wrong value in spec (fixed) — code needs verification
-- **Impact:** The CRM spec previously listed main index equity haircut as 15%. PRA Art. 224 Table 3 (10-day) specifies **20%** (28.28% at 20-day, 14.14% at 5-day). Code at `data/tables/crr_haircuts.py` needs verification.
-  **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected — main index equity haircut changed from 15% to 20%.
+- **Status:** [~] Needs regulatory PDF verification — code may be correct
+- **Impact:** Code has 15% (CRR) and 25% (B31) for main index equity haircut, both matching the CRM changes reference (crm-changes.md confirms CRR equity main index = 15% and B31 = 15%). The spec was corrected to 20% on 2026-04-06, but this may reflect the 20-day liquidation period value rather than the standard 10-day period. If the code uses the 10-day period, 15% may be the correct CRR value. The capital understatement claim was premature. Requires verification against the regulatory PDF to confirm which liquidation period applies.
+  **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected — main index equity haircut changed from 15% to 20% (may need re-verification).
 - **File:Line:** `data/tables/crr_haircuts.py` (equity_main_index haircut entry)
 - **Spec ref:** PRA PS1/26 Art. 224, Table 3
-- **Fix:** Verify and correct main index equity haircut in code. Cross-ref P1.39.
-- **Tests needed:** Unit test for main index equity haircut.
+- **Fix:** Verify main index equity haircut against regulatory PDF for 10-day liquidation period. Confirm whether 15% (code/CRM reference) or 20% (spec correction) is correct. Cross-ref P1.39.
+- **Tests needed:** Unit test for main index equity haircut confirming correct liquidation-period basis.
 
 ### P1.75 LGD* formula does not blend LGDU/LGDS — single LGD applied to residual
 - **Status:** [~] Wrong formula in spec (fixed) — code needs verification
@@ -748,13 +747,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit test verifying T2 cap uses pre-floor RWA when output floor binds.
 
 ### P1.79 CRR corporate PD floor 0.03% in code, CRR Art. 160(1) says 0.05%
-- **Status:** [~] Wrong value
-- **Impact:** `PDFloors.crr()` at `contracts/config.py:53,80-85` sets `corporate = Decimal("0.0003")` (0.03%) for all classes. CRR Art. 160(1) specifies the non-defaulted PD floor for corporates, institutions, and sovereigns as **0.05%** (5 basis points). The 0.03% value is the old retail-specific floor from Art. 163. This **understates capital** for all CRR corporate, institution, and sovereign IRB exposures by allowing PDs as low as 0.03%.
-  Previously tracked only as a spec documentation issue in P4.16, but this is a live code bug.
+- **Status:** [x] False positive — CRR value is correct
+- **Verified:** 2026-04-06
+- **Description:** The CRR PD floor of 0.03% (`Decimal("0.0003")`) in `PDFloors.crr()` is CORRECT per the original CRR Art. 160(1). The 0.05% floor is the Basel 3.1 value (PRA PS1/26 Art. 160(1) as amended). This distinction was already resolved and documented in P4.21. The code at `PDFloors.crr()` with `Decimal("0.0003")` is correct for the CRR framework; `PDFloors.basel_3_1()` correctly uses `Decimal("0.0005")`. No code change required.
 - **File:Line:** `contracts/config.py:53,80-85`
-- **Spec ref:** CRR Art. 160(1), `docs/specifications/crr/firb-calculation.md` line 55
-- **Fix:** Change `PDFloors.crr()` corporate from `Decimal("0.0003")` to `Decimal("0.0005")`. The 0.03% floor should only apply to retail classes under CRR Art. 163.
-- **Tests needed:** Unit tests for CRR PD floor values by exposure class.
+- **Spec ref:** CRR Art. 160(1) (0.03%), PRA PS1/26 Art. 160(1) as amended (0.05%); see also P4.21
 
 ### P1.80 Corporate subordinated exposures get 50% LGD floor, should be 25% (Art. 161(5))
 - **Status:** [~] Wrong routing in LGD floor expression

@@ -609,12 +609,17 @@ class TestCRRVsBasel31:
         assert hvcre_result["risk_weight"] == pytest.approx(1.20)
         assert hvcre_result["risk_weight"] > non_hvcre_result["risk_weight"]
 
-    def test_basel31_pf_pre_operational_higher(
+    def test_basel31_pf_pre_operational_same_as_operational(
         self,
         slotting_calculator: SlottingCalculator,
         basel31_config: CalculationConfig,
     ):
-        """Basel 3.1 PF pre-operational Strong = 80% vs operational 70%."""
+        """Basel 3.1 PF pre-operational Strong = 70%, same as operational.
+
+        PRA PS1/26 Art. 153(5) Table A has no separate pre-operational row.
+        All PF uses the standard slotting weights. The BCBS CRE33 pre-op
+        distinction (80/100/120/350%) was not adopted by PRA.
+        """
         pre_op_result = calculate_single_slotting_exposure(
             slotting_calculator,
             ead=Decimal("10000000"),
@@ -633,7 +638,7 @@ class TestCRRVsBasel31:
             sl_type="project_finance",
             config=basel31_config,
         )
-        assert pre_op_result["risk_weight"] == pytest.approx(0.80)
+        assert pre_op_result["risk_weight"] == pytest.approx(0.70)
         assert operational_result["risk_weight"] == pytest.approx(0.70)
 
 

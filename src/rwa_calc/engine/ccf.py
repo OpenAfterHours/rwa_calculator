@@ -75,9 +75,12 @@ def sa_ccf_expression(
     - FR / full_risk: 100%
     - MR / medium_risk: 50%
     - MLR / medium_low_risk: 20%
+    - OC / other_commit: 0% (no separate category under CRR)
     - LR / low_risk: 0%
 
-    Basel 3.1 (PRA Art. 111 Table A1): LR (unconditionally cancellable) changes to 10%.
+    Basel 3.1 (PRA Art. 111 Table A1):
+    - OC / other_commit: 40% (new category — Row 5)
+    - LR (unconditionally cancellable): 10% (Row 6)
 
     Args:
         risk_type_col: Name of the risk_type column (default "risk_type")
@@ -87,13 +90,18 @@ def sa_ccf_expression(
         Polars expression resolving to Float64 SA CCF values
     """
     normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
-    # Basel 3.1: SA UCC/LR gets 10% instead of 0% (PRA Art. 111 Table A1)
+    # Basel 3.1: SA UCC/LR gets 10% instead of 0% (PRA Art. 111 Table A1 Row 6)
     lr_ccf = 0.10 if is_basel_3_1 else 0.0
+    # Basel 3.1: "Other commitments" gets 40% (Table A1 Row 5); CRR has no
+    # separate category — these were 0% (lumped with LR/UCC).
+    oc_ccf = 0.40 if is_basel_3_1 else 0.0
     return (
         pl.when(normalized.is_in(["fr", "full_risk"]))
         .then(pl.lit(1.0))
         .when(normalized.is_in(["mr", "medium_risk"]))
         .then(pl.lit(0.5))
+        .when(normalized.is_in(["oc", "other_commit"]))
+        .then(pl.lit(oc_ccf))
         .when(normalized.is_in(["mlr", "medium_low_risk"]))
         .then(pl.lit(0.2))
         .when(normalized.is_in(["lr", "low_risk"]))
@@ -234,8 +242,8 @@ class CCFCalculator:
             firb_ccf = (
                 pl.when(normalized.is_in(["fr", "full_risk"]))
                 .then(pl.lit(1.0))
-                .when(normalized.is_in(["lr", "low_risk"]))
-                .then(pl.lit(0.0))  # UCC = 0% under CRR
+                .when(normalized.is_in(["lr", "low_risk", "oc", "other_commit"]))
+                .then(pl.lit(0.0))  # UCC = 0% under CRR; OC has no CRR category (0%)
                 .when(
                     normalized.is_in(["mlr", "medium_low_risk"])
                     & pl.col("is_short_term_trade_lc").fill_null(False)

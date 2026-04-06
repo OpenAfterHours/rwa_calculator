@@ -70,7 +70,7 @@ FACILITY_SCHEMA = {
     "is_revolving": pl.Boolean,
     "is_qrre_transactor": pl.Boolean,  # QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
@@ -109,7 +109,7 @@ CONTINGENTS_SCHEMA = {
     "lgd": pl.Float64,
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
@@ -496,6 +496,8 @@ VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
+VALID_RISK_TYPES_INPUT = {"FR", "MR", "OC", "MLR", "LR"}
+
 VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
@@ -507,6 +509,7 @@ VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
+        "risk_type": VALID_RISK_TYPES_INPUT,
     },
     "loans": {
         "seniority": VALID_SENIORITY,
@@ -514,6 +517,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "contingents": {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
+        "risk_type": VALID_RISK_TYPES_INPUT,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
@@ -575,7 +579,7 @@ RAW_EXPOSURE_SCHEMA = {
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
-    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
@@ -602,7 +606,7 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
@@ -636,7 +640,7 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)

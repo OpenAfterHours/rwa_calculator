@@ -446,15 +446,16 @@ def validate_lgd_range(
 # =============================================================================
 
 # Valid risk type codes (short form)
-VALID_RISK_TYPE_CODES = {"fr", "mr", "mlr", "lr"}
+VALID_RISK_TYPE_CODES = {"fr", "mr", "oc", "mlr", "lr"}
 
 # Valid risk type full values
-VALID_RISK_TYPES = {"full_risk", "medium_risk", "medium_low_risk", "low_risk"}
+VALID_RISK_TYPES = {"full_risk", "medium_risk", "other_commit", "medium_low_risk", "low_risk"}
 
 # Mapping from codes to full values
 RISK_TYPE_CODE_TO_VALUE = {
     "fr": "full_risk",
     "mr": "medium_risk",
+    "oc": "other_commit",
     "mlr": "medium_low_risk",
     "lr": "low_risk",
 }
@@ -468,8 +469,8 @@ def validate_risk_type(
     Add validation expression for risk_type values.
 
     Validates that risk_type is one of:
-    - Codes: FR, MR, MLR, LR (case insensitive)
-    - Full values: full_risk, medium_risk, medium_low_risk, low_risk
+    - Codes: FR, MR, OC, MLR, LR (case insensitive)
+    - Full values: full_risk, medium_risk, other_commit, medium_low_risk, low_risk
 
     Args:
         lf: LazyFrame to validate

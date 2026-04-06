@@ -362,6 +362,14 @@ class RiskType(StrEnum):
     -- Documentary credits, trade finance, short-term self-liquidating
     """
 
+    OC = "other_commit"
+    """
+    Other Commitments - 40% CCF under Basel 3.1 SA (PRA Art. 111 Table A1 Row 5)
+
+    -- All other commitments not in FR/MR/MLR/LR categories.
+    Under CRR, these were 0% (same as LR); Basel 3.1 introduces the 40% category.
+    """
+
     LR = "low_risk"
     """
     Low Risk - 0% CCF under SA and F-IRB

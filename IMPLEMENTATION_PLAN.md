@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.12 SCRA enhanced Grade A + short-term maturity implemented)
-**Current version:** 0.1.85 | **Test suite:** ~2,662 collected (~2,157 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.12, P1.32, P1.34, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.29 Basel 3.1 "Other Commitments" 40% CCF implemented)
+**Current version:** 0.1.87 | **Test suite:** ~2,675 collected (~2,170 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.12, P1.29, P1.32, P1.34, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -14,7 +14,7 @@
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
-- *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.29 (40% CCF category), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -401,12 +401,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for both output floor corporate treatment options.
 
 ### P1.29 Basel 3.1 SA "Other Commitments" 40% CCF category (Art. 111)
-- **Status:** [ ] Not implemented
-- **Impact:** Basel 3.1 introduces a fifth SA CCF category: "other commitments" at **40%**, distinct from unconditionally cancellable (10%). `ccf.py:82-95` only handles FR (100%), MR (50%), MLR (20%), LR (10%). No `OTHER_COMMIT` member in `RiskType` enum (`domain/enums.py:330-363`). `CommitmentType.COMMITTED` (enums.py:321) documents "40% or higher CCF" but is not wired into CCF calculation. Exposures falling into this bucket currently default to MR (50%) -- an overstatement.
-- **File:Line:** `engine/ccf.py:82-95`, `domain/enums.py:330-363,321`
-- **Spec ref:** `docs/specifications/crr/credit-conversion-factors.md` Basel 3.1 SA Changes
-- **Fix:** Add `OTHER_COMMIT` to `RiskType` enum. Add 40% branch to `sa_ccf_expression()`. Map `CommitmentType.COMMITTED` to the new category.
-- **Tests needed:** Unit tests for 40% CCF category in SA Basel 3.1.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Basel 3.1 PRA PS1/26 Art. 111 Table A1 Row 5 "other commitments" 40% CCF now implemented:
+  - **RiskType enum:** New `OC = "other_commit"` member added (`domain/enums.py`)
+  - **SA CCF expression:** `sa_ccf_expression()` handles `oc`/`other_commit` → 40% under Basel 3.1, 0% under CRR (no separate CRR category)
+  - **F-IRB Basel 3.1:** Automatically picks up 40% via `sa_ccf_expression(is_basel_3_1=True)` per Art. 166C
+  - **F-IRB CRR:** Mapped to 0% (same as LR; CRR had no "other commitments" category)
+  - **A-IRB Basel 3.1:** Revolving OC gets modelled CCF with 50% SA floor (50% × 40% = 20% floor); non-revolving uses SA 40% per Art. 166D(1)(a)
+  - **Validation:** `VALID_RISK_TYPE_CODES` and `VALID_RISK_TYPES` updated with `oc`/`other_commit`; `risk_type` added to `COLUMN_VALUE_CONSTRAINTS` for facilities and contingents schemas
+  - **Schema comments:** Updated to include OC in risk_type lists
+- **File:Line:** `domain/enums.py` (RiskType.OC), `engine/ccf.py:67-105` (sa_ccf_expression), `engine/ccf.py:234-247` (F-IRB CRR path), `contracts/validation.py:449-460` (VALID_RISK_TYPE_CODES/TYPES), `data/schemas.py` (VALID_RISK_TYPES_INPUT + COLUMN_VALUE_CONSTRAINTS)
+- **Spec ref:** PRA PS1/26 Art. 111 Table A1 Row 5, `docs/specifications/crr/credit-conversion-factors.md`
+- **Tests:** 15 new unit tests in `test_ccf.py` (TestOtherCommitCCF class): 6 SA expression tests (OC short code B31, full name B31, case insensitive, CRR 0%, B31 batch, CRR batch), 2 SA pipeline tests (B31 40%, CRR 0%), 2 F-IRB pipeline tests (B31 40%, CRR 0%), 3 A-IRB pipeline tests (revolving modelled with floor, floor binds, non-revolving uses SA). 2 existing tests updated (full_value_names and all_risk_types_batch include OC). All 2675 tests pass. Test count: 2675 (was 2662).
 
 ### P1.30 CRM method selection decision tree (Art. 191A)
 - **Status:** [ ] Not implemented

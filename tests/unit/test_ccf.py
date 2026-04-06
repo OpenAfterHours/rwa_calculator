@@ -267,7 +267,7 @@ class TestFIRBCCFBasel31:
 
     Under Basel 3.1, F-IRB off-balance-sheet items use SA CCFs (Table A1)
     instead of the CRR 75% flat rate:
-    - FR: 100%, MR: 50%, MLR: 20%, LR(UCC): 10%
+    - FR: 100%, MR: 50%, OC: 40%, MLR: 20%, LR(UCC): 10%
     """
 
     @pytest.fixture
@@ -1085,9 +1085,17 @@ class TestSACCFExpression:
     def test_full_value_names(self) -> None:
         """Full risk_type names should map correctly."""
         df = pl.DataFrame(
-            {"risk_type": ["full_risk", "medium_risk", "medium_low_risk", "low_risk"]}
+            {
+                "risk_type": [
+                    "full_risk",
+                    "medium_risk",
+                    "other_commit",
+                    "medium_low_risk",
+                    "low_risk",
+                ]
+            }
         ).select(sa_ccf_expression().alias("ccf"))
-        assert df["ccf"].to_list() == pytest.approx([1.0, 0.5, 0.2, 0.0])
+        assert df["ccf"].to_list() == pytest.approx([1.0, 0.5, 0.0, 0.2, 0.0])
 
     def test_case_insensitive(self) -> None:
         """Risk type matching should be case insensitive."""
@@ -1114,12 +1122,243 @@ class TestSACCFExpression:
         assert df["ccf"].to_list() == pytest.approx([1.0, 0.0])
 
     def test_all_risk_types_batch(self) -> None:
-        """Verify all SA CCFs in a single batch."""
-        df = pl.DataFrame({"risk_type": ["FR", "MR", "MLR", "LR"]}).select(
+        """Verify all SA CCFs in a single batch (CRR — OC maps to 0%)."""
+        df = pl.DataFrame({"risk_type": ["FR", "MR", "OC", "MLR", "LR"]}).select(
             sa_ccf_expression().alias("ccf")
         )
-        expected = [1.0, 0.5, 0.2, 0.0]
+        expected = [1.0, 0.5, 0.0, 0.2, 0.0]
         assert df["ccf"].to_list() == pytest.approx(expected)
+
+
+# =============================================================================
+# Basel 3.1 "Other Commitments" 40% CCF Tests (PRA Art. 111 Table A1 Row 5)
+# =============================================================================
+
+
+class TestOtherCommitCCF:
+    """Tests for the Basel 3.1 'other commitments' 40% CCF category.
+
+    PRA PS1/26 Art. 111 Table A1 Row 5 introduces a new 40% CCF for
+    'all other commitments not in other categories'. Under CRR, this
+    category did not exist (0%).
+
+    References:
+        PRA PS1/26 Art. 111 Table A1
+    """
+
+    @pytest.fixture
+    def b31_config(self) -> CalculationConfig:
+        """Return a Basel 3.1 configuration."""
+        return CalculationConfig.basel_3_1(reporting_date=date(2028, 1, 1))
+
+    # --- SA expression tests ---
+
+    def test_oc_code_returns_40_percent_b31(self) -> None:
+        """OC short code should return 40% under Basel 3.1."""
+        df = pl.DataFrame({"risk_type": ["OC"]}).select(
+            sa_ccf_expression(is_basel_3_1=True).alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.4)
+
+    def test_other_commit_full_name_returns_40_percent_b31(self) -> None:
+        """other_commit full name should return 40% under Basel 3.1."""
+        df = pl.DataFrame({"risk_type": ["other_commit"]}).select(
+            sa_ccf_expression(is_basel_3_1=True).alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.4)
+
+    def test_oc_case_insensitive_b31(self) -> None:
+        """OC matching should be case insensitive."""
+        df = pl.DataFrame({"risk_type": ["oc", "Oc", "OC", "OTHER_COMMIT"]}).select(
+            sa_ccf_expression(is_basel_3_1=True).alias("ccf")
+        )
+        assert df["ccf"].to_list() == pytest.approx([0.4, 0.4, 0.4, 0.4])
+
+    def test_oc_returns_0_percent_crr(self) -> None:
+        """OC should return 0% under CRR (no separate category)."""
+        df = pl.DataFrame({"risk_type": ["OC"]}).select(
+            sa_ccf_expression(is_basel_3_1=False).alias("ccf")
+        )
+        assert df["ccf"][0] == pytest.approx(0.0)
+
+    def test_all_risk_types_b31_batch(self) -> None:
+        """Verify all SA CCFs including OC in a single Basel 3.1 batch."""
+        df = pl.DataFrame({"risk_type": ["FR", "MR", "OC", "MLR", "LR"]}).select(
+            sa_ccf_expression(is_basel_3_1=True).alias("ccf")
+        )
+        expected = [1.0, 0.5, 0.4, 0.2, 0.1]
+        assert df["ccf"].to_list() == pytest.approx(expected)
+
+    def test_all_risk_types_crr_batch(self) -> None:
+        """Verify all SA CCFs including OC in a CRR batch."""
+        df = pl.DataFrame({"risk_type": ["FR", "MR", "OC", "MLR", "LR"]}).select(
+            sa_ccf_expression(is_basel_3_1=False).alias("ccf")
+        )
+        expected = [1.0, 0.5, 0.0, 0.2, 0.0]
+        assert df["ccf"].to_list() == pytest.approx(expected)
+
+    # --- Pipeline-level SA tests ---
+
+    def test_sa_pipeline_oc_40_percent_b31(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """SA pipeline should apply 40% CCF for OC risk_type under B31."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_001"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["standardised"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.4)
+        assert result["ead_from_ccf"][0] == pytest.approx(40000.0)
+
+    def test_sa_pipeline_oc_0_percent_crr(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SA pipeline should apply 0% CCF for OC risk_type under CRR."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_CRR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["standardised"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.0)
+        assert result["ead_from_ccf"][0] == pytest.approx(0.0)
+
+    # --- F-IRB pipeline tests ---
+
+    def test_firb_oc_uses_sa_40_percent_b31(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 F-IRB OC should use SA 40% (Art. 166C: F-IRB uses SA CCFs)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_OC_B31"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [200000.0],
+                "risk_type": ["OC"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.4)
+        assert result["ead_from_ccf"][0] == pytest.approx(80000.0)
+
+    def test_firb_oc_0_percent_crr(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR F-IRB OC should get 0% (no separate CRR category)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_OC_CRR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [200000.0],
+                "risk_type": ["OC"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.0)
+
+    # --- A-IRB pipeline tests ---
+
+    def test_airb_oc_revolving_uses_modelled_with_floor_b31(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 A-IRB revolving OC: modelled CCF with 50% SA floor (CRE32.27).
+
+        SA CCF for OC = 40%, so floor = 50% × 40% = 20%.
+        Modelled 30% > 20% floor, so use modelled 30%.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_OC_REV"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.30)
+
+    def test_airb_oc_revolving_floor_binds_b31(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 A-IRB revolving OC: floor binds when modelled < 50% of SA.
+
+        SA CCF for OC = 40%, so floor = 50% × 40% = 20%.
+        Modelled 15% < 20% floor, so floor applies → 20%.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_OC_FLOOR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.15],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.20)
+
+    def test_airb_oc_nonrevolving_uses_sa_b31(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 A-IRB non-revolving OC: must use SA 40% (Art. 166D(1)(a))."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_OC_NONREV"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.10],
+                "is_revolving": [False],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.40)
 
 
 # =============================================================================

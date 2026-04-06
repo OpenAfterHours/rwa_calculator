@@ -212,27 +212,29 @@ class CCFCalculator:
         based on the exposure's approach (SA/F-IRB/A-IRB).
         """
         is_b31 = config.is_basel_3_1
-        # FIRB: UCC is 40% under Basel 3.1 (PRA Art. 166C), vs SA 10% (Art. 111)
-        firb_lr_ccf = 0.40 if is_b31 else 0.0
 
         normalized = pl.col("risk_type").fill_null("").str.to_lowercase()
 
-        # F-IRB CCF: Art. 166(8) = 75%, with Art. 166(9) exception for
-        # short-term trade LCs. Basel 3.1 Art. 166C: UCC = 40%.
-        firb_ccf = (
-            pl.when(normalized.is_in(["fr", "full_risk"]))
-            .then(pl.lit(1.0))
-            .when(normalized.is_in(["lr", "low_risk"]))
-            .then(pl.lit(firb_lr_ccf))
-            .when(
-                normalized.is_in(["mlr", "medium_low_risk"])
-                & pl.col("is_short_term_trade_lc").fill_null(False)
+        if is_b31:
+            # Basel 3.1 Art. 166C: F-IRB uses SA CCFs (PRA PS1/26 Art. 111 Table A1)
+            # FR=100%, MR=50%, MLR=20%, LR(UCC)=10%
+            firb_ccf = sa_ccf_expression(is_basel_3_1=True)
+        else:
+            # CRR Art. 166(8): F-IRB = 75% for commitments, with exceptions
+            firb_ccf = (
+                pl.when(normalized.is_in(["fr", "full_risk"]))
+                .then(pl.lit(1.0))
+                .when(normalized.is_in(["lr", "low_risk"]))
+                .then(pl.lit(0.0))  # UCC = 0% under CRR
+                .when(
+                    normalized.is_in(["mlr", "medium_low_risk"])
+                    & pl.col("is_short_term_trade_lc").fill_null(False)
+                )
+                .then(pl.lit(0.2))  # Art. 166(9) exception
+                .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
+                .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
+                .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
             )
-            .then(pl.lit(0.2))  # Art. 166(9) exception
-            .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
-            .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
-            .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
-        )
 
         exposures = exposures.with_columns(
             sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),

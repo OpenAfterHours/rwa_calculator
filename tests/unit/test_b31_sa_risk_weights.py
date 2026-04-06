@@ -981,7 +981,7 @@ class TestTableDataIntegrity:
         assert B31_CORPORATE_RISK_WEIGHTS[2] == Decimal("0.50")
         assert B31_CORPORATE_RISK_WEIGHTS[3] == Decimal("0.75")  # Changed from CRR 100%
         assert B31_CORPORATE_RISK_WEIGHTS[4] == Decimal("1.00")
-        assert B31_CORPORATE_RISK_WEIGHTS[5] == Decimal("1.00")  # Changed from CRR 150%
+        assert B31_CORPORATE_RISK_WEIGHTS[5] == Decimal("1.50")  # PRA retains 150% (BCBS: 100%)
         assert B31_CORPORATE_RISK_WEIGHTS[6] == Decimal("1.50")
         assert B31_CORPORATE_RISK_WEIGHTS[None] == Decimal("1.00")
 
@@ -1044,7 +1044,7 @@ class TestB31CorporateCQS:
             (2, 0.50, 0.50),  # A+-A-: unchanged
             (3, 0.75, 1.00),  # BBB: 75% vs 100%
             (4, 1.00, 1.00),  # BB: unchanged
-            (5, 1.00, 1.50),  # B: 100% vs 150%
+            (5, 1.50, 1.50),  # B: PRA retains 150% (BCBS reduced to 100%)
             (6, 1.50, 1.50),  # CCC+: unchanged
             (None, 1.00, 1.00),  # Unrated: unchanged
         ],

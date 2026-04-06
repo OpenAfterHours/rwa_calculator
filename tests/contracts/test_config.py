@@ -41,24 +41,24 @@ class TestPDFloors:
         assert floors.retail_qrre_revolver == Decimal("0.0003")
 
     def test_basel_3_1_pd_floors_differentiated(self):
-        """Basel 3.1 should have differentiated PD floors."""
+        """Basel 3.1 should have differentiated PD floors per PRA Art. 160/163."""
         floors = PDFloors.basel_3_1()
 
-        assert floors.corporate == Decimal("0.0005")  # 0.05%
-        assert floors.corporate_sme == Decimal("0.0005")  # 0.05%
-        assert floors.retail_mortgage == Decimal("0.0005")  # 0.05%
-        assert floors.retail_other == Decimal("0.0005")  # 0.05%
-        assert floors.retail_qrre_transactor == Decimal("0.0003")  # 0.03%
-        assert floors.retail_qrre_revolver == Decimal("0.0010")  # 0.10%
+        assert floors.corporate == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert floors.corporate_sme == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert floors.retail_mortgage == Decimal("0.0010")  # 0.10% Art. 163(1)(b) UK RRE
+        assert floors.retail_other == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert floors.retail_qrre_transactor == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert floors.retail_qrre_revolver == Decimal("0.0010")  # 0.10% Art. 163(1)(a)
 
     def test_get_floor_by_exposure_class(self):
         """get_floor should return correct floor for each class."""
         floors = PDFloors.basel_3_1()
 
         assert floors.get_floor(ExposureClass.CORPORATE) == Decimal("0.0005")
-        assert floors.get_floor(ExposureClass.RETAIL_MORTGAGE) == Decimal("0.0005")
+        assert floors.get_floor(ExposureClass.RETAIL_MORTGAGE) == Decimal("0.0010")
         assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=True) == Decimal(
-            "0.0003"
+            "0.0005"
         )
         assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=False) == Decimal(
             "0.0010"

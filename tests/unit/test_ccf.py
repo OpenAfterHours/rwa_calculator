@@ -257,6 +257,157 @@ class TestFIRBCCF:
 
 
 # =============================================================================
+# Basel 3.1 F-IRB CCF Tests (PRA PS1/26 Art. 166C)
+# =============================================================================
+
+
+class TestFIRBCCFBasel31:
+    """Tests for F-IRB CCF under Basel 3.1: Art. 166C mandates SA CCFs.
+
+    Under Basel 3.1, F-IRB off-balance-sheet items use SA CCFs (Table A1)
+    instead of the CRR 75% flat rate:
+    - FR: 100%, MR: 50%, MLR: 20%, LR(UCC): 10%
+    """
+
+    @pytest.fixture
+    def b31_config(self) -> CalculationConfig:
+        """Return a Basel 3.1 configuration."""
+        return CalculationConfig.basel_3_1(reporting_date=date(2028, 1, 1))
+
+    def test_firb_mr_uses_sa_50_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 F-IRB MR should use SA 50% (not CRR 75%)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_MR_B31"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.50)
+        assert result["ead_from_ccf"][0] == pytest.approx(500000.0)
+
+    def test_firb_mlr_uses_sa_20_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 F-IRB MLR should use SA 20% (not CRR 75%)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_MLR_B31"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [500000.0],
+                "risk_type": ["MLR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.20)
+        assert result["ead_from_ccf"][0] == pytest.approx(100000.0)
+
+    def test_firb_lr_uses_sa_10_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 F-IRB LR(UCC) should use SA 10% (not CRR 0%)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_LR_B31"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["LR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.10)
+        assert result["ead_from_ccf"][0] == pytest.approx(100000.0)
+
+    def test_firb_fr_still_100_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 F-IRB FR should still be 100% (same as SA)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_FR_B31"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["FR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(1.00)
+
+    def test_firb_all_risk_types_b31(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 F-IRB should use SA CCFs for all risk types (Art. 166C)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["B31_FR", "B31_MR", "B31_MLR", "B31_LR"],
+                "drawn_amount": [0.0, 0.0, 0.0, 0.0],
+                "nominal_amount": [100000.0, 100000.0, 100000.0, 100000.0],
+                "risk_type": ["FR", "MR", "MLR", "LR"],
+                "approach": ["foundation_irb"] * 4,
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        expected = {
+            "B31_FR": 1.00,
+            "B31_MR": 0.50,
+            "B31_MLR": 0.20,
+            "B31_LR": 0.10,
+        }
+
+        for ref, expected_ccf in expected.items():
+            row = result.filter(pl.col("exposure_reference") == ref)
+            assert row["ccf"][0] == pytest.approx(expected_ccf), f"CCF mismatch for {ref}"
+
+    def test_crr_firb_still_75_percent_regression(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR F-IRB should still use 75% for MR/MLR (regression test)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRR_MR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1000000.0],
+                "risk_type": ["MR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.75)
+
+
+# =============================================================================
 # EAD Calculation Tests
 # =============================================================================
 

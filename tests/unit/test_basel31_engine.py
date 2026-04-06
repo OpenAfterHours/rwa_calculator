@@ -217,7 +217,7 @@ class TestPDFloors:
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: Retail mortgage PD floor is 0.05%."""
+        """Basel 3.1: Retail mortgage PD floor is 0.10% (PRA Art. 163(1)(b) UK RRE)."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["RETAIL_MORTGAGE"],
@@ -227,7 +227,7 @@ class TestPDFloors:
         result = lf.with_columns(
             _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
         ).collect()
-        assert result["pd_floor"][0] == pytest.approx(0.0005)
+        assert result["pd_floor"][0] == pytest.approx(0.0010)
 
     def test_basel31_retail_other_floor(
         self,
@@ -376,15 +376,15 @@ class TestPDFloors:
         result = lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         ).collect()
-        assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate
-        assert result["pd_floored"][1] == pytest.approx(0.0010)  # QRRE
-        assert result["pd_floored"][2] == pytest.approx(0.0005)  # Mortgage
+        assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate: 0.05%
+        assert result["pd_floored"][1] == pytest.approx(0.0010)  # QRRE revolver: 0.10%
+        assert result["pd_floored"][2] == pytest.approx(0.0010)  # Mortgage: 0.10% (Art. 163(1)(b))
 
     def test_qrre_transactor_floor_with_column(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: QRRE transactor gets 0.03% floor when is_qrre_transactor=True."""
+        """Basel 3.1: QRRE transactor gets 0.05% floor (Art. 163(1)(c))."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["RETAIL_QRRE", "RETAIL_QRRE"],
@@ -396,7 +396,7 @@ class TestPDFloors:
         result = lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         ).collect()
-        assert result["pd_floored"][0] == pytest.approx(0.0003)  # Transactor: 0.03%
+        assert result["pd_floored"][0] == pytest.approx(0.0005)  # Transactor: 0.05%
         assert result["pd_floored"][1] == pytest.approx(0.0010)  # Revolver: 0.10%
 
     def test_qrre_transactor_null_defaults_to_revolver(
@@ -440,7 +440,7 @@ class TestPDFloors:
         ).collect()
         assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate: 0.05%
         assert result["pd_floored"][1] == pytest.approx(0.0005)  # Retail other: 0.05%
-        assert result["pd_floored"][2] == pytest.approx(0.0003)  # QRRE transactor: 0.03%
+        assert result["pd_floored"][2] == pytest.approx(0.0005)  # QRRE transactor: 0.05%
 
 
 # =============================================================================
@@ -1536,7 +1536,7 @@ class TestEquityBasel31:
         assert result["risk_weight"] == pytest.approx(2.50)
 
     def test_single_exposure_basel31_exchange_traded(self) -> None:
-        """Basel 3.1: Exchange-traded equity gets SA 100% RW (not IRB 290%)."""
+        """Basel 3.1: Exchange-traded equity gets B31 SA 250% (not CRR 100%)."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
             permission_mode=PermissionMode.IRB,
@@ -1550,10 +1550,10 @@ class TestEquityBasel31:
             config=config,
         )
         assert result["approach"] == "sa"
-        # Basel 3.1 equity transitional (PRA Rule 4.2): 190% floor in 2028
-        # (phases from 160% in 2027 to 250% in 2030+)
-        assert result["risk_weight"] == pytest.approx(1.90)
-        assert result["rwa"] == pytest.approx(950_000.0)
+        # B31 Art. 133(3): listed/exchange-traded = 250%
+        # 2028 transitional floor = 190%, but 250% > 190% so no floor effect
+        assert result["risk_weight"] == pytest.approx(2.50)
+        assert result["rwa"] == pytest.approx(1_250_000.0)
 
 
 class TestEquityTransitionalSchedule:
@@ -1734,16 +1734,16 @@ class TestConfigFactoryMethods:
         assert config.pd_floors.retail_qrre_revolver == Decimal("0.0003")
 
     def test_basel31_pd_floors_differentiated(self) -> None:
-        """Basel 3.1 config pd_floors has differentiated values."""
+        """Basel 3.1 config pd_floors has differentiated values per PRA Art. 160/163."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
         )
-        assert config.pd_floors.corporate == Decimal("0.0005")
-        assert config.pd_floors.corporate_sme == Decimal("0.0005")
-        assert config.pd_floors.retail_mortgage == Decimal("0.0005")
-        assert config.pd_floors.retail_other == Decimal("0.0005")
-        assert config.pd_floors.retail_qrre_transactor == Decimal("0.0003")
-        assert config.pd_floors.retail_qrre_revolver == Decimal("0.0010")
+        assert config.pd_floors.corporate == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert config.pd_floors.corporate_sme == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert config.pd_floors.retail_mortgage == Decimal("0.0010")  # 0.10% Art. 163(1)(b)
+        assert config.pd_floors.retail_other == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert config.pd_floors.retail_qrre_transactor == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert config.pd_floors.retail_qrre_revolver == Decimal("0.0010")  # 0.10% Art. 163(1)(a)
 
     def test_crr_lgd_floors_all_zero(self) -> None:
         """CRR config lgd_floors are all 0% (no floor)."""

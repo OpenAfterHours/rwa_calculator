@@ -2,7 +2,7 @@
 
 Provision treatment, expected loss calculation, and EL vs provisions comparison.
 
-**Regulatory Reference:** CRR Articles 110, 111(2), 158-159
+**Regulatory Reference:** CRR Articles 110, 111(1)(a)-(b), 158-159
 
 **Test Group:** CRR-G
 
@@ -25,7 +25,10 @@ Provisions are resolved **before** CCF application in the pipeline:
 resolve_provisions → CCF → initialize_ead → collateral → guarantees → finalize_ead
 ```
 
-This ordering complies with CRR Art. 111(2), which requires provisions to reduce the exposure value before credit conversion factors are applied to off-balance sheet items.
+This ordering complies with CRR Art. 111(1)(a) (on-balance sheet: accounting value after specific CRA) and Art. 111(1)(b) (off-balance sheet: nominal after specific CRA, then × CCF). Note: Art. 111(2) governs derivative exposure values, not provisions.
+
+!!! warning "Previous Citation Was Wrong"
+    The regulatory reference was previously cited as "Art. 111(2)". The drawn-first provision deduction derives from Art. 111(1)(a) and 111(1)(b), not paragraph 2.
 
 ## Multi-Level Beneficiary Resolution
 
@@ -39,7 +42,7 @@ Provisions can be allocated at different levels and are resolved in priority ord
 
 Direct allocations are applied first. Facility-level and counterparty-level provisions are distributed proportionally based on each exposure's share of the total `ead_gross`.
 
-## SA Approach (CRR Art. 110, 111(2))
+## SA Approach (CRR Art. 110, 111(1))
 
 Under the Standardised Approach, provisions use a **drawn-first deduction** approach:
 
@@ -86,10 +89,30 @@ Instead, the calculator computes Expected Loss for comparison:
 EL = PD × LGD × EAD
 ```
 
-### EL vs Provisions Comparison
+!!! warning "BEEL Exception for A-IRB Defaulted (Art. 158(5))"
+    For **A-IRB defaulted exposures** (PD=1), EL shall be the institution's **best estimate of expected loss (BEEL)**, not PD × LGD (which would give 1 × LGD). F-IRB defaulted exposures use the standard formula. The spec's `EL = PD × LGD × EAD` applies only to non-defaulted exposures and F-IRB defaulted.
 
-- **EL > Provisions (shortfall):** The difference is deducted 50/50 from CET1 and T2 capital (CRR Art. 159)
-- **EL < Provisions (excess):** The surplus may be added to Tier 2 capital, capped at 0.6% of IRB RWA (CRR Art. 62(d))
+### Basel 3.1: Post-Model EL Adjustment (Art. 158(6A))
+
+Under Basel 3.1, total EL amounts must be increased to reflect any post-model adjustments on EL required under Art. 146(3)(c). This is a B31 addition not present under CRR.
+
+### EL vs Provisions Comparison (Art. 159)
+
+The comparison pool 'B' (provisions side) includes:
+- General credit risk adjustments (CRA)
+- Specific CRA for non-defaulted exposures
+- Additional value adjustments (AVAs per Art. 34)
+- Other own funds reductions
+
+!!! warning "AVAs Not Implemented"
+    The current implementation uses only `provision_allocated` as the offset against EL. AVAs (Art. 34) and other own funds reductions are not included, which **overstates EL shortfall** for banks with material AVA positions.
+
+### Art. 159(3) Two-Branch Comparison
+
+When non-defaulted EL exceeds non-defaulted provisions (A>B) AND defaulted provisions exceed defaulted EL (D>C) simultaneously, Art. 159(3) requires **separate computation** of the non-defaulted shortfall and defaulted excess. The defaulted excess must **not** offset the non-defaulted shortfall.
+
+!!! warning "Not Implemented"
+    The current implementation uses a single combined comparison (`sum(el_shortfall)` vs `sum(el_excess)`) across all exposures, which allows cross-subsidisation between defaulted and non-defaulted books.
 
 ### Portfolio-Level Summary (ELPortfolioSummary)
 
@@ -99,10 +122,13 @@ The aggregator computes a portfolio-level `ELPortfolioSummary` with:
 |-------|---------|---------------------|
 | `total_el_shortfall` | `sum(el_shortfall)` across all IRB exposures | CRR Art. 159 |
 | `total_el_excess` | `sum(el_excess)` across all IRB exposures | CRR Art. 62(d) |
-| `t2_credit_cap` | `total_irb_rwa × 0.006` | CRR Art. 62(d) |
+| `t2_credit_cap` | `total_irb_rwa × 0.006` (must use **un-floored** IRB RWA, not post-output-floor TREA) | CRR Art. 62(d) |
 | `t2_credit` | `min(total_el_excess, t2_credit_cap)` | CRR Art. 62(d) |
-| `cet1_deduction` | `total_el_shortfall × 0.5` | CRR Art. 159 |
-| `t2_deduction` | `total_el_shortfall × 0.5` | CRR Art. 159 |
+| `cet1_deduction` | `total_el_shortfall × 0.5` | Art. 36(1)(d) |
+| `t2_deduction` | `total_el_shortfall × 0.5` | Art. 62(d) |
+
+!!! note "Citation Correction"
+    The 50/50 split derives from Art. 36(1)(d) (CET1 deduction) and Art. 62(d) (T2 deduction), not Art. 159. Art. 159 only produces the "negative amount" (shortfall) and "positive amount" (excess).
 
 ## Slotting Approach
 

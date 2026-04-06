@@ -713,6 +713,8 @@ class CRMProcessor:
                 pl.lit(None).cast(pl.String).alias("protection_type"),
                 # FX mismatch haircut on guarantees (Art. 233(3-4))
                 pl.lit(0.0).alias("guarantee_fx_haircut"),
+                # CDS restructuring exclusion haircut (Art. 233(2))
+                pl.lit(0.0).alias("guarantee_restructuring_haircut"),
             ]
         )
 

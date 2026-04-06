@@ -211,6 +211,7 @@ GUARANTEE_SCHEMA = {
     "beneficiary_type": pl.String,
     "beneficiary_reference": pl.String,
     "protection_type": pl.String,  # "guarantee" or "credit_derivative" (CDS/CLN/TRS)
+    "includes_restructuring": pl.Boolean,  # CDS credit event coverage (Art. 233(2))
 }
 
 PROVISION_SCHEMA = {
@@ -696,6 +697,7 @@ CRM_ADJUSTED_SCHEMA = {
     "guarantee_coverage_pct": pl.Float64,
     "guaranteed_amount": pl.Float64,
     "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
+    "guarantee_restructuring_haircut": pl.Float64,  # CDS restructuring exclusion (40% or 0%)
     "ead_after_guarantee": pl.Float64,
     # Final EAD
     "final_ead": pl.Float64,
@@ -910,6 +912,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "guarantee_coverage_pct": pl.Float64,  # % of exposure guaranteed
     "guaranteed_amount": pl.Float64,  # Amount covered by guarantee
     "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
+    "guarantee_restructuring_haircut": pl.Float64,  # CDS restructuring exclusion (40% or 0%)
     "guarantor_risk_weight": pl.Float64,  # RW of guarantor (for substitution)
     "guarantee_benefit": pl.Float64,  # RWA reduction from guarantee
     # -------------------------------------------------------------------------

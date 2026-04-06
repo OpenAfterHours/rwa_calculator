@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_haircuts import FX_HAIRCUT
+from rwa_calc.data.tables.crr_haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import (
     drawn_for_ead,
@@ -82,6 +82,11 @@ def apply_guarantees(
     # When a guarantee is denominated in a different currency from the exposure,
     # the guaranteed amount is reduced: G* = G × (1 - H_fx) where H_fx = 8%.
     exposures = _apply_guarantee_fx_haircut(exposures)
+
+    # Apply CDS restructuring exclusion haircut (Art. 233(2)).
+    # When a credit derivative does not include restructuring as a credit event,
+    # protection is reduced by 40% (capped at 60% of exposure value).
+    exposures = _apply_restructuring_exclusion_haircut(exposures)
 
     # Look up guarantor's entity type, country code, and CQS for risk weight substitution
     # Join with counterparty to get guarantor's entity type and country
@@ -335,6 +340,11 @@ def _apply_guarantee_splits(
         agg_exprs.append(pl.col("original_currency").first().alias("guarantee_currency"))
     elif "currency" in guar_cols:
         agg_exprs.append(pl.col("currency").first().alias("guarantee_currency"))
+    # Preserve includes_restructuring for CDS restructuring exclusion haircut (Art. 233(2)).
+    if "includes_restructuring" in guar_cols:
+        agg_exprs.append(
+            pl.col("includes_restructuring").first().alias("includes_restructuring")
+        )
 
     guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
 
@@ -352,6 +362,8 @@ def _apply_guarantee_splits(
         guar_select.append("protection_type")
     if "guarantee_currency" in guar_cols:
         guar_select.append("guarantee_currency")
+    if "includes_restructuring" in guar_cols:
+        guar_select.append("includes_restructuring")
 
     # Count distinct guarantors per exposure
     guarantee_counts = guarantees.group_by("beneficiary_reference").agg(
@@ -366,6 +378,18 @@ def _apply_guarantee_splits(
         how="left",
     ).with_columns(pl.col("guarantee_count").fill_null(0))
 
+    # Drop initialized-to-null columns that will be re-added from guarantee data
+    # (or explicitly set) in each split path.  Without this, the join produces
+    # suffixed duplicates (e.g. protection_type_right) and the guarantee values
+    # are lost.
+    _cols_to_drop_before_join = [
+        c
+        for c in ("protection_type", "guarantee_currency", "includes_restructuring")
+        if c in exposures_with_counts.collect_schema().names()
+    ]
+    if _cols_to_drop_before_join:
+        exposures_with_counts = exposures_with_counts.drop(_cols_to_drop_before_join)
+
     # --- Path 1: No guarantees ---
     no_guarantee = exposures_with_counts.filter(pl.col("guarantee_count") == 0).with_columns(
         pl.lit(0.0).alias("guaranteed_portion"),
@@ -374,6 +398,7 @@ def _apply_guarantee_splits(
         pl.lit(0.0).alias("guarantee_amount"),
         pl.lit(None).cast(pl.String).alias("protection_type"),
         pl.lit(None).cast(pl.String).alias("guarantee_currency"),
+        pl.lit(None).cast(pl.Boolean).alias("includes_restructuring"),
     )
 
     # --- Path 2: Single guarantor (backward compatible, no split) ---
@@ -466,6 +491,7 @@ def _apply_guarantee_splits(
         pl.lit(None).cast(pl.String).alias("guarantor_reference"),
         pl.lit(None).cast(pl.String).alias("protection_type"),
         pl.lit(None).cast(pl.String).alias("guarantee_currency"),
+        pl.lit(None).cast(pl.Boolean).alias("includes_restructuring"),
         pl.concat_str(
             [pl.col("parent_exposure_reference"), pl.lit("__REM")],
         ).alias("exposure_reference"),
@@ -713,6 +739,61 @@ def _apply_guarantee_fx_haircut(exposures: pl.LazyFrame) -> pl.LazyFrame:
         .then(pl.lit(h_fx))
         .otherwise(pl.lit(0.0))
         .alias("guarantee_fx_haircut"),
+    ).with_columns(
+        (pl.col("ead_after_collateral") - pl.col("guaranteed_portion"))
+        .clip(lower_bound=0.0)
+        .alias("unguaranteed_portion"),
+    )
+
+    return exposures
+
+
+def _apply_restructuring_exclusion_haircut(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """
+    Apply CDS restructuring exclusion haircut to credit derivative amounts.
+
+    When a credit derivative does not include restructuring as a credit event,
+    the effective protection is reduced by 40%:
+
+        G* = G × (1 − H_restructuring) = G × 0.60
+
+    This only applies to credit derivatives (``protection_type == "credit_derivative"``),
+    not to regular guarantees. Null ``includes_restructuring`` defaults to ``True``
+    (no haircut) for backward compatibility.
+
+    References:
+        CRR Art. 233(2), PRA PS1/26 Art. 233(2)
+        Art. 216(1): Credit events for credit derivatives
+    """
+    schema = exposures.collect_schema()
+    cols = schema.names()
+
+    has_protection_type = "protection_type" in cols
+    has_includes_restructuring = "includes_restructuring" in cols
+
+    if not has_protection_type or not has_includes_restructuring:
+        return exposures.with_columns(
+            pl.lit(0.0).alias("guarantee_restructuring_haircut"),
+        )
+
+    h_restructuring = float(RESTRUCTURING_EXCLUSION_HAIRCUT)
+
+    # Condition: credit derivative without restructuring as a credit event
+    applies = (
+        (pl.col("protection_type") == "credit_derivative")
+        & (pl.col("includes_restructuring").fill_null(True).not_())
+        & (pl.col("guaranteed_portion") > 0)
+    )
+
+    exposures = exposures.with_columns(
+        pl.when(applies)
+        .then(pl.col("guaranteed_portion") * (1.0 - h_restructuring))
+        .otherwise(pl.col("guaranteed_portion"))
+        .alias("guaranteed_portion"),
+        pl.when(applies)
+        .then(pl.lit(h_restructuring))
+        .otherwise(pl.lit(0.0))
+        .alias("guarantee_restructuring_haircut"),
     ).with_columns(
         (pl.col("ead_after_collateral") - pl.col("guaranteed_portion"))
         .clip(lower_bound=0.0)

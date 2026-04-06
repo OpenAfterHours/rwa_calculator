@@ -117,6 +117,11 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
 # Currency mismatch haircut (CRR Art. 224 / CRE22.54) — same under both frameworks
 FX_HAIRCUT: Decimal = Decimal("0.08")
 
+# CDS restructuring exclusion haircut (CRR Art. 233(2) / PRA PS1/26 Art. 233(2))
+# If a credit derivative does not include restructuring as a credit event,
+# protection value is reduced by 40% (capped at 60% of exposure value).
+RESTRUCTURING_EXCLUSION_HAIRCUT: Decimal = Decimal("0.40")
+
 
 def _create_haircut_df(is_basel_3_1: bool = False) -> pl.DataFrame:
     """Create haircut lookup DataFrame for the specified framework."""

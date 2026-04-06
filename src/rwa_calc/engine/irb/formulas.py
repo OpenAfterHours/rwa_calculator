@@ -118,21 +118,23 @@ def _lgd_floor_expression(
     config: CalculationConfig,
     *,
     has_seniority: bool = False,
+    has_exposure_class: bool = False,
 ) -> pl.Expr:
     """
     Build Polars expression for LGD floor (no collateral_type column).
 
     Under CRR: No LGD floors (returns 0.0).
-    Under Basel 3.1 (CRE30.41): Differentiated floors for A-IRB:
-        - Unsecured (senior): 25%
-        - Unsecured (subordinated): 50%
+    Under Basel 3.1: Differentiated floors for A-IRB:
+        - Corporate unsecured (senior & subordinated): 25% (Art. 161(5))
+        - Retail QRRE unsecured: 50% (Art. 164(4)(b)(i))
         - Financial collateral: 0%
         - Receivables: 10%
-        - CRE: 10%, RRE: 5%
-        - Other physical: 15%
+        - CRE: 10%, RRE: 10% (PRA), Other physical: 15%
 
-    Without a collateral_type column, defaults to unsecured floor (25%/50%).
-    When has_seniority=True, checks seniority column for subordinated (50%).
+    Without a collateral_type column, defaults to unsecured floor (25%).
+    When has_seniority=True and has_exposure_class=True, the 50% subordinated
+    floor only applies to retail QRRE exposures (Art. 164(4)(b)(i)).
+    Corporate subordinated gets 25% like senior (Art. 161(5)).
 
     Returns a Polars expression evaluating to the per-row LGD floor value.
     """
@@ -145,6 +147,21 @@ def _lgd_floor_expression(
         is_subordinated = (
             pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
         )
+        if has_exposure_class:
+            # Art. 161(5): corporate subordinated = 25% (same as senior)
+            # Art. 164(4)(b)(i): retail QRRE unsecured = 50%
+            is_retail_qrre = (
+                pl.col("exposure_class")
+                .cast(pl.String)
+                .str.to_lowercase()
+                .is_in(["retail_qrre"])
+            )
+            return (
+                pl.when(is_subordinated & is_retail_qrre)
+                .then(pl.lit(float(floors.subordinated_unsecured)))
+                .otherwise(pl.lit(float(floors.unsecured)))
+            )
+        # Fallback without exposure_class: conservative subordinated = 50%
         return (
             pl.when(is_subordinated)
             .then(pl.lit(float(floors.subordinated_unsecured)))
@@ -159,6 +176,7 @@ def _lgd_floor_expression_with_collateral(
     config: CalculationConfig,
     *,
     has_seniority: bool = False,
+    has_exposure_class: bool = False,
 ) -> pl.Expr:
     """
     Build Polars expression for per-collateral-type LGD floor when collateral_type
@@ -167,8 +185,9 @@ def _lgd_floor_expression_with_collateral(
     This is used when the dataframe has a collateral_type column, allowing
     precise per-row LGD floors based on the primary collateral type.
 
-    When has_seniority=True, subordinated unsecured exposures get the higher
-    50% floor instead of 25% (CRE30.41).
+    When has_seniority=True and has_exposure_class=True, the 50% subordinated
+    floor only applies to retail QRRE (Art. 164(4)(b)(i)). Corporate
+    subordinated gets 25% like senior (Art. 161(5)).
     """
     if config.is_crr:
         return pl.lit(0.0)
@@ -176,16 +195,32 @@ def _lgd_floor_expression_with_collateral(
     floors = config.lgd_floors
     coll = pl.col("collateral_type").fill_null("unsecured").str.to_lowercase()
 
-    # Determine unsecured floor: 50% for subordinated, 25% for senior (CRE30.41)
+    # Determine unsecured floor based on seniority and exposure class
     if has_seniority:
         is_subordinated = (
             pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
         )
-        unsecured_floor = (
-            pl.when(is_subordinated)
-            .then(pl.lit(float(floors.subordinated_unsecured)))
-            .otherwise(pl.lit(float(floors.unsecured)))
-        )
+        if has_exposure_class:
+            # Art. 161(5): corporate subordinated = 25% (same as senior)
+            # Art. 164(4)(b)(i): retail QRRE unsecured = 50%
+            is_retail_qrre = (
+                pl.col("exposure_class")
+                .cast(pl.String)
+                .str.to_lowercase()
+                .is_in(["retail_qrre"])
+            )
+            unsecured_floor = (
+                pl.when(is_subordinated & is_retail_qrre)
+                .then(pl.lit(float(floors.subordinated_unsecured)))
+                .otherwise(pl.lit(float(floors.unsecured)))
+            )
+        else:
+            # Fallback without exposure_class: conservative subordinated = 50%
+            unsecured_floor = (
+                pl.when(is_subordinated)
+                .then(pl.lit(float(floors.subordinated_unsecured)))
+                .otherwise(pl.lit(float(floors.unsecured)))
+            )
     else:
         unsecured_floor = pl.lit(float(floors.unsecured))
 

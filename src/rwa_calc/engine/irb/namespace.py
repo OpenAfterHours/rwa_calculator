@@ -301,10 +301,11 @@ class IRBLazyFrame:
         as the base for flooring.
 
         CRR: No LGD floor (A-IRB models LGD freely)
-        Basel 3.1 (CRE30.41): Differentiated floors by collateral type:
-            - Unsecured senior: 25%, Subordinated: 50%
+        Basel 3.1: Differentiated floors by collateral type and exposure class:
+            - Corporate unsecured (senior & subordinated): 25% (Art. 161(5))
+            - Retail QRRE unsecured: 50% (Art. 164(4)(b)(i))
             - Financial: 0%, Receivables: 10%
-            - RRE: 5%, CRE: 10%, Other physical: 15%
+            - RRE: 10%, CRE: 10%, Other physical: 15%
 
         LGD floors only apply to A-IRB own-estimate LGDs. F-IRB supervisory
         LGDs are regulatory values and don't need flooring.
@@ -322,12 +323,19 @@ class IRBLazyFrame:
         if config.is_basel_3_1:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
+            has_exposure_class = "exposure_class" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
-                    config, has_seniority=has_seniority
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
                 )
             else:
-                lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+                lgd_floor_expr = _lgd_floor_expression(
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
+                )
 
             # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
             is_airb = (
@@ -553,12 +561,19 @@ class IRBLazyFrame:
         if config.is_basel_3_1:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
+            has_exposure_class = "exposure_class" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
-                    config, has_seniority=has_seniority
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
                 )
             else:
-                lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+                lgd_floor_expr = _lgd_floor_expression(
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
+                )
             is_airb = (
                 pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
             )

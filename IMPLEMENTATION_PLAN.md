@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.69 receivables haircut fix implemented)
-**Current version:** 0.1.77 | **Test suite:** ~2,531 collected (~2,037 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.69 fixed. (unit tests increased from 2,025 to ~2,037)
+**Last updated:** 2026-04-06 (P1.80 corporate subordinated LGD floor fix implemented)
+**Current version:** 0.1.78 | **Test suite:** ~2,535 collected (~2,041 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.80 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -10,7 +10,7 @@
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69 now fixed/verified]
-- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
+- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80 now fixed/verified]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
@@ -782,12 +782,12 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** CRR Art. 160(1) (0.03%), PRA PS1/26 Art. 160(1) as amended (0.05%); see also P4.21
 
 ### P1.80 Corporate subordinated exposures get 50% LGD floor, should be 25% (Art. 161(5))
-- **Status:** [~] Wrong routing in LGD floor expression
-- **Impact:** `engine/irb/formulas.py:144-155` (`_lgd_floor_expression`) applies `subordinated_unsecured = 50%` when the seniority column contains "sub". For **corporate** exposures, Art. 161(5) specifies a flat **25%** floor for all unsecured (both senior and subordinated). The 50% floor exists only for **retail QRRE unsecured** per Art. 164(4)(b)(i). If a corporate exposure is marked subordinated, it incorrectly receives 50% instead of 25%, **overstating capital**.
-- **File:Line:** `engine/irb/formulas.py:144-155`
-- **Spec ref:** PRA PS1/26 Art. 161(5) (corporate = 25%), Art. 164(4)(b) (retail QRRE = 50%)
-- **Fix:** Gate the `subordinated_unsecured` floor on exposure class. Corporate subordinated → 25%. Retail QRRE unsecured → 50%. Requires exposure_class parameter in `_lgd_floor_expression`.
-- **Tests needed:** Unit tests for corporate subordinated LGD floor (25%) and retail QRRE unsecured (50%).
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Both `_lgd_floor_expression` and `_lgd_floor_expression_with_collateral` now accept `has_exposure_class` parameter. When `exposure_class` column is available, the 50% subordinated floor is gated behind retail QRRE only (Art. 164(4)(b)(i)). Corporate/institution/sovereign subordinated exposures receive the standard 25% unsecured floor (Art. 161(5)), matching senior treatment. Backward-compatible: without exposure_class column, conservative 50% fallback is preserved.
+- **File:Line:** `engine/irb/formulas.py:119-168` (both floor functions), `engine/irb/namespace.py:322-330,554-570` (callers pass has_exposure_class)
+- **Spec ref:** PRA PS1/26 Art. 161(5) (corporate = 25%), Art. 164(4)(b)(i) (retail QRRE = 50%)
+- **Tests:** 4 new unit tests in `test_basel31_engine.py`: corporate subordinated 25% with collateral_type, corporate subordinated 25% no collateral_type, retail QRRE subordinated 50% with exposure_class, corporate subordinated via namespace. All pass. Test count: 2535 (was 2531).
 
 ---
 

@@ -867,6 +867,110 @@ class TestLGDFloors:
         assert result["lgd_floor"][0] == pytest.approx(0.10)
         assert result["lgd_floor"][1] == pytest.approx(0.15)
 
+    def test_corporate_subordinated_floor_25pct_with_exposure_class(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 161(5): Corporate subordinated LGD floor is 25%, same as senior.
+
+        When exposure_class is available, subordinated corporate exposures
+        get the standard 25% floor (not 50%). The 50% floor only applies
+        to retail QRRE per Art. 164(4)(b)(i).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10, 0.10],
+                "collateral_type": ["unsecured", "unsecured", "unsecured"],
+                "seniority": ["subordinated", "senior", "subordinated"],
+                "exposure_class": ["CORPORATE", "CORPORATE", "INSTITUTION"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_seniority=True, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Corporate subordinated: 25% (Art. 161(5))
+        assert result["lgd_floor"][0] == pytest.approx(0.25)
+        # Corporate senior: 25%
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+        # Institution subordinated: 25% (not retail QRRE, so no 50%)
+        assert result["lgd_floor"][2] == pytest.approx(0.25)
+
+    def test_corporate_subordinated_floor_25pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 161(5): Corporate subordinated floor 25% via _lgd_floor_expression."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "seniority": ["subordinated", "senior"],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(
+                basel31_config, has_seniority=True, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Corporate subordinated: 25% (Art. 161(5))
+        assert result["lgd_floor"][0] == pytest.approx(0.25)
+        # Corporate senior: 25%
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_retail_qrre_subordinated_floor_50pct_with_exposure_class(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(i): Retail QRRE subordinated unsecured LGD floor is 50%.
+
+        Only retail QRRE exposures get the 50% subordinated unsecured floor.
+        Corporate subordinated gets 25%.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10, 0.10],
+                "collateral_type": ["unsecured", "unsecured", "unsecured"],
+                "seniority": ["subordinated", "subordinated", "senior"],
+                "exposure_class": ["retail_qrre", "CORPORATE", "retail_qrre"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_seniority=True, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Retail QRRE subordinated: 50% (Art. 164(4)(b)(i))
+        assert result["lgd_floor"][0] == pytest.approx(0.50)
+        # Corporate subordinated: 25% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+        # Retail QRRE senior: 25% (only subordinated QRRE gets 50%)
+        assert result["lgd_floor"][2] == pytest.approx(0.25)
+
+    def test_corporate_subordinated_via_namespace(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Pipeline: apply_lgd_floor() gives corporate subordinated 25% floor.
+
+        Verifies the namespace method correctly passes exposure_class
+        awareness to the floor expression, so corporate subordinated
+        exposures get 25% (not 50%) when exposure_class column is present.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "lgd_input": [0.10, 0.10],
+                "seniority": ["subordinated", "senior"],
+                "is_airb": [True, True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        # Both get 25% floor — corporate subordinated same as senior (Art. 161(5))
+        assert result["lgd_floored"][0] == pytest.approx(0.25)
+        assert result["lgd_floored"][1] == pytest.approx(0.25)
+
     def test_apply_all_formulas_lgd_floor_airb_only(
         self,
         basel31_config: CalculationConfig,

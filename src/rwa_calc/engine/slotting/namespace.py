@@ -217,9 +217,9 @@ class SlottingLazyFrame:
         return self._lf.with_columns(risk_weight=rw_expr)
 
     def calculate_rwa(self) -> pl.LazyFrame:
-        """Calculate RWA = EAD x Risk Weight."""
+        """Calculate RWA = EAD x Risk Weight (pre-supporting-factor)."""
         rwa = col("ead_final") * col("risk_weight")
-        return self._lf.with_columns(rwa=rwa, rwa_final=rwa)
+        return self._lf.with_columns(rwa=rwa)
 
     def apply_el_rates(self, config: CalculationConfig) -> pl.LazyFrame:
         """Apply slotting expected loss rates per Art. 158(6) Table B.
@@ -295,6 +295,7 @@ class SlottingLazyFrame:
             "ead_final",
             "risk_weight",
             "rwa",
+            "supporting_factor",
         ]
 
         select_cols = [c for c in base_cols + optional_cols if c in schema]

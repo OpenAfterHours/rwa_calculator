@@ -180,18 +180,24 @@ def calculate_single_slotting_exposure(
     sl_type: str = "project_finance",
     is_short_maturity: bool = False,
     is_pre_operational: bool = False,
+    is_infrastructure: bool | None = None,
+    is_sme: bool | None = None,
 ) -> dict:
     """Calculate slotting RWA for a single exposure via calculate_branch."""
-    df = pl.DataFrame(
-        {
-            "exposure_reference": ["SINGLE"],
-            "ead": [float(ead)],
-            "slotting_category": [category],
-            "is_hvcre": [is_hvcre],
-            "sl_type": [sl_type],
-            "is_short_maturity": [is_short_maturity],
-            "is_pre_operational": [is_pre_operational],
-        }
-    ).lazy()
+    data: dict = {
+        "exposure_reference": ["SINGLE"],
+        "ead": [float(ead)],
+        "slotting_category": [category],
+        "is_hvcre": [is_hvcre],
+        "sl_type": [sl_type],
+        "is_short_maturity": [is_short_maturity],
+        "is_pre_operational": [is_pre_operational],
+    }
+    if is_infrastructure is not None:
+        data["is_infrastructure"] = [is_infrastructure]
+    if is_sme is not None:
+        data["is_sme"] = [is_sme]
+
+    df = pl.DataFrame(data).lazy()
 
     return calculator.calculate_branch(df, config).collect().to_dicts()[0]

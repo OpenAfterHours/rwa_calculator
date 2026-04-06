@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.64 Art. 166D(5) EAD floors (b) and (c) implemented)
-**Current version:** 0.1.102 | **Test suite:** ~2,937 collected (~2,413 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.44 slotting supporting factors implemented)
+**Current version:** 0.1.103 | **Test suite:** ~2,948 collected (~2,424 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -577,12 +577,22 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Art. 216(3) exemption (restructuring requiring 100% vote under well-established bankruptcy code) is not enforced — institutions must set `includes_restructuring=True` for exempt credit derivatives.
 
 ### P1.44 Infrastructure supporting factor not applied to slotting exposures
-- **Status:** [ ] Not applied
-- **Impact:** Under CRR, infrastructure project finance may qualify for 0.75 infrastructure supporting factor (Art. 501a). The slotting pipeline (`pipeline.py:608-613`) calls `calculate_branch` -> `_standardize_branch_output` with no hook for `SupportingFactorCalculator`. The supporting factor is only applied to SA/IRB branches, not slotting. Infrastructure PF exposures in the slotting branch silently miss the 0.75 factor.
-- **File:Line:** `engine/pipeline.py:608-613`
-- **Spec ref:** CRR Art. 501a
-- **Fix:** Apply `SupportingFactorCalculator` to slotting output in pipeline, or document that slotting exposures are excluded from supporting factors with regulatory justification.
-- **Tests needed:** Unit test for infrastructure PF with slotting approach.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** Under CRR, infrastructure project finance qualifying for the 0.75 infrastructure supporting factor (Art. 501a) was silently missed in the slotting branch. The slotting calculator now applies `SupportingFactorCalculator` after `calculate_rwa()`, following the same pattern as the IRB calculator:
+  - `rwa` is aliased to `rwa_pre_factor` before factor application
+  - `SupportingFactorCalculator.apply_factors()` produces `rwa_post_factor` and `supporting_factor`
+  - `rwa` and `rwa_final` are updated to the post-factor values
+  - Under Basel 3.1, supporting factors are disabled — `supporting_factor=1.0`
+  - Both SME (Art. 501) and infrastructure (Art. 501a) factors apply to slotting exposures
+  - When both apply, `min(sme_factor, infra_factor)` is used
+  - Missing `is_infrastructure`/`is_sme` columns default to `False` (no factor, backward compatible)
+  - EL is unaffected — `expected_loss = el_rate × ead_final` computed after supporting factors but on the original EAD
+  - Namespace `calculate_rwa()` no longer sets `rwa_final` directly (set by calculator after factor application)
+  - Audit trail includes `supporting_factor` column
+- **File:Line:** `engine/slotting/calculator.py:95-151` (_apply_supporting_factors + calculate_branch chain), `engine/slotting/namespace.py:219-222` (calculate_rwa no longer sets rwa_final), `engine/slotting/namespace.py:287-300` (audit includes supporting_factor)
+- **Spec ref:** CRR Art. 501a, CRR Art. 501
+- **Tests:** 11 new unit tests in `tests/unit/test_slotting_supporting_factors.py`: infrastructure PF 0.75 factor, RWA reduced (Strong 70% × 0.75 = 52.5%), non-infrastructure no reduction, missing column defaults, B31 no factor, HVCRE gets factor, weak category gets factor, SME slotting gets 0.7619, combined min(0.7619, 0.75) = 0.75, mixed batch 3 exposures, EL unchanged by factor. 1 existing test updated (removed rwa_final expectation from namespace apply_all). All 2948 tests pass. Test count: 2948 (was 2937).
 
 ### P1.45 SCRA null grade defaults to Grade A (most favourable) instead of Grade C
 - **Status:** [x] Complete

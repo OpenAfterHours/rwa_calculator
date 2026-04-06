@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.35 Slotting EL rates Table B implemented)
-**Current version:** 0.1.88 | **Test suite:** ~2,745 collected (~2,240 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.12, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.11 CRM maturity mismatch fixed)
+**Current version:** 0.1.89 | **Test suite:** ~2,756 collected (~2,251 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -243,12 +243,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for transitional date logic.
 
 ### P1.11 CRM maturity mismatch hardcoded exposure maturity (Art. 238)
-- **Status:** [~] Simplified -- conservative but incorrect
-- **Impact:** `engine/crm/haircuts.py:312` hardcodes T=5 years in `(pl.col("coll_maturity") - 0.25) / (5.0 - 0.25)` instead of using actual `exposure_maturity` column (available in data). CRR Art. 238 formula is `CVAM = CVA x (t - 0.25) / (T - 0.25)` where T = residual maturity of exposure (capped at 5). T=5 gives most conservative result; shorter-maturity exposures get too much CRM benefit reduction.
-- **File:Line:** `engine/crm/haircuts.py:312`
-- **Spec ref:** CRR Art. 238 / `docs/specifications/crr/credit-risk-mitigation.md`
-- **Fix:** Replace `5.0` with `pl.col("exposure_maturity").clip(upper_bound=5.0)`. Guard against null (fall back to 5.0).
-- **Tests needed:** Unit tests for maturity mismatch with varying exposure maturities.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** `apply_maturity_mismatch` now uses actual exposure maturity derived from the `exposure_maturity` Date column via `config.reporting_date`, capped at 5yr and floored at 0.25yr. Previously hardcoded T=5 in both the no-adjustment guard and the CVAM denominator, which over-penalised short-maturity exposures (e.g., 1yr exposure with 0.5yr collateral got factor 0.053 instead of correct 0.333). Two bugs fixed:
+  - **No-adjustment guard:** was `coll_maturity >= 5.0`, now `coll_maturity >= exposure_maturity_years`
+  - **CVAM denominator:** was `5.0 - 0.25`, now `exposure_maturity_years - 0.25`
+  - Null exposure maturity defaults to T=5 (conservative). Null collateral maturity defaults to 10yr (no mismatch).
+  - Fixture data for LOAN_CRM_D5 maturity_date updated from 2031-01-01 to 2036-01-01 so residual maturity is >=5yr at both CRR (2025-12-31) and B31 (2030-06-30) reporting dates.
+- **File:Line:** `engine/crm/haircuts.py:316-381` (apply_maturity_mismatch), `engine/crm/collateral.py:262` (call site passes config)
+- **Spec ref:** CRR Art. 238, PRA PS1/26 Art. 238, `docs/specifications/crr/credit-risk-mitigation.md`
+- **Tests:** 11 new unit tests in `tests/unit/crm/test_maturity_mismatch.py`: no mismatch (collateral >= exposure), 3yr exposure 2yr collateral (factor 0.636 vs old 0.368), 5yr exposure 2yr collateral (T capped at 5), 7yr exposure capped at 5, collateral <3m zeroed, null collateral defaults 10yr, null exposure defaults T=5, 1yr exposure amplified factor, B31 same formula, mixed batch 4 exposures, exposure maturity floored at 0.25yr. All 2756 tests pass. Test count: 2756 (was 2745).
 
 ### P1.12 SCRA enhanced sub-grade and short-term maturity weights (Basel 3.1)
 - **Status:** [x] Complete

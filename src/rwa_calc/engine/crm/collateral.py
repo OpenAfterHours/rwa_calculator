@@ -258,8 +258,8 @@ def apply_collateral(
     # Apply haircuts to collateral (no longer needs exposures)
     adjusted_collateral = haircut_calculator.apply_haircuts(collateral, config)
 
-    # Apply maturity mismatch (no longer needs exposures)
-    adjusted_collateral = haircut_calculator.apply_maturity_mismatch(adjusted_collateral)
+    # Apply maturity mismatch using actual exposure maturity (Art. 238)
+    adjusted_collateral = haircut_calculator.apply_maturity_mismatch(adjusted_collateral, config)
 
     return _apply_collateral_unified(
         exposures,

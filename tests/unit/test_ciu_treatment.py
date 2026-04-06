@@ -51,12 +51,12 @@ def sa_config() -> CalculationConfig:
 class TestCIUApproachSelection:
     """Test CIU approach-aware risk weight selection."""
 
-    def test_fallback_1250_percent(
+    def test_fallback_150_percent(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU with fallback approach gets 1250% RW (Art. 132B)."""
+        """CIU with fallback approach gets 150% RW under CRR (Art. 132(2))."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -64,7 +64,7 @@ class TestCIUApproachSelection:
             config=sa_config,
             ciu_approach="fallback",
         )
-        assert result["risk_weight"] == pytest.approx(12.50)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_look_through_250_percent(
         self,
@@ -97,12 +97,12 @@ class TestCIUApproachSelection:
         )
         assert result["risk_weight"] == pytest.approx(3.50)
 
-    def test_mandate_based_no_rw_falls_to_1250(
+    def test_mandate_based_no_rw_falls_to_150(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU mandate-based with no ciu_mandate_rw falls back to 1250%."""
+        """CIU mandate-based with no ciu_mandate_rw falls back to 150% under CRR."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -110,7 +110,7 @@ class TestCIUApproachSelection:
             config=sa_config,
             ciu_approach="mandate_based",
         )
-        assert result["risk_weight"] == pytest.approx(12.50)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_null_approach_defaults_250_percent(
         self,
@@ -131,7 +131,7 @@ class TestCIUApproachSelection:
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU fallback RWA = EAD * 12.50."""
+        """CIU fallback RWA = EAD * 1.50 under CRR (Art. 132(2))."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -139,7 +139,7 @@ class TestCIUApproachSelection:
             config=sa_config,
             ciu_approach="fallback",
         )
-        assert result["rwa"] == pytest.approx(12_500_000.0)
+        assert result["rwa"] == pytest.approx(1_500_000.0)
 
 
 # =============================================================================
@@ -221,7 +221,7 @@ class TestCIUMandateBasedThirdParty:
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Third-party with null mandate_rw uses 1250% fallback * 1.2 = 1500%."""
+        """Third-party with null mandate_rw uses 150% fallback * 1.2 = 180% under CRR."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -230,7 +230,7 @@ class TestCIUMandateBasedThirdParty:
             ciu_approach="mandate_based",
             ciu_third_party_calc=True,
         )
-        assert result["risk_weight"] == pytest.approx(15.00)
+        assert result["risk_weight"] == pytest.approx(1.80)
 
 
 # =============================================================================

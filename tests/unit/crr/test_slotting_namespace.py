@@ -657,10 +657,18 @@ class TestBasel31SlottingWeightsHVCRE:
 
 
 class TestBasel31SlottingWeightsPFPreOp:
-    """Tests for Basel 3.1 Project Finance pre-operational slotting weights."""
+    """Tests for Basel 3.1 Project Finance pre-operational slotting weights.
 
-    def test_basel31_pf_preop_strong_80_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 PF Pre-Op Strong should get 80% risk weight."""
+    PRA PS1/26 Art. 153(5) Table A does NOT define separate pre-operational
+    weights — all PF uses standard slotting weights regardless of operational
+    status. BCBS CRE33 had higher pre-op weights (80/100/120/350%) but PRA
+    did not adopt this distinction.
+    """
+
+    def test_basel31_pf_preop_strong_same_as_standard(
+        self, basel31_config: CalculationConfig
+    ) -> None:
+        """Basel 3.1 PF Pre-Op Strong uses standard 70% RW (no PRA pre-op uplift)."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -672,10 +680,12 @@ class TestBasel31SlottingWeightsPFPreOp:
             }
         )
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.80)
+        assert result["risk_weight"][0] == pytest.approx(0.70)
 
-    def test_basel31_pf_preop_good_100_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 PF Pre-Op Good should get 100% risk weight."""
+    def test_basel31_pf_preop_good_same_as_standard(
+        self, basel31_config: CalculationConfig
+    ) -> None:
+        """Basel 3.1 PF Pre-Op Good uses standard 90% RW."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -687,12 +697,12 @@ class TestBasel31SlottingWeightsPFPreOp:
             }
         )
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(1.00)
+        assert result["risk_weight"][0] == pytest.approx(0.90)
 
-    def test_basel31_pf_preop_satisfactory_120_percent(
+    def test_basel31_pf_preop_satisfactory_same_as_standard(
         self, basel31_config: CalculationConfig
     ) -> None:
-        """Basel 3.1 PF Pre-Op Satisfactory should get 120% risk weight."""
+        """Basel 3.1 PF Pre-Op Satisfactory uses standard 115% RW."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -704,10 +714,12 @@ class TestBasel31SlottingWeightsPFPreOp:
             }
         )
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(1.20)
+        assert result["risk_weight"][0] == pytest.approx(1.15)
 
-    def test_basel31_pf_preop_weak_350_percent(self, basel31_config: CalculationConfig) -> None:
-        """Basel 3.1 PF Pre-Op Weak should get 350% risk weight."""
+    def test_basel31_pf_preop_weak_same_as_standard(
+        self, basel31_config: CalculationConfig
+    ) -> None:
+        """Basel 3.1 PF Pre-Op Weak uses standard 250% RW."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -719,7 +731,7 @@ class TestBasel31SlottingWeightsPFPreOp:
             }
         )
         result = lf.slotting.apply_slotting_weights(basel31_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(3.50)
+        assert result["risk_weight"][0] == pytest.approx(2.50)
 
 
 # =============================================================================

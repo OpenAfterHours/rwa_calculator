@@ -87,6 +87,9 @@ class ExposureClass(StrEnum):
     COVERED_BOND = "covered_bond"
     """Covered bonds (CRR Art. 129, PRA PS1/26 Art. 129)"""
 
+    HIGH_RISK = "high_risk"
+    """Items associated with particularly high risk (CRR Art. 112(l), Art. 128)"""
+
     OTHER = "other"
     """Other items (CRR Art. 112(q))"""
 
@@ -297,13 +300,18 @@ class Seniority(StrEnum):
 class SCRAGrade(StrEnum):
     """
     Standardised Credit Risk Assessment Approach (SCRA) grades (Basel 3.1 CRE20.16-21).
+
+    Short-term (≤3m) risk weights differ from long-term — see B31_SCRA_SHORT_TERM_RISK_WEIGHTS.
     """
 
     A = "A"
-    """CET1 > 14%, Leverage > 5%, meets all regulatory requirements → 40% RW"""
+    """Meets all minimum requirements + buffers → 40% RW (>3m), 20% (≤3m)"""
+
+    A_ENHANCED = "A_ENHANCED"
+    """CET1 >= 14% AND leverage ratio >= 5% → 30% RW (>3m), 20% (≤3m) (CRE20.19)"""
 
     B = "B"
-    """CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW"""
+    """CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW (>3m), 50% (≤3m)"""
 
     C = "C"
     """Below minimum regulatory requirements → 150% RW"""
@@ -355,6 +363,14 @@ class RiskType(StrEnum):
     Medium Low Risk - 20% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
 
     -- Documentary credits, trade finance, short-term self-liquidating
+    """
+
+    OC = "other_commit"
+    """
+    Other Commitments - 40% CCF under Basel 3.1 SA (PRA Art. 111 Table A1 Row 5)
+
+    -- All other commitments not in FR/MR/MLR/LR categories.
+    Under CRR, these were 0% (same as LR); Basel 3.1 introduces the 40% category.
     """
 
     LR = "low_risk"

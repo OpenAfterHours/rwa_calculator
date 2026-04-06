@@ -1,36 +1,32 @@
 """
 Equity Calculator for Equity Exposure RWA.
 
-Implements two approaches under CRR:
-- Article 133: Standardised Approach (SA) - Default for SA firms
-- Article 155: IRB Simple Risk Weight Method - For firms with IRB permission
+Implements framework-dependent approaches:
+- CRR Article 133: Standardised Approach (SA) — 0%/100%/250%/400%
+- CRR Article 155: IRB Simple Risk Weight Method — 190%/290%/370%
+- Basel 3.1 Art. 133(3)-(6): SA only — 0%/100%/250%/400% (IRB removed)
 
 Pipeline position:
     CRMProcessor -> EquityCalculator -> Aggregation
 
 Key responsibilities:
-- Determine equity risk weights based on equity type
+- Determine equity risk weights based on equity type and framework
 - Handle diversified portfolio treatment for private equity
+- Apply transitional floor (PRA Rules 4.1-4.10) during phase-in
 - Calculate RWA = EAD x RW
 - Build audit trail of calculations
 
-Risk Weight Summary:
-
-Article 133 (SA):
-- Central bank: 0%
-- Listed/Exchange-traded/Government-supported: 100%
-- Unlisted: 250%
-- Speculative: 400%
-
-Article 155 (IRB Simple):
-- Private equity (diversified portfolio): 190%
-- Exchange-traded: 290%
-- Other equity: 370%
+Basel 3.1 key changes from CRR:
+- Listed/exchange-traded: 100% -> 250% (Art. 133(3))
+- CIU fallback: 150% -> 250% (Art. 132(2))
+- IRB equity removed (Art. 147A) — all equity uses SA
+- Transitional floor phases from 160%/220% (2027) to 250%/400% (2030)
 
 References:
 - CRR Art. 133: Equity exposures under SA
 - CRR Art. 155: Simple risk weight approach under IRB
-- EBA Q&A 2023_6716: Strategic equity treatment
+- PRA PS1/26 Art. 133(3)-(6): Basel 3.1 SA equity weights
+- PRA Rules 4.1-4.10: Equity transitional schedule
 """
 
 from __future__ import annotations
@@ -189,6 +185,7 @@ class EquityCalculator:
         else:
             exposures = self._apply_equity_weights_sa(exposures, config)
 
+        exposures = self._apply_transitional_floor(exposures, config)
         exposures = self._calculate_rwa(exposures)
 
         audit = self._build_audit(exposures, approach)
@@ -430,7 +427,24 @@ class EquityCalculator:
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Apply Article 133 (SA) equity risk weights.
+        Apply SA equity risk weights, branching by framework.
+
+        CRR Art. 133: 0% / 100% / 250% / 400%
+        Basel 3.1 Art. 133(3)-(6): 0% / 100% / 250% / 400% with key changes:
+            - Listed/exchange-traded: 100% -> 250%
+            - CIU fallback: 150% -> 250%
+        """
+        if config.is_basel_3_1:
+            return self._apply_b31_equity_weights_sa(exposures, config)
+        return self._apply_crr_equity_weights_sa(exposures, config)
+
+    def _apply_crr_equity_weights_sa(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply CRR Article 133 SA equity risk weights.
 
         Risk weights:
         - Central bank: 0%
@@ -467,13 +481,13 @@ class EquityCalculator:
                     (pl.col("equity_type").str.to_lowercase() == "ciu")
                     & (pl.col("ciu_approach") == "fallback")
                 )
-                .then(pl.lit(12.50))  # 1250% Art. 132B fallback
+                .then(pl.lit(1.50))  # 150% CRR Art. 132(2) fallback
                 .when(
                     (pl.col("equity_type").str.to_lowercase() == "ciu")
                     & (pl.col("ciu_approach") == "mandate_based")
                 )
                 .then(
-                    pl.col("ciu_mandate_rw").fill_null(12.50)
+                    pl.col("ciu_mandate_rw").fill_null(1.50)
                     * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
                     .then(pl.lit(1.2))
                     .otherwise(pl.lit(1.0))
@@ -486,6 +500,64 @@ class EquityCalculator:
                 .when(pl.col("equity_type").str.to_lowercase() == "ciu")
                 .then(pl.lit(2.50))  # CIU default: 250%
                 .otherwise(pl.lit(2.50))
+                .alias("risk_weight"),
+            ]
+        )
+
+    def _apply_b31_equity_weights_sa(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply Basel 3.1 PRA PS1/26 Art. 133 SA equity risk weights.
+
+        Risk weights:
+        - Central bank: 0%  (Art. 133(6))
+        - Government-supported (legislative programme): 100%
+        - Speculative / higher risk: 400%  (Art. 133(4))
+        - All other standard equity: 250%  (Art. 133(3))
+        - CIU fallback: 250%  (Art. 132(2) under B31)
+
+        Note: Subordinated debt / non-equity own funds = 150% (Art. 133(5))
+        requires EquityType.SUBORDINATED_DEBT — not yet implemented.
+        """
+        return exposures.with_columns(
+            [
+                pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
+                .then(pl.lit(0.00))  # Art. 133(6): 0%
+                .when(pl.col("is_speculative") == True)  # noqa: E712
+                .then(pl.lit(4.00))  # Art. 133(4): 400% higher risk
+                .when(pl.col("equity_type").str.to_lowercase() == "speculative")
+                .then(pl.lit(4.00))  # Art. 133(4): 400% higher risk
+                .when(pl.col("is_government_supported") == True)  # noqa: E712
+                .then(pl.lit(1.00))  # Legislative programme: 100%
+                .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
+                .then(pl.lit(1.00))  # Legislative programme: 100%
+                # CIU: approach-aware risk weights (B31 Art. 132-132C)
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "fallback")
+                )
+                .then(pl.lit(2.50))  # B31 Art. 132(2): 250% fallback (was 150% CRR)
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "mandate_based")
+                )
+                .then(
+                    pl.col("ciu_mandate_rw").fill_null(2.50)
+                    * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
+                    .then(pl.lit(1.2))
+                    .otherwise(pl.lit(1.0))
+                )  # Art. 132A, 1.2x for third-party
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "look_through")
+                )
+                .then(pl.col("ciu_look_through_rw").fill_null(2.50))  # Art. 132
+                .when(pl.col("equity_type").str.to_lowercase() == "ciu")
+                .then(pl.lit(2.50))  # CIU default: 250%
+                .otherwise(pl.lit(2.50))  # Art. 133(3): 250% standard
                 .alias("risk_weight"),
             ]
         )

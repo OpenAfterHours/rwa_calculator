@@ -267,9 +267,11 @@ class FXConverter:
             how="left",
         )
 
-        # Convert amounts where rate is available
+        # Convert amounts where rate is available, preserving original currency
+        # for FX mismatch haircut (Art. 233(3-4))
         converted = converted.with_columns(
             [
+                pl.col("currency").alias("original_currency"),
                 pl.when(pl.col("currency") == target_currency)
                 .then(pl.col("amount_covered"))
                 .when(pl.col("rate").is_not_null())

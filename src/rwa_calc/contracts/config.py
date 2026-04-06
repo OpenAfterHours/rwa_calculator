@@ -87,42 +87,85 @@ class PDFloors:
 
     @classmethod
     def basel_3_1(cls) -> PDFloors:
-        """Basel 3.1 PD floors: differentiated by class (CRE30.55)."""
+        """Basel 3.1 PD floors: differentiated by class (PRA PS1/26 Art. 160/163)."""
         return cls(
-            corporate=Decimal("0.0005"),  # 0.05%
-            corporate_sme=Decimal("0.0005"),  # 0.05%
-            retail_mortgage=Decimal("0.0005"),  # 0.05%
-            retail_other=Decimal("0.0005"),  # 0.05%
-            retail_qrre_transactor=Decimal("0.0003"),  # 0.03%
-            retail_qrre_revolver=Decimal("0.0010"),  # 0.10%
+            corporate=Decimal("0.0005"),  # 0.05% Art. 160(1)
+            corporate_sme=Decimal("0.0005"),  # 0.05% Art. 160(1)
+            retail_mortgage=Decimal("0.0010"),  # 0.10% Art. 163(1)(b) secured by UK RRE
+            retail_other=Decimal("0.0005"),  # 0.05% Art. 163(1)(c) all other retail
+            retail_qrre_transactor=Decimal("0.0005"),  # 0.05% Art. 163(1)(c) all other retail
+            retail_qrre_revolver=Decimal("0.0010"),  # 0.10% Art. 163(1)(a) QRRE revolvers
         )
 
 
 @dataclass(frozen=True)
 class LGDFloors:
     """
-    LGD floor values by collateral type for A-IRB.
+    LGD floor values by collateral type and exposure class for A-IRB.
 
     Only applicable under Basel 3.1 (CRE30.41, PS1/26 Ch.5).
     CRR has no LGD floors for A-IRB.
 
+    Corporate floors (Art. 161(5)):
+        - Unsecured (senior & subordinated): 25%
+        - Financial collateral: 0%, Receivables: 10%, CRE: 10%, RRE: 10%, Other: 15%
+
+    Retail floors (Art. 164(4)):
+        - (a) RRE-secured retail: 5%
+        - (b)(i) QRRE unsecured: 50%
+        - (b)(ii) Other retail unsecured: 30%
+        - (c) Other secured retail: blended formula with LGDU=30%, LGDS per collateral type
+
     All values expressed as decimals (e.g., 0.25 = 25%)
     """
 
+    # Corporate LGD floors — Art. 161(5)
     unsecured: Decimal = Decimal("0.25")  # 25%
-    subordinated_unsecured: Decimal = Decimal("0.50")  # 50%
+    subordinated_unsecured: Decimal = Decimal("0.50")  # 50% conservative fallback
     financial_collateral: Decimal = Decimal("0.0")  # 0%
     receivables: Decimal = Decimal("0.10")  # 10%
     commercial_real_estate: Decimal = Decimal("0.10")  # 10%
-    residential_real_estate: Decimal = Decimal("0.10")  # 10% (PRA Art. 161/164)
+    residential_real_estate: Decimal = Decimal("0.10")  # 10% (PRA Art. 161(5))
     other_physical: Decimal = Decimal("0.15")  # 15%
 
-    def get_floor(self, collateral_type: CollateralType) -> Decimal:
-        """Get the LGD floor for a given collateral type."""
+    # Retail LGD floors — Art. 164(4)
+    retail_rre: Decimal = Decimal("0.05")  # 5% Art. 164(4)(a) RRE-secured retail
+    retail_qrre_unsecured: Decimal = Decimal("0.50")  # 50% Art. 164(4)(b)(i)
+    retail_other_unsecured: Decimal = Decimal("0.30")  # 30% Art. 164(4)(b)(ii)
+    retail_lgdu: Decimal = Decimal("0.30")  # 30% Art. 164(4)(c) LGDU for blended formula
+
+    def get_floor(
+        self,
+        collateral_type: CollateralType,
+        exposure_class: str | None = None,
+    ) -> Decimal:
+        """Get the LGD floor for a given collateral type and optional exposure class.
+
+        When exposure_class is a retail class, returns Art. 164(4) retail floors.
+        Otherwise returns Art. 161(5) corporate floors.
+        """
+        is_retail_mortgage = exposure_class in ("retail_mortgage", "RETAIL_MORTGAGE")
+        is_retail_qrre = exposure_class in ("retail_qrre", "RETAIL_QRRE")
+        is_retail_other = exposure_class in ("retail_other", "RETAIL_OTHER")
+        is_retail = is_retail_mortgage or is_retail_qrre or is_retail_other
+
+        if is_retail and collateral_type == CollateralType.OTHER:
+            # Unsecured retail — return exposure-class-specific floor
+            if is_retail_qrre:
+                return self.retail_qrre_unsecured
+            if is_retail_other:
+                return self.retail_other_unsecured
+            # Retail mortgage unsecured (unusual) — use other retail floor
+            return self.retail_other_unsecured
+
+        if is_retail_mortgage and collateral_type == CollateralType.IMMOVABLE:
+            return self.retail_rre
+
+        # Collateral-type-based floor (same LGDS for corporate and retail)
         mapping = {
             CollateralType.FINANCIAL: self.financial_collateral,
             CollateralType.RECEIVABLES: self.receivables,
-            CollateralType.IMMOVABLE: self.commercial_real_estate,  # Default to CRE
+            CollateralType.IMMOVABLE: self.commercial_real_estate,
             CollateralType.OTHER_PHYSICAL: self.other_physical,
             CollateralType.OTHER: self.unsecured,
         }
@@ -139,6 +182,10 @@ class LGDFloors:
             commercial_real_estate=Decimal("0.0"),
             residential_real_estate=Decimal("0.0"),
             other_physical=Decimal("0.0"),
+            retail_rre=Decimal("0.0"),
+            retail_qrre_unsecured=Decimal("0.0"),
+            retail_other_unsecured=Decimal("0.0"),
+            retail_lgdu=Decimal("0.0"),
         )
 
     @classmethod
@@ -146,18 +193,25 @@ class LGDFloors:
         """
         Basel 3.1 LGD floors (CRE30.41).
 
-        Values reflect PRA PS1/26 Art. 161(5) / Art. 164(4) implementation.
-        Note: BCBS CRE30.41 has different values for some types (RRE: 5%).
-        PRA sets immovable property (both RESI and CRE) at 10%.
+        Corporate floors: PRA PS1/26 Art. 161(5).
+        Retail floors: PRA PS1/26 Art. 164(4).
+        Note: BCBS CRE30.41 RRE = 5% for retail; PRA Art. 161(5) sets corporate
+        RRE at 10%. Both are now correctly distinguished.
         """
         return cls(
+            # Corporate — Art. 161(5)
             unsecured=Decimal("0.25"),  # 25%
-            subordinated_unsecured=Decimal("0.50"),  # 50%
+            subordinated_unsecured=Decimal("0.50"),  # 50% conservative fallback
             financial_collateral=Decimal("0.0"),  # 0%
             receivables=Decimal("0.10"),  # 10%
             commercial_real_estate=Decimal("0.10"),  # 10%
-            residential_real_estate=Decimal("0.10"),  # 10% (PRA Art. 161/164)
+            residential_real_estate=Decimal("0.10"),  # 10% (PRA Art. 161(5))
             other_physical=Decimal("0.15"),  # 15%
+            # Retail — Art. 164(4)
+            retail_rre=Decimal("0.05"),  # 5% Art. 164(4)(a)
+            retail_qrre_unsecured=Decimal("0.50"),  # 50% Art. 164(4)(b)(i)
+            retail_other_unsecured=Decimal("0.30"),  # 30% Art. 164(4)(b)(ii)
+            retail_lgdu=Decimal("0.30"),  # 30% Art. 164(4)(c) LGDU
         )
 
 
@@ -356,7 +410,7 @@ class PostModelAdjustmentConfig:
         cls,
         pma_rwa_scalar: Decimal = Decimal("0.0"),
         pma_el_scalar: Decimal = Decimal("0.0"),
-        mortgage_rw_floor: Decimal = Decimal("0.15"),
+        mortgage_rw_floor: Decimal = Decimal("0.10"),
         unrecognised_exposure_scalar: Decimal = Decimal("0.0"),
     ) -> PostModelAdjustmentConfig:
         """
@@ -365,7 +419,7 @@ class PostModelAdjustmentConfig:
         Args:
             pma_rwa_scalar: General PMA as fraction of base RWEA (default 0%)
             pma_el_scalar: General PMA as fraction of base EL (default 0%)
-            mortgage_rw_floor: Minimum RW for residential mortgages (default 15%)
+            mortgage_rw_floor: Minimum RW for residential mortgages (default 10%, Art. 154(4A)(b))
             unrecognised_exposure_scalar: Unrecognised exposure add-on (default 0%)
         """
         return cls(
@@ -409,7 +463,7 @@ class RetailThresholds:
         """Basel 3.1 retail thresholds (GBP)."""
         return cls(
             max_exposure_threshold=Decimal("880000"),  # GBP 880k
-            qrre_max_limit=Decimal("100000"),  # GBP 100k
+            qrre_max_limit=Decimal("90000"),  # GBP 90k per Art. 147(5A)(c)
         )
 
 
@@ -471,6 +525,64 @@ class IRBPermissions:
             }
         )
 
+    @classmethod
+    def full_irb_b31(cls) -> IRBPermissions:
+        """Full IRB permissions with Basel 3.1 Art. 147A approach restrictions.
+
+        Art. 147A mandates:
+        - Sovereign/quasi-sovereign (RGLA, PSE, MDB): SA only
+        - Institution: F-IRB only (no A-IRB)
+        - IPRE/HVCRE: Slotting only (enforced at classifier level)
+        - FSE corporate: F-IRB only (enforced at classifier level)
+        - Large corporate (>GBP 440m): F-IRB only (enforced at classifier level)
+        - Equity: SA only
+        - Other SL (PF/OF/CF): Slotting default, F-IRB/A-IRB with permission
+        - Other corporate: F-IRB default, A-IRB with explicit permission
+        - Retail: A-IRB (if approved)
+
+        Note: FSE and large corporate AIRB restrictions are enforced at
+        classifier level using counterparty attributes, not here, because
+        they depend on per-exposure data (revenue, entity flags).
+        """
+        return cls(
+            permissions={
+                # SA only — Art. 147A(1)(a): sovereign and quasi-sovereigns
+                ExposureClass.CENTRAL_GOVT_CENTRAL_BANK: {ApproachType.SA},
+                ExposureClass.PSE: {ApproachType.SA},
+                ExposureClass.MDB: {ApproachType.SA},
+                ExposureClass.RGLA: {ApproachType.SA},
+                # F-IRB only — Art. 147A(1)(b): institutions
+                ExposureClass.INSTITUTION: {ApproachType.SA, ApproachType.FIRB},
+                # Corporate — Art. 147A(1)(f): F-IRB default, A-IRB with permission
+                # (FSE/large corp AIRB restriction enforced at classifier level)
+                ExposureClass.CORPORATE: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
+                ExposureClass.CORPORATE_SME: {
+                    ApproachType.SA,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
+                # Retail — Art. 147A(3): A-IRB (if approved)
+                ExposureClass.RETAIL_MORTGAGE: {ApproachType.SA, ApproachType.AIRB},
+                ExposureClass.RETAIL_QRRE: {ApproachType.SA, ApproachType.AIRB},
+                ExposureClass.RETAIL_OTHER: {ApproachType.SA, ApproachType.AIRB},
+                # SL — Art. 147A(1)(c)/(d): IPRE/HVCRE slotting-only at classifier
+                # Other SL (PF/OF/CF) may use F-IRB/A-IRB with explicit permission
+                ExposureClass.SPECIALISED_LENDING: {
+                    ApproachType.SA,
+                    ApproachType.SLOTTING,
+                    ApproachType.FIRB,
+                    ApproachType.AIRB,
+                },
+                # SA only
+                ExposureClass.EQUITY: {ApproachType.SA},
+                ExposureClass.COVERED_BOND: {ApproachType.SA},
+            }
+        )
+
 
 @dataclass(frozen=True)
 class CalculationConfig:
@@ -494,6 +606,7 @@ class CalculationConfig:
         retail_thresholds: Retail classification thresholds
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
+        use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%
         collect_engine: Polars engine for .collect() - 'cpu' (default)
             processes in batches for lower memory usage, 'cpu' for in-memory
         spill_dir: Directory for temp parquet files during streaming materialization.
@@ -518,13 +631,17 @@ class CalculationConfig:
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
+    use_investment_grade_assessment: bool = False  # Art. 122(6): IG=65% / non-IG=135%
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
     def __post_init__(self) -> None:
-        """Derive internal irb_permissions from permission_mode."""
+        """Derive internal irb_permissions from permission_mode and framework."""
         if self.permission_mode == PermissionMode.IRB:
-            object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb())
+            if self.framework == RegulatoryFramework.BASEL_3_1:
+                object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb_b31())
+            else:
+                object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb())
         else:
             object.__setattr__(self, "irb_permissions", IRBPermissions.sa_only())
 
@@ -600,6 +717,7 @@ class CalculationConfig:
         reporting_date: date,
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
+        use_investment_grade_assessment: bool = False,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -618,6 +736,9 @@ class CalculationConfig:
             reporting_date: As-of date for calculation
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             post_model_adjustments: PMA configuration (optional, defaults to B3.1)
+            use_investment_grade_assessment: Art. 122(6) election — when True,
+                unrated IG corporates get 65% and non-IG get 135%. When False
+                (default), all unrated corporates get 100%.
             collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -640,6 +761,7 @@ class CalculationConfig:
             equity_transitional=EquityTransitionalConfig.basel_3_1(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
+            use_investment_grade_assessment=use_investment_grade_assessment,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
         )

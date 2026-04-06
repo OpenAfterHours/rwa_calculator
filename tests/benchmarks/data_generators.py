@@ -181,6 +181,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "default_status": pl.Series(defaults),
                 "sector_code": pl.Series(sector_codes),
                 "apply_fi_scalar": pl.Series(apply_fi_scalar),
+                "is_financial_sector_entity": pl.Series(apply_fi_scalar),
                 "is_managed_as_retail": pl.Series(np.zeros(n, dtype=bool)),
                 "scra_grade": pl.Series([None] * n, dtype=pl.String),
                 "is_investment_grade": pl.Series(np.zeros(n, dtype=bool)),

@@ -2,9 +2,9 @@
 Unit tests for Basel 3.1 slotting data tables.
 
 Tests verify:
-- Lookup tables contain expected values per BCBS CRE33
+- Lookup tables contain expected values per PRA PS1/26 Art. 153(5) Table A
 - Lookup function returns correct values
-- Pre-operational phase has distinct (higher) weights
+- Pre-operational PF uses standard weights (PRA has no separate pre-op table)
 - HVCRE weights match CRR HVCRE equivalents
 """
 
@@ -48,30 +48,34 @@ class TestB31SlottingRiskWeights:
 
 
 class TestB31SlottingPreOperational:
-    """Tests for Basel 3.1 pre-operational phase weights."""
+    """Tests for Basel 3.1 pre-operational phase weights.
 
-    def test_preop_strong_eighty_percent(self) -> None:
-        """Strong pre-operational gets 80% RW (higher than base 70%)."""
-        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.STRONG] == Decimal("0.80")
+    PRA PS1/26 Art. 153(5) Table A does NOT define a separate pre-operational
+    PF table — all PF uses the same standard weights regardless of operational
+    status. The pre-op distinction exists only in SA (Art. 122B(2)(c)), not in
+    slotting. BCBS CRE33 had separate higher pre-op weights (80/100/120/350%),
+    but PRA did not adopt this distinction.
+    """
 
-    def test_preop_good_hundred_percent(self) -> None:
-        """Good pre-operational gets 100% RW."""
-        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.GOOD] == Decimal("1.00")
+    def test_preop_strong_same_as_base(self) -> None:
+        """Strong pre-operational uses standard 70% RW (PRA has no pre-op uplift)."""
+        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.STRONG] == Decimal("0.70")
 
-    def test_preop_satisfactory_one_twenty(self) -> None:
-        """Satisfactory pre-operational gets 120% RW."""
-        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.SATISFACTORY] == Decimal("1.20")
+    def test_preop_good_same_as_base(self) -> None:
+        """Good pre-operational uses standard 90% RW."""
+        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.GOOD] == Decimal("0.90")
 
-    def test_preop_weak_three_fifty(self) -> None:
-        """Weak pre-operational gets 350% RW (higher than base 250%)."""
-        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.WEAK] == Decimal("3.50")
+    def test_preop_satisfactory_same_as_base(self) -> None:
+        """Satisfactory pre-operational uses standard 115% RW."""
+        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.SATISFACTORY] == Decimal("1.15")
 
-    def test_preop_weak_differs_from_base(self) -> None:
-        """Pre-operational Weak (350%) differs from base Weak (250%)."""
-        assert (
-            B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.WEAK]
-            != B31_SLOTTING_RISK_WEIGHTS[SlottingCategory.WEAK]
-        )
+    def test_preop_weak_same_as_base(self) -> None:
+        """Weak pre-operational uses standard 250% RW."""
+        assert B31_SLOTTING_RISK_WEIGHTS_PREOP[SlottingCategory.WEAK] == Decimal("2.50")
+
+    def test_preop_matches_standard_table(self) -> None:
+        """Pre-operational table matches standard table (PRA PS1/26 Art. 153(5))."""
+        assert B31_SLOTTING_RISK_WEIGHTS_PREOP == B31_SLOTTING_RISK_WEIGHTS
 
 
 class TestB31SlottingHVCRE:
@@ -113,8 +117,8 @@ class TestB31SlottingLookup:
         assert lookup_b31_slotting_rw("strong", is_hvcre=True) == Decimal("0.95")
 
     def test_lookup_preop(self) -> None:
-        """Lookup pre-operational weight."""
-        assert lookup_b31_slotting_rw("strong", is_pre_operational=True) == Decimal("0.80")
+        """Lookup pre-operational weight (same as standard under PRA PS1/26)."""
+        assert lookup_b31_slotting_rw("strong", is_pre_operational=True) == Decimal("0.70")
 
     def test_lookup_hvcre_takes_precedence_over_preop(self) -> None:
         """HVCRE flag takes precedence when both flags are set."""

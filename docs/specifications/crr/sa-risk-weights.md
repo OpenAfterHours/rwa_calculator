@@ -528,15 +528,15 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Other Real Estate** (Art. 124J): 150% income-dependent, counterparty RW otherwise — Done
 - **Revised corporate CQS mapping** (Art. 122(2) Table 6): CQS 3 from 100% to 75% — Done. **Note:** PRA retains CQS 5 = 150% (BCBS CRE20.42 reduced to 100%, but PRA did not adopt this reduction)
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
-- **SCRA enhanced Grade A** (CRE20.19): 30% for CET1 ≥ 14% and leverage ratio ≥ 5% — Pending
-- **SCRA short-term maturity** (CRE20.20): Grade A 20%, Grade B 50% for ≤3m exposures — Pending
+- **SCRA enhanced Grade A** (CRE20.19): 30% for CET1 ≥ 14% and leverage ratio ≥ 5% — Done
+- **SCRA short-term maturity** (CRE20.20): Grade A/A_ENHANCED 20%, Grade B 50% for ≤3m exposures — Done
 - **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done
 - **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Pending
 - **Payroll/pension loans** (Art. 123): 35% — Pending
-- **Non-regulatory retail** (Art. 123(3)(c)): 100% — Pending
+- **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Pending
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
 - **Other items** (Art. 134): Cash=0%, gold=0%, collection=20%, tangible=100% — Done

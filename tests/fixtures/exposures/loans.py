@@ -944,7 +944,9 @@ def _crm_scenario_loans() -> list[Loan]:
             book_code="CORP_LENDING",
             counterparty_reference="CORP_UR_001",  # Unrated corporate - 100% RW
             value_date=VALUE_DATE,
-            maturity_date=date(2031, 1, 1),  # 5yr maturity for mismatch test
+            maturity_date=date(
+                2036, 1, 1
+            ),  # Far enough for >=5yr residual at both CRR/B31 reporting dates
             currency="GBP",
             drawn_amount=1_000_000.0,
             interest=0.0,

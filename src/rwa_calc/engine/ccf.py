@@ -5,6 +5,13 @@ Calculates EAD for contingent exposures using regulatory CCFs:
 - SA: CRR Article 111 (0%, 20%, 50%, 100%)
 - F-IRB: CRR Article 166(8) (75% for undrawn commitments)
 - F-IRB Exception: CRR Article 166(9) (20% for short-term trade LCs)
+- A-IRB: Own-estimate CCFs with Basel 3.1 restrictions (Art. 166D)
+
+Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D(1)(a)):
+- Own-estimate CCFs permitted ONLY for revolving facilities
+- Non-revolving A-IRB must use SA CCFs from Table A1
+- Revolving facilities with 100% SA CCF (Table A1 Row 2) cannot use own-estimates
+- All own-estimate CCFs floored at 50% of SA CCF (CRE32.27)
 
 CCF is part of exposure measurement, not credit risk mitigation.
 It converts nominal/notional amounts to credit-equivalent EAD.
@@ -68,9 +75,12 @@ def sa_ccf_expression(
     - FR / full_risk: 100%
     - MR / medium_risk: 50%
     - MLR / medium_low_risk: 20%
+    - OC / other_commit: 0% (no separate category under CRR)
     - LR / low_risk: 0%
 
-    Basel 3.1 (PRA Art. 111 Table A1): LR (unconditionally cancellable) changes to 10%.
+    Basel 3.1 (PRA Art. 111 Table A1):
+    - OC / other_commit: 40% (new category — Row 5)
+    - LR (unconditionally cancellable): 10% (Row 6)
 
     Args:
         risk_type_col: Name of the risk_type column (default "risk_type")
@@ -80,13 +90,18 @@ def sa_ccf_expression(
         Polars expression resolving to Float64 SA CCF values
     """
     normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
-    # Basel 3.1: SA UCC/LR gets 10% instead of 0% (PRA Art. 111 Table A1)
+    # Basel 3.1: SA UCC/LR gets 10% instead of 0% (PRA Art. 111 Table A1 Row 6)
     lr_ccf = 0.10 if is_basel_3_1 else 0.0
+    # Basel 3.1: "Other commitments" gets 40% (Table A1 Row 5); CRR has no
+    # separate category — these were 0% (lumped with LR/UCC).
+    oc_ccf = 0.40 if is_basel_3_1 else 0.0
     return (
         pl.when(normalized.is_in(["fr", "full_risk"]))
         .then(pl.lit(1.0))
         .when(normalized.is_in(["mr", "medium_risk"]))
         .then(pl.lit(0.5))
+        .when(normalized.is_in(["oc", "other_commit"]))
+        .then(pl.lit(oc_ccf))
         .when(normalized.is_in(["mlr", "medium_low_risk"]))
         .then(pl.lit(0.2))
         .when(normalized.is_in(["lr", "low_risk"]))
@@ -103,12 +118,13 @@ class CCFCalculator:
     - SA (Art. 111): 0%, 20%, 50%, 100% by commitment type
     - F-IRB (Art. 166(8)): 75% for undrawn commitments (except 0% for cancellable)
     - F-IRB (Art. 166(9)): 20% for short-term trade LCs arising from goods movement
+    - A-IRB: own estimates under CRR; restricted to revolving under Basel 3.1
 
-    The approach determines which CCF table to use:
-    - SA exposures use standard CCFs (0%, 20%, 50%, 100%)
-    - F-IRB exposures use 75% for most undrawn commitments
-    - F-IRB short-term trade LCs retain 20% CCF (Art. 166(9) exception)
-    - A-IRB exposures use own estimates (passed through as-is)
+    Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D(1)(a)):
+    - Own-estimate CCFs ONLY for revolving facilities with SA CCF < 100%
+    - Non-revolving A-IRB: must use SA CCFs from Table A1
+    - Revolving with 100% SA CCF: must use SA CCF (Table A1 Row 2 carve-out)
+    - All own CCFs floored at 50% of SA CCF (CRE32.27)
     """
 
     def __init__(self) -> None:
@@ -127,7 +143,8 @@ class CCFCalculator:
         - SA: FR=100%, MR=50%, MLR=20%, LR=0%
         - F-IRB: FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0%
         - F-IRB Exception: MLR with is_short_term_trade_lc=True retains 20% (Art. 166(9))
-        - A-IRB: Uses ccf_modelled if provided, otherwise falls back to SA
+        - A-IRB CRR: Uses ccf_modelled if provided, otherwise falls back to SA
+        - A-IRB B31: Own CCF only for revolving (non-100% SA); else SA CCF (Art. 166D)
 
         Args:
             exposures: Exposures with nominal_amount, risk_type, and approach columns
@@ -180,6 +197,7 @@ class CCFCalculator:
                 pl.lit(False).alias("is_short_term_trade_lc"),
             ),
             ("interest", pl.lit(0.0).alias("interest")),
+            ("is_revolving", pl.lit(False).alias("is_revolving")),
         ]
         for col_name, default_expr in defaults:
             if col_name not in names:
@@ -212,27 +230,29 @@ class CCFCalculator:
         based on the exposure's approach (SA/F-IRB/A-IRB).
         """
         is_b31 = config.is_basel_3_1
-        # FIRB: UCC is 40% under Basel 3.1 (PRA Art. 166C), vs SA 10% (Art. 111)
-        firb_lr_ccf = 0.40 if is_b31 else 0.0
 
         normalized = pl.col("risk_type").fill_null("").str.to_lowercase()
 
-        # F-IRB CCF: Art. 166(8) = 75%, with Art. 166(9) exception for
-        # short-term trade LCs. Basel 3.1 Art. 166C: UCC = 40%.
-        firb_ccf = (
-            pl.when(normalized.is_in(["fr", "full_risk"]))
-            .then(pl.lit(1.0))
-            .when(normalized.is_in(["lr", "low_risk"]))
-            .then(pl.lit(firb_lr_ccf))
-            .when(
-                normalized.is_in(["mlr", "medium_low_risk"])
-                & pl.col("is_short_term_trade_lc").fill_null(False)
+        if is_b31:
+            # Basel 3.1 Art. 166C: F-IRB uses SA CCFs (PRA PS1/26 Art. 111 Table A1)
+            # FR=100%, MR=50%, MLR=20%, LR(UCC)=10%
+            firb_ccf = sa_ccf_expression(is_basel_3_1=True)
+        else:
+            # CRR Art. 166(8): F-IRB = 75% for commitments, with exceptions
+            firb_ccf = (
+                pl.when(normalized.is_in(["fr", "full_risk"]))
+                .then(pl.lit(1.0))
+                .when(normalized.is_in(["lr", "low_risk", "oc", "other_commit"]))
+                .then(pl.lit(0.0))  # UCC = 0% under CRR; OC has no CRR category (0%)
+                .when(
+                    normalized.is_in(["mlr", "medium_low_risk"])
+                    & pl.col("is_short_term_trade_lc").fill_null(False)
+                )
+                .then(pl.lit(0.2))  # Art. 166(9) exception
+                .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
+                .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
+                .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
             )
-            .then(pl.lit(0.2))  # Art. 166(9) exception
-            .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
-            .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
-            .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
-        )
 
         exposures = exposures.with_columns(
             sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),
@@ -242,12 +262,24 @@ class CCFCalculator:
             ),
         )
 
-        # A-IRB CCF: use modelled value, with Basel 3.1 floor (CRE32.27)
+        # A-IRB CCF: use modelled value, with Basel 3.1 restrictions
         ccf_modelled_expr = pl.col("ccf_modelled").cast(pl.Float64, strict=False)
         if is_b31:
-            airb_ccf = pl.max_horizontal(
+            # Basel 3.1 Art. 166D(1)(a): own-estimate CCFs only for revolving
+            # facilities whose SA CCF is not 100% (Table A1 Row 2 carve-out).
+            # Non-revolving A-IRB must use SA CCFs from Table A1.
+            # Revolving with SA CCF < 100%: own CCF with 50% SA floor (CRE32.27).
+            airb_revolving_ccf = pl.max_horizontal(
                 ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
                 pl.col("_sa_ccf_from_risk_type") * 0.5,
+            )
+            is_eligible_for_own_ccf = pl.col("is_revolving").fill_null(False) & (
+                pl.col("_sa_ccf_from_risk_type") < 1.0
+            )
+            airb_ccf = (
+                pl.when(is_eligible_for_own_ccf)
+                .then(airb_revolving_ccf)
+                .otherwise(pl.col("_sa_ccf_from_risk_type"))
             )
         else:
             airb_ccf = ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type"))

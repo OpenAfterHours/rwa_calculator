@@ -70,7 +70,7 @@ FACILITY_SCHEMA = {
     "is_revolving": pl.Boolean,
     "is_qrre_transactor": pl.Boolean,  # QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
@@ -109,7 +109,7 @@ CONTINGENTS_SCHEMA = {
     "lgd": pl.Float64,
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
@@ -145,6 +145,12 @@ COUNTERPARTY_SCHEMA = {
     #     - "retail"              → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
     #   Specialised lending (CRR Art. 147(8)):
     #     - "specialised_lending" → SA: SPECIALISED_LENDING, IRB: SPECIALISED_LENDING
+    #   Other items class (CRR Art. 112(q), Art. 134):
+    #     - "other_cash"              → SA: OTHER, 0% RW (Art. 134(1))
+    #     - "other_gold"              → SA: OTHER, 0% RW (Art. 134(4))
+    #     - "other_items_in_collection" → SA: OTHER, 20% RW (Art. 134(3))
+    #     - "other_tangible"          → SA: OTHER, 100% RW (Art. 134(2))
+    #     - "other_residual_lease"    → SA: OTHER, 1/t × 100% RW (Art. 134(6))
     "entity_type": pl.String,
     "country_code": pl.String,
     "annual_revenue": pl.Float64,  # For SME classification (EUR 50m threshold)
@@ -154,8 +160,9 @@ COUNTERPARTY_SCHEMA = {
     # Retained boolean flags - orthogonal to entity_type classification
     "apply_fi_scalar": pl.Boolean,  # 1.25x IRB correlation for LFSE/unregulated FSE (CRR Art. 153(2))
     "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
+    "is_financial_sector_entity": pl.Boolean,  # All FSEs → F-IRB only under B31 (Art. 147A(1)(e))
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
-    "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)
+    "scra_grade": pl.String,  # SCRA grade: "A"/"A_ENHANCED"/"B"/"C" (Basel 3.1 CRE20.16-21)
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
     # CCP fields (CRR Art. 300-311, CRE54.14-15)
     "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
@@ -416,6 +423,7 @@ VALID_ENTITY_TYPES = {
     "pse_sovereign",
     "pse_institution",
     "mdb",
+    "mdb_named",
     "international_org",
     "institution",
     "bank",
@@ -428,6 +436,15 @@ VALID_ENTITY_TYPES = {
     "specialised_lending",
     "equity",
     "covered_bond",
+    "other_cash",
+    "other_gold",
+    "other_items_in_collection",
+    "other_tangible",
+    "other_residual_lease",
+    "high_risk",
+    "high_risk_venture_capital",
+    "high_risk_private_equity",
+    "high_risk_speculative_re",
 }
 
 VALID_SENIORITY = {"senior", "subordinated"}
@@ -481,6 +498,10 @@ VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent"}
 
 VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
+VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
+
+VALID_RISK_TYPES_INPUT = {"FR", "MR", "OC", "MLR", "LR"}
+
 VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
@@ -492,6 +513,7 @@ VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
+        "risk_type": VALID_RISK_TYPES_INPUT,
     },
     "loans": {
         "seniority": VALID_SENIORITY,
@@ -499,9 +521,11 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "contingents": {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
+        "risk_type": VALID_RISK_TYPES_INPUT,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
+        "scra_grade": VALID_SCRA_GRADES,
     },
     "collateral": {
         "collateral_type": VALID_COLLATERAL_TYPES,
@@ -559,7 +583,7 @@ RAW_EXPOSURE_SCHEMA = {
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
-    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
@@ -586,7 +610,7 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
@@ -620,7 +644,7 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, MLR, LR - determines CCF (CRR Art. 111)
+    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
@@ -668,6 +692,7 @@ CRM_ADJUSTED_SCHEMA = {
     # Guarantee impact
     "guarantee_coverage_pct": pl.Float64,
     "guaranteed_amount": pl.Float64,
+    "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
     "ead_after_guarantee": pl.Float64,
     # Final EAD
     "final_ead": pl.Float64,
@@ -881,6 +906,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "guarantor_references": pl.List(pl.String),  # Guarantor counterparty IDs
     "guarantee_coverage_pct": pl.Float64,  # % of exposure guaranteed
     "guaranteed_amount": pl.Float64,  # Amount covered by guarantee
+    "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
     "guarantor_risk_weight": pl.Float64,  # RW of guarantor (for substitution)
     "guarantee_benefit": pl.Float64,  # RWA reduction from guarantee
     # -------------------------------------------------------------------------

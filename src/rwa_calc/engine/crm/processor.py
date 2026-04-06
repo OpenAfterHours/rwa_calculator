@@ -711,6 +711,8 @@ class CRMProcessor:
                 pl.lit("").alias("guarantor_approach"),
                 # Unfunded protection type (guarantee vs credit_derivative)
                 pl.lit(None).cast(pl.String).alias("protection_type"),
+                # FX mismatch haircut on guarantees (Art. 233(3-4))
+                pl.lit(0.0).alias("guarantee_fx_haircut"),
             ]
         )
 

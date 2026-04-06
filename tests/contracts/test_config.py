@@ -41,24 +41,24 @@ class TestPDFloors:
         assert floors.retail_qrre_revolver == Decimal("0.0003")
 
     def test_basel_3_1_pd_floors_differentiated(self):
-        """Basel 3.1 should have differentiated PD floors."""
+        """Basel 3.1 should have differentiated PD floors per PRA Art. 160/163."""
         floors = PDFloors.basel_3_1()
 
-        assert floors.corporate == Decimal("0.0005")  # 0.05%
-        assert floors.corporate_sme == Decimal("0.0005")  # 0.05%
-        assert floors.retail_mortgage == Decimal("0.0005")  # 0.05%
-        assert floors.retail_other == Decimal("0.0005")  # 0.05%
-        assert floors.retail_qrre_transactor == Decimal("0.0003")  # 0.03%
-        assert floors.retail_qrre_revolver == Decimal("0.0010")  # 0.10%
+        assert floors.corporate == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert floors.corporate_sme == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert floors.retail_mortgage == Decimal("0.0010")  # 0.10% Art. 163(1)(b) UK RRE
+        assert floors.retail_other == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert floors.retail_qrre_transactor == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert floors.retail_qrre_revolver == Decimal("0.0010")  # 0.10% Art. 163(1)(a)
 
     def test_get_floor_by_exposure_class(self):
         """get_floor should return correct floor for each class."""
         floors = PDFloors.basel_3_1()
 
         assert floors.get_floor(ExposureClass.CORPORATE) == Decimal("0.0005")
-        assert floors.get_floor(ExposureClass.RETAIL_MORTGAGE) == Decimal("0.0005")
+        assert floors.get_floor(ExposureClass.RETAIL_MORTGAGE) == Decimal("0.0010")
         assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=True) == Decimal(
-            "0.0003"
+            "0.0005"
         )
         assert floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=False) == Decimal(
             "0.0010"
@@ -85,17 +85,28 @@ class TestLGDFloors:
         assert floors.commercial_real_estate == Decimal("0.0")
         assert floors.residential_real_estate == Decimal("0.0")
         assert floors.other_physical == Decimal("0.0")
+        # Retail floors also zero under CRR
+        assert floors.retail_rre == Decimal("0.0")
+        assert floors.retail_qrre_unsecured == Decimal("0.0")
+        assert floors.retail_other_unsecured == Decimal("0.0")
+        assert floors.retail_lgdu == Decimal("0.0")
 
     def test_basel_3_1_lgd_floors(self):
         """Basel 3.1 should have LGD floors by collateral type."""
         floors = LGDFloors.basel_3_1()
 
+        # Corporate floors — Art. 161(5)
         assert floors.unsecured == Decimal("0.25")  # 25%
         assert floors.financial_collateral == Decimal("0.0")  # 0%
         assert floors.receivables == Decimal("0.10")  # 10%
         assert floors.commercial_real_estate == Decimal("0.10")  # 10%
-        assert floors.residential_real_estate == Decimal("0.10")  # 10% (PRA Art. 161/164)
+        assert floors.residential_real_estate == Decimal("0.10")  # 10% (PRA Art. 161(5))
         assert floors.other_physical == Decimal("0.15")  # 15%
+        # Retail floors — Art. 164(4)
+        assert floors.retail_rre == Decimal("0.05")  # 5% Art. 164(4)(a)
+        assert floors.retail_qrre_unsecured == Decimal("0.50")  # 50% Art. 164(4)(b)(i)
+        assert floors.retail_other_unsecured == Decimal("0.30")  # 30% Art. 164(4)(b)(ii)
+        assert floors.retail_lgdu == Decimal("0.30")  # 30% Art. 164(4)(c)
 
     def test_get_floor_by_collateral_type(self):
         """get_floor should return correct floor for each collateral type."""
@@ -104,6 +115,19 @@ class TestLGDFloors:
         assert floors.get_floor(CollateralType.FINANCIAL) == Decimal("0.0")
         assert floors.get_floor(CollateralType.RECEIVABLES) == Decimal("0.10")
         assert floors.get_floor(CollateralType.OTHER) == Decimal("0.25")
+
+    def test_get_floor_retail_exposure_classes(self):
+        """get_floor returns retail-specific floors when exposure_class is provided."""
+        floors = LGDFloors.basel_3_1()
+
+        # Retail QRRE unsecured: 50% (Art. 164(4)(b)(i))
+        assert floors.get_floor(CollateralType.OTHER, "retail_qrre") == Decimal("0.50")
+        # Retail other unsecured: 30% (Art. 164(4)(b)(ii))
+        assert floors.get_floor(CollateralType.OTHER, "retail_other") == Decimal("0.30")
+        # Retail mortgage + immovable: 5% (Art. 164(4)(a))
+        assert floors.get_floor(CollateralType.IMMOVABLE, "retail_mortgage") == Decimal("0.05")
+        # Corporate unsecured (no retail override): 25%
+        assert floors.get_floor(CollateralType.OTHER, "CORPORATE") == Decimal("0.25")
 
 
 class TestSupportingFactors:

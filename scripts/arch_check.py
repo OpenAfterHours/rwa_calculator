@@ -30,9 +30,7 @@ def _is_excluded(py_file: Path) -> bool:
     if py_file.name == "__init__.py":
         return True
     parts = py_file.parts
-    if "ui" in parts and "marimo" in parts:
-        return True
-    return False
+    return bool("ui" in parts and "marimo" in parts)
 
 
 def check_future_annotations(path: Path) -> list[str]:
@@ -113,9 +111,7 @@ def check_no_engine_arg(path: Path) -> list[str]:
             if stripped.startswith(("#", '"""', "'''")):
                 continue
             if pattern.search(line):
-                violations.append(
-                    f"  {py_file}:{i}: engine= in collect -- use materialise.py"
-                )
+                violations.append(f"  {py_file}:{i}: engine= in collect -- use materialise.py")
     return violations
 
 

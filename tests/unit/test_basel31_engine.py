@@ -42,7 +42,9 @@ from rwa_calc.engine.irb.formulas import (
     _lgd_floor_expression,
     _lgd_floor_expression_with_collateral,
     _pd_floor_expression,
+    _polars_correlation_expr,
     apply_irb_formulas,
+    calculate_correlation,
 )
 
 # =============================================================================
@@ -217,7 +219,7 @@ class TestPDFloors:
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: Retail mortgage PD floor is 0.05%."""
+        """Basel 3.1: Retail mortgage PD floor is 0.10% (PRA Art. 163(1)(b) UK RRE)."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["RETAIL_MORTGAGE"],
@@ -227,7 +229,7 @@ class TestPDFloors:
         result = lf.with_columns(
             _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
         ).collect()
-        assert result["pd_floor"][0] == pytest.approx(0.0005)
+        assert result["pd_floor"][0] == pytest.approx(0.0010)
 
     def test_basel31_retail_other_floor(
         self,
@@ -376,15 +378,15 @@ class TestPDFloors:
         result = lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         ).collect()
-        assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate
-        assert result["pd_floored"][1] == pytest.approx(0.0010)  # QRRE
-        assert result["pd_floored"][2] == pytest.approx(0.0005)  # Mortgage
+        assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate: 0.05%
+        assert result["pd_floored"][1] == pytest.approx(0.0010)  # QRRE revolver: 0.10%
+        assert result["pd_floored"][2] == pytest.approx(0.0010)  # Mortgage: 0.10% (Art. 163(1)(b))
 
     def test_qrre_transactor_floor_with_column(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: QRRE transactor gets 0.03% floor when is_qrre_transactor=True."""
+        """Basel 3.1: QRRE transactor gets 0.05% floor (Art. 163(1)(c))."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["RETAIL_QRRE", "RETAIL_QRRE"],
@@ -396,7 +398,7 @@ class TestPDFloors:
         result = lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         ).collect()
-        assert result["pd_floored"][0] == pytest.approx(0.0003)  # Transactor: 0.03%
+        assert result["pd_floored"][0] == pytest.approx(0.0005)  # Transactor: 0.05%
         assert result["pd_floored"][1] == pytest.approx(0.0010)  # Revolver: 0.10%
 
     def test_qrre_transactor_null_defaults_to_revolver(
@@ -440,7 +442,7 @@ class TestPDFloors:
         ).collect()
         assert result["pd_floored"][0] == pytest.approx(0.0005)  # Corporate: 0.05%
         assert result["pd_floored"][1] == pytest.approx(0.0005)  # Retail other: 0.05%
-        assert result["pd_floored"][2] == pytest.approx(0.0003)  # QRRE transactor: 0.03%
+        assert result["pd_floored"][2] == pytest.approx(0.0005)  # QRRE transactor: 0.05%
 
 
 # =============================================================================
@@ -867,6 +869,297 @@ class TestLGDFloors:
         assert result["lgd_floor"][0] == pytest.approx(0.10)
         assert result["lgd_floor"][1] == pytest.approx(0.15)
 
+    def test_corporate_subordinated_floor_25pct_with_exposure_class(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 161(5): Corporate subordinated LGD floor is 25%, same as senior.
+
+        When exposure_class is available, subordinated corporate exposures
+        get the standard 25% floor (not 50%). The 50% floor only applies
+        to retail QRRE per Art. 164(4)(b)(i).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10, 0.10],
+                "collateral_type": ["unsecured", "unsecured", "unsecured"],
+                "seniority": ["subordinated", "senior", "subordinated"],
+                "exposure_class": ["CORPORATE", "CORPORATE", "INSTITUTION"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_seniority=True, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Corporate subordinated: 25% (Art. 161(5))
+        assert result["lgd_floor"][0] == pytest.approx(0.25)
+        # Corporate senior: 25%
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+        # Institution subordinated: 25% (not retail QRRE, so no 50%)
+        assert result["lgd_floor"][2] == pytest.approx(0.25)
+
+    def test_corporate_subordinated_floor_25pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 161(5): Corporate subordinated floor 25% via _lgd_floor_expression."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "seniority": ["subordinated", "senior"],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(
+                basel31_config, has_seniority=True, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Corporate subordinated: 25% (Art. 161(5))
+        assert result["lgd_floor"][0] == pytest.approx(0.25)
+        # Corporate senior: 25%
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_retail_qrre_floor_50pct_with_exposure_class(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(i): ALL retail QRRE unsecured exposures get 50% LGD floor.
+
+        The 50% floor applies to all QRRE exposures regardless of seniority.
+        Corporate exposures get 25% regardless of seniority (Art. 161(5)).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10, 0.10],
+                "collateral_type": ["unsecured", "unsecured", "unsecured"],
+                "seniority": ["subordinated", "subordinated", "senior"],
+                "exposure_class": ["retail_qrre", "CORPORATE", "retail_qrre"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(
+                basel31_config, has_seniority=True, has_exposure_class=True
+            ).alias("lgd_floor")
+        ).collect()
+        # Retail QRRE subordinated: 50% (Art. 164(4)(b)(i))
+        assert result["lgd_floor"][0] == pytest.approx(0.50)
+        # Corporate subordinated: 25% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+        # Retail QRRE senior: 50% (ALL QRRE gets 50%, Art. 164(4)(b)(i))
+        assert result["lgd_floor"][2] == pytest.approx(0.50)
+
+    def test_corporate_subordinated_via_namespace(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Pipeline: apply_lgd_floor() gives corporate subordinated 25% floor.
+
+        Verifies the namespace method correctly passes exposure_class
+        awareness to the floor expression, so corporate subordinated
+        exposures get 25% (not 50%) when exposure_class column is present.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "lgd_input": [0.10, 0.10],
+                "seniority": ["subordinated", "senior"],
+                "is_airb": [True, True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        # Both get 25% floor — corporate subordinated same as senior (Art. 161(5))
+        assert result["lgd_floored"][0] == pytest.approx(0.25)
+        assert result["lgd_floored"][1] == pytest.approx(0.25)
+
+    # --- Retail LGD floor tests (Art. 164(4)) ---
+
+    def test_retail_mortgage_floor_5pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(a): Retail mortgage LGD floor is 5% (RRE-secured).
+
+        Without collateral_type column, retail_mortgage is assumed RRE-secured
+        and gets the 5% floor, not the corporate 25%.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02, 0.02],
+                "exposure_class": ["retail_mortgage", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
+        ).collect()
+        # Retail mortgage: 5% (Art. 164(4)(a))
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        # Corporate: 25% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_retail_qrre_floor_50pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(i): QRRE unsecured LGD floor is 50%.
+
+        Applies regardless of seniority when exposure_class is available.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "exposure_class": ["retail_qrre", "retail_qrre"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.50)
+        assert result["lgd_floor"][1] == pytest.approx(0.50)
+
+    def test_retail_other_floor_30pct_no_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(ii): Other retail unsecured LGD floor is 30%."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10],
+                "exposure_class": ["retail_other"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.30)
+
+    def test_retail_mortgage_rre_collateral_floor_5pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(a): Retail mortgage with RRE collateral gets 5% floor.
+
+        Corporate with RRE collateral gets 10% (Art. 161(5)).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02, 0.02],
+                "collateral_type": ["residential_re", "residential_re"],
+                "exposure_class": ["retail_mortgage", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        # Retail mortgage + RRE: 5% (Art. 164(4)(a))
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        # Corporate + RRE: 10% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.10)
+
+    def test_retail_other_unsecured_floor_30pct_with_collateral_col(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Art. 164(4)(b)(ii): Other retail unsecured gets 30% floor.
+
+        Corporate unsecured gets 25% (Art. 161(5)).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10, 0.10],
+                "collateral_type": ["unsecured", "unsecured"],
+                "exposure_class": ["retail_other", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        # Retail other unsecured: 30% (Art. 164(4)(b)(ii))
+        assert result["lgd_floor"][0] == pytest.approx(0.30)
+        # Corporate unsecured: 25% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.25)
+
+    def test_retail_with_financial_collateral_floor_0pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Retail with financial collateral gets 0% floor (same LGDS as corporate)."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.10],
+                "collateral_type": ["financial_collateral"],
+                "exposure_class": ["retail_other"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.0)
+
+    def test_retail_via_namespace_apply_lgd_floor(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Pipeline: apply_lgd_floor() applies retail-specific floors.
+
+        Verifies retail_other gets 30% and retail_qrre gets 50% through
+        the namespace pipeline.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_other", "retail_qrre", "CORPORATE"],
+                "lgd_input": [0.10, 0.10, 0.10],
+                "is_airb": [True, True, True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        # Retail other: 30% (Art. 164(4)(b)(ii))
+        assert result["lgd_floored"][0] == pytest.approx(0.30)
+        # Retail QRRE: 50% (Art. 164(4)(b)(i))
+        assert result["lgd_floored"][1] == pytest.approx(0.50)
+        # Corporate: 25% (Art. 161(5))
+        assert result["lgd_floored"][2] == pytest.approx(0.25)
+
+    def test_retail_mortgage_via_namespace_apply_lgd_floor(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Pipeline: apply_lgd_floor() applies 5% floor for retail_mortgage."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_mortgage"],
+                "lgd_input": [0.02],
+                "is_airb": [True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        assert result["lgd_floored"][0] == pytest.approx(0.05)
+
+    def test_retail_lgd_above_floor_unchanged(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Retail A-IRB LGD above floor is not modified.
+
+        Retail other with LGD=0.40 above the 30% floor stays at 0.40.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_other"],
+                "lgd_input": [0.40],
+                "is_airb": [True],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        assert result["lgd_floored"][0] == pytest.approx(0.40)
+
     def test_apply_all_formulas_lgd_floor_airb_only(
         self,
         basel31_config: CalculationConfig,
@@ -1151,6 +1444,75 @@ class TestFIRBSupervisoryLGD:
         result = lf.irb.apply_firb_lgd(basel31_config).collect()
         assert result["lgd"][0] == pytest.approx(0.30)
 
+    # --- FSE vs non-FSE LGD (Art. 161(1)(a) vs (aa)) ---
+
+    def test_namespace_b31_fse_firb_lgd_45pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 namespace: FSE FIRB gets 45% LGD (Art. 161(1)(a))."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [None],
+                "approach": [ApproachType.FIRB.value],
+                "cp_is_financial_sector_entity": [True],
+            }
+        )
+        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        assert result["lgd"][0] == pytest.approx(0.45)
+
+    def test_namespace_b31_non_fse_firb_lgd_40pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 namespace: non-FSE FIRB gets 40% LGD (Art. 161(1)(aa))."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [None],
+                "approach": [ApproachType.FIRB.value],
+                "cp_is_financial_sector_entity": [False],
+            }
+        )
+        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        assert result["lgd"][0] == pytest.approx(0.40)
+
+    def test_namespace_crr_fse_ignored(
+        self,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR namespace: FSE flag is irrelevant — FIRB always gets 45%."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [None],
+                "approach": [ApproachType.FIRB.value],
+                "cp_is_financial_sector_entity": [True],
+            }
+        )
+        result = lf.irb.apply_firb_lgd(crr_config).collect()
+        assert result["lgd"][0] == pytest.approx(0.45)
+
+    # --- Covered bond LGD ---
+
+    def test_b31_covered_bond_dict_value(self) -> None:
+        """Basel 3.1 covered bond LGD = 11.25% in dict (Art. 161(1)(d))."""
+        assert BASEL31_FIRB_SUPERVISORY_LGD["covered_bond"] == Decimal("0.1125")
+
+    def test_crr_covered_bond_dict_value(self) -> None:
+        """CRR covered bond LGD = 11.25% in dict (Art. 161(1)(d))."""
+        assert FIRB_SUPERVISORY_LGD["covered_bond"] == Decimal("0.1125")
+
+    # --- B31 FSE key exists ---
+
+    def test_b31_fse_unsecured_key_exists(self) -> None:
+        """Basel 3.1 dict has separate unsecured_senior_fse key = 45%."""
+        assert BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior_fse"] == Decimal("0.45")
+
 
 # =============================================================================
 # CCF TESTS (CRE20.88, CRE32.27)
@@ -1225,6 +1587,7 @@ class TestCCFBasel31:
 
         Example: SA CCF = 50% (MR), modelled = 10%.
         Floor = 0.50 * 0.50 = 0.25. Result should be 0.25.
+        Requires is_revolving=True (Art. 166D(1)(a): own CCFs for revolving only).
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1236,6 +1599,7 @@ class TestCCFBasel31:
                 "approach": [ApproachType.AIRB.value],
                 "ccf_modelled": [0.10],  # 10% modelled < 25% floor
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()
@@ -1250,6 +1614,7 @@ class TestCCFBasel31:
 
         Example: SA CCF = 50% (MR), modelled = 40%.
         Floor = 0.50 * 0.50 = 0.25. Result should be 0.40.
+        Requires is_revolving=True (Art. 166D(1)(a): own CCFs for revolving only).
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1261,6 +1626,7 @@ class TestCCFBasel31:
                 "approach": [ApproachType.AIRB.value],
                 "ccf_modelled": [0.40],  # 40% > 25% floor
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()
@@ -1294,10 +1660,11 @@ class TestCCFBasel31:
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: A-IRB CCF floor with FR (100%) is 50%.
+        """Basel 3.1: A-IRB FR (100% SA) cannot use own-estimate per Art. 166D(1)(a).
 
-        SA CCF = 100%, floor = 50% of 100% = 50%.
-        Modelled = 30% -> floored at 50%.
+        Revolving facilities with 100% SA CCF (Table A1 Row 2 — factoring,
+        repos, forward deposits) must use SA CCF, not own-estimate.
+        Even a revolving facility gets SA 100% when risk_type=FR.
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1307,12 +1674,14 @@ class TestCCFBasel31:
                 "nominal_amount": [1_000_000.0],
                 "risk_type": ["FR"],  # SA CCF = 100%
                 "approach": [ApproachType.AIRB.value],
-                "ccf_modelled": [0.30],  # 30% < 50% floor
+                "ccf_modelled": [0.30],  # 30% — ignored, SA 100% applies
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()
-        assert result["ccf"][0] == pytest.approx(0.50)
+        # Art. 166D(1)(a): revolving with 100% SA CCF → SA 100% (not modelled)
+        assert result["ccf"][0] == pytest.approx(1.0)
 
     def test_airb_ccf_floor_with_lr_basel31(
         self,
@@ -1322,6 +1691,7 @@ class TestCCFBasel31:
 
         SA CCF = 10% (Basel 3.1 LR), floor = 50% of 10% = 5%.
         Modelled = 3% -> floored at 5%.
+        Requires is_revolving=True (Art. 166D(1)(a): own CCFs for revolving only).
         """
         calculator = CCFCalculator()
         lf = pl.LazyFrame(
@@ -1333,6 +1703,7 @@ class TestCCFBasel31:
                 "approach": [ApproachType.AIRB.value],
                 "ccf_modelled": [0.03],  # 3% < 5% floor
                 "interest": [0.0],
+                "is_revolving": [True],
             }
         )
         result = calculator.apply_ccf(lf, basel31_config).collect()
@@ -1536,7 +1907,7 @@ class TestEquityBasel31:
         assert result["risk_weight"] == pytest.approx(2.50)
 
     def test_single_exposure_basel31_exchange_traded(self) -> None:
-        """Basel 3.1: Exchange-traded equity gets SA 100% RW (not IRB 290%)."""
+        """Basel 3.1: Exchange-traded equity gets B31 SA 250% (not CRR 100%)."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
             permission_mode=PermissionMode.IRB,
@@ -1550,10 +1921,10 @@ class TestEquityBasel31:
             config=config,
         )
         assert result["approach"] == "sa"
-        # Basel 3.1 equity transitional (PRA Rule 4.2): 190% floor in 2028
-        # (phases from 160% in 2027 to 250% in 2030+)
-        assert result["risk_weight"] == pytest.approx(1.90)
-        assert result["rwa"] == pytest.approx(950_000.0)
+        # B31 Art. 133(3): listed/exchange-traded = 250%
+        # 2028 transitional floor = 190%, but 250% > 190% so no floor effect
+        assert result["risk_weight"] == pytest.approx(2.50)
+        assert result["rwa"] == pytest.approx(1_250_000.0)
 
 
 class TestEquityTransitionalSchedule:
@@ -1734,16 +2105,16 @@ class TestConfigFactoryMethods:
         assert config.pd_floors.retail_qrre_revolver == Decimal("0.0003")
 
     def test_basel31_pd_floors_differentiated(self) -> None:
-        """Basel 3.1 config pd_floors has differentiated values."""
+        """Basel 3.1 config pd_floors has differentiated values per PRA Art. 160/163."""
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 1, 1),
         )
-        assert config.pd_floors.corporate == Decimal("0.0005")
-        assert config.pd_floors.corporate_sme == Decimal("0.0005")
-        assert config.pd_floors.retail_mortgage == Decimal("0.0005")
-        assert config.pd_floors.retail_other == Decimal("0.0005")
-        assert config.pd_floors.retail_qrre_transactor == Decimal("0.0003")
-        assert config.pd_floors.retail_qrre_revolver == Decimal("0.0010")
+        assert config.pd_floors.corporate == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert config.pd_floors.corporate_sme == Decimal("0.0005")  # 0.05% Art. 160(1)
+        assert config.pd_floors.retail_mortgage == Decimal("0.0010")  # 0.10% Art. 163(1)(b)
+        assert config.pd_floors.retail_other == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert config.pd_floors.retail_qrre_transactor == Decimal("0.0005")  # 0.05% Art. 163(1)(c)
+        assert config.pd_floors.retail_qrre_revolver == Decimal("0.0010")  # 0.10% Art. 163(1)(a)
 
     def test_crr_lgd_floors_all_zero(self) -> None:
         """CRR config lgd_floors are all 0% (no floor)."""
@@ -1792,3 +2163,197 @@ class TestConfigFactoryMethods:
         )
         assert config.is_crr is False
         assert config.is_basel_3_1 is True
+
+
+# =============================================================================
+# SME CORRELATION ADJUSTMENT — Basel 3.1 GBP-native parameters (Art. 153(4))
+# =============================================================================
+
+
+class TestB31SMECorrelation:
+    """Tests for Basel 3.1 SME correlation using GBP-native thresholds.
+
+    PRA PS1/26 Art. 153(4) mandates GBP parameters for the SME correlation
+    adjustment: threshold = GBP 44m, floor = GBP 4.4m, range = 39.6.
+    Unlike CRR (EUR 50m/5m/45 with FX conversion), B31 operates directly
+    on GBP turnover without currency conversion.
+
+    References:
+    - PRA PS1/26 Art. 153(4)
+    - CRR Art. 153(4) (EUR version)
+    """
+
+    def test_b31_sme_floor_max_adjustment(self) -> None:
+        """At GBP 4.4m floor, SME adjustment should be maximum (0.04).
+
+        Under B31, turnover GBP 4.4m is the floor — anything at or below
+        gets the full 0.04 reduction.
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        floor_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=4.4, is_b31=True
+        )
+        assert base_corr - floor_corr == pytest.approx(0.04, rel=0.01)
+
+    def test_b31_sme_below_floor_also_max_adjustment(self) -> None:
+        """Below GBP 4.4m, adjustment still maxes at 0.04 (clamped to floor)."""
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        below_floor_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=2.0, is_b31=True
+        )
+        assert base_corr - below_floor_corr == pytest.approx(0.04, rel=0.01)
+
+    def test_b31_sme_at_threshold_no_adjustment(self) -> None:
+        """At GBP 44m threshold, SME adjustment should be zero.
+
+        s = max(4.4, min(44, 44)) = 44
+        adjustment = 0.04 × (1 - (44 - 4.4) / 39.6) = 0.04 × 0 = 0
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        threshold_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=44.0, is_b31=True
+        )
+        assert base_corr == pytest.approx(threshold_corr, abs=1e-10)
+
+    def test_b31_sme_above_threshold_no_adjustment(self) -> None:
+        """Above GBP 44m, no SME adjustment (not classified as SME).
+
+        Large corporates with turnover >= GBP 44m get base corporate correlation.
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        large_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=100.0, is_b31=True
+        )
+        assert base_corr == pytest.approx(large_corr)
+
+    def test_b31_sme_midpoint_partial_adjustment(self) -> None:
+        """At GBP 24.2m (midpoint), adjustment should be ~0.02.
+
+        s = max(4.4, min(24.2, 44)) = 24.2
+        adjustment = 0.04 × (1 - (24.2 - 4.4) / 39.6) = 0.04 × 0.5 = 0.02
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        mid_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=24.2, is_b31=True
+        )
+        assert base_corr - mid_corr == pytest.approx(0.02, rel=0.01)
+
+    def test_b31_no_fx_conversion(self) -> None:
+        """B31 uses GBP directly — eur_gbp_rate should not affect the result.
+
+        Passing different eur_gbp_rate values should produce identical B31 results
+        because the formula ignores the FX rate under B31.
+        """
+        corr_default_rate = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.8732,
+            is_b31=True,
+        )
+        corr_different_rate = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.5000,
+            is_b31=True,
+        )
+        assert corr_default_rate == pytest.approx(corr_different_rate)
+
+    def test_crr_uses_fx_conversion(self) -> None:
+        """CRR results should change with different eur_gbp_rate.
+
+        Verifies the CRR path still converts GBP→EUR using the rate.
+        """
+        corr_rate_1 = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.8732,
+            is_b31=False,
+        )
+        corr_rate_2 = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.5000,
+            is_b31=False,
+        )
+        # Different FX rates should produce different results under CRR
+        assert corr_rate_1 != pytest.approx(corr_rate_2, abs=1e-6)
+
+    def test_b31_vs_crr_numerical_difference(self) -> None:
+        """B31 and CRR should produce different results for the same GBP turnover.
+
+        GBP 20m under B31: s = max(4.4, min(20, 44)) = 20
+          adjustment = 0.04 × (1 - (20 - 4.4) / 39.6) = 0.04 × 0.60606...
+
+        GBP 20m under CRR at rate 0.8732: EUR = 20/0.8732 ≈ 22.9m
+          s = max(5, min(22.9, 50)) = 22.9
+          adjustment = 0.04 × (1 - (22.9 - 5) / 45) = 0.04 × 0.60222...
+
+        The adjustments are close but not identical.
+        """
+        b31_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=20.0, is_b31=True
+        )
+        crr_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=20.0, is_b31=False
+        )
+        # Both should have SME adjustment (both are SME-sized)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        assert b31_corr < base_corr
+        assert crr_corr < base_corr
+        # But they should differ slightly
+        assert b31_corr != pytest.approx(crr_corr, abs=1e-6)
+
+    def test_b31_namespace_sme_correlation(self, basel31_config: CalculationConfig) -> None:
+        """B31 namespace path uses GBP-native SME correlation parameters.
+
+        Verifies the full namespace pipeline produces consistent results
+        with the scalar B31 formula.
+        """
+        lf = pl.LazyFrame(
+            {
+                "pd_floored": [0.01, 0.01, 0.01],
+                "exposure_class": ["CORPORATE_SME", "CORPORATE_SME", "CORPORATE"],
+                "turnover_m": [4.4, 24.2, 100.0],
+                "requires_fi_scalar": [False, False, False],
+            }
+        )
+        result = lf.with_columns(
+            _polars_correlation_expr(
+                eur_gbp_rate=float(basel31_config.eur_gbp_rate),
+                is_b31=True,
+            ).alias("correlation")
+        ).collect()
+
+        correlations = result["correlation"].to_list()
+
+        # Floor turnover (4.4m) — max adjustment of 0.04
+        base = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        assert correlations[0] == pytest.approx(base - 0.04, rel=0.01)
+
+        # Midpoint (24.2m) — ~0.02 adjustment
+        assert correlations[1] == pytest.approx(base - 0.02, rel=0.01)
+
+        # Large corp (100m) — no adjustment
+        assert correlations[2] == pytest.approx(base)
+
+    def test_b31_sme_boundary_43_66m_vs_44m(self) -> None:
+        """GBP 43.66m is below B31 threshold (44m) but was above old EUR-converted threshold.
+
+        Under the old code: GBP 43.66m / 0.8732 ≈ EUR 50m → no adjustment.
+        Under B31: GBP 43.66m < GBP 44m → gets SME adjustment.
+        This is the boundary case the fix corrects.
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        boundary_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=43.66, is_b31=True
+        )
+        # Should get a small but non-zero adjustment
+        # s = max(4.4, min(43.66, 44)) = 43.66
+        # adjustment = 0.04 × (1 - (43.66 - 4.4) / 39.6) ≈ 0.04 × 0.00859 ≈ 0.000344
+        assert boundary_corr < base_corr
+        expected_adj = 0.04 * (1.0 - (43.66 - 4.4) / 39.6)
+        assert base_corr - boundary_corr == pytest.approx(expected_adj, rel=0.01)

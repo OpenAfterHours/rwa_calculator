@@ -121,9 +121,29 @@ class HaircutCalculator:
                 (
                     pl.col("market_value")
                     * (1.0 - pl.col("collateral_haircut") - pl.col("fx_haircut"))
-                ).alias("value_after_haircut"),
+                )
+                .clip(lower_bound=0.0)
+                .alias("value_after_haircut"),
             ]
         )
+
+        # Zero out value for ineligible bonds (Art. 197 — CQS 5-6 govt, CQS 4-6 corp)
+        if "_bond_ineligible" in collateral.collect_schema().names():
+            collateral = collateral.with_columns(
+                pl.when(pl.col("_bond_ineligible"))
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("value_after_haircut"))
+                .alias("value_after_haircut")
+            )
+            # Also enforce is_eligible_financial_collateral = False for ineligible bonds
+            if "is_eligible_financial_collateral" in collateral.collect_schema().names():
+                collateral = collateral.with_columns(
+                    pl.when(pl.col("_bond_ineligible"))
+                    .then(pl.lit(False))
+                    .otherwise(pl.col("is_eligible_financial_collateral"))
+                    .alias("is_eligible_financial_collateral")
+                )
+            collateral = collateral.drop("_bond_ineligible")
 
         # Add haircut audit trail
         collateral = collateral.with_columns(
@@ -235,9 +255,25 @@ class HaircutCalculator:
             suffix="_ht",
         )
 
-        # Unmatched rows default to other_physical (40%)
+        # Bond eligibility check per CRR Art. 197
+        # Govt bonds: CQS 1-4 eligible (Art. 197(1)(b)), CQS 5-6/unrated ineligible
+        # Corp/institution bonds: CQS 1-3 eligible (Art. 197(1)(d)), CQS 4-6/unrated ineligible
+        is_govt = pl.col("_lookup_type") == "govt_bond"
+        is_corp = pl.col("_lookup_type") == "corp_bond"
+        cqs_val = pl.col("issuer_cqs")
+        _ineligible_bond = (is_govt & ((cqs_val >= 5) | cqs_val.is_null())) | (
+            is_corp & ((cqs_val >= 4) | cqs_val.is_null())
+        )
+
+        # Ineligible bonds: zero value; unmatched non-bonds: 40% default (other_physical)
         collateral = collateral.with_columns(
-            [pl.col("haircut").fill_null(0.40).alias("collateral_haircut")]
+            [
+                _ineligible_bond.alias("_bond_ineligible"),
+                pl.when(_ineligible_bond)
+                .then(pl.lit(1.0))
+                .otherwise(pl.col("haircut").fill_null(0.40))
+                .alias("collateral_haircut"),
+            ]
         ).drop(
             [
                 "_lookup_type",
@@ -278,38 +314,55 @@ class HaircutCalculator:
     def apply_maturity_mismatch(
         self,
         collateral: pl.LazyFrame,
+        config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
         Apply maturity mismatch adjustment per CRR Article 238.
 
+        Formula: CVAM = CVA × (t - 0.25) / (T - 0.25)
+        where t = collateral residual maturity, T = min(exposure residual maturity, 5).
+
         Args:
-            collateral: Collateral with value_after_haircut and exposure_maturity
+            collateral: Collateral with value_after_haircut, residual_maturity_years,
+                and exposure_maturity (Date) columns
+            config: Calculation configuration (provides reporting_date)
 
         Returns:
             LazyFrame with maturity-adjusted collateral values
         """
-        # Calculate residual maturities
+        reporting_date = config.reporting_date
+
+        # Derive exposure maturity in years from the Date column, capped at 5y, floored at 0.25y
+        exposure_maturity_years_expr = (
+            (
+                (pl.col("exposure_maturity").cast(pl.Date) - pl.lit(reporting_date))
+                .dt.total_days()
+                .cast(pl.Float64)
+                / 365.25
+            )
+            .clip(lower_bound=0.25, upper_bound=5.0)
+            .fill_null(5.0)
+        )
+
         collateral = collateral.with_columns(
             [
-                # Collateral residual maturity
                 pl.col("residual_maturity_years").fill_null(10.0).alias("coll_maturity"),
+                exposure_maturity_years_expr.alias("_exposure_maturity_years"),
             ]
         )
 
-        # Calculate maturity mismatch adjustment
+        # Calculate maturity mismatch adjustment per Art. 238
         collateral = collateral.with_columns(
             [
-                # If collateral maturity >= exposure maturity, no adjustment
-                pl.when(
-                    pl.col("coll_maturity") >= 5.0  # Assume 5y cap
-                )
+                # No adjustment when collateral maturity >= exposure maturity
+                pl.when(pl.col("coll_maturity") >= pl.col("_exposure_maturity_years"))
                 .then(pl.lit(1.0))
-                # If collateral < 3 months, no protection
+                # No protection when collateral maturity < 3 months
                 .when(pl.col("coll_maturity") < 0.25)
                 .then(pl.lit(0.0))
-                # Apply adjustment: (t - 0.25) / (T - 0.25)
+                # CVAM = (t - 0.25) / (T - 0.25) where T = exposure maturity capped at 5y
                 .otherwise(
-                    (pl.col("coll_maturity") - 0.25) / (5.0 - 0.25)  # Simplified with T=5
+                    (pl.col("coll_maturity") - 0.25) / (pl.col("_exposure_maturity_years") - 0.25)
                 )
                 .alias("maturity_adjustment_factor"),
             ]
@@ -324,7 +377,7 @@ class HaircutCalculator:
             ]
         )
 
-        return collateral
+        return collateral.drop("_exposure_maturity_years")
 
     def calculate_single_haircut(
         self,
@@ -355,7 +408,7 @@ class HaircutCalculator:
         Returns:
             HaircutResult with all haircut details
         """
-        # Get collateral haircut
+        # Get collateral haircut (None means ineligible per Art. 197)
         coll_haircut = lookup_collateral_haircut(
             collateral_type=collateral_type,
             cqs=cqs,
@@ -363,6 +416,20 @@ class HaircutCalculator:
             is_main_index=is_main_index,
             is_basel_3_1=self._is_basel_3_1,
         )
+
+        # Ineligible bonds: zero adjusted value
+        if coll_haircut is None:
+            return HaircutResult(
+                original_value=market_value,
+                collateral_haircut=Decimal("1.0"),
+                fx_haircut=Decimal("0.0"),
+                maturity_adjustment=Decimal("0.0"),
+                adjusted_value=Decimal("0"),
+                description=(
+                    f"MV={market_value:,.0f}; INELIGIBLE per Art. 197 "
+                    f"(type={collateral_type}, CQS={cqs})"
+                ),
+            )
 
         # Get FX haircut
         fx_haircut = lookup_fx_haircut(exposure_currency, collateral_currency)

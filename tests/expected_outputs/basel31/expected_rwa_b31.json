@@ -495,7 +495,7 @@
     {
       "scenario_id": "B31-C2",
       "scenario_group": "B31-C",
-      "description": "Retail A-IRB — own LGD 15% floored to 25% (LGD floor binding)",
+      "description": "Retail A-IRB — own LGD 15% floored to 30% (Art. 164(4)(b)(ii) other retail unsecured)",
       "regulatory_framework": "Basel 3.1",
       "approach": "A-IRB",
       "exposure_class": "RETAIL_OTHER",
@@ -508,13 +508,13 @@
       "cqs": null,
       "ltv": null,
       "turnover": null,
-      "risk_weight": 0.13221426861928243,
-      "rwa_before_sf": 13221.43,
+      "risk_weight": 0.15865712234313892,
+      "rwa_before_sf": 15865.71,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 13221.43,
+      "rwa_after_sf": 15865.71,
       "expected_loss": 450.0,
-      "regulatory_reference": "CRE30.41, CRE31.8-9",
-      "calculation_notes": "A-IRB retail own LGD estimate 15% floored to 25% (CRE30.41). RW computed with floored LGD. No maturity adjustment for retail. RWA 57% higher than CRR (0.1322 vs 0.0841) due to LGD floor overriding low own-estimate."
+      "regulatory_reference": "Art. 164(4)(b)(ii), CRE31.8-9",
+      "calculation_notes": "A-IRB other retail own LGD estimate 15% floored to 30% (Art. 164(4)(b)(ii)). RW computed with floored LGD. No maturity adjustment for retail. RWA 89% higher than CRR (0.1587 vs 0.0841) due to retail-specific LGD floor."
     },
     {
       "scenario_id": "B31-C3",

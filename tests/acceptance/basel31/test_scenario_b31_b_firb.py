@@ -391,7 +391,10 @@ class TestB31GroupB_ParameterizedValidation:
         b31_b_scenarios: list[dict[str, Any]],
     ) -> None:
         """Verify F-IRB scenarios use Basel 3.1 supervisory LGD values."""
-        valid_lgds = {0.40, 0.75, 0.20, 0.0, 0.25}  # Basel 3.1 supervisory LGDs
+        # Basel 3.1 supervisory LGDs: 0.40 (non-FSE senior), 0.45 (FSE senior),
+        # 0.75 (subordinated), 0.20 (receivables/RE), 0.0 (financial), 0.25 (other
+        # physical), 0.1125 (covered bonds)
+        valid_lgds = {0.40, 0.45, 0.75, 0.20, 0.0, 0.25, 0.1125}
         for scenario in b31_b_scenarios:
             lgd = scenario["lgd"]
             assert lgd is not None, f"Scenario {scenario['scenario_id']} missing LGD"

@@ -44,6 +44,7 @@ from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
+    SpecialisedLendingType,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +64,7 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "pse_sovereign": ExposureClass.PSE.value,
     "pse_institution": ExposureClass.PSE.value,
     "mdb": ExposureClass.MDB.value,
+    "mdb_named": ExposureClass.MDB.value,
     "international_org": ExposureClass.MDB.value,
     "institution": ExposureClass.INSTITUTION.value,
     "bank": ExposureClass.INSTITUTION.value,
@@ -75,9 +77,21 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
     "equity": ExposureClass.EQUITY.value,
     "covered_bond": ExposureClass.COVERED_BOND.value,
+    "other_cash": ExposureClass.OTHER.value,
+    "other_gold": ExposureClass.OTHER.value,
+    "other_items_in_collection": ExposureClass.OTHER.value,
+    "other_tangible": ExposureClass.OTHER.value,
+    "other_residual_lease": ExposureClass.OTHER.value,
+    # High-risk items (CRR Art. 128): 150% unconditional
+    "high_risk": ExposureClass.HIGH_RISK.value,
+    "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
+    "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
+    "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
 }
 
 # entity_type → IRB exposure class (for IRB formula selection)
+# Other Items (Art. 134) are SA-only — no IRB class exists for these.
+# High-risk items (Art. 128) are SA-only — they map to HIGH_RISK for SA treatment.
 ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
     "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
@@ -86,6 +100,7 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "pse_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
     "pse_institution": ExposureClass.INSTITUTION.value,
     "mdb": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+    "mdb_named": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
     "international_org": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
     "institution": ExposureClass.INSTITUTION.value,
     "bank": ExposureClass.INSTITUTION.value,
@@ -98,6 +113,27 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
     "equity": ExposureClass.EQUITY.value,
     "covered_bond": ExposureClass.COVERED_BOND.value,
+    "other_cash": ExposureClass.OTHER.value,
+    "other_gold": ExposureClass.OTHER.value,
+    "other_items_in_collection": ExposureClass.OTHER.value,
+    "other_tangible": ExposureClass.OTHER.value,
+    "other_residual_lease": ExposureClass.OTHER.value,
+    # High-risk items (Art. 128) are SA-only — they map to OTHER for IRB
+    # (no separate IRB treatment; HIGH_RISK is an SA exposure class).
+    "high_risk": ExposureClass.HIGH_RISK.value,
+    "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
+    "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
+    "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
+}
+
+# PRA PS1/26 Art. 147A(1)(d): Large corporate revenue threshold (GBP)
+# Corporates with consolidated annual revenue > GBP 440m → F-IRB only (no A-IRB)
+B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP = 440_000_000.0
+
+# SL types restricted to slotting-only under B31 Art. 147A(1)(c)
+_B31_SLOTTING_ONLY_SL_TYPES = {
+    SpecialisedLendingType.IPRE.value,
+    SpecialisedLendingType.HVCRE.value,
 }
 
 
@@ -247,6 +283,12 @@ class ExposureClassifier:
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ]
 
+        # FSE flag — Art. 147A(1)(e) approach restriction (optional in input data)
+        if "is_financial_sector_entity" in cp_col_names:
+            select_cols.append(
+                pl.col("is_financial_sector_entity").alias("cp_is_financial_sector_entity")
+            )
+
         # Basel 3.1 fields — propagate if present (optional in input data)
         if "scra_grade" in cp_col_names:
             select_cols.append(pl.col("scra_grade").alias("cp_scra_grade"))
@@ -338,7 +380,13 @@ class ExposureClassifier:
                 # --- Default flags ---
                 (pl.col("cp_default_status") == True)  # noqa: E712
                 .alias("is_defaulted"),
-                pl.when(pl.col("cp_default_status") == True)  # noqa: E712
+                # Art. 112 Table A2: HIGH_RISK (priority 4) takes precedence over
+                # DEFAULTED (priority 5). A defaulted high-risk item retains 150% per
+                # Art. 128, not the provision-based 100%/150% of Art. 127.
+                pl.when(
+                    (pl.col("cp_default_status") == True)  # noqa: E712
+                    & (pl.col("_sa_class") != ExposureClass.HIGH_RISK.value)
+                )
                 .then(pl.lit(ExposureClass.DEFAULTED.value))
                 .when(sl_override)
                 .then(sl_class)
@@ -390,9 +438,14 @@ class ExposureClassifier:
 
         Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
         """
-        sme_threshold_gbp = float(
-            config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
-        )
+        if config.is_basel_3_1:
+            # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
+            sme_threshold_gbp = 44_000_000.0
+        else:
+            # CRR: EUR 50m converted to GBP via FX rate
+            sme_threshold_gbp = float(
+                config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
+            )
         qrre_max_limit = float(config.retail_thresholds.qrre_max_limit)
 
         # Conditions reused across expressions (reading Phase 2 columns)
@@ -510,9 +563,14 @@ class ExposureClassifier:
                 ]
             )
 
-        sme_turnover_threshold = float(
-            config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
-        )
+        if config.is_basel_3_1:
+            # PRA PS1/26 Art. 153(4): native GBP 44m threshold
+            sme_turnover_threshold = 44_000_000.0
+        else:
+            # CRR: EUR 50m converted to GBP via FX rate
+            sme_turnover_threshold = float(
+                config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
+            )
 
         # Reclassification eligibility expression (inlined — not a column ref)
         reclassification_expr = (
@@ -760,6 +818,34 @@ class ExposureClassifier:
             pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
         ) & build_eu_domestic_currency_expr("cp_country_code", "currency")
 
+        # --- B31 Art. 147A classifier-level approach restrictions ---
+        # These supplement the permissions-level restrictions in full_irb_b31()
+        # with data-dependent checks that cannot be encoded in the permission map.
+        _b31_ipre_hvcre_forced_slotting = pl.lit(False)
+        if config.is_basel_3_1:
+            # Art. 147A(1)(c): IPRE/HVCRE → slotting only
+            _b31_ipre_hvcre_forced_slotting = (
+                pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+            ) & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
+
+            # Art. 147A(1)(d)/(e): FSE and large corporates → F-IRB only (no A-IRB)
+            _is_fse = pl.lit(False)
+            if "cp_is_financial_sector_entity" in schema_names:
+                _is_fse = (
+                    (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
+                    .fill_null(False)
+                )
+            _is_large_corp = (
+                pl.col("cp_annual_revenue") > B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
+            ).fill_null(False)
+
+            _b31_airb_blocked = _is_fse | _is_large_corp
+
+            # Remove AIRB eligibility for B31-restricted exposures
+            airb_permitted_expr = airb_permitted_expr & ~_b31_airb_blocked
+            # Expand FIRB LGD clearing to include exposures whose AIRB was blocked
+            firb_clear_expr = firb_clear_expr | (firb_permitted_expr & _b31_airb_blocked)
+
         # --- Approach expression ---
         # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
         is_ccp = pl.col("cp_entity_type") == "ccp"
@@ -773,7 +859,10 @@ class ExposureClassifier:
             # Qualifying CCP trade exposures — always SA with prescribed RW (CRE54.14-15)
             .when(is_ccp)
             .then(pl.lit(ApproachType.SA.value))
-            # SL A-IRB takes precedence over slotting
+            # B31 Art. 147A(1)(c): IPRE/HVCRE → slotting only (overrides model perms)
+            .when(_b31_ipre_hvcre_forced_slotting)
+            .then(pl.lit(ApproachType.SLOTTING.value))
+            # SL A-IRB takes precedence over slotting (non-IPRE/HVCRE under B31)
             .when(
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
                 & sl_airb
@@ -785,7 +874,7 @@ class ExposureClassifier:
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_slotting
             )
             .then(pl.lit(ApproachType.SLOTTING.value))
-            # A-IRB (model or org-wide)
+            # A-IRB (model or org-wide, with B31 FSE/large-corp restriction applied)
             .when(airb_permitted_expr)
             .then(pl.lit(ApproachType.AIRB.value))
             # F-IRB (model or org-wide)

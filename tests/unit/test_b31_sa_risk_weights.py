@@ -7,7 +7,8 @@ Tests cover Basel 3.1 risk weight changes from CRR:
 - ADC exposures: 150% default, 100% pre-sold
 - Revised corporate CQS weights: CQS3 = 75% (was 100%), CQS5 = 100% (was 150%)
 - SCRA-based institution weights for unrated: Grade A (40%), B (75%), C (150%)
-- Investment-grade corporate: 65% risk weight
+- Investment-grade corporate: 65% risk weight (Art. 122(6)(a))
+- Non-investment-grade corporate: 135% risk weight (Art. 122(6)(b))
 - SME corporate: 85% risk weight (was 100%)
 - Subordinated debt: flat 150% risk weight
 - CRR regression: existing CRR risk weights unchanged
@@ -48,12 +49,15 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_COMMERCIAL_GENERAL_SECURED_RW,
     B31_COMMERCIAL_INCOME_LTV_BANDS,
     B31_CORPORATE_INVESTMENT_GRADE_RW,
+    B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
     B31_CORPORATE_RISK_WEIGHTS,
     B31_CORPORATE_SME_RW,
+    B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
     B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO,
     B31_RESIDENTIAL_GENERAL_SECURED_RW,
     B31_RESIDENTIAL_INCOME_LTV_BANDS,
     B31_SCRA_RISK_WEIGHTS,
+    B31_SCRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
     get_b31_combined_cqs_risk_weights,
     lookup_b31_commercial_rw,
@@ -676,6 +680,150 @@ class TestB31QRRETransactor:
 
 
 # =============================================================================
+# NON-REGULATORY RETAIL — 100% (PRA Art. 123(3)(c))
+# =============================================================================
+
+
+class TestB31NonRegulatoryRetail:
+    """Basel 3.1 non-regulatory retail — 100% risk weight (Art. 123(3)(c)).
+
+    Why this test matters:
+        Under Basel 3.1, retail exposures that fail Art. 123A qualifying criteria
+        (e.g. lending group exposure exceeds GBP 880k threshold) must receive 100%
+        risk weight instead of the 75% regulatory retail rate. Without this gate,
+        non-qualifying retail gets a 25pp capital understatement.
+
+    References:
+    - PRA PS1/26 Art. 123(3)(c): non-regulatory retail = 100%
+    - PRA PS1/26 Art. 123A: qualifying criteria for regulatory retail
+    """
+
+    def test_non_regulatory_retail_gets_100pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Retail exposure failing Art. 123A criteria should get 100% RW."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1500000"),
+            exposure_class="RETAIL_OTHER",
+            qualifies_as_retail=False,
+            config=b31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.0)
+        assert result["rwa"] == pytest.approx(1500000)
+
+    def test_regulatory_retail_still_gets_75pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Retail exposure meeting Art. 123A criteria should still get 75% RW."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("50000"),
+            exposure_class="RETAIL_OTHER",
+            qualifies_as_retail=True,
+            config=b31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(0.75)
+        assert result["rwa"] == pytest.approx(37500)
+
+    def test_non_regulatory_qrre_gets_100pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-qualifying QRRE should get 100%, not 45% or 75%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["QRRE_NR001"],
+                "ead_final": [200000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [False],
+                "qualifies_as_retail": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(1.0)
+
+    def test_qrre_transactor_qualifying_still_gets_45pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """QRRE transactor that qualifies should still get 45%, not 100%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["QRRE_Q001"],
+                "ead_final": [30000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [True],
+                "qualifies_as_retail": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.45)
+
+    def test_null_qualifies_as_retail_defaults_to_qualifying(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null qualifies_as_retail should default to qualifying (75% RW)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_NULL001"],
+                "ead_final": [80000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "qualifies_as_retail": [None],
+            },
+            schema_overrides={"qualifies_as_retail": pl.Boolean},
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+
+# =============================================================================
 # SA SPECIALISED LENDING — Art. 122A-122B
 # =============================================================================
 
@@ -734,6 +882,201 @@ class TestB31SASpecialisedLending:
         df = result.frame.collect()
 
         assert df["risk_weight"][0] == pytest.approx(expected_rw)
+
+
+# =============================================================================
+# RATED SA SPECIALISED LENDING — Art. 122A(3)
+# =============================================================================
+
+
+class TestRatedSASpecialisedLending:
+    """Rated SL exposures use the corporate CQS table (Art. 122A(3)).
+
+    Why these tests matter:
+        Art. 122A(3) mandates that rated specialised lending exposures under
+        SA use the corporate CQS risk weight table, not the SL-specific type
+        weights (OF/CF=100%, PF pre-op=130%, PF high-quality=80%). Without
+        this, a rated PF exposure with CQS 1 (AAA) would incorrectly receive
+        100% instead of 20%, overstating capital for highly-rated SL exposures.
+    """
+
+    @pytest.mark.parametrize(
+        ("sl_type", "cqs", "expected_rw"),
+        [
+            ("project_finance", 1, 0.20),  # AAA-AA-: corporate CQS 1 = 20%
+            ("project_finance", 2, 0.50),  # A+-A-: corporate CQS 2 = 50%
+            ("project_finance", 3, 0.75),  # BBB+-BBB-: corporate CQS 3 = 75% (B31)
+            ("project_finance", 4, 1.00),  # BB+-BB-: corporate CQS 4 = 100%
+            ("project_finance", 5, 1.50),  # B+-B-: corporate CQS 5 = 150%
+            ("object_finance", 1, 0.20),  # Rated OF also uses corporate table
+            ("commodities_finance", 2, 0.50),  # Rated CF also uses corporate table
+        ],
+        ids=[
+            "pf_cqs1_20pct",
+            "pf_cqs2_50pct",
+            "pf_cqs3_75pct",
+            "pf_cqs4_100pct",
+            "pf_cqs5_150pct",
+            "of_cqs1_20pct",
+            "cf_cqs2_50pct",
+        ],
+    )
+    def test_rated_sl_uses_corporate_cqs_table(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        sl_type: str,
+        cqs: int,
+        expected_rw: float,
+    ) -> None:
+        """Rated SL exposure should get corporate CQS risk weight, not SL type weight."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [cqs],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": [sl_type],
+                "sl_project_phase": [None],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(expected_rw)
+
+    def test_unrated_sl_still_uses_type_specific_weights(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Unrated SL (null CQS) should still use Art. 122A-122B type-specific weights."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_UNRATED_001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["high_quality"],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.80)  # PF high-quality = 80%
+
+    def test_rated_sl_rwa_correct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated SL RWA = EAD × corporate CQS RW."""
+        ead = 5000000.0
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_002"],
+                "ead_final": [ead],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [1],  # CQS 1 = 20% under B31 corporate
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["operational"],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.20)
+        assert df["rwa_pre_factor"][0] == pytest.approx(ead * 0.20)
+
+    def test_rated_pf_high_quality_ignores_phase(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated PF with high_quality phase still uses corporate CQS, not 80%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_003"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [3],  # CQS 3 = 75% under B31 corporate
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["high_quality"],  # Would be 80% if unrated
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # Rated: 75% (corporate CQS 3), not 80% (SL PF high-quality)
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_rated_pf_preop_ignores_phase(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated PF with pre_operational phase still uses corporate CQS, not 130%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["SL_RATED_004"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "cqs": [2],  # CQS 2 = 50% under B31 corporate
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "sl_type": ["project_finance"],
+                "sl_project_phase": ["pre_operational"],  # Would be 130% if unrated
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # Rated: 50% (corporate CQS 2), not 130% (SL PF pre-operational)
+        assert df["risk_weight"][0] == pytest.approx(0.50)
 
 
 # =============================================================================
@@ -981,19 +1324,41 @@ class TestTableDataIntegrity:
         assert B31_CORPORATE_RISK_WEIGHTS[2] == Decimal("0.50")
         assert B31_CORPORATE_RISK_WEIGHTS[3] == Decimal("0.75")  # Changed from CRR 100%
         assert B31_CORPORATE_RISK_WEIGHTS[4] == Decimal("1.00")
-        assert B31_CORPORATE_RISK_WEIGHTS[5] == Decimal("1.00")  # Changed from CRR 150%
+        assert B31_CORPORATE_RISK_WEIGHTS[5] == Decimal("1.50")  # PRA retains 150% (BCBS: 100%)
         assert B31_CORPORATE_RISK_WEIGHTS[6] == Decimal("1.50")
         assert B31_CORPORATE_RISK_WEIGHTS[None] == Decimal("1.00")
 
     def test_scra_risk_weight_values(self) -> None:
-        """SCRA risk weight constants should be correct."""
+        """SCRA long-term risk weight constants should be correct."""
         assert B31_SCRA_RISK_WEIGHTS["A"] == Decimal("0.40")
+        assert B31_SCRA_RISK_WEIGHTS["A_ENHANCED"] == Decimal("0.30")
         assert B31_SCRA_RISK_WEIGHTS["B"] == Decimal("0.75")
         assert B31_SCRA_RISK_WEIGHTS["C"] == Decimal("1.50")
+
+    def test_scra_short_term_risk_weight_values(self) -> None:
+        """SCRA short-term (≤3m) risk weight constants should be correct (CRE20.17)."""
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A"] == Decimal("0.20")
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A_ENHANCED"] == Decimal("0.20")
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["B"] == Decimal("0.50")
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"] == Decimal("1.50")
+
+    def test_ecra_short_term_risk_weight_values(self) -> None:
+        """ECRA short-term (≤3m, Table 4): CQS 1-5 = 20%, CQS 6 = 150%."""
+        for cqs_step in range(1, 6):
+            assert B31_ECRA_SHORT_TERM_RISK_WEIGHTS[cqs_step] == Decimal("0.20")
+        assert B31_ECRA_SHORT_TERM_RISK_WEIGHTS[6] == Decimal("1.50")
+
+    def test_ecra_short_term_table_has_6_entries(self) -> None:
+        """ECRA short-term table should have exactly 6 CQS entries."""
+        assert len(B31_ECRA_SHORT_TERM_RISK_WEIGHTS) == 6
 
     def test_investment_grade_rw(self) -> None:
         """Investment-grade corporate constant should be 65%."""
         assert Decimal("0.65") == B31_CORPORATE_INVESTMENT_GRADE_RW
+
+    def test_non_investment_grade_rw(self) -> None:
+        """Non-investment-grade corporate constant should be 135%."""
+        assert Decimal("1.35") == B31_CORPORATE_NON_INVESTMENT_GRADE_RW
 
     def test_sme_corporate_rw(self) -> None:
         """SME corporate constant should be 85%."""
@@ -1044,7 +1409,7 @@ class TestB31CorporateCQS:
             (2, 0.50, 0.50),  # A+-A-: unchanged
             (3, 0.75, 1.00),  # BBB: 75% vs 100%
             (4, 1.00, 1.00),  # BB: unchanged
-            (5, 1.00, 1.50),  # B: 100% vs 150%
+            (5, 1.50, 1.50),  # B: PRA retains 150% (BCBS reduced to 100%)
             (6, 1.50, 1.50),  # CCC+: unchanged
             (None, 1.00, 1.00),  # Unrated: unchanged
         ],
@@ -1132,10 +1497,11 @@ class TestB31SCRAInstitutionWeights:
         ("scra_grade", "expected_rw"),
         [
             ("A", 0.40),  # Well-capitalised: same as CRR default
+            ("A_ENHANCED", 0.30),  # CET1 >= 14% AND leverage >= 5% (CRE20.19)
             ("B", 0.75),  # Meets minimums: higher than CRR default
             ("C", 1.50),  # Below minimums: much higher
         ],
-        ids=["grade_A", "grade_B", "grade_C"],
+        ids=["grade_A", "grade_A_enhanced", "grade_B", "grade_C"],
     )
     def test_scra_grade_risk_weight(
         self,
@@ -1197,18 +1563,22 @@ class TestB31SCRAInstitutionWeights:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Unrated institution without SCRA grade uses CQS table default under Basel 3.1."""
+        """Unrated institution without SCRA grade defaults to Grade C (150%) under Basel 3.1.
+
+        Per PRA PS1/26 Art. 120A, missing SCRA data must not produce a favourable
+        risk weight. Null SCRA grade is conservatively treated as Grade C (150%).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=None,
-            scra_grade=None,  # No SCRA grade provided
+            scra_grade=None,  # No SCRA grade → Grade C conservative default
             config=b31_config,
         )
 
-        # Falls through to CQS-based unrated institution → 40% (UK deviation)
-        assert float(result["risk_weight"]) == pytest.approx(0.40)
+        # Null SCRA defaults to Grade C = 150% (conservative, not Grade A = 40%)
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
 
     def test_scra_grade_b_rwa(
         self,
@@ -1228,6 +1598,573 @@ class TestB31SCRAInstitutionWeights:
         # 10M × 75% = 7.5M
         assert float(result["rwa"]) == pytest.approx(7_500_000.0)
 
+    def test_scra_none_unrated_institution_rwa(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null SCRA grade produces correct RWA at Grade C (150%).
+
+        Why this matters:
+            An institution without SCRA assessment data must not receive
+            favourable capital treatment. The 150% weight ensures prudent
+            capitalisation until proper SCRA classification is obtained.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade=None,
+            config=b31_config,
+        )
+
+        # 10M × 150% = 15M RWA
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
+        assert float(result["rwa"]) == pytest.approx(15_000_000.0)
+
+
+# =============================================================================
+# SCRA ENHANCED GRADE A (CRE20.19)
+# =============================================================================
+
+
+class TestB31SCRAEnhancedGradeA:
+    """Basel 3.1 SCRA enhanced Grade A: 30% for CET1 >= 14% AND leverage >= 5%.
+
+    PRA PS1/26 Art. 120A / CRE20.19 introduces a sub-grade of SCRA Grade A
+    for institutions that exceed both a 14% CET1 ratio and a 5% leverage ratio.
+    These well-capitalised institutions receive a preferential 30% risk weight
+    (vs standard Grade A 40%).
+
+    Why this matters:
+        The 10pp reduction (40% → 30%) for the most strongly capitalised
+        counterparties incentivises lending to well-capitalised institutions
+        and aligns interbank capital charges with counterparty strength.
+    """
+
+    def test_enhanced_a_rw_30_percent(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Enhanced Grade A institution gets 30% RW (vs 40% for standard A)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.30)
+        assert float(result["rwa"]) == pytest.approx(3_000_000.0)
+
+    def test_enhanced_a_vs_standard_a(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Enhanced Grade A produces lower RWA than standard Grade A."""
+        enhanced = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+        standard = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            config=b31_config,
+        )
+
+        assert float(enhanced["rwa"]) < float(standard["rwa"])
+
+    def test_enhanced_a_rated_institution_uses_ecra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated institution ignores SCRA enhanced grade — ECRA (CQS) takes precedence."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=2,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+
+        # ECRA CQS 2 → 30% (UK deviation), not SCRA enhanced A 30%
+        assert float(result["risk_weight"]) == pytest.approx(0.30)
+
+    def test_enhanced_a_covered_bond_derives_20pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Unrated covered bond with enhanced-A issuer derives 20% RW (same as standard A)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="covered_bond",
+            cqs=None,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+
+# =============================================================================
+# SCRA SHORT-TERM MATURITY (CRE20.17)
+# =============================================================================
+
+
+class TestB31SCRAShortTermMaturity:
+    """Basel 3.1 SCRA short-term (≤3m) risk weights for unrated institutions.
+
+    PRA PS1/26 Art. 120A / CRE20.17 provides reduced risk weights for
+    short-term (residual maturity ≤ 3 months) unrated institution exposures:
+    - Grade A / A Enhanced: 20% (vs 40%/30% long-term)
+    - Grade B: 50% (vs 75% long-term)
+    - Grade C: 150% (unchanged)
+
+    Why this matters:
+        Short-term interbank exposures carry less risk due to their limited
+        duration. The reduced weights lower capital charges for overnight,
+        money market, and short-dated placements to well-capitalised banks.
+    """
+
+    @pytest.mark.parametrize(
+        ("scra_grade", "expected_rw"),
+        [
+            ("A", 0.20),
+            ("A_ENHANCED", 0.20),
+            ("B", 0.50),
+            ("C", 1.50),
+        ],
+        ids=["grade_A_20pct", "grade_A_enhanced_20pct", "grade_B_50pct", "grade_C_150pct"],
+    )
+    def test_short_term_scra_risk_weight(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        scra_grade: str,
+        expected_rw: float,
+    ) -> None:
+        """Short-term (≤3m) unrated institution gets reduced SCRA RW."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade=scra_grade,
+            residual_maturity_years=0.20,  # ~2.4 months, below 3m threshold
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(expected_rw)
+
+    def test_short_term_grade_a_rwa(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Short-term Grade A: 10M × 20% = 2M RWA."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,  # ~5 weeks
+            config=b31_config,
+        )
+
+        assert float(result["rwa"]) == pytest.approx(2_000_000.0)
+
+    def test_short_term_boundary_exactly_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Exactly 3 months (0.25y) should qualify as short-term."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.25,  # Exactly 3 months
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_long_term_boundary_just_over_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Just over 3 months should get long-term rates."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.26,  # Just over 3 months
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+    def test_null_maturity_defaults_to_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null residual maturity defaults to long-term (conservative).
+
+        When maturity data is missing, the fill_null(1.0) default ensures
+        the exposure is treated as long-term, preventing accidental
+        capital reduction from missing data.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=None,  # Missing → defaults to 1.0y → long-term
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+    def test_short_term_rated_institution_uses_ecra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Short-term rated institution still uses ECRA, not SCRA short-term table."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=1,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        # ECRA CQS 1 → 20%, not SCRA short-term A → 20% (same value but different path)
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_short_term_null_scra_defaults_grade_c(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Short-term with null SCRA still defaults to Grade C (150%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade=None,
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
+
+    def test_short_term_not_applied_under_crr(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no SCRA short-term treatment — unrated institution gets 40%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            config=crr_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+
+# =============================================================================
+# ECRA SHORT-TERM RATED INSTITUTIONS (PRA PS1/26 Art. 120, Table 4)
+# =============================================================================
+
+
+class TestB31ECRAShortTermInstitution:
+    """Basel 3.1 ECRA short-term risk weights for rated institutions.
+
+    Under Basel 3.1, rated institution exposures with residual maturity ≤ 3
+    months receive preferential weights per Table 4: CQS 1-5 = 20%, CQS 6 =
+    150%. Trade finance exposures qualify up to 6 months (Art. 121(5)).
+
+    Why this matters:
+        Without the short-term ECRA table, a CQS 3 institution exposure at 2
+        months maturity incorrectly receives 50% RW (the long-term ECRA weight)
+        instead of 20%. For CQS 4, the overstatement is 5x (100% vs 20%). This
+        systematically overstates capital on short-term interbank lending, which
+        is a large volume for most banks.
+    """
+
+    @pytest.mark.parametrize(
+        ("cqs", "expected_rw"),
+        [
+            (1, 0.20),
+            (2, 0.20),
+            (3, 0.20),
+            (4, 0.20),
+            (5, 0.20),
+            (6, 1.50),
+        ],
+        ids=["CQS1", "CQS2", "CQS3", "CQS4", "CQS5", "CQS6"],
+    )
+    def test_short_term_ecra_risk_weight(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        cqs: int,
+        expected_rw: float,
+    ) -> None:
+        """ECRA Table 4: CQS 1-5 all get 20%, CQS 6 gets 150% at ≤3m."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=cqs,
+            residual_maturity_years=0.20,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(expected_rw)
+
+    def test_short_term_ecra_rwa(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """End-to-end RWA for short-term CQS 3: 10M × 20% = 2M."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+        assert float(result["rwa"]) == pytest.approx(2_000_000.0)
+
+    def test_boundary_exactly_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Exactly 3 months (0.25y) qualifies as short-term → 20%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.25,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_boundary_just_over_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Just over 3 months (0.26y) uses long-term ECRA CQS table → 50%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.26,
+            config=b31_config,
+        )
+
+        # CQS 3 long-term = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_null_maturity_defaults_to_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null maturity defaults to 1.0y (long-term) → standard CQS weight."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=None,
+            config=b31_config,
+        )
+
+        # CQS 3 long-term = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_cqs2_long_term_unchanged(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """CQS 2 long-term still uses standard ECRA weight (30% UK deviation)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=2,
+            residual_maturity_years=1.0,
+            config=b31_config,
+        )
+
+        # CQS 2 UK deviation long-term = 30%
+        assert float(result["risk_weight"]) == pytest.approx(0.30)
+
+    def test_cqs4_short_vs_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """CQS 4 short-term = 20% vs long-term = 100% — largest reduction."""
+        short = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=4,
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+        long = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=4,
+            residual_maturity_years=1.0,
+            config=b31_config,
+        )
+
+        assert float(short["risk_weight"]) == pytest.approx(0.20)
+        assert float(long["risk_weight"]) == pytest.approx(1.00)
+
+    def test_trade_finance_6m_qualifies(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Trade finance at 5 months (0.42y) qualifies for short-term via Art. 121(5)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.42,
+            is_short_term_trade_lc=True,
+            config=b31_config,
+        )
+
+        # Trade finance ≤6m → short-term ECRA Table 4 → 20%
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_trade_finance_over_6m_uses_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Trade finance at 7 months (0.58y) does not qualify for short-term."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.58,
+            is_short_term_trade_lc=True,
+            config=b31_config,
+        )
+
+        # Over 6m → long-term CQS 3 = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_non_trade_finance_at_4m_uses_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-trade-finance at 4 months does not qualify (>3m threshold)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.33,
+            is_short_term_trade_lc=False,
+            config=b31_config,
+        )
+
+        # 4 months > 3m threshold, not trade finance → long-term CQS 3 = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_ecra_short_term_not_applied_under_crr(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no ECRA short-term Table 4 — rated institution uses standard CQS."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            config=crr_config,
+        )
+
+        # CRR CQS 3 institution = 50% regardless of maturity
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_unrated_short_term_still_uses_scra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Unrated institution at ≤3m uses SCRA short-term, not ECRA."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="B",
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        # SCRA short-term Grade B = 50%
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
 
 # =============================================================================
 # INVESTMENT-GRADE CORPORATE (CRE20.47-49)
@@ -1238,27 +2175,37 @@ class TestB31InvestmentGradeCorporate:
     """Basel 3.1 investment-grade corporate risk weight: 65%.
 
     Qualifying: publicly traded + investment grade external rating.
-    This is a preferential treatment for qualifying unrated corporates.
+    Requires Art. 122(6) IG assessment election (use_investment_grade_assessment=True).
 
     Why this matters:
         The 65% weight (vs 100% unrated default) significantly reduces SA RWA
         for large, well-capitalised corporates, narrowing the gap between SA
         and IRB capital requirements for investment-grade portfolios.
+        The election is paired with a 135% weight for non-IG corporates
+        (see TestB31NonInvestmentGradeCorporate).
     """
+
+    @pytest.fixture
+    def ig_config(self) -> CalculationConfig:
+        """B31 config with investment-grade assessment elected."""
+        return CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30),
+            use_investment_grade_assessment=True,
+        )
 
     def test_investment_grade_65pct(
         self,
         sa_calculator: SACalculator,
-        b31_config: CalculationConfig,
+        ig_config: CalculationConfig,
     ) -> None:
-        """Investment-grade corporate gets 65% under Basel 3.1."""
+        """Investment-grade corporate gets 65% under Basel 3.1 with IG assessment."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
             exposure_class="corporate",
             cqs=None,
             is_investment_grade=True,
-            config=b31_config,
+            config=ig_config,
         )
 
         assert float(result["risk_weight"]) == pytest.approx(0.65)
@@ -1317,6 +2264,162 @@ class TestB31InvestmentGradeCorporate:
 
         # CQS 1 → 20% (from CQS table, not 65%)
         assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+
+# =============================================================================
+# NON-INVESTMENT-GRADE CORPORATE RISK WEIGHT (Art. 122(6)(b), Basel 3.1)
+# =============================================================================
+
+
+class TestB31NonInvestmentGradeCorporate:
+    """Basel 3.1 non-investment-grade corporate risk weight: 135%.
+
+    When an institution has PRA permission to use the investment-grade
+    assessment (Art. 122(6)), unrated corporates are split:
+    - Investment-grade: 65% (Art. 122(6)(a))
+    - Non-investment-grade: 135% (Art. 122(6)(b))
+
+    Without the election, all unrated corporates receive 100%.
+
+    Why this matters:
+        Art. 122(6) is an opt-in election. Institutions that elect it get
+        the favorable 65% for IG corporates, but must accept the punitive
+        135% for non-IG corporates. The 35pp surcharge over the 100% default
+        prevents cherry-picking the IG benefit without the corresponding penalty.
+    """
+
+    @pytest.fixture
+    def ig_config(self) -> CalculationConfig:
+        """B31 config with investment-grade assessment elected."""
+        return CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30),
+            use_investment_grade_assessment=True,
+        )
+
+    def test_non_ig_corporate_135pct(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """Non-IG unrated corporate gets 135% when IG assessment is active."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=False,
+            config=ig_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.35)
+        assert float(result["rwa"]) == pytest.approx(2_700_000.0)  # 2M × 135%
+
+    def test_ig_corporate_65pct_with_assessment(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """IG unrated corporate gets 65% when IG assessment is active."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=True,
+            config=ig_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.65)
+        assert float(result["rwa"]) == pytest.approx(1_300_000.0)  # 2M × 65%
+
+    def test_ig_flag_ignored_without_assessment(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """IG flag is ignored when assessment is not active — gets 100%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=True,
+            config=b31_config,
+        )
+
+        # Without use_investment_grade_assessment=True, all unrated corporates → 100%
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
+
+    def test_non_ig_gets_100pct_without_assessment(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-IG corporate gets standard 100% when assessment is not active."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=False,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
+
+    def test_null_ig_flag_treated_as_non_ig(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """Null is_investment_grade is treated as non-IG → 135% with assessment."""
+        # When data doesn't include the IG flag, it defaults to False in the calculator
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=None,
+            is_investment_grade=False,  # Simulates null (fill_null(False))
+            config=ig_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.35)
+
+    def test_rated_corporate_unaffected_by_assessment(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """Rated corporates use CQS table regardless of IG assessment."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate",
+            cqs=3,
+            is_investment_grade=False,
+            config=ig_config,
+        )
+
+        # CQS 3 → 75% (from B31 corporate CQS table), not 135%
+        assert float(result["risk_weight"]) == pytest.approx(0.75)
+
+    def test_sme_corporate_unaffected_by_assessment(
+        self,
+        sa_calculator: SACalculator,
+        ig_config: CalculationConfig,
+    ) -> None:
+        """SME corporates get 85% regardless of IG assessment."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="corporate_sme",
+            cqs=None,
+            is_investment_grade=False,
+            config=ig_config,
+        )
+
+        # SME corporate → 85%, not 135% (SME branch fires before non-IG)
+        assert float(result["risk_weight"]) == pytest.approx(0.85)
 
 
 # =============================================================================
@@ -1729,3 +2832,220 @@ class TestCurrencyMismatchMultiplier:
         )
         # CQS 1 institution = 20% — no multiplier
         assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+
+# =============================================================================
+# DEFAULTED RESI RE — ALWAYS 100% (PRA PS1/26 Art. 127 / CRE20.88)
+# =============================================================================
+#
+# Under Basel 3.1, defaulted general RESI RE (non-income-dependent) always gets
+# 100% RW regardless of provision coverage. This is a Basel 3.1 simplification
+# for owner-occupied housing — income-dependent and CRE defaulted exposures still
+# use the provision-based 100%/150% test. CRR has no such exception.
+# =============================================================================
+
+
+class TestDefaultedResiREBasel31:
+    """Tests for Basel 3.1 defaulted RESI RE always-100% exception (CRE20.88)."""
+
+    def test_defaulted_resi_re_non_income_always_100(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-income-dependent defaulted RESI RE → 100% regardless of provisions."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),  # 0% provisions
+            config=b31_config,
+        )
+        # Should be 100% flat, NOT 150% (provision-based)
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_non_income_with_low_provisions_still_100(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Even with provisions < 20%, non-income RESI RE gets 100% (not 150%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("50000"),  # 5% < 20% threshold
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_non_income_with_high_provisions_still_100(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """With provisions >= 20%, non-income RESI RE still gets 100% (same result)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("300000"),  # 30% >= 20%
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_income_dependent_uses_provision_test(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Income-dependent defaulted RESI RE still uses provision-based test."""
+        # Low provisions → 150%
+        result_low = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=True,  # Income-dependent
+            provision_allocated=Decimal("50000"),  # 5% < 20%
+            config=b31_config,
+        )
+        assert result_low["risk_weight"] == pytest.approx(1.50)
+
+        # High provisions → 100%
+        result_high = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=True,
+            provision_allocated=Decimal("250000"),  # 25% >= 20%
+            config=b31_config,
+        )
+        assert result_high["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_rwa_correctness(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """RWA = EAD × 100% for defaulted non-income RESI RE."""
+        ead = Decimal("750000")
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=ead,
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(float(ead) * 1.00)
+
+    def test_defaulted_residential_class_variant(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """RESIDENTIAL_RE class also gets the always-100% treatment."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="RESIDENTIAL_RE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_null_income_cover_defaults_non_income(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null has_income_cover defaults to False (non-income) → 100%."""
+        df = pl.DataFrame(
+            {
+                "exposure_reference": ["NULL_INCOME"],
+                "ead_final": [500000.0],
+                "exposure_class": ["RETAIL_MORTGAGE"],
+                "cqs": [None],
+                "is_defaulted": [True],
+                "has_income_cover": [None],
+                "provision_allocated": [0.0],
+                "provision_deducted": [0.0],
+            }
+        ).lazy()
+
+        result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_crr_defaulted_resi_re_no_exception(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no RESI RE defaulted exception — provision-based test applies."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),  # 0% provisions
+            config=crr_config,
+        )
+        # CRR: no provisions → 150% (provision-based test, no RESI RE exception)
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_defaulted_corporate_still_provision_based(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-RE defaulted exposures still use provision-based test under B31."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_defaulted=True,
+            provision_allocated=Decimal("50000"),  # 5% < 20%
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_defaulted_commercial_re_still_provision_based(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Defaulted CRE uses provision-based test (no RESI-like exception)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="COMMERCIAL_RE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            property_type="commercial",
+            provision_allocated=Decimal("50000"),  # 5% < 20%
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.50)

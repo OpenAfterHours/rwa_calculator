@@ -53,6 +53,9 @@ def calculate_single_sa_exposure(
     currency: str | None = None,
     country_code: str | None = None,
     borrower_income_currency: str | None = None,
+    residual_maturity_years: float | None = None,
+    entity_type: str | None = None,
+    is_short_term_trade_lc: bool = False,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch."""
     df = pl.DataFrame(
@@ -79,6 +82,9 @@ def calculate_single_sa_exposure(
             "currency": [currency],
             "cp_country_code": [country_code],
             "borrower_income_currency": [borrower_income_currency],
+            "residual_maturity_years": [residual_maturity_years],
+            "cp_entity_type": [entity_type],
+            "is_short_term_trade_lc": [is_short_term_trade_lc],
         }
     ).lazy()
 

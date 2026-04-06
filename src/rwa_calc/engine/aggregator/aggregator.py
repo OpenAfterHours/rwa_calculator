@@ -109,7 +109,10 @@ class OutputAggregator:
             supporting_factor_impact = generate_supporting_factor_impact(combined)
 
         # EL portfolio summary (T2 credit cap, CET1/T2 deductions)
-        el_summary = compute_el_portfolio_summary(irb_results)
+        # Include slotting EL: slotting is an IRB sub-approach (Art. 153(5) is in
+        # the IRB chapter), so slotting RWA and EL feed into the T2 credit cap
+        # (Art. 62(d)) and EL shortfall/excess (Art. 158-159).
+        el_summary = compute_el_portfolio_summary(irb_results, slotting_results)
 
         return AggregatedResultBundle(
             results=combined,

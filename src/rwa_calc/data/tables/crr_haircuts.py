@@ -38,6 +38,10 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
     "govt_bond_cqs2_3_1_5y": Decimal("0.03"),
     "govt_bond_cqs2_3_5y_plus": Decimal("0.06"),
+    # Government bonds CQS 4 (BB+ to BB-) — Art. 197(1)(b): eligible, Art. 224 Table 1: 15%
+    "govt_bond_cqs4_0_1y": Decimal("0.15"),
+    "govt_bond_cqs4_1_5y": Decimal("0.15"),
+    "govt_bond_cqs4_5y_plus": Decimal("0.15"),
     # Corporate bonds by CQS and maturity band (CRR Art. 224 Table 1)
     # CQS 1 (AAA to AA-) — lower haircuts
     "corp_bond_cqs1_0_1y": Decimal("0.01"),
@@ -47,10 +51,14 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
     "corp_bond_cqs2_3_1_5y": Decimal("0.06"),
     "corp_bond_cqs2_3_5y_plus": Decimal("0.12"),
+    # Note: Corp/institution bonds CQS 4-6 are ineligible per Art. 197(1)(d)
     # Equity
     "equity_main_index": Decimal("0.15"),
     "equity_other": Decimal("0.25"),
-    # Other
+    # Non-financial collateral
+    # CRR Art. 230 uses C*/C** threshold mechanism (Table 5), not HC-based formula.
+    # These values are ad-hoc approximations since the code applies haircuts uniformly.
+    # Receivables: effective discount from 1.25x OC ratio ≈ 20%.
     "real_estate": Decimal("0.00"),
     "receivables": Decimal("0.20"),
     "other_physical": Decimal("0.40"),
@@ -77,6 +85,12 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs2_3_3_5y": Decimal("0.04"),
     "govt_bond_cqs2_3_5_10y": Decimal("0.06"),
     "govt_bond_cqs2_3_10y_plus": Decimal("0.12"),
+    # Government bonds CQS 4 (BB+ to BB-) — Art. 197(1)(b): eligible, 15% flat
+    "govt_bond_cqs4_0_1y": Decimal("0.15"),
+    "govt_bond_cqs4_1_3y": Decimal("0.15"),
+    "govt_bond_cqs4_3_5y": Decimal("0.15"),
+    "govt_bond_cqs4_5_10y": Decimal("0.15"),
+    "govt_bond_cqs4_10y_plus": Decimal("0.15"),
     # Corporate bonds CQS 1 (AAA to AA-) — significant increases for long-dated
     "corp_bond_cqs1_0_1y": Decimal("0.01"),
     "corp_bond_cqs1_1_3y": Decimal("0.04"),
@@ -92,9 +106,11 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     # Equity — increased under Basel 3.1
     "equity_main_index": Decimal("0.25"),  # CRR: 15%
     "equity_other": Decimal("0.35"),  # CRR: 25%
-    # Other (unchanged)
-    "real_estate": Decimal("0.00"),
-    "receivables": Decimal("0.20"),
+    # Non-financial collateral — Art. 230(2) HC values (PRA PS1/26)
+    # B31 Art. 230 uses HC in LGD* formula: ES = min(C(1-HC-Hfx), E(1+HE))
+    # HC=40% for all non-financial types; only LGDS differs (20% rec/RE, 25% other)
+    "real_estate": Decimal("0.00"),  # Handled via LTV, not HC haircut
+    "receivables": Decimal("0.40"),  # Art. 230(2): HC=40% (not LGDS=20%)
     "other_physical": Decimal("0.40"),
 }
 
@@ -190,6 +206,28 @@ def _create_crr_haircut_df() -> pl.DataFrame:
             "cqs": 3,
             "maturity_band": "5y_plus",
             "haircut": 0.06,
+            "is_main_index": None,
+        },
+        # Government bonds CQS 4 (BB+ to BB-) — Art. 197(1)(b): eligible, Art. 224 Table 1
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "0_1y",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "1_5y",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "5y_plus",
+            "haircut": 0.15,
             "is_main_index": None,
         },
         # Corporate bonds CQS 1 (AAA to AA-)
@@ -429,6 +467,42 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "haircut": 0.12,
             "is_main_index": None,
         },
+        # Government bonds CQS 4 (BB+ to BB-) — Art. 197(1)(b): eligible, Art. 224 Table 1
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "0_1y",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "1_3y",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "3_5y",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "5_10y",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
+        {
+            "collateral_type": "govt_bond",
+            "cqs": 4,
+            "maturity_band": "10y_plus",
+            "haircut": 0.15,
+            "is_main_index": None,
+        },
         # Corporate bonds CQS 1 (AAA to AA-)
         {
             "collateral_type": "corp_bond",
@@ -551,7 +625,8 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "haircut": 0.35,
             "is_main_index": False,
         },
-        # Other (unchanged)
+        # Non-financial collateral — Art. 230(2) HC values (PRA PS1/26)
+        # HC=40% for receivables, RE, and other physical in the LGD* formula
         {
             "collateral_type": "real_estate",
             "cqs": None,
@@ -563,7 +638,7 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "collateral_type": "receivables",
             "cqs": None,
             "maturity_band": None,
-            "haircut": 0.20,
+            "haircut": 0.40,
             "is_main_index": None,
         },
         {
@@ -630,13 +705,44 @@ def get_maturity_band(residual_maturity_years: float, is_basel_3_1: bool = False
             return "5y_plus"
 
 
+def is_bond_eligible_as_financial_collateral(
+    collateral_type: str,
+    cqs: int | None,
+) -> bool:
+    """
+    Check if a bond is eligible as financial collateral per CRR Art. 197.
+
+    Eligibility rules:
+    - Art. 197(1)(b): Government/central bank bonds — CQS 1-4 eligible
+    - Art. 197(1)(d): Institution/corporate bonds — CQS 1-3 eligible
+    - Unrated bonds (cqs=None) are ineligible under both categories
+    - Non-bond collateral types are not subject to these rules (returns True)
+
+    Args:
+        collateral_type: Canonical collateral type ('govt_bond' or 'corp_bond')
+        cqs: Credit quality step of issuer (1-6), or None if unrated
+
+    Returns:
+        True if eligible, False if ineligible
+    """
+    coll_lower = collateral_type.lower()
+
+    if coll_lower in ("govt_bond", "sovereign_bond", "government_bond", "gilt"):
+        return cqs is not None and 1 <= cqs <= 4
+    if coll_lower in ("corp_bond", "corporate_bond"):
+        return cqs is not None and 1 <= cqs <= 3
+
+    # Non-bond collateral types are not subject to bond eligibility rules
+    return True
+
+
 def lookup_collateral_haircut(
     collateral_type: str,
     cqs: int | None = None,
     residual_maturity_years: float | None = None,
     is_main_index: bool = False,
     is_basel_3_1: bool = False,
-) -> Decimal:
+) -> Decimal | None:
     """
     Look up supervisory haircut for collateral.
 
@@ -651,7 +757,7 @@ def lookup_collateral_haircut(
         is_basel_3_1: Whether to use Basel 3.1 haircuts (CRE22.52-53)
 
     Returns:
-        Haircut as Decimal
+        Haircut as Decimal, or None if collateral is ineligible per Art. 197
     """
     table = BASEL31_COLLATERAL_HAIRCUTS if is_basel_3_1 else COLLATERAL_HAIRCUTS
     coll_lower = collateral_type.lower()
@@ -664,8 +770,11 @@ def lookup_collateral_haircut(
     if coll_lower == "gold":
         return table["gold"]
 
-    # Government bonds
+    # Government bonds — Art. 197(1)(b): CQS 1-4 eligible, CQS 5-6/unrated ineligible
     if coll_lower in ("govt_bond", "sovereign_bond", "government_bond", "gilt"):
+        if not is_bond_eligible_as_financial_collateral("govt_bond", cqs):
+            return None
+
         maturity = residual_maturity_years or 5.0
         maturity_band = get_maturity_band(maturity, is_basel_3_1=is_basel_3_1)
 
@@ -673,14 +782,18 @@ def lookup_collateral_haircut(
             key = f"govt_bond_cqs1_{maturity_band}"
         elif cqs in (2, 3):
             key = f"govt_bond_cqs2_3_{maturity_band}"
+        elif cqs == 4:
+            key = f"govt_bond_cqs4_{maturity_band}"
         else:
-            # CQS 4+ or unrated - use higher haircut
-            return Decimal("0.15")
+            return None  # Should not reach here after eligibility check
 
         return table.get(key, Decimal("0.15"))
 
-    # Corporate bonds (CRR Art. 224: CQS 1 alone, CQS 2-3 grouped)
+    # Corporate/institution bonds — Art. 197(1)(d): CQS 1-3 eligible, CQS 4-6/unrated ineligible
     if coll_lower in ("corp_bond", "corporate_bond"):
+        if not is_bond_eligible_as_financial_collateral("corp_bond", cqs):
+            return None
+
         maturity = residual_maturity_years or 5.0
         maturity_band = get_maturity_band(maturity, is_basel_3_1=is_basel_3_1)
 
@@ -689,8 +802,7 @@ def lookup_collateral_haircut(
         elif cqs in (2, 3):
             key = f"corp_bond_cqs2_3_{maturity_band}"
         else:
-            # Lower rated - not eligible or high haircut
-            return Decimal("0.20")
+            return None  # Should not reach here after eligibility check
 
         return table.get(key, Decimal("0.20"))
 

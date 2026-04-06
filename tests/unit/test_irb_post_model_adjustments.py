@@ -218,9 +218,9 @@ class TestPostModelAdjustmentConfig:
         assert config.enabled is True
 
     def test_b31_default_mortgage_floor(self) -> None:
-        """Basel 3.1 default mortgage RW floor is 15%."""
+        """Basel 3.1 default mortgage RW floor is 10% (PRA Art. 154(4A)(b))."""
         config = PostModelAdjustmentConfig.basel_3_1()
-        assert config.mortgage_rw_floor == Decimal("0.15")
+        assert config.mortgage_rw_floor == Decimal("0.10")
 
     def test_b31_custom_scalars(self) -> None:
         """Basel 3.1 config accepts custom scalars."""

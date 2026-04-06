@@ -5,7 +5,9 @@ Per CRR Art. 158-159, Expected Loss is an IRB-only concept. When an IRB exposure
 is guaranteed by an SA counterparty, the SA-guaranteed portion should have zero EL
 (SA has no EL concept). Only the unguaranteed portion retains IRB EL.
 
-For IRB guarantors, EL remains unchanged (PD substitution not yet implemented).
+For IRB guarantors with available PD, EL uses the guarantor's PD for the guaranteed
+portion per CRR Art. 161(3): EL = PD_guarantor × LGD_senior × guaranteed_portion
++ original_EL × (unguaranteed / EAD).
 """
 
 from datetime import date
@@ -133,8 +135,37 @@ class TestELGuaranteeAdjustment:
         assert result["is_guarantee_beneficial"][0] is False
         assert result["expected_loss"][0] == pytest.approx(450.0)
 
-    def test_irb_guarantor_el_unchanged(self, crr_config: CalculationConfig) -> None:
-        """IRB guarantor should leave EL unchanged (PD substitution not implemented)."""
+    def test_irb_guarantor_el_substituted_with_pd(self, crr_config: CalculationConfig) -> None:
+        """IRB guarantor with PD should substitute guarantor PD for EL (Art. 161(3))."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],
+                "risk_weight": [0.50],
+                "expected_loss": [4_500.0],  # PD * LGD * EAD = 0.01 * 0.45 * 1M
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],
+                "guarantor_approach": ["irb"],
+                "guarantor_pd": [0.005],  # 0.5% — lower than borrower's 1%
+            }
+        )
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # EL = guarantor_PD(0.005) × LGD_senior(0.45) × guaranteed(1M) + 0 (no unguaranteed)
+        # = 2,250.0
+        assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
+        assert result["expected_loss"][0] == pytest.approx(2_250.0)
+
+    def test_irb_guarantor_el_unchanged_without_pd(self, crr_config: CalculationConfig) -> None:
+        """IRB guarantor without guarantor_pd column leaves EL unchanged."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -151,13 +182,72 @@ class TestELGuaranteeAdjustment:
                 "guarantor_entity_type": ["sovereign"],
                 "guarantor_cqs": [1],
                 "guarantor_approach": ["irb"],
+                # No guarantor_pd column — backward compatibility
             }
         )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
-        # IRB guarantor: EL not adjusted (PD substitution not yet implemented)
+        # Without guarantor_pd, IRB guarantor EL remains unchanged
         assert result["expected_loss"][0] == pytest.approx(4_500.0)
+
+    def test_partial_irb_guarantee_blended_el(self, crr_config: CalculationConfig) -> None:
+        """Partial IRB guarantee (60%) should blend borrower and guarantor EL."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],
+                "risk_weight": [0.50],
+                "expected_loss": [4_500.0],
+                "guaranteed_portion": [600_000.0],  # 60% guaranteed
+                "unguaranteed_portion": [400_000.0],  # 40% unguaranteed
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],
+                "guarantor_approach": ["irb"],
+                "guarantor_pd": [0.002],  # 0.2%
+            }
+        )
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # Unguaranteed EL = 4500 × (400K / 1M) = 1,800
+        # Guaranteed EL = 0.002 × 0.45 × 600K = 540
+        # Total EL = 1,800 + 540 = 2,340
+        assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
+        assert result["expected_loss"][0] == pytest.approx(2_340.0)
+
+    def test_irb_guarantor_pd_floored_to_crr_minimum(self, crr_config: CalculationConfig) -> None:
+        """Guarantor PD below CRR 0.03% floor should be floored."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [500_000.0],
+                "risk_weight": [0.50],
+                "expected_loss": [4_500.0],
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["sovereign"],
+                "guarantor_cqs": [1],
+                "guarantor_approach": ["irb"],
+                "guarantor_pd": [0.0001],  # 0.01% — below CRR 0.03% floor
+            }
+        )
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
+        # PD floored to 0.0003 (CRR 0.03%)
+        # EL = 0.0003 × 0.45 × 1M = 135.0
+        assert result["expected_loss"][0] == pytest.approx(135.0)
 
     def test_no_expected_loss_column_backward_compat(self, crr_config: CalculationConfig) -> None:
         """Method should still work when expected_loss column is absent."""

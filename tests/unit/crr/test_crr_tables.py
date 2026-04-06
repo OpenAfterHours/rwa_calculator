@@ -248,6 +248,14 @@ class TestCollateralHaircuts:
         """Other equity has 25% haircut."""
         assert COLLATERAL_HAIRCUTS["equity_other"] == Decimal("0.25")
 
+    def test_receivables_twenty_percent(self) -> None:
+        """CRR receivables haircut is 20% (OC-ratio-derived approximation)."""
+        assert COLLATERAL_HAIRCUTS["receivables"] == Decimal("0.20")
+
+    def test_other_physical_forty_percent(self) -> None:
+        """Other physical collateral has 40% haircut."""
+        assert COLLATERAL_HAIRCUTS["other_physical"] == Decimal("0.40")
+
     def test_fx_haircut(self) -> None:
         """FX mismatch haircut is 8%."""
         assert Decimal("0.08") == FX_HAIRCUT

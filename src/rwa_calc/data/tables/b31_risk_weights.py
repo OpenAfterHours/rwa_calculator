@@ -101,8 +101,8 @@ B31_ADC_RISK_WEIGHT = Decimal("1.50")
 B31_ADC_PRESOLD_RISK_WEIGHT = Decimal("1.00")
 
 # =============================================================================
-# CORPORATE CQS-BASED RISK WEIGHTS — BASEL 3.1 (CRE20.22-26)
-# Differs from CRR: CQS3 = 75% (was 100%), CQS5 = 100% (was 150%)
+# CORPORATE CQS-BASED RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 122(2) Table 6)
+# Differs from CRR: CQS3 = 75% (was 100%). PRA retains CQS5 = 150% (BCBS: 100%).
 # =============================================================================
 
 B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = {
@@ -110,14 +110,21 @@ B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = {
     2: Decimal("0.50"),  # A+ to A-
     3: Decimal("0.75"),  # BBB+ to BBB- (CRR: 100%)
     4: Decimal("1.00"),  # BB+ to BB-
-    5: Decimal("1.00"),  # B+ to B- (CRR: 150%)
+    5: Decimal("1.50"),  # B+ to B- (PRA retains 150%, BCBS reduced to 100%)
     6: Decimal("1.50"),  # CCC+ and below
     None: Decimal("1.00"),  # Unrated
 }
 
-# Investment-grade corporate: 65% (CRE20.44)
+# Investment-grade corporate: 65% (PRA PS1/26 Art. 122(6)(a))
 # Qualifying: publicly traded + investment grade external rating
+# Only applies when institution has PRA permission to use IG assessment
 B31_CORPORATE_INVESTMENT_GRADE_RW = Decimal("0.65")
+
+# Non-investment-grade corporate: 135% (PRA PS1/26 Art. 122(6)(b))
+# Applies to unrated corporates that do NOT qualify as investment-grade
+# when the institution has elected to use the IG assessment permission.
+# Without IG assessment permission, all unrated corporates get 100%.
+B31_CORPORATE_NON_INVESTMENT_GRADE_RW = Decimal("1.35")
 
 # SME corporate: 85% (CRE20.47)
 # Qualifying: turnover <= EUR 50m, unrated
@@ -130,10 +137,40 @@ B31_CORPORATE_SME_RW = Decimal("0.85")
 # Rated institutions use ECRA (same as CRR Art. 120-121).
 # =============================================================================
 
+# Long-term (>3m residual maturity) SCRA risk weights
 B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
-    "A": Decimal("0.40"),  # CET1 > 14%, Leverage > 5%, meets all requirements
-    "B": Decimal("0.75"),  # CET1 > 5.5%, Leverage > 3%, meets minimums
-    "C": Decimal("1.50"),  # Below minimum requirements
+    "A": Decimal("0.40"),  # Meets all minimum requirements + buffers (CRE20.18)
+    "A_ENHANCED": Decimal("0.30"),  # CET1 >= 14% AND leverage >= 5% (CRE20.19)
+    "B": Decimal("0.75"),  # CET1 > 5.5%, Leverage > 3%, meets minimums (CRE20.20)
+    "C": Decimal("1.50"),  # Below minimum requirements (CRE20.21)
+}
+
+# Short-term (≤3m residual maturity) SCRA risk weights (PRA PS1/26 Art. 120A)
+B31_SCRA_SHORT_TERM_RISK_WEIGHTS: dict[str, Decimal] = {
+    "A": Decimal("0.20"),  # Grade A short-term (CRE20.18)
+    "A_ENHANCED": Decimal("0.20"),  # Enhanced A short-term — same as A (CRE20.19)
+    "B": Decimal("0.50"),  # Grade B short-term (CRE20.20)
+    "C": Decimal("1.50"),  # Grade C unchanged by maturity (CRE20.21)
+}
+
+# =============================================================================
+# ECRA SHORT-TERM INSTITUTION RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 120)
+# For RATED institutions with residual maturity ≤ 3 months (Table 4).
+# Long-term ECAI applied to short-term exposure: CQS 1-5 all receive 20%.
+# Trade finance ≤ 6 months also qualifies for short-term treatment (Art. 121(5)).
+#
+# NOTE: Table 4A (short-term ECAI assessment) uses different weights:
+# CQS 1=20%, CQS 2=50%, CQS 3=100%, other=150%.
+# Table 4A requires a `has_short_term_ecai` flag not yet in schema.
+# =============================================================================
+
+B31_ECRA_SHORT_TERM_RISK_WEIGHTS: dict[int, Decimal] = {
+    1: Decimal("0.20"),  # CQS 1 short-term (Table 4)
+    2: Decimal("0.20"),  # CQS 2 short-term (Table 4)
+    3: Decimal("0.20"),  # CQS 3 short-term (Table 4)
+    4: Decimal("0.20"),  # CQS 4 short-term (Table 4)
+    5: Decimal("0.20"),  # CQS 5 short-term (Table 4)
+    6: Decimal("1.50"),  # CQS 6 short-term (Table 4) — unchanged
 }
 
 # =============================================================================
@@ -142,6 +179,7 @@ B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
 # =============================================================================
 
 B31_RETAIL_TRANSACTOR_RW = Decimal("0.45")  # 45% for QRRE transactors
+B31_RETAIL_NON_REGULATORY_RW = Decimal("1.00")  # 100% for non-regulatory retail (Art. 123(3)(c))
 
 # =============================================================================
 # SA SPECIALISED LENDING — BASEL 3.1 (PRA PS1/26 Art. 122A-122B)
@@ -168,9 +206,20 @@ B31_SUBORDINATED_DEBT_RW = Decimal("1.50")
 # DEFAULTED EXPOSURE RISK WEIGHTS — BASEL 3.1 (CRE20.88-90)
 # =============================================================================
 
-B31_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # CRE20.89: provisions >= 50%
-B31_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # CRE20.88: provisions < 50%
-B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.50")  # 50% threshold
+# =============================================================================
+# HIGH-RISK EXPOSURE RISK WEIGHT — BASEL 3.1 (Art. 128)
+# Speculative immovable property financing and other designated high-risk items.
+# Note: PE/VC may be reclassified to equity under Art. 133(5) at 400%.
+# =============================================================================
+
+B31_HIGH_RISK_RW = Decimal("1.50")  # Art. 128: 150% flat
+
+B31_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # Art. 127: provisions >= 20%
+B31_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # Art. 127: provisions < 20%
+B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # PRA PS1/26 Art. 127: 20% threshold
+# Defaulted general RESI RE (non-income-dependent): 100% flat regardless of provisions
+# PRA PS1/26 Art. 127 / CRE20.88 — Basel 3.1 simplification for owner-occupied housing
+B31_DEFAULTED_RESI_RE_NON_INCOME_RW = Decimal("1.00")
 
 
 def _create_b31_corporate_df() -> pl.DataFrame:
@@ -178,7 +227,7 @@ def _create_b31_corporate_df() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "cqs": [1, 2, 3, 4, 5, 6, None],
-            "risk_weight": [0.20, 0.50, 0.75, 1.00, 1.00, 1.50, 1.00],
+            "risk_weight": [0.20, 0.50, 0.75, 1.00, 1.50, 1.50, 1.00],
             "exposure_class": ["CORPORATE"] * 7,
         }
     ).with_columns(
@@ -206,11 +255,17 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
         _create_cgcb_df,
         _create_covered_bond_df,
         _create_institution_df,
+        _create_mdb_df,
+        _create_pse_df,
+        _create_rgla_df,
     )
 
     return pl.concat(
         [
             _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_rgla_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_pse_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_mdb_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_institution_df(use_uk_deviation).select(
                 ["exposure_class", "cqs", "risk_weight"]
             ),

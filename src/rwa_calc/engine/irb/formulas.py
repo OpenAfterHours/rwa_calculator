@@ -118,21 +118,21 @@ def _lgd_floor_expression(
     config: CalculationConfig,
     *,
     has_seniority: bool = False,
+    has_exposure_class: bool = False,
 ) -> pl.Expr:
     """
     Build Polars expression for LGD floor (no collateral_type column).
 
     Under CRR: No LGD floors (returns 0.0).
-    Under Basel 3.1 (CRE30.41): Differentiated floors for A-IRB:
-        - Unsecured (senior): 25%
-        - Unsecured (subordinated): 50%
-        - Financial collateral: 0%
-        - Receivables: 10%
-        - CRE: 10%, RRE: 5%
-        - Other physical: 15%
+    Under Basel 3.1: Differentiated floors for A-IRB by exposure class:
+        Corporate (Art. 161(5)): 25% unsecured (senior & subordinated alike)
+        Retail (Art. 164(4)):
+            - retail_mortgage: 5% (assumed RRE-secured)
+            - retail_qrre: 50% (Art. 164(4)(b)(i))
+            - retail_other: 30% (Art. 164(4)(b)(ii))
 
-    Without a collateral_type column, defaults to unsecured floor (25%/50%).
-    When has_seniority=True, checks seniority column for subordinated (50%).
+    Without exposure_class, falls back to seniority-based logic (conservative).
+    Without either, defaults to 25% unsecured floor.
 
     Returns a Polars expression evaluating to the per-row LGD floor value.
     """
@@ -141,7 +141,21 @@ def _lgd_floor_expression(
 
     floors = config.lgd_floors
 
+    if has_exposure_class:
+        # Route by exposure class — retail gets Art. 164(4) floors
+        exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
+        return (
+            pl.when(exp_class.is_in(["retail_mortgage"]))
+            .then(pl.lit(float(floors.retail_rre)))  # 5% Art. 164(4)(a)
+            .when(exp_class.is_in(["retail_qrre"]))
+            .then(pl.lit(float(floors.retail_qrre_unsecured)))  # 50% Art. 164(4)(b)(i)
+            .when(exp_class.is_in(["retail_other"]))
+            .then(pl.lit(float(floors.retail_other_unsecured)))  # 30% Art. 164(4)(b)(ii)
+            .otherwise(pl.lit(float(floors.unsecured)))  # 25% Art. 161(5)
+        )
+
     if has_seniority:
+        # Fallback without exposure_class: conservative subordinated = 50%
         is_subordinated = (
             pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
         )
@@ -159,16 +173,18 @@ def _lgd_floor_expression_with_collateral(
     config: CalculationConfig,
     *,
     has_seniority: bool = False,
+    has_exposure_class: bool = False,
 ) -> pl.Expr:
     """
     Build Polars expression for per-collateral-type LGD floor when collateral_type
     column is available.
 
-    This is used when the dataframe has a collateral_type column, allowing
-    precise per-row LGD floors based on the primary collateral type.
-
-    When has_seniority=True, subordinated unsecured exposures get the higher
-    50% floor instead of 25% (CRE30.41).
+    When has_exposure_class=True, applies retail-specific floors (Art. 164(4)):
+        - retail_mortgage + RRE collateral: 5% (Art. 164(4)(a))
+        - retail_qrre unsecured: 50% (Art. 164(4)(b)(i))
+        - retail_other unsecured: 30% (Art. 164(4)(b)(ii))
+        - retail + other collateral: same LGDS as corporate (0%/10%/10%/15%)
+    Corporate floors use Art. 161(5): 25% unsecured, collateral-type LGDS.
     """
     if config.is_crr:
         return pl.lit(0.0)
@@ -176,8 +192,26 @@ def _lgd_floor_expression_with_collateral(
     floors = config.lgd_floors
     coll = pl.col("collateral_type").fill_null("unsecured").str.to_lowercase()
 
-    # Determine unsecured floor: 50% for subordinated, 25% for senior (CRE30.41)
-    if has_seniority:
+    # Determine unsecured floor based on exposure class (retail vs corporate)
+    if has_exposure_class:
+        exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
+        unsecured_floor = (
+            pl.when(exp_class.is_in(["retail_mortgage"]))
+            .then(pl.lit(float(floors.retail_rre)))  # 5% Art. 164(4)(a)
+            .when(exp_class.is_in(["retail_qrre"]))
+            .then(pl.lit(float(floors.retail_qrre_unsecured)))  # 50% Art. 164(4)(b)(i)
+            .when(exp_class.is_in(["retail_other"]))
+            .then(pl.lit(float(floors.retail_other_unsecured)))  # 30% Art. 164(4)(b)(ii)
+            .otherwise(pl.lit(float(floors.unsecured)))  # 25% Art. 161(5)
+        )
+        # RRE collateral floor: 5% for retail_mortgage, 10% for corporate
+        rre_floor = (
+            pl.when(exp_class.is_in(["retail_mortgage"]))
+            .then(pl.lit(float(floors.retail_rre)))  # 5% Art. 164(4)(a)
+            .otherwise(pl.lit(float(floors.residential_real_estate)))  # 10% Art. 161(5)
+        )
+    elif has_seniority:
+        # Fallback without exposure_class: conservative subordinated = 50%
         is_subordinated = (
             pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
         )
@@ -186,8 +220,10 @@ def _lgd_floor_expression_with_collateral(
             .then(pl.lit(float(floors.subordinated_unsecured)))
             .otherwise(pl.lit(float(floors.unsecured)))
         )
+        rre_floor = pl.lit(float(floors.residential_real_estate))
     else:
         unsecured_floor = pl.lit(float(floors.unsecured))
+        rre_floor = pl.lit(float(floors.residential_real_estate))
 
     return (
         pl.when(coll.is_in(["financial_collateral", "cash", "deposit", "gold", "financial"]))
@@ -195,7 +231,7 @@ def _lgd_floor_expression_with_collateral(
         .when(coll.is_in(["receivables", "trade_receivables"]))
         .then(pl.lit(float(floors.receivables)))
         .when(coll.is_in(["residential_re", "rre", "residential", "residential_property"]))
-        .then(pl.lit(float(floors.residential_real_estate)))
+        .then(rre_floor)
         .when(coll.is_in(["commercial_re", "cre", "commercial", "commercial_property"]))
         .then(pl.lit(float(floors.commercial_real_estate)))
         .when(coll.is_in(["real_estate", "property", "immovable"]))
@@ -277,10 +313,12 @@ def apply_irb_formulas(
         exposures = exposures.with_columns(pl.col("lgd").alias("lgd_floored"))
 
     # Step 3: Calculate correlation using pure Polars expressions
-    # Pass EUR/GBP rate from config to convert GBP turnover to EUR for SME adjustment
+    # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
     exposures = exposures.with_columns(
-        _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation")
+        _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1).alias(
+            "correlation"
+        )
     )
 
     # Step 4: Calculate K using pure Polars with polars-normal-stats
@@ -388,6 +426,7 @@ def _correlation_expr_from_pd(
     pd_expr: pl.Expr,
     sme_threshold: float = 50.0,
     eur_gbp_rate: float = 0.8732,
+    is_b31: bool = False,
 ) -> pl.Expr:
     """
     Shared correlation expression accepting an arbitrary PD expression.
@@ -399,16 +438,27 @@ def _correlation_expr_from_pd(
     - Other retail: PD-dependent (decay=35)
 
     Includes:
-    - SME firm size adjustment for corporates (turnover converted from GBP to EUR)
+    - SME firm size adjustment for corporates
     - FI scalar (1.25x) for large/unregulated financial sector entities (CRR Art. 153(2))
+
+    Under Basel 3.1 (PRA PS1/26 Art. 153(4)), the SME correlation adjustment uses
+    native GBP thresholds (44m/4.4m/39.6) directly on GBP turnover — no FX conversion.
+    Under CRR, GBP turnover is converted to EUR via eur_gbp_rate, then clipped to
+    EUR 5m-50m with denominator 45.
 
     Reads exposure_class, turnover_m, requires_fi_scalar columns from the LazyFrame.
 
     Args:
         pd_expr: Polars expression for the PD value to use
-        sme_threshold: SME threshold in EUR millions (default 50.0)
-        eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (default 0.8732)
+        sme_threshold: SME threshold in EUR millions (default 50.0, CRR only)
+        eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (CRR only)
+        is_b31: If True, use GBP-native parameters per PRA PS1/26 Art. 153(4)
     """
+    # Basel 3.1 SME correlation parameters (PRA PS1/26 Art. 153(4))
+    _B31_SME_THRESHOLD_M = 44.0  # GBP 44m
+    _B31_SME_FLOOR_M = 4.4  # GBP 4.4m
+    _B31_SME_RANGE = 39.6  # 44.0 - 4.4
+
     exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
 
     # Pre-calculate decay denominators (constants)
@@ -428,22 +478,30 @@ def _correlation_expr_from_pd(
     r_retail_other = 0.03 * f_pd_retail + 0.16 * (1.0 - f_pd_retail)
 
     # SME adjustment for corporates: reduce correlation based on turnover
-    # The SME threshold is in EUR, but turnover_m is stored in GBP millions
-    # Convert GBP turnover to EUR: turnover_eur = turnover_gbp / eur_gbp_rate
-    # s_clamped = max(5, min(turnover_eur, 50))
-    # adjustment = 0.04 × (1 - (s_clamped - 5) / 45)
-    # Cast to Float64 first to handle null dtype, then convert to EUR and clip
+    # Cast to Float64 first to handle null dtype
     turnover_float = pl.col("turnover_m").cast(pl.Float64)
-    turnover_eur = turnover_float / eur_gbp_rate
-    s_clamped = turnover_eur.clip(5.0, sme_threshold)
-    sme_adjustment = 0.04 * (1.0 - (s_clamped - 5.0) / 45.0)
 
-    # Corporate with SME adjustment (when turnover_eur < threshold and is corporate)
+    if is_b31:
+        # Basel 3.1: use GBP turnover directly with PRA-mandated thresholds
+        # s = max(4.4, min(turnover_GBP, 44))
+        # adjustment = 0.04 × (1 - (s - 4.4) / 39.6)
+        s_clamped = turnover_float.clip(_B31_SME_FLOOR_M, _B31_SME_THRESHOLD_M)
+        sme_adjustment = 0.04 * (1.0 - (s_clamped - _B31_SME_FLOOR_M) / _B31_SME_RANGE)
+        has_valid_turnover = turnover_float.is_not_null() & turnover_float.is_finite()
+        is_sme = has_valid_turnover & (turnover_float < _B31_SME_THRESHOLD_M)
+    else:
+        # CRR: convert GBP turnover to EUR, then apply EUR thresholds
+        # turnover_eur = turnover_gbp / eur_gbp_rate
+        # s = max(5, min(turnover_eur, 50))
+        # adjustment = 0.04 × (1 - (s - 5) / 45)
+        turnover_eur = turnover_float / eur_gbp_rate
+        s_clamped = turnover_eur.clip(5.0, sme_threshold)
+        sme_adjustment = 0.04 * (1.0 - (s_clamped - 5.0) / 45.0)
+        has_valid_turnover = turnover_eur.is_not_null() & turnover_eur.is_finite()
+        is_sme = has_valid_turnover & (turnover_eur < sme_threshold)
+
+    # Corporate with SME adjustment (when turnover < threshold and is corporate)
     is_corporate = exp_class.str.contains("CORPORATE")
-    # Use is_not_null() and is_finite() to check for valid turnover values
-    # is_finite() returns false for NaN and infinities, handles null dtype gracefully
-    has_valid_turnover = turnover_eur.is_not_null() & turnover_eur.is_finite()
-    is_sme = has_valid_turnover & (turnover_eur < sme_threshold)
 
     r_corporate_with_sme = (
         pl.when(is_corporate & is_sme).then(r_corporate - sme_adjustment).otherwise(r_corporate)
@@ -474,6 +532,7 @@ def _correlation_expr_from_pd(
 def _polars_correlation_expr(
     sme_threshold: float = 50.0,
     eur_gbp_rate: float = 0.8732,
+    is_b31: bool = False,
 ) -> pl.Expr:
     """
     Pure Polars expression for correlation calculation using pd_floored column.
@@ -481,10 +540,13 @@ def _polars_correlation_expr(
     Thin wrapper around ``_correlation_expr_from_pd`` that reads ``pl.col("pd_floored")``.
 
     Args:
-        sme_threshold: SME threshold in EUR millions (default 50.0)
-        eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (default 0.8732)
+        sme_threshold: SME threshold in EUR millions (default 50.0, CRR only)
+        eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (CRR only)
+        is_b31: If True, use GBP-native parameters per PRA PS1/26 Art. 153(4)
     """
-    return _correlation_expr_from_pd(pl.col("pd_floored"), sme_threshold, eur_gbp_rate)
+    return _correlation_expr_from_pd(
+        pl.col("pd_floored"), sme_threshold, eur_gbp_rate, is_b31=is_b31
+    )
 
 
 def _capital_k_expr_from_params(
@@ -633,6 +695,7 @@ def _parametric_irb_risk_weight_expr(
     lgd: float,
     scaling_factor: float = 1.0,
     eur_gbp_rate: float = 0.8732,
+    is_b31: bool = False,
 ) -> pl.Expr:
     """
     Compute IRB risk weight from arbitrary PD expression and fixed LGD.
@@ -649,12 +712,13 @@ def _parametric_irb_risk_weight_expr(
         pd_expr: Polars expression for the substituted PD (e.g. guarantor PD, floored)
         lgd: Fixed LGD value (e.g. F-IRB supervisory unsecured senior)
         scaling_factor: 1.06 for CRR, 1.0 for Basel 3.1
-        eur_gbp_rate: EUR/GBP rate for SME turnover conversion
+        eur_gbp_rate: EUR/GBP rate for SME turnover conversion (CRR only)
+        is_b31: If True, use GBP-native SME parameters per PRA PS1/26 Art. 153(4)
 
     Returns:
         Expression computing risk_weight = K × 12.5 × scaling × MA
     """
-    correlation = _correlation_expr_from_pd(pd_expr, eur_gbp_rate=eur_gbp_rate)
+    correlation = _correlation_expr_from_pd(pd_expr, eur_gbp_rate=eur_gbp_rate, is_b31=is_b31)
     k = _capital_k_expr_from_params(pd_expr, pl.lit(lgd), correlation)
     ma = _maturity_adjustment_expr_from_pd(pd_expr)
 
@@ -750,7 +814,8 @@ def _run_scalar_via_vectorized(
     # Apply the appropriate expression based on output column
     if output_col == "correlation":
         eur_gbp_rate = inputs.get("eur_gbp_rate", 0.8732)
-        expr = _polars_correlation_expr(eur_gbp_rate=float(eur_gbp_rate))
+        is_b31 = bool(inputs.get("is_b31", False))
+        expr = _polars_correlation_expr(eur_gbp_rate=float(eur_gbp_rate), is_b31=is_b31)
     elif output_col == "k":
         expr = _polars_capital_k_expr()
     elif output_col == "maturity_adjustment":
@@ -779,6 +844,7 @@ def calculate_correlation(
     sme_threshold: float = 50.0,
     apply_fi_scalar: bool = False,
     eur_gbp_rate: float = 0.8732,
+    is_b31: bool = False,
 ) -> float:
     """
     Scalar correlation calculation.
@@ -789,11 +855,12 @@ def calculate_correlation(
     Args:
         pd: Probability of default
         exposure_class: Exposure class string
-        turnover_m: Turnover in GBP millions (for SME adjustment, will be converted to EUR)
-        sme_threshold: SME threshold in EUR millions (default 50.0)
+        turnover_m: Turnover in GBP millions (for SME adjustment)
+        sme_threshold: SME threshold in EUR millions (default 50.0, CRR only)
         apply_fi_scalar: Whether to apply 1.25x FI scalar (CRR Art. 153(2))
                         for large/unregulated financial sector entities
-        eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (default 0.8732)
+        eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (CRR only)
+        is_b31: If True, use GBP-native parameters per PRA PS1/26 Art. 153(4)
 
     Returns:
         Asset correlation value
@@ -805,6 +872,7 @@ def calculate_correlation(
             "turnover_m": turnover_m,
             "requires_fi_scalar": apply_fi_scalar,
             "eur_gbp_rate": eur_gbp_rate,
+            "is_b31": is_b31,
         },
         "correlation",
     )

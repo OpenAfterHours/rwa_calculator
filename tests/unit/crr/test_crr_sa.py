@@ -431,6 +431,27 @@ class TestRetailRiskWeights:
 
         assert result["risk_weight"] == pytest.approx(0.75)
 
+    def test_non_regulatory_retail_gets_100pct(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Non-qualifying retail (fails Art. 123 criteria) should get 100% RW.
+
+        Why: Capital understatement — retail exposures above EUR 1m lending group
+        threshold should not benefit from 75% preferential treatment.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1500000"),
+            exposure_class="RETAIL",
+            qualifies_as_retail=False,
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.0)
+        assert result["rwa"] == pytest.approx(1500000)
+
 
 # =============================================================================
 # Real Estate Tests
@@ -1340,7 +1361,7 @@ class TestDefaultedExposureRiskWeights:
         sa_calculator: SACalculator,
         basel31_config: CalculationConfig,
     ) -> None:
-        """CRE20.89: provision >= 50% -> 100% RW."""
+        """Art. 127: provision >= 20% of EAD -> 100% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -1348,7 +1369,7 @@ class TestDefaultedExposureRiskWeights:
             cqs=None,
             is_defaulted=True,
             # provision_allocated=600k, provision_deducted=0
-            # ratio = 600k / (1m + 0) = 60% >= 50%
+            # ratio = 600k / 1m = 60% >= 20%
             provision_allocated=Decimal("600000"),
             provision_deducted=Decimal("0"),
             config=basel31_config,
@@ -1361,7 +1382,7 @@ class TestDefaultedExposureRiskWeights:
         sa_calculator: SACalculator,
         basel31_config: CalculationConfig,
     ) -> None:
-        """CRE20.88: provision < 50% -> 150% RW."""
+        """Art. 127: provision < 20% of EAD -> 150% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),

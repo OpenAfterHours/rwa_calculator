@@ -45,6 +45,8 @@ REAL_ESTATE_TYPES: list[str] = [
 
 OTHER_PHYSICAL_TYPES: list[str] = ["other_physical", "equipment", "inventory", "other"]
 
+COVERED_BOND_TYPES: list[str] = ["covered_bond", "covered_bonds"]
+
 # Subset of real estate types that are NOT eligible financial collateral
 # (used for SA EAD reduction eligibility check)
 NON_ELIGIBLE_RE_TYPES: list[str] = [
@@ -73,6 +75,7 @@ CRR_SUPERVISORY_LGD: dict[str, float] = {
     "real_estate": 0.35,
     "other_physical": 0.40,
     "unsecured": 0.45,
+    "covered_bond": 0.1125,
 }
 
 BASEL31_SUPERVISORY_LGD: dict[str, float] = {
@@ -80,7 +83,9 @@ BASEL31_SUPERVISORY_LGD: dict[str, float] = {
     "receivables": 0.20,
     "real_estate": 0.20,
     "other_physical": 0.25,
-    "unsecured": 0.40,
+    "unsecured": 0.40,  # Art. 161(1)(aa): non-FSE corporates
+    "unsecured_fse": 0.45,  # Art. 161(1)(a): financial sector entities
+    "covered_bond": 0.1125,  # Art. 161(1)(d)
 }
 
 # ---------------------------------------------------------------------------
@@ -123,12 +128,19 @@ def supervisory_lgd_values(is_basel_3_1: bool) -> dict[str, float]:
 
 
 def collateral_lgd_expr(is_basel_3_1: bool) -> pl.Expr:
-    """Build expression mapping collateral_type to supervisory LGD."""
+    """Build expression mapping collateral_type to supervisory LGD.
+
+    Note: The "otherwise" (unsecured) value uses the non-FSE LGD under Basel 3.1.
+    FSE-specific unsecured LGD (45%) is handled at the exposure level in
+    collateral.py, not here — this expression is for per-collateral-type LGDS.
+    """
     lgd = supervisory_lgd_values(is_basel_3_1)
     ct = _coll_type_lower()
     return (
         pl.when(ct.is_in(FINANCIAL_TYPES))
         .then(pl.lit(lgd["financial"]))
+        .when(ct.is_in(COVERED_BOND_TYPES))
+        .then(pl.lit(lgd["covered_bond"]))
         .when(ct.is_in(RECEIVABLE_TYPES))
         .then(pl.lit(lgd["receivables"]))
         .when(ct.is_in(REAL_ESTATE_TYPES))

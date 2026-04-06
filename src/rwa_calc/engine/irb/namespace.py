@@ -126,8 +126,8 @@ class IRBLazyFrame:
         """
         Apply F-IRB supervisory LGD for Foundation IRB exposures.
 
-        CRR (Art. 161): Senior unsecured 45%, subordinated 75%
-        Basel 3.1 (CRE32.9-12): Senior unsecured 40%, subordinated 75%
+        CRR Art. 161(1)(a): Senior unsecured 45%, subordinated 75%
+        Basel 3.1 Art. 161(1)(a)/(aa): FSE senior 45%, non-FSE senior 40%, sub 75%
 
         For F-IRB exposures with collateral, the CRM processor calculates
         the effective LGD (lgd_post_crm) based on collateral type and coverage.
@@ -142,11 +142,12 @@ class IRBLazyFrame:
             LazyFrame with F-IRB LGD applied
         """
         schema = self._lf.collect_schema()
-        has_seniority = "seniority" in schema.names()
-        has_lgd_post_crm = "lgd_post_crm" in schema.names()
+        schema_names = schema.names()
+        has_seniority = "seniority" in schema_names
+        has_lgd_post_crm = "lgd_post_crm" in schema_names
 
         lf = self._lf
-        if "lgd" not in schema.names():
+        if "lgd" not in schema_names:
             lf = lf.with_columns(
                 [
                     pl.lit(None).cast(pl.Float64).alias("lgd"),
@@ -165,6 +166,19 @@ class IRBLazyFrame:
         default_lgd = float(lgd_table["unsecured_senior"])
         sub_lgd = float(lgd_table["subordinated"])
 
+        # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
+        # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
+        has_fse_col = config.is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names
+        if has_fse_col:
+            fse_lgd = float(lgd_table["unsecured_senior_fse"])
+            default_lgd_expr = (
+                pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
+                .then(pl.lit(fse_lgd))
+                .otherwise(pl.lit(default_lgd))
+            )
+        else:
+            default_lgd_expr = pl.lit(default_lgd)
+
         lf = lf.with_columns(
             [
                 pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
@@ -177,7 +191,7 @@ class IRBLazyFrame:
                         .str.contains("sub")
                     )
                     .then(pl.lit(sub_lgd))
-                    .otherwise(pl.lit(default_lgd))
+                    .otherwise(default_lgd_expr)
                 )
                 .otherwise(pl.col("lgd").fill_null(default_lgd))
                 .alias("lgd"),
@@ -239,11 +253,11 @@ class IRBLazyFrame:
                             1.0, 5.0
                         )
                     )
-                    .otherwise(pl.lit(5.0))
+                    .otherwise(pl.lit(2.5))
                     .alias("maturity"),
                 )
             else:
-                exprs.append(pl.lit(5.0).alias("maturity"))
+                exprs.append(pl.lit(2.5).alias("maturity"))
 
         # Turnover for SME correlation adjustment
         if "turnover_m" not in names:
@@ -301,10 +315,11 @@ class IRBLazyFrame:
         as the base for flooring.
 
         CRR: No LGD floor (A-IRB models LGD freely)
-        Basel 3.1 (CRE30.41): Differentiated floors by collateral type:
-            - Unsecured senior: 25%, Subordinated: 50%
+        Basel 3.1: Differentiated floors by collateral type and exposure class:
+            - Corporate unsecured (senior & subordinated): 25% (Art. 161(5))
+            - Retail QRRE unsecured: 50% (Art. 164(4)(b)(i))
             - Financial: 0%, Receivables: 10%
-            - RRE: 5%, CRE: 10%, Other physical: 15%
+            - RRE: 10%, CRE: 10%, Other physical: 15%
 
         LGD floors only apply to A-IRB own-estimate LGDs. F-IRB supervisory
         LGDs are regulatory values and don't need flooring.
@@ -322,12 +337,19 @@ class IRBLazyFrame:
         if config.is_basel_3_1:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
+            has_exposure_class = "exposure_class" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
-                    config, has_seniority=has_seniority
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
                 )
             else:
-                lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+                lgd_floor_expr = _lgd_floor_expression(
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
+                )
 
             # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
             is_airb = (
@@ -363,10 +385,12 @@ class IRBLazyFrame:
         if "requires_fi_scalar" not in schema.names():
             lf = lf.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
-        # Pass EUR/GBP rate from config to convert GBP turnover to EUR for SME adjustment
+        # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
         return lf.with_columns(
-            _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation")
+            _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1).alias(
+                "correlation"
+            )
         )
 
     def calculate_k(self, config: CalculationConfig) -> pl.LazyFrame:
@@ -553,12 +577,19 @@ class IRBLazyFrame:
         if config.is_basel_3_1:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
+            has_exposure_class = "exposure_class" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
-                    config, has_seniority=has_seniority
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
                 )
             else:
-                lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+                lgd_floor_expr = _lgd_floor_expression(
+                    config,
+                    has_seniority=has_seniority,
+                    has_exposure_class=has_exposure_class,
+                )
             is_airb = (
                 pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
             )
@@ -572,6 +603,7 @@ class IRBLazyFrame:
         lf = lf.with_columns(batch1)
 
         # --- Batch 2: Correlation + maturity adjustment (read pd_floored) ---
+        # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
         is_retail = (
             pl.col("exposure_class")
@@ -582,7 +614,9 @@ class IRBLazyFrame:
         )
         lf = lf.with_columns(
             [
-                _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation"),
+                _polars_correlation_expr(
+                    eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1
+                ).alias("correlation"),
                 pl.when(is_retail)
                 .then(pl.lit(1.0))
                 .otherwise(_polars_maturity_adjustment_expr())

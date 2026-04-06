@@ -12,9 +12,16 @@ Modules:
     crr_slotting: CRR specialised lending slotting risk weights
     b31_slotting: Basel 3.1 specialised lending slotting risk weights
     crr_firb_lgd: F-IRB supervisory LGD values
-    crr_equity_rw: Equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
+    crr_equity_rw: CRR equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
+    b31_equity_rw: Basel 3.1 equity risk weights (PRA PS1/26 Art. 133)
 """
 
+from .b31_equity_rw import (
+    B31_SA_EQUITY_RISK_WEIGHTS,
+    get_b31_equity_risk_weights,
+    get_b31_equity_rw_table,
+    lookup_b31_equity_rw,
+)
 from .b31_risk_weights import (
     B31_ADC_PRESOLD_RISK_WEIGHT,
     B31_ADC_RISK_WEIGHT,
@@ -130,11 +137,16 @@ __all__ = [
     "EU_MEMBER_STATES",
     "EU_COUNTRY_DOMESTIC_CURRENCY",
     "build_eu_domestic_currency_expr",
-    # Equity risk weights
+    # Equity risk weights — CRR
     "SA_EQUITY_RISK_WEIGHTS",
     "IRB_SIMPLE_EQUITY_RISK_WEIGHTS",
     "get_equity_risk_weights",
     "lookup_equity_rw",
     "get_equity_rw_table",
     "get_combined_equity_rw_table",
+    # Equity risk weights — Basel 3.1
+    "B31_SA_EQUITY_RISK_WEIGHTS",
+    "get_b31_equity_risk_weights",
+    "lookup_b31_equity_rw",
+    "get_b31_equity_rw_table",
 ]

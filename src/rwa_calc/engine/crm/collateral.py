@@ -27,6 +27,7 @@ import polars as pl
 
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.constants import (
+    MIN_COLLATERALISATION_THRESHOLDS,
     NON_ELIGIBLE_RE_TYPES,
     WATERFALL_ORDER,
     beneficiary_level_expr,
@@ -580,15 +581,28 @@ def _apply_collateral_unified(
         combine_exprs.append(_sum3(f"_e{suffix}").alias(f"_eff_{suffix}_a"))
     exposures = exposures.with_columns(combine_exprs)
 
-    # Min threshold: zero non-financial if raw < 30% of EAD
-    nf_eligible = pl.col("_raw_nf_a") >= 0.30 * pl.col("ead_gross")
+    # Per-type minimum collateralisation thresholds (Art. 230)
+    # Art. 230 requires the threshold to apply per collateral type, not across
+    # the combined non-financial pool.  Each type (real_estate, other_physical)
+    # must independently meet its 30% threshold to be eligible for LGDS
+    # reduction.  Financial, covered_bond, and receivables have no threshold.
+    _type_threshold: dict[str, tuple[float, str]] = {
+        "re": (MIN_COLLATERALISATION_THRESHOLDS["real_estate"], "collateral_re_value"),
+        "op": (
+            MIN_COLLATERALISATION_THRESHOLDS["other_physical"],
+            "collateral_other_physical_value",
+        ),
+    }
     nf_threshold_exprs = []
     for suffix in _wf_suffixes:
-        if suffix == "fin":
-            continue  # Financial collateral is exempt from the threshold
+        if suffix not in _type_threshold:
+            continue  # No threshold for fin/cb/rec
+        threshold, raw_col = _type_threshold[suffix]
+        if threshold <= 0:
+            continue
         col_name = f"_eff_{suffix}_a"
         nf_threshold_exprs.append(
-            pl.when(nf_eligible)
+            pl.when(pl.col(raw_col) >= threshold * pl.col("ead_gross"))
             .then(pl.col(col_name))
             .otherwise(pl.lit(0.0))
             .alias(col_name)

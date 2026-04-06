@@ -181,14 +181,18 @@ class TestSequentialFillBasic:
     ):
         """When total collateral > EAD, sequential fill produces lower LGD than pro-rata.
 
-        Setup: EAD=1000, financial=400 (LGDS=0%), RE=500 (LGDS=20%),
-        other_physical=300 (LGDS=25%). Total eff_secured=1200 > EAD.
+        Setup: EAD=1000.
+        Cash MV=400 → HC=0% → VAH=400, eff=400/1.0=400 (LGDS=0%)
+        RE MV=700 → HC=0% → VAH=700, eff=700/1.40=500 (LGDS=20%)
+        OP MV=500 → HC=40% → VAH=300, eff=300/1.40=214.3 (LGDS=25%)
+        Total eff=1114.3 > EAD=1000.
+
+        Art. 230 per-type 30% threshold: RE=700/1000=70%≥30% ✓, OP=300/1000=30%≥30% ✓.
 
         Sequential: fin absorbs 400, RE absorbs 500, other absorbs 100 → EU=0
         LGD* = (0*400 + 0.20*500 + 0.25*100) / 1000 = 0.125
 
-        Pro-rata would give: fin=333.3, RE=416.7, oth=250 (scaled to 1000)
-        LGD* = (0*333.3 + 0.20*416.7 + 0.25*250) / 1000 = 0.1458
+        Pro-rata would give higher LGD because lower-LGDS fin is underused.
 
         Sequential is lower (more favourable) because financial fully absorbed first.
         """
@@ -211,11 +215,11 @@ class TestSequentialFillBasic:
                 "collateral_reference": ["C1", "C2", "C3"],
                 "collateral_type": ["cash", "real_estate", "other_physical"],
                 "currency": ["GBP", "GBP", "GBP"],
-                "market_value": [400.0, 700.0, 420.0],
-                "value_after_maturity_adj": [400.0, 700.0, 420.0],
-                # RE OC ratio = 1.40 → eff = 700/1.40 = 500
-                # Other OC ratio = 1.40 → eff = 420/1.40 = 300
-                # Financial OC ratio = 1.0 → eff = 400
+                "market_value": [400.0, 700.0, 500.0],
+                "value_after_maturity_adj": [400.0, 700.0, 500.0],
+                # RE HC=0% → VAH=700, OC ratio=1.40 → eff=500
+                # Other HC=40% → VAH=300, OC ratio=1.40 → eff=214.3
+                # Financial HC=0%, OC ratio=1.0 → eff=400
                 "beneficiary_type": ["loan", "loan", "loan"],
                 "beneficiary_reference": ["EXP1", "EXP1", "EXP1"],
                 "maturity_date": [date(2030, 12, 31)] * 3,
@@ -235,10 +239,12 @@ class TestSequentialFillBasic:
     ):
         """When total collateral < EAD, sequential and pro-rata give same result.
 
-        Setup: EAD=1000, RE MV=280, other_physical MV=280.
-        Haircuts: RE 0%, other 40% → VAH: RE=280, other=168.
-        Effectively secured: RE=280/1.40=200, other=168/1.40=120.
-        Total=320 < 1000. Both types fully allocated regardless of ordering.
+        Setup: EAD=1000.
+        RE MV=700 → HC=0% → VAH=700, eff=700/1.40=500 (LGDS=20%)
+        OP MV=700 → HC=40% → VAH=420, eff=420/1.40=300 (LGDS=25%)
+        Total eff=800 < 1000. Both types fully allocated regardless of ordering.
+
+        Art. 230 per-type 30% threshold: RE=700/1000=70%≥30% ✓, OP=420/1000=42%≥30% ✓.
         """
         bundle = _create_bundle(
             exposures_data={
@@ -259,8 +265,8 @@ class TestSequentialFillBasic:
                 "collateral_reference": ["C1", "C2"],
                 "collateral_type": ["real_estate", "other_physical"],
                 "currency": ["GBP", "GBP"],
-                "market_value": [280.0, 280.0],
-                "value_after_maturity_adj": [280.0, 280.0],
+                "market_value": [700.0, 700.0],
+                "value_after_maturity_adj": [700.0, 700.0],
                 "beneficiary_type": ["loan", "loan"],
                 "beneficiary_reference": ["EXP1", "EXP1"],
                 "maturity_date": [date(2030, 12, 31)] * 2,
@@ -271,11 +277,10 @@ class TestSequentialFillBasic:
         row = result.filter(pl.col("exposure_reference") == "EXP1")
         lgd = row["lgd_post_crm"][0]
 
-        # RE: HC=0% → VAH=280, eff=280/1.40=200
-        # Other: HC=40% → VAH=168, eff=168/1.40=120. Total=320, EU=680
-        # lgd_secured = (0.20*200 + 0.25*120) / 320 = 70/320 = 0.21875
-        # lgd_post_crm = 0.21875*320/1000 + 0.40*680/1000 = 0.342
-        assert lgd == pytest.approx(0.342, abs=0.001)
+        # RE: eff=500, Other: eff=300. Total=800, EU=200.
+        # lgd_secured = (0.20*500 + 0.25*300) / 800 = 175/800 = 0.21875
+        # lgd_post_crm = 0.21875*800/1000 + 0.40*200/1000 = 0.175+0.08 = 0.255
+        assert lgd == pytest.approx(0.255, abs=0.001)
 
 
 class TestSequentialFillOrdering:
@@ -679,12 +684,16 @@ class TestSequentialFillAllCategories:
         CB MV=200 → VAH=120, eff=120/1.0=120 (LGDS=11.25%)
         Rec MV=375 → VAH=225, eff=225/1.25=180 (LGDS=20%)
         RE MV=420 → VAH=420, eff=420/1.40=300 (LGDS=20%)
-        Other MV=280 → VAH=168, eff=168/1.40=120 (LGDS=25%)
-        Total eff=920 < 1000, EU=80.
+        Other MV=500 → VAH=300, eff=300/1.40=214.3 (LGDS=25%)
+        Total eff=1014.3 > 1000.
 
-        Sequential: fin=200, cb=120, rec=180, re=300, other=120.
-        lgd_secured = (0+13.5+36+60+30)/920 = 139.5/920 ≈ 0.1516
-        lgd_post_crm = 0.1516*920/1000 + 0.40*80/1000 = 0.1395+0.032 = 0.1715
+        Art. 230 per-type 30% threshold: RE=420/1000=42%≥30% ✓, OP=300/1000=30%≥30% ✓.
+        Receivables have no threshold (0%). Covered bonds exempt. Financial exempt.
+
+        Sequential: fin=200, cb=120, rec=180, re=300, other=200 (capped by EAD).
+        lgd_num = (0+13.5+36+60+50) = 159.5
+        lgd_secured = 159.5/1000 = 0.1595
+        lgd_post_crm = 0.1595 (fully secured, EU=0)
         """
         bundle = _create_bundle(
             exposures_data={
@@ -711,8 +720,8 @@ class TestSequentialFillAllCategories:
                     "other_physical",
                 ],
                 "currency": ["GBP"] * 5,
-                "market_value": [200.0, 200.0, 375.0, 420.0, 280.0],
-                "value_after_maturity_adj": [200.0, 200.0, 375.0, 420.0, 280.0],
+                "market_value": [200.0, 200.0, 375.0, 420.0, 500.0],
+                "value_after_maturity_adj": [200.0, 200.0, 375.0, 420.0, 500.0],
                 "beneficiary_type": ["loan"] * 5,
                 "beneficiary_reference": ["EXP1"] * 5,
                 "maturity_date": [date(2030, 12, 31)] * 5,
@@ -723,7 +732,7 @@ class TestSequentialFillAllCategories:
         row = result.filter(pl.col("exposure_reference") == "EXP1")
         lgd = row["lgd_post_crm"][0]
 
-        assert lgd == pytest.approx(0.1715, abs=0.001)
+        assert lgd == pytest.approx(0.1595, abs=0.001)
 
 
 class TestSequentialFillMultiExposure:
@@ -774,3 +783,347 @@ class TestSequentialFillMultiExposure:
 
         exp2 = result.filter(pl.col("exposure_reference") == "EXP2")
         assert exp2["lgd_post_crm"][0] == pytest.approx(0.20, abs=0.001)
+
+
+# =============================================================================
+# Tests: Art. 230 per-type minimum collateralisation threshold (P1.70)
+# =============================================================================
+
+
+class TestPerTypeMinThreshold:
+    """Art. 230 requires 30% threshold per collateral type, not globally.
+
+    Before P1.70 fix, the 30% threshold was checked against the combined
+    non-financial collateral pool. A mix of small RE + small OP could pass
+    the combined test when each individually failed, allowing ineligible
+    collateral to reduce EAD.
+
+    After P1.70 fix, each type is checked independently:
+    - real_estate: must individually >= 30% of EAD
+    - other_physical: must individually >= 30% of EAD
+    - receivables: no threshold (0%)
+    - covered_bond: no threshold
+    - financial: no threshold
+    """
+
+    def test_mixed_re_op_combined_passes_individually_fails(
+        self, b31_processor: CRMProcessor, firb_b31_config: CalculationConfig
+    ):
+        """Mixed RE + OP: combined 40% > 30% but each type < 30% individually.
+
+        EAD=1000.
+        RE MV=280 → HC=0% → VAH=280, 28% < 30% → FAILS per-type threshold.
+        OP MV=200 → HC=40% → VAH=120, 12% < 30% → FAILS per-type threshold.
+        Combined NF=400, 40% > 30% → would pass OLD global check.
+
+        New behavior: both zeroed. Only unsecured LGD applies.
+        lgd_post_crm = lgd_unsecured = 0.40 (B31 non-FSE)
+        """
+        bundle = _create_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000.0],
+                "ead_gross": [1000.0],
+                "lgd": [None],
+                "pd": [0.01],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+            },
+            collateral_data={
+                "collateral_reference": ["C1", "C2"],
+                "collateral_type": ["real_estate", "other_physical"],
+                "currency": ["GBP", "GBP"],
+                "market_value": [280.0, 200.0],
+                "value_after_maturity_adj": [280.0, 200.0],
+                "beneficiary_type": ["loan", "loan"],
+                "beneficiary_reference": ["EXP1", "EXP1"],
+                "maturity_date": [date(2030, 12, 31)] * 2,
+                "is_eligible_financial_collateral": [False, False],
+            },
+        )
+        result = _run_crm(b31_processor, firb_b31_config, bundle)
+        row = result.filter(pl.col("exposure_reference") == "EXP1")
+        lgd = row["lgd_post_crm"][0]
+
+        # Both types fail 30% individually → fully unsecured
+        assert lgd == pytest.approx(0.40, abs=0.001)
+
+    def test_re_passes_independently_op_fails(
+        self, b31_processor: CRMProcessor, firb_b31_config: CalculationConfig
+    ):
+        """RE passes 30% but OP fails 30% — independent per-type check.
+
+        EAD=1000.
+        RE MV=420 → HC=0% → VAH=420, 42% ≥ 30% ✓, eff=420/1.40=300
+        OP MV=200 → HC=40% → VAH=120, 12% < 30% ✗ → zeroed.
+
+        Only RE contributes.  Total_secured=300, EU=700.
+        lgd_secured = 0.20
+        lgd_post_crm = 0.20*300/1000 + 0.40*700/1000 = 0.06+0.28 = 0.34
+        """
+        bundle = _create_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000.0],
+                "ead_gross": [1000.0],
+                "lgd": [None],
+                "pd": [0.01],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+            },
+            collateral_data={
+                "collateral_reference": ["C1", "C2"],
+                "collateral_type": ["real_estate", "other_physical"],
+                "currency": ["GBP", "GBP"],
+                "market_value": [420.0, 200.0],
+                "value_after_maturity_adj": [420.0, 200.0],
+                "beneficiary_type": ["loan", "loan"],
+                "beneficiary_reference": ["EXP1", "EXP1"],
+                "maturity_date": [date(2030, 12, 31)] * 2,
+                "is_eligible_financial_collateral": [False, False],
+            },
+        )
+        result = _run_crm(b31_processor, firb_b31_config, bundle)
+        row = result.filter(pl.col("exposure_reference") == "EXP1")
+        lgd = row["lgd_post_crm"][0]
+
+        assert lgd == pytest.approx(0.34, abs=0.001)
+
+    def test_receivables_no_threshold(
+        self, b31_processor: CRMProcessor, firb_b31_config: CalculationConfig
+    ):
+        """Receivables have no 30% threshold — even 10% of EAD still contributes.
+
+        EAD=1000.
+        Receivables MV=167 → HC=40% → VAH=100, 10% of EAD, eff=100/1.25=80.
+        Art. 230: receivables C*=0%, so 10% passes.
+
+        Total_secured=80, EU=920.
+        lgd_secured = 0.20 (B31 LGDS for receivables)
+        lgd_post_crm = 0.20*80/1000 + 0.40*920/1000 = 0.016+0.368 = 0.384
+        """
+        bundle = _create_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000.0],
+                "ead_gross": [1000.0],
+                "lgd": [None],
+                "pd": [0.01],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+            },
+            collateral_data={
+                "collateral_reference": ["C1"],
+                "collateral_type": ["receivables"],
+                "currency": ["GBP"],
+                "market_value": [167.0],
+                "value_after_maturity_adj": [167.0],
+                "beneficiary_type": ["loan"],
+                "beneficiary_reference": ["EXP1"],
+                "maturity_date": [date(2030, 12, 31)],
+                "is_eligible_financial_collateral": [False],
+            },
+        )
+        result = _run_crm(b31_processor, firb_b31_config, bundle)
+        row = result.filter(pl.col("exposure_reference") == "EXP1")
+        lgd = row["lgd_post_crm"][0]
+
+        assert lgd == pytest.approx(0.384, abs=0.005)
+
+    def test_covered_bonds_no_threshold(
+        self, b31_processor: CRMProcessor, firb_b31_config: CalculationConfig
+    ):
+        """Covered bonds have no 30% threshold — small values still contribute.
+
+        EAD=1000.
+        Covered bond MV=200 → HC=40% → VAH=120, 12% of EAD, eff=120/1.0=120.
+        No 30% threshold for covered bonds.
+
+        Total_secured=120, EU=880.
+        lgd_secured = 0.1125 (LGDS for covered bonds)
+        lgd_post_crm = 0.1125*120/1000 + 0.40*880/1000 = 0.0135+0.352 = 0.3655
+        """
+        bundle = _create_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000.0],
+                "ead_gross": [1000.0],
+                "lgd": [None],
+                "pd": [0.01],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+            },
+            collateral_data={
+                "collateral_reference": ["C1"],
+                "collateral_type": ["covered_bond"],
+                "currency": ["GBP"],
+                "market_value": [200.0],
+                "value_after_maturity_adj": [200.0],
+                "beneficiary_type": ["loan"],
+                "beneficiary_reference": ["EXP1"],
+                "maturity_date": [date(2030, 12, 31)],
+                "is_eligible_financial_collateral": [False],
+            },
+        )
+        result = _run_crm(b31_processor, firb_b31_config, bundle)
+        row = result.filter(pl.col("exposure_reference") == "EXP1")
+        lgd = row["lgd_post_crm"][0]
+
+        assert lgd == pytest.approx(0.3655, abs=0.005)
+
+    def test_financial_plus_failing_re_only_financial_counts(
+        self, b31_processor: CRMProcessor, firb_b31_config: CalculationConfig
+    ):
+        """Financial collateral unaffected when RE fails per-type threshold.
+
+        EAD=1000.
+        Cash MV=300 → eff=300 (financial, no threshold).
+        RE MV=100 → HC=0% → VAH=100, 10% < 30% → zeroed.
+
+        Only cash contributes. Total_secured=300, EU=700.
+        lgd_secured = 0.0
+        lgd_post_crm = 0.0*300/1000 + 0.40*700/1000 = 0.28
+        """
+        bundle = _create_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000.0],
+                "ead_gross": [1000.0],
+                "lgd": [None],
+                "pd": [0.01],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+            },
+            collateral_data={
+                "collateral_reference": ["C1", "C2"],
+                "collateral_type": ["cash", "real_estate"],
+                "currency": ["GBP", "GBP"],
+                "market_value": [300.0, 100.0],
+                "value_after_maturity_adj": [300.0, 100.0],
+                "beneficiary_type": ["loan", "loan"],
+                "beneficiary_reference": ["EXP1", "EXP1"],
+                "maturity_date": [date(2030, 12, 31)] * 2,
+                "is_eligible_financial_collateral": [True, False],
+            },
+        )
+        result = _run_crm(b31_processor, firb_b31_config, bundle)
+        row = result.filter(pl.col("exposure_reference") == "EXP1")
+        lgd = row["lgd_post_crm"][0]
+
+        assert lgd == pytest.approx(0.28, abs=0.001)
+
+    def test_per_type_threshold_crr_same_behavior(
+        self, crr_processor: CRMProcessor, firb_crr_config: CalculationConfig
+    ):
+        """CRR framework applies the same per-type threshold as B31.
+
+        EAD=1000.
+        RE MV=280 → HC=0% → VAH=280, 28% < 30% → FAILS per-type.
+        OP MV=200 → HC=40% → VAH=120, 12% < 30% → FAILS per-type.
+
+        Both zeroed under CRR too.
+        lgd_post_crm = lgd_unsecured = 0.45 (CRR)
+        """
+        bundle = _create_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000.0],
+                "ead_gross": [1000.0],
+                "lgd": [None],
+                "pd": [0.01],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+            },
+            collateral_data={
+                "collateral_reference": ["C1", "C2"],
+                "collateral_type": ["real_estate", "other_physical"],
+                "currency": ["GBP", "GBP"],
+                "market_value": [280.0, 200.0],
+                "value_after_maturity_adj": [280.0, 200.0],
+                "beneficiary_type": ["loan", "loan"],
+                "beneficiary_reference": ["EXP1", "EXP1"],
+                "maturity_date": [date(2030, 12, 31)] * 2,
+                "is_eligible_financial_collateral": [False, False],
+            },
+        )
+        result = _run_crm(crr_processor, firb_crr_config, bundle)
+        row = result.filter(pl.col("exposure_reference") == "EXP1")
+        lgd = row["lgd_post_crm"][0]
+
+        # CRR unsecured LGD = 0.45
+        assert lgd == pytest.approx(0.45, abs=0.001)
+
+    def test_re_at_exactly_30pct_passes_per_type(
+        self, b31_processor: CRMProcessor, firb_b31_config: CalculationConfig
+    ):
+        """RE at exactly 30% of EAD passes the per-type threshold.
+
+        EAD=1000.
+        RE MV=300 → HC=0% → VAH=300, 30% = 30% → passes.
+        eff=300/1.40=214.3.
+
+        lgd_secured = 0.20. Total_secured=214.3, EU=785.7.
+        lgd_post_crm = 0.20*214.3/1000 + 0.40*785.7/1000 = 0.04286+0.31429 = 0.357
+        """
+        bundle = _create_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000.0],
+                "ead_gross": [1000.0],
+                "lgd": [None],
+                "pd": [0.01],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+            },
+            collateral_data={
+                "collateral_reference": ["C1"],
+                "collateral_type": ["real_estate"],
+                "currency": ["GBP"],
+                "market_value": [300.0],
+                "value_after_maturity_adj": [300.0],
+                "beneficiary_type": ["loan"],
+                "beneficiary_reference": ["EXP1"],
+                "maturity_date": [date(2030, 12, 31)],
+                "is_eligible_financial_collateral": [False],
+            },
+        )
+        result = _run_crm(b31_processor, firb_b31_config, bundle)
+        row = result.filter(pl.col("exposure_reference") == "EXP1")
+        lgd = row["lgd_post_crm"][0]
+
+        assert lgd == pytest.approx(0.357, abs=0.005)

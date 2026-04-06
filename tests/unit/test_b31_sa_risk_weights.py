@@ -678,6 +678,150 @@ class TestB31QRRETransactor:
 
 
 # =============================================================================
+# NON-REGULATORY RETAIL — 100% (PRA Art. 123(3)(c))
+# =============================================================================
+
+
+class TestB31NonRegulatoryRetail:
+    """Basel 3.1 non-regulatory retail — 100% risk weight (Art. 123(3)(c)).
+
+    Why this test matters:
+        Under Basel 3.1, retail exposures that fail Art. 123A qualifying criteria
+        (e.g. lending group exposure exceeds GBP 880k threshold) must receive 100%
+        risk weight instead of the 75% regulatory retail rate. Without this gate,
+        non-qualifying retail gets a 25pp capital understatement.
+
+    References:
+    - PRA PS1/26 Art. 123(3)(c): non-regulatory retail = 100%
+    - PRA PS1/26 Art. 123A: qualifying criteria for regulatory retail
+    """
+
+    def test_non_regulatory_retail_gets_100pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Retail exposure failing Art. 123A criteria should get 100% RW."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1500000"),
+            exposure_class="RETAIL_OTHER",
+            qualifies_as_retail=False,
+            config=b31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.0)
+        assert result["rwa"] == pytest.approx(1500000)
+
+    def test_regulatory_retail_still_gets_75pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Retail exposure meeting Art. 123A criteria should still get 75% RW."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("50000"),
+            exposure_class="RETAIL_OTHER",
+            qualifies_as_retail=True,
+            config=b31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(0.75)
+        assert result["rwa"] == pytest.approx(37500)
+
+    def test_non_regulatory_qrre_gets_100pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-qualifying QRRE should get 100%, not 45% or 75%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["QRRE_NR001"],
+                "ead_final": [200000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [False],
+                "qualifies_as_retail": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(1.0)
+
+    def test_qrre_transactor_qualifying_still_gets_45pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """QRRE transactor that qualifies should still get 45%, not 100%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["QRRE_Q001"],
+                "ead_final": [30000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [True],
+                "qualifies_as_retail": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.45)
+
+    def test_null_qualifies_as_retail_defaults_to_qualifying(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null qualifies_as_retail should default to qualifying (75% RW)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_NULL001"],
+                "ead_final": [80000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "qualifies_as_retail": [None],
+            },
+            schema_overrides={"qualifies_as_retail": pl.Boolean},
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+
+# =============================================================================
 # SA SPECIALISED LENDING — Art. 122A-122B
 # =============================================================================
 

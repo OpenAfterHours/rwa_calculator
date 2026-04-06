@@ -556,7 +556,14 @@ class SACalculator:
                         & pl.col("is_qrre_transactor").fill_null(False)
                     )
                     .then(pl.lit(0.45))
-                    # 10. Retail (non-mortgage): 75% flat
+                    # 9a. Non-regulatory retail: 100% (Art. 123(3)(c))
+                    # Retail exposures failing Art. 123A qualifying criteria
+                    .when(
+                        _uc.str.contains("RETAIL", literal=True)
+                        & (pl.col("qualifies_as_retail").fill_null(True) == False)  # noqa: E712
+                    )
+                    .then(pl.lit(1.0))
+                    # 10. Regulatory retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
                     # 11. Unrated covered bonds: derive from issuer institution RW
@@ -663,7 +670,14 @@ class SACalculator:
                         & _uc.str.contains("SME", literal=True)
                     )
                     .then(pl.lit(1.0))
-                    # 5. Retail (non-mortgage): 75% flat
+                    # 5. Non-regulatory retail: 100% (Art. 123(c))
+                    # Retail exposures failing qualifying criteria
+                    .when(
+                        _uc.str.contains("RETAIL", literal=True)
+                        & (pl.col("qualifies_as_retail").fill_null(True) == False)  # noqa: E712
+                    )
+                    .then(pl.lit(1.0))
+                    # 5a. Regulatory retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
                     # 6. Unrated covered bonds: derive from issuer institution RW

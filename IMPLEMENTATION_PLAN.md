@@ -1,7 +1,7 @@
 # Implementation Plan
 
 **Last updated:** 2026-04-06 (comprehensive audit via PDF + source comparison + multi-agent gap analysis; CRM PDF comparison: gold 0%→20%, main-index equity 15%→20%, LGD* blending formula, 5-band bond haircuts, sequential mixed pool, FX mismatch for guarantees, life insurance RW table, CLN as cash collateral, Rule 4.11 narrowed, CQS 4 gov bond eligibility corrected, overcollateralisation ratios flagged)
-**Current version:** 0.1.69 | **Test suite:** ~2,352 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter) | P1.47 fixed, P1.79/P1.66 verified as false positives.
+**Current version:** 0.1.70 | **Test suite:** ~2,358 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter) | P1.47 fixed, P1.79/P1.66 verified as false positives.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility), P1.25 (non-regulatory retail 100%) [P1.46, P1.42, P1.51, P1.66, P1.79, P1.24 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
 - *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
@@ -341,12 +341,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 8 new/updated unit tests in `test_b31_sa_risk_weights.py`: IG 65% with assessment, non-IG 135%, flag-off default 100%, null IG treated as non-IG, rated corp unaffected, SME unaffected.
 
 ### P1.25 Non-regulatory retail 100% risk weight (Art. 123(3)(c))
-- **Status:** [ ] Not implemented
-- **Impact:** Under Basel 3.1, retail has three tiers: transactor regulatory retail = 45%, non-transactor regulatory retail = 75%, **non-regulatory retail = 100%**. Code at `calculator.py:540-548` has the 45% transactor branch and defaults all other retail to 75%. No 100% path for non-qualifying retail exposures. The `qualifies_as_retail` field exists in the schema but defaults to `True` at `calculator.py:335-336` -- meaning all retail auto-qualifies. Art. 123A defines regulatory retail criteria (SME or natural person, <=GBP 880k, diversified portfolio). Classifier agent confirms: `qualifies_as_retail` defaults to True when no lending group data (`classifier.py:350-363`), masking non-regulatory retail. Cross-ref P6.12.
-- **File:Line:** `engine/sa/calculator.py:540-548,335-336`, `engine/classifier.py:350-363`
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Summary:** Added 100% risk weight path for `qualifies_as_retail=False` retail exposures in BOTH Basel 3.1 and CRR branches of the SA calculator. Added `B31_RETAIL_NON_REGULATORY_RW` constant to `b31_risk_weights.py`. The non-regulatory retail 100% branch is inserted BEFORE the generic 75% retail fallback in the when-chain. Null `qualifies_as_retail` defaults to qualifying (75% RW) — conservative assumption when flag is absent. 6 new unit tests: non-regulatory 100%, regulatory still 75%, non-regulatory QRRE 100%, transactor qualifying still 45%, null defaults to qualifying, CRR non-regulatory 100%.
+- **File:Line:** `engine/sa/calculator.py` (B31 branch ~line 559, CRR branch ~line 670), `data/tables/b31_risk_weights.py:152`
 - **Spec ref:** PRA PS1/26 Art. 123(3)(c), Art. 123A
-- **Fix:** When `qualifies_as_retail=False`, apply 100% instead of 75%. Remove the default `True` for `qualifies_as_retail` or make it schema-driven.
-- **Tests needed:** Unit tests for regulatory vs non-regulatory retail.
 
 ### P1.26 Short-term institution ECRA/SCRA tables (Art. 120/121)
 - **Status:** [ ] Not implemented

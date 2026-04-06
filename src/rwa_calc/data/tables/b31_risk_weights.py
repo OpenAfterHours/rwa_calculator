@@ -149,6 +149,7 @@ B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
 # =============================================================================
 
 B31_RETAIL_TRANSACTOR_RW = Decimal("0.45")  # 45% for QRRE transactors
+B31_RETAIL_NON_REGULATORY_RW = Decimal("1.00")  # 100% for non-regulatory retail (Art. 123(3)(c))
 
 # =============================================================================
 # SA SPECIALISED LENDING — BASEL 3.1 (PRA PS1/26 Art. 122A-122B)

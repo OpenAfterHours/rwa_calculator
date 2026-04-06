@@ -431,6 +431,27 @@ class TestRetailRiskWeights:
 
         assert result["risk_weight"] == pytest.approx(0.75)
 
+    def test_non_regulatory_retail_gets_100pct(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Non-qualifying retail (fails Art. 123 criteria) should get 100% RW.
+
+        Why: Capital understatement — retail exposures above EUR 1m lending group
+        threshold should not benefit from 75% preferential treatment.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1500000"),
+            exposure_class="RETAIL",
+            qualifies_as_retail=False,
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.0)
+        assert result["rwa"] == pytest.approx(1500000)
+
 
 # =============================================================================
 # Real Estate Tests

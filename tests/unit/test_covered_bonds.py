@@ -298,3 +298,24 @@ class TestCoveredBondSABasel31:
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(expected_rw)
+
+    def test_unrated_covered_bond_null_scra_grade(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ):
+        """Unrated covered bond with null SCRA grade defaults to Grade C derivation (100%).
+
+        Why this matters:
+            Missing SCRA data must not produce a favourable covered bond RW.
+            Grade C institution RW (150%) derives to 100% covered bond RW.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="COVERED_BOND",
+            cqs=None,
+            scra_grade=None,
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)

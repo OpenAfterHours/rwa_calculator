@@ -497,10 +497,11 @@ class SACalculator:
                     .then(b31_commercial_rw_expr("_cqs_risk_weight"))
                     # 4. SCRA-based unrated institutions (CRE20.16-21)
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
+                    # Null SCRA grade defaults to Grade C (150%) — conservative treatment
+                    # per PRA PS1/26 Art. 120A (missing data must not produce favourable RW)
                     .when(
                         _uc.str.contains("INSTITUTION", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                        & pl.col("cp_scra_grade").is_not_null()
                     )
                     .then(
                         pl.when(pl.col("cp_scra_grade") == "A")

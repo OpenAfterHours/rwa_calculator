@@ -1,7 +1,7 @@
 # Implementation Plan
 
 **Last updated:** 2026-04-06 (comprehensive audit via PDF + source comparison + multi-agent gap analysis; CRM PDF comparison: gold 0%→20%, main-index equity 15%→20%, LGD* blending formula, 5-band bond haircuts, sequential mixed pool, FX mismatch for guarantees, life insurance RW table, CLN as cash collateral, Rule 4.11 narrowed, CQS 4 gov bond eligibility corrected, overcollateralisation ratios flagged)
-**Current version:** 0.1.70 | **Test suite:** ~2,358 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter) | P1.47 fixed, P1.79/P1.66 verified as false positives.
+**Current version:** 0.1.71 | **Test suite:** ~2,360 collected (1,746 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~43 skipped (benchmarks + xlsxwriter) | P1.47 fixed, P1.79/P1.66 verified as false positives.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* P1.52-P1.55 (PSE/RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
 - *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
@@ -502,12 +502,12 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit test for infrastructure PF with slotting approach.
 
 ### P1.45 SCRA null grade defaults to Grade A (most favourable) instead of Grade C
-- **Status:** [~] Wrong default
-- **Impact:** `sa/calculator.py:562` -- when `cp_scra_grade` is null for an unrated institution exposure, the covered bond derivation chain defaults to 20% (Grade A). This applies the most favourable risk weight to unrated data rather than the most conservative (Grade C = 150%) or emitting a data quality error. Affects any institution or covered bond exposure with missing SCRA data. Classifier agent confirms same finding.
-- **File:Line:** `engine/sa/calculator.py:562`
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Removed `.is_not_null()` guard on SCRA grade check in the B31 SA calculator's unrated institution branch. Null SCRA grade now falls through the inner when-chain to `otherwise(scra_c_rw)` = 150% (Grade C), the most conservative treatment. Previously, null SCRA fell through to the CQS table default of 40% (Grade A equivalent), causing capital understatement on any institution exposure with missing SCRA data. Covered bond path was already correct (null SCRA → 100% = Grade C derivation).
+- **File:Line:** `engine/sa/calculator.py:498-511`
 - **Spec ref:** PRA PS1/26 Art. 120A
-- **Fix:** Default null SCRA to Grade C (150%) and emit a `CalculationError` with severity WARNING.
-- **Tests needed:** Unit test for null SCRA grade behavior.
+- **Tests:** Existing test expectation corrected (40% → 150%). 2 new tests added: null SCRA RWA verification (institution), null SCRA covered bond (100%). Test count: 2360 (was 2358).
 
 ### P1.48 CRR defaulted exposure secured/unsecured split (Art. 127)
 - **Status:** [ ] Not implemented

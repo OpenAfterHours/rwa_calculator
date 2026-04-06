@@ -1347,18 +1347,22 @@ class TestB31SCRAInstitutionWeights:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Unrated institution without SCRA grade uses CQS table default under Basel 3.1."""
+        """Unrated institution without SCRA grade defaults to Grade C (150%) under Basel 3.1.
+
+        Per PRA PS1/26 Art. 120A, missing SCRA data must not produce a favourable
+        risk weight. Null SCRA grade is conservatively treated as Grade C (150%).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=None,
-            scra_grade=None,  # No SCRA grade provided
+            scra_grade=None,  # No SCRA grade → Grade C conservative default
             config=b31_config,
         )
 
-        # Falls through to CQS-based unrated institution → 40% (UK deviation)
-        assert float(result["risk_weight"]) == pytest.approx(0.40)
+        # Null SCRA defaults to Grade C = 150% (conservative, not Grade A = 40%)
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
 
     def test_scra_grade_b_rwa(
         self,
@@ -1377,6 +1381,31 @@ class TestB31SCRAInstitutionWeights:
 
         # 10M × 75% = 7.5M
         assert float(result["rwa"]) == pytest.approx(7_500_000.0)
+
+    def test_scra_none_unrated_institution_rwa(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null SCRA grade produces correct RWA at Grade C (150%).
+
+        Why this matters:
+            An institution without SCRA assessment data must not receive
+            favourable capital treatment. The 150% weight ensures prudent
+            capitalisation until proper SCRA classification is obtained.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade=None,
+            config=b31_config,
+        )
+
+        # 10M × 150% = 15M RWA
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
+        assert float(result["rwa"]) == pytest.approx(15_000_000.0)
 
 
 # =============================================================================

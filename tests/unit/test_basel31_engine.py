@@ -42,7 +42,9 @@ from rwa_calc.engine.irb.formulas import (
     _lgd_floor_expression,
     _lgd_floor_expression_with_collateral,
     _pd_floor_expression,
+    _polars_correlation_expr,
     apply_irb_formulas,
+    calculate_correlation,
 )
 
 # =============================================================================
@@ -2158,3 +2160,197 @@ class TestConfigFactoryMethods:
         )
         assert config.is_crr is False
         assert config.is_basel_3_1 is True
+
+
+# =============================================================================
+# SME CORRELATION ADJUSTMENT — Basel 3.1 GBP-native parameters (Art. 153(4))
+# =============================================================================
+
+
+class TestB31SMECorrelation:
+    """Tests for Basel 3.1 SME correlation using GBP-native thresholds.
+
+    PRA PS1/26 Art. 153(4) mandates GBP parameters for the SME correlation
+    adjustment: threshold = GBP 44m, floor = GBP 4.4m, range = 39.6.
+    Unlike CRR (EUR 50m/5m/45 with FX conversion), B31 operates directly
+    on GBP turnover without currency conversion.
+
+    References:
+    - PRA PS1/26 Art. 153(4)
+    - CRR Art. 153(4) (EUR version)
+    """
+
+    def test_b31_sme_floor_max_adjustment(self) -> None:
+        """At GBP 4.4m floor, SME adjustment should be maximum (0.04).
+
+        Under B31, turnover GBP 4.4m is the floor — anything at or below
+        gets the full 0.04 reduction.
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        floor_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=4.4, is_b31=True
+        )
+        assert base_corr - floor_corr == pytest.approx(0.04, rel=0.01)
+
+    def test_b31_sme_below_floor_also_max_adjustment(self) -> None:
+        """Below GBP 4.4m, adjustment still maxes at 0.04 (clamped to floor)."""
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        below_floor_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=2.0, is_b31=True
+        )
+        assert base_corr - below_floor_corr == pytest.approx(0.04, rel=0.01)
+
+    def test_b31_sme_at_threshold_no_adjustment(self) -> None:
+        """At GBP 44m threshold, SME adjustment should be zero.
+
+        s = max(4.4, min(44, 44)) = 44
+        adjustment = 0.04 × (1 - (44 - 4.4) / 39.6) = 0.04 × 0 = 0
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        threshold_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=44.0, is_b31=True
+        )
+        assert base_corr == pytest.approx(threshold_corr, abs=1e-10)
+
+    def test_b31_sme_above_threshold_no_adjustment(self) -> None:
+        """Above GBP 44m, no SME adjustment (not classified as SME).
+
+        Large corporates with turnover >= GBP 44m get base corporate correlation.
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        large_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=100.0, is_b31=True
+        )
+        assert base_corr == pytest.approx(large_corr)
+
+    def test_b31_sme_midpoint_partial_adjustment(self) -> None:
+        """At GBP 24.2m (midpoint), adjustment should be ~0.02.
+
+        s = max(4.4, min(24.2, 44)) = 24.2
+        adjustment = 0.04 × (1 - (24.2 - 4.4) / 39.6) = 0.04 × 0.5 = 0.02
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        mid_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=24.2, is_b31=True
+        )
+        assert base_corr - mid_corr == pytest.approx(0.02, rel=0.01)
+
+    def test_b31_no_fx_conversion(self) -> None:
+        """B31 uses GBP directly — eur_gbp_rate should not affect the result.
+
+        Passing different eur_gbp_rate values should produce identical B31 results
+        because the formula ignores the FX rate under B31.
+        """
+        corr_default_rate = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.8732,
+            is_b31=True,
+        )
+        corr_different_rate = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.5000,
+            is_b31=True,
+        )
+        assert corr_default_rate == pytest.approx(corr_different_rate)
+
+    def test_crr_uses_fx_conversion(self) -> None:
+        """CRR results should change with different eur_gbp_rate.
+
+        Verifies the CRR path still converts GBP→EUR using the rate.
+        """
+        corr_rate_1 = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.8732,
+            is_b31=False,
+        )
+        corr_rate_2 = calculate_correlation(
+            pd=0.01,
+            exposure_class="CORPORATE",
+            turnover_m=20.0,
+            eur_gbp_rate=0.5000,
+            is_b31=False,
+        )
+        # Different FX rates should produce different results under CRR
+        assert corr_rate_1 != pytest.approx(corr_rate_2, abs=1e-6)
+
+    def test_b31_vs_crr_numerical_difference(self) -> None:
+        """B31 and CRR should produce different results for the same GBP turnover.
+
+        GBP 20m under B31: s = max(4.4, min(20, 44)) = 20
+          adjustment = 0.04 × (1 - (20 - 4.4) / 39.6) = 0.04 × 0.60606...
+
+        GBP 20m under CRR at rate 0.8732: EUR = 20/0.8732 ≈ 22.9m
+          s = max(5, min(22.9, 50)) = 22.9
+          adjustment = 0.04 × (1 - (22.9 - 5) / 45) = 0.04 × 0.60222...
+
+        The adjustments are close but not identical.
+        """
+        b31_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=20.0, is_b31=True
+        )
+        crr_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=20.0, is_b31=False
+        )
+        # Both should have SME adjustment (both are SME-sized)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        assert b31_corr < base_corr
+        assert crr_corr < base_corr
+        # But they should differ slightly
+        assert b31_corr != pytest.approx(crr_corr, abs=1e-6)
+
+    def test_b31_namespace_sme_correlation(self, basel31_config: CalculationConfig) -> None:
+        """B31 namespace path uses GBP-native SME correlation parameters.
+
+        Verifies the full namespace pipeline produces consistent results
+        with the scalar B31 formula.
+        """
+        lf = pl.LazyFrame(
+            {
+                "pd_floored": [0.01, 0.01, 0.01],
+                "exposure_class": ["CORPORATE_SME", "CORPORATE_SME", "CORPORATE"],
+                "turnover_m": [4.4, 24.2, 100.0],
+                "requires_fi_scalar": [False, False, False],
+            }
+        )
+        result = lf.with_columns(
+            _polars_correlation_expr(
+                eur_gbp_rate=float(basel31_config.eur_gbp_rate),
+                is_b31=True,
+            ).alias("correlation")
+        ).collect()
+
+        correlations = result["correlation"].to_list()
+
+        # Floor turnover (4.4m) — max adjustment of 0.04
+        base = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        assert correlations[0] == pytest.approx(base - 0.04, rel=0.01)
+
+        # Midpoint (24.2m) — ~0.02 adjustment
+        assert correlations[1] == pytest.approx(base - 0.02, rel=0.01)
+
+        # Large corp (100m) — no adjustment
+        assert correlations[2] == pytest.approx(base)
+
+    def test_b31_sme_boundary_43_66m_vs_44m(self) -> None:
+        """GBP 43.66m is below B31 threshold (44m) but was above old EUR-converted threshold.
+
+        Under the old code: GBP 43.66m / 0.8732 ≈ EUR 50m → no adjustment.
+        Under B31: GBP 43.66m < GBP 44m → gets SME adjustment.
+        This is the boundary case the fix corrects.
+        """
+        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        boundary_corr = calculate_correlation(
+            pd=0.01, exposure_class="CORPORATE", turnover_m=43.66, is_b31=True
+        )
+        # Should get a small but non-zero adjustment
+        # s = max(4.4, min(43.66, 44)) = 43.66
+        # adjustment = 0.04 × (1 - (43.66 - 4.4) / 39.6) ≈ 0.04 × 0.00859 ≈ 0.000344
+        assert boundary_corr < base_corr
+        expected_adj = 0.04 * (1.0 - (43.66 - 4.4) / 39.6)
+        assert base_corr - boundary_corr == pytest.approx(expected_adj, rel=0.01)

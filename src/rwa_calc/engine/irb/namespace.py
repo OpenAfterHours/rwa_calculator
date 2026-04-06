@@ -387,10 +387,12 @@ class IRBLazyFrame:
         if "requires_fi_scalar" not in schema.names():
             lf = lf.with_columns(pl.lit(False).alias("requires_fi_scalar"))
 
-        # Pass EUR/GBP rate from config to convert GBP turnover to EUR for SME adjustment
+        # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
         return lf.with_columns(
-            _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation")
+            _polars_correlation_expr(
+                eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1
+            ).alias("correlation")
         )
 
     def calculate_k(self, config: CalculationConfig) -> pl.LazyFrame:
@@ -603,6 +605,7 @@ class IRBLazyFrame:
         lf = lf.with_columns(batch1)
 
         # --- Batch 2: Correlation + maturity adjustment (read pd_floored) ---
+        # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
         is_retail = (
             pl.col("exposure_class")
@@ -613,7 +616,9 @@ class IRBLazyFrame:
         )
         lf = lf.with_columns(
             [
-                _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate).alias("correlation"),
+                _polars_correlation_expr(
+                    eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1
+                ).alias("correlation"),
                 pl.when(is_retail)
                 .then(pl.lit(1.0))
                 .otherwise(_polars_maturity_adjustment_expr())

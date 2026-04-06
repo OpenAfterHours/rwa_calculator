@@ -421,9 +421,14 @@ class ExposureClassifier:
 
         Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
         """
-        sme_threshold_gbp = float(
-            config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
-        )
+        if config.is_basel_3_1:
+            # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
+            sme_threshold_gbp = 44_000_000.0
+        else:
+            # CRR: EUR 50m converted to GBP via FX rate
+            sme_threshold_gbp = float(
+                config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
+            )
         qrre_max_limit = float(config.retail_thresholds.qrre_max_limit)
 
         # Conditions reused across expressions (reading Phase 2 columns)
@@ -541,9 +546,14 @@ class ExposureClassifier:
                 ]
             )
 
-        sme_turnover_threshold = float(
-            config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
-        )
+        if config.is_basel_3_1:
+            # PRA PS1/26 Art. 153(4): native GBP 44m threshold
+            sme_turnover_threshold = 44_000_000.0
+        else:
+            # CRR: EUR 50m converted to GBP via FX rate
+            sme_turnover_threshold = float(
+                config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
+            )
 
         # Reclassification eligibility expression (inlined — not a column ref)
         reclassification_expr = (

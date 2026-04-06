@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.32 FSE vs non-FSE F-IRB supervisory LGD implemented)
-**Current version:** 0.1.78 | **Test suite:** ~2,613 collected (~2,094 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~35 skipped | P1.4, P1.32 fixed.
+**Last updated:** 2026-04-06 (P1.34 B31 SME correlation GBP-native parameters implemented)
+**Current version:** 0.1.82 | **Test suite:** ~2,623 collected (~2,126 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~12 skipped | P1.4, P1.32, P1.34 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -440,12 +440,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fixed:** 2026-04-06
 
 ### P1.34 SME correlation adjustment uses EUR parameters under B31 (Art. 153(4))
-- **Status:** [~] EUR-based formula, should be GBP
-- **Impact:** PRA PS1/26 Art. 153(4) uses **GBP directly**: threshold = GBP 44m, minimum = GBP 4.4m, denominator = 39.6. Code at `formulas.py:439` uses `(s_clamped - 5.0) / 45.0` -- the EUR-based formula (EUR 50m threshold, EUR 5m min, denominator 45). Config comment at `config.py:642` says "Not used for Basel 3.1 (GBP thresholds)" for `eur_gbp_rate`, but the IRB formula still uses EUR-style parameters. The classifier also uses EUR thresholds converted via FX rate (`classifier.py:393-394`).
-- **File:Line:** `engine/irb/formulas.py:439`, `contracts/config.py:642`, `engine/classifier.py:393-394`
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** PRA PS1/26 Art. 153(4) mandates GBP-native parameters for the SME correlation adjustment. Previously the code always used the CRR EUR-based formula (EUR 50m/5m/45 with FX conversion). Now:
+  - **Formula** (`_correlation_expr_from_pd`): Added `is_b31` parameter. When True, uses GBP turnover directly: `s = max(4.4, min(turnover_GBP, 44))`, `adjustment = 0.04 × (1 - (s - 4.4) / 39.6)`. CRR path unchanged (EUR conversion via `eur_gbp_rate`).
+  - **All call sites** updated: `_polars_correlation_expr`, `_parametric_irb_risk_weight_expr`, `apply_irb_formulas`, `namespace.calculate_correlation`, `namespace.apply_all_formulas`, `guarantee._apply_b31_parameter_substitution`, and scalar `calculate_correlation` all propagate `is_b31=config.is_basel_3_1`.
+  - **Classifier** (`classifier.py`): SME classification threshold now uses GBP 44m directly under B31 (was EUR 50m × 0.8732 ≈ GBP 43.66m). Both Phase 3 (`_classify_sme_and_retail`) and Phase 4 (`_reclassify_corporate_to_retail`) updated.
+  - **Boundary fix**: Firms with turnover between GBP 43.66m and GBP 44m now correctly classified as SME under B31 (previously missed due to EUR-converted threshold).
+- **File:Line:** `engine/irb/formulas.py:423-490` (correlation expr), `engine/irb/namespace.py:390-394,614-618` (namespace calls), `engine/irb/guarantee.py:296-301` (guarantee call), `engine/classifier.py:424-430,549-555` (classifier thresholds)
 - **Spec ref:** PRA PS1/26 Art. 153(4)
-- **Fix:** When `is_b31=True`, use GBP 44m/4.4m/39.6 in correlation formula. Either add B31-specific parameters to config or branch in `formulas.py`.
-- **Tests needed:** Unit tests for B31 vs CRR SME correlation adjustment.
+- **Tests:** 10 new unit tests in `test_basel31_engine.py` (TestB31SMECorrelation): floor max adjustment, below floor, at threshold, above threshold, midpoint partial, no FX conversion, CRR uses FX, B31 vs CRR numerical difference, namespace integration, boundary 43.66m vs 44m. All existing CRR tests (9 correlation + 4 namespace) unchanged. Test count: 2136 unit (was 2126).
 
 ### P1.35 Slotting expected loss rates (Table B) missing
 - **Status:** [~] Spec fixed; code not implemented

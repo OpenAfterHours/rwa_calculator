@@ -298,6 +298,7 @@ def _apply_parameter_substitution(
             lgd=firb_lgd_senior,
             scaling_factor=scaling_factor,
             eur_gbp_rate=eur_gbp_rate,
+            is_b31=config.is_basel_3_1,
         )
 
         # Select method: IRB guarantor under Basel 3.1 -> parameter substitution,

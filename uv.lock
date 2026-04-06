@@ -984,6 +984,7 @@ dev = [
     { name = "numpy" },
     { name = "pymupdf" },
     { name = "pytest-benchmark" },
+    { name = "ruff" },
     { name = "zensical" },
 ]
 
@@ -1015,6 +1016,7 @@ dev = [
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pymupdf", specifier = ">=1.27.2.2" },
     { name = "pytest-benchmark", specifier = ">=5.2.3" },
+    { name = "ruff", specifier = ">=0.14.14" },
     { name = "zensical", specifier = ">=0.0.29" },
 ]
 

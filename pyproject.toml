@@ -144,4 +144,5 @@ dev = [
     "pytest-benchmark>=5.2.3",
     "numpy>=1.26.0",  # For benchmark data generation only
     "pymupdf>=1.27.2.2",
+    "ruff>=0.14.14",
 ]

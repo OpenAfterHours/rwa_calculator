@@ -13,6 +13,8 @@ These enums provide type safety and self-documenting code for the
 dual-framework support (CRR until Dec 2026, Basel 3.1 from Jan 2027).
 """
 
+from __future__ import annotations
+
 from enum import IntEnum, StrEnum
 
 

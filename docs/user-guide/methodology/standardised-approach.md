@@ -43,118 +43,19 @@ External ratings are mapped to Credit Quality Steps:
 
 ## Risk Weights by Exposure Class
 
-### Sovereign Exposures
+Risk weights depend on the exposure class and the counterparty's Credit Quality Step (CQS). Under Basel 3.1, several classes receive revised weights — notably more granular LTV-based treatment for real estate, reduced weights for CQS 3 corporates, and differentiated retail categories.
 
-Exposures to governments and central banks:
+> **Details:** See [SA Risk Weights](../../specifications/crr/sa-risk-weights.md) for the complete risk weight tables by exposure class, and [Key Differences](../../framework-comparison/key-differences.md) for CRR vs Basel 3.1 changes.
 
-| CQS | Risk Weight |
-|-----|-------------|
-| CQS 1 | 0% |
-| CQS 2 | 20% |
-| CQS 3 | 50% |
-| CQS 4 | 100% |
-| CQS 5 | 100% |
-| CQS 6 | 150% |
-| Unrated | 100% |
+Key points:
 
-!!! note "UK Government"
-    UK Government (HM Treasury) exposures receive 0% risk weight as a CQS 1 sovereign.
-
-### Institution Exposures
-
-Exposures to banks and investment firms:
-
-| CQS | CRR Risk Weight | Basel 3.1 (ECRA) |
-|-----|-----------------|------------------|
-| CQS 1 | 20% | 20% |
-| CQS 2 | 30%* | 30% |
-| CQS 3 | 50% | 50% |
-| CQS 4 | 100% | 100% |
-| CQS 5 | 100% | 100% |
-| CQS 6 | 150% | 150% |
-
-*UK deviation from standard 50% Basel weight
-
-**Unrated Institutions:**
-- CRR: 40% risk weight (with due diligence assessment)
-- Basel 3.1: Use Standardised Credit Risk Assessment (SCRA)
-
-### Corporate Exposures
-
-Exposures to non-financial corporates:
-
-| CQS | CRR | Basel 3.1 |
-|-----|-----|-----------|
-| CQS 1 | 20% | 20% |
-| CQS 2 | 50% | 50% |
-| CQS 3 | 100% | 75% |
-| CQS 4 | 100% | 100% |
-| CQS 5 | 150% | 100% |
-| CQS 6 | 150% | 150% |
-| Unrated | 100% | 100% |
-
-**Corporate SME:**
-- Same risk weights as Corporate
-- SME Supporting Factor may apply (CRR only)
-
-### Retail Exposures
-
-**Residential Mortgages (CRR):**
-
-| Criterion | Risk Weight |
-|-----------|-------------|
-| LTV ≤ 80%, performing | 35% |
-| LTV > 80% | Split treatment: 35% on portion up to 80% LTV, 75% on excess |
-
-**Residential Mortgages (Basel 3.1):**
-
-| LTV | General (Whole Loan) | Income-Producing |
-|-----|----------------------|------------------|
-| ≤ 50% | 20% | 30% |
-| 50-60% | 25% | 35% |
-| 60-70% | 25% | 45% |
-| 70-80% | 30% | 50% |
-| 80-90% | 40% | 60% |
-| 90-100% | 50% | 75% |
-| > 100% | 70% | 105% |
-
-**QRRE (Qualifying Revolving Retail Exposures):**
-
-| Framework | Risk Weight |
-|-----------|-------------|
-| CRR | 75% |
-| Basel 3.1 | 75% |
-
-**Other Retail:**
-
-| Framework | Risk Weight |
-|-----------|-------------|
-| CRR | 75% |
-| Basel 3.1 | 75% |
-
-### Defaulted Exposures
-
-Exposures where the counterparty is in default receive 100% risk weight under SA. Defaulted treatment with provision-coverage differentiation is handled through the IRB approach (see [IRB Approach](irb-approach.md)).
-
-### Equity Exposures
-
-| Type | SA Risk Weight |
-|------|---------------|
-| Central bank | 0% |
-| Listed / Exchange-traded / Government-supported | 100% |
-| Unlisted / Private equity / CIU / Other | 250% |
-| Speculative | 400% |
-
-### Commercial Real Estate
-
-| Scenario | CRR | Basel 3.1 |
-|----------|-----|-----------|
-| Standard | 100% | 100% |
-| CRR preferential (LTV ≤ 50%, income cover) | 50% | N/A |
-| Income-Producing (LTV ≤ 60%) | N/A | 70% |
-| Income-Producing (60-80%) | N/A | 90% |
-| Income-Producing (LTV > 80%) | N/A | 110% |
-| General (LTV ≤ 60%) | N/A | min(60%, Cpty RW) |
+- **Sovereign**: 0% (CQS 1) to 150% (CQS 6); UK Government always 0% in GBP
+- **Institution**: 20%-150% by CQS; Basel 3.1 introduces ECRA/SCRA for unrated
+- **Corporate**: 20%-150% by CQS; Basel 3.1 reduces CQS 3 from 100% to 75%
+- **Retail**: CRR flat 75%; Basel 3.1 differentiates (45% transactor, 35% payroll/pension)
+- **Residential RE**: CRR flat 35%; Basel 3.1 uses LTV-based bands (20%-105%)
+- **Defaulted**: 100%-150% based on provision coverage
+- **Equity**: CRR 100%; Basel 3.1 250%/400%
 
 ## EAD Calculation
 
@@ -194,59 +95,9 @@ The `risk_type` column determines the CCF for off-balance sheet exposures:
 
 ## Credit Risk Mitigation
 
-SA allows several CRM techniques:
+SA allows several CRM techniques — financial collateral (simple and comprehensive methods), guarantees (substitution approach), and provisions (drawn-first deduction).
 
-### Financial Collateral Simple Method
-
-```python
-# Reduce RW based on collateral
-Collateral_RW = Risk_Weight_of_Collateral_Issuer
-
-# Apply lower of exposure RW or collateral RW
-Effective_RW = min(Exposure_RW, Collateral_RW)
-```
-
-### Financial Collateral Comprehensive Method
-
-```python
-# Calculate adjusted values
-E_adjusted = Exposure × (1 + H_e)  # Exposure haircut
-C_adjusted = Collateral × (1 - H_c - H_fx)  # Collateral haircut
-
-# Net exposure
-E_star = max(0, E_adjusted - C_adjusted)
-
-# RWA on net exposure
-RWA = E_star × Risk_Weight
-```
-
-**Supervisory Haircuts:**
-
-| Collateral Type | Haircut |
-|-----------------|---------|
-| Cash (same currency) | 0% |
-| Government bonds ≤1yr | 0.5% |
-| Government bonds 1-5yr | 2% |
-| Government bonds >5yr | 4% |
-| Corporate bonds AAA-AA ≤1yr | 1% |
-| Corporate bonds AAA-AA 1-5yr | 4% |
-| Corporate bonds AAA-AA >5yr | 8% |
-| Main index equity | 15% |
-| Other equity | 25% |
-| **Currency mismatch add-on** | **+8%** |
-
-### Guarantees (Substitution Approach)
-
-```python
-# Guaranteed portion treated as exposure to guarantor
-Guaranteed_RWA = Guaranteed_Amount × Guarantor_RW
-
-# Unguaranteed portion at counterparty RW
-Unguaranteed_RWA = (EAD - Guaranteed_Amount) × Counterparty_RW
-
-# Total RWA
-RWA = Guaranteed_RWA + Unguaranteed_RWA
-```
+> **Details:** See [Credit Risk Mitigation](crm.md) for the full treatment including haircut tables, overcollateralisation ratios, maturity mismatch adjustments, and worked examples.
 
 ## Supporting Factors (CRR Only)
 

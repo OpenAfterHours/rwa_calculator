@@ -91,25 +91,9 @@ This documentation serves multiple audiences:
 
 ## Calculation Pipeline Overview
 
-The RWA calculator processes exposures through a well-defined pipeline:
+The RWA calculator processes exposures through a six-stage pipeline: Load → Hierarchy → Classify → CRM → Calculate → Aggregate.
 
-```mermaid
-graph LR
-    A[Raw Data] --> B[Loader]
-    B --> C[Hierarchy Resolver]
-    C --> D[Classifier]
-    D --> E[CRM Processor]
-    E --> F{Approach}
-    F -->|SA| G[SA Calculator]
-    F -->|IRB| H[IRB Calculator]
-    F -->|Slotting| I[Slotting Calculator]
-    F -->|Equity| L[Equity Calculator]
-    G --> J[Aggregator]
-    H --> J
-    I --> J
-    L --> J
-    J --> K[Final RWA]
-```
+> **Details:** See [Pipeline Architecture](architecture/pipeline.md) for the full stage-by-stage walkthrough with diagrams.
 
 ## Supported Calculations
 

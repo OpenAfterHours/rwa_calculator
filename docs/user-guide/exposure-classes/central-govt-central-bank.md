@@ -16,53 +16,15 @@ Sovereign exposures include:
 
 ## Risk Weights (SA)
 
-### External Rating Approach
+Sovereign risk weights range from 0% (CQS 1) to 150% (CQS 6), with 100% for unrated. UK Government exposures in GBP always receive 0%.
 
-| CQS | S&P/Fitch | Moody's | Risk Weight |
-|-----|-----------|---------|-------------|
-| CQS 1 | AAA to AA- | Aaa to Aa3 | **0%** |
-| CQS 2 | A+ to A- | A1 to A3 | **20%** |
-| CQS 3 | BBB+ to BBB- | Baa1 to Baa3 | **50%** |
-| CQS 4 | BB+ to BB- | Ba1 to Ba3 | **100%** |
-| CQS 5 | B+ to B- | B1 to B3 | **100%** |
-| CQS 6 | CCC+ and below | Caa1 and below | **150%** |
-| Unrated | - | - | **100%** |
-
-### Preferential Treatment
-
-Certain sovereigns receive preferential risk weights:
-
-| Sovereign | Treatment | Risk Weight |
-|-----------|-----------|-------------|
-| UK Government | Domestic sovereign | 0% |
-| Other G10 | Reciprocal treatment | Per rating |
-| Non-OECD Unrated | Default weight | 100% |
+> **Details:** See [SA Risk Weights](../../specifications/crr/sa-risk-weights.md) for the complete risk weight tables by CQS.
 
 ## IRB Treatment
 
-### F-IRB Parameters
+Sovereign exposures use the corporate correlation formula. F-IRB uses supervisory LGD (45% senior); A-IRB uses bank estimates.
 
-| Parameter | Value |
-|-----------|-------|
-| PD | Bank estimate (floor 0.03%) |
-| LGD | Supervisory 45% |
-| M | Effective maturity |
-
-### A-IRB Parameters
-
-| Parameter | Value |
-|-----------|-------|
-| PD | Bank estimate (floor 0.03% CRR / 0.05% Basel 3.1) |
-| LGD | Bank estimate |
-| EAD | Bank estimate |
-
-### Correlation
-
-Sovereign correlation uses the corporate formula:
-```python
-R = 0.12 × (1 - exp(-50 × PD)) / (1 - exp(-50)) +
-    0.24 × [1 - (1 - exp(-50 × PD)) / (1 - exp(-50))]
-```
+> **Details:** See [IRB Approach](../methodology/irb-approach.md) for the full formula, correlation, and maturity adjustment details. See [Key Differences](../../framework-comparison/key-differences.md#irb-approach-restrictions) for Basel 3.1 restrictions (sovereigns are mandatorily SA).
 
 ## Domestic Sovereign
 
@@ -200,13 +162,9 @@ if guarantee.type == "SOVEREIGN" and guarantee.cqs <= 3:
 
 ### Sovereign Collateral
 
-Government bonds as collateral receive low haircuts:
+Government bonds as collateral receive low haircuts (0.5%–4% for CQS 1 depending on residual maturity).
 
-| Collateral (CQS 1 Sovereign) | Maturity | Haircut |
-|------------------------------|----------|---------|
-| Government bonds | ≤1 year | 0.5% |
-| Government bonds | 1-5 years | 2% |
-| Government bonds | >5 years | 4% |
+> **Details:** See [Credit Risk Mitigation](../methodology/crm.md) for the complete haircut tables.
 
 ## Calculation Example
 

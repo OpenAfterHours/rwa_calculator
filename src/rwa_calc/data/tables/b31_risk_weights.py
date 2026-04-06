@@ -137,10 +137,20 @@ B31_CORPORATE_SME_RW = Decimal("0.85")
 # Rated institutions use ECRA (same as CRR Art. 120-121).
 # =============================================================================
 
+# Long-term (>3m residual maturity) SCRA risk weights
 B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = {
-    "A": Decimal("0.40"),  # CET1 > 14%, Leverage > 5%, meets all requirements
-    "B": Decimal("0.75"),  # CET1 > 5.5%, Leverage > 3%, meets minimums
-    "C": Decimal("1.50"),  # Below minimum requirements
+    "A": Decimal("0.40"),  # Meets all minimum requirements + buffers (CRE20.18)
+    "A_ENHANCED": Decimal("0.30"),  # CET1 >= 14% AND leverage >= 5% (CRE20.19)
+    "B": Decimal("0.75"),  # CET1 > 5.5%, Leverage > 3%, meets minimums (CRE20.20)
+    "C": Decimal("1.50"),  # Below minimum requirements (CRE20.21)
+}
+
+# Short-term (≤3m residual maturity) SCRA risk weights (PRA PS1/26 Art. 120A)
+B31_SCRA_SHORT_TERM_RISK_WEIGHTS: dict[str, Decimal] = {
+    "A": Decimal("0.20"),  # Grade A short-term (CRE20.18)
+    "A_ENHANCED": Decimal("0.20"),  # Enhanced A short-term — same as A (CRE20.19)
+    "B": Decimal("0.50"),  # Grade B short-term (CRE20.20)
+    "C": Decimal("1.50"),  # Grade C unchanged by maturity (CRE20.21)
 }
 
 # =============================================================================

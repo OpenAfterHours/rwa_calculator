@@ -297,13 +297,18 @@ class Seniority(StrEnum):
 class SCRAGrade(StrEnum):
     """
     Standardised Credit Risk Assessment Approach (SCRA) grades (Basel 3.1 CRE20.16-21).
+
+    Short-term (≤3m) risk weights differ from long-term — see B31_SCRA_SHORT_TERM_RISK_WEIGHTS.
     """
 
     A = "A"
-    """CET1 > 14%, Leverage > 5%, meets all regulatory requirements → 40% RW"""
+    """Meets all minimum requirements + buffers → 40% RW (>3m), 20% (≤3m)"""
+
+    A_ENHANCED = "A_ENHANCED"
+    """CET1 >= 14% AND leverage ratio >= 5% → 30% RW (>3m), 20% (≤3m) (CRE20.19)"""
 
     B = "B"
-    """CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW"""
+    """CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW (>3m), 50% (≤3m)"""
 
     C = "C"
     """Below minimum regulatory requirements → 150% RW"""

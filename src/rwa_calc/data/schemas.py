@@ -162,7 +162,7 @@ COUNTERPARTY_SCHEMA = {
     "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
     "is_financial_sector_entity": pl.Boolean,  # All FSEs → F-IRB only under B31 (Art. 147A(1)(e))
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
-    "scra_grade": pl.String,  # SCRA grade for unrated institutions: "A"/"B"/"C" (Basel 3.1 CRE20.16-21)
+    "scra_grade": pl.String,  # SCRA grade: "A"/"A_ENHANCED"/"B"/"C" (Basel 3.1 CRE20.16-21)
     "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
     # CCP fields (CRR Art. 300-311, CRE54.14-15)
     "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
@@ -494,6 +494,8 @@ VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent"}
 
 VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
+VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
+
 VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
@@ -515,6 +517,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
+        "scra_grade": VALID_SCRA_GRADES,
     },
     "collateral": {
         "collateral_type": VALID_COLLATERAL_TYPES,

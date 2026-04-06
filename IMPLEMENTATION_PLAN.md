@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.78 guarantee FX mismatch haircut implemented)
-**Current version:** 0.1.84 | **Test suite:** ~2,645 collected (~2,140 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.32, P1.34, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.12 SCRA enhanced Grade A + short-term maturity implemented)
+**Current version:** 0.1.85 | **Test suite:** ~2,662 collected (~2,157 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.12, P1.32, P1.34, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -14,7 +14,7 @@
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* P1.71 (CRR equity unlisted 250% vs spec 150%, PE 250% vs spec 190%)
-- *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.12 (SCRA enhanced/short-term), P1.29 (40% CCF category), P1.30 (CRM method selection)
+- *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.29 (40% CCF category), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -251,12 +251,23 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for maturity mismatch with varying exposure maturities.
 
 ### P1.12 SCRA enhanced sub-grade and short-term maturity weights (Basel 3.1)
-- **Status:** [ ] Not implemented
-- **Impact:** Basel 3.1 SCRA has four rows: Grade A (40%), **Grade A enhanced (30%, CET1 >= 14% AND leverage >= 5%)**, Grade B (75%), Grade C (150%). Short-term (<=3m) weights also differ: Grade A = 20%, Grade B = 50%. `SCRAGrade` enum (`domain/enums.py:295`) only has A/B/C -- no enhanced sub-grade. `B31_SCRA_RISK_WEIGHTS` dict (`b31_risk_weights.py:133-137`) has three entries. No <=3m maturity fork anywhere for SCRA. The SA calculator (`calculator.py:504-509`) tests A/B/default-C with no enhanced-A path. Data tables agent confirms no short-term institution CQS table exists for Art. 121(2) <=3m domestic currency.
-- **File:Line:** `domain/enums.py:295` (SCRAGrade), `engine/sa/b31_risk_weights.py:133-137`, `engine/sa/calculator.py:504-509`
-- **Spec ref:** `docs/specifications/crr/sa-risk-weights.md` (SCRA table), PRA PS1/26 Art. 120A
-- **Fix:** Add `A_ENHANCED` to `SCRAGrade` enum. Add short-term SCRA weights to `b31_risk_weights.py`. Fork SA calculator on residual maturity <=3m for institution exposures.
-- **Tests needed:** Unit tests for enhanced-A and short-term maturity SCRA paths.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Basel 3.1 SCRA now fully implements four grades and short-term maturity fork:
+  - **A_ENHANCED** (CET1 >= 14% AND leverage >= 5%): 30% long-term, 20% short-term (CRE20.19)
+  - **A** (meets all requirements + buffers): 40% long-term, 20% short-term (CRE20.18)
+  - **B** (meets minimums): 75% long-term, 50% short-term (CRE20.20)
+  - **C** (below minimums): 150% for both maturities (CRE20.21)
+  - Short-term threshold: residual maturity ≤ 0.25 years (3 months)
+  - Null maturity defaults to 1.0 year (conservative: long-term rates)
+  - Null SCRA grade defaults to Grade C (150%) for both maturities
+  - Covered bonds: A_ENHANCED issuer derives 20% (same as standard A)
+  - CRR path unchanged (no SCRA, unrated institution → 40%)
+  - `VALID_SCRA_GRADES` added to `COLUMN_VALUE_CONSTRAINTS` for input validation
+- **File:Line:** `domain/enums.py:297-315` (SCRAGrade with A_ENHANCED), `data/tables/b31_risk_weights.py:140-155` (both dicts), `engine/sa/calculator.py:595-623` (short-term + long-term when-chains), `data/schemas.py:165,497,518` (schema + constraints)
+- **Spec ref:** PRA PS1/26 Art. 120A, CRE20.16-21
+- **Tests:** 17 new unit tests: 2 constant tests (long-term + short-term dicts), 1 additional parametrized grade (A_ENHANCED in existing test), 4 enhanced-A tests (30% RW, vs standard A, rated ECRA precedence, covered bond derivation), 8 short-term tests (parametrized 4 grades, Grade A RWA, boundary 3m exact, boundary just over 3m, null maturity default, rated ECRA precedence, null SCRA default, CRR no short-term), 2 existing tests updated (parametrized + constant). All 2662 tests pass. Test count: 2662 (was 2645).
+- **Note:** Short-term ECRA (rated institution ≤3m, Art. 120 Tables 4/4A) is NOT yet implemented — tracked separately as P1.26.
 
 ### P1.13 CRE general "other counterparties" formula (Art. 124H)
 - **Status:** [ ] Not implemented

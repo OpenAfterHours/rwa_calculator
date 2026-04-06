@@ -58,6 +58,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_DEFAULTED_RW_HIGH_PROVISION,
     B31_DEFAULTED_RW_LOW_PROVISION,
     B31_SCRA_RISK_WEIGHTS,
+    B31_SCRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
     b31_adc_rw_expr,
     b31_commercial_rw_expr,
@@ -454,9 +455,16 @@ class SACalculator:
             )
 
             # Basel 3.1 SCRA risk weights for unrated institutions (CRE20.16-21)
+            # Long-term (>3m)
             scra_a_rw = float(B31_SCRA_RISK_WEIGHTS["A"])
+            scra_ae_rw = float(B31_SCRA_RISK_WEIGHTS["A_ENHANCED"])
             scra_b_rw = float(B31_SCRA_RISK_WEIGHTS["B"])
             scra_c_rw = float(B31_SCRA_RISK_WEIGHTS["C"])
+            # Short-term (≤3m)
+            scra_st_a_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A"])
+            scra_st_ae_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A_ENHANCED"])
+            scra_st_b_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["B"])
+            scra_st_c_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"])
             inv_grade_rw = float(B31_CORPORATE_INVESTMENT_GRADE_RW)
             non_inv_grade_rw = float(B31_CORPORATE_NON_INVESTMENT_GRADE_RW)
             sme_corp_rw = float(B31_CORPORATE_SME_RW)
@@ -588,12 +596,28 @@ class SACalculator:
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
                     # Null SCRA grade defaults to Grade C (150%) — conservative treatment
                     # per PRA PS1/26 Art. 120A (missing data must not produce favourable RW)
+                    # Short-term (≤3m): Grade A/A_ENHANCED → 20%, Grade B → 50%, C → 150%
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                        & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                    )
+                    .then(
+                        pl.when(pl.col("cp_scra_grade").is_in(["A", "A_ENHANCED"]))
+                        .then(pl.lit(scra_st_a_rw))
+                        .when(pl.col("cp_scra_grade") == "B")
+                        .then(pl.lit(scra_st_b_rw))
+                        .otherwise(pl.lit(scra_st_c_rw))
+                    )
+                    # 4d. SCRA long-term unrated institutions (>3m) (CRE20.16-21)
                     .when(
                         _uc.str.contains("INSTITUTION", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
                     .then(
-                        pl.when(pl.col("cp_scra_grade") == "A")
+                        pl.when(pl.col("cp_scra_grade") == "A_ENHANCED")
+                        .then(pl.lit(scra_ae_rw))
+                        .when(pl.col("cp_scra_grade") == "A")
                         .then(pl.lit(scra_a_rw))
                         .when(pl.col("cp_scra_grade") == "B")
                         .then(pl.lit(scra_b_rw))
@@ -657,13 +681,13 @@ class SACalculator:
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
                     # 11. Unrated covered bonds: derive from issuer institution RW
-                    # (Art. 129(5)) — SCRA grade A=40%→20%, B=75%→35%, C=150%→100%
+                    # (Art. 129(5)) — SCRA A/A_ENHANCED→20%, B→35%, C/null→100%
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
                     .then(
-                        pl.when(pl.col("cp_scra_grade") == "A")
+                        pl.when(pl.col("cp_scra_grade").is_in(["A", "A_ENHANCED"]))
                         .then(pl.lit(0.20))
                         .when(pl.col("cp_scra_grade") == "B")
                         .then(pl.lit(0.35))

@@ -56,6 +56,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_RESIDENTIAL_GENERAL_SECURED_RW,
     B31_RESIDENTIAL_INCOME_LTV_BANDS,
     B31_SCRA_RISK_WEIGHTS,
+    B31_SCRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
     get_b31_combined_cqs_risk_weights,
     lookup_b31_commercial_rw,
@@ -1132,10 +1133,18 @@ class TestTableDataIntegrity:
         assert B31_CORPORATE_RISK_WEIGHTS[None] == Decimal("1.00")
 
     def test_scra_risk_weight_values(self) -> None:
-        """SCRA risk weight constants should be correct."""
+        """SCRA long-term risk weight constants should be correct."""
         assert B31_SCRA_RISK_WEIGHTS["A"] == Decimal("0.40")
+        assert B31_SCRA_RISK_WEIGHTS["A_ENHANCED"] == Decimal("0.30")
         assert B31_SCRA_RISK_WEIGHTS["B"] == Decimal("0.75")
         assert B31_SCRA_RISK_WEIGHTS["C"] == Decimal("1.50")
+
+    def test_scra_short_term_risk_weight_values(self) -> None:
+        """SCRA short-term (≤3m) risk weight constants should be correct (CRE20.17)."""
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A"] == Decimal("0.20")
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A_ENHANCED"] == Decimal("0.20")
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["B"] == Decimal("0.50")
+        assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"] == Decimal("1.50")
 
     def test_investment_grade_rw(self) -> None:
         """Investment-grade corporate constant should be 65%."""
@@ -1282,10 +1291,11 @@ class TestB31SCRAInstitutionWeights:
         ("scra_grade", "expected_rw"),
         [
             ("A", 0.40),  # Well-capitalised: same as CRR default
+            ("A_ENHANCED", 0.30),  # CET1 >= 14% AND leverage >= 5% (CRE20.19)
             ("B", 0.75),  # Meets minimums: higher than CRR default
             ("C", 1.50),  # Below minimums: much higher
         ],
-        ids=["grade_A", "grade_B", "grade_C"],
+        ids=["grade_A", "grade_A_enhanced", "grade_B", "grade_C"],
     )
     def test_scra_grade_risk_weight(
         self,
@@ -1406,6 +1416,287 @@ class TestB31SCRAInstitutionWeights:
         # 10M × 150% = 15M RWA
         assert float(result["risk_weight"]) == pytest.approx(1.50)
         assert float(result["rwa"]) == pytest.approx(15_000_000.0)
+
+
+# =============================================================================
+# SCRA ENHANCED GRADE A (CRE20.19)
+# =============================================================================
+
+
+class TestB31SCRAEnhancedGradeA:
+    """Basel 3.1 SCRA enhanced Grade A: 30% for CET1 >= 14% AND leverage >= 5%.
+
+    PRA PS1/26 Art. 120A / CRE20.19 introduces a sub-grade of SCRA Grade A
+    for institutions that exceed both a 14% CET1 ratio and a 5% leverage ratio.
+    These well-capitalised institutions receive a preferential 30% risk weight
+    (vs standard Grade A 40%).
+
+    Why this matters:
+        The 10pp reduction (40% → 30%) for the most strongly capitalised
+        counterparties incentivises lending to well-capitalised institutions
+        and aligns interbank capital charges with counterparty strength.
+    """
+
+    def test_enhanced_a_rw_30_percent(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Enhanced Grade A institution gets 30% RW (vs 40% for standard A)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.30)
+        assert float(result["rwa"]) == pytest.approx(3_000_000.0)
+
+    def test_enhanced_a_vs_standard_a(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Enhanced Grade A produces lower RWA than standard Grade A."""
+        enhanced = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+        standard = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            config=b31_config,
+        )
+
+        assert float(enhanced["rwa"]) < float(standard["rwa"])
+
+    def test_enhanced_a_rated_institution_uses_ecra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Rated institution ignores SCRA enhanced grade — ECRA (CQS) takes precedence."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=2,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+
+        # ECRA CQS 2 → 30% (UK deviation), not SCRA enhanced A 30%
+        assert float(result["risk_weight"]) == pytest.approx(0.30)
+
+    def test_enhanced_a_covered_bond_derives_20pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Unrated covered bond with enhanced-A issuer derives 20% RW (same as standard A)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="covered_bond",
+            cqs=None,
+            scra_grade="A_ENHANCED",
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+
+# =============================================================================
+# SCRA SHORT-TERM MATURITY (CRE20.17)
+# =============================================================================
+
+
+class TestB31SCRAShortTermMaturity:
+    """Basel 3.1 SCRA short-term (≤3m) risk weights for unrated institutions.
+
+    PRA PS1/26 Art. 120A / CRE20.17 provides reduced risk weights for
+    short-term (residual maturity ≤ 3 months) unrated institution exposures:
+    - Grade A / A Enhanced: 20% (vs 40%/30% long-term)
+    - Grade B: 50% (vs 75% long-term)
+    - Grade C: 150% (unchanged)
+
+    Why this matters:
+        Short-term interbank exposures carry less risk due to their limited
+        duration. The reduced weights lower capital charges for overnight,
+        money market, and short-dated placements to well-capitalised banks.
+    """
+
+    @pytest.mark.parametrize(
+        ("scra_grade", "expected_rw"),
+        [
+            ("A", 0.20),
+            ("A_ENHANCED", 0.20),
+            ("B", 0.50),
+            ("C", 1.50),
+        ],
+        ids=["grade_A_20pct", "grade_A_enhanced_20pct", "grade_B_50pct", "grade_C_150pct"],
+    )
+    def test_short_term_scra_risk_weight(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        scra_grade: str,
+        expected_rw: float,
+    ) -> None:
+        """Short-term (≤3m) unrated institution gets reduced SCRA RW."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade=scra_grade,
+            residual_maturity_years=0.20,  # ~2.4 months, below 3m threshold
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(expected_rw)
+
+    def test_short_term_grade_a_rwa(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Short-term Grade A: 10M × 20% = 2M RWA."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,  # ~5 weeks
+            config=b31_config,
+        )
+
+        assert float(result["rwa"]) == pytest.approx(2_000_000.0)
+
+    def test_short_term_boundary_exactly_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Exactly 3 months (0.25y) should qualify as short-term."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.25,  # Exactly 3 months
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_long_term_boundary_just_over_3m(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Just over 3 months should get long-term rates."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.26,  # Just over 3 months
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+    def test_null_maturity_defaults_to_long_term(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null residual maturity defaults to long-term (conservative).
+
+        When maturity data is missing, the fill_null(1.0) default ensures
+        the exposure is treated as long-term, preventing accidental
+        capital reduction from missing data.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=None,  # Missing → defaults to 1.0y → long-term
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+    def test_short_term_rated_institution_uses_ecra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Short-term rated institution still uses ECRA, not SCRA short-term table."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=1,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        # ECRA CQS 1 → 20%, not SCRA short-term A → 20% (same value but different path)
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_short_term_null_scra_defaults_grade_c(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Short-term with null SCRA still defaults to Grade C (150%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade=None,
+            residual_maturity_years=0.10,
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
+
+    def test_short_term_not_applied_under_crr(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no SCRA short-term treatment — unrated institution gets 40%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            config=crr_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
 
 
 # =============================================================================

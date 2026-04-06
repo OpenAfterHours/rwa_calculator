@@ -8,6 +8,7 @@ The development guide covers:
 
 - [**Testing Guide**](testing.md) - Running tests, writing tests, test fixtures
 - [**Workbooks & UI**](workbooks.md) - Marimo workbooks and interactive UI applications
+- [**Scripts & Automation**](scripts.md) - Developer scripts for setup, deployment, and test data
 - [**Benchmark Tests**](benchmarks.md) - Performance and scale testing (10K-10M)
 - [**Adding Features**](extending.md) - Extending the calculator
 - [**Code Style**](code-style.md) - Coding standards and conventions

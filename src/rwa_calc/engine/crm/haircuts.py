@@ -8,10 +8,13 @@ Key responsibilities:
 - Apply supervisory haircuts by collateral type, CQS, and maturity
 - Framework-conditional logic: CRR (Art. 224) vs Basel 3.1 (CRE22.52-53)
 - FX mismatch haircuts (8%, same under both frameworks)
-- Maturity mismatch adjustments (CRR Art. 238)
+- Maturity mismatch adjustments (CRR Art. 237-238)
+- Art. 237(2) ineligibility: original maturity <1yr, 1-day M floor exposures
 
 References:
     CRR Art. 224: Supervisory haircuts (3 maturity bands)
+    CRR Art. 237: Maturity mismatch — eligibility conditions
+    CRR Art. 238: Maturity mismatch — adjustment formula (CVAM)
     CRE22.52-53: Basel 3.1 supervisory haircuts (5 maturity bands, higher equity/long-dated)
 """
 
@@ -317,20 +320,29 @@ class HaircutCalculator:
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Apply maturity mismatch adjustment per CRR Article 238.
+        Apply maturity mismatch adjustment per CRR Art. 237-238.
 
-        Formula: CVAM = CVA × (t - 0.25) / (T - 0.25)
+        Art. 237(2) ineligibility conditions (protection zeroed when mismatch exists):
+        - (a) Residual maturity < 3 months (existing check)
+        - (b) Original maturity of protection < 1 year
+        - Art. 162(3) exposures with 1-day IRB maturity floor: ANY mismatch makes
+          protection ineligible (repos/SFTs with daily margining)
+
+        Formula (Art. 238): CVAM = CVA × (t - 0.25) / (T - 0.25)
         where t = collateral residual maturity, T = min(exposure residual maturity, 5).
 
         Args:
             collateral: Collateral with value_after_haircut, residual_maturity_years,
-                and exposure_maturity (Date) columns
+                and exposure_maturity (Date) columns. Optionally:
+                original_maturity_years (Float64) and
+                exposure_has_one_day_maturity_floor (Boolean).
             config: Calculation configuration (provides reporting_date)
 
         Returns:
             LazyFrame with maturity-adjusted collateral values
         """
         reporting_date = config.reporting_date
+        coll_schema = collateral.collect_schema()
 
         # Derive exposure maturity in years from the Date column, capped at 5y, floored at 0.25y
         exposure_maturity_years_expr = (
@@ -344,21 +356,49 @@ class HaircutCalculator:
             .fill_null(5.0)
         )
 
-        collateral = collateral.with_columns(
-            [
-                pl.col("residual_maturity_years").fill_null(10.0).alias("coll_maturity"),
-                exposure_maturity_years_expr.alias("_exposure_maturity_years"),
-            ]
-        )
+        prep_cols = [
+            pl.col("residual_maturity_years").fill_null(10.0).alias("coll_maturity"),
+            exposure_maturity_years_expr.alias("_exposure_maturity_years"),
+        ]
 
-        # Calculate maturity mismatch adjustment per Art. 238
+        # Art. 237(2): original maturity of protection — null defaults to >= 1yr (permissive)
+        if "original_maturity_years" in coll_schema.names():
+            prep_cols.append(
+                pl.col("original_maturity_years").fill_null(10.0).alias("_orig_maturity")
+            )
+        else:
+            prep_cols.append(pl.lit(10.0).alias("_orig_maturity"))
+
+        # Art. 162(3): 1-day maturity floor flag — null/absent defaults to False (permissive)
+        if "exposure_has_one_day_maturity_floor" in coll_schema.names():
+            prep_cols.append(
+                pl.col("exposure_has_one_day_maturity_floor")
+                .fill_null(False)
+                .alias("_has_1d_floor")
+            )
+        else:
+            prep_cols.append(pl.lit(False).alias("_has_1d_floor"))
+
+        collateral = collateral.with_columns(prep_cols)
+
+        # Determine whether a maturity mismatch exists (collateral < exposure)
+        has_mismatch = pl.col("coll_maturity") < pl.col("_exposure_maturity_years")
+
+        # Calculate maturity mismatch adjustment per Art. 237-238
         collateral = collateral.with_columns(
             [
                 # No adjustment when collateral maturity >= exposure maturity
-                pl.when(pl.col("coll_maturity") >= pl.col("_exposure_maturity_years"))
+                pl.when(~has_mismatch)
                 .then(pl.lit(1.0))
-                # No protection when collateral maturity < 3 months
+                # Art. 237(2)(a): No protection when collateral maturity < 3 months
                 .when(pl.col("coll_maturity") < 0.25)
+                .then(pl.lit(0.0))
+                # Art. 237(2): Original maturity of protection < 1 year → ineligible
+                .when(pl.col("_orig_maturity") < 1.0)
+                .then(pl.lit(0.0))
+                # Art. 162(3)/237(2): 1-day M floor exposure → any mismatch makes
+                # protection ineligible (repos/SFTs with daily margining)
+                .when(pl.col("_has_1d_floor"))
                 .then(pl.lit(0.0))
                 # CVAM = (t - 0.25) / (T - 0.25) where T = exposure maturity capped at 5y
                 .otherwise(
@@ -377,7 +417,9 @@ class HaircutCalculator:
             ]
         )
 
-        return collateral.drop("_exposure_maturity_years")
+        return collateral.drop(
+            ["_exposure_maturity_years", "_orig_maturity", "_has_1d_floor"]
+        )
 
     def calculate_single_haircut(
         self,
@@ -390,6 +432,8 @@ class HaircutCalculator:
         is_main_index: bool = False,
         collateral_maturity_years: float | None = None,
         exposure_maturity_years: float | None = None,
+        original_maturity_years: float | None = None,
+        has_one_day_maturity_floor: bool = False,
     ) -> HaircutResult:
         """
         Calculate haircut for a single collateral item (convenience method).
@@ -404,6 +448,8 @@ class HaircutCalculator:
             is_main_index: Whether equity is on main index
             collateral_maturity_years: For maturity mismatch
             exposure_maturity_years: For maturity mismatch
+            original_maturity_years: Original contract term of protection (Art. 237(2))
+            has_one_day_maturity_floor: Art. 162(3) 1-day M floor exposure
 
         Returns:
             HaircutResult with all haircut details
@@ -448,6 +494,8 @@ class HaircutCalculator:
                 collateral_value=adjusted,
                 collateral_maturity_years=collateral_maturity_years,
                 exposure_maturity_years=exposure_maturity_years,
+                original_maturity_years=original_maturity_years,
+                has_one_day_maturity_floor=has_one_day_maturity_floor,
             )
             if adjusted > Decimal("0"):
                 maturity_adj = adjusted / (market_value * (1 - coll_haircut - fx_haircut))

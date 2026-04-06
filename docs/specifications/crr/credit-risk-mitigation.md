@@ -177,9 +177,21 @@ Art. 230 does specify conditions for collateral eligibility:
 - The collateral value must be sufficient to justify the LGDS applied
 - Specific conditions apply per collateral type (e.g., real estate valuation requirements per Art. 229)
 
+## Maturity Mismatch Eligibility (CRR Art. 237)
+
+When a maturity mismatch exists (collateral maturity < exposure maturity), credit protection
+is only eligible if **all** of the following conditions are met (Art. 237(2)):
+
+1. **Residual maturity ≥ 3 months** — protection with < 3 months residual maturity is disallowed
+2. **Original maturity ≥ 1 year** — protection instruments originally issued with a term < 1 year are ineligible when a mismatch exists
+3. **Not a 1-day M floor exposure** — exposures subject to Art. 162(3) 1-day maturity floor (repos, SFTs with daily margining) cannot use maturity-mismatched protection at all
+
+If any condition fails, the protection value is zeroed (collateral value = 0 for the mismatched portion).
+
 ## Maturity Mismatch Adjustment (CRR Art. 238)
 
-When collateral maturity is shorter than exposure maturity:
+When collateral maturity is shorter than exposure maturity and the Art. 237 eligibility
+conditions are met:
 
 ```
 adjustment_factor = (t - 0.25) / (T - 0.25)
@@ -187,10 +199,7 @@ adjustment_factor = (t - 0.25) / (T - 0.25)
 
 Where `t` = residual collateral maturity (years), `T` = min(residual exposure maturity, 5) years.
 
-**No adjustment** when:
-
-- Collateral residual maturity ≥ exposure residual maturity (no mismatch), or
-- Collateral residual maturity < 3 months (protection disallowed — collateral value zeroed)
+**No adjustment** when collateral residual maturity ≥ exposure residual maturity (no mismatch).
 
 ## Multi-Level Collateral Allocation
 

@@ -875,15 +875,24 @@ def calculate_maturity_mismatch_adjustment(
     collateral_maturity_years: float,
     exposure_maturity_years: float,
     minimum_maturity_years: float = 0.25,
+    original_maturity_years: float | None = None,
+    has_one_day_maturity_floor: bool = False,
 ) -> tuple[Decimal, str]:
     """
-    Apply maturity mismatch adjustment (CRR Art. 238).
+    Apply maturity mismatch adjustment (CRR Art. 237-238).
+
+    Art. 237(2) ineligibility conditions (applied when mismatch exists):
+    - (a) Residual maturity < 3 months → no protection
+    - (b) Original maturity of protection < 1 year → no protection
+    - Art. 162(3) 1-day M floor exposures → any mismatch makes protection ineligible
 
     Args:
         collateral_value: Adjusted collateral value
         collateral_maturity_years: Residual maturity of collateral
         exposure_maturity_years: Residual maturity of exposure
         minimum_maturity_years: Minimum maturity threshold (default 3 months)
+        original_maturity_years: Original contract term of protection (Art. 237(2))
+        has_one_day_maturity_floor: Art. 162(3) 1-day M floor exposure
 
     Returns:
         Tuple of (adjusted_value, description)
@@ -896,11 +905,26 @@ def calculate_maturity_mismatch_adjustment(
     if collateral_maturity_years >= exposure_maturity_years:
         return collateral_value, "No maturity mismatch adjustment"
 
-    # If collateral maturity < 3 months, no protection
-    if collateral_maturity_years < minimum_maturity_years:
-        return Decimal("0"), "Collateral maturity < 3 months, no protection"
+    # --- Mismatch exists: apply Art. 237(2) ineligibility conditions ---
 
-    # Apply adjustment
+    # Art. 237(2)(a): collateral maturity < 3 months → no protection
+    if collateral_maturity_years < minimum_maturity_years:
+        return Decimal("0"), "Collateral maturity < 3 months, no protection (Art. 237(2))"
+
+    # Art. 237(2): original maturity of protection < 1 year → ineligible
+    if original_maturity_years is not None and original_maturity_years < 1.0:
+        return Decimal("0"), (
+            "Original maturity < 1 year, protection ineligible (Art. 237(2))"
+        )
+
+    # Art. 162(3)/237(2): 1-day M floor exposure → any mismatch → ineligible
+    if has_one_day_maturity_floor:
+        return Decimal("0"), (
+            "1-day maturity floor exposure, mismatch makes protection ineligible "
+            "(Art. 237(2)/162(3))"
+        )
+
+    # Apply CVAM adjustment (Art. 238)
     t = max(collateral_maturity_years, minimum_maturity_years)
     T = min(max(exposure_maturity_years, minimum_maturity_years), 5.0)
 

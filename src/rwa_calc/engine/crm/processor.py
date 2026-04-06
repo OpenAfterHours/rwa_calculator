@@ -63,28 +63,44 @@ def _build_exposure_lookups(
     """
     exp_schema = exposures.collect_schema()
 
+    # Determine whether has_one_day_maturity_floor is available
+    has_floor_col = "has_one_day_maturity_floor" in exp_schema.names()
+
     # Direct: one row per exposure
-    direct_lookup = exposures.select(
-        [
-            pl.col("exposure_reference").alias("_ben_ref_direct"),
-            pl.col("ead_gross").alias("_ead_direct"),
-            pl.col("currency").alias("_currency_direct"),
-            pl.col("maturity_date").alias("_maturity_direct"),
-        ]
-    )
+    direct_cols = [
+        pl.col("exposure_reference").alias("_ben_ref_direct"),
+        pl.col("ead_gross").alias("_ead_direct"),
+        pl.col("currency").alias("_currency_direct"),
+        pl.col("maturity_date").alias("_maturity_direct"),
+    ]
+    if has_floor_col:
+        direct_cols.append(
+            pl.col("has_one_day_maturity_floor").fill_null(False).alias("_floor_direct")
+        )
+    else:
+        direct_cols.append(pl.lit(False).alias("_floor_direct"))
+    direct_lookup = exposures.select(direct_cols)
 
     # Facility: aggregated per parent_facility_reference
     if "parent_facility_reference" in exp_schema.names():
+        facility_agg = [
+            pl.col("ead_gross").sum().alias("_ead_facility"),
+            pl.col("currency").first().alias("_currency_facility"),
+            pl.col("maturity_date").first().alias("_maturity_facility"),
+        ]
+        if has_floor_col:
+            # Conservative: if ANY exposure in facility has 1-day floor, flag whole facility
+            facility_agg.append(
+                pl.col("has_one_day_maturity_floor").fill_null(False).max().alias(
+                    "_floor_facility"
+                )
+            )
+        else:
+            facility_agg.append(pl.lit(False).alias("_floor_facility"))
         facility_lookup = (
             exposures.filter(pl.col("parent_facility_reference").is_not_null())
             .group_by("parent_facility_reference")
-            .agg(
-                [
-                    pl.col("ead_gross").sum().alias("_ead_facility"),
-                    pl.col("currency").first().alias("_currency_facility"),
-                    pl.col("maturity_date").first().alias("_maturity_facility"),
-                ]
-            )
+            .agg(facility_agg)
             .with_columns(
                 pl.col("parent_facility_reference").cast(pl.String),
             )
@@ -97,19 +113,26 @@ def _build_exposure_lookups(
                 "_ead_facility": pl.Float64,
                 "_currency_facility": pl.String,
                 "_maturity_facility": pl.Date,
+                "_floor_facility": pl.Boolean,
             }
         )
 
     # Counterparty: aggregated per counterparty_reference
+    cp_agg = [
+        pl.col("ead_gross").sum().alias("_ead_cp"),
+        pl.col("currency").first().alias("_currency_cp"),
+        pl.col("maturity_date").first().alias("_maturity_cp"),
+    ]
+    if has_floor_col:
+        # Conservative: if ANY exposure for counterparty has 1-day floor, flag whole group
+        cp_agg.append(
+            pl.col("has_one_day_maturity_floor").fill_null(False).max().alias("_floor_cp")
+        )
+    else:
+        cp_agg.append(pl.lit(False).alias("_floor_cp"))
     cp_lookup = (
         exposures.group_by("counterparty_reference")
-        .agg(
-            [
-                pl.col("ead_gross").sum().alias("_ead_cp"),
-                pl.col("currency").first().alias("_currency_cp"),
-                pl.col("maturity_date").first().alias("_maturity_cp"),
-            ]
-        )
+        .agg(cp_agg)
         .rename({"counterparty_reference": "_ben_ref_cp"})
     )
 
@@ -143,6 +166,7 @@ def _join_collateral_to_lookups(
                 pl.col("_ead_direct").alias("_beneficiary_ead"),
                 pl.col("_currency_direct").alias("exposure_currency"),
                 pl.col("_maturity_direct").alias("exposure_maturity"),
+                pl.col("_floor_direct").alias("exposure_has_one_day_maturity_floor"),
             ),
             left_on="beneficiary_reference",
             right_on="_ben_ref_direct",
@@ -200,6 +224,15 @@ def _join_collateral_to_lookups(
             .then(pl.col("_maturity_cp"))
             .otherwise(pl.lit(None).cast(pl.Date))
             .alias("exposure_maturity"),
+            # Art. 162(3) 1-day maturity floor flag — for Art. 237(2) ineligibility
+            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
+            .then(pl.col("_floor_direct"))
+            .when(bt_lower == "facility")
+            .then(pl.col("_floor_facility"))
+            .when(bt_lower == "counterparty")
+            .then(pl.col("_floor_cp"))
+            .otherwise(pl.lit(False))
+            .alias("exposure_has_one_day_maturity_floor"),
         ]
     ).drop(
         [
@@ -212,6 +245,9 @@ def _join_collateral_to_lookups(
             "_maturity_direct",
             "_maturity_facility",
             "_maturity_cp",
+            "_floor_direct",
+            "_floor_facility",
+            "_floor_cp",
         ]
     )
 

@@ -75,6 +75,7 @@ FACILITY_SCHEMA = {
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
 }
 
 LOAN_SCHEMA = {
@@ -92,6 +93,7 @@ LOAN_SCHEMA = {
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
     "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
@@ -114,6 +116,7 @@ CONTINGENTS_SCHEMA = {
     "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
 }
 
@@ -186,6 +189,7 @@ COLLATERAL_SCHEMA = {
     "issuer_cqs": pl.Int8,  # Credit Quality Step of issuer (1-6) for haircut lookup
     "issuer_type": pl.String,  # sovereign, pse, corporate, securitisation - for haircut table
     "residual_maturity_years": pl.Float64,  # For haircut bands: <=1yr, 1-3yr, 3-5yr, 5-10yr, >10yr
+    "original_maturity_years": pl.Float64,  # Original contract term — Art. 237(2): <1yr makes protection ineligible
     # Eligibility flags
     "is_eligible_financial_collateral": pl.Boolean,  # Meets SA eligibility (CRR Art 197, CRE22.40)
     "is_eligible_irb_collateral": pl.Boolean,  # Meets IRB eligibility - wider pool (CRR Art 199)
@@ -591,6 +595,7 @@ RAW_EXPOSURE_SCHEMA = {
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,  # Currency before FX conversion
     "original_amount": pl.Float64,  # Amount before FX conversion (drawn + interest + nominal)

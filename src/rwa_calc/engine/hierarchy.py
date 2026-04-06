@@ -597,6 +597,7 @@ class HierarchyResolver:
                     "is_short_term_trade_lc": pl.Boolean,
                     "is_payroll_loan": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
+                    "has_one_day_maturity_floor": pl.Boolean,
                     "has_netting_agreement": pl.Boolean,
                     "is_revolving": pl.Boolean,
                     "is_qrre_transactor": pl.Boolean,
@@ -820,6 +821,11 @@ class HierarchyResolver:
                 if "is_buy_to_let" in facility_cols
                 else pl.lit(False).alias("is_buy_to_let")
             ),
+            (
+                pl.col("has_one_day_maturity_floor").fill_null(False)
+                if "has_one_day_maturity_floor" in facility_cols
+                else pl.lit(False).alias("has_one_day_maturity_floor")
+            ),
             pl.lit(False).alias("has_netting_agreement"),
             # QRRE classification fields (CRR Art. 147(5), CRE30.55)
             (
@@ -912,6 +918,11 @@ class HierarchyResolver:
                 else pl.lit(False).alias("is_buy_to_let")
             ),
             (
+                pl.col("has_one_day_maturity_floor").fill_null(False)
+                if "has_one_day_maturity_floor" in loan_cols
+                else pl.lit(False).alias("has_one_day_maturity_floor")
+            ),
+            (
                 pl.col("has_netting_agreement").fill_null(False)
                 if "has_netting_agreement" in loan_cols
                 else pl.lit(False).alias("has_netting_agreement")
@@ -979,6 +990,11 @@ class HierarchyResolver:
                     pl.lit(False).alias(
                         "is_buy_to_let"
                     ),  # BTL is a property lending characteristic, not for contingents
+                    (
+                        pl.col("has_one_day_maturity_floor").fill_null(False)
+                        if "has_one_day_maturity_floor" in cont_cols
+                        else pl.lit(False).alias("has_one_day_maturity_floor")
+                    ),
                     pl.lit(False).alias("has_netting_agreement"),
                 ]
             )

@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.41 CDS restructuring exclusion haircut implemented)
-**Current version:** 0.1.96 | **Test suite:** ~2,898 collected (~2,374 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.41, P1.62, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-06 (P1.40 Art. 237(2) maturity mismatch ineligibility implemented)
+**Current version:** 0.1.97 | **Test suite:** ~2,923 collected (~2,399 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.62, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -11,7 +11,7 @@
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
-- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
+- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
 - *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
@@ -546,12 +546,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for each liquidation period.
 
 ### P1.40 CRM maturity mismatch additional ineligibility conditions (Art. 237(2))
-- **Status:** [ ] Not implemented
-- **Impact:** Art. 237(2) adds two ineligibility conditions beyond the existing 3-month residual maturity test: (a) **original maturity of protection < 1 year** -> not eligible where maturity mismatch exists; (b) exposures with **1-day IRB maturity floor** (Art. 162(3)) -> protection ineligible. Code only checks 3-month residual maturity.
-- **File:Line:** `engine/crm/haircuts.py`
-- **Spec ref:** PRA PS1/26 Art. 237(2)
-- **Fix:** Add original maturity and 1-day M floor checks to maturity mismatch evaluation in `haircuts.py`.
-- **Tests needed:** Unit tests for each ineligibility condition.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Art. 237(2) ineligibility conditions now enforced. When a maturity mismatch exists (collateral maturity < exposure maturity), two additional checks prevent over-recognition of protection:
+  - **(a) Original maturity of protection < 1 year → ineligible:** `original_maturity_years` field added to `COLLATERAL_SCHEMA`. When present and < 1.0, protection value is zeroed. Null/absent defaults to >= 1yr (permissive, backward compatible).
+  - **(b) Art. 162(3) 1-day IRB maturity floor → any mismatch makes protection ineligible:** `has_one_day_maturity_floor` field added to facility/loan/contingent/raw exposure schemas. Flows from exposure through hierarchy resolver → CRM processor exposure lookups → collateral frame via `_build_exposure_lookups` and `_join_collateral_to_lookups`. When True and mismatch exists, protection value is zeroed. Conservative: for facility/counterparty lookups, `.max()` aggregation (if ANY exposure has the flag, the whole group is flagged).
+  - Both conditions are checked AFTER the no-mismatch guard (no impact when collateral >= exposure maturity) and AFTER the existing < 3-month residual check.
+  - Both vectorized path (`HaircutCalculator.apply_maturity_mismatch`) and scalar path (`calculate_maturity_mismatch_adjustment`, `calculate_single_haircut`) updated.
+  - Works identically under CRR and Basel 3.1.
+  - Backward compatible: absent columns default to permissive (no ineligibility check applied).
+- **File:Line:** `engine/crm/haircuts.py:314-410` (apply_maturity_mismatch + calculate_single_haircut), `data/tables/crr_haircuts.py:873-933` (scalar function), `engine/crm/processor.py:49-232` (exposure lookups + join), `engine/hierarchy.py` (field propagation), `data/schemas.py` (schema additions)
+- **Spec ref:** CRR Art. 237(2), Art. 162(3), PRA PS1/26 Art. 237(2)
+- **Tests:** 25 new unit tests in `tests/unit/crm/test_art237_ineligibility.py`: 7 original maturity tests (zeroed <1yr, eligible =1yr, boundary 0.99yr, no mismatch skips check, null defaults permissive, missing column permissive, B31 same), 6 one-day floor tests (mismatch zeroed, no mismatch skips, false allows CVAM, null defaults false, missing column permissive, B31 same), 4 combined tests (both conditions, 3m still applies, mixed batch 4 rows, CVAM formula unchanged), 8 scalar API tests (original maturity zeroed/eligible/none, floor zeroed/false, no mismatch skips all, residual <3m still checked, CVAM formula correct). All 2923 tests pass. Test count: 2923 (was 2898).
+- **Limitation:** Art. 162(3) transaction type identification relies on `has_one_day_maturity_floor` flag in input data — the calculator does not auto-detect repos/SFTs. Institutions must set the flag for qualifying short-term transactions.
 
 ### P1.41 Credit derivative restructuring exclusion haircut (Art. 233(2))
 - **Status:** [x] Complete
@@ -1312,15 +1319,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Add all missing enum members. Ensure consistency between enum members and string-based validation sets. Note: A_ENHANCED and OTHER_COMMIT are prerequisites for P1.12 and P1.29 respectively.
 - **Tests needed:** Contract tests verifying enum completeness against regulatory tables. Unit tests for new enum values in risk weight lookups.
 
-### P6.15 8 missing schema fields for plan items
-- **Status:** [ ] Not started
+### P6.15 4 missing schema fields for plan items
+- **Status:** [~] Partially resolved
 - **Impact:** Implementation plan items reference schema fields that do not yet exist in `data/schemas.py`:
   - `prior_charge_amount` (P1.6 junior charges)
   - `protection_inception_date` (P1.10 unfunded CRM transitional)
   - `contractual_termination_date` (P1.20 revolving maturity)
-  - `is_payroll_loan` (P1.19 payroll/pension retail)
-  - `is_financial_sector_entity` (P1.4/P1.32 FSE flag)
+  - ~~`is_payroll_loan`~~ (P1.19 — now added)
+  - ~~`is_financial_sector_entity`~~ (P1.4/P1.32 — now added as `cp_is_financial_sector_entity`)
   - ~~`includes_restructuring`~~ (P1.41 — now added)
+  - ~~`has_one_day_maturity_floor`~~ (P1.40 — now added)
+  - ~~`original_maturity_years`~~ (P1.40 — now added to COLLATERAL_SCHEMA)
   - `due_diligence_override_rw` (P1.49 Art. 110A)
   - `liquidation_period` (P1.39 haircut dependency)
 - **File:Line:** `data/schemas.py`

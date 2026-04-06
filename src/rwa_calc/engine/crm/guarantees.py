@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.tables.crr_haircuts import FX_HAIRCUT
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import (
     drawn_for_ead,
@@ -76,6 +77,11 @@ def apply_guarantees(
     )
 
     exposures = _apply_guarantee_splits(guarantees, exposures)
+
+    # Apply FX mismatch haircut to guarantee amounts (Art. 233(3-4)).
+    # When a guarantee is denominated in a different currency from the exposure,
+    # the guaranteed amount is reduced: G* = G × (1 - H_fx) where H_fx = 8%.
+    exposures = _apply_guarantee_fx_haircut(exposures)
 
     # Look up guarantor's entity type, country code, and CQS for risk weight substitution
     # Join with counterparty to get guarantor's entity type and country
@@ -323,6 +329,12 @@ def _apply_guarantee_splits(
         agg_exprs.append(pl.col("guarantee_reference").first().alias("guarantee_reference"))
     if "protection_type" in guar_cols:
         agg_exprs.append(pl.col("protection_type").first().alias("protection_type"))
+    # Preserve guarantee currency for FX mismatch haircut (Art. 233(3-4)).
+    # Use original_currency (pre-FX-conversion) if available, else currency.
+    if "original_currency" in guar_cols:
+        agg_exprs.append(pl.col("original_currency").first().alias("guarantee_currency"))
+    elif "currency" in guar_cols:
+        agg_exprs.append(pl.col("currency").first().alias("guarantee_currency"))
 
     guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
 
@@ -338,6 +350,8 @@ def _apply_guarantee_splits(
         guar_select.append("guarantee_reference")
     if "protection_type" in guar_cols:
         guar_select.append("protection_type")
+    if "guarantee_currency" in guar_cols:
+        guar_select.append("guarantee_currency")
 
     # Count distinct guarantors per exposure
     guarantee_counts = guarantees.group_by("beneficiary_reference").agg(
@@ -359,6 +373,7 @@ def _apply_guarantee_splits(
         pl.lit(None).cast(pl.String).alias("guarantor_reference"),
         pl.lit(0.0).alias("guarantee_amount"),
         pl.lit(None).cast(pl.String).alias("protection_type"),
+        pl.lit(None).cast(pl.String).alias("guarantee_currency"),
     )
 
     # --- Path 2: Single guarantor (backward compatible, no split) ---
@@ -450,6 +465,7 @@ def _apply_guarantee_splits(
         pl.lit(0.0).alias("guarantee_amount"),
         pl.lit(None).cast(pl.String).alias("guarantor_reference"),
         pl.lit(None).cast(pl.String).alias("protection_type"),
+        pl.lit(None).cast(pl.String).alias("guarantee_currency"),
         pl.concat_str(
             [pl.col("parent_exposure_reference"), pl.lit("__REM")],
         ).alias("exposure_reference"),
@@ -648,6 +664,60 @@ def _allocate_guarantees_pro_rata(
         )
         .drop("exposure_reference", "_weight")
     )
+
+
+def _apply_guarantee_fx_haircut(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """
+    Apply FX mismatch haircut to guarantee amounts.
+
+    When a guarantee or credit derivative is denominated in a different currency
+    from the exposure, the effective protection is reduced by H_fx (8%):
+
+        G* = G × (1 − H_fx)
+
+    This reduces ``guaranteed_portion`` and correspondingly increases
+    ``unguaranteed_portion`` for cross-currency guarantees.
+
+    References:
+        CRR Art. 233(3-4), PRA PS1/26 Art. 233(3-4)
+        H_fx = 8% (Art. 224 Table 4, 10-day liquidation period)
+    """
+    schema = exposures.collect_schema()
+    cols = schema.names()
+
+    # Need both guarantee_currency and exposure currency to detect mismatch
+    has_guarantee_ccy = "guarantee_currency" in cols
+    has_exposure_ccy = "original_currency" in cols or "currency" in cols
+
+    if not has_guarantee_ccy or not has_exposure_ccy:
+        return exposures.with_columns(pl.lit(0.0).alias("guarantee_fx_haircut"))
+
+    # Use original_currency (pre-FX-conversion) if available, else currency
+    exposure_ccy = pl.col("original_currency") if "original_currency" in cols else pl.col("currency")
+    h_fx = float(FX_HAIRCUT)
+
+    fx_mismatch = (
+        pl.col("guarantee_currency").is_not_null()
+        & (pl.col("guarantee_currency") != exposure_ccy)
+        & (pl.col("guaranteed_portion") > 0)
+    )
+
+    exposures = exposures.with_columns(
+        pl.when(fx_mismatch)
+        .then(pl.col("guaranteed_portion") * (1.0 - h_fx))
+        .otherwise(pl.col("guaranteed_portion"))
+        .alias("guaranteed_portion"),
+        pl.when(fx_mismatch)
+        .then(pl.lit(h_fx))
+        .otherwise(pl.lit(0.0))
+        .alias("guarantee_fx_haircut"),
+    ).with_columns(
+        (pl.col("ead_after_collateral") - pl.col("guaranteed_portion"))
+        .clip(lower_bound=0.0)
+        .alias("unguaranteed_portion"),
+    )
+
+    return exposures
 
 
 def _drop_columns_if_present(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:

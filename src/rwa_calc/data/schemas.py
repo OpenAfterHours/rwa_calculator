@@ -681,6 +681,7 @@ CRM_ADJUSTED_SCHEMA = {
     # Guarantee impact
     "guarantee_coverage_pct": pl.Float64,
     "guaranteed_amount": pl.Float64,
+    "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
     "ead_after_guarantee": pl.Float64,
     # Final EAD
     "final_ead": pl.Float64,
@@ -894,6 +895,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "guarantor_references": pl.List(pl.String),  # Guarantor counterparty IDs
     "guarantee_coverage_pct": pl.Float64,  # % of exposure guaranteed
     "guaranteed_amount": pl.Float64,  # Amount covered by guarantee
+    "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
     "guarantor_risk_weight": pl.Float64,  # RW of guarantor (for substitution)
     "guarantee_benefit": pl.Float64,  # RWA reduction from guarantee
     # -------------------------------------------------------------------------

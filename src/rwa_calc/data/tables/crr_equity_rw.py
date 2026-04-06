@@ -20,6 +20,8 @@ References:
     - EBA Q&A 2023_6716: Strategic equity treatment
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
 
 import polars as pl

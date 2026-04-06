@@ -11,6 +11,8 @@ Reference:
     CRR Art. 153(5): Slotting approach for specialised lending exposures
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
 
 from rwa_calc.domain.enums import SlottingCategory

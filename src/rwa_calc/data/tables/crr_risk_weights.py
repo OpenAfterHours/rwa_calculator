@@ -13,6 +13,8 @@ References:
     - CRR Art. 126: Commercial real estate risk weights
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
 from typing import TypedDict
 

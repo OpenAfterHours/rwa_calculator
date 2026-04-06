@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/post_edit_ruff.sh",
+            "timeout": 30,
+            "statusMessage": "Running ruff on edited file..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "if": "Bash(git:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/pre_commit_gate.sh",
+            "timeout": 120,
+            "statusMessage": "Running pre-commit checks..."
+          }
+        ]
+      }
+    ]
+  }
+}

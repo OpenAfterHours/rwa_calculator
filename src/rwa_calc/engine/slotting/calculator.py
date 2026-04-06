@@ -1,18 +1,21 @@
 """
-Slotting Calculator for Specialised Lending RWA.
+Slotting Calculator for Specialised Lending RWA and Expected Loss.
 
-Implements CRR Art. 153(5) for supervisory slotting approach.
-Supports both CRR and Basel 3.1 frameworks with appropriate risk weights.
+Implements CRR Art. 153(5) for supervisory slotting approach (risk weights)
+and CRR Art. 158(6) Table B for expected loss rates.
 
 Pipeline position:
     CRMProcessor -> SlottingCalculator -> Aggregation
 
 Key responsibilities:
-- Map slotting categories to risk weights
+- Map slotting categories to risk weights (Art. 153(5))
+- Map slotting categories to expected loss rates (Art. 158(6) Table B)
 - Handle HVCRE (High Volatility Commercial Real Estate) distinction
 - Handle maturity-based splits (CRR: <2.5yr / >=2.5yr)
 - Handle PF pre-operational vs operational distinction (Basel 3.1)
 - Calculate RWA = EAD x RW
+- Calculate EL = EL_rate x EAD
+- Compute EL shortfall/excess for T2 credit cap and CET1/T2 deductions
 - Build audit trail of calculations
 
 Specialised Lending Types:
@@ -25,6 +28,8 @@ Specialised Lending Types:
 References:
 - CRR Art. 153(5): Supervisory slotting approach (Tables 1 & 2)
 - CRR Art. 147(8): Specialised lending definition
+- CRR Art. 158(6), Table B: Expected loss rates for slotting
+- CRR Art. 159: EL shortfall/excess treatment
 - BCBS CRE33: Basel 3.1 specialised lending slotting
 """
 
@@ -71,19 +76,24 @@ class SlottingCalculator:
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Calculate Slotting RWA on pre-filtered slotting-only rows.
+        Calculate Slotting RWA and Expected Loss on pre-filtered slotting-only rows.
+
+        Computes risk weights (Art. 153(5)), RWA, expected loss rates (Art. 158(6)
+        Table B), and EL shortfall/excess for the portfolio EL summary.
 
         Args:
             exposures: Pre-filtered slotting rows only
             config: Calculation configuration
 
         Returns:
-            LazyFrame with slotting RWA columns populated
+            LazyFrame with slotting RWA, expected_loss, el_shortfall, el_excess
         """
         return (
             exposures.slotting.prepare_columns(config)
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
+            .slotting.apply_el_rates(config)
+            .slotting.compute_el_shortfall_excess()
         )
 
     def get_slotting_result_bundle(

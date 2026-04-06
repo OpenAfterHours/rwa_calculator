@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.29 Basel 3.1 "Other Commitments" 40% CCF implemented)
-**Current version:** 0.1.87 | **Test suite:** ~2,675 collected (~2,170 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.12, P1.29, P1.32, P1.34, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.35 Slotting EL rates Table B implemented)
+**Current version:** 0.1.88 | **Test suite:** ~2,745 collected (~2,240 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.12, P1.29, P1.32, P1.34, P1.35, P1.78 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -473,17 +473,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** PRA PS1/26 Art. 153(4)
 - **Tests:** 10 new unit tests in `test_basel31_engine.py` (TestB31SMECorrelation): floor max adjustment, below floor, at threshold, above threshold, midpoint partial, no FX conversion, CRR uses FX, B31 vs CRR numerical difference, namespace integration, boundary 43.66m vs 44m. All existing CRR tests (9 correlation + 4 namespace) unchanged. Test count: 2136 unit (was 2126).
 
-### P1.35 Slotting expected loss rates (Table B) missing
-- **Status:** [~] Spec fixed; code not implemented
-- **Impact:** PRA PS1/26 Art. 158(6), Table B defines slotting EL rates:
-  - OF/PF/CF/IPRE: Strong <2.5y=0%, Strong >=2.5y=0.4%, Good <2.5y=0.4%, Good >=2.5y=0.8%, Satisfactory=2.8%, Weak=8%, Default=50%
-  - HVCRE: Strong=0.4%, Good=0.8%, Satisfactory=2.8%, Weak=8%, Default=50%
-  The slotting engine (`engine/slotting/`) computes risk weights but not expected loss. No `el_rate` or Table B data exists anywhere in the slotting module. This affects IRB EL comparison and T2 credit cap for slotting exposures.
-  **Spec fix (2026-04-06):** `slotting-approach.md` Table B corrected from flat BCBS CRE33 values (5%/10%/35%/50%/50%) to correct PRA maturity-dependent values. Previous BCBS values were 6-12x too high for Strong/Good categories.
-- **File:Line:** `engine/slotting/` (no EL code)
+### P1.35 Slotting expected loss rates (Table B)
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** PRA PS1/26 Art. 158(6), Table B slotting EL rates now fully implemented:
+  - **Data tables:** EL rate constants added to both `crr_slotting.py` (3 tables: base, short, HVCRE) and `b31_slotting.py` (3 tables: base, short, HVCRE) with scalar lookup functions. Non-HVCRE rates are maturity-dependent (<2.5yr vs >=2.5yr); HVCRE rates are flat.
+  - **Namespace:** `SlottingExpr.lookup_el_rate()` vectorised lookup; `SlottingLazyFrame.apply_el_rates()` produces `slotting_el_rate` and `expected_loss = el_rate × ead_final`; `SlottingLazyFrame.compute_el_shortfall_excess()` produces `el_shortfall` and `el_excess` columns.
+  - **Calculator:** `calculate_branch()` now chains EL computation after RWA; `apply_all()` includes full EL pipeline.
+  - **Aggregator:** `compute_el_portfolio_summary()` now accepts optional `slotting_results` parameter. Slotting EL and RWA are concatenated with IRB results for joint EL summary. Slotting RWA included in T2 credit cap denominator (Art. 62(d) references Part Three, Title II, Chapter 3 which includes slotting under Art. 153(5)).
+  - **Key EL rates (non-HVCRE):** Strong >=2.5yr=0.4%, <2.5yr=0%; Good >=2.5yr=0.8%, <2.5yr=0.4%; Satisfactory=2.8%; Weak=8%; Default=50%
+  - **Key EL rates (HVCRE):** Strong=0.4%, Good=0.8%, Satisfactory=2.8%, Weak=8%, Default=50% (flat, no maturity split)
+  - **Notable:** B31 EL rates are maturity-dependent even though B31 risk weights are not (RW has no maturity split under PRA PS1/26). Default category: 0% RW (K=0) but 50% EL rate — EL is still computed for shortfall comparison.
+- **File:Line:** `data/tables/crr_slotting.py` (EL rate tables + lookup), `data/tables/b31_slotting.py` (EL rate tables + lookup), `engine/slotting/namespace.py` (lookup_el_rate + apply_el_rates + compute_el_shortfall_excess), `engine/slotting/calculator.py` (calculate_branch chains EL), `engine/aggregator/_el_summary.py` (_combine_irb_and_slotting + updated signature), `engine/aggregator/aggregator.py` (passes slotting_results to EL summary)
 - **Spec ref:** PRA PS1/26 Art. 158(6), Table B. `docs/specifications/crr/slotting-approach.md`
-- **Fix:** Add Table B EL rates to slotting data. Compute EL in slotting calculator. Include in EL summary aggregation. **Aggregator wiring note:** `aggregator.py:112` calls `compute_el_portfolio_summary(irb_results)` with only IRB results — slotting results are a separate branch. When slotting EL is implemented, the aggregator must also pass slotting EL into the portfolio summary to include it in T2 credit / CET1 deduction calculations.
-- **Tests needed:** Unit tests for slotting EL by category and grade. Integration test for slotting EL in portfolio EL summary.
+- **Tests:** 70 new unit tests in `tests/unit/test_slotting_el_rates.py`: 6 CRR base constants, 6 CRR short constants, 6 CRR HVCRE constants, 7 CRR scalar lookup, 6 B31 base constants, 2 B31 short constants, 2 B31 HVCRE constants, 4 B31 scalar lookup, 4 namespace EL rate lookup (CRR long/short, HVCRE flat, B31 maturity-dependent), 3 EL computation (values, zero EL, default 0% RW positive EL), 3 EL shortfall/excess (full shortfall, partial, excess), 4 calculator branch (produces columns, values, B31, apply_all), 4 aggregator integration (combined, slotting-only, backward compat, excess T2), 13 parametrized category × maturity × HVCRE. All 2745 tests pass. Test count: 2745 (was 2675).
 
 ### P1.37 CCF commitment-to-issue lower-of rule (Art. 111(1)(c))
 - **Status:** [ ] Not implemented

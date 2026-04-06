@@ -34,11 +34,17 @@ import polars as pl
 from polars import col, lit
 
 from rwa_calc.data.tables.b31_slotting import (
+    B31_SLOTTING_EL_RATES,
+    B31_SLOTTING_EL_RATES_HVCRE,
+    B31_SLOTTING_EL_RATES_SHORT,
     B31_SLOTTING_RISK_WEIGHTS,
     B31_SLOTTING_RISK_WEIGHTS_HVCRE,
     B31_SLOTTING_RISK_WEIGHTS_PREOP,
 )
 from rwa_calc.data.tables.crr_slotting import (
+    SLOTTING_EL_RATES,
+    SLOTTING_EL_RATES_HVCRE,
+    SLOTTING_EL_RATES_SHORT,
     SLOTTING_RISK_WEIGHTS,
     SLOTTING_RISK_WEIGHTS_HVCRE,
     SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
@@ -76,6 +82,24 @@ _SLOTTING_WEIGHTS: dict[str, dict[str, dict[str, float]]] = {
         "base": _to_float_map(B31_SLOTTING_RISK_WEIGHTS),
         "preop": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_PREOP),
         "hvcre": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_HVCRE),
+    },
+}
+
+# EL rate constants — sourced from data/tables/ (Art. 158(6) Table B)
+# EL rates are maturity-dependent for non-HVCRE under both CRR and B31.
+# HVCRE EL rates are flat (same for both maturities).
+_SLOTTING_EL_RATES: dict[str, dict[str, dict[str, float]]] = {
+    "crr": {
+        "base": _to_float_map(SLOTTING_EL_RATES),
+        "short": _to_float_map(SLOTTING_EL_RATES_SHORT),
+        "hvcre": _to_float_map(SLOTTING_EL_RATES_HVCRE),
+        "hvcre_short": _to_float_map(SLOTTING_EL_RATES_HVCRE),  # same as hvcre (flat)
+    },
+    "basel_3_1": {
+        "base": _to_float_map(B31_SLOTTING_EL_RATES),
+        "short": _to_float_map(B31_SLOTTING_EL_RATES_SHORT),
+        "hvcre": _to_float_map(B31_SLOTTING_EL_RATES_HVCRE),
+        "hvcre_short": _to_float_map(B31_SLOTTING_EL_RATES_HVCRE),  # same as hvcre (flat)
     },
 }
 
@@ -197,12 +221,64 @@ class SlottingLazyFrame:
         rwa = col("ead_final") * col("risk_weight")
         return self._lf.with_columns(rwa=rwa, rwa_final=rwa)
 
+    def apply_el_rates(self, config: CalculationConfig) -> pl.LazyFrame:
+        """Apply slotting expected loss rates per Art. 158(6) Table B.
+
+        Produces:
+            slotting_el_rate: The EL rate for this category/maturity/HVCRE combination
+            expected_loss: EL rate x EAD (the expected loss amount)
+        """
+        is_crr = config.is_crr
+        # EL rates are always maturity-dependent (even under B31 where RW is not)
+        el_rate_expr = col("slotting_category").slotting.lookup_el_rate(
+            is_crr=is_crr,
+            is_hvcre=col("is_hvcre"),
+            is_short=col("is_short_maturity"),
+        )
+        return self._lf.with_columns(
+            slotting_el_rate=el_rate_expr,
+            expected_loss=el_rate_expr * col("ead_final"),
+        )
+
+    def compute_el_shortfall_excess(self) -> pl.LazyFrame:
+        """Compute EL shortfall and excess for slotting exposures.
+
+        Compares expected loss to allocated provisions. Same logic as IRB
+        (CRR Art. 158-159) but using slotting-specific EL rates.
+
+        Produces:
+            el_shortfall: max(0, expected_loss - provision_allocated)
+            el_excess:    max(0, provision_allocated - expected_loss)
+        """
+        schema = self._lf.collect_schema()
+        cols = schema.names()
+
+        if "expected_loss" not in cols:
+            return self._lf.with_columns(
+                el_shortfall=lit(0.0),
+                el_excess=lit(0.0),
+            )
+
+        el = col("expected_loss").fill_null(0.0)
+        prov = (
+            col("provision_allocated").fill_null(0.0)
+            if "provision_allocated" in cols
+            else lit(0.0)
+        )
+
+        return self._lf.with_columns(
+            el_shortfall=pl.max_horizontal(lit(0.0), el - prov),
+            el_excess=pl.max_horizontal(lit(0.0), prov - el),
+        )
+
     def apply_all(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply full slotting calculation pipeline."""
+        """Apply full slotting calculation pipeline including EL."""
         return (
             self.prepare_columns(config)
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
+            .slotting.apply_el_rates(config)
+            .slotting.compute_el_shortfall_excess()
         )
 
     def build_audit(self) -> pl.LazyFrame:
@@ -300,9 +376,38 @@ class SlottingExpr:
                 .otherwise(self._map_category(cat, weights["base"]))
             )
 
+    def lookup_el_rate(
+        self,
+        is_crr: bool = True,
+        is_hvcre: bool | pl.Expr = False,
+        is_short: bool | pl.Expr = False,
+    ) -> pl.Expr:
+        """Look up expected loss rate per Art. 158(6) Table B.
+
+        EL rates are always maturity-dependent for non-HVCRE (both CRR and B31).
+        HVCRE EL rates are flat (same for both maturities).
+        """
+        cat = self._expr.str.to_lowercase()
+
+        is_hvcre_expr = lit(is_hvcre) if isinstance(is_hvcre, bool) else is_hvcre
+        is_short_expr = lit(is_short) if isinstance(is_short, bool) else is_short
+
+        fw_key = "crr" if is_crr else "basel_3_1"
+        rates = _SLOTTING_EL_RATES[fw_key]
+
+        return (
+            pl.when(is_hvcre_expr.not_() & is_short_expr.not_())
+            .then(self._map_category(cat, rates["base"]))
+            .when(is_hvcre_expr.not_() & is_short_expr)
+            .then(self._map_category(cat, rates["short"]))
+            .when(is_hvcre_expr & is_short_expr.not_())
+            .then(self._map_category(cat, rates["hvcre"]))
+            .otherwise(self._map_category(cat, rates["hvcre_short"]))
+        )
+
     @staticmethod
     def _map_category(cat_expr: pl.Expr, weights: dict[str, float]) -> pl.Expr:
-        """Map category name to risk weight using replace_strict."""
+        """Map category name to weight/rate using replace_strict."""
         return cat_expr.replace_strict(
             old=list(weights.keys()),
             new=list(weights.values()),

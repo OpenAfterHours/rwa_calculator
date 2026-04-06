@@ -778,18 +778,18 @@ class TestCoveredBondLGD:
 
     def test_lookup_covered_bond(self) -> None:
         """lookup_firb_lgd returns 11.25% for covered bonds."""
-        assert lookup_firb_lgd(
-            collateral_type="covered_bond", is_basel_3_1=False
-        ) == Decimal("0.1125")
-        assert lookup_firb_lgd(
-            collateral_type="covered_bond", is_basel_3_1=True
-        ) == Decimal("0.1125")
+        assert lookup_firb_lgd(collateral_type="covered_bond", is_basel_3_1=False) == Decimal(
+            "0.1125"
+        )
+        assert lookup_firb_lgd(collateral_type="covered_bond", is_basel_3_1=True) == Decimal(
+            "0.1125"
+        )
 
     def test_lookup_covered_bonds_plural(self) -> None:
         """Plural form 'covered_bonds' also resolves correctly."""
-        assert lookup_firb_lgd(
-            collateral_type="covered_bonds", is_basel_3_1=True
-        ) == Decimal("0.1125")
+        assert lookup_firb_lgd(collateral_type="covered_bonds", is_basel_3_1=True) == Decimal(
+            "0.1125"
+        )
 
 
 # =============================================================================

@@ -28,6 +28,7 @@ import pytest
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
 from rwa_calc.data.tables.crr_risk_weights import (
     PSE_RISK_WEIGHTS_OWN_RATING,
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
@@ -36,10 +37,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
     lookup_risk_weight,
 )
-from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa import SACalculator
-
 
 # =============================================================================
 # FIXTURES
@@ -97,11 +96,11 @@ class TestPSERiskWeightTables:
 
     def test_short_term_rw(self):
         """Art. 116(3): short-term PSE exposures get 20%."""
-        assert PSE_SHORT_TERM_RW == Decimal("0.20")
+        assert Decimal("0.20") == PSE_SHORT_TERM_RW
 
     def test_unrated_default(self):
         """Unrated PSEs default to 100% when sovereign CQS is unknown."""
-        assert PSE_UNRATED_DEFAULT_RW == Decimal("1.00")
+        assert Decimal("1.00") == PSE_UNRATED_DEFAULT_RW
 
     def test_pse_in_combined_crr_table(self):
         """PSE rows are included in the CRR combined CQS table."""
@@ -141,82 +140,122 @@ class TestCRRPSERiskWeights:
     def test_rated_pse_cqs1_20pct(self, sa_calculator, crr_config):
         """CRR: Rated PSE with CQS 1 → 20% (Table 2A)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=1, country_code="GB", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=1,
+            country_code="GB",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_rated_pse_cqs2_50pct(self, sa_calculator, crr_config):
         """CRR: Rated PSE with CQS 2 → 50% (Table 2A)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=2, country_code="GB", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=2,
+            country_code="GB",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.50)
 
     def test_rated_pse_cqs3_50pct(self, sa_calculator, crr_config):
         """CRR: Rated PSE with CQS 3 → 50% (Table 2A — not 100% like Table 2)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=3, country_code="GB", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=3,
+            country_code="GB",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.50)
 
     def test_rated_pse_cqs4_100pct(self, sa_calculator, crr_config):
         """CRR: Rated PSE with CQS 4 → 100%."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=4, country_code="DE", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=4,
+            country_code="DE",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_rated_pse_cqs5_100pct(self, sa_calculator, crr_config):
         """CRR: Rated PSE with CQS 5 → 100%."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=5, country_code="DE", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=5,
+            country_code="DE",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_rated_pse_cqs6_150pct(self, sa_calculator, crr_config):
         """CRR: Rated PSE with CQS 6 → 150% — capital understatement risk if missing."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=6, country_code="DE", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=6,
+            country_code="DE",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_unrated_uk_pse_20pct(self, sa_calculator, crr_config):
         """CRR: Unrated UK PSE → 20% (sovereign-derived, UK sovereign CQS=1)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=None, country_code="GB", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=None,
+            country_code="GB",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_unrated_non_uk_pse_100pct(self, sa_calculator, crr_config):
         """CRR: Unrated non-UK PSE → 100% conservative default."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=None, country_code="DE", config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=None,
+            country_code="DE",
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_short_term_pse_20pct(self, sa_calculator, crr_config):
         """CRR: Short-term PSE (≤3m) → 20% regardless of rating (Art. 116(3))."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=4, country_code="DE",
-            residual_maturity_years=0.2, config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=4,
+            country_code="DE",
+            residual_maturity_years=0.2,
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_short_term_unrated_pse_20pct(self, sa_calculator, crr_config):
         """CRR: Unrated short-term PSE → 20% (short-term overrides sovereign-derived)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=None, country_code="DE",
-            residual_maturity_years=0.1, config=crr_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=None,
+            country_code="DE",
+            residual_maturity_years=0.1,
+            config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
@@ -224,8 +263,12 @@ class TestCRRPSERiskWeights:
         """CRR: PSE RWA = EAD × RW."""
         ead = Decimal("5000000")
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=ead,
-            exposure_class="pse", cqs=1, country_code="GB", config=crr_config,
+            sa_calculator,
+            ead=ead,
+            exposure_class="pse",
+            cqs=1,
+            country_code="GB",
+            config=crr_config,
         )
         expected_rwa = float(ead) * 0.20
         assert result["rwa"] == pytest.approx(expected_rwa)
@@ -242,73 +285,109 @@ class TestB31PSERiskWeights:
     def test_rated_pse_cqs1_20pct(self, sa_calculator, b31_config):
         """B31: Rated PSE with CQS 1 → 20% (same as CRR)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=1, country_code="GB", config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=1,
+            country_code="GB",
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_rated_pse_cqs3_50pct(self, sa_calculator, b31_config):
         """B31: Rated PSE with CQS 3 → 50% (Table 2A)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=3, country_code="GB", config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=3,
+            country_code="GB",
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(0.50)
 
     def test_rated_pse_cqs6_150pct(self, sa_calculator, b31_config):
         """B31: Rated PSE with CQS 6 → 150%."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=6, country_code="DE", config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=6,
+            country_code="DE",
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_unrated_uk_pse_20pct(self, sa_calculator, b31_config):
         """B31: Unrated UK PSE → 20% sovereign-derived."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=None, country_code="GB", config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=None,
+            country_code="GB",
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_unrated_non_uk_pse_100pct(self, sa_calculator, b31_config):
         """B31: Unrated non-UK PSE → 100% conservative default."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=None, country_code="DE", config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=None,
+            country_code="DE",
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_short_term_pse_overrides_cqs(self, sa_calculator, b31_config):
         """B31: Short-term PSE ≤3m → 20% even with CQS 5 (Art. 116(3))."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=5, country_code="DE",
-            residual_maturity_years=0.25, config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=5,
+            country_code="DE",
+            residual_maturity_years=0.25,
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_above_3m_uses_cqs_table(self, sa_calculator, b31_config):
         """B31: PSE with maturity > 3m uses CQS table, not short-term treatment."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=5, country_code="DE",
-            residual_maturity_years=0.5, config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=5,
+            country_code="DE",
+            residual_maturity_years=0.5,
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_null_maturity_uses_cqs_table(self, sa_calculator, b31_config):
         """B31: PSE with null maturity uses CQS table (short-term not triggered)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=2, country_code="GB", config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=2,
+            country_code="GB",
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(0.50)
 
     def test_null_country_unrated_pse_100pct(self, sa_calculator, b31_config):
         """B31: Unrated PSE with null country → 100% conservative default."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("1000000"),
-            exposure_class="pse", cqs=None, country_code=None, config=b31_config,
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=None,
+            country_code=None,
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)

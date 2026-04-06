@@ -128,9 +128,7 @@ class TestMaturityMismatchVectorized:
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
         assert result["value_after_maturity_adj"][0] == pytest.approx(0.0)
 
-    def test_null_collateral_maturity_defaults_to_10yr(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_null_collateral_maturity_defaults_to_10yr(self, crr_config: CalculationConfig) -> None:
         """Null collateral maturity defaults to 10yr (no mismatch)."""
         reporting = crr_config.reporting_date
         exposure_mat = reporting + timedelta(days=int(3 * 365.25))
@@ -153,9 +151,7 @@ class TestMaturityMismatchVectorized:
         # 10yr collateral > 3yr exposure → no adjustment
         assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)
 
-    def test_null_exposure_maturity_defaults_to_5yr(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_null_exposure_maturity_defaults_to_5yr(self, crr_config: CalculationConfig) -> None:
         """Null exposure maturity defaults to T=5 (conservative)."""
         collateral = pl.LazyFrame(
             {
@@ -212,9 +208,7 @@ class TestMaturityMismatchVectorized:
         expected_factor = (2.0 - 0.25) / (3.0 - 0.25)
         assert result["maturity_adjustment_factor"][0] == pytest.approx(expected_factor, rel=1e-2)
 
-    def test_mixed_batch_varying_exposure_maturities(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_mixed_batch_varying_exposure_maturities(self, crr_config: CalculationConfig) -> None:
         """Multiple exposures with different maturities processed correctly."""
         reporting = crr_config.reporting_date
         collateral = pl.LazyFrame(

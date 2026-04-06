@@ -474,10 +474,9 @@ def _adjust_expected_loss(
         & (pl.col("guarantor_rw").is_not_null())
         & (pl.col("is_guarantee_beneficial"))
     )
-    _el_unguaranteed = (
-        pl.col("expected_loss_irb_original")
-        * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
-    )
+    _el_unguaranteed = pl.col("expected_loss_irb_original") * (
+        pl.col("unguaranteed_portion") / pl.col(ead_col)
+    ).fill_null(1.0)
 
     has_guarantor_pd = "guarantor_pd" in lf.collect_schema().names()
     if has_guarantor_pd:

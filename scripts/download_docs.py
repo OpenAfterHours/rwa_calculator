@@ -28,17 +28,12 @@ ASSETS_DIR = PROJECT_ROOT / "docs" / "assets"
 
 USER_AGENT = "Mozilla/5.0 (rwa-calc document fetcher)"
 
-BOE_PS126_BASE = (
-    "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january"
-)
-BOE_PS126_LANDING = (
-    "https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement"
-)
+BOE_PS126_BASE = "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january"
+BOE_PS126_LANDING = "https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement"
 PRA_RULEBOOK = "https://www.prarulebook.co.uk/pra-rules/crr-firms"
 
-BOE_CRR_BASE = (
-    "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2023/november/"
-)
+BOE_CRR_BASE = "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2023/november/"
+
 
 @dataclass(frozen=True)
 class DocEntry:

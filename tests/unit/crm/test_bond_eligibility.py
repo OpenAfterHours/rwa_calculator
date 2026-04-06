@@ -31,7 +31,6 @@ from rwa_calc.data.tables.crr_haircuts import (
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
-
 # =============================================================================
 # ELIGIBILITY FUNCTION TESTS
 # =============================================================================
@@ -188,35 +187,27 @@ class TestHaircutTableEligibleRows:
     def test_crr_table_has_cqs4_govt_bond(self) -> None:
         """CRR haircut table includes CQS 4 government bond rows."""
         df = get_haircut_table(is_basel_3_1=False)
-        cqs4_govt = df.filter(
-            (pl.col("collateral_type") == "govt_bond") & (pl.col("cqs") == 4)
-        )
+        cqs4_govt = df.filter((pl.col("collateral_type") == "govt_bond") & (pl.col("cqs") == 4))
         assert cqs4_govt.height == 3  # 3 CRR maturity bands
         assert all(h == pytest.approx(0.15) for h in cqs4_govt["haircut"].to_list())
 
     def test_b31_table_has_cqs4_govt_bond(self) -> None:
         """Basel 3.1 haircut table includes CQS 4 government bond rows."""
         df = get_haircut_table(is_basel_3_1=True)
-        cqs4_govt = df.filter(
-            (pl.col("collateral_type") == "govt_bond") & (pl.col("cqs") == 4)
-        )
+        cqs4_govt = df.filter((pl.col("collateral_type") == "govt_bond") & (pl.col("cqs") == 4))
         assert cqs4_govt.height == 5  # 5 B31 maturity bands
         assert all(h == pytest.approx(0.15) for h in cqs4_govt["haircut"].to_list())
 
     def test_crr_table_no_cqs5_govt_bond(self) -> None:
         """CRR haircut table does NOT include CQS 5+ government bond rows."""
         df = get_haircut_table(is_basel_3_1=False)
-        cqs5_govt = df.filter(
-            (pl.col("collateral_type") == "govt_bond") & (pl.col("cqs") >= 5)
-        )
+        cqs5_govt = df.filter((pl.col("collateral_type") == "govt_bond") & (pl.col("cqs") >= 5))
         assert cqs5_govt.height == 0
 
     def test_crr_table_no_cqs4_corp_bond(self) -> None:
         """CRR haircut table does NOT include CQS 4+ corporate bond rows."""
         df = get_haircut_table(is_basel_3_1=False)
-        cqs4_corp = df.filter(
-            (pl.col("collateral_type") == "corp_bond") & (pl.col("cqs") >= 4)
-        )
+        cqs4_corp = df.filter((pl.col("collateral_type") == "corp_bond") & (pl.col("cqs") >= 4))
         assert cqs4_corp.height == 0
 
 
@@ -262,9 +253,7 @@ class TestSingleHaircutIneligibility:
         assert result.adjusted_value == Decimal("0")
         assert "INELIGIBLE" in result.description
 
-    def test_govt_bond_cqs4_eligible_adjusted_value(
-        self, calculator: HaircutCalculator
-    ) -> None:
+    def test_govt_bond_cqs4_eligible_adjusted_value(self, calculator: HaircutCalculator) -> None:
         """CQS 4 govt bond: eligible, adjusted value = MV * (1 - 0.15)."""
         result = calculator.calculate_single_haircut(
             collateral_type="govt_bond",
@@ -291,9 +280,7 @@ class TestSingleHaircutIneligibility:
         )
         assert result.adjusted_value == Decimal("0")
 
-    def test_unrated_corp_bond_zero_adjusted_value(
-        self, calculator: HaircutCalculator
-    ) -> None:
+    def test_unrated_corp_bond_zero_adjusted_value(self, calculator: HaircutCalculator) -> None:
         """Unrated corp bond: ineligible, adjusted value = 0."""
         result = calculator.calculate_single_haircut(
             collateral_type="corp_bond",

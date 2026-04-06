@@ -693,7 +693,9 @@ def _apply_guarantee_fx_haircut(exposures: pl.LazyFrame) -> pl.LazyFrame:
         return exposures.with_columns(pl.lit(0.0).alias("guarantee_fx_haircut"))
 
     # Use original_currency (pre-FX-conversion) if available, else currency
-    exposure_ccy = pl.col("original_currency") if "original_currency" in cols else pl.col("currency")
+    exposure_ccy = (
+        pl.col("original_currency") if "original_currency" in cols else pl.col("currency")
+    )
     h_fx = float(FX_HAIRCUT)
 
     fx_mismatch = (

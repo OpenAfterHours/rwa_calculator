@@ -19,17 +19,14 @@ from __future__ import annotations
 from datetime import date
 
 import polars as pl
-import pytest
 
 from rwa_calc.contracts.bundles import (
-    ClassifiedExposuresBundle,
     CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
-
 
 # =============================================================================
 # Helpers
@@ -283,8 +280,11 @@ class TestFullIRBB31Permissions:
     def test_retail_unchanged(self) -> None:
         """Art. 147A(3): Retail classes retain A-IRB option."""
         perms = IRBPermissions.full_irb_b31()
-        for ec in [ExposureClass.RETAIL_MORTGAGE, ExposureClass.RETAIL_QRRE,
-                    ExposureClass.RETAIL_OTHER]:
+        for ec in [
+            ExposureClass.RETAIL_MORTGAGE,
+            ExposureClass.RETAIL_QRRE,
+            ExposureClass.RETAIL_OTHER,
+        ]:
             permitted = perms.get_permitted_approaches(ec)
             assert ApproachType.SA in permitted
             assert ApproachType.AIRB in permitted
@@ -325,12 +325,8 @@ class TestB31ConfigUsesB31Permissions:
             permission_mode=PermissionMode.IRB,
         )
         # Institution should be FIRB only (B31), not AIRB+FIRB (CRR)
-        assert not config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION, ApproachType.AIRB
-        )
-        assert config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION, ApproachType.FIRB
-        )
+        assert not config.irb_permissions.is_permitted(ExposureClass.INSTITUTION, ApproachType.AIRB)
+        assert config.irb_permissions.is_permitted(ExposureClass.INSTITUTION, ApproachType.FIRB)
 
     def test_crr_irb_config_uses_full_irb(self) -> None:
         """CRR IRB config should use full_irb() with AIRB for institutions."""
@@ -339,9 +335,7 @@ class TestB31ConfigUsesB31Permissions:
             permission_mode=PermissionMode.IRB,
         )
         # Institution should have AIRB under CRR
-        assert config.irb_permissions.is_permitted(
-            ExposureClass.INSTITUTION, ApproachType.AIRB
-        )
+        assert config.irb_permissions.is_permitted(ExposureClass.INSTITUTION, ApproachType.AIRB)
 
     def test_b31_sa_config_uses_sa_only(self) -> None:
         """B31 SA-only config should use sa_only() — no IRB."""
@@ -350,9 +344,7 @@ class TestB31ConfigUsesB31Permissions:
             permission_mode=PermissionMode.STANDARDISED,
         )
         # No IRB for any class
-        assert not config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE, ApproachType.FIRB
-        )
+        assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
 
     def test_b31_sovereign_forced_sa(self) -> None:
         """B31 IRB config blocks IRB for sovereigns."""

@@ -45,7 +45,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa import SACalculator
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -99,19 +98,19 @@ class TestRGLARiskWeightTables:
 
     def test_uk_devolved_rw(self):
         """PRA designation: UK devolved administrations receive 0%."""
-        assert RGLA_UK_DEVOLVED_RW == Decimal("0.00")
+        assert Decimal("0.00") == RGLA_UK_DEVOLVED_RW
 
     def test_uk_local_auth_rw(self):
         """PRA designation: UK local authorities receive 20%."""
-        assert RGLA_UK_LOCAL_AUTH_RW == Decimal("0.20")
+        assert Decimal("0.20") == RGLA_UK_LOCAL_AUTH_RW
 
     def test_domestic_currency_rw(self):
         """Art. 115(5): domestic-currency RGLA → 20%."""
-        assert RGLA_DOMESTIC_CURRENCY_RW == Decimal("0.20")
+        assert Decimal("0.20") == RGLA_DOMESTIC_CURRENCY_RW
 
     def test_unrated_default(self):
         """Conservative fallback for unrated RGLA when sovereign CQS unknown."""
-        assert RGLA_UNRATED_DEFAULT_RW == Decimal("1.00")
+        assert Decimal("1.00") == RGLA_UNRATED_DEFAULT_RW
 
     def test_rgla_in_combined_crr_table(self):
         """RGLA rows are included in the combined CRR CQS risk weight table."""
@@ -151,8 +150,11 @@ class TestCRRRGLARiskWeights:
     def test_rated_rgla_cqs1(self, sa_calculator, crr_config):
         """CRR rated RGLA CQS 1 → 20% via Table 1B join."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=1, config=crr_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=1,
+            config=crr_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -160,8 +162,11 @@ class TestCRRRGLARiskWeights:
     def test_rated_rgla_cqs3(self, sa_calculator, crr_config):
         """CRR rated RGLA CQS 3 → 50% (Table 1B, not 100% from Table 1A)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=3, config=crr_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=3,
+            config=crr_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(0.50)
@@ -169,8 +174,11 @@ class TestCRRRGLARiskWeights:
     def test_rated_rgla_cqs6(self, sa_calculator, crr_config):
         """CRR rated RGLA CQS 6 → 150%."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=6, config=crr_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=6,
+            config=crr_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(1.50)
@@ -178,9 +186,12 @@ class TestCRRRGLARiskWeights:
     def test_uk_devolved_govt_zero_percent(self, sa_calculator, crr_config):
         """CRR UK devolved government (rgla_sovereign) → 0% (PRA designation)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("10000000"),
-            exposure_class="rgla", config=crr_config,
-            country_code="GB", entity_type="rgla_sovereign",
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="rgla",
+            config=crr_config,
+            country_code="GB",
+            entity_type="rgla_sovereign",
         )
         assert result["risk_weight"] == pytest.approx(0.0)
         assert result["rwa"] == pytest.approx(0.0)
@@ -188,9 +199,12 @@ class TestCRRRGLARiskWeights:
     def test_uk_local_authority_domestic_currency(self, sa_calculator, crr_config):
         """CRR UK local authority in GBP → 20% via Art. 115(5) domestic currency."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=crr_config,
-            country_code="GB", currency="GBP",
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=crr_config,
+            country_code="GB",
+            currency="GBP",
             entity_type="rgla_institution",
         )
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -198,8 +212,10 @@ class TestCRRRGLARiskWeights:
     def test_unrated_uk_rgla(self, sa_calculator, crr_config):
         """CRR unrated UK RGLA → 20% (sovereign-derived, UK CQS 1)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=crr_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=crr_config,
             country_code="GB",
         )
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -207,8 +223,10 @@ class TestCRRRGLARiskWeights:
     def test_unrated_non_uk_rgla(self, sa_calculator, crr_config):
         """CRR unrated non-UK RGLA → 100% conservative default."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=crr_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=crr_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(1.00)
@@ -216,8 +234,11 @@ class TestCRRRGLARiskWeights:
     def test_rwa_calculation(self, sa_calculator, crr_config):
         """CRR RGLA RWA = EAD x RW = 5,000,000 x 0.20 = 1,000,000."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=1, config=crr_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=1,
+            config=crr_config,
             country_code="DE",
         )
         assert result["rwa"] == pytest.approx(5_000_000 * 0.20)
@@ -225,9 +246,13 @@ class TestCRRRGLARiskWeights:
     def test_eu_domestic_currency_rgla(self, sa_calculator, crr_config):
         """CRR EU RGLA in domestic currency (DE+EUR) → 20% (Art. 115(5))."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=4, config=crr_config,
-            country_code="DE", currency="EUR",
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=4,
+            config=crr_config,
+            country_code="DE",
+            currency="EUR",
         )
         # Art. 115(5) domestic currency overrides CQS 4 (would be 100% from Table 1B)
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -235,9 +260,12 @@ class TestCRRRGLARiskWeights:
     def test_non_uk_devolved_not_zero(self, sa_calculator, crr_config):
         """Non-UK rgla_sovereign does NOT get 0% — only UK devolved govts do."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=crr_config,
-            country_code="DE", entity_type="rgla_sovereign",
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=crr_config,
+            country_code="DE",
+            entity_type="rgla_sovereign",
         )
         # Non-UK, non-domestic-currency, unrated → 100% conservative default
         assert result["risk_weight"] == pytest.approx(1.00)
@@ -254,8 +282,11 @@ class TestB31RGLARiskWeights:
     def test_rated_rgla_cqs1(self, sa_calculator, b31_config):
         """B31 rated RGLA CQS 1 → 20% via Table 1B join."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=1, config=b31_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=1,
+            config=b31_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -263,8 +294,11 @@ class TestB31RGLARiskWeights:
     def test_rated_rgla_cqs3(self, sa_calculator, b31_config):
         """B31 rated RGLA CQS 3 → 50% (Table 1B own-rating)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=3, config=b31_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=3,
+            config=b31_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(0.50)
@@ -272,8 +306,11 @@ class TestB31RGLARiskWeights:
     def test_rated_rgla_cqs6(self, sa_calculator, b31_config):
         """B31 rated RGLA CQS 6 → 150%."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=6, config=b31_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=6,
+            config=b31_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(1.50)
@@ -281,9 +318,12 @@ class TestB31RGLARiskWeights:
     def test_uk_devolved_govt_zero_percent(self, sa_calculator, b31_config):
         """B31 UK devolved government (rgla_sovereign) → 0%."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("10000000"),
-            exposure_class="rgla", config=b31_config,
-            country_code="GB", entity_type="rgla_sovereign",
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="rgla",
+            config=b31_config,
+            country_code="GB",
+            entity_type="rgla_sovereign",
         )
         assert result["risk_weight"] == pytest.approx(0.0)
         assert result["rwa"] == pytest.approx(0.0)
@@ -291,9 +331,12 @@ class TestB31RGLARiskWeights:
     def test_uk_local_authority_domestic_currency(self, sa_calculator, b31_config):
         """B31 UK local authority in GBP → 20%."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=b31_config,
-            country_code="GB", currency="GBP",
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=b31_config,
+            country_code="GB",
+            currency="GBP",
             entity_type="rgla_institution",
         )
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -301,8 +344,10 @@ class TestB31RGLARiskWeights:
     def test_unrated_uk_rgla(self, sa_calculator, b31_config):
         """B31 unrated UK RGLA → 20% (sovereign-derived)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=b31_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=b31_config,
             country_code="GB",
         )
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -310,8 +355,10 @@ class TestB31RGLARiskWeights:
     def test_unrated_non_uk_rgla(self, sa_calculator, b31_config):
         """B31 unrated non-UK RGLA → 100% conservative default."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=b31_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=b31_config,
             country_code="DE",
         )
         assert result["risk_weight"] == pytest.approx(1.00)
@@ -319,16 +366,22 @@ class TestB31RGLARiskWeights:
     def test_null_country_unrated_rgla(self, sa_calculator, b31_config):
         """B31 unrated RGLA with null country → 100% conservative."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", config=b31_config,
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_uk_devolved_with_cqs_still_zero(self, sa_calculator, b31_config):
         """UK devolved govt with a CQS rating still gets 0% (PRA overrides CQS)."""
         result = calculate_single_sa_exposure(
-            sa_calculator, ead=Decimal("5000000"),
-            exposure_class="rgla", cqs=3, config=b31_config,
-            country_code="GB", entity_type="rgla_sovereign",
+            sa_calculator,
+            ead=Decimal("5000000"),
+            exposure_class="rgla",
+            cqs=3,
+            config=b31_config,
+            country_code="GB",
+            entity_type="rgla_sovereign",
         )
         assert result["risk_weight"] == pytest.approx(0.0)

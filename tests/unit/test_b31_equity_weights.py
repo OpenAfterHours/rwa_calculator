@@ -31,7 +31,6 @@ from rwa_calc.data.tables.b31_equity_rw import (
 from rwa_calc.domain.enums import EquityType, PermissionMode
 from rwa_calc.engine.equity import EquityCalculator
 
-
 # =============================================================================
 # Data Table Tests
 # =============================================================================

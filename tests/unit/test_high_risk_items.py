@@ -34,7 +34,6 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-import polars as pl
 import pytest
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
@@ -47,7 +46,6 @@ from rwa_calc.engine.classifier import (
     ENTITY_TYPE_TO_SA_CLASS,
 )
 from rwa_calc.engine.sa import SACalculator
-
 
 # =============================================================================
 # FIXTURES
@@ -79,11 +77,11 @@ class TestHighRiskConstants:
 
     def test_crr_high_risk_rw_150(self):
         """CRR Art. 128: High-risk items → 150%."""
-        assert HIGH_RISK_RW == Decimal("1.50")
+        assert Decimal("1.50") == HIGH_RISK_RW
 
     def test_b31_high_risk_rw_150(self):
         """PRA PS1/26 Art. 128: High-risk items → 150% (unchanged from CRR)."""
-        assert B31_HIGH_RISK_RW == Decimal("1.50")
+        assert Decimal("1.50") == B31_HIGH_RISK_RW
 
     def test_crr_and_b31_high_risk_same(self):
         """Art. 128 is unchanged between CRR and Basel 3.1."""
@@ -330,9 +328,7 @@ class TestHighRiskDefaultedPriority:
         )
         assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_defaulted_corporate_still_gets_defaulted_treatment(
-        self, sa_calculator, crr_config
-    ):
+    def test_defaulted_corporate_still_gets_defaulted_treatment(self, sa_calculator, crr_config):
         """Non-high-risk defaulted exposures still use Art. 127 treatment."""
         result = calculate_single_sa_exposure(
             sa_calculator,

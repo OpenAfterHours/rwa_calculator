@@ -28,7 +28,6 @@ from rwa_calc.data.tables.crr_haircuts import (
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
     get_haircut_table,
-    is_bond_eligible_as_financial_collateral,
     lookup_collateral_haircut,
     lookup_fx_haircut,
 )
@@ -262,9 +261,8 @@ class HaircutCalculator:
         is_govt = pl.col("_lookup_type") == "govt_bond"
         is_corp = pl.col("_lookup_type") == "corp_bond"
         cqs_val = pl.col("issuer_cqs")
-        _ineligible_bond = (
-            (is_govt & ((cqs_val >= 5) | cqs_val.is_null()))
-            | (is_corp & ((cqs_val >= 4) | cqs_val.is_null()))
+        _ineligible_bond = (is_govt & ((cqs_val >= 5) | cqs_val.is_null())) | (
+            is_corp & ((cqs_val >= 4) | cqs_val.is_null())
         )
 
         # Ineligible bonds: zero value; unmatched non-bonds: 40% default (other_physical)
@@ -336,11 +334,15 @@ class HaircutCalculator:
 
         # Derive exposure maturity in years from the Date column, capped at 5y, floored at 0.25y
         exposure_maturity_years_expr = (
-            (pl.col("exposure_maturity").cast(pl.Date) - pl.lit(reporting_date))
-            .dt.total_days()
-            .cast(pl.Float64)
-            / 365.25
-        ).clip(lower_bound=0.25, upper_bound=5.0).fill_null(5.0)
+            (
+                (pl.col("exposure_maturity").cast(pl.Date) - pl.lit(reporting_date))
+                .dt.total_days()
+                .cast(pl.Float64)
+                / 365.25
+            )
+            .clip(lower_bound=0.25, upper_bound=5.0)
+            .fill_null(5.0)
+        )
 
         collateral = collateral.with_columns(
             [
@@ -353,17 +355,14 @@ class HaircutCalculator:
         collateral = collateral.with_columns(
             [
                 # No adjustment when collateral maturity >= exposure maturity
-                pl.when(
-                    pl.col("coll_maturity") >= pl.col("_exposure_maturity_years")
-                )
+                pl.when(pl.col("coll_maturity") >= pl.col("_exposure_maturity_years"))
                 .then(pl.lit(1.0))
                 # No protection when collateral maturity < 3 months
                 .when(pl.col("coll_maturity") < 0.25)
                 .then(pl.lit(0.0))
                 # CVAM = (t - 0.25) / (T - 0.25) where T = exposure maturity capped at 5y
                 .otherwise(
-                    (pl.col("coll_maturity") - 0.25)
-                    / (pl.col("_exposure_maturity_years") - 0.25)
+                    (pl.col("coll_maturity") - 0.25) / (pl.col("_exposure_maturity_years") - 0.25)
                 )
                 .alias("maturity_adjustment_factor"),
             ]

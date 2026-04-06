@@ -903,12 +903,12 @@ class TestRatedSASpecialisedLending:
     @pytest.mark.parametrize(
         ("sl_type", "cqs", "expected_rw"),
         [
-            ("project_finance", 1, 0.20),   # AAA-AA-: corporate CQS 1 = 20%
-            ("project_finance", 2, 0.50),   # A+-A-: corporate CQS 2 = 50%
-            ("project_finance", 3, 0.75),   # BBB+-BBB-: corporate CQS 3 = 75% (B31)
-            ("project_finance", 4, 1.00),   # BB+-BB-: corporate CQS 4 = 100%
-            ("project_finance", 5, 1.50),   # B+-B-: corporate CQS 5 = 150%
-            ("object_finance", 1, 0.20),    # Rated OF also uses corporate table
+            ("project_finance", 1, 0.20),  # AAA-AA-: corporate CQS 1 = 20%
+            ("project_finance", 2, 0.50),  # A+-A-: corporate CQS 2 = 50%
+            ("project_finance", 3, 0.75),  # BBB+-BBB-: corporate CQS 3 = 75% (B31)
+            ("project_finance", 4, 1.00),  # BB+-BB-: corporate CQS 4 = 100%
+            ("project_finance", 5, 1.50),  # B+-B-: corporate CQS 5 = 150%
+            ("object_finance", 1, 0.20),  # Rated OF also uses corporate table
             ("commodities_finance", 2, 0.50),  # Rated CF also uses corporate table
         ],
         ids=[

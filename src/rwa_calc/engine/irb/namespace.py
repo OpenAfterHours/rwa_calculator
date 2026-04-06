@@ -168,9 +168,7 @@ class IRBLazyFrame:
 
         # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
         # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
-        has_fse_col = (
-            config.is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names
-        )
+        has_fse_col = config.is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names
         if has_fse_col:
             fse_lgd = float(lgd_table["unsecured_senior_fse"])
             default_lgd_expr = (
@@ -390,9 +388,9 @@ class IRBLazyFrame:
         # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
         return lf.with_columns(
-            _polars_correlation_expr(
-                eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1
-            ).alias("correlation")
+            _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1).alias(
+                "correlation"
+            )
         )
 
     def calculate_k(self, config: CalculationConfig) -> pl.LazyFrame:

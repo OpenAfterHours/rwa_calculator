@@ -825,9 +825,8 @@ class ExposureClassifier:
         if config.is_basel_3_1:
             # Art. 147A(1)(c): IPRE/HVCRE → slotting only
             _b31_ipre_hvcre_forced_slotting = (
-                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
-                & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
-            )
+                pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+            ) & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
 
             # Art. 147A(1)(d)/(e): FSE and large corporates → F-IRB only (no A-IRB)
             _is_fse = pl.lit(False)

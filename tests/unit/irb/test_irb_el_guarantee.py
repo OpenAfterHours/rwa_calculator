@@ -135,9 +135,7 @@ class TestELGuaranteeAdjustment:
         assert result["is_guarantee_beneficial"][0] is False
         assert result["expected_loss"][0] == pytest.approx(450.0)
 
-    def test_irb_guarantor_el_substituted_with_pd(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_irb_guarantor_el_substituted_with_pd(self, crr_config: CalculationConfig) -> None:
         """IRB guarantor with PD should substitute guarantor PD for EL (Art. 161(3))."""
         lf = pl.LazyFrame(
             {
@@ -166,9 +164,7 @@ class TestELGuaranteeAdjustment:
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         assert result["expected_loss"][0] == pytest.approx(2_250.0)
 
-    def test_irb_guarantor_el_unchanged_without_pd(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_irb_guarantor_el_unchanged_without_pd(self, crr_config: CalculationConfig) -> None:
         """IRB guarantor without guarantor_pd column leaves EL unchanged."""
         lf = pl.LazyFrame(
             {
@@ -225,9 +221,7 @@ class TestELGuaranteeAdjustment:
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         assert result["expected_loss"][0] == pytest.approx(2_340.0)
 
-    def test_irb_guarantor_pd_floored_to_crr_minimum(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_irb_guarantor_pd_floored_to_crr_minimum(self, crr_config: CalculationConfig) -> None:
         """Guarantor PD below CRR 0.03% floor should be floored."""
         lf = pl.LazyFrame(
             {

@@ -261,9 +261,7 @@ class SlottingLazyFrame:
 
         el = col("expected_loss").fill_null(0.0)
         prov = (
-            col("provision_allocated").fill_null(0.0)
-            if "provision_allocated" in cols
-            else lit(0.0)
+            col("provision_allocated").fill_null(0.0) if "provision_allocated" in cols else lit(0.0)
         )
 
         return self._lf.with_columns(

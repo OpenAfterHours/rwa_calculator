@@ -31,6 +31,7 @@ import pytest
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
 from rwa_calc.data.tables.crr_risk_weights import (
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
@@ -39,10 +40,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
     lookup_risk_weight,
 )
-from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa import SACalculator
-
 
 # =============================================================================
 # FIXTURES
@@ -89,15 +88,15 @@ class TestMDBRiskWeightTables:
     def test_unrated_differs_from_institutions(self):
         """MDB unrated = 50% (Table 2B), not 40% like institutions."""
         assert MDB_RISK_WEIGHTS_TABLE_2B[CQS.UNRATED] == Decimal("0.50")
-        assert MDB_UNRATED_RW == Decimal("0.50")
+        assert Decimal("0.50") == MDB_UNRATED_RW
 
     def test_named_mdb_zero_rw(self):
         """Art. 117(2): Named MDB constant is 0%."""
-        assert MDB_NAMED_ZERO_RW == Decimal("0.00")
+        assert Decimal("0.00") == MDB_NAMED_ZERO_RW
 
     def test_io_zero_rw(self):
         """Art. 118: International organisation constant is 0%."""
-        assert IO_ZERO_RW == Decimal("0.00")
+        assert Decimal("0.00") == IO_ZERO_RW
 
     def test_mdb_in_combined_crr_table(self):
         """MDB rows present in combined CRR CQS risk weight table."""

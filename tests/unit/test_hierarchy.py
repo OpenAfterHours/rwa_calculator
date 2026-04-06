@@ -541,9 +541,7 @@ class TestDualRatingResolution:
         the counterparty they were assigned to. Only internal ratings
         inherit down the org hierarchy.
         """
-        counterparties = pl.DataFrame(
-            {"counterparty_reference": ["PARENT", "CHILD"]}
-        ).lazy()
+        counterparties = pl.DataFrame({"counterparty_reference": ["PARENT", "CHILD"]}).lazy()
         ratings = pl.DataFrame(
             {
                 "rating_reference": ["PARENT_EXT"],

@@ -45,7 +45,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
 )
 from rwa_calc.engine.sa import SACalculator
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -76,23 +75,23 @@ class TestOtherItemsRiskWeightConstants:
 
     def test_cash_rw_zero(self):
         """Art. 134(1): Cash and equivalent → 0%."""
-        assert OTHER_ITEMS_CASH_RW == Decimal("0.00")
+        assert Decimal("0.00") == OTHER_ITEMS_CASH_RW
 
     def test_gold_rw_zero(self):
         """Art. 134(4): Gold bullion in own vaults → 0%."""
-        assert OTHER_ITEMS_GOLD_RW == Decimal("0.00")
+        assert Decimal("0.00") == OTHER_ITEMS_GOLD_RW
 
     def test_collection_rw_twenty(self):
         """Art. 134(3): Items in course of collection → 20%."""
-        assert OTHER_ITEMS_COLLECTION_RW == Decimal("0.20")
+        assert Decimal("0.20") == OTHER_ITEMS_COLLECTION_RW
 
     def test_tangible_rw_hundred(self):
         """Art. 134(2): Tangible assets → 100%."""
-        assert OTHER_ITEMS_TANGIBLE_RW == Decimal("1.00")
+        assert Decimal("1.00") == OTHER_ITEMS_TANGIBLE_RW
 
     def test_default_rw_hundred(self):
         """Art. 134(2): All other items → 100%."""
-        assert OTHER_ITEMS_DEFAULT_RW == Decimal("1.00")
+        assert Decimal("1.00") == OTHER_ITEMS_DEFAULT_RW
 
     def test_lookup_risk_weight_other(self):
         """lookup_risk_weight for OTHER returns 100% (generic default)."""

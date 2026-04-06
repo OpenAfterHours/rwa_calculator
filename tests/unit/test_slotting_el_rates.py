@@ -25,6 +25,8 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
+# Ensure slotting namespace is registered
+import rwa_calc.engine.slotting.namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_slotting import (
     B31_SLOTTING_EL_RATES,
@@ -39,10 +41,6 @@ from rwa_calc.data.tables.crr_slotting import (
     lookup_slotting_el_rate,
 )
 from rwa_calc.domain.enums import SlottingCategory
-
-# Ensure slotting namespace is registered
-import rwa_calc.engine.slotting.namespace  # noqa: F401
-
 
 # =============================================================================
 # CRR Table B EL Rate Constants
@@ -92,9 +90,10 @@ class TestCRRSlottingELRatesShort:
 
     def test_strong_lower_than_long_maturity(self) -> None:
         """Short-maturity Strong (0%) < long-maturity Strong (0.4%)."""
-        assert SLOTTING_EL_RATES_SHORT[SlottingCategory.STRONG] < SLOTTING_EL_RATES[
-            SlottingCategory.STRONG
-        ]
+        assert (
+            SLOTTING_EL_RATES_SHORT[SlottingCategory.STRONG]
+            < SLOTTING_EL_RATES[SlottingCategory.STRONG]
+        )
 
 
 class TestCRRSlottingELRatesHVCRE:
@@ -261,9 +260,7 @@ class TestSlottingNamespaceELRateLookup:
         el_rates = result["slotting_el_rate"].to_list()
         assert el_rates == pytest.approx([0.004, 0.008, 0.028, 0.08, 0.50])
 
-    def test_crr_non_hvcre_short_maturity_el_rates(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_crr_non_hvcre_short_maturity_el_rates(self, crr_config: CalculationConfig) -> None:
         """CRR non-HVCRE < 2.5yr: Strong=0%, Good=0.4%."""
         lf = pl.LazyFrame(
             {
@@ -284,9 +281,7 @@ class TestSlottingNamespaceELRateLookup:
         el_rates = result["slotting_el_rate"].to_list()
         assert el_rates == pytest.approx([0.0, 0.004])
 
-    def test_crr_hvcre_el_rates_flat(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_crr_hvcre_el_rates_flat(self, crr_config: CalculationConfig) -> None:
         """HVCRE EL rates are flat (same for short and long maturity)."""
         lf = pl.LazyFrame(
             {
@@ -308,9 +303,7 @@ class TestSlottingNamespaceELRateLookup:
         assert el_rates[0] == pytest.approx(el_rates[1])  # flat
         assert el_rates[0] == pytest.approx(0.004)
 
-    def test_b31_el_rates_are_maturity_dependent(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_b31_el_rates_are_maturity_dependent(self, b31_config: CalculationConfig) -> None:
         """B31 EL rates vary by maturity even though B31 risk weights do not."""
         lf = pl.LazyFrame(
             {
@@ -357,12 +350,10 @@ class TestSlottingELComputation:
         assert el[0] == pytest.approx(0.004 * ead)  # Strong: 40k
         assert el[1] == pytest.approx(0.008 * ead)  # Good: 80k
         assert el[2] == pytest.approx(0.028 * ead)  # Satisfactory: 280k
-        assert el[3] == pytest.approx(0.08 * ead)   # Weak: 800k
-        assert el[4] == pytest.approx(0.50 * ead)   # Default: 5m
+        assert el[3] == pytest.approx(0.08 * ead)  # Weak: 800k
+        assert el[4] == pytest.approx(0.50 * ead)  # Default: 5m
 
-    def test_strong_short_maturity_zero_el(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_strong_short_maturity_zero_el(self, crr_config: CalculationConfig) -> None:
         """Strong short-maturity has 0% EL rate, so expected_loss = 0."""
         lf = pl.LazyFrame(
             {
@@ -383,9 +374,7 @@ class TestSlottingELComputation:
         assert result["expected_loss"][0] == pytest.approx(0.0)
         assert result["slotting_el_rate"][0] == pytest.approx(0.0)
 
-    def test_default_category_zero_rw_but_positive_el(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_default_category_zero_rw_but_positive_el(self, crr_config: CalculationConfig) -> None:
         """Default category: 0% RW (K=0) but 50% EL rate — EL still computed."""
         lf = pl.LazyFrame(
             {
@@ -416,9 +405,7 @@ class TestSlottingELComputation:
 class TestSlottingELShortfallExcess:
     """EL shortfall/excess computation for slotting exposures."""
 
-    def test_full_shortfall_no_provisions(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_full_shortfall_no_provisions(self, crr_config: CalculationConfig) -> None:
         """Without provisions, full EL is shortfall."""
         lf = pl.LazyFrame(
             {
@@ -441,9 +428,7 @@ class TestSlottingELShortfallExcess:
         assert result["el_shortfall"][0] == pytest.approx(el)
         assert result["el_excess"][0] == pytest.approx(0.0)
 
-    def test_partial_shortfall_with_provisions(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_partial_shortfall_with_provisions(self, crr_config: CalculationConfig) -> None:
         """Provisions cover part of EL — shortfall is the remainder."""
         lf = pl.LazyFrame(
             {
@@ -467,9 +452,7 @@ class TestSlottingELShortfallExcess:
         assert result["el_shortfall"][0] == pytest.approx(el - 50_000.0)  # 30k
         assert result["el_excess"][0] == pytest.approx(0.0)
 
-    def test_excess_when_provisions_exceed_el(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_excess_when_provisions_exceed_el(self, crr_config: CalculationConfig) -> None:
         """Provisions > EL — excess can be added to T2 capital."""
         lf = pl.LazyFrame(
             {
@@ -525,7 +508,7 @@ class TestSlottingCalculatorBranchEL:
         ead = 10_000_000.0
         expected_els = [0.004 * ead, 0.008 * ead, 0.028 * ead, 0.08 * ead, 0.50 * ead]
         actual_els = result["expected_loss"].to_list()
-        for actual, expected in zip(actual_els, expected_els):
+        for actual, expected in zip(actual_els, expected_els, strict=True):
             assert actual == pytest.approx(expected)
 
     def test_calculate_branch_b31_config(

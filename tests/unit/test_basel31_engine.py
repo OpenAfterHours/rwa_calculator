@@ -991,9 +991,7 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression(
-                basel31_config, has_exposure_class=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
         ).collect()
         # Retail mortgage: 5% (Art. 164(4)(a))
         assert result["lgd_floor"][0] == pytest.approx(0.05)
@@ -1015,9 +1013,7 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression(
-                basel31_config, has_exposure_class=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.50)
         assert result["lgd_floor"][1] == pytest.approx(0.50)
@@ -1034,9 +1030,7 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression(
-                basel31_config, has_exposure_class=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.30)
 
@@ -1056,9 +1050,9 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression_with_collateral(
-                basel31_config, has_exposure_class=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
         ).collect()
         # Retail mortgage + RRE: 5% (Art. 164(4)(a))
         assert result["lgd_floor"][0] == pytest.approx(0.05)
@@ -1081,9 +1075,9 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression_with_collateral(
-                basel31_config, has_exposure_class=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
         ).collect()
         # Retail other unsecured: 30% (Art. 164(4)(b)(ii))
         assert result["lgd_floor"][0] == pytest.approx(0.30)
@@ -1103,9 +1097,9 @@ class TestLGDFloors:
             }
         )
         result = lf.with_columns(
-            _lgd_floor_expression_with_collateral(
-                basel31_config, has_exposure_class=True
-            ).alias("lgd_floor")
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.0)
 

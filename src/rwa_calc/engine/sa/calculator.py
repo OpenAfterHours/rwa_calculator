@@ -81,9 +81,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     OTHER_ITEMS_CASH_RW,
     OTHER_ITEMS_COLLECTION_RW,
     OTHER_ITEMS_DEFAULT_RW,
-    OTHER_ITEMS_GOLD_RW,
-    OTHER_ITEMS_TANGIBLE_RW,
-    PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
     QCCP_CLIENT_CLEARED_RW,
@@ -387,9 +384,7 @@ class SACalculator:
         if "is_qrre_transactor" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_qrre_transactor"))
         if "residual_maturity_years" not in schema.names():
-            missing_cols.append(
-                pl.lit(None).cast(pl.Float64).alias("residual_maturity_years")
-            )
+            missing_cols.append(pl.lit(None).cast(pl.Float64).alias("residual_maturity_years"))
         if "is_short_term_trade_lc" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_short_term_trade_lc"))
         if missing_cols:
@@ -474,7 +469,6 @@ class SACalculator:
             scra_c_rw = float(B31_SCRA_RISK_WEIGHTS["C"])
             # Short-term (≤3m)
             scra_st_a_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A"])
-            scra_st_ae_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A_ENHANCED"])
             scra_st_b_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["B"])
             scra_st_c_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"])
             inv_grade_rw = float(B31_CORPORATE_INVESTMENT_GRADE_RW)
@@ -501,9 +495,7 @@ class SACalculator:
                     # NOT (ead + provision_deducted) — that is the CRR denominator.
                     # Exception: general RESI RE (non-income-dependent) always 100%
                     # per CRE20.88 / Art. 127 — Basel 3.1 simplification.
-                    .when(
-                        pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
-                    )
+                    .when(pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK"))
                     .then(
                         # RESI RE non-income-dependent: 100% flat (CRE20.88)
                         pl.when(
@@ -515,10 +507,7 @@ class SACalculator:
                         )
                         .then(pl.lit(float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW)))
                         # All other defaulted: provision-based (Art. 127)
-                        .when(
-                            pl.col("provision_allocated")
-                            >= b31_def_threshold * pl.col(_ead_col)
-                        )
+                        .when(pl.col("provision_allocated") >= b31_def_threshold * pl.col(_ead_col))
                         .then(pl.lit(b31_def_high_rw))
                         .otherwise(pl.lit(b31_def_low_rw))
                     )
@@ -567,10 +556,7 @@ class SACalculator:
                     # 4b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
                     # Rated PSEs use Table 2A from CQS join; unrated need sovereign CQS.
                     # UK sovereign CQS=1 → 20%. Non-UK: conservative 100%.
-                    .when(
-                        (_uc == "PSE")
-                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                    )
+                    .when((_uc == "PSE") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
@@ -590,10 +576,7 @@ class SACalculator:
                     .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
                     # 4e-rgla. RGLA unrated non-domestic: sovereign-derived (Table 1A)
                     # UK sovereign CQS=1 → 20%. Non-UK: conservative 100%.
-                    .when(
-                        (_uc == "RGLA")
-                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                    )
+                    .when((_uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 1A row 1
@@ -602,10 +585,7 @@ class SACalculator:
                     # Rated RGLA: falls through to CQS join (Table 1B) via default
                     # 4f-mdb. Named MDB → 0% (Art. 117(2))
                     # 16 named MDBs get 0% unconditionally, identified by mdb_named entity_type.
-                    .when(
-                        (_uc == "MDB")
-                        & (pl.col("cp_entity_type").fill_null("") == "mdb_named")
-                    )
+                    .when((_uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))
                     .then(pl.lit(float(MDB_NAMED_ZERO_RW)))
                     # 4g-io. International Organisation → 0% (Art. 118)
                     # EU, IMF, BIS, EFSF, ESM — always 0%.
@@ -615,10 +595,7 @@ class SACalculator:
                     )
                     .then(pl.lit(float(IO_ZERO_RW)))
                     # 4h-mdb. Unrated non-named MDB → 50% (Art. 117(1), Table 2B)
-                    .when(
-                        (_uc == "MDB")
-                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                    )
+                    .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 4b-ecra. ECRA short-term rated institutions (Table 4, Art. 120)
@@ -632,10 +609,7 @@ class SACalculator:
                             (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
                             | (
                                 pl.col("is_short_term_trade_lc").fill_null(False)
-                                & (
-                                    pl.col("residual_maturity_years").fill_null(1.0)
-                                    <= 0.5
-                                )
+                                & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.5)
                             )
                         )
                     )
@@ -761,34 +735,26 @@ class SACalculator:
                     .when(
                         (_uc == "OTHER")
                         & (
-                            pl.col("cp_entity_type").fill_null("").is_in(
-                                ["other_cash", "other_gold"]
-                            )
+                            pl.col("cp_entity_type")
+                            .fill_null("")
+                            .is_in(["other_cash", "other_gold"])
                         )
                     )
                     .then(pl.lit(float(OTHER_ITEMS_CASH_RW)))
                     # 12b. Items in course of collection → 20% (Art. 134(3))
                     .when(
                         (_uc == "OTHER")
-                        & (
-                            pl.col("cp_entity_type").fill_null("")
-                            == "other_items_in_collection"
-                        )
+                        & (pl.col("cp_entity_type").fill_null("") == "other_items_in_collection")
                     )
                     .then(pl.lit(float(OTHER_ITEMS_COLLECTION_RW)))
                     # 12c. Residual lease value → 1/t × 100% (Art. 134(6))
                     .when(
                         (_uc == "OTHER")
-                        & (
-                            pl.col("cp_entity_type").fill_null("")
-                            == "other_residual_lease"
-                        )
+                        & (pl.col("cp_entity_type").fill_null("") == "other_residual_lease")
                     )
                     .then(
                         pl.lit(1.0)
-                        / pl.col("residual_maturity_years").fill_null(1.0).clip(
-                            lower_bound=1.0
-                        )
+                        / pl.col("residual_maturity_years").fill_null(1.0).clip(lower_bound=1.0)
                     )
                     # 12d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
@@ -824,9 +790,7 @@ class SACalculator:
                     # Art. 127 per Art. 112 Table A2 classification ordering.
                     # Provision ratio = provision_allocated / (ead + provision_deducted)
                     # where denominator reconstructs pre-provision unsecured EAD
-                    .when(
-                        pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
-                    )
+                    .when(pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK"))
                     .then(
                         pl.when(
                             pl.col("provision_allocated")
@@ -904,10 +868,7 @@ class SACalculator:
                     )
                     .then(pl.lit(float(PSE_SHORT_TERM_RW)))
                     # 6b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
-                    .when(
-                        (_uc == "PSE")
-                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                    )
+                    .when((_uc == "PSE") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
@@ -924,10 +885,7 @@ class SACalculator:
                     .when((_uc == "RGLA") & _is_domestic_currency)
                     .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
                     # 6e-rgla. RGLA unrated non-domestic: sovereign-derived (Table 1A)
-                    .when(
-                        (_uc == "RGLA")
-                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                    )
+                    .when((_uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 1A row 1
@@ -935,10 +893,7 @@ class SACalculator:
                     )
                     # Rated RGLA: falls through to CQS join (Table 1B) via default
                     # 6f-mdb. Named MDB → 0% (Art. 117(2))
-                    .when(
-                        (_uc == "MDB")
-                        & (pl.col("cp_entity_type").fill_null("") == "mdb_named")
-                    )
+                    .when((_uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))
                     .then(pl.lit(float(MDB_NAMED_ZERO_RW)))
                     # 6g-io. International Organisation → 0% (Art. 118)
                     .when(
@@ -947,10 +902,7 @@ class SACalculator:
                     )
                     .then(pl.lit(float(IO_ZERO_RW)))
                     # 6h-mdb. Unrated non-named MDB �� 50% (Art. 117(1), Table 2B)
-                    .when(
-                        (_uc == "MDB")
-                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                    )
+                    .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 7. Unrated covered bonds: derive from issuer institution RW
@@ -970,34 +922,26 @@ class SACalculator:
                     .when(
                         (_uc == "OTHER")
                         & (
-                            pl.col("cp_entity_type").fill_null("").is_in(
-                                ["other_cash", "other_gold"]
-                            )
+                            pl.col("cp_entity_type")
+                            .fill_null("")
+                            .is_in(["other_cash", "other_gold"])
                         )
                     )
                     .then(pl.lit(float(OTHER_ITEMS_CASH_RW)))
                     # 8b. Items in course of collection → 20% (Art. 134(3))
                     .when(
                         (_uc == "OTHER")
-                        & (
-                            pl.col("cp_entity_type").fill_null("")
-                            == "other_items_in_collection"
-                        )
+                        & (pl.col("cp_entity_type").fill_null("") == "other_items_in_collection")
                     )
                     .then(pl.lit(float(OTHER_ITEMS_COLLECTION_RW)))
                     # 8c. Residual lease value → 1/t × 100% (Art. 134(6))
                     .when(
                         (_uc == "OTHER")
-                        & (
-                            pl.col("cp_entity_type").fill_null("")
-                            == "other_residual_lease"
-                        )
+                        & (pl.col("cp_entity_type").fill_null("") == "other_residual_lease")
                     )
                     .then(
                         pl.lit(1.0)
-                        / pl.col("residual_maturity_years").fill_null(1.0).clip(
-                            lower_bound=1.0
-                        )
+                        / pl.col("residual_maturity_years").fill_null(1.0).clip(lower_bound=1.0)
                     )
                     # 8d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
@@ -1148,8 +1092,7 @@ class SACalculator:
                 )
                 # Named MDB guarantors (Art. 117(2)): 0% unconditional
                 .when(
-                    (_gec == "mdb")
-                    & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named")
+                    (_gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named")
                 )
                 .then(pl.lit(0.0))
                 # International Organisation guarantors (Art. 118): 0% unconditional

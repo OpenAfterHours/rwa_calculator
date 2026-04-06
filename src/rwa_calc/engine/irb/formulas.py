@@ -316,9 +316,9 @@ def apply_irb_formulas(
     # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
     exposures = exposures.with_columns(
-        _polars_correlation_expr(
-            eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1
-        ).alias("correlation")
+        _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1).alias(
+            "correlation"
+        )
     )
 
     # Step 4: Calculate K using pure Polars with polars-normal-stats

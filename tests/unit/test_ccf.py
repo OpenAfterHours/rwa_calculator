@@ -2060,9 +2060,9 @@ class TestAIRBCCFBasel31Revolving:
 
         expected = {
             "REV_001": 0.40,  # Revolving MR: max(0.40, 0.25) = 0.40
-            "NR_001": 0.50,   # Non-revolving MR: SA = 0.50
-            "REV_FR": 1.00,   # Revolving FR: SA = 1.00 (100% carve-out)
-            "NR_LR": 0.10,    # Non-revolving LR: SA = 0.10
+            "NR_001": 0.50,  # Non-revolving MR: SA = 0.50
+            "REV_FR": 1.00,  # Revolving FR: SA = 1.00 (100% carve-out)
+            "NR_LR": 0.10,  # Non-revolving LR: SA = 0.10
         }
         for ref, exp_ccf in expected.items():
             row = result.filter(pl.col("exposure_reference") == ref)

@@ -38,12 +38,18 @@ Where:
 - **x** = floor multiplier from transitional schedule (60%-72.5%)
 - **OF-ADJ** = `12.5 × (IRB_T2 - IRB_CET1 - GCRA + SA_T2)` — adjusts for approach-specific deductions
 
-| Component | Description |
-|-----------|-------------|
-| IRB_T2 | IRB-specific T2 deductions (provisioning shortfall) |
-| IRB_CET1 | IRB-specific CET1 deductions (EL shortfall) |
-| GCRA | General credit risk adjustment included in T2 |
-| SA_T2 | SA-specific T2 deductions |
+| Component | Description | Regulatory Ref |
+|-----------|-------------|----------------|
+| IRB_T2 | IRB excess provisions T2 **credit** (provisions > EL), capped at 0.6% of IRB credit RWAs | Art. 62(d) |
+| IRB_CET1 | IRB EL shortfall CET1 deductions (EL > provisions) + Art. 40 additional deductions | Art. 36(1)(d), Art. 40 |
+| GCRA | General credit risk adjustment included in T2, capped at **1.25% of S-TREA** | Art. 62(c), Art. 92(2A) |
+| SA_T2 | SA general credit risk adjustments T2 credit | Art. 62(c) |
+
+!!! note "Entity-Type Carve-Outs"
+    The output floor does NOT apply universally. Art. 92 para 2A(b)-(d) exempts: non-ring-fenced institutions on sub-consolidated basis, ring-fenced bodies at individual level, and international subsidiaries. Exempt entities use U-TREA (no floor).
+
+!!! note "Transitional Rates Are Permissive"
+    Art. 92 para 5 says institutions "may apply" the 60/65/70% transitional rates — firms can voluntarily use 72.5% from day one.
 
 ### Status
 - Engine implemented — Done
@@ -63,21 +69,28 @@ breakdown, risk weight breakdown, memorandum items).
 ### Templates
 - **C 02.00 / OF 02.00** — Own Funds Requirements: master template aggregating RWEA across all risk types. 1 column (CRR) / 3 columns (Basel 3.1). Basel 3.1 adds col 0020 (SA-only RWEA for floor comparison) and col 0030 (output floor RWEA after applying floor multiplier and OF-ADJ). Rows restructured: FIRB/AIRB/Slotting separated, corporate and retail subclass breakdowns added, slotting by 5 SL types, market risk expanded for ASA/IMA.
 - **OF 02.01** — Output Floor (**new**, no CRR equivalent): dedicated output floor comparison for IM firms. 4 columns: modelled RWA (0010), SA portfolio RWA (0020), U-TREA (0030), S-TREA (0040). 8 rows by risk type (credit, CCR, CVA, securitisation, market, op risk, residual, total). Does not apply the floor multiplier — provides raw comparison data for OF 02.00.
-- **C 07.00 / OF 07.00** — CR SA: one submission per SA exposure class. 24 columns (CRR) / 22 columns (Basel 3.1) covering original exposure, provisions, CRM substitution effects, Financial Collateral Comprehensive Method, CCF breakdown, exposure value, and RWEA. 5 row sections: totals, exposure types (on-BS/off-BS/CCR), risk weights (15 bands CRR / 29 bands Basel 3.1), CIU approach, memorandum items.
+- **C 07.00 / OF 07.00** — CR SA: one submission per SA exposure class. 24 columns (CRR) / ~29 columns (Basel 3.1) covering original exposure, provisions, CRM substitution effects, on-balance sheet netting adjustment, Financial Collateral Comprehensive Method, CCF breakdown (5 bands: 10%, 20%, 40%, 50%, 100%), exposure value, and RWEA. 5 row sections: totals, exposure types (on-BS/off-BS/CCR), risk weights (15 bands CRR / 29 bands Basel 3.1), CIU approach, memorandum items.
 - **C 08.01 / OF 08.01** — CR IRB totals: one submission per IRB exposure class × own-estimates filter. 33 columns (CRR) / 40+ columns (Basel 3.1) covering PD, original exposure, CRM substitution effects, CRM in LGD estimates (detailed collateral breakdown), exposure value, LGD, maturity, RWEA, expected loss, provisions, obligor count. Basel 3.1 adds post-model adjustment and output floor columns.
 - **C 08.02 / OF 08.02** — CR IRB by obligor grade: same columns as C 08.01 with dynamic rows (one per firm-specific internal rating grade/pool, ordered by PD).
-- **C 08.03 / OF 08.03** — CR IRB PD ranges: one submission per IRB exposure class. 11 columns covering on/off-BS, avg CCF, exposure value, avg PD, obligors, avg LGD, avg maturity, RWEA, EL, provisions. Rows are 17 fixed PD range buckets (0.00–0.15 through 100% default). Basel 3.1: PD and LGD columns reflect input floors, supporting factors removed, slotting excluded.
+- **C 08.03 / OF 08.03** — CR IRB PD ranges: one submission per IRB exposure class. 11 columns covering on/off-BS, avg CCF, exposure value, avg PD, obligors, avg LGD, avg maturity, RWEA, EL, provisions. Rows are 17 fixed PD range buckets (0.00–0.15 through 100% default). Basel 3.1: row allocation uses pre-input-floor PD ("PD RANGE (PRE-INPUT FLOOR)") while the PD column value reports post-input-floor PD ("EXPOSURE WEIGHTED AVERAGE PD (POST INPUT FLOOR)"). Supporting factors removed, slotting excluded.
 - **C 08.04 / OF 08.04** — CR IRB RWEA flow statements: one submission per IRB exposure class. 1 column (RWEA), 9 rows (previous period, 7 movement categories, current period). Virtually identical between CRR and Basel 3.1 (supporting factors no longer mentioned).
-- **C 08.06 / OF 08.06** — CR IRB specialised lending slotting: one submission per SL type. 10 columns (CRR) / 11 columns (Basel 3.1 adds FCCM). Rows by slotting category (1–5) × maturity band. Basel 3.1 adds "substantially stronger" sub-categories and separates HVCRE from IPRE (5 SL types vs 4).
+- **C 08.06 / OF 08.06** — CR IRB specialised lending slotting: one submission per SL type. 10 columns (CRR) / 11 columns (Basel 3.1 adds col 0031 "(-) Change in exposure due to FCCM" — a deduction column between original exposure and exposure value). Rows by slotting category (1–5) × maturity band. Basel 3.1 adds "substantially stronger" sub-categories (reported in both row 0015 and 0025 when both criteria met) and separates HVCRE from IPRE (5 SL types vs 4).
 - **C 08.07 / OF 08.07** — CR IRB scope of use: one submission covering all exposure/roll-out classes. 5 columns (CRR) / 18 columns (Basel 3.1 — significantly expanded with RWEA breakdown by SA reason and materiality thresholds). Rows change from exposure classes to roll-out classes (Art 147B).
 - **C 09.01 / OF 09.01** — CR GB 1 geographical breakdown SA: one submission per country. 13 columns (CRR) / 10 columns (Basel 3.1) covering original exposure, defaults, provisions, exposure value, RWEA. Rows by SA exposure class. Basel 3.1: supporting factor columns removed, real estate rows restructured (regulatory residential/commercial RE sub-rows).
-- **C 09.02 / OF 09.02** — CR GB 2 geographical breakdown IRB: one submission per country. 17 columns (CRR) / 15 columns (Basel 3.1) covering exposure, defaults, provisions, PD, LGD, RWEA, EL. Basel 3.1: adds defaulted exposure value column, removes supporting factors, adds corporate sub-rows, restructures retail RE rows, removes equity.
+- **C 09.02 / OF 09.02** — CR GB 2 geographical breakdown IRB: one submission per country. 17 columns (CRR) / 13 columns (Basel 3.1) covering exposure, defaults, provisions, PD, LGD, RWEA, EL. Basel 3.1: adds defaulted exposure value column, removes supporting factors and SF columns, adds corporate sub-rows, restructures retail RE rows, removes equity.
+
+### Missing Templates (Not Yet Documented)
+
+- **OF 08.05** — PD Backtesting: 5 columns — col 0010 arithmetic average PD (post-input floor, %), col 0020 number of obligors at end of previous year, col 0030 of which defaulted during the year, col 0040 observed average default rate (%), col 0050 average historical annual default rate (%). Rows organised by PD range buckets. CRR equivalent C 08.05 exists with same structure except col 0010 is "arithmetic average PD (%)" without the floor qualifier.
+- **OF 08.05.1** — PD Backtesting External Rating Equivalent: Extension of OF 08.05 for Art. 180(1)(f) ECAI-based estimates. Col 0005 uses firm-defined PD ranges (variable-width, not fixed buckets). Col 0006 provides one column per ECAI considered showing external rating equivalents. Columns 0010-0050 same as OF 08.05.
+- **OF 34.07** — IRB CCR Exposures by Exposure Class and PD Scale: 7 columns — col 0010 exposure value, col 0020 exposure-weighted average PD (post-floor), col 0030 number of obligors, col 0040 EWA LGD, col 0050 EWA maturity (years), col 0060 RWEA, col 0070 density of RWEA (col 0060 / col 0010). Required for any firm using F-IRB or A-IRB for CCR, regardless of CCR valuation method (SA-CCR, IMM, etc.). Excludes CCP-cleared exposures.
 
 ### Basel 3.1 Reporting Field Additions
 
 **OF 07.00 (SA)** — new columns vs CRR C 07.00:
 - Col 0035: (-) Adjustment for on-balance sheet netting (Art. 219)
 - Col 0160-0190: Off-balance sheet breakdown now uses 5 CCF bands (10%, 20%, 40%, 50%, 100%) instead of 4
+- Col 0235: Of which: where a credit assessment by a nominated ECAI is not available (new)
 - Rows 0021-0026: Specialised lending sub-types (object, commodities, project finance phases)
 - Rows 0330-0360: Real estate sub-breakdowns (regulatory RESI/CRE, dependent/not, ADC)
 - Row 0380: Currency mismatch multiplier (retail and real estate)
@@ -88,8 +101,52 @@ breakdown, risk weight breakdown, memorandum items).
 - Col 0251: RWEA pre-adjustments
 - Col 0252: Adjustment for post-model adjustments
 - Col 0253: Adjustment for mortgage RW floor
+- Col 0254: Unrecognised exposure adjustments (Art. 153(5A)(b), 154(4A)(c)) — not reported for F-IRB or slotting sheets
+- Col 0265: Of which: exposure value for non-defaulted
 - Col 0275-0276: Non-modelled approaches exposure value and RWEA (for output floor)
 - Col 0281: Expected loss adjustment for post-model adjustments
+- Col 0282: Expected loss amount after post-model adjustments (total EL post all adjustments, not just PD/LGD floors)
+
+### Missing Row IDs
+
+**OF 02.00** — missing row IDs:
+- Rows 0271, 0290, 0295-0297: F-IRB breakdown (institutions, SL excl slotting, financial/large corporates, SME, non-SME)
+- Rows 0355-0356: A-IRB corporate breakdown (SME, non-SME)
+- Rows 0382-0385: A-IRB retail residential/commercial splits (SME/non-SME)
+- Rows 0411-0416: Slotting by 5 SL types (PF, OF, CF, IPRE, HVCRE)
+- Row 0034: Output floor activated (Yes/No indicator, not RWEA)
+- Row 0035: Output floor multiplier (percentage 60%-72.5%, not RWEA)
+- Row 0036: Output floor adjustment OF-ADJ (monetary value)
+
+**OF 07.00 (SA)** — missing row IDs:
+- Rows 0021-0026: Specialised lending sub-types (0021=OF, 0022=CF, 0023=PF, 0024=PF pre-operational, 0025=PF operational, 0026=PF high-quality operational — hierarchical under PF)
+- Rows 0331-0344: Real estate sub-breakdowns (regulatory RESI/CRE by dependent/non-dependent, including SME sub-rows 0343/0344 within CRE, ADC)
+- Rows 0351-0354: Other real estate sub-breakdown (residential/commercial, dependent/non-dependent)
+- Rows 0371-0374: Equity transitional sub-rows (0371=SA higher-risk, 0372=SA other, 0373=IRB higher-risk, 0374=IRB other — expire 1 January 2030)
+- Row 0380: Retail and real estate exposures subject to the currency mismatch multiplier (Art. 112(1)(h)/(i))
+
+**OF 08.07 (IRB Scope of Use)** — missing row IDs:
+- Rows 0180-0260: Roll-out class breakdowns for corporate sub-classes, retail sub-classes, and SL types
+
+**OF 09.01 (SA Geographic Breakdown)** — missing row IDs:
+- Rows 0071-0073: Specialised lending sub-rows
+- Rows 0091-0094: Real estate sub-breakdowns (regulatory RESI, regulatory CRE, ADC, other RE)
+
+**OF 09.02 (IRB Geographic Breakdown)** — missing row IDs:
+- Row 0042: Specialised lending (excluding slotting approach)
+- Row 0045: Specialised lending under the slotting approach
+- Row 0048: Financial corporates and large corporates (Art. 147(4C))
+- Row 0049: Purchased receivables (corporate) — **not** SME as previously documented
+- Row 0050: Other general corporates – SME
+- Row 0055: Other general corporates – non-SME
+- Rows 0071-0074: Retail RE sub-rows (SME/non-SME splits for residential and commercial)
+- Row 0100: Qualifying revolving retail exposures
+- Row 0105: Purchased receivables (retail)
+- Row 0120: Retail – Other SME
+- Row 0130: Other non-SME
+- Row 0150: Total exposures
+- Col 0105 = total exposure value; col 0107 = of which: defaulted (sub-item)
+- Note: Equity rows removed under Basel 3.1
 
 ### Reference Documents
 - `docs/assets/CRR - corep-own-funds.xlsx` — CRR template layouts (sheets "7", "8.1", "8.2", "8.3", "8.4", "8.6", "8.7", "9.1", "9.2")

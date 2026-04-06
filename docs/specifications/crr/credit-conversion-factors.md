@@ -29,31 +29,71 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 
 ## Basel 3.1 SA Changes (PRA PS1/26 Art. 111 Table A1)
 
-| CCF Category | CRR | Basel 3.1 | Description |
-|-------------|-----|-----------|-------------|
-| Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees |
-| Medium Risk (MR) | 50% | 50% | NIFs, RUFs, UK resi mortgage commitments |
-| Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
-| Other commitments | 0% | **40%** | All other commitments not in other categories |
-| Low Risk (LR) | 0% | **10%** | Unconditionally cancellable commitments |
+| Row | CCF Category | CRR | Basel 3.1 | Description |
+|-----|-------------|-----|-----------|-------------|
+| 1 | Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees |
+| 2 | Commitments | — | **100%** | Commitments to lend, purchase securities, provide guarantees or acceptances |
+| 3 | Other OBS | — | **50%** | Other off-balance sheet items (NIFs, RUFs, UK resi mortgage commitments) |
+| 4 | Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
+| 5 | Other commitments | 0% | **40%** | All other commitments not in other categories |
+| 6 | Low Risk (LR) | 0% | **10%** | Unconditionally cancellable commitments |
+
+!!! note "B31 Maturity Distinction Removed"
+    CRR distinguished between commitments > 1 year (50% MR) and ≤ 1 year (20% MLR). Basel 3.1 removes this maturity-based distinction — the commitment type determines the CCF category, not its maturity.
+
+### Commitment-to-Issue Lower-Of Rule (Art. 111(1)(c))
+
+A commitment to provide an off-balance sheet item receives the **lower of** the two applicable CCFs: the CCF of the commitment itself and the CCF of the item it commits to provide.
 
 ## Basel 3.1 F-IRB Changes (PRA PS1/26 Art. 166C)
 
-| CCF Category | CRR | Basel 3.1 | Description |
-|-------------|-----|-----------|-------------|
-| Full Risk (FR) | 100% | 100% | Same as SA |
-| Medium Risk (MR) | 75% | 75% | General undrawn commitments |
-| MLR (trade LCs) | 20% | 20% | Short-term trade LCs (Art. 166(9) / 166C exception) |
-| Low Risk (LR) | 0% | **40%** | Unconditionally cancellable commitments |
+Under Basel 3.1, F-IRB CCFs are aligned to **SA CCFs** (Art. 166C). The separate higher F-IRB CCFs from CRR are removed:
 
-## Basel 3.1 A-IRB Changes (PRA PS1/26 Art. 166D)
+| CCF Category | CRR F-IRB | Basel 3.1 F-IRB | Description |
+|-------------|-----------|-----------------|-------------|
+| Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees |
+| Commitments (Row 2) | 75% | **100%** | Commitments to lend, purchase securities, provide guarantees |
+| Medium Risk (MR) | 75% | **50%** | NIFs, RUFs, UK resi mortgage commitments |
+| Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
+| Other commitments | — | **40%** | All other commitments not in other categories |
+| Low Risk (LR) | 0% | **10%** | Unconditionally cancellable commitments |
 
-- Own CCF estimates **only permitted for revolving facilities**
-- All other off-balance sheet items must use **SA CCFs**
+!!! warning "Critical Change"
+    The CRR F-IRB 75% medium risk CCF is replaced by SA-aligned values under Basel 3.1. F-IRB no longer has its own distinct CCF schedule — it uses SA Table A1 values per Art. 166C.
+
+**Note:** Art. 166(9) trade LC exception: PS1/26 blanks the trade LC exception text. The 20% MLR rate for trade-related LCs continues under the general SA Table A1 MLR category.
+
+## Basel 3.1 A-IRB Changes (PRA PS1/26 Art. 166D / CRE32.27)
+
+- Own CCF estimates **only permitted for revolving facilities** (Art. 166D(1)(a))
+- **Exception**: revolving facilities subject to **100% SA CCF** (Table A1 Row 2 — factoring, repos, forward deposits) **cannot** use own-estimate CCFs even though revolving
+- All other off-balance sheet items must use **SA CCFs** (Table A1)
 - The revolving-only restriction is a data classification concern — exposures should carry an `is_revolving` flag; non-revolving AIRB facilities must use SA CCFs regardless of modelled estimates
-- Code enforces the 50% floor: `max(ccf_modelled, sa_ccf × 0.5)` in `ccf.py`
-- EAD floor: drawn + 50% of off-balance sheet using F-IRB CCF
-- Falls back to SA CCFs if not available
+
+### A-IRB CCF Floor (CRE32.27)
+
+Modelled CCF estimates are subject to a **50% floor** relative to the SA CCF:
+
+```
+CCF_applied = max(CCF_modelled, 0.50 × CCF_SA)
+```
+
+Where `CCF_SA` is the applicable SA CCF from Table A1 for that off-balance sheet item category. This floor applies to all A-IRB CCF estimates including revolving facilities.
+
+### A-IRB EAD Floors (Art. 166D(5))
+
+Three separate floor tests apply:
+
+1. **(a) CCF floor**: Own CCF estimates ≥ 50% × SA CCF (see above)
+2. **(b) Facility-level EAD floor** (for partially/fully undrawn revolving facilities using Art. 166D(3) single EAD): EAD ≥ on-balance-sheet EAD + 50% × F-IRB off-balance-sheet EAD
+3. **(c) Fully-drawn EAD floor** (for fully drawn revolving facilities using Art. 166D(4)): EAD ≥ on-balance-sheet EAD (ignoring Art. 166D)
+
+### Full-Facility EAD Approach (Art. 166D(3)/(4))
+
+As an alternative to the CCF approach, A-IRB firms may compute a **single EAD estimate** for the entire revolving facility:
+
+- Art. 166D(3): for partially/fully undrawn revolving facilities — a single EAD combining on-BS and off-BS components
+- Art. 166D(4): for fully drawn revolving facilities — the own EAD estimate replaces the on-BS accounting value
 
 ## EAD Calculation
 

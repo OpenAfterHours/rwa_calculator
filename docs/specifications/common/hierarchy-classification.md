@@ -81,7 +81,8 @@ Counterparty entity type determines the base SA exposure class:
 | `sovereign`, `central_bank` | CENTRAL_GOVT_CENTRAL_BANK |
 | `rgla_sovereign`, `rgla_institution` | RGLA |
 | `pse_sovereign`, `pse_institution` | PSE |
-| `mdb`, `international_org` | MDB |
+| `mdb` | MDB |
+| `international_org` | INTERNATIONAL_ORGANISATION |
 | `institution`, `bank`, `ccp`, `financial_institution` | INSTITUTION |
 | `corporate`, `company` | CORPORATE |
 | `individual`, `retail` | RETAIL_OTHER (if qualifying) |
@@ -90,7 +91,7 @@ Counterparty entity type determines the base SA exposure class:
 
 ### Basel 3.1 Exposure Class Priority (Art. 112)
 
-PRA PS1/26 Art. 112 defines 17 exposure classes with a strict priority ordering. When an exposure could belong to multiple classes, the highest-priority class takes precedence:
+PRA PS1/26 Art. 112 Table A2 defines 16 exposure classes with a strict priority ordering. When an exposure could belong to multiple classes, the highest-priority class takes precedence:
 
 | Priority | Exposure Class | Art. 112 Ref |
 |----------|---------------|--------------|
@@ -100,7 +101,7 @@ PRA PS1/26 Art. 112 defines 17 exposure classes with a strict priority ordering.
 | 4 | Items associated with particularly high risk | (l) |
 | 5 | Exposures in default | (k) |
 | 6 | Covered bonds | (m) |
-| 7 | Real estate (RESI / CRE / ADC) | (i), (j) |
+| 7 | Real estate (RESI / CRE / ADC) | (i) |
 | 8 | International organisations | (e) |
 | 9 | MDBs | (d) |
 | 10 | Institutions | (f) |
@@ -108,9 +109,11 @@ PRA PS1/26 Art. 112 defines 17 exposure classes with a strict priority ordering.
 | 12 | Regional governments / local authorities | (b) |
 | 13 | Public sector entities | (c) |
 | 14 | Retail | (h) |
-| 15 | Specialised lending | (ga) |
-| 16 | Corporates | (g) |
-| 17 (lowest) | Other items | (q) |
+| 15 | Corporates (including specialised lending per Art. 122A) | (g) |
+| 16 (lowest) | Other items | (q) |
+
+!!! note "Specialised Lending is a Corporate Sub-Type"
+    Under SA, specialised lending is classified within the corporate class (Art. 112(1)(g)) with distinct risk weights via Art. 122A-122B. There is no separate Art. 112(1)(ga) — the "(ga)" reference does not exist in the regulation. SL exposures are assigned to the corporate SA class and then sub-classified for risk weight purposes.
 
 **Calculator coverage**: The calculator currently implements classes for: central govt/CB, RGLA, PSE, MDB, institution, corporate, specialised lending, retail, equity, real estate, ADC, and default. Securitisation, CIU (beyond 250% fallback), covered bonds, and high-risk items are tracked as future enhancements.
 
@@ -118,7 +121,8 @@ PRA PS1/26 Art. 112 defines 17 exposure classes with a strict priority ordering.
 
 Corporate counterparties are reclassified as CORPORATE_SME when:
 
-- Group turnover < EUR 50m (GBP converted to EUR at configured rate)
+- **CRR:** Group turnover < EUR 50m (GBP converted to EUR at configured rate)
+- **Basel 3.1:** Group turnover < **GBP 44m** (direct GBP threshold per PRA PS1/26, calculated on highest consolidated accounts of the group; no FX conversion needed)
 
 ### Retail Qualification
 
@@ -126,15 +130,72 @@ Individual counterparties qualify for retail treatment when:
 
 - **CRR:** Aggregate exposure < EUR 1m (GBP ~873k at default EUR/GBP rate of 0.8732)
 - **Basel 3.1:** Aggregate exposure < GBP 880k
-- **QRRE limit:** Individual exposure ≤ EUR 100k (CRR, GBP ~87k at default rate) / GBP 100k (Basel 3.1)
+- **QRRE limit (IRB Art. 147(5A)(c)):** Largest aggregate nominal exposure to any single individual in the QRRE sub-portfolio ≤ EUR 100k (CRR) / **GBP 90,000** (Basel 3.1). This is a **portfolio-level** constraint, not a per-facility check.
 
 If retail thresholds are breached, the exposure is reclassified as CORPORATE.
+
+### Basel 3.1 Retail Qualifying Criteria (Art. 123A)
+
+Under Basel 3.1, Art. 123A has a two-path structure:
+
+- **Art. 123A(1)(a) — SME retail**: Exposures to SMEs automatically qualify as regulatory retail without further conditions.
+- **Art. 123A(1)(b) — Natural person retail**: Three conditions must **all** be met:
+
+1. **Product type** (Art. 123A(1)(b)(i)): The exposure takes the form of revolving credits/lines of credit (credit cards, overdrafts), personal term loans/leases (instalment loans, auto loans, student loans), or small business facilities. Must not be a derivative, bond, or equity instrument. Mortgages are excluded (separate class).
+2. **Granularity** (Art. 123A(1)(b)(ii)): Total exposure to the obligor (or connected group) does not exceed **GBP 880,000**. No single exposure represents more than 0.2% of the retail portfolio.
+3. **Pool management** (Art. 123A(1)(b)(iii)): The exposure is part of a **significant number of similarly managed exposures** with similar characteristics. This is a qualitative/attestation requirement, not a calculated check.
+
+!!! warning "Current Gap"
+    Only condition 2 (granularity threshold) is partially implemented. Condition 1 (product type screening) and condition 3 (pool management) are not enforced. The SME auto-qualification path under (a) is also not explicitly handled.
+
+!!! note "No Art. 123A(d)"
+    There is no Art. 123A(d) — the article has only two paths (a) and (b), with three sub-conditions under (b). Previous documentation incorrectly described four criteria.
+
+### Large Corporate Revenue Threshold (Basel 3.1)
+
+Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500 million (GBP 440 million)** are classified as **large corporates** and are restricted to **F-IRB only** (cannot use A-IRB). This threshold is distinct from the SME firm-size adjustment threshold (EUR 50m / GBP 44m).
+
+### FSE Classification Requirements
+
+**Financial sector entity (FSE)** classification is required under Basel 3.1 for:
+
+- Applying the correct F-IRB LGD (45% for FSE vs 40% for non-FSE, per Art. 161(1))
+- Applying the FI scalar (1.25x correlation multiplier)
+- Determining approach restrictions under Art. 147A(1)(e) (**all** FSEs → F-IRB only, not just large FSEs)
+
+The `is_financial_sector_entity` flag should be derived from entity type and/or regulatory classification data. Currently not implemented in the classifier.
 
 ### Defaulted Exposures
 
 Exposures flagged with a default status are identified and tracked throughout the calculation. Defaulted status affects risk weighting (e.g., 150% SA risk weight for defaulted unsecured).
 
 ## Approach Assignment
+
+### Basel 3.1 Approach Restrictions (Art. 147A)
+
+Under Basel 3.1, PRA PS1/26 Art. 147A mandates specific approaches by exposure sub-class. These are **not optional** — firms cannot choose an alternative even if they have model approval:
+
+| Exposure Sub-Class | Mandatory Approach | Reference |
+|-------------------|-------------------|-----------|
+| Sovereign (incl. quasi-sovereigns: RGLA, PSE, MDB, Int'l Org with 0% RW) | **SA only** | Art. 147A(1)(a), Art. 147(3) |
+| Institution | **F-IRB only** (no A-IRB) | Art. 147A(1)(b) |
+| IPRE | **Slotting only** | Art. 147A(1)(c) |
+| HVCRE | **Slotting only** | Art. 147A(1)(c) |
+| Large corporate (revenue > GBP 440m) | **F-IRB only** (no A-IRB) | Art. 147A(1)(d) |
+| Financial sector entity (all FSEs) | **F-IRB only** (no A-IRB) | Art. 147A(1)(e) |
+| Equity | **SA only** (IRB equity removed) | Art. 147A(1)(f) |
+| Corporate (other) | **F-IRB** (default); A-IRB only with explicit Art. 143(2A)/(2B) permission | Art. 147A(1)(f) |
+| Retail — mortgage | A-IRB (if approved) | Art. 147A(3) |
+| Retail — QRRE | A-IRB (if approved) | Art. 147A(3) |
+| Retail — other | A-IRB (if approved) | Art. 147A(3) |
+| Specialised lending (OF/PF/CF) | **Slotting** (default); F-IRB or A-IRB with explicit permission | Art. 147A(1)(d) |
+
+!!! warning "Critical Gap — Not Implemented"
+    Art. 147A restrictions are **not enforced** in the classifier. The current implementation routes exposures based on `IRBPermissions` configuration without checking Basel 3.1 mandatory approach assignments. This is a P1 item.
+
+### Art. 112 Table A2 Priority Ordering
+
+When an exposure qualifies for multiple SA exposure classes, the highest-priority class takes precedence. See the priority table in the [Exposure Classification](#exposure-classification) section above. The classifier should apply this ordering systematically rather than relying on entity type alone.
 
 ### Dual-Approach Split
 

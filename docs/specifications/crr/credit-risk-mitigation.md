@@ -25,10 +25,10 @@ Collateral haircuts, overcollateralisation, FX mismatch, maturity mismatch, and 
 
 ### Financial Collateral
 
-| Collateral Type | Haircut |
-|----------------|---------|
+| Collateral Type | Haircut (10-day) |
+|----------------|------------------|
 | Cash / Deposit | 0% |
-| Gold | 15% |
+| Gold | **20%** |
 
 ### Government Bonds (by CQS and Residual Maturity)
 
@@ -36,62 +36,146 @@ Collateral haircuts, overcollateralisation, FX mismatch, maturity mismatch, and 
 |-----|----------|-----------|----------|
 | 1 | 0.5% | 2% | 4% |
 | 2-3 | 1% | 3% | 6% |
+| 4 | 15% | 15% | 15% |
 
-### Corporate Bonds (by CQS and Residual Maturity)
+**Note on CQS eligibility:**
 
-| CQS | 0-1 year | 1-5 years | 5+ years |
-|-----|----------|-----------|----------|
-| 1 | 1% | 4% | 8% |
-| 2-3 | 2% | 6% | 12% |
+- CQS 1-4 government/central bank bonds are eligible as financial collateral (Art. 197(1)(b): "credit quality step 4 or above" means CQS 1–4 are all eligible)
+- CQS 4 government bonds use a flat 15% haircut (Art. 224 Table 1)
+- CQS 5-6 government bonds are **ineligible** as financial collateral (Art. 197)
+- CQS 1-3 institution/corporate bonds are eligible (Art. 197(1)(c)/(d)); CQS 4-6 institution/corporate bonds are **ineligible**
 
-### Equity
+### Corporate/Institution Bonds (by CQS and Residual Maturity — Art. 224 Table 1, 10-day)
+
+| CQS | ≤1yr | 1-3yr | 3-5yr | 5-10yr | >10yr |
+|-----|------|-------|-------|--------|-------|
+| 1 | 1% | 3% | 4% | 6% | 12% |
+| 2-3 | 2% | 4% | 6% | 12% | 20% |
+
+### Equity (Art. 224 Table 3, 10-day)
 
 | Type | Haircut |
 |------|---------|
-| Main index | 15% |
-| Other listed | 25% |
+| Main index | **20%** |
+| Other listed | **30%** |
 
 ### Non-Financial Collateral
 
-| Type | Haircut |
-|------|---------|
-| Receivables | 20% |
-| Real estate | 0% (handled via LTV, not haircut) |
-| Other physical | 40% |
+Non-financial collateral does not use the supervisory volatility haircut framework (Art. 224). Instead, it is recognised through the **Foundation Collateral Method** (Art. 230-231) using LGDS values and overcollateralisation ratios. The haircut-like values below represent the effective value reduction:
+
+| Type | Effective Haircut | Mechanism |
+|------|-------------------|-----------|
+| Receivables | ~40% | LGDS = 20%, OC ratio = 1.25x |
+| Real estate | ~40% | LGDS = 20%, OC ratio = 1.4x |
+| Other physical | ~44% | LGDS = 25%, OC ratio = 1.4x |
+
+See [F-IRB LGDS Values](#f-irb-lgds-values-art-230) and [Overcollateralisation](#overcollateralisation-crr-art-230) below for the precise treatment.
 
 ### FX Mismatch Haircut (CRR Art. 233)
 
 When collateral currency differs from exposure currency: **8%** additional haircut.
 
-## Overcollateralisation (CRR Art. 230)
+### Zero-Haircut Conditions (CRR Art. 227)
 
-Non-financial collateral requires overcollateralisation to receive credit risk mitigation benefit.
+Under certain conditions, supervisory haircuts may be set to **0%** for repo-style transactions:
 
-### Overcollateralisation Ratios
+- Both the exposure and collateral are **cash or CQS 1 government bonds**
+- The transaction is subject to **daily margin maintenance** with a one-day margin period of risk
+- In the event of a counterparty failure to deliver margin, the transaction can be **terminated and collateral liquidated promptly**
+- Settlement is via a **delivery-versus-payment** or equivalent mechanism
+- The documentation is **standard market documentation** for the repo/SFT transaction type
 
-| Collateral Type | Required Ratio |
-|----------------|---------------|
-| Financial | 1.0x (no overcollateralisation required) |
-| Receivables | 1.25x |
-| Real estate | 1.4x |
-| Other physical | 1.4x |
+Where these conditions are met, H_c = 0%, H_e = 0%, and H_fx = 0% (if applicable).
 
-The effectively secured amount is:
+!!! note "Implementation Status"
+    Zero-haircut conditions are not yet evaluated in the calculator. All transactions currently use the standard supervisory haircuts. This is a future enhancement.
+
+### Volatility Scaling (CRR Art. 226)
+
+Art. 226 defines **two separate scaling formulas**:
+
+**Art. 226(2) — Scaling between liquidation periods:**
+```
+H_m = H_n × sqrt(T_m / T_n)
+```
+Where `H_n` is the haircut at liquidation period `T_n` and `H_m` is the haircut at the target period `T_m`.
+
+**Art. 226(1) — Non-daily revaluation adjustment:**
+```
+H = H_m × sqrt((NR + T_m - 1) / T_m)
+```
+Where `NR` is the actual number of business days between revaluations and `T_m` is the liquidation period in days.
+
+### Liquidation Period Dependency (CRR Art. 224, Tables 1-4)
+
+| Transaction Type | Minimum Holding Period (T_m) |
+|-----------------|------------------------------|
+| Repo-style transactions | 5 business days |
+| Other capital market transactions | 10 business days |
+| Secured lending | 20 business days |
+
+Art. 224 Tables 1-4 provide haircuts at all three liquidation periods. When scaling is needed (e.g., applying a 10-day table haircut to a repo), use Art. 226(2). When revaluation is not daily, additionally apply Art. 226(1).
+
+### F-IRB LGDS Values (Art. 230)
+
+Under the Foundation Collateral Method, the collateral-adjusted LGD (LGD*) uses supervisory LGDS values:
+
+| Collateral Type | LGDS |
+|----------------|------|
+| Financial collateral | 0% |
+| Receivables | 20% |
+| Commercial / residential real estate | 20% |
+| Other physical collateral | 25% |
+
+### LGD* Formula — Foundation Collateral Method (Art. 230)
+
+The formula blends LGDU (unsecured) and LGDS (secured) across the secured and unsecured portions:
 
 ```
-effectively_secured = adjusted_collateral_value / overcollateralisation_ratio
+LGD* = LGDU × (EU / E(1+HE)) + LGDS × (ES / E(1+HE))
 ```
 
-### Minimum Coverage Thresholds
+Where:
+- `E(1+HE)` = exposure value grossed up by the exposure volatility haircut
+- `ES` = haircut-adjusted collateral value, capped at `E(1+HE)`: `ES = min(C(1-HC-HFX), E(1+HE))`
+- `EU` = unsecured portion: `EU = E(1+HE) - ES`
+- `LGDU` = unsecured LGD (40% non-FSE / 45% FSE under CRR; same under B31 per Art. 161(1))
+- `LGDS` = secured LGD (0% financial, 20% receivables/RE, 25% other physical)
+- `HC` = collateral haircut, `HE` = exposure haircut, `HFX` = FX mismatch haircut (8% if currencies differ)
 
-| Collateral Type | Minimum Coverage |
-|----------------|-----------------|
-| Financial | No minimum |
-| Receivables | No minimum |
-| Real estate | 30% of EAD |
-| Other physical | 30% of EAD |
+!!! warning "Previous Formula Was Wrong"
+    The formula previously documented here (`LGD* = LGD × (E*/E)` where `E* = max(0, E(1+HE) - C(1-HC-HFX))`) applies a single LGD to the residual exposure fraction. This is only correct when LGDS = LGDU. For non-financial collateral (LGDS = 20-25%, LGDU = 40-45%), the correct formula must blend both rates across the secured and unsecured portions.
 
-If the minimum threshold is not met, the non-financial collateral value is set to zero (no CRM benefit).
+### Mixed Collateral Pools (Art. 231)
+
+When an exposure is secured by multiple collateral types, allocation is **sequential (waterfall)**, not pro-rata:
+
+```
+For each collateral type i (in chosen order):
+  ES_i = min(C_i, E(1+HE) - sum(ES_k for k < i))
+  EU = E(1+HE) - sum(ES_i)
+
+Blended LGD* = sum(LGDS_i × ES_i / E(1+HE)) + LGDU × EU / E(1+HE)
+```
+
+The institution may choose the ordering (most favourable = lowest LGDS first). Typical waterfall: financial collateral first (LGDS=0%), then receivables (20%), then real estate (20%), then other physical (25%), with the remainder at LGDU.
+
+!!! warning "Previous Formula Was Wrong"
+    The formula previously documented here used pro-rata allocation (`E_i = E × (C_i / sum(C_all))`). Art. 231 requires sequential fill — each collateral type absorbs as much exposure as possible before the next type. Pro-rata and sequential give different LGD* when total collateral < total exposure.
+
+## Non-Financial Collateral Recognition (CRR Art. 230)
+
+Non-financial collateral is recognised through the Foundation Collateral Method using the LGD* formula with LGDS values and the HC=40% haircut mechanism.
+
+!!! warning "Overcollateralisation Ratios Are Not in Art. 230"
+    The overcollateralisation ratios (1.25x receivables, 1.4x RE/physical) and 30% minimum thresholds previously documented here do not appear in Art. 230 of CRR or PRA PS1/26. Art. 230 uses the HC=40% mechanism within the LGD* formula. Applying additional ratio checks on top of the LGD* formula would be double-counting. These ratios may derive from old CRR Art. 227 (SA overcollateralisation for physical collateral under the Simple Method). The code at `engine/crm/collateral.py` implements these ratios — needs verification against the actual regulation.
+
+### Minimum Coverage Requirements
+
+Art. 230 does specify conditions for collateral eligibility:
+- The collateral must be properly valued and regularly revalued
+- The collateral value must be sufficient to justify the LGDS applied
+- Specific conditions apply per collateral type (e.g., real estate valuation requirements per Art. 229)
 
 ## Maturity Mismatch Adjustment (CRR Art. 238)
 
@@ -148,6 +232,46 @@ The calculator tracks pre- and post-CRM values for audit:
 - `guaranteed_portion` / `unguaranteed_portion`
 - `is_guarantee_beneficial`
 
+## Unfunded Credit Protection Adjustments (Art. 233)
+
+### FX Mismatch for Guarantees/CDS (Art. 233(3-4))
+
+When a guarantee or credit derivative is denominated in a different currency from the exposure:
+
+```
+G* = G × (1 - H_fx)
+```
+
+Where `H_fx` is from Art. 224 Table 4 at the applicable liquidation period (8% at 10-day, scaled by Art. 226(1) if not daily revalued). The guaranteed amount must be reduced before applying substitution.
+
+### CDS Restructuring Exclusion Haircut (Art. 233(2) / Art. 216(1))
+
+If a credit derivative does not include restructuring as a credit event:
+- Protection value is **reduced by 40%** (if protection amount ≤ exposure value)
+- Protection value is **capped at 60% of exposure value** (if protection amount > exposure value)
+- Exception: Art. 216(3) exemption applies where restructuring requires 100% vote amendment and the reference entity is subject to a well-established bankruptcy code
+
+## Partial Protection and Tranching (CRR Art. 233A / Art. 234)
+
+### Proportional Coverage (Art. 233A)
+
+When unfunded credit protection covers only a proportion of the exposure:
+
+- The **covered portion** receives the protection provider's risk weight (substitution)
+- The **uncovered portion** retains the obligor's risk weight
+- The split is simple pro-rata: `covered = guarantee_amount / exposure_value`
+
+### Tranched Coverage (Art. 234)
+
+When credit protection covers a specific tranche (first loss or mezzanine) rather than proportional coverage:
+
+- **First loss tranche**: The protection covers losses up to a specified threshold. The firm bears losses above the threshold. The protected portion uses the protection provider's risk weight; the retained senior tranche uses the obligor's risk weight.
+- **Second loss / mezzanine tranche**: More complex — the firm bears first losses up to the attachment point, protection covers the mezzanine band. The first loss portion may attract higher risk weights (up to 1250% for securitisation-like treatment).
+- **Maturity mismatch**: Standard maturity mismatch adjustment (Art. 238) applies to the protected tranche.
+
+!!! note "Implementation Status"
+    Proportional coverage is implemented. Tranched coverage (Art. 234) is not yet implemented — all guarantee coverage is treated as proportional. This is a future enhancement for structured credit protection.
+
 ## Cross-Approach CCF Substitution (CRR Art. 153(3))
 
 When an IRB exposure is guaranteed by a counterparty under the Standardised Approach, the guaranteed portion uses SA CCFs instead of IRB supervisory CCFs.
@@ -201,14 +325,50 @@ Nested application of Parts 1-3 where unfunded protection is itself collateralis
 
 ## Financial Collateral Simple Method (Art. 222)
 
-SA-only method. The risk weight of the collateral substitutes for the exposure risk weight on the secured portion:
+SA-only method (FCSM). The risk weight of the collateral substitutes for the exposure risk weight on the secured portion:
 
-- **Floor**: 20% minimum risk weight (except qualifying repo-style transactions: 0%)
+- **Floor**: 20% minimum risk weight (except qualifying repo-style transactions per Art. 222(4): 0%)
+- **Art. 222(6) 0% condition**: 0% RW applies where exposure and collateral are same currency AND either (a) cash/deposit collateral, or (b) 0%-RW sovereign bond collateral with a **20% market value discount** applied
 - **Eligibility**: Collateral must be eligible financial collateral per Art. 197
 - **Maturity**: Collateral maturity must cover exposure maturity (no mismatch allowed)
 - **Formula**: `RW_secured = max(20%, RW_collateral)`, `RW_unsecured = RW_obligor`
 
 The calculator uses the Financial Collateral Comprehensive Method by default.
+
+!!! note "Basel 3.1 FCSM Retention"
+    Under Basel 3.1 (PRA PS1/26), the FCSM remains available for SA exposures only. IRB exposures must use the Comprehensive Method or LGD Modelling Collateral Method.
+
+## Credit-Linked Notes (Art. 218)
+
+Credit-linked notes (CLNs) issued by the institution are treated as **cash collateral** (funded credit protection):
+
+- The CLN is treated as cash equivalent — Art. 194(6)(c) condition is deemed satisfied
+- The embedded CDS must qualify as eligible unfunded credit protection
+- Funded protection value = nominal amount of the CLN minus any credit event reduction
+
+!!! warning "Previous Description Was Wrong"
+    CLNs were previously described as "funded credit protection from the issuer" with "issuer risk weight" to be considered. Art. 218 does not introduce a separate issuer risk weight check — the CLN is treated as cash collateral.
+
+## Life Insurance Method (Art. 232)
+
+Life insurance policies assigned to the lending institution as collateral:
+
+- **Eligible**: Only life insurance policies with a current surrender value assigned/pledged to the institution (Art. 200(b) + Art. 212(2) operational requirements)
+- **Haircut**: The collateral value is the current surrender value, subject to a haircut based on the difference between surrender value and the claim at maturity
+- **SA risk weight**: The secured portion uses a **mapped risk weight** (not direct substitution):
+
+| Insurer Risk Weight | Secured Portion RW |
+|--------------------|-------------------|
+| 20% | 20% |
+| 30% or 50% | 35% |
+| 65%, 100%, or 135% | 70% |
+| 150% | 150% |
+
+- **F-IRB treatment** (Art. 232(2)(b)): The secured portion uses LGD = **40%** (not the standard LGDU)
+- **A-IRB treatment**: Own LGD estimate for the secured portion
+
+!!! warning "Previous Description Was Wrong"
+    Three errors corrected: (1) Risk weight is a mapped table, not direct substitution from the insurer; (2) IRB treatment (LGD = 40%) was missing; (3) Eligibility was cited as Art. 201 (unfunded protection providers) — correct reference is Art. 200(b) (eligible funded collateral) + Art. 212(2) (operational requirements).
 
 ## Parameter Substitution Method (Art. 236)
 
@@ -221,11 +381,55 @@ IRB-only method for unfunded credit protection (guarantees and credit derivative
 - **Expected loss**: `EL_covered = PD_guarantor × LGD_covered`, `EL_uncovered = PD_obligor × LGD`
 - **Double recovery constraint**: Combined coverage from funded + unfunded cannot exceed 100%
 
+## LGD Modelling Collateral Method (Basel 3.1 Art. 169A/169B)
+
+New Basel 3.1 method for recognising collateral in A-IRB LGD estimates. This replaces the CRR approach of free-form LGD modelling with collateral:
+
+### Scope (Art. 169A)
+
+- Available **only** for A-IRB exposures where the firm has approval to model LGD
+- Firms must demonstrate that their LGD models appropriately capture collateral effects
+- Model must be validated separately for secured and unsecured exposure segments
+
+### Key Requirements (Art. 169B)
+
+- LGD estimates must reflect collateral-specific recovery characteristics
+- **Haircut approach**: Firms may use own-estimate haircuts subject to PRA approval, or supervisory haircuts
+- **Collateral revaluation**: Firms must revalue collateral at least annually, more frequently for volatile collateral
+- **Downturn LGD**: Collateral values must be adjusted for economic downturn conditions
+- The method must produce LGD estimates that are **at least as conservative** as the Foundation Collateral Method (Art. 230-231)
+- LGD estimates remain subject to the **A-IRB LGD floors** per Art. 161(5)
+
+### Relationship to Other Methods
+
+| Approach | CRM Method | Reference |
+|----------|-----------|-----------|
+| SA | FCSM (Art. 222) or Comprehensive Method (Art. 223) | Art. 191A Part 2 |
+| F-IRB | Foundation Collateral Method (Art. 229-231) | Art. 191A Part 2 |
+| A-IRB | LGD Modelling Collateral Method (Art. 169A/169B) **or** Foundation Collateral Method | Art. 191A Part 2 |
+
+## Parameter Substitution LGD Choice (Art. 236)
+
+Under IRB parameter substitution for guaranteed exposures:
+
+- **F-IRB**: The covered portion uses the **supervisory LGD for a senior unsecured claim** on the guarantor. For non-FSE guarantors this is 40%; for FSE guarantors this is 45%.
+- **A-IRB**: The covered portion uses the firm's **own LGD estimate** for a senior unsecured claim on the guarantor, subject to A-IRB LGD floors.
+
+The choice of LGD for the covered portion depends on the approach used for the guarantor's exposure class, not the obligor's approach.
+
 ## Unfunded Credit Protection Transitional (Rule 4.11)
 
-Pre-existing unfunded credit protection (guarantees/credit derivatives) issued before 1 January 2027 may continue to use CRR treatment until **30 June 2028**, provided:
-- The protection was in place and eligible under CRR as at 31 December 2026
-- The protection has not been restructured or materially changed after 1 January 2027
+Rule 4.11 provides a **narrow contractual carve-out** for pre-existing unfunded credit protection during 1 January 2027 to 30 June 2028:
+
+- Art. 213(1)(c)(i) normally requires that protection contracts do not allow the provider to unilaterally cancel **or change** the terms
+- Rule 4.11 removes the words **"or change"** from Art. 213(1)(c)(i) for unfunded credit protection entered into **prior to 1 January 2027**
+- Effect: legacy protection contracts that contain clauses allowing the provider to **change** (but not unilaterally cancel) the protection remain eligible during the transitional period under the new Basel 3.1 Art. 213 requirements
+
+!!! warning "Previous Description Was Wrong"
+    Rule 4.11 was previously described as a broad permission to continue using pre-Basel 3.1 CRR treatment for legacy unfunded protection. The actual rule is narrower — it only removes the "or change" wording from one sub-paragraph of the eligibility test. The conditions about "not restructured or materially changed" were fabricated and do not appear in Rule 4.11.
+
+!!! note "Transitional Scope"
+    Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit derivatives). Funded credit protection (collateral) transitions immediately to Basel 3.1 rules on 1 January 2027. The transitional is exposure-specific — each protection arrangement is assessed individually.
 
 ## Key Scenarios
 

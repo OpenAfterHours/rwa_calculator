@@ -17,6 +17,10 @@ Standardised Approach risk weights by exposure class and credit quality step.
 
 ---
 
+## Due Diligence Obligation (Basel 3.1 Art. 110A)
+
+Under Basel 3.1, firms must perform due diligence to ensure they understand the risk profile of their counterparties. Where due diligence is inadequate, the firm must apply a **higher risk weight** than would otherwise apply. This applies to all SA exposure classes and is a precondition for reliance on external ratings.
+
 ## Sovereign Exposures (CRR Art. 114)
 
 | CQS | Rating Equivalent | Risk Weight |
@@ -28,6 +32,130 @@ Standardised Approach risk weights by exposure class and credit quality step.
 | 5 | B+ to B- | 100% |
 | 6 | CCC+ and below | 150% |
 | Unrated | — | 100% |
+
+**Domestic currency**: Sovereign exposures denominated and funded in the domestic currency of that sovereign may receive **0%** risk weight (Art. 114(4)).
+
+## RGLA Exposures (CRR Art. 115)
+
+Regional governments and local authorities. Two possible treatments:
+
+### Sovereign-Derived Treatment — Table 1A (Art. 115(1)(a))
+
+Where RGLA exposures lack their own ECAI rating, use the **sovereign's CQS** with Table 1A:
+
+| Sovereign CQS | RGLA Risk Weight |
+|---------------|-----------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 100% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+
+Under PRA rules, UK devolved administrations (Scotland, Wales, Northern Ireland) receive **0%** risk weight.
+
+### Own-Rating Treatment — Table 1B (Art. 115(1)(b))
+
+Where RGLA exposures have their own ECAI rating, use Table 1B:
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | 100% |
+
+**UK local authorities**: All UK local authorities receive **20%** risk weight per PRA designation.
+
+**Sterling-funded short-term**: RGLA exposures of the UK denominated and funded in **sterling** receive **20%** regardless of CQS (Art. 115(5)).
+
+## PSE Exposures (CRR Art. 116)
+
+Public sector entities have three sub-treatments:
+
+### Sub-treatment 1 — Sovereign-Derived — Table 2 (Art. 116(1))
+
+UK PSEs without own ECAI rating use the **sovereign's CQS** with Table 2:
+
+| Sovereign CQS | PSE Risk Weight |
+|---------------|----------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 100% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+
+### Sub-treatment 2 — Own-Rating — Table 2A (Art. 116(2))
+
+UK PSEs with own ECAI rating use Table 2A:
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+
+!!! note "Art. 116(4) left blank"
+    PRA PS1/26 leaves Art. 116(4) blank — there is no "institution-equivalent" PSE sub-treatment under the PRA rules. UK PSEs use Tables 2/2A above.
+
+**Short-term exposures (≤ 3 months)**: UK PSE exposures with original effective maturity ≤ 3 months receive **20%** risk weight (Art. 116(3)). No domestic currency condition required for PSEs.
+
+## MDB Exposures (CRR Art. 117)
+
+### Named MDBs at 0% (Art. 117(2))
+
+The following 16 MDBs receive a **0%** risk weight:
+
+1. International Bank for Reconstruction and Development (IBRD / World Bank)
+2. International Finance Corporation (IFC)
+3. Inter-American Development Bank (IDB)
+4. Asian Development Bank (ADB)
+5. African Development Bank (AfDB)
+6. Council of Europe Development Bank (CEB)
+7. Nordic Investment Bank (NIB)
+8. Caribbean Development Bank (CDB)
+9. European Bank for Reconstruction and Development (EBRD)
+10. European Investment Bank (EIB)
+11. European Investment Fund (EIF)
+12. Multilateral Investment Guarantee Agency (MIGA)
+13. International Finance Facility for Immunisation (IFFIm)
+14. Islamic Development Bank (IsDB)
+15. Asian Infrastructure Investment Bank (AIIB)
+16. International Development Association (IDA)
+
+### Rated MDBs — Table 2B (Art. 117(1))
+
+Other MDBs not on the 0% list use Table 2B:
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1 | 20% |
+| 2 | **30%** |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | **50%** |
+
+!!! note "MDB Table Differs from Institution Table"
+    MDB Table 2B has CQS 2 = 30% (same as UK institutions) and unrated = **50%** (not 40% like UK institutions). Do not use the institution table for MDB lookups.
+
+## International Organisations (CRR Art. 118)
+
+The following international organisations receive a **0%** risk weight:
+
+- European Union (EU)
+- International Monetary Fund (IMF)
+- Bank for International Settlements (BIS)
+- European Financial Stability Facility (EFSF)
+- European Stability Mechanism (ESM)
 
 ## Institution Exposures (CRR Art. 120-121)
 
@@ -46,6 +174,31 @@ Standardised Approach risk weights by exposure class and credit quality step.
 
 UK unrated institutions default to 40% (derived from sovereign CQS 2).
 
+### Short-Term Institution Exposures (CRR Art. 120 Table 4 / Art. 120 Table 4A)
+
+Short-term exposures (≤ 3 months, denominated and funded in domestic currency):
+
+**Table 4 — Sovereign-Derived (CRR Art. 120(1))**
+
+| Sovereign CQS | Short-Term RW |
+|---------------|---------------|
+| 1 | 20% |
+| 2 | 20% |
+| 3 | 20% |
+| 4-5 | 50% |
+| 6 | 150% |
+
+**Table 4A — Own-Rating Based (CRR Art. 120(2))**
+
+| Institution CQS | Short-Term RW |
+|-----------------|---------------|
+| 1 | 20% |
+| 2 | 20% |
+| 3 | 20% |
+| 4-5 | 50% |
+| 6 | 150% |
+| Unrated | 20% |
+
 ## Corporate Exposures (CRR Art. 122)
 
 | CQS | Risk Weight |
@@ -61,6 +214,64 @@ UK unrated institutions default to 40% (derived from sovereign CQS 2).
 ## Retail Exposures (CRR Art. 123)
 
 All qualifying retail exposures receive a flat **75%** risk weight.
+
+### Basel 3.1 Retail Sub-Treatments (Art. 123)
+
+| Sub-Treatment | Risk Weight | Condition | Reference |
+|---------------|-------------|-----------|-----------|
+| Regulatory retail | 75% | Meets all 4 qualifying criteria (Art. 123A) | Art. 123(1) |
+| QRRE transactors | 45% | Qualifying revolving, balance repaid monthly | Art. 123(2) (Basel 3.1) |
+| QRRE non-transactors | 75% | Qualifying revolving, non-transactor | Art. 123(2) |
+| Payroll / pension loans | 35% | Loans secured by assignment of borrower's payroll or pension income | Art. 123(3)(a-b) |
+| Non-regulatory retail | 100% | Retail exposure that fails Art. 123A qualifying criteria | Art. 123(3)(c) |
+
+## Covered Bond Exposures (CRR Art. 129)
+
+Covered bonds backed by eligible collateral pools receive preferential risk weights:
+
+### CRR Covered Bond Risk Weights (Art. 129(4))
+
+| CQS of Issuing Institution | Risk Weight |
+|-----------------------------|-------------|
+| 1 | 10% |
+| 2 | 20% |
+| 3 | 20% |
+| 4 | 50% |
+| 5 | 50% |
+| 6 | 100% |
+| Unrated | 20% (if institution CQS 1-2 equivalent) |
+
+### Eligibility Conditions (Art. 129(1)-(3))
+
+Covered bonds must meet the following to qualify for preferential treatment:
+
+- Issued by a credit institution with registered office in the UK or EEA
+- Subject to special public supervision protecting bond holders
+- Backed by one of: (a) residential mortgage loans ≤ 80% LTV, (b) commercial mortgage loans ≤ 60% LTV, (c) exposures to central/regional governments ≤ CQS 1-2, (d) exposures to credit institutions ≤ CQS 1-2
+- Bond holders have priority claim in the event of issuer default
+
+### Basel 3.1 Covered Bond Changes (Art. 129A)
+
+Under Basel 3.1, covered bond risk weights are reduced and the CQS mapping is simplified:
+
+| CQS of Issuing Institution | Risk Weight |
+|-----------------------------|-------------|
+| 1 | 10% |
+| 2 | 15% |
+| 3 | 20% |
+| 4-6 | 50% |
+| Unrated | Pending — verification needed |
+
+!!! note "Implementation Status"
+    Covered bonds are tracked as a separate exposure class under Art. 112(m) but are not yet implemented in the calculator. This is a future enhancement.
+
+## High-Risk Exposures (CRR Art. 128)
+
+Exposures associated with particularly high risk receive **150%** risk weight, including:
+
+- Investments in venture capital firms or private equity
+- Speculative immovable property financing
+- Other exposures designated as high-risk by the PRA
 
 ## Residential Mortgage Exposures (CRR Art. 125)
 
@@ -108,7 +319,7 @@ RW = 0.20 × secured_share + counterparty_RW × (1.0 - secured_share)
 | Social housing | max(75%, unsecured RW) |
 | Other | Unsecured counterparty RW |
 
-**Junior charges** (Art. 124F(2)): If a prior or pari passu charge exists, the 55% threshold is reduced by the amount of the prior charge. Not yet modelled.
+**Junior charges** (Art. 124F(2)): If a prior or pari passu charge exists, the 55% threshold is reduced by the amount of the prior charge. The effective secured portion decreases, increasing the blended risk weight. Not yet modelled.
 
 ### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
 
@@ -124,7 +335,7 @@ Materially dependent on cash flows from the property (e.g., buy-to-let). Whole-l
 | 90-100% | 75% |
 | > 100% | 105% |
 
-**Junior charge multiplier** (Art. 124G(2)): 1.25× on income-dependent RESI RE if LTV > 50% and prior/pari passu charges exist. Not yet modelled.
+**Junior charge multiplier** (Art. 124G(2)): **1.25x** applied to the whole-loan risk weight when LTV > 50% and prior/pari passu charges exist. Not yet modelled.
 
 ### Commercial RE — General, Loan-Splitting (Art. 124H)
 
@@ -137,7 +348,13 @@ secured_share = min(1.0, 0.55 / LTV)
 RW = 0.60 × secured_share + counterparty_RW × (1.0 - secured_share)
 ```
 
-**Other counterparties**: `max(60%, min(counterparty_RW, Art 124I income-producing RW))`
+**Other counterparties** (Art. 124H(3)):
+
+```
+RW = max(60%, min(counterparty_RW, income_producing_RW))
+```
+
+Where `income_producing_RW` is the Art. 124I whole-loan weight for the same LTV band. This formula ensures the RW is at least 60% (the secured portion floor) but no more than the lower of the counterparty's unsecured RW or the income-producing table rate.
 
 ### Commercial RE — Income-Producing (Art. 124I)
 
@@ -173,17 +390,20 @@ Non-regulatory real estate (doesn't meet Art. 124A requirements):
 | Default | 150% |
 | Residential with pre-sales/equity at risk | 100% |
 
-## Basel 3.1 Corporate Exposures (CRE20.42-49)
+## Basel 3.1 Corporate Exposures (PRA PS1/26 Art. 122(2) Table 6)
 
-| CQS | Rating Equivalent | CRR Risk Weight | Basel 3.1 Risk Weight |
-|-----|-------------------|-----------------|----------------------|
+| CQS | Rating Equivalent | CRR Risk Weight | Basel 3.1 Risk Weight (PRA) |
+|-----|-------------------|-----------------|---------------------------|
 | 1 | AAA to AA- | 20% | 20% |
 | 2 | A+ to A- | 50% | 50% |
 | 3 | BBB+ to BBB- | **100%** | **75%** |
 | 4 | BB+ to BB- | 100% | 100% |
-| 5 | B+ to B- | **150%** | **100%** |
+| 5 | B+ to B- | **150%** | **150%** |
 | 6 | CCC+ and below | 150% | 150% |
 | Unrated | — | 100% | 100% |
+
+!!! warning "PRA vs BCBS Deviation for CQS 5"
+    BCBS CRE20.42 sets CQS 5 = **100%** (reduced from CRR 150%). However, PRA PS1/26 Art. 122(2) Table 6 retains CQS 5 = **150%** (same as CQS 6). The PRA did not adopt the BCBS reduction for this credit quality step. The calculator must use the PRA value (150%), not the BCBS value (100%).
 
 ### Additional Basel 3.1 Corporate Treatments
 
@@ -214,20 +434,22 @@ ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR
 |-------------|-------------|-----------|
 | Central bank/sovereign | 0% | Art. 133(1) |
 | Listed/exchange-traded | 100% | Art. 133(2) |
-| Government-supported | 100% | Art. 133(3) |
+| Unlisted/other | 150% | Art. 133(3) |
+| Private equity / venture capital | 190% | Art. 133(4) |
 
-### Basel 3.1 Equity Risk Weights (Art. 133)
+### Basel 3.1 Equity Risk Weights (PRA PS1/26 Art. 133)
 
 | Equity Type | Risk Weight | Reference |
 |-------------|-------------|-----------|
-| Standard equity (listed) | 250% | Art. 133(3) |
-| Higher risk (unlisted, <5yr, PE, speculative) | 400% | Art. 133(5) |
 | Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
-| Legislative equity (govt mandate) | 100% | Art. 133(6) |
-| CQS 1-2 speculative unlisted | 100% | Art. 133(4)(a) |
-| CQS 3-6/unrated speculative | 150% | Art. 133(4)(b) |
+| Standard equity (listed) | 250% | Art. 133(3) |
+| Higher risk (unlisted AND held < 5yr, or PE/VC) | 400% | Art. 133(5) |
+| Legislative equity (carve-out for govt-mandated holdings) | 100% | Art. 133(6) |
 
-**Note:** Basel 3.1 removes IRB equity approaches. All equity uses SA risk weights.
+!!! warning "PRA Deviation from BCBS"
+    PRA Art. 133 does **not** include the BCBS "CQS 1-2 speculative unlisted = 100%" or "CQS 3-6/unrated speculative = 150%" tiers. PRA uses a simpler structure: listed = 250%, higher-risk (unlisted <5yr / PE/VC) = 400%.
+
+**Note:** Basel 3.1 removes IRB equity approaches (Art. 147A). All equity uses SA risk weights. See [Equity Approach](equity-approach.md) for full details including CIU treatment and transitional schedule.
 
 ## Defaulted Exposures (CRR Art. 127 / PRA PS1/26 Art. 127)
 
@@ -238,13 +460,16 @@ ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR
 | Specific provisions ≥ 20% of (EAD + provision_deducted) | 100% |
 | Specific provisions < 20% | 150% |
 
-### Basel 3.1 Default Risk Weights
+### Basel 3.1 Default Risk Weights (PRA PS1/26 Art. 127)
 
 | Condition | Risk Weight |
 |-----------|-------------|
-| Specific provisions ≥ 20% of exposure value | 100% |
-| Specific provisions < 20% | 150% |
-| RESI RE non-dependent (Art. 124F) in default | 100% (always) |
+| Specific provisions ≥ **20%** of exposure value | 100% |
+| Specific provisions < **20%** | 150% |
+| RESI RE non-dependent (Art. 124F) in default | **100% (always)** — regardless of provision level |
+
+!!! warning "Threshold Difference from CRR"
+    The Basel 3.1 provision threshold for defaulted exposures is **20%** (same as CRR). Note that the threshold denominator changes: CRR uses `EAD + provision_deducted`, while Basel 3.1 uses `exposure value`.
 
 ## Basel 3.1 SA Specialised Lending (Art. 122A-122B)
 
@@ -262,30 +487,62 @@ Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
 
 ## Other Items (CRR Art. 134 / PRA PS1/26 Art. 134)
 
-| Item | Risk Weight |
-|------|-------------|
-| Cash and equivalent (notes, coins, gold bullion) | 0% |
-| Items in course of collection | 20% |
-| Tangible assets (premises, equipment) | 100% |
-| Prepaid expenses, accrued income | 100% |
-| Residual value of leased assets | 1/t × 100% (t = remaining lease years) |
-| All other | 100% |
+| Item | Risk Weight | Reference |
+|------|-------------|-----------|
+| Cash and equivalent (notes, coins) | 0% | Art. 134(1) |
+| Gold bullion (held in own vaults or allocated) | 0% | Art. 134(4) |
+| Items in course of collection | 20% | Art. 134(3) |
+| Repo-style transactions — RW of underlying asset | Asset RW | Art. 134(5) |
+| Nth-to-default basket credit derivatives | Per Art. 266-270 | Art. 134(5) |
+| Tangible assets (premises, equipment) | 100% | Art. 134(2) |
+| Prepaid expenses, accrued income | 100% | Art. 134(2) |
+| Residual value of leased assets | 1/t × 100% (t = remaining lease years, min 1) | Art. 134(6) |
+| All other | 100% | Art. 134(2) |
+
+## ECA Consensus Risk Scores (CRR Art. 137 / Table 9)
+
+Export Credit Agency (ECA) consensus risk scores are mapped to CQS for sovereign exposures when no ECAI rating is available:
+
+| ECA Risk Score | CQS Mapping | Risk Weight |
+|---------------|-------------|-------------|
+| 0-1 | CQS 1 | 0% |
+| 2 | CQS 2 | 20% |
+| 3 | CQS 3 | 50% |
+| 4-6 | CQS 4-5 | 100% |
+| 7 | CQS 6 | 150% |
+
+This mapping is used for sovereign exposures (Art. 114) and for deriving institution risk weights from their sovereign's ECA score where the sovereign lacks an ECAI rating.
+
+!!! note "Implementation Status"
+    ECA score lookup is not yet implemented. The calculator currently requires ECAI CQS for rated exposures. ECA-to-CQS mapping is a future enhancement.
 
 ## Basel 3.1 Changes Summary
 
+- **Due diligence obligation** (Art. 110A): New prerequisite for all SA risk weight assignments — Pending
 - **Residential RE loan-splitting** (Art. 124F): 20% on ≤55% LTV, counterparty RW on residual — Done
 - **Residential RE income-producing** (Art. 124G): Whole-loan LTV table (30%-105%) — Done
 - **Commercial RE loan-splitting** (Art. 124H): 60% on ≤55% LTV, counterparty RW on residual — Done
+- **Commercial RE other counterparties** (Art. 124H(3)): max/min formula — Pending
 - **Commercial RE income-producing** (Art. 124I): 100%/110% at ≤80%/>80% — Done
-- **Revised corporate CQS mapping** (CRE20.42): CQS 3 from 100% to 75%, CQS 5 from 150% to 100% — Done
+- **Junior charge multipliers** (Art. 124F/G/I): 1.25x / 1.375x for subordinate liens — Pending
+- **Other Real Estate** (Art. 124J): 150% income-dependent, counterparty RW otherwise — Done
+- **Revised corporate CQS mapping** (Art. 122(2) Table 6): CQS 3 from 100% to 75% — Done. **Note:** PRA retains CQS 5 = 150% (BCBS CRE20.42 reduced to 100%, but PRA did not adopt this reduction)
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
+- **SCRA enhanced Grade A** (CRE20.19): 30% for CET1 ≥ 14% and leverage ratio ≥ 5% — Pending
+- **SCRA short-term maturity** (CRE20.20): Grade A 20%, Grade B 50% for ≤3m exposures — Pending
 - **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done
 - **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
+- **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Pending
+- **Payroll/pension loans** (Art. 123): 35% — Pending
+- **Non-regulatory retail** (Art. 123(3)(c)): 100% — Pending
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Pending
-- **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE exception — Done
-- **Other items** (Art. 134): Cash=0%, collection=20%, tangible=100% — Done
+- **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
+- **Other items** (Art. 134): Cash=0%, gold=0%, collection=20%, tangible=100% — Done
+- **Covered bonds** (Art. 129/129A): CQS-based risk weights, eligibility criteria — Added
+- **RGLA/PSE/MDB/Int'l Org tables** (Art. 115-118): Missing from original spec — Added
+- **ECA consensus scores** (Art. 137 Table 9): ECA-to-CQS mapping for unrated sovereigns — Added
 - **Removal of SME supporting factor**: No longer applicable under Basel 3.1
 - **Removal of 1.06 scaling factor**: Scaling factor set to 1.0 under Basel 3.1
 

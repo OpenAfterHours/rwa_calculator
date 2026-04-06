@@ -76,9 +76,16 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
     "equity": ExposureClass.EQUITY.value,
     "covered_bond": ExposureClass.COVERED_BOND.value,
+    "other_cash": ExposureClass.OTHER.value,
+    "other_gold": ExposureClass.OTHER.value,
+    "other_items_in_collection": ExposureClass.OTHER.value,
+    "other_tangible": ExposureClass.OTHER.value,
+    "other_residual_lease": ExposureClass.OTHER.value,
 }
 
 # entity_type → IRB exposure class (for IRB formula selection)
+# Other Items (Art. 134) are SA-only — no IRB class exists for these.
+# They map to OTHER which will be treated under SA.
 ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
     "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
@@ -100,6 +107,11 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
     "equity": ExposureClass.EQUITY.value,
     "covered_bond": ExposureClass.COVERED_BOND.value,
+    "other_cash": ExposureClass.OTHER.value,
+    "other_gold": ExposureClass.OTHER.value,
+    "other_items_in_collection": ExposureClass.OTHER.value,
+    "other_tangible": ExposureClass.OTHER.value,
+    "other_residual_lease": ExposureClass.OTHER.value,
 }
 
 

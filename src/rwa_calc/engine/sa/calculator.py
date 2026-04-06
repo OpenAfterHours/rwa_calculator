@@ -73,6 +73,11 @@ from rwa_calc.data.tables.crr_risk_weights import (
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
+    OTHER_ITEMS_CASH_RW,
+    OTHER_ITEMS_COLLECTION_RW,
+    OTHER_ITEMS_DEFAULT_RW,
+    OTHER_ITEMS_GOLD_RW,
+    OTHER_ITEMS_TANGIBLE_RW,
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
@@ -666,6 +671,43 @@ class SACalculator:
                         .then(pl.lit(1.00))
                         .otherwise(pl.lit(1.00))  # Default: assume Grade C (conservative)
                     )
+                    # 12. Other Items (Art. 134): sub-type-specific risk weights
+                    # 12a. Cash/gold → 0% (Art. 134(1)/(4))
+                    .when(
+                        (_uc == "OTHER")
+                        & (
+                            pl.col("cp_entity_type").fill_null("").is_in(
+                                ["other_cash", "other_gold"]
+                            )
+                        )
+                    )
+                    .then(pl.lit(float(OTHER_ITEMS_CASH_RW)))
+                    # 12b. Items in course of collection → 20% (Art. 134(3))
+                    .when(
+                        (_uc == "OTHER")
+                        & (
+                            pl.col("cp_entity_type").fill_null("")
+                            == "other_items_in_collection"
+                        )
+                    )
+                    .then(pl.lit(float(OTHER_ITEMS_COLLECTION_RW)))
+                    # 12c. Residual lease value → 1/t × 100% (Art. 134(6))
+                    .when(
+                        (_uc == "OTHER")
+                        & (
+                            pl.col("cp_entity_type").fill_null("")
+                            == "other_residual_lease"
+                        )
+                    )
+                    .then(
+                        pl.lit(1.0)
+                        / pl.col("residual_maturity_years").fill_null(1.0).clip(
+                            lower_bound=1.0
+                        )
+                    )
+                    # 12d. Tangible assets and all other → 100% (Art. 134(2))
+                    .when(_uc == "OTHER")
+                    .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
                     # Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
@@ -829,7 +871,44 @@ class SACalculator:
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
                     .then(pl.lit(0.20))
-                    # 8. Default: CQS-based or 100%
+                    # 8. Other Items (Art. 134): sub-type-specific risk weights
+                    # 8a. Cash/gold → 0% (Art. 134(1)/(4))
+                    .when(
+                        (_uc == "OTHER")
+                        & (
+                            pl.col("cp_entity_type").fill_null("").is_in(
+                                ["other_cash", "other_gold"]
+                            )
+                        )
+                    )
+                    .then(pl.lit(float(OTHER_ITEMS_CASH_RW)))
+                    # 8b. Items in course of collection → 20% (Art. 134(3))
+                    .when(
+                        (_uc == "OTHER")
+                        & (
+                            pl.col("cp_entity_type").fill_null("")
+                            == "other_items_in_collection"
+                        )
+                    )
+                    .then(pl.lit(float(OTHER_ITEMS_COLLECTION_RW)))
+                    # 8c. Residual lease value → 1/t × 100% (Art. 134(6))
+                    .when(
+                        (_uc == "OTHER")
+                        & (
+                            pl.col("cp_entity_type").fill_null("")
+                            == "other_residual_lease"
+                        )
+                    )
+                    .then(
+                        pl.lit(1.0)
+                        / pl.col("residual_maturity_years").fill_null(1.0).clip(
+                            lower_bound=1.0
+                        )
+                    )
+                    # 8d. Tangible assets and all other → 100% (Art. 134(2))
+                    .when(_uc == "OTHER")
+                    .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
+                    # 9. Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
                 ]

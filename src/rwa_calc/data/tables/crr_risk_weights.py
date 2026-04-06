@@ -323,6 +323,17 @@ QCCP_CLIENT_CLEARED_RW: Decimal = Decimal("0.04")  # CRE54.15: client-cleared tr
 
 
 # =============================================================================
+# OTHER ITEMS RISK WEIGHTS (CRR Art. 134 / PRA PS1/26 Art. 134)
+# =============================================================================
+
+OTHER_ITEMS_CASH_RW: Decimal = Decimal("0.00")  # Art. 134(1): cash and equivalent
+OTHER_ITEMS_GOLD_RW: Decimal = Decimal("0.00")  # Art. 134(4): gold bullion in own vaults
+OTHER_ITEMS_COLLECTION_RW: Decimal = Decimal("0.20")  # Art. 134(3): items in course of collection
+OTHER_ITEMS_TANGIBLE_RW: Decimal = Decimal("1.00")  # Art. 134(2): tangible assets, prepaid
+OTHER_ITEMS_DEFAULT_RW: Decimal = Decimal("1.00")  # Art. 134(2): all other items
+
+
+# =============================================================================
 # DEFAULTED EXPOSURE RISK WEIGHTS (CRR Art. 127)
 # =============================================================================
 
@@ -603,6 +614,9 @@ def lookup_risk_weight(
 
     if exposure_upper == "RETAIL":
         return RETAIL_RISK_WEIGHT
+
+    if exposure_upper == "OTHER":
+        return OTHER_ITEMS_DEFAULT_RW
 
     # Default to 100% for unrecognized classes
     return Decimal("1.00")

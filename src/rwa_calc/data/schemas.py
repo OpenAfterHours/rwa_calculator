@@ -145,6 +145,12 @@ COUNTERPARTY_SCHEMA = {
     #     - "retail"              → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
     #   Specialised lending (CRR Art. 147(8)):
     #     - "specialised_lending" → SA: SPECIALISED_LENDING, IRB: SPECIALISED_LENDING
+    #   Other items class (CRR Art. 112(q), Art. 134):
+    #     - "other_cash"              → SA: OTHER, 0% RW (Art. 134(1))
+    #     - "other_gold"              → SA: OTHER, 0% RW (Art. 134(4))
+    #     - "other_items_in_collection" → SA: OTHER, 20% RW (Art. 134(3))
+    #     - "other_tangible"          → SA: OTHER, 100% RW (Art. 134(2))
+    #     - "other_residual_lease"    → SA: OTHER, 1/t × 100% RW (Art. 134(6))
     "entity_type": pl.String,
     "country_code": pl.String,
     "annual_revenue": pl.Float64,  # For SME classification (EUR 50m threshold)
@@ -429,6 +435,11 @@ VALID_ENTITY_TYPES = {
     "specialised_lending",
     "equity",
     "covered_bond",
+    "other_cash",
+    "other_gold",
+    "other_items_in_collection",
+    "other_tangible",
+    "other_residual_lease",
 }
 
 VALID_SENIORITY = {"senior", "subordinated"}

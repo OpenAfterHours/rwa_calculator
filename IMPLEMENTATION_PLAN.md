@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.54 MDB/IO risk weights implemented)
-**Current version:** 0.1.73 | **Test suite:** ~2,449 collected (1,955 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~14 skipped | P1.54 fixed.
+**Last updated:** 2026-04-06 (P1.55 Other Items risk weights implemented)
+**Current version:** 0.1.74 | **Test suite:** ~2,473 collected (1,979 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~14 skipped | P1.55 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.55 (Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* P1.56 (CQS 5-6 bond ineligibility) [P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
 - *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
@@ -555,12 +555,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for LGD modelling collateral method. Acceptance tests comparing FCCM vs LGD modelling results.
 
 ### P1.55 Art. 134 "Other Items" risk weights missing (cash 0%, items in collection 20%, residual lease)
-- **Status:** [ ] Not started
-- **Impact:** Art. 134 defines risk weights for miscellaneous items not covered by other exposure classes: (4) cash in hand and equivalent = 0%, (5) items in course of collection = 20%, residual value of leased assets = formula-based 1/t * 100%. None of these are implemented -- "other items" exposures would default to 100%.
-- **File:Line:** `engine/sa/calculator.py` (no "other items" branch)
-- **Spec ref:** CRR Art. 134(4)-(6), PRA PS1/26 Art. 134
-- **Fix:** Add OTHER_ITEMS exposure class handling with sub-category routing for cash (0%), items in collection (20%), and residual lease value formula.
-- **Tests needed:** Unit tests for each sub-category.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Art. 134 "Other Items" risk weights now fully implemented with sub-type routing via entity_type:
+  - `other_cash` / `other_gold`: 0% (Art. 134(1)/(4))
+  - `other_items_in_collection`: 20% (Art. 134(3))
+  - `other_tangible`: 100% (Art. 134(2))
+  - `other_residual_lease`: 1/t × 100% where t = max(residual_maturity_years, 1) (Art. 134(6))
+  - Generic OTHER (unrecognized sub-type): 100% (Art. 134(2))
+  Both CRR and B31 SA calculator paths handle all sub-types identically (Art. 134 is unchanged by PRA PS1/26).
+- **File:Line:** `data/tables/crr_risk_weights.py` (5 constants: OTHER_ITEMS_CASH_RW, GOLD, COLLECTION, TANGIBLE, DEFAULT), `engine/sa/calculator.py` (OTHER branches in both B31 and CRR when-chains), `engine/classifier.py` (5 entity_type → OTHER mappings), `data/schemas.py` (5 entity_type values added to VALID_ENTITY_TYPES)
+- **Spec ref:** CRR Art. 134, PRA PS1/26 Art. 134
+- **Tests:** 24 new unit tests: 6 data table/constant tests, 10 CRR calculator tests, 8 B31 calculator tests. All pass. Test count: 1979 unit (was 1955).
+- **Limitation:** Repo-style transactions (Art. 134(5), asset RW) and nth-to-default credit derivatives (Art. 134(5), Art. 266-270) not implemented — these require underlying asset risk weight lookup which is architecturally non-trivial.
 
 ### P1.59 IRB_SIMPLE_EQUITY_RISK_WEIGHTS exported under B31 config
 - **Status:** [ ] Not started (deferred)

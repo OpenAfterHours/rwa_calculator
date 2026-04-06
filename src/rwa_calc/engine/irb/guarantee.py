@@ -13,6 +13,7 @@ Key responsibilities:
 
 References:
 - CRR Art. 153(3), 202-203: Double default treatment
+- CRR Art. 161(3): Guarantor PD substitution for expected loss
 - CRR Art. 213, 215-217: Guarantee eligibility and substitution
 - Basel 3.1 CRE22.70-85: Parameter substitution approach
 - CRR Art. 306, CRE54.14-15: CCP risk weights
@@ -465,20 +466,57 @@ def _adjust_expected_loss(
             ]
         )
 
-    # CRR: SA guarantors -> reduce EL for guaranteed portion
+    # CRR: SA guarantors -> reduce EL for guaranteed portion (SA has no EL concept)
+    # CRR: IRB guarantors (non-DD, with PD) -> PD substitution for EL (Art. 161(3))
     # Double default exposures retain full obligor EL (DD modifies K, not EL)
+    _base_el = (
+        (pl.col("guaranteed_portion").fill_null(0) > 0)
+        & (pl.col("guarantor_rw").is_not_null())
+        & (pl.col("is_guarantee_beneficial"))
+    )
+    _el_unguaranteed = (
+        pl.col("expected_loss_irb_original")
+        * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
+    )
+
+    has_guarantor_pd = "guarantor_pd" in lf.collect_schema().names()
+    if has_guarantor_pd:
+        from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+
+        firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
+        firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])  # 0.45 CRR
+
+        has_transactor = "is_qrre_transactor" in lf.collect_schema().names()
+        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
+        guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
+
+        _is_irb_non_dd = (
+            (pl.col("guarantor_approach").fill_null("") == "irb")
+            & pl.col("guarantor_pd").is_not_null()
+            & ~pl.col("_is_dd_applied")
+        )
+
+        return lf.with_columns(
+            [
+                pl.when(_base_el & (pl.col("guarantor_approach").fill_null("") == "sa"))
+                .then(_el_unguaranteed)
+                .when(_base_el & _is_irb_non_dd)
+                .then(
+                    # IRB guarantor: blend borrower EL (unguaranteed) +
+                    # guarantor EL (guaranteed) per Art. 161(3)
+                    _el_unguaranteed
+                    + guarantor_pd_floored * firb_lgd_senior * pl.col("guaranteed_portion")
+                )
+                .otherwise(pl.col("expected_loss_irb_original"))
+                .alias("expected_loss"),
+            ]
+        )
+
+    # No guarantor_pd column — only SA guarantor EL reduction
     return lf.with_columns(
         [
-            pl.when(
-                (pl.col("guaranteed_portion").fill_null(0) > 0)
-                & (pl.col("guarantor_rw").is_not_null())
-                & (pl.col("is_guarantee_beneficial"))
-                & (pl.col("guarantor_approach").fill_null("") == "sa")
-            )
-            .then(
-                pl.col("expected_loss_irb_original")
-                * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
-            )
+            pl.when(_base_el & (pl.col("guarantor_approach").fill_null("") == "sa"))
+            .then(_el_unguaranteed)
             .otherwise(pl.col("expected_loss_irb_original"))
             .alias("expected_loss"),
         ]

@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.52 PSE risk weights implemented; comprehensive audit via PDF + source comparison + multi-agent gap analysis)
-**Current version:** 0.1.72 | **Test suite:** ~2,389 collected (1,775 unit + 277 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~42 skipped (benchmarks + xlsxwriter) | P1.52 fixed.
+**Last updated:** 2026-04-06 (P1.53 RGLA risk weights implemented)
+**Current version:** 0.1.73 | **Test suite:** ~2,419 collected (1,925 unit + 263 acceptance + 123 contracts + 102 integration + 35 benchmarks), ~14 skipped | P1.53 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Polars venv currently broken (delta import error) -- needs `uv sync` or package reinstall
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 81 (+P1.9a sub-item; P1.47 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* P1.53-P1.55 (RGLA/MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* P1.54-P1.55 (MDB/Other Items missing), P1.56 (CQS 5-6 bond ineligibility) [P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45 now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72 now fixed/verified]
 - *CRM formula/value errors:* P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.77 (mixed pool pro-rata vs sequential), P1.78 (FX mismatch on guarantees missing)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
@@ -85,12 +85,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Non-UK unrated PSEs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (not yet in schema). UK PSEs are the primary use case for a PRA-regulated calculator.
 
 ### P1.53 RGLA risk weight tables missing from code (Art. 115)
-- **Status:** [ ] Not started
-- **Impact:** Regional Governments and Local Authorities have no risk weight lookup. All RGLA exposures default to 100%. Art. 115 defines: UK devolved governments 0%, UK local authorities 20%, others derived from sovereign of jurisdiction. Two tables: Table 1A (sovereign-derived) and Table 1B (rated RGLA).
-- **File:Line:** `data/tables/crr_risk_weights.py` (no RGLA table exists); `engine/sa/calculator.py` (no RGLA branch)
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** RGLA risk weights now implemented with full Art. 115 treatment:
+  - Rated RGLAs (CQS 1-6): Table 1B own-rating weights via CQS join (CQS 3 = 50%)
+  - Unrated UK RGLAs: 20% sovereign-derived (UK sovereign CQS=1, Table 1A)
+  - Unrated non-UK RGLAs: 100% conservative default (sovereign CQS unknown)
+  - UK devolved administrations (Scotland, Wales, NI): 0% (PRA designation, via entity_type=rgla_sovereign)
+  - Domestic-currency (GB+GBP, EU+EUR): 20% (Art. 115(5)), overrides CQS-based weights
+  - RGLA guarantor substitution: Table 1B for rated, sovereign-derived for unrated
+- **File:Line:** `data/tables/crr_risk_weights.py` (RGLA tables + _create_rgla_df), `engine/sa/calculator.py` (RGLA branches in B31/CRR when-chains + guarantee substitution), `data/tables/b31_risk_weights.py` (RGLA in combined B31 table)
 - **Spec ref:** CRR Art. 115, PRA PS1/26 Art. 115
-- **Fix:** Add RGLA risk weight tables. Add RGLA branch in SA calculator. Add UK-specific 0%/20% overrides.
-- **Tests needed:** Unit tests for UK devolved govt (0%), UK local authority (20%), foreign sovereign-derived RGLA.
+- **Tests:** 30 new unit tests: 11 data table tests, 10 CRR calculator tests, 9 B31 calculator tests. All pass. Test count: 1925 unit (was 1895).
+- **Limitation:** Non-UK unrated RGLAs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (not yet in schema). UK RGLAs are the primary use case for a PRA-regulated calculator.
 
 ### P1.54 MDB 0% risk weight lookup missing from code (Art. 117-118)
 - **Status:** [ ] Not started

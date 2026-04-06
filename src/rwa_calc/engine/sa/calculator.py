@@ -77,6 +77,9 @@ from rwa_calc.data.tables.crr_risk_weights import (
     QCCP_PROPRIETARY_RW,
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
+    RGLA_DOMESTIC_CURRENCY_RW,
+    RGLA_UK_DEVOLVED_RW,
+    RGLA_UNRATED_DEFAULT_RW,
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
@@ -394,6 +397,8 @@ class SACalculator:
                 # Map detailed classes to lookup classes
                 pl.when(_upper.str.contains("CENTRAL_GOVT", literal=True))
                 .then(pl.lit("CENTRAL_GOVT_CENTRAL_BANK"))
+                .when(_upper == "RGLA")
+                .then(pl.lit("RGLA"))
                 .when(_upper == "PSE")
                 .then(pl.lit("PSE"))
                 .when(_upper.str.contains("INSTITUTION", literal=True))
@@ -524,6 +529,30 @@ class SACalculator:
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
                         .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
                     )
+                    # 4c-rgla. RGLA UK devolved govt → 0% (PRA designation)
+                    # Overrides all other RGLA treatments for devolved administrations.
+                    .when(
+                        (_uc == "RGLA")
+                        & (pl.col("cp_entity_type").fill_null("") == "rgla_sovereign")
+                        & (pl.col("cp_country_code") == "GB")
+                    )
+                    .then(pl.lit(float(RGLA_UK_DEVOLVED_RW)))
+                    # 4d-rgla. RGLA domestic currency → 20% (Art. 115(5))
+                    # UK+GBP or EU+domestic currency → 20% regardless of CQS.
+                    .when((_uc == "RGLA") & _is_domestic_currency)
+                    .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
+                    # 4e-rgla. RGLA unrated non-domestic: sovereign-derived (Table 1A)
+                    # UK sovereign CQS=1 → 20%. Non-UK: conservative 100%.
+                    .when(
+                        (_uc == "RGLA")
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(
+                        pl.when(pl.col("cp_country_code") == "GB")
+                        .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 1A row 1
+                        .otherwise(pl.lit(float(RGLA_UNRATED_DEFAULT_RW)))
+                    )
+                    # Rated RGLA: falls through to CQS join (Table 1B) via default
                     # 4c. SCRA-based unrated institutions (CRE20.16-21)
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
                     # Null SCRA grade defaults to Grade C (150%) — conservative treatment
@@ -727,6 +756,27 @@ class SACalculator:
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
                         .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
                     )
+                    # 6c-rgla. RGLA UK devolved govt → 0% (PRA designation)
+                    .when(
+                        (_uc == "RGLA")
+                        & (pl.col("cp_entity_type").fill_null("") == "rgla_sovereign")
+                        & (pl.col("cp_country_code") == "GB")
+                    )
+                    .then(pl.lit(float(RGLA_UK_DEVOLVED_RW)))
+                    # 6d-rgla. RGLA domestic currency → 20% (Art. 115(5))
+                    .when((_uc == "RGLA") & _is_domestic_currency)
+                    .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
+                    # 6e-rgla. RGLA unrated non-domestic: sovereign-derived (Table 1A)
+                    .when(
+                        (_uc == "RGLA")
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                    )
+                    .then(
+                        pl.when(pl.col("cp_country_code") == "GB")
+                        .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 1A row 1
+                        .otherwise(pl.lit(float(RGLA_UNRATED_DEFAULT_RW)))
+                    )
+                    # Rated RGLA: falls through to CQS join (Table 1B) via default
                     # 7. Unrated covered bonds: derive from issuer institution RW
                     # (CRR Art. 129(5)) — unrated institution = 40% → covered bond = 20%
                     .when(
@@ -900,6 +950,26 @@ class SACalculator:
                     .then(pl.lit(0.50))
                     .when(pl.col("guarantor_cqs") == 3)
                     .then(pl.lit(0.50))  # Table 2A: CQS 3 = 50% (differs from institutions)
+                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
+                    .then(pl.lit(1.0))
+                    .when(pl.col("guarantor_cqs") == 6)
+                    .then(pl.lit(1.50))
+                    # Unrated: sovereign-derived; UK → 20%, otherwise 100%
+                    .otherwise(
+                        pl.when(pl.col("guarantor_country_code").fill_null("") == "GB")
+                        .then(pl.lit(0.20))
+                        .otherwise(pl.lit(1.0))
+                    )
+                )
+                # RGLA guarantors (Art. 115(1)(b) Table 1B for rated; sovereign-derived for unrated)
+                .when(_gec == "rgla")
+                .then(
+                    pl.when(pl.col("guarantor_cqs") == 1)
+                    .then(pl.lit(0.20))
+                    .when(pl.col("guarantor_cqs") == 2)
+                    .then(pl.lit(0.50))
+                    .when(pl.col("guarantor_cqs") == 3)
+                    .then(pl.lit(0.50))  # Table 1B: CQS 3 = 50%
                     .when(pl.col("guarantor_cqs").is_in([4, 5]))
                     .then(pl.lit(1.0))
                     .when(pl.col("guarantor_cqs") == 6)

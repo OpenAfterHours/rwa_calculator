@@ -6,6 +6,7 @@ in the RWA calculation pipeline.
 
 References:
     - CRR Art. 114: Central govt/central bank risk weights
+    - CRR Art. 115: Regional govt/local authority risk weights
     - CRR Art. 116: Public sector entity risk weights
     - CRR Art. 120-121: Institution risk weights
     - CRR Art. 122: Corporate risk weights
@@ -148,6 +149,68 @@ def _create_pse_df() -> pl.DataFrame:
             "cqs": [1, 2, 3, 4, 5, 6],
             "risk_weight": [0.20, 0.50, 0.50, 1.00, 1.00, 1.50],
             "exposure_class": ["PSE"] * 6,
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
+
+
+# =============================================================================
+# RGLA RISK WEIGHTS (CRR Art. 115 / PRA PS1/26 Art. 115)
+# =============================================================================
+
+# Sovereign-derived treatment (Art. 115(1)(a), Table 1A):
+# Applied to RGLAs without their own ECAI rating — uses sovereign CQS.
+# Values identical to PSE sovereign-derived (Table 2).
+RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED: dict[CQS, Decimal] = {
+    CQS.CQS1: Decimal("0.20"),
+    CQS.CQS2: Decimal("0.50"),
+    CQS.CQS3: Decimal("1.00"),
+    CQS.CQS4: Decimal("1.00"),
+    CQS.CQS5: Decimal("1.00"),
+    CQS.CQS6: Decimal("1.50"),
+}
+
+# Own-rating treatment (Art. 115(1)(b), Table 1B):
+# Applied to RGLAs with their own ECAI rating — uses the RGLA's own CQS.
+# Note: CQS 3 = 50% here vs 100% in sovereign-derived (Table 1A).
+RGLA_RISK_WEIGHTS_OWN_RATING: dict[CQS, Decimal] = {
+    CQS.CQS1: Decimal("0.20"),
+    CQS.CQS2: Decimal("0.50"),
+    CQS.CQS3: Decimal("0.50"),
+    CQS.CQS4: Decimal("1.00"),
+    CQS.CQS5: Decimal("1.00"),
+    CQS.CQS6: Decimal("1.50"),
+}
+
+# PRA designation: UK devolved administrations (Scotland, Wales, NI) → 0%
+RGLA_UK_DEVOLVED_RW = Decimal("0.00")
+
+# PRA designation: UK local authorities → 20%
+RGLA_UK_LOCAL_AUTH_RW = Decimal("0.20")
+
+# Art. 115(5): Domestic-currency RGLA exposures → 20% regardless of CQS
+RGLA_DOMESTIC_CURRENCY_RW = Decimal("0.20")
+
+# Default for unrated RGLA when sovereign CQS is unknown (conservative fallback)
+RGLA_UNRATED_DEFAULT_RW = Decimal("1.00")
+
+
+def _create_rgla_df() -> pl.DataFrame:
+    """Create RGLA risk weight lookup DataFrame (Art. 115(1)(b), Table 1B, own-rating).
+
+    Rated RGLAs join against this table via their own CQS.
+    Unrated RGLAs use sovereign-derived treatment handled in the SA calculator.
+    UK devolved govts (0%) and UK local authorities (20%) are overrides in the calculator.
+    """
+    return pl.DataFrame(
+        {
+            "cqs": [1, 2, 3, 4, 5, 6],
+            "risk_weight": [0.20, 0.50, 0.50, 1.00, 1.00, 1.50],
+            "exposure_class": ["RGLA"] * 6,
         }
     ).with_columns(
         [
@@ -378,6 +441,7 @@ def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.Da
     """
     return {
         "central_govt_central_bank": _create_cgcb_df(),
+        "rgla": _create_rgla_df(),
         "pse": _create_pse_df(),
         "institution": _create_institution_df(use_uk_deviation),
         "corporate": _create_corporate_df(),
@@ -404,6 +468,7 @@ def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame
     return pl.concat(
         [
             _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_rgla_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_pse_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_institution_df(use_uk_deviation).select(
                 ["exposure_class", "cqs", "risk_weight"]
@@ -454,6 +519,14 @@ def lookup_risk_weight(
             # Returns 100% as conservative default (caller should use sovereign CQS)
             return PSE_UNRATED_DEFAULT_RW
         return PSE_RISK_WEIGHTS_OWN_RATING.get(cqs_enum, PSE_UNRATED_DEFAULT_RW)
+
+    if exposure_upper == "RGLA":
+        cqs_enum = _get_cqs_enum(cqs)
+        if cqs_enum == CQS.UNRATED:
+            # Unrated RGLA: sovereign-derived treatment (Art. 115(1)(a), Table 1A)
+            # Returns 100% as conservative default (caller should use sovereign CQS)
+            return RGLA_UNRATED_DEFAULT_RW
+        return RGLA_RISK_WEIGHTS_OWN_RATING.get(cqs_enum, RGLA_UNRATED_DEFAULT_RW)
 
     if exposure_upper == "INSTITUTION":
         table = (

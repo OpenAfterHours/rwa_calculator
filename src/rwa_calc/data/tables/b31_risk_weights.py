@@ -217,6 +217,9 @@ B31_HIGH_RISK_RW = Decimal("1.50")  # Art. 128: 150% flat
 B31_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # Art. 127: provisions >= 20%
 B31_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # Art. 127: provisions < 20%
 B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # PRA PS1/26 Art. 127: 20% threshold
+# Defaulted general RESI RE (non-income-dependent): 100% flat regardless of provisions
+# PRA PS1/26 Art. 127 / CRE20.88 — Basel 3.1 simplification for owner-occupied housing
+B31_DEFAULTED_RESI_RE_NON_INCOME_RW = Decimal("1.00")
 
 
 def _create_b31_corporate_df() -> pl.DataFrame:

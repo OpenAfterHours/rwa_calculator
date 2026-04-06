@@ -55,6 +55,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
     B31_CORPORATE_SME_RW,
     B31_DEFAULTED_PROVISION_THRESHOLD,
+    B31_DEFAULTED_RESI_RE_NON_INCOME_RW,
     B31_DEFAULTED_RW_HIGH_PROVISION,
     B31_DEFAULTED_RW_LOW_PROVISION,
     B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
@@ -497,13 +498,26 @@ class SACalculator:
                     # HIGH_RISK excluded: Art. 128 (150%) takes priority over
                     # Art. 127 per Art. 112 Table A2 classification ordering.
                     # B31 provision ratio = provision_allocated / ead (exposure value)
-                    # NOT (ead + provision_deducted) — that is the CRR denominator
+                    # NOT (ead + provision_deducted) — that is the CRR denominator.
+                    # Exception: general RESI RE (non-income-dependent) always 100%
+                    # per CRE20.88 / Art. 127 — Basel 3.1 simplification.
                     .when(
                         pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
                     )
                     .then(
+                        # RESI RE non-income-dependent: 100% flat (CRE20.88)
                         pl.when(
-                            pl.col("provision_allocated") >= b31_def_threshold * pl.col(_ead_col)
+                            (
+                                _uc.str.contains("MORTGAGE", literal=True)
+                                | _uc.str.contains("RESIDENTIAL", literal=True)
+                            )
+                            & ~pl.col("has_income_cover").fill_null(False)
+                        )
+                        .then(pl.lit(float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW)))
+                        # All other defaulted: provision-based (Art. 127)
+                        .when(
+                            pl.col("provision_allocated")
+                            >= b31_def_threshold * pl.col(_ead_col)
                         )
                         .then(pl.lit(b31_def_high_rw))
                         .otherwise(pl.lit(b31_def_low_rw))

@@ -2832,3 +2832,220 @@ class TestCurrencyMismatchMultiplier:
         )
         # CQS 1 institution = 20% — no multiplier
         assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+
+# =============================================================================
+# DEFAULTED RESI RE — ALWAYS 100% (PRA PS1/26 Art. 127 / CRE20.88)
+# =============================================================================
+#
+# Under Basel 3.1, defaulted general RESI RE (non-income-dependent) always gets
+# 100% RW regardless of provision coverage. This is a Basel 3.1 simplification
+# for owner-occupied housing — income-dependent and CRE defaulted exposures still
+# use the provision-based 100%/150% test. CRR has no such exception.
+# =============================================================================
+
+
+class TestDefaultedResiREBasel31:
+    """Tests for Basel 3.1 defaulted RESI RE always-100% exception (CRE20.88)."""
+
+    def test_defaulted_resi_re_non_income_always_100(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-income-dependent defaulted RESI RE → 100% regardless of provisions."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),  # 0% provisions
+            config=b31_config,
+        )
+        # Should be 100% flat, NOT 150% (provision-based)
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_non_income_with_low_provisions_still_100(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Even with provisions < 20%, non-income RESI RE gets 100% (not 150%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("50000"),  # 5% < 20% threshold
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_non_income_with_high_provisions_still_100(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """With provisions >= 20%, non-income RESI RE still gets 100% (same result)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("300000"),  # 30% >= 20%
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_income_dependent_uses_provision_test(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Income-dependent defaulted RESI RE still uses provision-based test."""
+        # Low provisions → 150%
+        result_low = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=True,  # Income-dependent
+            provision_allocated=Decimal("50000"),  # 5% < 20%
+            config=b31_config,
+        )
+        assert result_low["risk_weight"] == pytest.approx(1.50)
+
+        # High provisions → 100%
+        result_high = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=True,
+            provision_allocated=Decimal("250000"),  # 25% >= 20%
+            config=b31_config,
+        )
+        assert result_high["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_resi_re_rwa_correctness(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """RWA = EAD × 100% for defaulted non-income RESI RE."""
+        ead = Decimal("750000")
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=ead,
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(float(ead) * 1.00)
+
+    def test_defaulted_residential_class_variant(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """RESIDENTIAL_RE class also gets the always-100% treatment."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="RESIDENTIAL_RE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_defaulted_null_income_cover_defaults_non_income(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null has_income_cover defaults to False (non-income) → 100%."""
+        df = pl.DataFrame(
+            {
+                "exposure_reference": ["NULL_INCOME"],
+                "ead_final": [500000.0],
+                "exposure_class": ["RETAIL_MORTGAGE"],
+                "cqs": [None],
+                "is_defaulted": [True],
+                "has_income_cover": [None],
+                "provision_allocated": [0.0],
+                "provision_deducted": [0.0],
+            }
+        ).lazy()
+
+        result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_crr_defaulted_resi_re_no_exception(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no RESI RE defaulted exception — provision-based test applies."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            provision_allocated=Decimal("0"),  # 0% provisions
+            config=crr_config,
+        )
+        # CRR: no provisions → 150% (provision-based test, no RESI RE exception)
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_defaulted_corporate_still_provision_based(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-RE defaulted exposures still use provision-based test under B31."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=None,
+            is_defaulted=True,
+            provision_allocated=Decimal("50000"),  # 5% < 20%
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_defaulted_commercial_re_still_provision_based(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Defaulted CRE uses provision-based test (no RESI-like exception)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="COMMERCIAL_RE",
+            cqs=None,
+            is_defaulted=True,
+            has_income_cover=False,
+            property_type="commercial",
+            provision_allocated=Decimal("50000"),  # 5% < 20%
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(1.50)

@@ -290,22 +290,32 @@ class ELPortfolioSummary:
     - Compute T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d))
     - Compute T2 credit (min of total excess and cap)
     - Compute CET1/T2 deduction split (50/50 per CRR Art. 159)
+    - Apply Art. 159(3) two-branch rule: when non-defaulted EL exceeds
+      non-defaulted provisions AND defaulted provisions exceed defaulted
+      EL simultaneously, shortfall and excess are computed separately
+      for each pool — defaulted excess cannot offset non-defaulted shortfall
 
     References:
     - CRR Art. 62(d): T2 credit cap for EL excess
     - CRR Art. 158: EL shortfall deduction
     - CRR Art. 159: 50/50 CET1/T2 deduction split
+    - CRR Art. 159(3): Two-branch no-cross-offset rule
 
     Attributes:
         total_expected_loss: Sum of expected loss across all IRB exposures
         total_provisions_allocated: Sum of provisions allocated to IRB exposures
-        total_el_shortfall: Sum of max(0, EL - provisions) per exposure
-        total_el_excess: Sum of max(0, provisions - EL) per exposure
+        total_el_shortfall: Effective shortfall after Art. 159(3) rule
+        total_el_excess: Effective excess after Art. 159(3) rule
         total_irb_rwa: Total IRB RWA (denominator for T2 cap)
         t2_credit_cap: 0.6% of total IRB RWA
         t2_credit: min(total_el_excess, t2_credit_cap) — addable to T2 capital
         cet1_deduction: 50% of total_el_shortfall — deducted from CET1
         t2_deduction: 50% of total_el_shortfall — deducted from T2
+        non_defaulted_el_shortfall: Shortfall from non-defaulted exposures only
+        non_defaulted_el_excess: Excess from non-defaulted exposures only
+        defaulted_el_shortfall: Shortfall from defaulted exposures only
+        defaulted_el_excess: Excess from defaulted exposures only
+        art_159_3_applies: True when two-branch condition is triggered
     """
 
     total_expected_loss: float
@@ -317,6 +327,11 @@ class ELPortfolioSummary:
     t2_credit: float
     cet1_deduction: float
     t2_deduction: float
+    non_defaulted_el_shortfall: float = 0.0
+    non_defaulted_el_excess: float = 0.0
+    defaulted_el_shortfall: float = 0.0
+    defaulted_el_excess: float = 0.0
+    art_159_3_applies: bool = False
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.70 per-type overcollateralisation threshold)
-**Current version:** 0.1.94 | **Test suite:** ~2,861 collected (~2,345 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.70, P1.71, P1.78 fixed.
+**Last updated:** 2026-04-06 (P1.81 Art. 159(3) two-branch EL shortfall/excess)
+**Current version:** 0.1.95 | **Test suite:** ~2,878 collected (~2,362 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.70, P1.71, P1.78, P1.81 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -11,7 +11,7 @@
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
-- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
+- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
 - *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
@@ -811,13 +811,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Art. 226(1) liquidation period scaling not yet implemented (standard 10-day/8% used for all). Art. 227 zero-haircut conditions for qualifying repos not checked. These are shared limitations with the collateral FX haircut path.
 
 ### P1.81 Art. 159(3) two-branch EL shortfall/excess comparison not implemented
-- **Status:** [ ] Not started
-- **Impact:** Art. 159(3) requires that when non-defaulted EL exceeds non-defaulted provisions (A>B) AND defaulted provisions exceed defaulted EL (D>C) simultaneously, the shortfall and excess must be computed **separately**. The defaulted excess must NOT offset the non-defaulted shortfall. The current implementation uses a single combined comparison (`sum(el_shortfall)` vs `sum(el_excess)` across all exposures), which allows cross-subsidisation between defaulted and non-defaulted books. This **understates CET1 deductions** when both conditions hold simultaneously.
-  **Spec fix (2026-04-06):** provisions.md updated with Art. 159(3) two-branch rule and warning.
-- **File:Line:** `engine/irb/adjustments.py`, `engine/aggregator/`
-- **Spec ref:** CRR Art. 159(3), `docs/specifications/crr/provisions.md`
-- **Fix:** Split EL comparison into non-defaulted and defaulted pools. When A>B AND D>C, compute shortfall from non-defaulted pool only and excess from defaulted pool only.
-- **Tests needed:** Unit tests for: (a) combined pool where only one condition holds, (b) simultaneous A>B AND D>C where cross-subsidisation would occur.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** Art. 159(3) two-branch no-cross-offset rule now implemented:
+  - When non-defaulted EL exceeds non-defaulted provisions (A > B) AND defaulted provisions exceed defaulted EL (D > C) simultaneously, shortfall and excess are computed separately for each pool
+  - Defaulted excess cannot offset non-defaulted shortfall (prevents CET1 deduction understatement)
+  - `compute_el_portfolio_summary()` now splits aggregation by `is_defaulted` flag, with fallback to all-non-defaulted when column absent (conservative)
+  - `ELPortfolioSummary` dataclass extended with: `non_defaulted_el_shortfall`, `non_defaulted_el_excess`, `defaulted_el_shortfall`, `defaulted_el_excess`, `art_159_3_applies`
+  - Backward compatible: when `is_defaulted` column absent, all exposures treated as non-defaulted (Art. 159(3) cannot trigger)
+  - Null `is_defaulted` values default to `False` (non-defaulted, conservative)
+  - Works across combined IRB + slotting portfolios
+- **File:Line:** `engine/aggregator/_el_summary.py` (two-branch logic + `_aggregate_by_default_status`), `contracts/bundles.py` (ELPortfolioSummary extended fields)
+- **Spec ref:** CRR Art. 159(3), Art. 36(1)(d), Art. 62(d)
+- **Tests:** 17 new unit tests in `tests/unit/test_el_two_branch.py`: 3 two-branch triggering tests (trigger + CET1/T2 deductions + T2 credit), 5 non-triggering tests (all non-defaulted shortfall, all defaulted excess, both pools shortfall, both pools excess, reverse direction), 3 backward compatibility tests (no is_defaulted column, mixed without is_defaulted, null is_defaulted), 4 pool breakdown tests (fields populated, RWA totals, T2 cap with two-branch, slotting + IRB combined), 2 capital impact tests (prevents understatement, flag false when no cross-offset). All 2878 tests pass. Test count: 2878 (was 2861).
 
 ### P1.82 BEEL exception for A-IRB defaulted EL not implemented (Art. 158(5))
 - **Status:** [ ] Not started

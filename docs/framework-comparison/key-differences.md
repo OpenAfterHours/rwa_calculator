@@ -369,11 +369,11 @@ exposure is not hedged. Distinct from the 8% FX collateral haircut in CRM.
 
 ### Equity Exposures
 
-| Type | CRR | Basel 3.1 (Fully Phased) | Change |
+| Type | CRR (Art. 133(2)) | Basel 3.1 (Fully Phased) | Change |
 |------|-----|--------------------------|--------|
 | Standard listed equities | 100% | **250%** | +150pp |
-| Higher-risk (unlisted, < 5 yrs) | 250-400% | **400%** | Standardised |
-| Speculative / venture capital | 400% | **400%** | — |
+| Higher-risk (unlisted, PE, etc.) | 100% | **400%** | +300pp |
+| Speculative / venture capital | 100% (or 150% if Art. 128 high-risk) | **400%** | +250-300pp |
 
 IRB is **removed** for equity under Basel 3.1 — SA only. The PD/LGD method (CRR Art. 155)
 is blanked in the final rules.

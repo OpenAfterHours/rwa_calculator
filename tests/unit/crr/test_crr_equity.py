@@ -4,11 +4,9 @@ Unit tests for CRR Equity Calculator.
 Tests equity exposure RWA calculation under two approaches:
 
 Article 133 (Standardised Approach):
-- Central bank: 0% RW
-- Listed/Exchange-traded: 100% RW
-- Government-supported: 100% RW
-- Unlisted: 250% RW
-- Speculative: 400% RW
+- Central bank: 0% RW (sovereign treatment)
+- All other equity: 100% RW (Art. 133(2) flat)
+- CIU: 150% RW (Art. 132(2) fallback)
 
 Article 155 (IRB Simple Risk Weight):
 - Private equity (diversified): 190% RW
@@ -16,9 +14,9 @@ Article 155 (IRB Simple Risk Weight):
 - Other equity: 370% RW
 
 References:
-- CRR Art. 133: Equity exposures under SA
+- CRR Art. 133(2): Equity = 100% flat
+- CRR Art. 132: CIU treatment (look-through, mandate-based, 150% fallback)
 - CRR Art. 155: Simple risk weight approach under IRB
-- EBA Q&A 2023_6716: Strategic equity treatment
 """
 
 from datetime import date
@@ -145,40 +143,40 @@ class TestSAEquityRiskWeights:
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_unlisted_250_percent(
+    def test_unlisted_100_percent(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Unlisted equity gets 250% RW under SA (Art. 133(2))."""
+        """Unlisted equity gets 100% RW under CRR SA (Art. 133(2) flat)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50)
+        assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_speculative_400_percent(
+    def test_speculative_100_percent(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Speculative unlisted equity gets 400% RW under SA (Art. 133(2))."""
+        """Speculative equity gets 100% RW under CRR SA (Art. 133(2) flat)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="speculative",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(4.00)
+        assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_is_speculative_flag_overrides_type(
+    def test_is_speculative_flag_still_100_percent(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """is_speculative flag forces 400% RW even for unlisted type."""
+        """is_speculative flag has no effect under CRR SA — still 100% (Art. 133(2))."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -186,35 +184,35 @@ class TestSAEquityRiskWeights:
             is_speculative=True,
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(4.00)
+        assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_private_equity_250_percent(
+    def test_private_equity_100_percent(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Private equity gets 250% RW under SA (same as unlisted)."""
+        """Private equity gets 100% RW under CRR SA (Art. 133(2) flat)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="private_equity",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50)
+        assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_ciu_250_percent(
+    def test_ciu_150_percent_fallback(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU (collective investment undertaking) gets 250% RW under SA."""
+        """CIU gets 150% RW under CRR SA (Art. 132(2) fallback)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="ciu",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
 
 # =============================================================================
@@ -399,30 +397,30 @@ class TestEquityRWACalculation:
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """SA Unlisted: £1m at 250% = £2.5m RWA."""
+        """SA Unlisted: £1m at 100% = £1m RWA (Art. 133(2) flat)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="unlisted",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50)
-        assert result["rwa"] == pytest.approx(2_500_000)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(1_000_000)
 
     def test_sa_speculative_1m_rwa(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """SA Speculative: £1m at 400% = £4m RWA."""
+        """SA Speculative: £1m at 100% = £1m RWA (Art. 133(2) flat)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="speculative",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(4.00)
-        assert result["rwa"] == pytest.approx(4_000_000)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(1_000_000)
 
     def test_irb_pe_diversified_1m_rwa(
         self,
@@ -527,10 +525,10 @@ class TestEquityBundleProcessing:
         assert row1["risk_weight"] == pytest.approx(1.00)
         assert row1["rwa"] == pytest.approx(1_000_000)
 
-        # Check second exposure
+        # Check second exposure (unlisted = 100% under CRR Art. 133(2))
         row2 = df.filter(pl.col("exposure_reference") == "EQ002").to_dicts()[0]
-        assert row2["risk_weight"] == pytest.approx(2.50)
-        assert row2["rwa"] == pytest.approx(1_250_000)
+        assert row2["risk_weight"] == pytest.approx(1.00)
+        assert row2["rwa"] == pytest.approx(500_000)
 
     def test_empty_equity_exposures_returns_empty_result(
         self,
@@ -675,8 +673,8 @@ class TestEquityRiskWeightTables:
         """lookup_equity_rw returns correct SA risk weights."""
         assert lookup_equity_rw("central_bank", "sa") == Decimal("0.00")
         assert lookup_equity_rw("listed", "sa") == Decimal("1.00")
-        assert lookup_equity_rw("unlisted", "sa") == Decimal("2.50")
-        assert lookup_equity_rw("speculative", "sa") == Decimal("4.00")
+        assert lookup_equity_rw("unlisted", "sa") == Decimal("1.00")
+        assert lookup_equity_rw("speculative", "sa") == Decimal("1.00")
 
     def test_lookup_equity_rw_irb_simple(self):
         """lookup_equity_rw returns correct IRB Simple risk weights."""
@@ -742,7 +740,7 @@ class TestEquityEdgeCases:
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Unknown equity type defaults to 'other' (250% SA)."""
+        """Unknown equity type defaults to 'other' (100% CRR SA, Art. 133(2))."""
         bundle = create_equity_bundle(
             [
                 {
@@ -754,7 +752,7 @@ class TestEquityEdgeCases:
         )
         result = equity_calculator.calculate(bundle, sa_config)
         df = result.frame.collect()
-        assert df["risk_weight"][0] == pytest.approx(2.50)
+        assert df["risk_weight"][0] == pytest.approx(1.00)
 
     def test_zero_ead_produces_zero_rwa(
         self,
@@ -903,7 +901,7 @@ class TestSAVsIRBSimple:
         sa_config: CalculationConfig,
         irb_config: CalculationConfig,
     ):
-        """Unlisted equity: SA (250%) is lower than IRB Simple (370%)."""
+        """Unlisted equity: CRR SA (100%) is lower than IRB Simple (370%)."""
         sa_result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -916,17 +914,17 @@ class TestSAVsIRBSimple:
             equity_type="unlisted",
             config=irb_config,
         )
-        assert sa_result["risk_weight"] == pytest.approx(2.50)
+        assert sa_result["risk_weight"] == pytest.approx(1.00)
         assert irb_result["risk_weight"] == pytest.approx(3.70)
         assert sa_result["risk_weight"] < irb_result["risk_weight"]
 
-    def test_speculative_sa_higher_than_irb(
+    def test_speculative_sa_lower_than_irb(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
         irb_config: CalculationConfig,
     ):
-        """Speculative equity: SA (400%) is higher than IRB Simple (370%)."""
+        """Speculative equity: CRR SA (100%) is lower than IRB Simple (370%)."""
         sa_result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -939,6 +937,6 @@ class TestSAVsIRBSimple:
             equity_type="speculative",
             config=irb_config,
         )
-        assert sa_result["risk_weight"] == pytest.approx(4.00)
+        assert sa_result["risk_weight"] == pytest.approx(1.00)
         assert irb_result["risk_weight"] == pytest.approx(3.70)
-        assert sa_result["risk_weight"] > irb_result["risk_weight"]
+        assert sa_result["risk_weight"] < irb_result["risk_weight"]

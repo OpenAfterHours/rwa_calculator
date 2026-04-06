@@ -429,10 +429,9 @@ class EquityCalculator:
         """
         Apply SA equity risk weights, branching by framework.
 
-        CRR Art. 133: 0% / 100% / 250% / 400%
-        Basel 3.1 Art. 133(3)-(6): 0% / 100% / 250% / 400% with key changes:
-            - Listed/exchange-traded: 100% -> 250%
-            - CIU fallback: 150% -> 250%
+        CRR Art. 133(2): 100% flat (with 0% for central bank);
+            CIU via Art. 132 (150% fallback for regulated-exchange CIU)
+        Basel 3.1 Art. 133(3)-(6): 250% / 400% / 100% (legislative) / 150% (sub debt)
         """
         if config.is_basel_3_1:
             return self._apply_b31_equity_weights_sa(exposures, config)
@@ -446,36 +445,23 @@ class EquityCalculator:
         """
         Apply CRR Article 133 SA equity risk weights.
 
+        Art. 133(2): "Equity exposures shall be assigned a risk weight of 100%,
+        unless they are required to be deducted [...], assigned a 250% risk weight
+        in accordance with Article 48(4), assigned a 1250% risk weight in accordance
+        with Article 89(3) or treated as high risk items in accordance with Article 128."
+
         Risk weights:
-        - Central bank: 0%
-        - Listed/Exchange-traded/Government-supported: 100%
-        - Unlisted: 250%
-        - Speculative: 400%
+        - Central bank: 0% (sovereign treatment)
+        - CIU: Art. 132 treatment (150% fallback, look-through, mandate-based)
+        - All other equity: 100% (Art. 133(2) flat)
+
+        Note: PE/VC qualifying as high-risk is routed to Art. 128 (150%) via the
+        classifier's HIGH_RISK exposure class, not through this equity calculator.
         """
         return exposures.with_columns(
             [
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
                 .then(pl.lit(0.00))
-                .when(pl.col("is_speculative") == True)  # noqa: E712
-                .then(pl.lit(4.00))
-                .when(pl.col("equity_type").str.to_lowercase() == "speculative")
-                .then(pl.lit(4.00))
-                .when(pl.col("is_exchange_traded") == True)  # noqa: E712
-                .then(pl.lit(1.00))
-                .when(pl.col("equity_type").str.to_lowercase() == "listed")
-                .then(pl.lit(1.00))
-                .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
-                .then(pl.lit(1.00))
-                .when(pl.col("is_government_supported") == True)  # noqa: E712
-                .then(pl.lit(1.00))
-                .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
-                .then(pl.lit(1.00))
-                .when(pl.col("equity_type").str.to_lowercase() == "unlisted")
-                .then(pl.lit(2.50))
-                .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
-                .then(pl.lit(2.50))
-                .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
-                .then(pl.lit(2.50))
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .when(
                     (pl.col("equity_type").str.to_lowercase() == "ciu")
@@ -496,10 +482,11 @@ class EquityCalculator:
                     (pl.col("equity_type").str.to_lowercase() == "ciu")
                     & (pl.col("ciu_approach") == "look_through")
                 )
-                .then(pl.col("ciu_look_through_rw").fill_null(2.50))  # Art. 132
+                .then(pl.col("ciu_look_through_rw").fill_null(1.50))  # Art. 132
                 .when(pl.col("equity_type").str.to_lowercase() == "ciu")
-                .then(pl.lit(2.50))  # CIU default: 250%
-                .otherwise(pl.lit(2.50))
+                .then(pl.lit(1.50))  # CIU default: Art. 132(2) fallback
+                # Art. 133(2): all other equity = 100%
+                .otherwise(pl.lit(1.00))
                 .alias("risk_weight"),
             ]
         )

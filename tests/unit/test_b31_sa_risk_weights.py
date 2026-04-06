@@ -56,6 +56,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO,
     B31_RESIDENTIAL_GENERAL_SECURED_RW,
     B31_RESIDENTIAL_INCOME_LTV_BANDS,
+    B31_RETAIL_PAYROLL_LOAN_RW,
     B31_SCRA_RISK_WEIGHTS,
     B31_SCRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
@@ -3053,3 +3054,235 @@ class TestDefaultedResiREBasel31:
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.50)
+
+
+# =============================================================================
+# PAYROLL / PENSION LOAN — 35% (PRA PS1/26 Art. 123(3)(a-b))
+# =============================================================================
+
+
+class TestB31PayrollPensionLoan:
+    """Basel 3.1 payroll/pension loan — 35% risk weight (Art. 123(3)(a-b)).
+
+    Why these tests matter:
+        Under Basel 3.1, loans secured by assignment of the borrower's payroll
+        or pension income receive a preferential 35% risk weight instead of the
+        standard 75% regulatory retail rate. This is a new Basel 3.1 retail
+        sub-category not present in CRR. Without this treatment, payroll/pension
+        loans are overcharged by 40pp (75% vs 35%), overstating capital.
+
+    References:
+    - PRA PS1/26 Art. 123(3)(a-b): payroll/pension loans = 35%
+    - PRA PS1/26 Art. 123A: qualifying criteria for regulatory retail
+    """
+
+    def test_payroll_loan_gets_35pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Payroll loan exposure should get 35% RW under Basel 3.1."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.35)
+
+    def test_payroll_loan_rwa_correctness(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Payroll loan RWA should be EAD * 35%."""
+        ead = 40000.0
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_002"],
+                "ead_final": [ead],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["rwa_pre_factor"][0] == pytest.approx(ead * 0.35)
+
+    def test_non_payroll_retail_still_gets_75pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-payroll retail should still get 75% RW."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_payroll_loan_qrre_transactor_gets_45pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """QRRE transactor takes priority over payroll loan in the when-chain."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_QRRE_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [True],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # QRRE transactor (45%) takes priority over payroll (35%) in the when-chain
+        assert df["risk_weight"][0] == pytest.approx(0.45)
+
+    def test_null_payroll_flag_defaults_to_non_payroll(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null is_payroll_loan defaults to False (standard 75% retail)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_NULL_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [None],
+            },
+            schema_overrides={"is_payroll_loan": pl.Boolean},
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_missing_payroll_column_defaults_to_non_payroll(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """When is_payroll_loan column is absent, defaults to False (75% retail)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_NO_COL_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_crr_payroll_loan_gets_75pct(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Under CRR, payroll loans get standard 75% retail RW (no 35% category)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_CRR_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        # CRR has no payroll/pension category — all retail is 75%
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_payroll_loan_constant_value(self) -> None:
+        """B31_RETAIL_PAYROLL_LOAN_RW constant should be 0.35 (35%)."""
+        assert B31_RETAIL_PAYROLL_LOAN_RW == Decimal("0.35")

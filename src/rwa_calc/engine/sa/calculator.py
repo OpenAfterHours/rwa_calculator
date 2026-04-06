@@ -387,6 +387,8 @@ class SACalculator:
             missing_cols.append(pl.lit(None).cast(pl.Float64).alias("residual_maturity_years"))
         if "is_short_term_trade_lc" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_short_term_trade_lc"))
+        if "is_payroll_loan" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_payroll_loan"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -694,13 +696,20 @@ class SACalculator:
                         & _uc.str.contains("SME", literal=True)
                     )
                     .then(pl.lit(sme_corp_rw))
-                    # 9. QRRE transactor: 45% (Art. 123)
+                    # 9. QRRE transactor: 45% (Art. 123(2))
                     .when(
                         _uc.str.contains("RETAIL", literal=True)
                         & pl.col("is_qrre_transactor").fill_null(False)
                     )
                     .then(pl.lit(0.45))
-                    # 9a. Non-regulatory retail: 100% (Art. 123(3)(c))
+                    # 9b. Payroll/pension loans: 35% (Art. 123(3)(a-b))
+                    # Loans secured by assignment of borrower's payroll or pension
+                    .when(
+                        _uc.str.contains("RETAIL", literal=True)
+                        & pl.col("is_payroll_loan").fill_null(False)
+                    )
+                    .then(pl.lit(0.35))
+                    # 9c. Non-regulatory retail: 100% (Art. 123(3)(c))
                     # Retail exposures failing Art. 123A qualifying criteria
                     .when(
                         _uc.str.contains("RETAIL", literal=True)

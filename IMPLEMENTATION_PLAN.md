@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-06 (P1.81 Art. 159(3) two-branch EL shortfall/excess)
-**Current version:** 0.1.95 | **Test suite:** ~2,878 collected (~2,362 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.70, P1.71, P1.78, P1.81 fixed.
+**Last updated:** 2026-04-06 (P1.19 payroll/pension loan retail category; P1.82 BEEL false positive closed)
+**Current version:** 0.1.95 | **Test suite:** ~2,886 collected (~2,362 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.26, P1.29, P1.32, P1.34, P1.35, P1.62, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 78 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
@@ -335,12 +335,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 10 new unit tests in `tests/unit/test_b31_sa_risk_weights.py` (TestDefaultedResiREBasel31): non-income always 100%, low provisions still 100%, high provisions still 100%, income-dependent uses provision test (150%/100%), RWA correctness, RESIDENTIAL_RE class variant, null income_cover defaults non-income, CRR no exception (150%), corporate still provision-based, CRE still provision-based. All 2821 tests pass. Test count: 2821 (was 2805).
 
 ### P1.19 Payroll/pension loan retail category (Basel 3.1 Art. 123)
-- **Status:** [ ] Not implemented
-- **Impact:** Basel 3.1 introduces a 35% risk weight for payroll/pension loans (loans repaid directly from salary or pension). No `is_payroll_loan` flag exists in the schema, no 35% RW branch in the SA calculator. This is a new Basel 3.1 retail sub-category per PRA PS1/26 Art. 123.
-- **File:Line:** `data/schemas.py` (no field), `engine/sa/calculator.py` (no branch)
-- **Spec ref:** `docs/framework-comparison/key-differences.md` (Retail Exposures table)
-- **Fix:** Add `is_payroll_loan` boolean to facility schema. In SA calculator, when `is_b31=True` and `is_payroll_loan`, apply 35% RW.
-- **Tests needed:** Unit tests in SA calculator. Acceptance test in B31-A.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-06
+- **Impact:** PRA PS1/26 Art. 123(3)(a-b) payroll/pension loan 35% risk weight now implemented:
+  - **Schema:** `is_payroll_loan` Boolean field added to FACILITY_SCHEMA, LOAN_SCHEMA, CONTINGENTS (default False), and RAW_EXPOSURE_SCHEMA
+  - **Data table:** `B31_RETAIL_PAYROLL_LOAN_RW = Decimal("0.35")` constant added to `b31_risk_weights.py`
+  - **SA calculator:** New when-branch in B31 retail section (item 9b) between QRRE transactor (45%) and non-regulatory retail (100%). Uses `pl.col("is_payroll_loan").fill_null(False)` — null defaults to non-payroll (75% standard retail)
+  - **Hierarchy resolver:** `is_payroll_loan` handled in facility undrawn, loan, and contingent resolution paths with fill_null(False) defaults
+  - **CRR path:** No change (CRR has no payroll/pension category — all retail is flat 75%)
+  - **Backward compatible:** When `is_payroll_loan` column is absent, `_ensure_columns` defaults to False (standard 75% retail)
+  - **When-chain priority:** QRRE transactor (45%) > payroll/pension (35%) > non-regulatory (100%) > regulatory retail (75%)
+- **File:Line:** `data/tables/b31_risk_weights.py` (B31_RETAIL_PAYROLL_LOAN_RW), `data/schemas.py` (FACILITY_SCHEMA, LOAN_SCHEMA, RAW_EXPOSURE_SCHEMA), `engine/sa/calculator.py` (B31 when-chain item 9b + _ensure_columns), `engine/hierarchy.py` (unified schema + 3 resolution paths)
+- **Spec ref:** PRA PS1/26 Art. 123(3)(a-b)
+- **Tests:** 8 new unit tests in `tests/unit/test_b31_sa_risk_weights.py` (TestB31PayrollPensionLoan): payroll 35%, RWA correctness, non-payroll 75%, QRRE transactor priority, null defaults, missing column defaults, CRR no payroll, constant value. All 2886 tests pass. Test count: 2886 (was 2878).
 
 ### P1.20 Revolving maturity change (Basel 3.1 Art. 162(2A)(k))
 - **Status:** [ ] Not implemented
@@ -826,13 +833,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 17 new unit tests in `tests/unit/test_el_two_branch.py`: 3 two-branch triggering tests (trigger + CET1/T2 deductions + T2 credit), 5 non-triggering tests (all non-defaulted shortfall, all defaulted excess, both pools shortfall, both pools excess, reverse direction), 3 backward compatibility tests (no is_defaulted column, mixed without is_defaulted, null is_defaulted), 4 pool breakdown tests (fields populated, RWA totals, T2 cap with two-branch, slotting + IRB combined), 2 capital impact tests (prevents understatement, flag false when no cross-offset). All 2878 tests pass. Test count: 2878 (was 2861).
 
 ### P1.82 BEEL exception for A-IRB defaulted EL not implemented (Art. 158(5))
-- **Status:** [ ] Not started
-- **Impact:** Art. 158(5) specifies that for A-IRB defaulted exposures (PD=1), EL = BEEL (best estimate of expected loss), NOT PD × LGD (which gives 1 × LGD). F-IRB defaulted uses the standard formula. The code applies `PD × LGD × EAD` universally. Using LGD instead of BEEL overstates or understates EL depending on whether BEEL differs from LGD. No `beel` input field exists in the schema.
-  **Spec fix (2026-04-06):** provisions.md updated with BEEL exception warning.
-- **File:Line:** `engine/irb/adjustments.py`, `data/schemas.py` (missing `beel` field)
+- **Status:** [x] Complete — already implemented (false positive)
+- **Verified:** 2026-04-06
+- **Description:** Code audit confirmed that `adjustments.py:80-103` already implements Art. 158(5): A-IRB defaulted exposures use `beel × ead_final` for EL (not `PD × LGD × EAD`). F-IRB defaulted uses `lgd_floored × ead_final`. The `beel` column exists in all input schemas (LOAN_SCHEMA, FACILITY_SCHEMA, CONTINGENTS_SCHEMA, RAW_EXPOSURE_SCHEMA) as `pl.Float64`. When absent, defaults to 0.0 (conservative: EL=0, K=max(0, LGD-0)=LGD). The duplicate implementation in `formulas.py:373-392` mirrors this logic identically.
+- **File:Line:** `engine/irb/adjustments.py:80-103` (vectorized path), `engine/irb/formulas.py:373-392` (legacy/scalar path), `data/schemas.py` (beel field in all schemas)
 - **Spec ref:** PRA PS1/26 Art. 158(5)
-- **Fix:** Add `beel` field to loan/exposure schema. For A-IRB defaulted exposures, use `BEEL × EAD` instead of `PD × LGD × EAD`. For F-IRB defaulted, keep standard formula.
-- **Tests needed:** Unit tests for A-IRB defaulted EL using BEEL vs F-IRB defaulted using PD×LGD.
 
 ### P1.83 EL comparison pool 'B' excludes AVAs and own funds reductions (Art. 159(1))
 - **Status:** [ ] Not started

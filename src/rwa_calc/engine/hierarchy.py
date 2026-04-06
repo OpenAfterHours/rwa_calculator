@@ -595,6 +595,7 @@ class HierarchyResolver:
                     "risk_type": pl.String,
                     "ccf_modelled": pl.Float64,
                     "is_short_term_trade_lc": pl.Boolean,
+                    "is_payroll_loan": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
                     "has_netting_agreement": pl.Boolean,
                     "is_revolving": pl.Boolean,
@@ -810,6 +811,11 @@ class HierarchyResolver:
                 else pl.lit(False).alias("is_short_term_trade_lc")
             ),
             (
+                pl.col("is_payroll_loan").fill_null(False)
+                if "is_payroll_loan" in facility_cols
+                else pl.lit(False).alias("is_payroll_loan")
+            ),
+            (
                 pl.col("is_buy_to_let").fill_null(False)
                 if "is_buy_to_let" in facility_cols
                 else pl.lit(False).alias("is_buy_to_let")
@@ -896,6 +902,11 @@ class HierarchyResolver:
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
             (
+                pl.col("is_payroll_loan").fill_null(False)
+                if "is_payroll_loan" in loan_cols
+                else pl.lit(False).alias("is_payroll_loan")
+            ),
+            (
                 pl.col("is_buy_to_let").fill_null(False)
                 if "is_buy_to_let" in loan_cols
                 else pl.lit(False).alias("is_buy_to_let")
@@ -962,6 +973,9 @@ class HierarchyResolver:
                     .then(pl.lit(None).cast(pl.Boolean))
                     .otherwise(pl.col("is_short_term_trade_lc"))
                     .alias("is_short_term_trade_lc"),
+                    pl.lit(False).alias(
+                        "is_payroll_loan"
+                    ),  # Payroll loans are term loans, not contingents
                     pl.lit(False).alias(
                         "is_buy_to_let"
                     ),  # BTL is a property lending characteristic, not for contingents

@@ -73,6 +73,7 @@ FACILITY_SCHEMA = {
     "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
 }
 
@@ -89,6 +90,7 @@ LOAN_SCHEMA = {
     "lgd": pl.Float64,  # A-IRB modelled LGD (optional)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
+    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
     "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
@@ -586,6 +588,7 @@ RAW_EXPOSURE_SCHEMA = {
     "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,  # Currency before FX conversion

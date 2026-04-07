@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.50 Art. 169A/169B LGD Modelling Collateral Method implemented)
-**Current version:** 0.1.124 | **Test suite:** ~3,634 collected (~3,601 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
+**Last updated:** 2026-04-07 (P1.61 CIU look-through leverage adjustment + transitional floor fix implemented)
+**Current version:** 0.1.124 | **Test suite:** ~3,644 collected (~3,611 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -764,13 +764,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** PRA PS1/26 Art. 161(1), Art. 161(1B), CRE32.9-12
 - **Tests:** 74 new unit tests in `tests/unit/test_b31_firb_lgd.py`: 10 constant value tests, 8 CRR-to-B31 change tests, 16 DataFrame generator tests (schema, row count, all values, overcollateralisation ratios, thresholds), 24 scalar lookup tests (all collateral types, aliases, FSE routing, case insensitivity, unknown collateral defaults), 8 comparison table tests, 8 consistency tests (constants vs DataFrame vs lookup, value bounds). All 3,298 tests pass (was 3,224). Test count: 3,298 passed, 33 skipped.
 
-### P1.61 CIU look-through and mandate-based approach incomplete (Art. 132A/132B)
-- **Status:** [~] Fallback implemented; look-through/mandate partial
-- **Impact:** The completed items claim CIU look-through/mandate/fallback as done, but the equity spec (FR-1.7b) marks CIU treatment as **Partial**. Art. 132A (look-through) requires: (a) sufficient knowledge of underlying holdings, (b) risk-weighting each underlying per its own exposure class, (c) leverage gross-up of underlying RWs. Art. 132B (mandate-based) requires: (a) assuming maximum mandate allocation to highest-risk classes, (b) applying RW to the hypothetical portfolio. The 250% CIU fallback works, but look-through and mandate-based paths are not fully implemented -- they require decomposing fund holdings into sub-exposures and routing each through the SA/IRB calculator, which is architecturally non-trivial.
-- **File:Line:** `engine/equity/calculator.py` (CIU treatment)
-- **Spec ref:** CRR Art. 132A/132B, `docs/specifications/crr/equity-approach.md` (FR-1.7b)
-- **Fix:** Implement full look-through decomposition (Art. 132A) with per-holding risk weight calculation and leverage adjustment. Implement mandate-based maximum-risk-allocation (Art. 132B). Both need integration with SA calculator for underlying exposure RW lookup.
-- **Tests needed:** Unit tests for CIU look-through with mixed underlying exposures. Unit tests for mandate-based approach with leverage. Acceptance tests comparing look-through vs mandate vs fallback.
+### P1.61 CIU look-through leverage adjustment and transitional floor fix (Art. 132a(3))
+- **Status:** [x] Complete (v0.1.125)
+- **Fixed:** 2026-04-07
+- **Impact:** Two issues fixed in CIU (Collective Investment Undertaking) treatment:
+  - **(a) Look-through leverage adjustment (Art. 132a(3)):** When a CIU is leveraged (total underlying assets > NAV), the look-through effective risk weight must be grossed up by dividing by the fund's NAV instead of total holding value. Previously, `_resolve_look_through_rw` always divided by `sum(holding_value)`, causing **capital understatement** for leveraged funds. Example: 2x leveraged fund with 100% underlying corporate RW now correctly produces 200% effective RW (was 100%). Added `fund_nav` field to `EQUITY_EXPOSURE_SCHEMA`. When null or absent, falls back to `sum(holding_value)` (backward compatible).
+  - **(b) Transitional floor exclusion for CIU look-through/mandate:** The equity transitional RW floor (`_apply_transitional_floor`) was incorrectly applied to CIU look-through and mandate-based exposures. These derive their RW from underlying assets (Art. 132a) or mandate constraints (Art. 132b), not from Art. 133 equity SA weights. The transitional floor now excludes CIU exposures with `ciu_approach == "look_through"` or `"mandate_based"`. CIU fallback is unaffected (250% already >= transitional max).
+  - **All three CIU approaches were already implemented** (look-through, mandate-based, fallback) — P1.61 was incorrectly marked as partial. The leverage adjustment and transitional floor fix were the only real gaps.
+- **File:Line:** `engine/equity/calculator.py` (_resolve_look_through_rw leverage denominator, _apply_transitional_floor CIU exclusion, _prepare_columns fund_nav default), `data/schemas.py` (fund_nav field)
+- **Spec ref:** CRR Art. 132a(3), PRA PS1/26 Art. 132a(3), CRE60.6. `docs/specifications/crr/equity-approach.md`
+- **Tests:** 11 new unit tests in `tests/unit/test_ciu_treatment.py` (TestCIULeverageAdjustment): 2x leveraged fund doubles RW, unleveraged unchanged, null fund_nav backward compat, missing fund_nav column backward compat, 3x leverage, leveraged mixed holdings, zero fund_nav fallback, B31 leveraged fund, multiple funds different leverage, negative fund_nav fallback. All 3,611 tests pass (was ~3,601). Test count: 3,611 passed, 33 skipped.
+- **Limitation:** Mandate-based approach accepts pre-computed `ciu_mandate_rw` from input — the calculator does not compute the mandate allocation internally (requires fund mandate constraints data not in schema). This is by design.
 
 ### P1.62 Art. 128 high-risk items 150% risk weight missing
 - **Status:** [x] Complete

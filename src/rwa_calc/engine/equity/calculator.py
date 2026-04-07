@@ -337,6 +337,13 @@ class EquityCalculator:
                 ]
             )
 
+        if "fund_nav" not in schema.names():
+            exposures = exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.Float64).alias("fund_nav"),
+                ]
+            )
+
         return exposures
 
     def _resolve_look_through_rw(
@@ -346,16 +353,23 @@ class EquityCalculator:
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Resolve look-through risk weights for CIU exposures (Art. 132).
+        Resolve look-through risk weights for CIU exposures (Art. 132a).
 
         Joins CIU holdings to SA risk weight tables, aggregates a
         value-weighted effective RW per fund, and sets ciu_look_through_rw.
+
+        Leverage adjustment (Art. 132a(3)): When fund_nav is provided and total
+        underlying assets exceed fund_nav (leveraged fund), the effective RW is
+        grossed up by dividing weighted sum by fund_nav instead of total holding
+        value. This ensures RWA reflects the fund's leverage.
 
         If no holdings are available, exposures are returned unchanged
         and the look-through CIU falls back to 250% in the when-chain.
         """
         if ciu_holdings is None:
             return exposures
+
+        fallback_rw = 2.50 if config.is_basel_3_1 else 1.50
 
         # Get CQS-based risk weight table for holding-level RW lookup
         from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
@@ -389,17 +403,40 @@ class EquityCalculator:
             )
         )
 
-        # Aggregate to effective RW per fund
+        # Aggregate risk-weighted sum and total holding value per fund
+        fund_agg = holdings_with_rw.group_by("fund_reference").agg(
+            (pl.col("holding_value") * pl.col("holding_rw")).sum().alias("_weighted_sum"),
+            pl.col("holding_value").sum().alias("_total_value"),
+        )
+
+        # Get fund_nav per fund from exposures for leverage adjustment (Art. 132a(3))
+        # When fund_nav is provided and > 0, use it as the denominator instead of
+        # total holding value. This correctly handles leveraged funds where
+        # total_assets > NAV.
+        fund_nav_df = (
+            exposures.filter(
+                (pl.col("equity_type").str.to_lowercase() == "ciu")
+                & (pl.col("ciu_approach") == "look_through")
+                & pl.col("fund_reference").is_not_null()
+            )
+            .select(["fund_reference", "fund_nav"])
+            .unique(subset=["fund_reference"])
+        )
+
         fund_rw = (
-            holdings_with_rw.group_by("fund_reference")
-            .agg(
-                (pl.col("holding_value") * pl.col("holding_rw")).sum().alias("_weighted_sum"),
-                pl.col("holding_value").sum().alias("_total_value"),
+            fund_agg.join(fund_nav_df, on="fund_reference", how="left")
+            .with_columns(
+                # Art. 132a(3): use fund_nav as denominator when available (leverage-aware)
+                # Fall back to total holding value when fund_nav absent (backward compat)
+                pl.coalesce(
+                    pl.when(pl.col("fund_nav") > 0).then(pl.col("fund_nav")),
+                    pl.when(pl.col("_total_value") > 0).then(pl.col("_total_value")),
+                ).alias("_denominator"),
             )
             .with_columns(
-                pl.when(pl.col("_total_value") > 0)
-                .then(pl.col("_weighted_sum") / pl.col("_total_value"))
-                .otherwise(pl.lit(2.50))
+                pl.when(pl.col("_denominator").is_not_null() & (pl.col("_denominator") > 0))
+                .then(pl.col("_weighted_sum") / pl.col("_denominator"))
+                .otherwise(pl.lit(fallback_rw))
                 .alias("_fund_look_through_rw"),
             )
             .select(["fund_reference", "_fund_look_through_rw"])
@@ -624,12 +661,20 @@ class EquityCalculator:
         )
 
         # PRA Rule 4.3: transitional does NOT apply to legislative equity
-        # (always 100%) or subordinated debt (always 150%)
+        # (always 100%) or subordinated debt (always 150%).
+        # CIU look-through/mandate-based RWs are derived from underlying assets
+        # (Art. 132a/132b), not from Art. 133 equity weights — exclude from floor.
+        # CIU fallback (250%) is already >= transitional max, so exclusion is moot.
         eq_type_lower = pl.col("equity_type").str.to_lowercase()
+        is_ciu_non_fallback = (eq_type_lower == "ciu") & (
+            (pl.col("ciu_approach") == "look_through")
+            | (pl.col("ciu_approach") == "mandate_based")
+        )
         is_excluded = (
             (eq_type_lower == "central_bank")
             | (eq_type_lower == "government_supported")
             | (eq_type_lower == "subordinated_debt")
+            | is_ciu_non_fallback
         )
         if "is_government_supported" in schema.names():
             is_excluded = is_excluded | pl.col("is_government_supported").fill_null(False)

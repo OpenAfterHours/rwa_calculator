@@ -296,6 +296,7 @@ EQUITY_EXPOSURE_SCHEMA = {
     "ciu_mandate_rw": pl.Float64,  # Pre-computed mandate-based risk weight (Art. 132A)
     "ciu_third_party_calc": pl.Boolean,  # Third-party calc → 1.2x factor (Art. 132(4))
     "fund_reference": pl.String,  # CIU fund reference for look-through join
+    "fund_nav": pl.Float64,  # CIU fund NAV for leverage adjustment (Art. 132a(3))
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
 }
 

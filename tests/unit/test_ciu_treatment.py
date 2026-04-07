@@ -518,3 +518,376 @@ class TestCIULookThrough:
         # CORPORATE CQS1 = 20%, RWA = 2M * 0.20 = 400K
         assert row["risk_weight"] == pytest.approx(0.20)
         assert row["rwa"] == pytest.approx(400_000.0)
+
+
+# =============================================================================
+# LEVERAGE ADJUSTMENT TESTS (Art. 132a(3))
+# =============================================================================
+
+
+class TestCIULeverageAdjustment:
+    """Test CIU look-through leverage adjustment per Art. 132a(3).
+
+    When a CIU is leveraged (total assets > NAV), the effective risk weight
+    must be grossed up by dividing the weighted sum of underlying RWs by
+    the fund's NAV rather than by total holding value. This prevents
+    capital understatement for leveraged funds.
+    """
+
+    def test_leveraged_fund_doubles_effective_rw(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """2x leveraged fund: effective RW = 2 * underlying avg RW (Art. 132a(3))."""
+        # Fund has 200K total assets (holdings) but only 100K NAV (2x leverage)
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_LEV",
+                    "ead_final": 100_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_LEV",
+                    "fund_nav": 100_000.0,
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_LEV",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 200_000.0,  # Total assets = 2x NAV
+                }
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # CORPORATE CQS1 = 20%, leverage = 200K/100K = 2x
+        # effective_rw = (200K * 0.20) / 100K = 0.40 (40%)
+        assert row["risk_weight"] == pytest.approx(0.40)
+        assert row["rwa"] == pytest.approx(40_000.0)
+
+    def test_unleveraged_fund_unchanged(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """Unleveraged fund (NAV = total assets): same result as before."""
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                    "fund_nav": 1_000_000.0,  # NAV = total assets (no leverage)
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_A",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # No leverage: effective_rw = (1M * 0.20) / 1M = 0.20
+        assert row["risk_weight"] == pytest.approx(0.20)
+
+    def test_null_fund_nav_backward_compatible(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """When fund_nav is null, falls back to sum(holding_value) — backward compat."""
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                    # No fund_nav — backward compatible
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_A",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # Without fund_nav, uses total holding value as denominator = 20%
+        assert row["risk_weight"] == pytest.approx(0.20)
+
+    def test_missing_fund_nav_column_backward_compatible(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """When fund_nav column absent entirely, still backward compatible."""
+        # Use the pre-existing test pattern (no fund_nav field at all)
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_1",
+                    "ead_final": 1_000_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_A",
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_A",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 3,
+                    "holding_value": 1_000_000.0,
+                }
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # CRR CORPORATE CQS3 = 100%, no leverage
+        assert row["risk_weight"] == pytest.approx(1.00)
+
+    def test_high_leverage_3x(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """3x leveraged fund: effective RW = 3 * underlying avg RW."""
+        # Fund has 300K assets but 100K NAV (3x leverage)
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_3X",
+                    "ead_final": 50_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_3X",
+                    "fund_nav": 100_000.0,
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_3X",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 2,
+                    "holding_value": 300_000.0,  # 3x NAV
+                }
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # CORPORATE CQS2 = 50%, leverage = 300K/100K = 3x
+        # effective_rw = (300K * 0.50) / 100K = 1.50 (150%)
+        assert row["risk_weight"] == pytest.approx(1.50)
+        assert row["rwa"] == pytest.approx(75_000.0)  # 50K * 1.50
+
+    def test_leveraged_mixed_holdings(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """Leveraged fund with mixed holdings: leverage applied to weighted average."""
+        # Fund NAV = 100K, total assets = 200K (2x leverage)
+        # 60% CORPORATE CQS1 (20%) + 40% CGCB CQS1 (0%)
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_MIX",
+                    "ead_final": 100_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_MIX",
+                    "fund_nav": 100_000.0,
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_MIX",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 120_000.0,
+                },
+                {
+                    "fund_reference": "FUND_MIX",
+                    "holding_reference": "H2",
+                    "exposure_class": "CENTRAL_GOVT_CENTRAL_BANK",
+                    "cqs": 1,
+                    "holding_value": 80_000.0,
+                },
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # weighted_sum = 120K * 0.20 + 80K * 0.00 = 24K
+        # effective_rw = 24K / 100K (NAV) = 0.24 (24%)
+        # Without leverage: 24K / 200K = 0.12 (12%) — understates by 2x
+        assert row["risk_weight"] == pytest.approx(0.24)
+        assert row["rwa"] == pytest.approx(24_000.0)
+
+    def test_zero_fund_nav_uses_fallback(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """fund_nav=0 falls back to sum(holding_value) as denominator."""
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_0",
+                    "ead_final": 100_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_0",
+                    "fund_nav": 0.0,
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_0",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 100_000.0,
+                }
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # fund_nav=0 is invalid, falls back to total_value as denominator
+        assert row["risk_weight"] == pytest.approx(0.20)
+
+    def test_b31_leveraged_fund(
+        self,
+    ):
+        """B31 leveraged fund uses same leverage mechanics with B31 RW tables."""
+        b31_config = CalculationConfig.basel_3_1(
+            reporting_date=date(2030, 6, 30),
+        )
+        calc = EquityCalculator()
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_B31",
+                    "ead_final": 100_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_B31",
+                    "fund_nav": 50_000.0,  # 2x leverage
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_B31",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 100_000.0,
+                }
+            ],
+        )
+        result = calc.get_equity_result_bundle(bundle, b31_config)
+        row = result.results.collect().to_dicts()[0]
+        # B31 CORPORATE CQS1 = 20%, leverage = 100K/50K = 2x
+        # effective_rw = (100K * 0.20) / 50K = 0.40 (40%)
+        assert row["risk_weight"] == pytest.approx(0.40)
+
+    def test_multiple_funds_different_leverage(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """Two CIU exposures to different funds with different leverage ratios."""
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_UNL",
+                    "ead_final": 100_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_UNL",
+                    "fund_nav": 100_000.0,  # 1x (no leverage)
+                },
+                {
+                    "exposure_reference": "CIU_LEV",
+                    "ead_final": 100_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_LEV",
+                    "fund_nav": 50_000.0,  # 2x leverage
+                },
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_UNL",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 2,
+                    "holding_value": 100_000.0,
+                },
+                {
+                    "fund_reference": "FUND_LEV",
+                    "holding_reference": "H2",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 2,
+                    "holding_value": 100_000.0,
+                },
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        rows = result.results.collect().sort("exposure_reference").to_dicts()
+        # FUND_LEV: CORPORATE CQS2 = 50%, leverage 2x → 100%
+        assert rows[0]["risk_weight"] == pytest.approx(1.00)
+        # FUND_UNL: CORPORATE CQS2 = 50%, no leverage → 50%
+        assert rows[1]["risk_weight"] == pytest.approx(0.50)
+
+    def test_negative_fund_nav_uses_total_value(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """Negative fund_nav (distressed fund) falls back to total holding value."""
+        bundle = _make_look_through_bundle(
+            equity_data=[
+                {
+                    "exposure_reference": "CIU_NEG",
+                    "ead_final": 100_000.0,
+                    "equity_type": "ciu",
+                    "ciu_approach": "look_through",
+                    "fund_reference": "FUND_NEG",
+                    "fund_nav": -50_000.0,  # Negative NAV
+                }
+            ],
+            holdings_data=[
+                {
+                    "fund_reference": "FUND_NEG",
+                    "holding_reference": "H1",
+                    "exposure_class": "CORPORATE",
+                    "cqs": 1,
+                    "holding_value": 100_000.0,
+                }
+            ],
+        )
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        row = result.results.collect().to_dicts()[0]
+        # Negative NAV → falls back to total_value denominator
+        assert row["risk_weight"] == pytest.approx(0.20)

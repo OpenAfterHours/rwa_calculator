@@ -93,10 +93,12 @@ class OutputAggregator:
         summary_by_class = generate_summary_by_class(post_crm_detailed)
         summary_by_approach = generate_summary_by_approach(post_crm_detailed)
 
-        # Apply portfolio-level output floor if enabled (Art. 92 para 2A)
+        # Apply portfolio-level output floor if applicable (Art. 92 para 2A)
+        # Floor only applies to specific (institution_type, reporting_basis)
+        # combinations — exempt entities use U-TREA with no floor add-on.
         floor_impact = None
         output_floor_summary = None
-        if config.output_floor.enabled:
+        if config.output_floor.is_floor_applicable():
             floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
             combined, floor_impact, output_floor_summary = apply_floor_with_impact(
                 combined,

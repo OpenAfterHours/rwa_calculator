@@ -24,8 +24,10 @@ from rwa_calc.domain.enums import (
     ApproachType,
     CollateralType,
     ExposureClass,
+    InstitutionType,
     PermissionMode,
     RegulatoryFramework,
+    ReportingBasis,
 )
 
 if TYPE_CHECKING:
@@ -273,6 +275,26 @@ class OutputFloorConfig:
     to be at least 72.5% of the equivalent SA RWAs.
 
     Not applicable under CRR.
+
+    Entity-type carve-outs (Art. 92 para 2A):
+        The floor applies only to specific (institution_type, reporting_basis)
+        combinations. When institution_type and reporting_basis are set, the
+        ``is_floor_applicable()`` method checks Art. 92 para 2A rules. When
+        not set (None), the floor defaults to applicable if enabled — backward
+        compatible with existing configurations.
+
+    Art. 92 para 2A applicability:
+        (a)(i)   stand-alone UK institution on individual basis → FLOOR
+        (a)(ii)  ring-fenced body on sub-consolidated basis → FLOOR
+        (a)(iii) non-international-subsidiary CRR consolidation entity
+                 on consolidated basis → FLOOR
+        (b)      non-ring-fenced on sub-consolidated basis → EXEMPT
+        (c)      ring-fenced body at individual level / non-stand-alone → EXEMPT
+        (d)      international subsidiary → EXEMPT
+
+    Art. 92 para 5 optionality:
+        Transitional floor rates (60/65/70%) are permissive — institutions
+        may voluntarily apply the full 72.5% from day one.
     """
 
     enabled: bool = False
@@ -280,6 +302,42 @@ class OutputFloorConfig:
     transitional_start_date: date | None = None
     transitional_end_date: date | None = None
     transitional_floor_schedule: dict[date, Decimal] = field(default_factory=dict)
+    institution_type: InstitutionType | None = None
+    reporting_basis: ReportingBasis | None = None
+
+    # Art. 92 para 2A(a): combinations where the output floor applies
+    _FLOOR_APPLICABLE_COMBINATIONS: frozenset[tuple[InstitutionType, ReportingBasis]] = field(
+        default=frozenset({
+            (InstitutionType.STANDALONE_UK, ReportingBasis.INDIVIDUAL),
+            (InstitutionType.RING_FENCED_BODY, ReportingBasis.SUB_CONSOLIDATED),
+            (InstitutionType.CRR_CONSOLIDATION_ENTITY, ReportingBasis.CONSOLIDATED),
+        }),
+        init=False,
+        repr=False,
+    )
+
+    def is_floor_applicable(self) -> bool:
+        """Determine if the output floor applies per Art. 92 para 2A.
+
+        Returns True when:
+        - Floor is enabled, AND
+        - Either institution_type/reporting_basis are not set (backward compatible
+          default: assumes user has already determined applicability), OR
+        - The (institution_type, reporting_basis) pair is in the Art. 92 para 2A(a)
+          applicability set.
+
+        Returns False when:
+        - Floor is disabled (CRR), OR
+        - The entity is exempt under Art. 92 para 2A(b)-(d): non-ring-fenced
+          institutions on sub-consolidated basis, ring-fenced bodies at individual
+          level, international subsidiaries.
+        """
+        if not self.enabled:
+            return False
+        # Backward compatible: when entity type not specified, default to applicable
+        if self.institution_type is None or self.reporting_basis is None:
+            return True
+        return (self.institution_type, self.reporting_basis) in self._FLOOR_APPLICABLE_COMBINATIONS
 
     def get_floor_percentage(self, calculation_date: date) -> Decimal:
         """Get the applicable floor percentage for a given date.
@@ -311,8 +369,20 @@ class OutputFloorConfig:
         return cls(enabled=False)
 
     @classmethod
-    def basel_3_1(cls) -> OutputFloorConfig:
-        """Basel 3.1 output floor configuration with transitional period."""
+    def basel_3_1(
+        cls,
+        institution_type: InstitutionType | None = None,
+        reporting_basis: ReportingBasis | None = None,
+    ) -> OutputFloorConfig:
+        """Basel 3.1 output floor configuration with transitional period.
+
+        Args:
+            institution_type: Entity type per Art. 92 para 2A. When set, floor
+                applicability is checked against the regulatory carve-outs.
+                When None, the floor is assumed applicable (backward compatible).
+            reporting_basis: Basis of calculation per Rule 2.2A. Required with
+                institution_type for floor applicability determination.
+        """
         # PRA PS1/26 Art. 92(5) transitional schedule
         # NOTE: PRA compressed the BCBS 6-year phase-in to 4 years (2027-2030).
         transitional_schedule = {
@@ -327,6 +397,8 @@ class OutputFloorConfig:
             transitional_start_date=date(2027, 1, 1),
             transitional_end_date=date(2030, 1, 1),
             transitional_floor_schedule=transitional_schedule,
+            institution_type=institution_type,
+            reporting_basis=reporting_basis,
         )
 
 
@@ -718,6 +790,8 @@ class CalculationConfig:
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
         use_investment_grade_assessment: bool = False,
+        institution_type: InstitutionType | None = None,
+        reporting_basis: ReportingBasis | None = None,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -739,6 +813,10 @@ class CalculationConfig:
             use_investment_grade_assessment: Art. 122(6) election — when True,
                 unrated IG corporates get 65% and non-IG get 135%. When False
                 (default), all unrated corporates get 100%.
+            institution_type: Entity type per Art. 92 para 2A for output floor
+                applicability. When None, floor is assumed applicable.
+            reporting_basis: Calculation basis per Rule 2.2A. Required with
+                institution_type for floor applicability check.
             collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -752,7 +830,10 @@ class CalculationConfig:
             pd_floors=PDFloors.basel_3_1(),
             lgd_floors=LGDFloors.basel_3_1(),
             supporting_factors=SupportingFactors.basel_3_1(),
-            output_floor=OutputFloorConfig.basel_3_1(),
+            output_floor=OutputFloorConfig.basel_3_1(
+                institution_type=institution_type,
+                reporting_basis=reporting_basis,
+            ),
             post_model_adjustments=(
                 post_model_adjustments or PostModelAdjustmentConfig.basel_3_1()
             ),

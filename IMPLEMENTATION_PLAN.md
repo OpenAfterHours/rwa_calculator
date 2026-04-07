@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.9(b) portfolio-level output floor implemented)
-**Current version:** 0.1.104 | **Test suite:** ~3,007 collected (~2,460 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.38b output floor entity-type carve-outs implemented)
+**Current version:** 0.1.107 | **Test suite:** ~3,057 collected (~2,460 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -14,7 +14,7 @@
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -531,19 +531,22 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit test for nested commitment CCF.
 
 ### P1.38 Output floor GCRA 1.25% cap and entity-type carve-outs (Art. 92)
-- **Status:** [ ] Not implemented
-- **Impact:** Two output floor gaps from PDF analysis:
-  - **(a) GCRA cap:** GCRA component of OF-ADJ is capped at **1.25% of S-TREA** (para 3A amounts, not U-TREA). No cap logic exists.
-  - **(b) Entity-type carve-outs (CRITICAL):** Art. 92 para 2A defines THREE entity categories where the floor formula applies: (i) stand-alone UK institution on individual basis, (ii) ring-fenced body in sub-consolidation group on sub-consolidated basis, (iii) non-international-subsidiary CRR consolidation entity on consolidated basis. All OTHER entities use U-TREA (no floor):
-    - Para 2A(b): Non-ring-fenced institution on sub-consolidated basis → U-TREA (no floor)
-    - Para 2A(c): Ring-fenced body at individual level, or non-stand-alone institution → U-TREA (no floor)
-    - Para 2A(d): International subsidiary CRR consolidation entity → U-TREA (no floor)
-    This is **materially wrong for major UK retail banks** (ring-fenced bodies) and international subsidiaries. No entity-type check exists anywhere in the code.
-  - **(c) Reporting basis (Rule 2.2A):** Output floor reporting must be on the same basis as Art. 92 para 3A — not always individual basis. Ring-fenced bodies report sub-consolidated; international subsidiaries do not report at all.
-- **File:Line:** `engine/aggregator/_floor.py`, `contracts/config.py` (no entity-type config)
+- **Status:** [~] Partial ((b) complete; (a) and (c) remain)
+- **Fixed (b):** 2026-04-07
+- **Impact:** Three output floor gaps from PDF analysis:
+  - **(a) GCRA cap:** GCRA component of OF-ADJ is capped at **1.25% of S-TREA** (para 3A amounts, not U-TREA). No cap logic exists. Depends on P1.9(a) OF-ADJ implementation.
+  - **(b) Entity-type carve-outs:** FIXED. Art. 92 para 2A defines THREE entity categories where the floor formula applies: (i) stand-alone UK institution on individual basis, (ii) ring-fenced body in sub-consolidation group on sub-consolidated basis, (iii) non-international-subsidiary CRR consolidation entity on consolidated basis. All OTHER entities use U-TREA (no floor). Implementation:
+    - `InstitutionType` enum (5 members) and `ReportingBasis` enum (3 members) added to `domain/enums.py`
+    - `OutputFloorConfig` extended with `institution_type` and `reporting_basis` fields
+    - `is_floor_applicable()` method encodes Art. 92 para 2A rules via frozen set of 3 applicable (institution_type, reporting_basis) pairs
+    - Aggregator uses `is_floor_applicable()` instead of raw `enabled` check
+    - `CalculationConfig.basel_3_1()` accepts and propagates `institution_type` and `reporting_basis` params
+    - Backward compatible: when institution_type/reporting_basis are None, floor defaults to applicable
+  - **(c) Reporting basis (Rule 2.2A):** Output floor reporting must be on the same basis as Art. 92 para 3A — not always individual basis. Ring-fenced bodies report sub-consolidated; international subsidiaries do not report at all. Not yet implemented.
+- **File:Line:** `domain/enums.py` (InstitutionType, ReportingBasis), `contracts/config.py` (OutputFloorConfig.is_floor_applicable, CalculationConfig.basel_3_1), `engine/aggregator/aggregator.py` (is_floor_applicable check)
 - **Spec ref:** PRA PS1/26 Art. 92 para 2A(a)-(d), Reporting (CRR) Part Rule 2.2A
-- **Fix:** Add GCRA 1.25% cap to OF-ADJ computation (P1.9). Add `entity_type` / `reporting_basis` configuration to `CalculationConfig`. Implement floor applicability check based on entity type and consolidation basis. Add reporting basis configuration for COREP output.
-- **Tests needed:** Unit tests for GCRA cap. Unit tests for each entity-type carve-out. Tests for reporting basis conditionality.
+- **Tests:** 50 new unit tests in `tests/unit/test_output_floor_entity_type.py`: 18 is_floor_applicable unit tests (CRR, B31 default, None params backward compat, 3 applicable combos, 3 exempt combos, 6 wrong-basis combos), 4 CalculationConfig integration tests, 10 end-to-end aggregator tests (exempt entities keep original RWA, applicable entities get floored, backward compat), 15 parametrized exhaustive all-combinations test, 4 enum value tests. All 3057 tests pass. Test count: 3057 (was 3007).
+- **Fix remaining:** (a) Implement GCRA 1.25% cap once OF-ADJ (P1.9a) is available. (c) Add reporting basis conditionality to COREP output.
 
 ### P1.39 CRM haircut liquidation period dependency not modelled (Art. 224)
 - **Status:** [ ] Not implemented

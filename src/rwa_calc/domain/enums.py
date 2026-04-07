@@ -462,3 +462,47 @@ class EquityApproach(StrEnum):
     - 290% for exchange-traded
     - 370% for other equity
     """
+
+
+class InstitutionType(StrEnum):
+    """
+    Institution type for output floor applicability (PRA PS1/26 Art. 92 para 2A).
+
+    The output floor applies only to specific (institution_type, reporting_basis)
+    combinations. Exempt entities use U-TREA (no floor add-on).
+    """
+
+    STANDALONE_UK = "standalone_uk"
+    """Stand-alone UK institution — floor applies on individual basis (para 2A(a)(i))."""
+
+    RING_FENCED_BODY = "ring_fenced_body"
+    """Ring-fenced body in a sub-consolidation group — floor applies on
+    sub-consolidated basis (para 2A(a)(ii)). Exempt at individual level (para 2A(c))."""
+
+    NON_RING_FENCED = "non_ring_fenced"
+    """Non-ring-fenced institution on sub-consolidated basis — exempt (para 2A(b))."""
+
+    INTERNATIONAL_SUBSIDIARY = "international_subsidiary"
+    """International subsidiary CRR consolidation entity — exempt (para 2A(d))."""
+
+    CRR_CONSOLIDATION_ENTITY = "crr_consolidation_entity"
+    """Non-international-subsidiary CRR consolidation entity — floor applies
+    on consolidated basis (para 2A(a)(iii))."""
+
+
+class ReportingBasis(StrEnum):
+    """
+    Basis on which the capital calculation is performed.
+
+    Determines output floor applicability in combination with InstitutionType
+    (PRA PS1/26 Art. 92 para 2A, Reporting (CRR) Part Rule 2.2A).
+    """
+
+    INDIVIDUAL = "individual"
+    """Individual entity basis — applies to stand-alone UK institutions."""
+
+    SUB_CONSOLIDATED = "sub_consolidated"
+    """Sub-consolidated basis — applies to ring-fenced body sub-groups."""
+
+    CONSOLIDATED = "consolidated"
+    """Consolidated basis — applies to UK group-level CRR consolidation entities."""

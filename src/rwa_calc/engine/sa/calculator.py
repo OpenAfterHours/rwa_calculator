@@ -45,6 +45,7 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SAResultBundle
 from rwa_calc.contracts.errors import (
+    ERROR_DUE_DILIGENCE_NOT_PERFORMED,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
@@ -246,6 +247,13 @@ class SACalculator:
         # Step 2b: Apply currency mismatch multiplier (Basel 3.1 Art. 123B)
         exposures = self._apply_currency_mismatch_multiplier(exposures, config)
 
+        # Step 2c: Apply due diligence override (Basel 3.1 Art. 110A)
+        dd_errors: list[CalculationError] = []
+        exposures = self._apply_due_diligence_override(
+            exposures, config, errors=dd_errors
+        )
+        errors.extend(dd_errors)
+
         # Step 3: Calculate pre-factor RWA
         exposures = self._calculate_rwa(exposures)
 
@@ -305,6 +313,9 @@ class SACalculator:
 
         # Step 3a: Currency mismatch multiplier (Basel 3.1 Art. 123B)
         exposures = self._apply_currency_mismatch_multiplier(exposures, config)
+
+        # Step 3a2: Due diligence override (Basel 3.1 Art. 110A)
+        exposures = self._apply_due_diligence_override(exposures, config)
 
         # Step 3b: Store SA-equivalent RWA for ALL rows before IRB calculator
         # overwrites risk_weight. The output floor needs: floor_rwa = floor_pct × sa_rwa.
@@ -367,6 +378,9 @@ class SACalculator:
 
         # Step 3b: Currency mismatch multiplier (Basel 3.1 Art. 123B)
         exposures = self._apply_currency_mismatch_multiplier(exposures, config)
+
+        # Step 3c: Due diligence override (Basel 3.1 Art. 110A)
+        exposures = self._apply_due_diligence_override(exposures, config)
 
         # Step 4: Calculate pre-factor RWA (all rows are SA — no guard needed)
         schema = exposures.collect_schema()
@@ -1732,6 +1746,79 @@ class SACalculator:
                 .otherwise(pl.col("risk_weight"))
                 .alias("risk_weight"),
                 mismatch_applies.alias("currency_mismatch_multiplier_applied"),
+            ]
+        )
+
+        return exposures
+
+    def _apply_due_diligence_override(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
+    ) -> pl.LazyFrame:
+        """
+        Apply due diligence risk weight override (Basel 3.1 Art. 110A).
+
+        Under Basel 3.1, firms must perform due diligence on all SA exposures.
+        Where due diligence reveals that the risk weight does not adequately
+        reflect the risk, the firm must apply a higher risk weight.
+
+        The override only increases the risk weight — it can never reduce it.
+        This is applied as the final risk weight modification before RWA
+        calculation, after all standard RW determination, CRM, and currency
+        mismatch adjustments.
+
+        Args:
+            exposures: Exposures with risk_weight column
+            config: Calculation configuration
+            errors: Optional error list to append warnings to
+
+        Returns:
+            Exposures with due diligence override applied where applicable
+        """
+        if not config.is_basel_3_1:
+            return exposures
+
+        schema = exposures.collect_schema()
+        cols = schema.names()
+
+        # Warn if due_diligence_performed column is absent under Basel 3.1
+        if "due_diligence_performed" not in cols:
+            if errors is not None:
+                errors.append(
+                    CalculationError(
+                        code=ERROR_DUE_DILIGENCE_NOT_PERFORMED,
+                        message=(
+                            "Due diligence assessment status not provided "
+                            "(due_diligence_performed column absent). "
+                            "Art. 110A requires firms to perform due diligence "
+                            "on all SA exposures to ensure risk weights "
+                            "appropriately reflect exposure risk."
+                        ),
+                        severity=ErrorSeverity.WARNING,
+                        category=ErrorCategory.DATA_QUALITY,
+                        regulatory_reference="PRA PS1/26 Art. 110A",
+                        field_name="due_diligence_performed",
+                    )
+                )
+
+        # Apply override RW where provided and higher than calculated RW
+        if "due_diligence_override_rw" not in cols:
+            return exposures
+
+        override_applies = pl.col("due_diligence_override_rw").is_not_null() & (
+            pl.col("due_diligence_override_rw") > pl.col("risk_weight")
+        )
+
+        exposures = exposures.with_columns(
+            [
+                pl.when(override_applies)
+                .then(pl.col("due_diligence_override_rw"))
+                .otherwise(pl.col("risk_weight"))
+                .alias("risk_weight"),
+                override_applies.alias("due_diligence_override_applied"),
             ]
         )
 

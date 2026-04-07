@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P5.7 CRM submodule unit tests)
-**Current version:** 0.1.146 | **Test suite:** 4,106 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.4, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-08 (P1.49 Art. 110A due diligence obligation)
+**Current version:** 0.1.148 | **Test suite:** 4,131 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.4, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (192 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (+P1.88 IRB EL silent defaults; all prior items complete except P1.9(d), P1.10, P1.30(e), P1.38(c), P1.49 — 5 open items remain) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 (P4.13/P4.14 now complete) | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (+P1.88 IRB EL silent defaults; all prior items complete except P1.9(d), P1.10, P1.30(e), P1.38(c) — 4 open items remain) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 (P4.13/P4.14 now complete) | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -83,12 +83,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix remaining:** (c) Add reporting basis conditionality to COREP output.
 
 ### P1.49 Art. 110A due diligence obligation (new SA requirement)
-- **Status:** [ ] Not started
-- **Impact:** PRA PS1/26 Art. 110A introduces a new mandatory due diligence obligation for SA credit risk. Institutions must perform due diligence to ensure risk weights appropriately reflect the risk of the exposure. No spec file, no code, no validation exists for this requirement. While primarily a governance/process requirement, it may have calculable implications (e.g., if due diligence reveals risk weight is not adequate, the institution must apply a higher weight).
-- **File:Line:** No code exists
-- **Spec ref:** PRA PS1/26 Art. 110A
-- **Fix:** At minimum, document the requirement in the SA risk weight spec. Optionally, add a `due_diligence_override_rw` field to schema allowing institutions to override SA risk weights upward where due diligence indicates inadequacy. Add validation that flags exposures where no due diligence assessment has been performed.
-- **Tests needed:** Validation tests for due diligence flag. Documentation test that spec covers Art. 110A.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** PRA PS1/26 Art. 110A introduces a new mandatory due diligence obligation for SA credit risk. Institutions must perform due diligence to ensure risk weights appropriately reflect the risk of the exposure.
+- **Fix:** Implemented as a risk weight override mechanism with validation warnings:
+  - **Schema:** Added `due_diligence_performed` (Boolean) and `due_diligence_override_rw` (Float64) to both LOAN_SCHEMA and CONTINGENTS_SCHEMA in `data/schemas.py`.
+  - **SA calculator:** Added `_apply_due_diligence_override()` method to `engine/sa/calculator.py`. The override is applied as the final RW modification (after standard RW, CRM, currency mismatch, before RWA calculation). Uses `max(calculated_rw, override_rw)` — can only increase risk weight, never reduce it. Null override values are silently ignored. Audit column `due_diligence_override_applied` added when override column is present.
+  - **Validation:** Under Basel 3.1, when `due_diligence_performed` column is absent, emits `CalculationError(code="SA004", severity=WARNING, category=DATA_QUALITY)` with regulatory reference to Art. 110A. No warning under CRR.
+  - **Wiring:** Override method wired into all three SA calculation paths: `get_sa_result_bundle()` (with error collection), `calculate_unified()`, and `calculate_branch()`.
+  - **Error code:** `ERROR_DUE_DILIGENCE_NOT_PERFORMED = "SA004"` added to `contracts/errors.py`.
+- **File:Line:** `data/schemas.py` (LOAN_SCHEMA, CONTINGENTS_SCHEMA), `contracts/errors.py:197` (SA004), `engine/sa/calculator.py` (_apply_due_diligence_override)
+- **Spec ref:** PRA PS1/26 Art. 110A, `docs/specifications/crr/sa-risk-weights.md` (updated with implementation details)
+- **Tests:** 25 new tests in `tests/unit/test_due_diligence.py`: 7 override application tests (higher/lower/equal/null/mixed/absent column/CRR no-op), 5 audit column tests (true/false/null/CRR absent/column missing), 9 warning tests (absent B31/severity/category/regulatory ref/field name/CRR no warning/present no warning/None errors/once not per row), 4 edge cases (zero override/very high/with DD false/preserves columns). All 4,131 tests pass (was 4,106).
 
 ### P1.88 IRBCalculator.calculate_expected_loss silently defaults PD/LGD without warning
 - **Status:** [x] Complete (2026-04-07)
@@ -558,7 +563,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
   - ~~`includes_restructuring`~~ (P1.41 — now added)
   - ~~`has_one_day_maturity_floor`~~ (P1.40 — now added)
   - ~~`original_maturity_years`~~ (P1.40 — now added to COLLATERAL_SCHEMA)
-  - `due_diligence_override_rw` (P1.49 Art. 110A)
+  - ~~`due_diligence_override_rw`~~ (P1.49 — now added as `due_diligence_override_rw` + `due_diligence_performed`)
   - `liquidation_period` (P1.39 haircut dependency)
   - ~~`institution_cqs`~~ (P1.86 — now added to COUNTERPARTY_SCHEMA as pl.Int8 nullable; classifier propagates as `cp_institution_cqs`)
 - **File:Line:** `data/schemas.py`
@@ -626,7 +631,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 These items are verified complete. Items with **[!]** have known gaps documented in P1/P2:
 
-**P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87
+**P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.49, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87
 
 - [x] All 8 pipeline stages (loader, hierarchy, classifier, CRM, SA/IRB/slotting/equity, aggregator)
 - [x] **[!]** CRR SA risk weights (core classes: sovereign, institution, corporate, retail, RE, defaulted, equity; PSE/RGLA/MDB/Int.Org/Other Items pending -- see P1.52-P1.55)

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **SA**: Implement Art. 110A due diligence risk weight override (Basel 3.1 only). Two new optional schema fields (`due_diligence_performed`, `due_diligence_override_rw`) allow firms to flag DD assessment status and override SA risk weights upward where due diligence reveals higher risk. Override uses max(calculated_rw, override_rw) — can only increase, never decrease. SA004 warning emitted when DD assessment status is absent under B31. 25 new unit tests (P1.49)
+
 ### Fixed
 - **IRB**: `IRBCalculator.calculate_expected_loss()` now emits IRB004/IRB005 warnings when PD/LGD columns are absent, instead of silently defaulting to PD=1%/LGD=45% with no error reporting (P1.88)
 - **Spec**: Fix CCF spec incorrect F-IRB Basel 3.1 table values (75%→50%, 40%→10% per Art. 166C), add missing Table A1 rows (P4.13)

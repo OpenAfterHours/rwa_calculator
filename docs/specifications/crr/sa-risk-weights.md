@@ -21,6 +21,35 @@ Standardised Approach risk weights by exposure class and credit quality step.
 
 Under Basel 3.1, firms must perform due diligence to ensure they understand the risk profile of their counterparties. Where due diligence is inadequate, the firm must apply a **higher risk weight** than would otherwise apply. This applies to all SA exposure classes and is a precondition for reliance on external ratings.
 
+### Implementation
+
+Two optional input fields support Art. 110A:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `due_diligence_performed` | Boolean | Whether the firm has completed its DD assessment for this exposure |
+| `due_diligence_override_rw` | Float64 | Override risk weight (as decimal, e.g. 1.50 = 150%) when DD reveals higher risk |
+
+**Override behaviour:**
+- The override is applied as the **final risk weight modification** — after all standard RW determination, CRM adjustments, and currency mismatch multiplier
+- The override can only **increase** the risk weight: `RW_final = max(RW_calculated, RW_override)`
+- Null override values are silently ignored (no override applied)
+- The override is a **floor**, not a replacement — if the calculated RW already exceeds the override, the calculated RW is retained
+
+**Validation:**
+- Under Basel 3.1, if the `due_diligence_performed` column is absent from the input data, a `SA004` warning is emitted (severity: WARNING, category: DATA_QUALITY)
+- Under CRR, no warning is emitted (Art. 110A does not exist under CRR)
+
+**Audit:**
+- When the override column is present, a `due_diligence_override_applied` Boolean audit column is added to the output, indicating which exposures had their risk weight overridden
+
+**Sequencing in the SA calculator:**
+1. Standard risk weight determination (CQS lookup, class-specific rules)
+2. FCSM / life insurance / guarantee substitution (CRM)
+3. Currency mismatch multiplier (Art. 123B)
+4. **Due diligence override (Art. 110A)** ← applied here
+5. RWA calculation (EAD × RW)
+
 ## Sovereign Exposures (CRR Art. 114)
 
 | CQS | Rating Equivalent | Risk Weight |
@@ -521,7 +550,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 
 ## Basel 3.1 Changes Summary
 
-- **Due diligence obligation** (Art. 110A): New prerequisite for all SA risk weight assignments — Pending
+- **Due diligence obligation** (Art. 110A): New prerequisite for all SA risk weight assignments — Done
 - **Residential RE loan-splitting** (Art. 124F): 20% on ≤55% LTV, counterparty RW on residual — Done
 - **Residential RE income-producing** (Art. 124G): Whole-loan LTV table (30%-105%) — Done
 - **Commercial RE loan-splitting** (Art. 124H): 60% on ≤55% LTV, counterparty RW on residual — Done

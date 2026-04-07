@@ -103,6 +103,8 @@ LOAN_SCHEMA = {
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
     "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
+    "due_diligence_performed": pl.Boolean,  # Art. 110A: firm has performed due diligence (B31 only)
+    "due_diligence_override_rw": pl.Float64,  # Art. 110A: override RW when DD reveals higher risk (B31 only)
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -129,6 +131,8 @@ CONTINGENTS_SCHEMA = {
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
+    "due_diligence_performed": pl.Boolean,  # Art. 110A: firm has performed due diligence (B31 only)
+    "due_diligence_override_rw": pl.Float64,  # Art. 110A: override RW when DD reveals higher risk (B31 only)
 }
 
 COUNTERPARTY_SCHEMA = {

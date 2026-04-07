@@ -47,6 +47,21 @@ OTHER_PHYSICAL_TYPES: list[str] = ["other_physical", "equipment", "inventory", "
 
 COVERED_BOND_TYPES: list[str] = ["covered_bond", "covered_bonds"]
 
+# Art. 227(2)(a): collateral types eligible for zero-haircut treatment in repos.
+# Both the exposure and collateral must be cash or 0%-RW sovereign debt securities.
+ZERO_HAIRCUT_ELIGIBLE_TYPES: list[str] = [
+    "cash",
+    "deposit",
+    "govt_bond",
+    "sovereign_bond",
+    "government_bond",
+    "gilt",
+]
+
+# Art. 227(3): maximum CQS for sovereign bonds eligible for zero-haircut treatment.
+# Only CQS 1 (0%-RW) sovereign debt qualifies.
+ZERO_HAIRCUT_MAX_SOVEREIGN_CQS: int = 1
+
 # Subset of real estate types that are NOT eligible financial collateral
 # (used for SA EAD reduction eligibility check)
 NON_ELIGIBLE_RE_TYPES: list[str] = [

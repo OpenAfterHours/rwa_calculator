@@ -88,7 +88,12 @@ Under certain conditions, supervisory haircuts may be set to **0%** for repo-sty
 Where these conditions are met, H_c = 0%, H_e = 0%, and H_fx = 0% (if applicable).
 
 !!! note "Implementation Status"
-    Zero-haircut conditions are not yet evaluated in the calculator. All transactions currently use the standard supervisory haircuts. This is a future enhancement.
+    Art. 227 zero-haircut conditions are implemented. Institutions certify all 8 conditions
+    (a)-(h) via the `qualifies_for_zero_haircut` Boolean field on collateral input data.
+    The calculator validates collateral type eligibility: only cash/deposit and CQS ≤ 1
+    sovereign bonds qualify. When conditions are met, H_c = 0%, H_fx = 0%.
+    Ineligible types (corporate bonds, equity, gold) fall through to standard haircuts
+    even when the flag is set.
 
 ### Volatility Scaling (CRR Art. 226)
 

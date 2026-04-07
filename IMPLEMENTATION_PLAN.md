@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.7 Financial Collateral Simple Method implemented + P1.38(a) GCRA cap confirmed complete)
-**Current version:** 0.1.122 | **Test suite:** ~3,572 collected (~3,539 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
+**Last updated:** 2026-04-07 (P1.30d Art. 227 zero-haircut conditions implemented)
+**Current version:** 0.1.123 | **Test suite:** ~3,607 collected (~3,573 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -13,7 +13,7 @@
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ (a) fixed; (d) documentation remains), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.7 Financial Collateral Simple Method now fixed] [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(a) GCRA cap now fixed; (b) entity-type carve-outs now fixed; (c) reporting basis remains] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ (a) fixed; (d) documentation remains), P1.30 (CRM method selection: (a) FCSM fixed, (d) Art. 227 zero-haircut fixed; (b)(c)(e) remain), P1.39 (liquidation period scaling now fixed) [P1.7 Financial Collateral Simple Method now fixed] [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(a) GCRA cap now fixed; (b) entity-type carve-outs now fixed; (c) reporting basis remains] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -500,19 +500,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 15 new unit tests in `test_ccf.py` (TestOtherCommitCCF class): 6 SA expression tests (OC short code B31, full name B31, case insensitive, CRR 0%, B31 batch, CRR batch), 2 SA pipeline tests (B31 40%, CRR 0%), 2 F-IRB pipeline tests (B31 40%, CRR 0%), 3 A-IRB pipeline tests (revolving modelled with floor, floor binds, non-revolving uses SA). 2 existing tests updated (full_value_names and all_risk_types_batch include OC). All 2675 tests pass. Test count: 2675 (was 2662).
 
 ### P1.30 CRM method selection decision tree (Art. 191A)
-- **Status:** [ ] Not implemented
-- **Impact:** Basel 3.1 Art. 191A defines a formal four-part CRM method selection: CCR/non-CCR split, on-BS netting, FCCM vs FCSM election, Foundation Collateral Method for immovable property/receivables/other physical under IRB, life insurance/institutional instrument method. `crm/processor.py` hardwires Comprehensive Method for funded CRM and risk-weight/parameter substitution for unfunded. No `crm_method` configuration or election hook.
-  **Missing CRM sub-methods confirmed by code inspection:**
-  - (a) FCSM (Art. 222) — 20% RW floor, SA-only, qualifying repo 0% (Art. 222(4)/(6)). COREP `generator.py:1046` confirms always 0.
-  - (b) Life insurance method (Art. 232) — surrender-value-based haircut + insurer RW substitution. No `life_insurance` collateral type exists.
-  - (c) Credit-linked notes (Art. 218) — funded credit protection with embedded issuer credit risk. No CLN handling in collateral processing.
-  - (d) Art. 227 zero-haircut conditions — supervised institutions in repo agreements with daily revaluation/margining under standard master agreements. No code references Art. 227.
+- **Status:** [~] Partial — (a) and (d) complete; (b)(c)(e)(f) remain
+- **Impact:** Basel 3.1 Art. 191A defines a formal four-part CRM method selection: CCR/non-CCR split, on-BS netting, FCCM vs FCSM election, Foundation Collateral Method for immovable property/receivables/other physical under IRB, life insurance/institutional instrument method. `crm/processor.py` hardwires Comprehensive Method for funded CRM and risk-weight/parameter substitution for unfunded. `CRMCollateralMethod` config enum supports COMPREHENSIVE/SIMPLE election.
+  **CRM sub-methods status:**
+  - (a) FCSM (Art. 222) — **COMPLETE** (P1.7). 20% RW floor, SA-only, qualifying repo 0% (Art. 222(4)/(6)).
+  - (b) Life insurance method (Art. 232) — surrender-value-based haircut + insurer RW substitution. No `life_insurance` collateral type exists. Not implemented.
+  - (c) Credit-linked notes (Art. 218) — funded credit protection with embedded issuer credit risk. No CLN handling. Not implemented.
+  - (d) Art. 227 zero-haircut conditions — **COMPLETE** (2026-04-07). Institution certifies all 8 conditions (a)-(h) via `qualifies_for_zero_haircut` Boolean on collateral schema. Calculator validates collateral type eligibility (cash/deposit or CQS ≤ 1 sovereign bond). Both H_c and H_fx set to 0% for qualifying items. Works in both pipeline (LazyFrame) and single-item paths. 34 unit tests.
   - (e) Partial protection tranching (Art. 234) — structured protection covering only part of the loss range. Not modelled.
-  - (f) Foundation Collateral Method for IRB (immovable property/receivables/other physical). Not distinct from FCCM.
-- **File:Line:** `engine/crm/processor.py`, `engine/crm/collateral.py`, `engine/crm/constants.py`
-- **Spec ref:** PRA PS1/26 Art. 191A, `docs/specifications/crr/credit-risk-mitigation.md`
-- **Fix:** Add CRM method selector to `CalculationConfig` or `CRMProcessorProtocol`. Implement method routing in processor. Add missing collateral types (CLN, life insurance).
-- **Tests needed:** Unit tests for method selection routing and each sub-method.
+  - (f) Foundation Collateral Method for IRB (immovable property/receivables/other physical). Already implemented via LGDS/OC ratio system in collateral.py; not separately named.
+- **File:Line:** `engine/crm/processor.py`, `engine/crm/collateral.py`, `engine/crm/constants.py`, `engine/crm/haircuts.py` (Art. 227), `engine/crm/simple_method.py` (FCSM)
+- **Spec ref:** PRA PS1/26 Art. 191A, Art. 227, `docs/specifications/crr/credit-risk-mitigation.md`
+- **Fix remaining:** Add life insurance collateral type (Art. 232), CLN handling (Art. 218), partial protection tranching (Art. 234).
+- **Tests:** 34 Art. 227 tests in `tests/unit/crm/test_art227_zero_haircut.py`, 49 FCSM tests in `tests/unit/crm/test_simple_method.py`.
 
 ### P1.31 SME supporting factor silent per-exposure fallback (CRR Art. 501)
 - **Status:** [x] Complete

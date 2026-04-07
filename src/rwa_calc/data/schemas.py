@@ -215,6 +215,8 @@ COLLATERAL_SCHEMA = {
     "is_qualifying_re": pl.Boolean,  # Art. 124A: meets regulatory RE criteria (valuation, lien, etc.)
     "prior_charge_ltv": pl.Float64,  # Art. 124F(2): LTV occupied by prior/pari passu charges (0.0 = first charge)
     "liquidation_period_days": pl.Int32,  # Art. 224(2): 5=repo, 10=capital market (default), 20=secured lending
+    # Art. 227 zero-haircut eligibility for repo-style transactions
+    "qualifies_for_zero_haircut": pl.Boolean,  # Art. 227: all 8 conditions (a)-(h) met (institution certification)
 }
 
 GUARANTEE_SCHEMA = {

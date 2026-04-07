@@ -8,11 +8,13 @@ Key responsibilities:
 - Apply supervisory haircuts by collateral type, CQS, and maturity
 - Framework-conditional logic: CRR (Art. 224) vs Basel 3.1 (CRE22.52-53)
 - FX mismatch haircuts (8%, same under both frameworks)
+- Art. 227 zero-haircut conditions for repo-style transactions
 - Maturity mismatch adjustments (CRR Art. 237-238)
 - Art. 237(2) ineligibility: original maturity <1yr, 1-day M floor exposures
 
 References:
     CRR Art. 224: Supervisory haircuts (3 maturity bands)
+    CRR Art. 227: Zero volatility adjustments for qualifying repos/SFTs
     CRR Art. 237: Maturity mismatch — eligibility conditions
     CRR Art. 238: Maturity mismatch — adjustment formula (CVAM)
     CRE22.52-53: Basel 3.1 supervisory haircuts (5 maturity bands, higher equity/long-dated)
@@ -35,7 +37,12 @@ from rwa_calc.data.tables.crr_haircuts import (
     lookup_fx_haircut,
     scale_haircut_for_liquidation_period,
 )
-from rwa_calc.engine.crm.constants import REAL_ESTATE_TYPES, RECEIVABLE_TYPES
+from rwa_calc.engine.crm.constants import (
+    REAL_ESTATE_TYPES,
+    RECEIVABLE_TYPES,
+    ZERO_HAIRCUT_ELIGIBLE_TYPES,
+    ZERO_HAIRCUT_MAX_SOVEREIGN_CQS,
+)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -139,15 +146,21 @@ class HaircutCalculator:
             )
 
         # Apply FX haircut (also subject to liquidation period scaling per Art. 224 Table 4)
+        # Art. 227: zero-haircut repos waive ALL volatility adjustments including H_fx
         fx_base = float(FX_HAIRCUT)
-        collateral = collateral.with_columns(
-            [
-                pl.when(pl.col("currency") != pl.col("exposure_currency"))
-                .then(pl.lit(fx_base) * scaling_factor)
-                .otherwise(pl.lit(0.0))
-                .alias("fx_haircut"),
-            ]
+        has_zero_flag = "_is_zero_haircut" in collateral.collect_schema().names()
+        fx_expr = (
+            pl.when(pl.col("currency") != pl.col("exposure_currency"))
+            .then(pl.lit(fx_base) * scaling_factor)
+            .otherwise(pl.lit(0.0))
         )
+        if has_zero_flag:
+            fx_expr = (
+                pl.when(pl.col("_is_zero_haircut"))
+                .then(pl.lit(0.0))
+                .otherwise(fx_expr)
+            )
+        collateral = collateral.with_columns([fx_expr.alias("fx_haircut")])
 
         # Calculate adjusted value after haircuts
         collateral = collateral.with_columns(
@@ -178,6 +191,10 @@ class HaircutCalculator:
                     .alias("is_eligible_financial_collateral")
                 )
             collateral = collateral.drop("_bond_ineligible")
+
+        # Clean up Art. 227 temp column
+        if "_is_zero_haircut" in collateral.collect_schema().names():
+            collateral = collateral.drop("_is_zero_haircut")
 
         # Add haircut audit trail
         collateral = collateral.with_columns(
@@ -236,11 +253,20 @@ class HaircutCalculator:
         collateral: pl.LazyFrame,
         is_basel_3_1: bool = False,
     ) -> pl.LazyFrame:
-        """Apply collateral-type-specific haircuts via lookup table join."""
+        """Apply collateral-type-specific haircuts via lookup table join.
+
+        Art. 227 zero-haircut: when ``qualifies_for_zero_haircut`` is True and the
+        collateral type is eligible (cash/deposit or CQS ≤ 1 sovereign bond), both
+        H_c and H_fx are set to 0%.  The ``_is_zero_haircut`` flag is propagated so
+        ``apply_haircuts`` can also zero the FX haircut.
+        """
         # Ensure issuer_type column exists for bond type normalization
         schema = collateral.collect_schema()
         if "issuer_type" not in schema.names():
             collateral = collateral.with_columns(pl.lit(None).cast(pl.String).alias("issuer_type"))
+
+        # Art. 227: determine whether zero-haircut flag column is available
+        has_zero_haircut_col = "qualifies_for_zero_haircut" in schema.names()
 
         # Normalize collateral type and build sentinel join keys
         bond_types = pl.col("_lookup_type").is_in(["govt_bond", "corp_bond"])
@@ -299,11 +325,27 @@ class HaircutCalculator:
             is_corp & ((cqs_val >= 4) | cqs_val.is_null())
         )
 
-        # Ineligible bonds: zero value; unmatched non-bonds: 40% default (other_physical)
+        # Art. 227(2)(a): eligible for zero haircut if cash/deposit or CQS ≤ 1 sovereign bond
+        _zero_type_eligible = pl.col("_lookup_type").is_in(["cash"]) | (
+            (pl.col("_lookup_type") == "govt_bond")
+            & pl.col("issuer_cqs").fill_null(99).le(ZERO_HAIRCUT_MAX_SOVEREIGN_CQS)
+        )
+
+        if has_zero_haircut_col:
+            _is_art227 = (
+                pl.col("qualifies_for_zero_haircut").fill_null(False) & _zero_type_eligible
+            )
+        else:
+            _is_art227 = pl.lit(False)
+
+        # Assign haircut: Art. 227 zero → ineligible bond 100% → standard lookup → 40% default
         collateral = collateral.with_columns(
             [
                 _ineligible_bond.alias("_bond_ineligible"),
-                pl.when(_ineligible_bond)
+                _is_art227.alias("_is_zero_haircut"),
+                pl.when(_is_art227)
+                .then(pl.lit(0.0))
+                .when(_ineligible_bond)
                 .then(pl.lit(1.0))
                 .otherwise(pl.col("haircut").fill_null(0.40))
                 .alias("collateral_haircut"),
@@ -466,6 +508,7 @@ class HaircutCalculator:
         original_maturity_years: float | None = None,
         has_one_day_maturity_floor: bool = False,
         liquidation_period_days: int = 10,
+        qualifies_for_zero_haircut: bool = False,
     ) -> HaircutResult:
         """
         Calculate haircut for a single collateral item (convenience method).
@@ -483,10 +526,48 @@ class HaircutCalculator:
             original_maturity_years: Original contract term of protection (Art. 237(2))
             has_one_day_maturity_floor: Art. 162(3) 1-day M floor exposure
             liquidation_period_days: Liquidation period in business days (default 10)
+            qualifies_for_zero_haircut: Art. 227 — institution certifies all 8 conditions met
 
         Returns:
             HaircutResult with all haircut details
         """
+        # Art. 227: zero-haircut for qualifying repos — check type eligibility
+        if qualifies_for_zero_haircut:
+            norm = collateral_type.lower()
+            is_cash = norm in ("cash", "deposit")
+            is_eligible_sovereign = norm in (
+                "govt_bond",
+                "sovereign_bond",
+                "government_bond",
+                "gilt",
+            ) and (cqs is not None and cqs <= ZERO_HAIRCUT_MAX_SOVEREIGN_CQS)
+            if is_cash or is_eligible_sovereign:
+                # All volatility adjustments zeroed: H_c = 0%, H_e = 0%, H_fx = 0%
+                adjusted = market_value
+                # Still apply maturity mismatch if applicable
+                maturity_adj = Decimal("1.0")
+                if collateral_maturity_years and exposure_maturity_years:
+                    adjusted, _ = calculate_maturity_mismatch_adjustment(
+                        collateral_value=adjusted,
+                        collateral_maturity_years=collateral_maturity_years,
+                        exposure_maturity_years=exposure_maturity_years,
+                        original_maturity_years=original_maturity_years,
+                        has_one_day_maturity_floor=has_one_day_maturity_floor,
+                    )
+                    if adjusted > Decimal("0") and market_value > Decimal("0"):
+                        maturity_adj = adjusted / market_value
+                return HaircutResult(
+                    original_value=market_value,
+                    collateral_haircut=Decimal("0.0"),
+                    fx_haircut=Decimal("0.0"),
+                    maturity_adjustment=maturity_adj,
+                    adjusted_value=adjusted,
+                    description=(
+                        f"MV={market_value:,.0f}; Art.227 zero-haircut "
+                        f"(type={collateral_type}); Adj={adjusted:,.0f}"
+                    ),
+                )
+
         # Get collateral haircut scaled for liquidation period (None = ineligible per Art. 197)
         coll_haircut = lookup_collateral_haircut(
             collateral_type=collateral_type,

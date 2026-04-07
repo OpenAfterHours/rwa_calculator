@@ -671,10 +671,12 @@ class SACalculator:
                         .then(pl.lit(scra_b_rw))
                         .otherwise(pl.lit(scra_c_rw))
                     )
-                    # 5. Investment-grade assessment (Art. 122(6))
+                    # 5. Investment-grade assessment (Art. 122(6)/(8))
                     # Only active when use_investment_grade_assessment=True.
                     # IG corporates → 65% (Art. 122(6)(a)), non-IG → 135% (Art. 122(6)(b))
                     # Without this election, all unrated corporates get 100%.
+                    # Art. 122(8): IRB institutions must declare this choice to the PRA;
+                    # it also determines the sa_rwa used for S-TREA (output floor).
                     .when(
                         pl.lit(config.use_investment_grade_assessment)
                         & _uc.str.contains("CORPORATE", literal=True)

@@ -17,6 +17,8 @@ to each floor-eligible exposure proportional to its SA-equivalent RWA.
 
 References:
 - PRA PS1/26 Art. 92 para 2A: TREA = max(U-TREA, x * S-TREA + OF-ADJ)
+- PRA PS1/26 Art. 122(8): IRB institutions choose 100% flat or 65%/135%
+  IG assessment for unrated corporates in S-TREA (via use_investment_grade_assessment)
 - CRE99.1-8: Output floor (Basel 3.1)
 - PS1/26 Ch.12: PRA output floor implementation
 

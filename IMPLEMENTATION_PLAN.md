@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.60 B31 FIRB LGD DataFrame generator)
-**Current version:** 0.1.113 | **Test suite:** ~3,331 collected (~3,298 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.28 output floor Art. 122(8) IG assessment)
+**Current version:** 0.1.116 | **Test suite:** ~3,348 collected (~3,315 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.28, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -452,12 +452,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for FX vs domestic currency unrated institution exposures.
 
 ### P1.28 Output floor -- IRB corporate SA RW choice (Art. 122(8))
-- **Status:** [ ] Not implemented
-- **Impact:** When computing the SA-equivalent RWA for the output floor, IRB institutions must choose between (a) 100% flat for all unrated corporates, or (b) 65%/135% based on investment-grade assessment (Art. 122(6)). This is a configuration choice that must be declared to the PRA. No such option exists in `CalculationConfig` or the output floor code.
-- **File:Line:** `contracts/config.py` (CalculationConfig), `engine/aggregator/_floor.py`
-- **Spec ref:** PRA PS1/26 Art. 122(8)
-- **Fix:** Add configuration flag for output floor corporate SA treatment. Implement in floor SA-RWA calculation.
-- **Tests needed:** Unit tests for both output floor corporate treatment options.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** Art. 122(8) requires IRB institutions to choose between (a) 100% flat (Art. 122(2)) or (b) 65%/135% IG assessment (Art. 122(6)) for unrated corporates in the output floor S-TREA computation. This choice was already functional via `CalculationConfig.use_investment_grade_assessment` (added in P1.24), which flows through the SA calculator's unified path to produce `sa_rwa` for all exposures including IRB. The `sa_rwa` column feeds directly into S-TREA in `_floor.py`. What was missing: explicit Art. 122(8) documentation, connection to the output floor, and tests proving S-TREA changes with the flag.
+  **Changes:**
+  - **Documentation:** Art. 122(8) references added to `use_investment_grade_assessment` field comment, `OutputFloorConfig` docstring (new "Art. 122(8) corporate SA treatment for S-TREA" section), `CalculationConfig.basel_3_1()` docstring, `_floor.py` module docstring, and SA calculator when-chain comments
+  - **Verification:** End-to-end proof that the flag flows: `use_investment_grade_assessment=True` → SA when-chain branches 5/5b → `risk_weight` 65%/135% → `sa_rwa` column → S-TREA → floor threshold → floor binding status
+  - **No code logic change needed:** The existing mechanism (P1.24 flag → SA unified path → `sa_rwa` → floor) is architecturally correct. Art. 122(8) is a single choice that applies to all SA corporate calculations including the floor — a separate floor-specific override is not needed
+- **File:Line:** `contracts/config.py:706-710` (field + Art. 122(8) comment), `contracts/config.py:298-304` (OutputFloorConfig docstring), `contracts/config.py:813-818` (factory docstring), `engine/aggregator/_floor.py:19-20` (module docstring), `engine/sa/calculator.py:674-679` (when-chain comment)
+- **Spec ref:** PRA PS1/26 Art. 122(8), Art. 122(6), Art. 92 para 2A
+- **Tests:** 17 new unit tests in `tests/unit/test_output_floor_ig_assessment.py`: 6 SA calculator unified path tests (sa_rwa 100%/65%/135%, rated unaffected, SME unaffected, institution unaffected), 11 aggregator floor tests (S-TREA 100%/65%/135%, threshold reduction, binding flip, non-IG threshold increase, mixed portfolio, RWA post-floor with/without IG, config factory propagation, CRR locked false). All 3,315 tests pass (was 3,298). Test count: 3,315 passed, 33 skipped.
 
 ### P1.29 Basel 3.1 SA "Other Commitments" 40% CCF category (Art. 111)
 - **Status:** [x] Complete

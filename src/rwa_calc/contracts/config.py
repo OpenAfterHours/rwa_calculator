@@ -295,6 +295,13 @@ class OutputFloorConfig:
     Art. 92 para 5 optionality:
         Transitional floor rates (60/65/70%) are permissive — institutions
         may voluntarily apply the full 72.5% from day one.
+
+    Art. 122(8) corporate SA treatment for S-TREA:
+        IRB institutions must choose between 100% flat (Art. 122(2)) or
+        65%/135% IG assessment (Art. 122(6)) for unrated corporate exposures
+        in the output floor S-TREA computation. This choice is configured via
+        ``CalculationConfig.use_investment_grade_assessment`` and flows to the
+        SA calculator's unified path, which produces ``sa_rwa`` for the floor.
     """
 
     enabled: bool = False
@@ -703,7 +710,11 @@ class CalculationConfig:
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
-    use_investment_grade_assessment: bool = False  # Art. 122(6): IG=65% / non-IG=135%
+    use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
+    # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
+    # or para 6 (65%/135% IG assessment) for unrated corporates. This choice
+    # applies to both regular SA calculations and the output floor S-TREA
+    # computation (Art. 92 para 2A). The choice must be declared to the PRA.
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
@@ -810,9 +821,12 @@ class CalculationConfig:
             reporting_date: As-of date for calculation
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             post_model_adjustments: PMA configuration (optional, defaults to B3.1)
-            use_investment_grade_assessment: Art. 122(6) election — when True,
+            use_investment_grade_assessment: Art. 122(6)/(8) election — when True,
                 unrated IG corporates get 65% and non-IG get 135%. When False
-                (default), all unrated corporates get 100%.
+                (default), all unrated corporates get 100%. Under Art. 122(8),
+                this choice also determines the SA-equivalent risk weight used
+                for the output floor S-TREA computation (Art. 92 para 2A).
+                Must be declared to the PRA.
             institution_type: Entity type per Art. 92 para 2A for output floor
                 applicability. When None, floor is assumed applicable.
             reporting_basis: Calculation basis per Rule 2.2A. Required with

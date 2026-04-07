@@ -45,11 +45,12 @@ class PDFloors:
     PD floor values by exposure class.
 
     Under CRR: Single floor of 0.03% for all exposures (Art. 163)
-    Under Basel 3.1: Differentiated floors (CRE30.55, PS1/26 Ch.5)
-        - Corporate: 0.05%
-        - Retail non-QRRE: 0.05%
-        - Retail QRRE transactors: 0.03%
-        - Retail QRRE revolvers: 0.10%
+    Under Basel 3.1: Differentiated floors (PRA PS1/26 Art. 160/163)
+        - Corporate/Institution/Sovereign: 0.05% (Art. 160(1))
+        - Retail Mortgage: 0.10% (Art. 163(1)(b))
+        - Retail Other: 0.05% (Art. 163(1)(c))
+        - QRRE Transactors: 0.05% (Art. 163(1)(c))
+        - QRRE Revolvers: 0.10% (Art. 163(1)(a))
 
     All values expressed as decimals (e.g., 0.0003 = 0.03%)
     """

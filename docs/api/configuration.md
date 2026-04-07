@@ -270,12 +270,11 @@ class OutputFloorConfig:
         the transitional start date (PS1/26: 1 Jan 2027 for UK firms).
 
         Transitional schedule:
-        - 2027: 50%
-        - 2028: 55%
-        - 2029: 60%
-        - 2030: 65%
-        - 2031: 70%
-        - 2032+: 72.5%
+        PRA compressed schedule (4-year, not BCBS 6-year):
+        - 2027: 60%
+        - 2028: 65%
+        - 2029: 70%
+        - 2030+: 72.5%
         """
 
     @classmethod

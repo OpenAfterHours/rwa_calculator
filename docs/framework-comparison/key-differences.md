@@ -540,8 +540,8 @@ Significant increases for equities and long-dated bonds. Maturity bands expand f
 
 | Collateral Type | CRR | Basel 3.1 | Change |
 |-----------------|-----|-----------|--------|
-| Main index equities | 15% | **25%** | +10pp |
-| Other listed equities | 25% | **35%** | +10pp |
+| Main index equities | 15% | **20%** | +5pp |
+| Other listed equities | 25% | **30%** | +5pp |
 | Govt bonds CQS 2-3 (10y+) | 6% | **12%** | +6pp |
 | Corp bonds CQS 1 (10y+) | 8% | **12%** | +4pp |
 | Corp bonds CQS 2-3 (5-10y / 10y+) | 12% | **15%** | +3pp |
@@ -679,7 +679,7 @@ Basel 3.1:
 | Sep 2024 | PRA PS1/26 published |
 | 2025-2026 | Parallel running recommended |
 | 1 Jan 2027 | Basel 3.1 effective |
-| 2027-2032 | Output floor phase-in |
+| 2027-2030 | Output floor phase-in (PRA 4-year schedule) |
 
 ### Recommended Actions
 

@@ -1,19 +1,19 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P1.9d Art. 92 para 5 transitional optionality)
-**Current version:** 0.1.148 | **Test suite:** 4,159 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.4, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-08 (P4.1/P4.5 doc regulatory parameter fixes)
+**Current version:** 0.1.150 | **Test suite:** 4,159 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.4, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (192 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (+P1.88 IRB EL silent defaults; all prior items complete except P1.10, P1.30(e), P1.38(c) — 3 open items remain) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 (P4.13/P4.14 now complete) | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (+P1.88 IRB EL silent defaults; all prior items complete except P1.10, P1.30(e), P1.38(c) — 3 open items remain) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 (P4.1/P4.5/P4.13/P4.14 now complete) | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
-- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
+- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed; P1.75 LGD* formula single-LGD not blended now fixed; P1.76 bond haircut 3 bands vs 5 now fixed]
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ (a) fixed; (d) documentation remains), P1.30 (CRM method selection: (a)(b)(c)(d)(f) complete; (e) Art. 234 tranching remains), P1.39 (liquidation period scaling now fixed) [P1.7 Financial Collateral Simple Method now fixed] [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(a) GCRA cap now fixed; (b) entity-type carve-outs now fixed; (c) reporting basis remains] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ (a) fixed; (d) fixed), P1.30 (CRM method selection: (a)(b)(c)(d)(f) complete; (e) Art. 234 tranching remains), P1.39 (liquidation period scaling now fixed) [P1.7 Financial Collateral Simple Method now fixed] [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(a) GCRA cap now fixed; (b) entity-type carve-outs now fixed; (c) reporting basis remains] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -249,9 +249,9 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 ## Priority 4 -- Documentation & Consistency Fixes
 
 ### P4.1 Output floor transitional schedule inconsistency
-- **Status:** [~] Code is correct; docs disagree
+- **Status:** [x] Complete (2026-04-08)
 - **Impact:** Code uses PRA compressed 4-year schedule (60%/65%/70%/72.5% for 2027-2030). But `docs/framework-comparison/technical-reference.md` lines 72-78 show BCBS 6-year schedule (50%-72.5% for 2027-2032). `TransitionalScheduleBundle` docstring references 50% (2027). Data tables agent confirms: output floor PRA 4-year phase-in schedule in code is correct.
-- **Fix:** Update technical-reference.md, stale docs, and bundle docstring to match PRA schedule.
+- **Fix:** Fixed BCBS 6-year schedule (50%/55%/60%/65%/70%/72.5%) to PRA 4-year (60%/65%/70%/72.5%) in 7 doc files: technical-reference.md, key-differences.md, basel31.md, configuration.md, overview.md, api/configuration.md, appendix/index.md (Gantt chart). Added Art. 92 para 5 permissive note.
 
 ### P4.2 Stale version numbers across docs
 - **Status:** [~] Multiple files outdated
@@ -267,9 +267,9 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Update FR status values.
 
 ### P4.5 PD floor documentation discrepancy
-- **Status:** [~] Multiple docs wrong
+- **Status:** [x] Complete (2026-04-08)
 - **Impact:** `technical-reference.md` shows retail mortgage PD floor as 0.05% -- should be **0.10%** per PRA Art. 163(1)(b). The `key-differences.md` table correctly shows 0.10%. Code also wrong (P1.1).
-- **Fix:** Update technical-reference.md line 33 to 0.10%. Also update the PDFloors docstring at `config.py:46` which says "Retail non-QRRE: 0.05%" -- should say "Retail mortgage: 0.10%".
+- **Fix:** Fixed retail mortgage PD floor 0.05%→0.10% (Art. 163(1)(b)) and QRRE transactor 0.03%→0.05% (Art. 163(1)(c)) in technical-reference.md, basel31.md. Fixed PDFloors docstring in config.py. key-differences.md already had correct values.
 
 ### P4.6 LGD floor documentation discrepancy
 - **Status:** [~] Docs inconsistent with PRA
@@ -377,6 +377,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 ### P4.21 firb-calculation.md CRR PD floor "correction" is itself wrong
 - **Status:** [x] Complete
+
+### P4.22 Basel 3.1 haircut values wrong in documentation + remaining stale output floor references
+- **Status:** [~] Partially fixed (2026-04-08)
+- **Impact:** Multiple doc files had wrong Basel 3.1 supervisory haircut values: main index equities 25%→20%, other equities 35%→30%, gold 15%→20%. Fixed in technical-reference.md, key-differences.md, basel31.md, regulatory-tables.md, input-schemas.md. ~10 secondary doc files still reference BCBS 6-year output floor schedule (2032, 50%): framework-comparison/index.md, reporting-differences.md, appendix/index.md, api/contracts.md, api/engine.md, plans/prd.md, plans/implementation-plan.md, specifications/index.md, features/index.md, framework-comparison/impact-analysis.md.
+- **Fix remaining:** Update remaining ~10 secondary doc files with PRA 4-year schedule values.
 
 ---
 

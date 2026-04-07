@@ -45,7 +45,7 @@ UK credit institutions face a major regulatory transition: migrating from CRR (E
 | **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS1/26) |
 | **Credit Risk Mitigation** | Collateral (9 types), guarantees (substitution), provisions (drawn-first SA, EL shortfall IRB) |
 | **Supporting Factors** | CRR SME tiered factor (0.7619/0.85), infrastructure factor (0.75) |
-| **Output Floor** | Basel 3.1 output floor with transitional phase-in (50%–72.5%, 2027–2032) |
+| **Output Floor** | Basel 3.1 output floor with PRA transitional phase-in (60%–72.5%, 2027–2030) |
 | **Multi-Currency** | FX conversion with haircut adjustments |
 | **Hierarchies** | Multi-level counterparty (10 levels, rating inheritance) and facility hierarchies |
 | **COREP Reporting** | C 07.00 (SA), C 08.01 (IRB totals), C 08.02 (IRB PD grade) templates |

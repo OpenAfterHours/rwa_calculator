@@ -199,12 +199,13 @@ lgd_floors = {
 
 | Year | Floor Percentage |
 |------|------------------|
-| 2027 | 50.0% |
-| 2028 | 55.0% |
-| 2029 | 60.0% |
-| 2030 | 65.0% |
-| 2031 | 70.0% |
-| 2032+ | 72.5% |
+| 2027 | 60.0% |
+| 2028 | 65.0% |
+| 2029 | 70.0% |
+| 2030+ | 72.5% |
+
+Note: PRA compressed the BCBS 6-year schedule to 4 years. Transitional rates are
+permissive (Art. 92 para 5) — firms may use 72.5% from day one.
 
 ### Transitional Configuration
 

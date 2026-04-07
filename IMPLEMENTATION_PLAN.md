@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.27 sovereign floor for FX institution exposures)
-**Current version:** 0.1.117 | **Test suite:** ~3,378 collected (~3,345 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.16 CRR unrated institution standard risk weight)
+**Current version:** 0.1.118 | **Test suite:** ~3,397 collected (~3,364 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
@@ -326,12 +326,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 11 new unit tests in `test_b31_sa_risk_weights.py` (TestRatedSASpecialisedLending): 7 parametrized CQS-to-RW tests (PF CQS 1-5, OF CQS 1, CF CQS 2), 1 unrated-still-uses-type-weights, 1 rated RWA correctness, 1 rated PF high-quality ignores phase, 1 rated PF pre-op ignores phase. All 2767 tests pass. Test count: 2767 (was 2756).
 
 ### P1.16 CRR unrated institution standard risk weight (Art. 120)
-- **Status:** [~] UK treatment correct; EU standard wrong
-- **Impact:** Under CRR, EU standard for unrated institutions is **100%**. UK gets 40% (derived from sovereign CQS 2). `crr_risk_weights.py:77` maps `CQS.UNRATED -> 0.40` in `INSTITUTION_RISK_WEIGHTS_STANDARD`, same as UK. Should be 100% for standard (non-UK).
-- **File:Line:** `data/tables/crr_risk_weights.py:77`
-- **Spec ref:** CRR Art. 120(2)
-- **Fix:** Set `INSTITUTION_RISK_WEIGHTS_STANDARD[CQS.UNRATED] = Decimal("1.00")`. The UK-specific table already correctly has 40%.
-- **Tests needed:** Unit test for EU-standard unrated institution RW.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** Under CRR, the EU standard treatment for unrated institutions is **100%** (Art. 120(2) Table 3, sovereign CQS unknown → conservative 100%). UK treatment correctly remains 40% (sovereign-derived from UK CQS 1). Previously both tables had 40%, causing **60pp capital understatement** for non-UK institution exposures when `base_currency != "GBP"` (i.e., `use_uk_deviation=False`).
+  **Changes:**
+  - **Data table:** `INSTITUTION_RISK_WEIGHTS_STANDARD[CQS.UNRATED]` corrected from `Decimal("0.40")` to `Decimal("1.00")` (Art. 120(2) Table 3).
+  - **DataFrame generator:** `_create_institution_df(use_uk_deviation=False)` unrated row corrected from 0.40 to 1.00.
+  - **Guarantor substitution:** Unrated institution guarantor `.otherwise()` branch now respects `use_uk_deviation`: 40% for UK, 100% for standard.
+  - **Comments:** Updated institution unrated references in SA calculator to reflect both treatments.
+  - UK treatment unchanged: `INSTITUTION_RISK_WEIGHTS_UK[CQS.UNRATED]` remains `Decimal("0.40")`.
+  - Consistent with PSE/RGLA pattern: both already use 100% as conservative default for non-UK unrated entities.
+- **File:Line:** `data/tables/crr_risk_weights.py:75-83,91` (STANDARD dict + DataFrame), `engine/sa/calculator.py:1367-1368` (guarantor substitution)
+- **Spec ref:** CRR Art. 120(2) Table 3
+- **Tests:** 18 new unit tests in `tests/unit/crr/test_crr_institution_standard.py`: 4 data table constant tests (standard=100%, UK=40%, differ, rated unchanged), 3 DataFrame generator tests (standard unrated=1.00, UK unrated=0.40, CQS 2 divergence), 3 scalar lookup tests (standard=100%, UK=40%, CQS 0=unrated), 6 SA calculator integration tests (EUR 100%, GBP 40%, CQS 2 EUR 50%, CQS 1 same, RWA correctness, capital understatement comparison), 2 guarantor substitution tests (EUR guarantor_rw=100%, GBP guarantor_rw=40%). 1 existing test in `test_crr_tables.py` updated (split into UK-specific and standard-specific assertions). All 3,364 tests pass (was 3,345). Test count: 3,364 passed, 33 skipped.
+- **Limitation:** CRR unrated covered bond derivation still hardcodes 20% (derived from UK institution 40%). For non-UK issuers with standard treatment (institution 100%), the CB should be 50% per Art. 129(5) derivation table. Tracked as a TODO comment in the CRR covered bond branch.
 
 ### P1.17 Unrated covered bond derivation table not wired (CRR Art. 129)
 - **Status:** [x] Complete

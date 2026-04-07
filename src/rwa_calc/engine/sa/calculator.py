@@ -938,7 +938,8 @@ class SACalculator:
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 7. Unrated covered bonds: derive from issuer institution RW
-                    # (CRR Art. 129(5)) — unrated institution = 40% → covered bond = 20%
+                    # (CRR Art. 129(5)) — UK: unrated institution 40% → CB 20%
+                    # TODO: non-UK issuers with standard treatment (100%) should get CB 50%
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
@@ -1291,7 +1292,7 @@ class SACalculator:
 
         # Guarantor risk weights by exposure class and CQS
         # CGCB: 0%, 20%, 50%, 100%, 100%, 150% (unrated 100%)
-        # Institution: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated 40%)
+        # Institution: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated: UK 40%, standard 100%)
         # MDB named/IO: 0% unconditional
         # MDB rated (Table 2B): 20%, 30%, 50%, 100%, 100%, 150% (unrated 50%)
         # Corporate: 20%, 50%, 100%, 100%, 150%, 150% (unrated 100%)
@@ -1364,7 +1365,8 @@ class SACalculator:
                     .then(pl.lit(1.0))
                     .when(pl.col("guarantor_cqs") == 6)
                     .then(pl.lit(1.50))
-                    .otherwise(pl.lit(0.40))  # Unrated institution = 40%
+                    # Unrated institution: UK sovereign-derived = 40%, standard = 100%
+                    .otherwise(pl.lit(0.40) if use_uk_deviation else pl.lit(1.00))
                 )
                 # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
                 .when(_gec == "pse")

@@ -1,8 +1,8 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P6.14/P6.16 enum validation completeness)
-**Current version:** 0.1.141 | **Test suite:** 3,896 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P6.1, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
-**CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
+**Last updated:** 2026-04-07 (P5.10 B31 defaulted acceptance tests)
+**Current version:** 0.1.142 | **Test suite:** 3,927 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P5.10, P6.1, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (147 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
@@ -688,9 +688,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Add acceptance test scenarios for: CRR SA equity (listed/unlisted/PE), CRR IRB simple equity, B31 SA equity (250%/400%/150%/100%), equity transitional schedule, CIU look-through/mandate/fallback.
 
 ### P5.10 No Basel 3.1 defaulted exposure acceptance tests
-- **Status:** [ ] Not started
-- **Impact:** CRR has `test_scenario_crr_i_defaulted.py` (9 tests) but no B31 equivalent exists. Given the P1.51 bugs (threshold 50%→20%, denominator wrong), B31 defaulted acceptance tests are essential.
-- **Fix:** Add B31 defaulted acceptance test scenario covering: provision threshold at 15%/20%/25%, RESI RE always-100% exception (P1.18), secured/unsecured split.
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** CRR has `test_scenario_crr_i_defaulted.py` (9 tests) but no B31 equivalent existed. Given the P1.51 bugs (threshold 50%→20%, denominator wrong), B31 defaulted acceptance tests are essential for regression prevention.
+- **Fix:** Added `tests/acceptance/basel31/test_scenario_b31_k_defaulted.py` with 31 tests across 12 scenarios:
+  - **SA defaulted (B31-K1 to K8):** Corporate high/low/zero provision (100%/150%), RESI RE non-income flat 100% exception (CRE20.88), RESI RE non-income with collateral (exception overrides split), RESI RE income-dependent (no exception, uses provision test), corporate with RE collateral blended RW (Art. 127(2) secured/unsecured split), B31 provision denominator vs CRR contrast (EAD vs EAD+provision_deducted)
+  - **IRB defaulted (B31-K9 to K12):** F-IRB corporate K=0/RWA=0, A-IRB retail K=max(0,LGD-BEEL), A-IRB corporate NO 1.06 scaling (key B31 vs CRR difference, 937,500 vs CRR 993,750), A-IRB BEEL>LGD floor at K=0
+- **File:Line:** `tests/acceptance/basel31/test_scenario_b31_k_defaulted.py` (31 tests)
+- **Tests:** All 3,927 tests pass (was 3,896). B31 acceptance tests: 147 (was 116).
 
 ---
 

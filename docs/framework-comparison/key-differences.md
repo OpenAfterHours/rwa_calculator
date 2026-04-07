@@ -351,9 +351,6 @@ new Basel 3.1 category for loans repaid directly from salary or pension.
 
 ### Currency Mismatch Multiplier (CRE20.76)
 
-!!! warning "Not Yet Implemented"
-    The currency mismatch risk weight multiplier is not yet implemented in the calculator.
-
 | Scenario | CRR | Basel 3.1 |
 |----------|-----|-----------|
 | Unhedged FX retail / residential RE | No adjustment | **1.5x RW multiplier** (max 150% RW) |
@@ -434,9 +431,9 @@ the equity transitional, but the election covers both and is irrevocable.
 | Unsecured, provisions < 20% | 150% | 150% |
 | Residential RE (not cash-flow dependent) | 100-150% | **100%** (flat) |
 
-Provision-coverage-based differentiation (CRE20.87-90) is not currently implemented in the
-SA calculator — defaulted treatment with provision coverage is handled through IRB. The flat
-100% for defaulted residential RE (not cash-flow dependent) is a Basel 3.1 simplification.
+The provision-coverage ratio determines whether a 100% or 150% risk weight applies to
+defaulted exposures (CRE20.87-90). The flat 100% for defaulted residential RE
+(not cash-flow dependent) is a Basel 3.1 simplification.
 
 ### Regional Governments and Local Authorities
 
@@ -506,10 +503,6 @@ Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):
 **Note:** Under CRR, HVCRE has a separate risk weight table (Art. 153(5) Table 2) with higher weights than non-HVCRE.
 
 ## SA Specialised Lending (Art. 122A-122B)
-
-!!! warning "Not Yet Implemented"
-    SA specialised lending risk weights are described here for regulatory completeness
-    but are not yet implemented in the calculator.
 
 Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from
 the IRB slotting approach above:

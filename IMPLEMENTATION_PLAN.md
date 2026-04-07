@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P5.9 equity acceptance tests)
-**Current version:** 0.1.143 | **Test suite:** 4,004 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P5.9, P5.10, P6.1, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-07 (P1.88 IRB EL silent defaults + P4.13/P4.14 spec fixes)
+**Current version:** 0.1.143 | **Test suite:** 4,014 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.13, P4.14, P5.6, P5.9, P5.10, P6.1, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (192 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -347,6 +347,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** PRA PS1/26 Art. 164(4)(c)
 - **Tests:** 32 new unit tests in `tests/unit/test_lgd_floor_blended.py`: 15 direct blended expression tests (CRR zero, unsecured null, fully secured financial/physical, mixed physical+unsecured, financial+receivables, three-type mix, all-six-types, QRRE 50% LGDU, mortgage/corporate null, zero EAD, overcollateralised), 6 namespace integration tests (A-IRB blended applied, LGD above floor, F-IRB not floored, CRR no floor, corporate single-type, mortgage flat 5%), 1 CRM column mapping test, 10 edge cases (null columns, precision, parametrized two-type mix, receivables+RE blend, life insurance, covered bonds). All 3,737 tests pass (was 3,705).
 
+### P1.88 IRBCalculator.calculate_expected_loss silently defaults PD/LGD without warning
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** `IRBCalculator.calculate_expected_loss()` (lines 170-173) silently defaulted PD to 0.01 (1%) and LGD to 0.45 (45%) when those columns were absent from IRB exposures. The method returned `errors=[]` — no indication that EL figures were based on placeholder values rather than actual model outputs or supervisory parameters. Follows the P6.10 pattern (IRB EL shortfall warnings).
+- **Fix:** Now emits `CalculationError(code="IRB004", severity=WARNING, category=DATA_QUALITY)` when PD column is absent and `CalculationError(code="IRB005", severity=WARNING, category=DATA_QUALITY)` when LGD column is absent. Warnings include regulatory references (CRR Art. 160/161), field names, and actual default values. Error list propagated through `LazyFrameResult.errors`.
+- **File:Line:** `engine/irb/calculator.py:149-215`
+- **Spec ref:** CRR Art. 160 (PD), Art. 161 (LGD), Art. 158 (EL)
+- **Tests:** 10 new tests in `tests/unit/test_irb_el_silent_defaults.py`: missing PD emits IRB004, missing LGD emits IRB005, both missing emits both, both present no warnings, PD default 0.01 used, LGD default 0.45 used, ead_final preferred, regulatory references present, actual values documented, Basel 3.1 config compatible. All 4,014 tests pass (was 4,004).
+
 ---
 
 ## Priority 2 -- COREP Reporting Completeness
@@ -562,17 +570,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Remove remaining BCBS-only CQS speculative concepts from PRA spec.
 
 ### P4.13 CCF spec incomplete -- missing Table A1 rows and structural changes
-- **Status:** [~] Multiple rows and rules missing
+- **Status:** [x] Complete (2026-04-07)
 - **Impact:** `credit-conversion-factors.md` vs PRA PS1/26 Art. 111 Table A1:
   - Row 2 (100% -- commitments with certain drawdowns: factoring, forward purchases, repos) missing
   - Row 3 (50% -- other issued OBS items, not credit-substitute character) missing
   - B31 removal of maturity-based distinction (>1yr/<=1yr) not documented
   - F-IRB B31 table **wrong**: shows 75% for medium risk (should be 50% per Art. 166C), shows 40% UCC (should be 10%)
   - Art. 166(9) trade LC exception is blanked in PS1/26 -- spec still references it
-- **Fix:** Rewrite CCF spec tables to match Table A1. Correct F-IRB B31 table.
+- **Fix:** CCF spec corrected: F-IRB B31 table values fixed (75%→50% for medium risk, 40%→10% for UCC). Missing Table A1 rows added (Row 2: 100% factoring/forward purchases/repos; Row 3: 50% other OBS items not of credit-substitute character). B31 removal of maturity-based distinction (>1yr/<=1yr) now documented. Art. 166(9) trade LC exception noted as blanked in PS1/26.
 
 ### P4.14 Stale key-differences.md implementation status claims
-- **Status:** [~] Three features marked "Not Yet Implemented" that ARE complete
+- **Status:** [x] Complete (2026-04-07)
 - **Impact:** `key-differences.md` claims "Not Yet Implemented" for:
   - (a) Currency mismatch 1.5x multiplier -- implemented at `engine/sa/calculator.py:900-966`
   - (b) SA Specialised Lending Art. 122A-122B -- implemented at `engine/sa/calculator.py:528-533`

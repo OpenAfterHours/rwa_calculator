@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **IRB**: `IRBCalculator.calculate_expected_loss()` now emits IRB004/IRB005 warnings when PD/LGD columns are absent, instead of silently defaulting to PD=1%/LGD=45% with no error reporting (P1.88)
+- **Spec**: Fix CCF spec incorrect F-IRB Basel 3.1 table values (75%→50%, 40%→10% per Art. 166C), add missing Table A1 rows (P4.13)
+- **Spec**: Fix key-differences.md stale implementation status — currency mismatch, SA specialised lending, provision-based defaulted treatment now correctly shown as implemented (P4.14)
+- **Spec**: Fix SA risk weights spec stale Basel 3.1 status markers for completed features
+
 ### Added
 - **CRM**: Implement Financial Collateral Simple Method (Art. 222) — `CRMCollateralMethod` enum (`COMPREHENSIVE`/`SIMPLE`) on `CalculationConfig`, new `engine/crm/simple_method.py` module with collateral RW derivation by type/CQS, Art. 222(4) zero-RW exceptions, multi-level allocation, 20% RW floor, blended secured/unsecured risk weight substitution in SA calculator, COREP row 0070 reporting. 49 new unit tests
 - **UI**: Add template workbench — duplicate read-only template workbooks into editable user workspace with full Python and SQL support via `marimo edit`

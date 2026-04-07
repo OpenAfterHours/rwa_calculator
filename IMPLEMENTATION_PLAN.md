@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P4.1/P4.5 doc regulatory parameter fixes)
-**Current version:** 0.1.150 | **Test suite:** 4,159 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.4, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-08 (P6.3/P6.6/P6.13/P2.11 code quality cleanup)
+**Current version:** 0.1.151 | **Test suite:** 4,159 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (192 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -190,11 +190,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Contract test verifying protocol compliance. Integration test for COREP export via protocol.
 
 ### P2.11 COREP backward-compatibility aliases are dead code
-- **Status:** [ ] Not started
-- **Impact:** `C07_COLUMNS`, `C08_01_COLUMNS`, `C08_02_COLUMNS` at `templates.py:661-689` are still exported but unused by any code. These are CRR-era simplified column sets superseded by the full template definitions.
-- **File:Line:** `reporting/corep/templates.py:661-689`
-- **Fix:** Remove dead alias exports. Update any imports.
-- **Tests needed:** Verify no imports reference the removed aliases.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** Investigation found `C07_COLUMNS` and `C08_01_COLUMNS` are NOT dead — they are imported in `__init__.py`, re-exported via `__all__`, and used in `tests/unit/test_corep.py` (lines 429, 435). Only `C08_02_COLUMNS` at `templates.py:689` was truly dead (never imported outside templates.py).
+- **Fix:** Removed dead `C08_02_COLUMNS` alias. Left `C07_COLUMNS` and `C08_01_COLUMNS` as live code.
+- **File:Line:** `reporting/corep/templates.py:688-689` (removed)
 
 ---
 
@@ -291,21 +290,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Status:** [~] Missing from data model
 - **Fix:** Add to architecture spec and configuration spec.
 
-### P4.11 SA risk weight spec missing 10+ exposure class sections (also CODE gaps)
-- **Status:** [ ] Incomplete
-- **Impact:** `docs/specifications/crr/sa-risk-weights.md` is missing dedicated sections for:
-  - Art. 115 RGLA: Two RW tables (sovereign-derived Table 1A + rated Table 1B), UK devolved government 0%, UK local authorities 20%
-  - Art. 116 PSE: Three sub-treatments (unrated sovereign-derived, rated, short-term <=3m = 20%)
-  - Art. 117 MDB: Rated table (CQS 2 = 30%, not 50%), unrated = 50%, 0% list (16 named MDBs)
-  - Art. 118 International Organisations: 0% list (EU, IMF, BIS, EFSF, ESM)
-  - Art. 120 Tables 4/4A: Short-term rated institution tables
-  - Art. 128 High-risk exposures: 150%
-  - Art. 129 Covered bonds: Rated Table 7 (10-100%) + unrated stepdown table
-  - Art. 134(4-6): Gold bullion 0%, repo/forward asset RW, nth-to-default basket
-  - Art. 137 ECA Table 9: MEIP score to RW mapping
-  Code has `ExposureClass` enum members for RGLA/PSE/MDB but risk weight tables are not in `data/tables/`.
-  **Note:** These are not just SPEC gaps but also CODE gaps -- the SA calculator has no implementation for PSE/RGLA/MDB/Art.134 risk weights. See P1.52, P1.53, P1.54, P1.55.
-- **Fix:** Add missing sections to SA risk weight spec. Author risk weight tables in `data/tables/`.
+### P4.11 SA risk weight spec missing ECA Art. 137 section
+- **Status:** [~] Mostly complete (2026-04-08 — stale claims corrected)
+- **Impact:** Previous description claimed RGLA/PSE/MDB/IntOrg/Art.134 had no code implementation. **Investigation (2026-04-08) proved all are fully implemented:**
+  - Art. 115 RGLA: `crr_risk_weights.py:164-222` — Tables 1A/1B, UK devolved 0%, domestic currency 20%, unrated fallback. Calculator `sa/calculator.py:676-696` (CRR) and `976-1020` (B31).
+  - Art. 116 PSE: `crr_risk_weights.py:108-160` — Tables 2/2A, short-term 20%, unrated sovereign-derived. Calculator `659-675`.
+  - Art. 117 MDB: `crr_risk_weights.py:225-267` — Table 2B (CQS 2=30%), 16 named MDBs 0%, unrated 50%. Calculator `697-711`.
+  - Art. 118 IntOrg: `crr_risk_weights.py:270-277` — EU/IMF/BIS/EFSF/ESM all 0%. Calculator `701-707`.
+  - Art. 134 Other Items: `crr_risk_weights.py:326-333` — cash/gold 0%, collection 20%, tangible 100%, leased residual 1/t×100%. Calculator `860-888` (B31) and `1036-1064` (CRR).
+  - Art. 120 Tables 4/4A, Art. 128 High-risk 150%, Art. 129 Covered bonds: all in spec and code.
+  **Only genuinely missing:** Art. 137 ECA Table 9 (MEIP score to CQS mapping). Calculator requires ECAI CQS directly; ECA-to-CQS derivation for unrated sovereigns is a future enhancement.
+- **Fix remaining:** Add Art. 137 ECA Table 9 section to SA risk weight spec. Implement ECA score lookup (low priority — niche feature for unrated sovereigns).
 
 ### P4.12 Equity spec misattributes BCBS CRE60 concepts to PRA Art. 133
 - **Status:** [~] Partially fixed
@@ -484,8 +479,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** All 4,014 tests pass. 135 contract tests pass.
 
 ### P6.3 `CalculationConfig.collect_engine` docstring error
-- **Status:** [~] Contradictory description
-- **Fix:** Correct the docstring.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** Three `collect_engine` docstrings (class-level Attributes line 755, `crr()` Args line 851, `basel_3_1()` Args line 927) all described `'cpu'` as both "for memory efficiency" and "for in-memory processing" — self-contradictory. The alternative engine `'streaming'` was never named.
+- **Fix:** All three docstrings corrected to: `'cpu' (default) for in-memory processing, 'streaming' for batched lower-memory execution.`
+- **File:Line:** `contracts/config.py:755,851,927`
 
 ### P6.4 `EquityResultBundle.approach` uses `str` instead of `EquityApproach` enum
 - **Status:** [x] Complete (2026-04-07)
@@ -502,8 +499,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 9 test files updated (~145 assertions) to use `float()` wrapping on ELPortfolioSummary field accesses in `pytest.approx` comparisons and float arithmetic. All 3,748 tests pass, 125 contract tests pass.
 
 ### P6.6 `CalculationError.to_dict()` returns bare `dict`
-- **Status:** [~] Minor type safety gap
-- **Fix:** Add type parameters.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** `to_dict()` at `contracts/errors.py:69` returned bare `dict` (equivalent to `dict[Any, Any]`), losing type information for downstream type checkers.
+- **Fix:** Changed return type from `dict` to `dict[str, str | None]` — all keys are `str`, all values are `str` (from `.value` on enums) or `str | None` (optional fields).
+- **File:Line:** `contracts/errors.py:69`
 
 ### P6.7 `is_guarantee_beneficial` absent from CRM bundle
 - **Status:** [~] Tracking field missing
@@ -541,8 +540,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 11 new tests in `tests/unit/test_classifier_qrre_warnings.py`: 8 warning attribute tests (both missing, only is_revolving missing, only facility_limit missing, both present no warning, severity, category, regulatory reference, Basel 3.1 compat), 3 classification behavior tests (without columns all retail_other, with columns revolving is QRRE, non-revolving not QRRE).
 
 ### P6.13 Dead `TYPE_CHECKING` block in config.py
-- **Status:** [~] Dead code
-- **Fix:** Remove.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** `contracts/config.py:35-36` had `if TYPE_CHECKING: pass` — the block body was empty, and `TYPE_CHECKING` was imported but unused.
+- **Fix:** Removed the `if TYPE_CHECKING: pass` block and the `TYPE_CHECKING` import. `from typing import Literal` remains.
+- **File:Line:** `contracts/config.py:21,35-36`
 
 ### P6.14 Missing enum values across domain/enums.py
 - **Status:** [x] Complete (2026-04-07)

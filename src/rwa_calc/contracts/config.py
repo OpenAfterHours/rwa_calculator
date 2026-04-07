@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from rwa_calc.domain.enums import (
     AIRBCollateralMethod,
@@ -31,9 +31,6 @@ from rwa_calc.domain.enums import (
     RegulatoryFramework,
     ReportingBasis,
 )
-
-if TYPE_CHECKING:
-    pass
 
 # Type alias for Polars collection engine
 PolarsEngine = Literal["cpu", "gpu", "streaming"]
@@ -754,8 +751,8 @@ class CalculationConfig:
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
         use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%
-        collect_engine: Polars engine for .collect() - 'cpu' (default)
-            processes in batches for lower memory usage, 'cpu' for in-memory
+        collect_engine: Polars engine for .collect() - 'cpu' (default) for
+            in-memory processing, 'streaming' for batched lower-memory execution.
         spill_dir: Directory for temp parquet files during streaming materialization.
             None uses system temp directory.
     """
@@ -850,8 +847,8 @@ class CalculationConfig:
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
             enable_double_default: Enable double default treatment for eligible guarantees
-            collect_engine: Polars engine for .collect() - 'cpu' (default)
-                for memory efficiency, 'cpu' for in-memory processing
+            collect_engine: Polars engine for .collect() - 'cpu' (default) for
+                in-memory processing, 'streaming' for batched lower-memory execution.
 
         Returns:
             Configured CalculationConfig for CRR
@@ -926,8 +923,8 @@ class CalculationConfig:
                 schedule (60%/65%/70%/72.5%) and apply the full 72.5% floor from
                 day one. Art. 92 para 5 says institutions "may apply" the transitional
                 rates — they are permissive, not mandatory.
-            collect_engine: Polars engine for .collect() - 'cpu' (default)
-                for memory efficiency, 'cpu' for in-memory processing
+            collect_engine: Polars engine for .collect() - 'cpu' (default) for
+                in-memory processing, 'streaming' for batched lower-memory execution.
 
         Returns:
             Configured CalculationConfig for Basel 3.1

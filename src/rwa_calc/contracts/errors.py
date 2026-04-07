@@ -66,7 +66,7 @@ class CalculationError:
 
         return " | ".join(parts)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | None]:
         """Convert to dictionary for serialization."""
         return {
             "code": self.code,

@@ -685,10 +685,6 @@ C08_01_COLUMNS: list[COREPColumn] = [
     COREPColumn("110", "EL shortfall (-)  / excess (+)"),
 ]
 
-# Old C 08.02 columns (same as old C 08.01)
-C08_02_COLUMNS: list[COREPColumn] = C08_01_COLUMNS
-
-
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================

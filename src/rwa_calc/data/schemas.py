@@ -71,6 +71,7 @@ FACILITY_SCHEMA = {
     "is_qrre_transactor": pl.Boolean,  # QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Optional: Art. 111(1)(c) - risk type of OBS item the commitment issues
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -116,6 +117,7 @@ CONTINGENTS_SCHEMA = {
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Optional: Art. 111(1)(c) - risk type of OBS item the commitment issues
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -533,6 +535,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
         "risk_type": VALID_RISK_TYPES_INPUT,
+        "underlying_risk_type": VALID_RISK_TYPES_INPUT,
     },
     "loans": {
         "seniority": VALID_SENIORITY,
@@ -541,6 +544,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
         "risk_type": VALID_RISK_TYPES_INPUT,
+        "underlying_risk_type": VALID_RISK_TYPES_INPUT,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
@@ -602,7 +606,8 @@ RAW_EXPOSURE_SCHEMA = {
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
-    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -633,7 +638,8 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -668,7 +674,8 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))

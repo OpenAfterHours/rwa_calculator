@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.83 Art. 159(1) Pool B AVAs complete)
-**Current version:** 0.1.119 | **Test suite:** ~3,465 collected (~3,432 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83 fixed.
+**Last updated:** 2026-04-07 (P1.37 Art. 111(1)(c) commitment-to-issue lower-of rule complete)
+**Current version:** 0.1.120 | **Test suite:** ~3,485 collected (~3,452 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -574,12 +574,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 70 new unit tests in `tests/unit/test_slotting_el_rates.py`: 6 CRR base constants, 6 CRR short constants, 6 CRR HVCRE constants, 7 CRR scalar lookup, 6 B31 base constants, 2 B31 short constants, 2 B31 HVCRE constants, 4 B31 scalar lookup, 4 namespace EL rate lookup (CRR long/short, HVCRE flat, B31 maturity-dependent), 3 EL computation (values, zero EL, default 0% RW positive EL), 3 EL shortfall/excess (full shortfall, partial, excess), 4 calculator branch (produces columns, values, B31, apply_all), 4 aggregator integration (combined, slotting-only, backward compat, excess T2), 13 parametrized category × maturity × HVCRE. All 2745 tests pass. Test count: 2745 (was 2675).
 
 ### P1.37 CCF commitment-to-issue lower-of rule (Art. 111(1)(c))
-- **Status:** [ ] Not implemented
-- **Impact:** Art. 111(1)(c) states that when a commitment is to issue another off-balance-sheet item (e.g., a commitment to issue a guarantee), the CCF is the **lower** of the CCF for the underlying OBS item and the CCF for the commitment type. No code implements this rule.
-- **File:Line:** `engine/ccf.py`
-- **Spec ref:** PRA PS1/26 Art. 111(1)(c)
-- **Fix:** Add logic to detect commitment-to-issue-OBS items and apply the lower-of CCF rule.
-- **Tests needed:** Unit test for nested commitment CCF.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** PRA PS1/26 Art. 111(1)(c) now enforced: when a commitment is to issue another OBS item (e.g., commitment to issue a guarantee), the CCF is the **lower of** the CCF for the underlying OBS item and the commitment type's CCF. Example: OC commitment (40%) to issue FR guarantee (100%) → min(40%,100%) = 40%.
+  **Implementation:**
+  - **Schema:** `underlying_risk_type` (optional String) added to `FACILITY_SCHEMA`, `CONTINGENTS_SCHEMA`, `RAW_EXPOSURE_SCHEMA`, `RESOLVED_HIERARCHY_SCHEMA`, `CLASSIFIED_EXPOSURE_SCHEMA`. Accepts same values as `risk_type` (FR, FRC, MR, OC, MLR, LR).
+  - **Validation:** `underlying_risk_type` added to `COLUMN_VALUE_CONSTRAINTS` for both facilities and contingents tables.
+  - **Hierarchy:** `underlying_risk_type` propagated through facility undrawn calculation and exposure unification (null for drawn loans, preserved for OFB contingents).
+  - **CCF calculator:** `_ensure_columns` adds `underlying_risk_type=""` default when absent (backward compatible). `_compute_ccf` applies lower-of cap after base CCF computation: when `underlying_risk_type` is non-empty, `_sa_ccf = min(sa_ccf, underlying_sa_ccf)` and `_firb_ccf = min(firb_ccf, underlying_firb_ccf)`. CRR F-IRB CCF logic extracted to reusable `_firb_ccf_for_col()` helper.
+  - **Audit trail:** `underlying_risk_type` included in `ccf_calculation` string when column present in original input.
+  - Flows through all approaches: SA (direct cap), F-IRB B31 (via SA CCFs per Art. 166C), F-IRB CRR (via F-IRB ladder), A-IRB (affects SA floor per CRE32.27 and non-revolving fallback).
+- **File:Line:** `engine/ccf.py` (_firb_ccf_for_col, _ensure_columns, _compute_ccf, _build_audit_trail), `data/schemas.py` (5 schemas + constraints), `engine/hierarchy.py` (4 propagation points)
+- **Spec ref:** PRA PS1/26 Art. 111(1)(c), `docs/specifications/crr/credit-conversion-factors.md`
+- **Tests:** 20 new unit tests in `tests/unit/test_ccf.py` (TestCommitmentToIssueLowerOf): 8 SA tests (OC→FR, FR→LR, MR→MLR, MLR→MR, same type, null underlying, missing column, EAD correctness), 2 CRR SA tests (MR→LR=0%, OC→FR=0%), 2 F-IRB tests (B31 MR→LR=10%, CRR MR→LR=0%), 2 A-IRB tests (revolving modelled, non-revolving capped SA), 2 audit trail tests (present/absent), 1 mixed batch, 1 full name support, 1 FRC underlying, 1 capital impact demo. All 3,452 tests pass (was 3,432). Test count: 3,452 passed, 33 skipped.
+- **Backward compatible:** When `underlying_risk_type` column is absent or null, no cap is applied — identical behavior to before.
 
 ### P1.38 Output floor GCRA 1.25% cap and entity-type carve-outs (Art. 92)
 - **Status:** [~] Partial ((b) complete; (a) and (c) remain)

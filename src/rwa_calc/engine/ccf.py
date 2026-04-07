@@ -7,6 +7,11 @@ Calculates EAD for contingent exposures using regulatory CCFs:
 - F-IRB Exception: CRR Article 166(9) (20% for short-term trade LCs)
 - A-IRB: Own-estimate CCFs with Basel 3.1 restrictions (Art. 166D)
 
+Art. 111(1)(c) commitment-to-issue lower-of rule:
+- When a commitment is to issue another OBS item (e.g., commitment to issue a guarantee),
+  the CCF is the LOWER of the CCF for the underlying OBS item and the commitment type.
+- Requires ``underlying_risk_type`` field on the exposure (optional; null = no cap).
+
 Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D):
 - Art. 166D(1)(a): Own-estimate CCFs permitted ONLY for revolving facilities
 - Non-revolving A-IRB must use SA CCFs from Table A1
@@ -116,6 +121,35 @@ def sa_ccf_expression(
     )
 
 
+def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
+    """Return CRR F-IRB CCF expression for a given risk_type column.
+
+    CRR Art. 166(8): 75% for commitments, with exceptions:
+    - FR/FRC = 100%
+    - LR/OC = 0%
+    - MLR with is_short_term_trade_lc = 20% (Art. 166(9))
+    - MR/MLR otherwise = 75%
+
+    This is extracted as a helper so Art. 111(1)(c) can compute the F-IRB CCF
+    for both the commitment's own risk_type and the underlying OBS item.
+    """
+    normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
+    return (
+        pl.when(normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"]))
+        .then(pl.lit(1.0))
+        .when(normalized.is_in(["lr", "low_risk", "oc", "other_commit"]))
+        .then(pl.lit(0.0))
+        .when(
+            normalized.is_in(["mlr", "medium_low_risk"])
+            & pl.col("is_short_term_trade_lc").fill_null(False)
+        )
+        .then(pl.lit(0.2))  # Art. 166(9) exception
+        .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
+        .then(pl.lit(0.75))
+        .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
+    )
+
+
 class CCFCalculator:
     """
     Calculate credit conversion factors for off-balance sheet items.
@@ -151,6 +185,8 @@ class CCFCalculator:
         - F-IRB Exception: MLR with is_short_term_trade_lc=True retains 20% (Art. 166(9))
         - A-IRB CRR: Uses ccf_modelled if provided, otherwise falls back to SA
         - A-IRB B31: Own CCF only for revolving (non-100% SA); else SA CCF (Art. 166D)
+        - Art. 111(1)(c): When underlying_risk_type is specified, CCF is capped
+          at the lower of the commitment's CCF and the underlying OBS item's CCF
 
         Args:
             exposures: Exposures with nominal_amount, risk_type, and approach columns
@@ -162,6 +198,7 @@ class CCFCalculator:
         schema = exposures.collect_schema()
         names = schema.names()
         original_has_risk_type = "risk_type" in names
+        original_has_underlying = "underlying_risk_type" in names
         original_has_interest = "interest" in names
         has_provision_cols = "nominal_after_provision" in names and "provision_on_drawn" in names
 
@@ -169,7 +206,7 @@ class CCFCalculator:
         exposures = self._compute_ccf(exposures, config)
         exposures = self._compute_ead(exposures, has_provision_cols, config)
         exposures = self._build_audit_trail(
-            exposures, original_has_risk_type, original_has_interest
+            exposures, original_has_risk_type, original_has_underlying, original_has_interest
         )
 
         # Clean up temp and default-populated columns
@@ -196,6 +233,7 @@ class CCFCalculator:
 
         defaults: list[tuple[str, pl.Expr]] = [
             ("risk_type", pl.lit("").alias("risk_type")),
+            ("underlying_risk_type", pl.lit("").alias("underlying_risk_type")),
             ("approach", pl.lit("sa").alias("approach")),
             ("ccf_modelled", pl.lit(None).cast(pl.Float64).alias("ccf_modelled")),
             (
@@ -238,30 +276,13 @@ class CCFCalculator:
         """
         is_b31 = config.is_basel_3_1
 
-        normalized = pl.col("risk_type").fill_null("").str.to_lowercase()
-
         if is_b31:
             # Basel 3.1 Art. 166C: F-IRB uses SA CCFs (PRA PS1/26 Art. 111 Table A1)
             # FR=100%, MR=50%, MLR=20%, LR(UCC)=10%
             firb_ccf = sa_ccf_expression(is_basel_3_1=True)
         else:
             # CRR Art. 166(8): F-IRB = 75% for commitments, with exceptions
-            firb_ccf = (
-                pl.when(
-                    normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"])
-                )
-                .then(pl.lit(1.0))
-                .when(normalized.is_in(["lr", "low_risk", "oc", "other_commit"]))
-                .then(pl.lit(0.0))  # UCC = 0% under CRR; OC has no CRR category (0%)
-                .when(
-                    normalized.is_in(["mlr", "medium_low_risk"])
-                    & pl.col("is_short_term_trade_lc").fill_null(False)
-                )
-                .then(pl.lit(0.2))  # Art. 166(9) exception
-                .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
-                .then(pl.lit(0.75))  # F-IRB 75% rule per CRR Art. 166(8)
-                .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
-            )
+            firb_ccf = _firb_ccf_for_col("risk_type")
 
         exposures = exposures.with_columns(
             sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),
@@ -269,6 +290,32 @@ class CCFCalculator:
             (pl.col("nominal_amount").cast(pl.Float64, strict=False).abs() < 1e-10).alias(
                 "_nominal_is_zero"
             ),
+        )
+
+        # Art. 111(1)(c): commitment-to-issue lower-of rule.
+        # When underlying_risk_type is specified, cap CCFs at the underlying item's CCF.
+        # "the lower of (i) the CCF applicable to the underlying OBS item and
+        #  (ii) the CCF applicable to the commitment type"
+        has_underlying = (
+            pl.col("underlying_risk_type").fill_null("").str.len_chars() > 0
+        )
+        underlying_sa = sa_ccf_expression("underlying_risk_type", is_basel_3_1=is_b31)
+        exposures = exposures.with_columns(
+            pl.when(has_underlying)
+            .then(pl.min_horizontal(pl.col("_sa_ccf_from_risk_type"), underlying_sa))
+            .otherwise(pl.col("_sa_ccf_from_risk_type"))
+            .alias("_sa_ccf_from_risk_type"),
+            pl.when(has_underlying)
+            .then(
+                pl.min_horizontal(
+                    pl.col("_firb_ccf_from_risk_type"),
+                    sa_ccf_expression("underlying_risk_type", is_basel_3_1=True)
+                    if is_b31
+                    else _firb_ccf_for_col("underlying_risk_type"),
+                )
+            )
+            .otherwise(pl.col("_firb_ccf_from_risk_type"))
+            .alias("_firb_ccf_from_risk_type"),
         )
 
         # A-IRB CCF: use modelled value, with Basel 3.1 restrictions
@@ -377,6 +424,7 @@ class CCFCalculator:
         self,
         exposures: pl.LazyFrame,
         has_risk_type: bool,
+        has_underlying: bool,
         has_interest: bool,
     ) -> pl.LazyFrame:
         """Build ccf_calculation audit string from available columns.
@@ -393,6 +441,11 @@ class CCFCalculator:
             parts += [
                 pl.lit("; risk_type="),
                 pl.col("risk_type").fill_null("unknown"),
+            ]
+        if has_underlying:
+            parts += [
+                pl.lit("; underlying="),
+                pl.col("underlying_risk_type").fill_null(""),
             ]
         if has_interest:
             parts += [

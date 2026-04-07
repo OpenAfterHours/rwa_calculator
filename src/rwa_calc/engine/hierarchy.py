@@ -593,6 +593,7 @@ class HierarchyResolver:
                     "beel": pl.Float64,
                     "seniority": pl.String,
                     "risk_type": pl.String,
+                    "underlying_risk_type": pl.String,
                     "ccf_modelled": pl.Float64,
                     "ead_modelled": pl.Float64,
                     "is_short_term_trade_lc": pl.Boolean,
@@ -805,6 +806,9 @@ class HierarchyResolver:
             pl.col("risk_type")
             if "risk_type" in facility_cols
             else pl.lit(None).cast(pl.String).alias("risk_type"),
+            pl.col("underlying_risk_type")
+            if "underlying_risk_type" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("underlying_risk_type"),
             pl.col("ccf_modelled").cast(pl.Float64, strict=False)
             if "ccf_modelled" in facility_cols
             else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
@@ -916,6 +920,7 @@ class HierarchyResolver:
             else pl.lit(0.0).alias("beel"),
             pl.col("seniority"),
             pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
+            pl.lit(None).cast(pl.String).alias("underlying_risk_type"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ead_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
@@ -990,6 +995,14 @@ class HierarchyResolver:
                     .then(pl.lit(None).cast(pl.String))
                     .otherwise(pl.col("risk_type"))
                     .alias("risk_type"),
+                    pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.String))
+                    .otherwise(
+                        pl.col("underlying_risk_type")
+                        if "underlying_risk_type" in cont_cols
+                        else pl.lit(None).cast(pl.String)
+                    )
+                    .alias("underlying_risk_type"),
                     pl.when(is_drawn)
                     .then(pl.lit(None).cast(pl.Float64))
                     .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))

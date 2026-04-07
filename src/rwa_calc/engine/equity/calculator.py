@@ -43,7 +43,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, EquityApproach
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -98,7 +98,7 @@ class EquityCalculator:
 
         exposures = self._prepare_columns(exposures, config)
 
-        if approach == "irb_simple":
+        if approach == EquityApproach.IRB_SIMPLE:
             exposures = self._apply_equity_weights_irb_simple(exposures, config)
         else:
             exposures = self._apply_equity_weights_sa(exposures, config)
@@ -171,7 +171,7 @@ class EquityCalculator:
             return EquityResultBundle(
                 results=empty_frame,
                 calculation_audit=empty_frame,
-                approach="sa",
+                approach=EquityApproach.SA,
                 errors=[],
             )
 
@@ -180,7 +180,7 @@ class EquityCalculator:
         exposures = self._prepare_columns(exposures, config)
         exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config)
 
-        if approach == "irb_simple":
+        if approach == EquityApproach.IRB_SIMPLE:
             exposures = self._apply_equity_weights_irb_simple(exposures, config)
         else:
             exposures = self._apply_equity_weights_sa(exposures, config)
@@ -197,7 +197,7 @@ class EquityCalculator:
             errors=errors,
         )
 
-    def _determine_approach(self, config: CalculationConfig) -> str:
+    def _determine_approach(self, config: CalculationConfig) -> EquityApproach:
         """
         Determine SA vs IRB_SIMPLE based on config.
 
@@ -213,23 +213,23 @@ class EquityCalculator:
             config: Calculation configuration
 
         Returns:
-            "sa" for Article 133, "irb_simple" for Article 155
+            EquityApproach.SA for Article 133, EquityApproach.IRB_SIMPLE for Article 155
         """
         # Basel 3.1: IRB equity removed — all equity uses SA (CRE20.58-62)
         if config.is_basel_3_1:
-            return "sa"
+            return EquityApproach.SA
 
         # CRR: Check if firm has any IRB permissions beyond SA
         # If permissions dict is empty, it's SA-only
         if not config.irb_permissions.permissions:
-            return "sa"
+            return EquityApproach.SA
 
         # Check if any exposure class has FIRB or AIRB permission
         for _exposure_class, approaches in config.irb_permissions.permissions.items():
             if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
-                return "irb_simple"
+                return EquityApproach.IRB_SIMPLE
 
-        return "sa"
+        return EquityApproach.SA
 
     def _prepare_columns(
         self,
@@ -705,7 +705,7 @@ class EquityCalculator:
     def _build_audit(
         self,
         exposures: pl.LazyFrame,
-        approach: str,
+        approach: EquityApproach,
     ) -> pl.LazyFrame:
         """Build equity calculation audit trail."""
         schema = exposures.collect_schema()
@@ -730,7 +730,7 @@ class EquityCalculator:
 
         audit = exposures.select(select_cols)
 
-        article = "Art. 133 SA" if approach == "sa" else "Art. 155 IRB Simple"
+        article = "Art. 133 SA" if approach == EquityApproach.SA else "Art. 155 IRB Simple"
 
         audit = audit.with_columns(
             [

@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.37 Art. 111(1)(c) commitment-to-issue lower-of rule complete)
-**Current version:** 0.1.120 | **Test suite:** ~3,485 collected (~3,452 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83 fixed.
+**Last updated:** 2026-04-07 (P1.84 T2 cap floor isolation + P1.9a resolved as false positive)
+**Current version:** 0.1.121 | **Test suite:** ~3,495 collected (~3,462 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -228,12 +228,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 24 new unit tests in `tests/unit/test_portfolio_level_floor.py`. Acceptance test B31-F2 updated (`is_floor_binding` now portfolio-level flag). All tests pass.
 
 ### P1.9a EL T2 credit cap uses pre-floor IRB RWA
-- **Status:** [~] Potentially understated
-- **Impact:** `_el_summary.py:36-64` computes `t2_credit_cap = total_irb_rwa x 0.006` using pre-floor IRB results. Under a binding floor, the regulatory capital base should arguably use final (floored) RWA. CRR Art. 62(d) references IRB credit-risk RWA in the context of final capital requirements. Current code understates the cap when floor binds, allowing less T2 credit.
-- **File:Line:** `engine/aggregator/_el_summary.py:36-64`
-- **Spec ref:** CRR Art. 62(d)
-- **Fix:** Compute T2 credit cap using post-floor IRB RWA. Requires floor computation to run before EL summary.
-- **Tests needed:** Unit test with binding floor verifying cap basis.
+- **Status:** [x] False positive — pre-floor basis is correct
+- **Verified:** 2026-04-07
+- **Description:** The original claim that T2 cap should use post-floor RWA was incorrect. Art. 62(d) explicitly references "risk-weighted exposure amounts **calculated under Chapter 3 of Title II of Part Three**" — Chapter 3 is the IRB chapter, not the output floor (Art. 92(2A) is in Part Two). Using post-floor TREA would also create a circular dependency: OF-ADJ = f(IRB T2 credit) → T2 credit = f(T2 cap) → T2 cap = f(TREA) → TREA = f(OF-ADJ). PRA reporting instructions (Annex II, row 0160) confirm: "risk weighted exposure amounts calculated with the IRB Approach" — the IRB amounts, not TREA. The code is correct: `compute_el_portfolio_summary` receives pre-floor IRB/slotting frames. See P1.84 for the full analysis and 10 unit tests confirming this.
+- **File:Line:** `engine/aggregator/_el_summary.py:229-232`, `engine/aggregator/aggregator.py:114-127`
+- **Spec ref:** CRR Art. 62(d), PRA PS1/26 Art. 92(2A), PRA Annex II row 0160
 
 ### P1.10 Unfunded credit protection transitional (PRA Rule 4.11)
 - **Status:** [ ] Not implemented
@@ -998,13 +997,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** AVA and other own funds reductions must be provided as per-exposure columns on the LazyFrame by the time the CRM processor runs. They are not auto-derived from input data — institutions must allocate their portfolio-level AVAs to exposures (or set them on a single exposure to capture the total).
 
 ### P1.84 T2 credit cap must use un-floored IRB RWA (Art. 62(d) / Art. 92(2A))
-- **Status:** [~] Not explicitly documented in code
-- **Impact:** The T2 credit cap = `total_irb_rwa × 0.006` (Art. 62(d)). For output-floor-bound banks, this must use **un-floored** (U-TREA) IRB RWA, not post-floor TREA. Using post-floor RWA would overstate the cap and allow too much T2 credit. The code uses `total_irb_rwa` which is pre-floor, but this is not documented or enforced.
-  **Spec fix (2026-04-06):** provisions.md updated with "un-floored" clarification in T2 cap row.
-- **File:Line:** `engine/aggregator/` (T2 cap computation)
-- **Spec ref:** CRR Art. 62(d), Art. 92(2A)
-- **Fix:** Add assertion/comment in aggregator confirming T2 cap uses pre-floor IRB RWA. If output floor code modifies `total_irb_rwa`, ensure the T2 cap computation receives the original un-floored value.
-- **Tests needed:** Unit test verifying T2 cap uses pre-floor RWA when output floor binds.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** The T2 credit cap = `total_irb_rwa × 0.006` (Art. 62(d)). For output-floor-bound banks, this must use **un-floored** (U-TREA) IRB RWA, not post-floor TREA. Using post-floor RWA would overstate the cap by up to 45% (for a bank with 50m IRB RWA and 72.5m floored TREA, the cap difference is 300k vs 435k). The code was already correct — `compute_el_portfolio_summary` receives original `irb_results`/`slotting_results` (pre-floor), not the floored `combined` frame — but this was undocumented and untested.
+  **Regulatory basis:** Art. 62(d) references "risk-weighted exposure amounts calculated under Chapter 3 of Title II of Part Three" — the IRB chapter. The output floor (Art. 92(2A)) is in Part Two (Own Funds Requirements), not the IRB chapter. Using post-floor TREA would also create a circular dependency with the OF-ADJ formula (OF-ADJ depends on IRB T2 → T2 cap → TREA → OF-ADJ).
+  **Changes:**
+  - **aggregator.py:** Added documentation comment explaining why `irb_results`/`slotting_results` (not `combined`) are passed to `compute_el_portfolio_summary`, referencing Art. 62(d) Chapter 3 and the OF-ADJ circularity.
+  - **_el_summary.py:** Added comment at T2 cap computation line documenting the un-floored basis requirement and caller responsibility.
+  - **Spec fix (2026-04-06):** provisions.md updated with "un-floored" clarification in T2 cap row.
+- **File:Line:** `engine/aggregator/aggregator.py:114-127` (isolation comment), `engine/aggregator/_el_summary.py:229-232` (cap basis comment)
+- **Spec ref:** CRR Art. 62(d), PRA PS1/26 Art. 92(2A)
+- **Tests:** 10 new unit tests in `tests/unit/test_t2_cap_floor_isolation.py`: core floor-binds test (cap=300k not 435k), formula verification (RWA×0.006), capped credit test (excess 500k > cap 300k), floor-not-binding test (cap unchanged), CRR no-floor test, slotting included in pre-floor basis, capital overstatement quantification (45% overstatement), multi-exposure binding floor, direct function call, rate constant 0.006. All 3,462 tests pass (was 3,452). Test count: 3,462 passed, 33 skipped.
 
 ### P1.79 CRR corporate PD floor 0.03% in code, CRR Art. 160(1) says 0.05%
 - **Status:** [x] False positive — CRR value is correct

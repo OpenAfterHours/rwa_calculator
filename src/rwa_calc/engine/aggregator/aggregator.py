@@ -115,6 +115,15 @@ class OutputAggregator:
         # Include slotting EL: slotting is an IRB sub-approach (Art. 153(5) is in
         # the IRB chapter), so slotting RWA and EL feed into the T2 credit cap
         # (Art. 62(d)) and EL shortfall/excess (Art. 158-159).
+        #
+        # IMPORTANT: The T2 credit cap (Art. 62(d)) uses un-floored IRB RWA,
+        # not post-floor TREA.  Art. 62(d) references "risk-weighted exposure
+        # amounts calculated under Chapter 3 of Title II of Part Three" — the
+        # IRB chapter — not the portfolio-level floor from Art. 92(2A).
+        # We intentionally pass the original irb_results / slotting_results
+        # (which are unaffected by the floor applied to `combined` above),
+        # NOT the floored `combined` LazyFrame.  Using post-floor TREA would
+        # also create a circular dependency with the OF-ADJ formula.
         el_summary = compute_el_portfolio_summary(irb_results, slotting_results)
 
         return AggregatedResultBundle(

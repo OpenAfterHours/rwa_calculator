@@ -227,6 +227,9 @@ def compute_el_portfolio_summary(
         effective_excess = raw_total_excess
 
     # T2 credit cap: 0.6% of total IRB+slotting RWA (CRR Art. 62(d))
+    # This MUST use un-floored IRB RWA ("calculated under Chapter 3 of Title II
+    # of Part Three"), NOT post-output-floor TREA from Art. 92(2A).  The caller
+    # (aggregator.py) is responsible for passing pre-floor IRB/slotting frames.
     t2_credit_cap = total_irb_rwa * T2_CREDIT_CAP_RATE
     t2_credit = min(effective_excess, t2_credit_cap)
 

@@ -238,8 +238,8 @@ class TestCRRGroupG_PortfolioELSummary:
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        expected_cap = el.total_irb_rwa * 0.006
-        assert el.t2_credit_cap == pytest.approx(expected_cap, rel=1e-6), (
+        expected_cap = float(el.total_irb_rwa) * 0.006
+        assert float(el.t2_credit_cap) == pytest.approx(expected_cap, rel=1e-6), (
             f"T2 credit cap should be 0.6% of IRB RWA ({el.total_irb_rwa:.0f}), "
             f"expected {expected_cap:.2f}, got {el.t2_credit_cap:.2f}"
         )
@@ -249,8 +249,8 @@ class TestCRRGroupG_PortfolioELSummary:
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        expected_t2 = min(el.total_el_excess, el.t2_credit_cap)
-        assert el.t2_credit == pytest.approx(expected_t2, rel=1e-6), (
+        expected_t2 = min(float(el.total_el_excess), float(el.t2_credit_cap))
+        assert float(el.t2_credit) == pytest.approx(expected_t2, rel=1e-6), (
             f"T2 credit should be min(excess={el.total_el_excess:.2f}, "
             f"cap={el.t2_credit_cap:.2f}) = {expected_t2:.2f}, "
             f"got {el.t2_credit:.2f}"
@@ -261,10 +261,10 @@ class TestCRRGroupG_PortfolioELSummary:
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert el.cet1_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6), (
+        assert float(el.cet1_deduction) == pytest.approx(float(el.total_el_shortfall) * 0.5, rel=1e-6), (
             f"CET1 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
         )
-        assert el.t2_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6), (
+        assert float(el.t2_deduction) == pytest.approx(float(el.total_el_shortfall) * 0.5, rel=1e-6), (
             f"T2 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
         )
 

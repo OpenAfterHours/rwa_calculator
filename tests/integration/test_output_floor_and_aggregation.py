@@ -471,8 +471,8 @@ class TestSummaries:
             assert isinstance(result.el_summary, ELPortfolioSummary)
             assert result.el_summary.total_irb_rwa > 0
             # T2 credit cap = 0.6% of total IRB RWA
-            assert result.el_summary.t2_credit_cap == pytest.approx(
-                result.el_summary.total_irb_rwa * 0.006, rel=1e-4
+            assert float(result.el_summary.t2_credit_cap) == pytest.approx(
+                float(result.el_summary.total_irb_rwa) * 0.006, rel=1e-4
             )
 
     def test_supporting_factor_impact_crr_only(

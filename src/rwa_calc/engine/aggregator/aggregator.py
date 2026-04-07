@@ -119,9 +119,10 @@ class OutputAggregator:
 
             # Compute OF-ADJ from EL summary + capital-tier config inputs
             # OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2)
-            irb_t2 = el_summary.t2_credit if el_summary else 0.0
+            # ELPortfolioSummary stores Decimal; convert to float for floor arithmetic.
+            irb_t2 = float(el_summary.t2_credit) if el_summary else 0.0
             irb_cet1 = (
-                (el_summary.cet1_deduction if el_summary else 0.0)
+                (float(el_summary.cet1_deduction) if el_summary else 0.0)
                 + config.output_floor.art_40_deductions
             )
             gcra = config.output_floor.gcra_amount

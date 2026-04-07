@@ -393,15 +393,15 @@ class TestB31GroupG_PortfolioELSummary:
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        expected_cap = el.total_irb_rwa * 0.006
-        assert el.t2_credit_cap == pytest.approx(expected_cap, rel=1e-6)
+        expected_cap = float(el.total_irb_rwa) * 0.006
+        assert float(el.t2_credit_cap) == pytest.approx(expected_cap, rel=1e-6)
 
     def test_t2_credit_does_not_exceed_cap(self, firb_pipeline_results) -> None:
         """T2 credit must never exceed the cap."""
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert el.t2_credit <= el.t2_credit_cap + 0.01, (
+        assert float(el.t2_credit) <= float(el.t2_credit_cap) + 0.01, (
             f"T2 credit ({el.t2_credit:.2f}) exceeds cap ({el.t2_credit_cap:.2f})"
         )
 
@@ -410,8 +410,8 @@ class TestB31GroupG_PortfolioELSummary:
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert el.cet1_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6)
-        assert el.t2_deduction == pytest.approx(el.total_el_shortfall * 0.5, rel=1e-6)
+        assert float(el.cet1_deduction) == pytest.approx(float(el.total_el_shortfall) * 0.5, rel=1e-6)
+        assert float(el.t2_deduction) == pytest.approx(float(el.total_el_shortfall) * 0.5, rel=1e-6)
 
 
 class TestB31GroupG_ParameterizedValidation:

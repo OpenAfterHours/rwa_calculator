@@ -217,10 +217,10 @@ class TestPoolBPortfolioSummary:
         )
         summary = compute_el_portfolio_summary(lf)
         assert summary is not None
-        assert summary.total_provisions_allocated == pytest.approx(6_000.0)
-        assert summary.total_ava_amount == pytest.approx(2_000.0)
-        assert summary.total_other_own_funds_reductions == pytest.approx(1_000.0)
-        assert summary.total_pool_b == pytest.approx(9_000.0)
+        assert float(summary.total_provisions_allocated) == pytest.approx(6_000.0)
+        assert float(summary.total_ava_amount) == pytest.approx(2_000.0)
+        assert float(summary.total_other_own_funds_reductions) == pytest.approx(1_000.0)
+        assert float(summary.total_pool_b) == pytest.approx(9_000.0)
 
     def test_ava_reduces_cet1_deduction(self) -> None:
         """AVA in Pool B reduces effective shortfall, thus reducing CET1 deduction."""
@@ -246,8 +246,8 @@ class TestPoolBPortfolioSummary:
 
         assert summary_no_ava is not None
         assert summary_with_ava is not None
-        assert summary_no_ava.cet1_deduction == pytest.approx(2_000.0)
-        assert summary_with_ava.cet1_deduction == pytest.approx(1_000.0)
+        assert float(summary_no_ava.cet1_deduction) == pytest.approx(2_000.0)
+        assert float(summary_with_ava.cet1_deduction) == pytest.approx(1_000.0)
         # AVA halved the CET1 deduction
         assert summary_with_ava.cet1_deduction < summary_no_ava.cet1_deduction
 
@@ -263,8 +263,8 @@ class TestPoolBPortfolioSummary:
         )
         summary = compute_el_portfolio_summary(lf)
         assert summary is not None
-        assert summary.total_el_excess == pytest.approx(3_000.0)
-        assert summary.t2_credit == pytest.approx(3_000.0)  # within cap
+        assert float(summary.total_el_excess) == pytest.approx(3_000.0)
+        assert float(summary.t2_credit) == pytest.approx(3_000.0)  # within cap
 
     def test_backward_compat_no_ava_columns(self) -> None:
         """Without AVA columns, summary behaves identically to before."""
@@ -281,11 +281,11 @@ class TestPoolBPortfolioSummary:
         )
         summary = compute_el_portfolio_summary(lf)
         assert summary is not None
-        assert summary.total_provisions_allocated == pytest.approx(6_000.0)
-        assert summary.total_ava_amount == pytest.approx(0.0)
-        assert summary.total_other_own_funds_reductions == pytest.approx(0.0)
-        assert summary.total_pool_b == pytest.approx(6_000.0)
-        assert summary.total_el_shortfall == pytest.approx(4_000.0)
+        assert float(summary.total_provisions_allocated) == pytest.approx(6_000.0)
+        assert float(summary.total_ava_amount) == pytest.approx(0.0)
+        assert float(summary.total_other_own_funds_reductions) == pytest.approx(0.0)
+        assert float(summary.total_pool_b) == pytest.approx(6_000.0)
+        assert float(summary.total_el_shortfall) == pytest.approx(4_000.0)
 
     def test_two_branch_with_ava(self) -> None:
         """Art. 159(3) two-branch rule works correctly with AVA present."""
@@ -309,11 +309,11 @@ class TestPoolBPortfolioSummary:
         assert summary is not None
         assert summary.art_159_3_applies is True
         # Two-branch: shortfall from ND only, excess from D only
-        assert summary.total_el_shortfall == pytest.approx(20_000.0)
-        assert summary.total_el_excess == pytest.approx(25_000.0)
+        assert float(summary.total_el_shortfall) == pytest.approx(20_000.0)
+        assert float(summary.total_el_excess) == pytest.approx(25_000.0)
         # AVA totals
-        assert summary.total_ava_amount == pytest.approx(15_000.0)
-        assert summary.total_pool_b == pytest.approx(65_000.0)
+        assert float(summary.total_ava_amount) == pytest.approx(15_000.0)
+        assert float(summary.total_pool_b) == pytest.approx(65_000.0)
 
     def test_slotting_with_ava(self) -> None:
         """AVA flows through combined IRB + slotting summary."""
@@ -345,9 +345,9 @@ class TestPoolBPortfolioSummary:
         )
         summary = compute_el_portfolio_summary(irb, slotting)
         assert summary is not None
-        assert summary.total_ava_amount == pytest.approx(3_000.0)
-        assert summary.total_other_own_funds_reductions == pytest.approx(500.0)
-        assert summary.total_pool_b == pytest.approx(12_500.0)  # 9000 + 3000 + 500
+        assert float(summary.total_ava_amount) == pytest.approx(3_000.0)
+        assert float(summary.total_other_own_funds_reductions) == pytest.approx(500.0)
+        assert float(summary.total_pool_b) == pytest.approx(12_500.0)  # 9000 + 3000 + 500
 
     def test_pool_b_breakdown_fields(self) -> None:
         """Verify all Pool B breakdown fields on ELPortfolioSummary."""
@@ -361,13 +361,13 @@ class TestPoolBPortfolioSummary:
         )
         summary = compute_el_portfolio_summary(lf)
         assert summary is not None
-        assert summary.total_provisions_allocated == pytest.approx(5_000.0)
-        assert summary.total_ava_amount == pytest.approx(1_500.0)
-        assert summary.total_other_own_funds_reductions == pytest.approx(800.0)
-        assert summary.total_pool_b == pytest.approx(7_300.0)
+        assert float(summary.total_provisions_allocated) == pytest.approx(5_000.0)
+        assert float(summary.total_ava_amount) == pytest.approx(1_500.0)
+        assert float(summary.total_other_own_funds_reductions) == pytest.approx(800.0)
+        assert float(summary.total_pool_b) == pytest.approx(7_300.0)
         # CET1 deduction = 50% of shortfall
-        assert summary.cet1_deduction == pytest.approx(1_350.0)
-        assert summary.t2_deduction == pytest.approx(1_350.0)
+        assert float(summary.cet1_deduction) == pytest.approx(1_350.0)
+        assert float(summary.t2_deduction) == pytest.approx(1_350.0)
 
     def test_zero_ava_identical_to_provisions_only(self) -> None:
         """Zero AVA/OFR gives same result as provisions-only."""
@@ -389,7 +389,7 @@ class TestPoolBPortfolioSummary:
         s1 = compute_el_portfolio_summary(lf_zero)
         s2 = compute_el_portfolio_summary(lf_absent)
         assert s1 is not None and s2 is not None
-        assert s1.total_el_shortfall == pytest.approx(s2.total_el_shortfall)
-        assert s1.total_el_excess == pytest.approx(s2.total_el_excess)
-        assert s1.cet1_deduction == pytest.approx(s2.cet1_deduction)
-        assert s1.t2_credit == pytest.approx(s2.t2_credit)
+        assert float(s1.total_el_shortfall) == pytest.approx(float(s2.total_el_shortfall))
+        assert float(s1.total_el_excess) == pytest.approx(float(s2.total_el_excess))
+        assert float(s1.cet1_deduction) == pytest.approx(float(s2.cet1_deduction))
+        assert float(s1.t2_credit) == pytest.approx(float(s2.t2_credit))

@@ -22,6 +22,7 @@ and efficient memory usage with Polars.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -331,23 +332,23 @@ class ELPortfolioSummary:
         art_159_3_applies: True when two-branch condition is triggered
     """
 
-    total_expected_loss: float
-    total_provisions_allocated: float
-    total_el_shortfall: float
-    total_el_excess: float
-    total_irb_rwa: float
-    t2_credit_cap: float
-    t2_credit: float
-    cet1_deduction: float
-    t2_deduction: float
-    non_defaulted_el_shortfall: float = 0.0
-    non_defaulted_el_excess: float = 0.0
-    defaulted_el_shortfall: float = 0.0
-    defaulted_el_excess: float = 0.0
+    total_expected_loss: Decimal
+    total_provisions_allocated: Decimal
+    total_el_shortfall: Decimal
+    total_el_excess: Decimal
+    total_irb_rwa: Decimal
+    t2_credit_cap: Decimal
+    t2_credit: Decimal
+    cet1_deduction: Decimal
+    t2_deduction: Decimal
+    non_defaulted_el_shortfall: Decimal = Decimal("0")
+    non_defaulted_el_excess: Decimal = Decimal("0")
+    defaulted_el_shortfall: Decimal = Decimal("0")
+    defaulted_el_excess: Decimal = Decimal("0")
     art_159_3_applies: bool = False
-    total_ava_amount: float = 0.0
-    total_other_own_funds_reductions: float = 0.0
-    total_pool_b: float = 0.0
+    total_ava_amount: Decimal = Decimal("0")
+    total_other_own_funds_reductions: Decimal = Decimal("0")
+    total_pool_b: Decimal = Decimal("0")
 
 
 @dataclass(frozen=True)

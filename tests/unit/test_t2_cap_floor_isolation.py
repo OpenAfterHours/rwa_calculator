@@ -114,9 +114,9 @@ class TestT2CapFloorIsolation:
         el = result.el_summary
         assert el is not None
         pre_floor_rwa = 50_000_000.0
-        assert el.total_irb_rwa == pytest.approx(pre_floor_rwa, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(pre_floor_rwa * T2_CREDIT_CAP_RATE, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(300_000.0, rel=0.001)
+        assert float(el.total_irb_rwa) == pytest.approx(pre_floor_rwa, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(pre_floor_rwa * T2_CREDIT_CAP_RATE, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(300_000.0, rel=0.001)
 
     def test_t2_cap_equals_pre_floor_irb_rwa_times_rate(
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
@@ -128,8 +128,8 @@ class TestT2CapFloorIsolation:
         el = result.el_summary
         assert el is not None
         # Pre-floor IRB RWA = 80m
-        assert el.total_irb_rwa == pytest.approx(80_000_000.0, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(80_000_000.0 * 0.006, rel=0.001)
+        assert float(el.total_irb_rwa) == pytest.approx(80_000_000.0, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(80_000_000.0 * 0.006, rel=0.001)
 
     def test_t2_credit_capped_at_pre_floor_rate(
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
@@ -145,7 +145,7 @@ class TestT2CapFloorIsolation:
 
         el = result.el_summary
         assert el is not None
-        assert el.t2_credit == pytest.approx(300_000.0, rel=0.001)
+        assert float(el.t2_credit) == pytest.approx(300_000.0, rel=0.001)
         # Excess 500k exceeds cap 300k → capped
         assert el.t2_credit < el.total_el_excess
 
@@ -159,8 +159,8 @@ class TestT2CapFloorIsolation:
         # Floor does not bind: 72.5% × 100m = 72.5m < 80m
         el = result.el_summary
         assert el is not None
-        assert el.total_irb_rwa == pytest.approx(80_000_000.0, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(480_000.0, rel=0.001)
+        assert float(el.total_irb_rwa) == pytest.approx(80_000_000.0, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(480_000.0, rel=0.001)
 
     def test_crr_no_floor_t2_cap_uses_irb_rwa(self, aggregator: OutputAggregator) -> None:
         """Under CRR (no floor), T2 cap uses IRB RWA directly."""
@@ -170,8 +170,8 @@ class TestT2CapFloorIsolation:
 
         el = result.el_summary
         assert el is not None
-        assert el.total_irb_rwa == pytest.approx(50_000_000.0, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(300_000.0, rel=0.001)
+        assert float(el.total_irb_rwa) == pytest.approx(50_000_000.0, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(300_000.0, rel=0.001)
 
 
 class TestT2CapWithSlottingAndFloor:
@@ -216,8 +216,8 @@ class TestT2CapWithSlottingAndFloor:
         el = result.el_summary
         assert el is not None
         # Pre-floor IRB + slotting RWA = 30m + 35m = 65m
-        assert el.total_irb_rwa == pytest.approx(65_000_000.0, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(65_000_000.0 * 0.006, rel=0.001)
+        assert float(el.total_irb_rwa) == pytest.approx(65_000_000.0, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(65_000_000.0 * 0.006, rel=0.001)
 
 
 class TestT2CapCapitalImpact:
@@ -239,7 +239,7 @@ class TestT2CapCapitalImpact:
 
         # Correct: pre-floor cap = 50m × 0.006 = 300k
         correct_cap = 50_000_000.0 * T2_CREDIT_CAP_RATE
-        assert el.t2_credit_cap == pytest.approx(correct_cap, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(correct_cap, rel=0.001)
 
         # Wrong: post-floor cap would be 72.5m × 0.006 = 435k
         wrong_cap = 72_500_000.0 * T2_CREDIT_CAP_RATE
@@ -277,8 +277,8 @@ class TestT2CapCapitalImpact:
         el = result.el_summary
         assert el is not None
         # T2 cap uses pre-floor 50m, not floored 134.125m
-        assert el.total_irb_rwa == pytest.approx(50_000_000.0, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(300_000.0, rel=0.001)
+        assert float(el.total_irb_rwa) == pytest.approx(50_000_000.0, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(300_000.0, rel=0.001)
 
 
 class TestT2CapDirectFunction:
@@ -298,8 +298,8 @@ class TestT2CapDirectFunction:
 
         el = compute_el_portfolio_summary(irb)
         assert el is not None
-        assert el.total_irb_rwa == pytest.approx(50_000_000.0, rel=0.001)
-        assert el.t2_credit_cap == pytest.approx(300_000.0, rel=0.001)
+        assert float(el.total_irb_rwa) == pytest.approx(50_000_000.0, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(300_000.0, rel=0.001)
 
     def test_rate_constant_is_0_006(self) -> None:
         """T2_CREDIT_CAP_RATE must be 0.6% = 0.006 per Art. 62(d)."""

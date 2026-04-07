@@ -27,11 +27,18 @@ References:
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import polars as pl
 
 from rwa_calc.contracts.bundles import ELPortfolioSummary
 from rwa_calc.engine.aggregator._schemas import T2_CREDIT_CAP_RATE
 from rwa_calc.engine.aggregator._utils import resolve_rwa_col
+
+
+def _to_decimal(value: float) -> Decimal:
+    """Convert a float to Decimal via string for exact representation."""
+    return Decimal(str(value))
 
 
 def _combine_irb_and_slotting(
@@ -238,21 +245,21 @@ def compute_el_portfolio_summary(
     t2_deduction = effective_shortfall * 0.5
 
     return ELPortfolioSummary(
-        total_expected_loss=total_expected_loss,
-        total_provisions_allocated=total_provisions,
-        total_el_shortfall=effective_shortfall,
-        total_el_excess=effective_excess,
-        total_irb_rwa=total_irb_rwa,
-        t2_credit_cap=t2_credit_cap,
-        t2_credit=t2_credit,
-        cet1_deduction=cet1_deduction,
-        t2_deduction=t2_deduction,
-        non_defaulted_el_shortfall=nd_shortfall,
-        non_defaulted_el_excess=nd_excess,
-        defaulted_el_shortfall=d_shortfall,
-        defaulted_el_excess=d_excess,
+        total_expected_loss=_to_decimal(total_expected_loss),
+        total_provisions_allocated=_to_decimal(total_provisions),
+        total_el_shortfall=_to_decimal(effective_shortfall),
+        total_el_excess=_to_decimal(effective_excess),
+        total_irb_rwa=_to_decimal(total_irb_rwa),
+        t2_credit_cap=_to_decimal(t2_credit_cap),
+        t2_credit=_to_decimal(t2_credit),
+        cet1_deduction=_to_decimal(cet1_deduction),
+        t2_deduction=_to_decimal(t2_deduction),
+        non_defaulted_el_shortfall=_to_decimal(nd_shortfall),
+        non_defaulted_el_excess=_to_decimal(nd_excess),
+        defaulted_el_shortfall=_to_decimal(d_shortfall),
+        defaulted_el_excess=_to_decimal(d_excess),
         art_159_3_applies=art_159_3_applies,
-        total_ava_amount=total_ava,
-        total_other_own_funds_reductions=total_other_ofr,
-        total_pool_b=total_pool_b,
+        total_ava_amount=_to_decimal(total_ava),
+        total_other_own_funds_reductions=_to_decimal(total_other_ofr),
+        total_pool_b=_to_decimal(total_pool_b),
     )

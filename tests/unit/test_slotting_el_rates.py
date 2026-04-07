@@ -566,10 +566,10 @@ class TestSlottingELAggregatorIntegration:
 
         summary = compute_el_portfolio_summary(irb_results, slotting_results)
         assert summary is not None
-        assert summary.total_expected_loss == pytest.approx(150_000.0)  # 100k + 50k
-        assert summary.total_el_shortfall == pytest.approx(40_000.0)  # 20k + 20k
-        assert summary.total_irb_rwa == pytest.approx(1_500_000.0)  # 1m + 500k
-        assert summary.t2_credit_cap == pytest.approx(1_500_000.0 * 0.006)  # 0.6% of combined
+        assert float(summary.total_expected_loss) == pytest.approx(150_000.0)  # 100k + 50k
+        assert float(summary.total_el_shortfall) == pytest.approx(40_000.0)  # 20k + 20k
+        assert float(summary.total_irb_rwa) == pytest.approx(1_500_000.0)  # 1m + 500k
+        assert float(summary.t2_credit_cap) == pytest.approx(1_500_000.0 * 0.006)  # 0.6% of combined
 
     def test_slotting_only_el_summary(self) -> None:
         """When only slotting has EL, portfolio summary still works."""
@@ -586,10 +586,10 @@ class TestSlottingELAggregatorIntegration:
 
         summary = compute_el_portfolio_summary(None, slotting_results)
         assert summary is not None
-        assert summary.total_expected_loss == pytest.approx(80_000.0)
-        assert summary.total_el_shortfall == pytest.approx(80_000.0)
-        assert summary.total_irb_rwa == pytest.approx(7_000_000.0)
-        assert summary.t2_credit_cap == pytest.approx(7_000_000.0 * 0.006)
+        assert float(summary.total_expected_loss) == pytest.approx(80_000.0)
+        assert float(summary.total_el_shortfall) == pytest.approx(80_000.0)
+        assert float(summary.total_irb_rwa) == pytest.approx(7_000_000.0)
+        assert float(summary.t2_credit_cap) == pytest.approx(7_000_000.0 * 0.006)
 
     def test_no_slotting_el_backward_compatible(self) -> None:
         """Old-style call without slotting still works."""
@@ -606,7 +606,7 @@ class TestSlottingELAggregatorIntegration:
 
         summary = compute_el_portfolio_summary(irb_results)
         assert summary is not None
-        assert summary.total_expected_loss == pytest.approx(100_000.0)
+        assert float(summary.total_expected_loss) == pytest.approx(100_000.0)
 
     def test_slotting_excess_increases_t2_credit(self) -> None:
         """Slotting provisions excess contributes to T2 credit."""
@@ -624,9 +624,9 @@ class TestSlottingELAggregatorIntegration:
 
         summary = compute_el_portfolio_summary(None, slotting_results)
         assert summary is not None
-        assert summary.total_el_excess == pytest.approx(60_000.0)
+        assert float(summary.total_el_excess) == pytest.approx(60_000.0)
         t2_cap = 7_000_000.0 * 0.006  # 42k
-        assert summary.t2_credit == pytest.approx(min(60_000.0, t2_cap))
+        assert float(summary.t2_credit) == pytest.approx(min(60_000.0, t2_cap))
 
 
 # =============================================================================

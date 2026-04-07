@@ -76,6 +76,13 @@ class StubCRMProcessor:
     ) -> CRMAdjustedBundle:
         return create_empty_crm_adjusted_bundle()
 
+    def get_crm_unified_bundle(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        return create_empty_crm_adjusted_bundle()
+
 
 class StubSACalculator:
     """Stub implementation of SACalculatorProtocol."""
@@ -170,6 +177,17 @@ class TestProtocolCompliance:
 
         result = processor.apply_crm(data, config)
         assert isinstance(result, LazyFrameResult)
+
+    def test_crm_processor_unified_bundle_protocol_satisfied(self):
+        """StubCRMProcessor.get_crm_unified_bundle should satisfy CRMProcessorProtocol."""
+        processor = StubCRMProcessor()
+        assert isinstance(processor, CRMProcessorProtocol)
+
+        data = create_empty_classified_bundle()
+        config = CalculationConfig.crr(reporting_date=date(2025, 1, 1))
+
+        result = processor.get_crm_unified_bundle(data, config)
+        assert isinstance(result, CRMAdjustedBundle)
 
     def test_sa_calculator_protocol_satisfied(self):
         """StubSACalculator should satisfy SACalculatorProtocol."""

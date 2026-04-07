@@ -121,9 +121,9 @@ Basel 3.1 introduces a minimum risk weight floor for UK residential property exp
 !!! warning "Correction"
     The regulatory floor is **10%**, not 15%. Art. 154(4A)(b) specifies the 10% minimum risk weight for residential property exposures under A-IRB. The previous 15% was an early implementation assumption.
 
-### General Post-Model Adjustments (Art. 158(6A))
+### General Post-Model Adjustments (Art. 146(3) / Art. 158(6A))
 
-Firms must apply post-model adjustments (PMAs) to compensate for known model deficiencies:
+Art. 146(3) establishes the root obligation: firms using IRB must apply post-model adjustments to compensate for known model deficiencies. Art. 158(6A) specifies the EL monotonicity constraint. Firms must apply PMAs to both RWEA and EL:
 
 - **PMA on RWEA**: `RWEA_adjusted = RWEA_modelled × (1 + pma_rwa_scalar)`
 - **PMA on EL**: `EL_adjusted = EL_modelled × (1 + pma_el_scalar)`

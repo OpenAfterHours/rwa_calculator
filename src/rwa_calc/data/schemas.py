@@ -981,6 +981,10 @@ CALCULATION_OUTPUT_SCHEMA = {
     "ead_after_guarantee": pl.Float64,  # Portion not guaranteed
     "final_ead": pl.Float64,  # Final EAD for RWA calculation
     "ead_calculation_method": pl.String,  # "simple", "comprehensive", "supervisory_haircut"
+    # Art. 222 Financial Collateral Simple Method (FCSM)
+    "fcsm_collateral_value": pl.Float64,  # Total eligible financial collateral (raw market value)
+    "fcsm_collateral_rw": pl.Float64,  # Weighted-average SA RW of collateral
+    "pre_fcsm_risk_weight": pl.Float64,  # Risk weight before FCSM substitution
     # -------------------------------------------------------------------------
     # RISK WEIGHT DETERMINATION - SA
     # -------------------------------------------------------------------------

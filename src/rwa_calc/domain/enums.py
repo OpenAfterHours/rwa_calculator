@@ -526,3 +526,28 @@ class ReportingBasis(StrEnum):
 
     CONSOLIDATED = "consolidated"
     """Consolidated basis — applies to UK group-level CRR consolidation entities."""
+
+
+class CRMCollateralMethod(StrEnum):
+    """
+    Method for recognising financial collateral in credit risk mitigation.
+
+    Institutions must elect one method for financial collateral recognition.
+    The choice applies firm-wide for all SA exposures (CRR Art. 191A / PRA PS1/26 Art. 191A).
+    IRB exposures always use the Foundation Collateral Method regardless.
+    """
+
+    COMPREHENSIVE = "comprehensive"
+    """Financial Collateral Comprehensive Method (Art. 223-224).
+
+    Default method. Reduces EAD via supervisory haircuts applied to collateral
+    market values (H_c, H_fx, maturity mismatch). Both SA and IRB eligible.
+    """
+
+    SIMPLE = "simple"
+    """Financial Collateral Simple Method (Art. 222).
+
+    SA-only. Substitutes the risk weight on the collateralised portion with the
+    collateral's own SA risk weight, subject to a 20% floor. EAD is NOT reduced.
+    Special 0% RW for same-currency cash deposits and 0%-RW sovereign bonds.
+    """

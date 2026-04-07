@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CRM**: Implement Financial Collateral Simple Method (Art. 222) — `CRMCollateralMethod` enum (`COMPREHENSIVE`/`SIMPLE`) on `CalculationConfig`, new `engine/crm/simple_method.py` module with collateral RW derivation by type/CQS, Art. 222(4) zero-RW exceptions, multi-level allocation, 20% RW floor, blended secured/unsecured risk weight substitution in SA calculator, COREP row 0070 reporting. 49 new unit tests
 - **UI**: Add template workbench — duplicate read-only template workbooks into editable user workspace with full Python and SQL support via `marimo edit`
 - **UI**: Add workspace management REST API (`/api/templates`, `/api/workbooks`, `/api/workbooks/duplicate`, `/api/workbooks/{name}`)
 - **UI**: Add "Workbench" link to sidebar navigation in all template apps

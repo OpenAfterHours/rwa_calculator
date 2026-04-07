@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Literal
 
 from rwa_calc.domain.enums import (
     ApproachType,
+    CRMCollateralMethod,
     CollateralType,
     ExposureClass,
     InstitutionType,
@@ -736,6 +737,11 @@ class CalculationConfig:
     # or para 6 (65%/135% IG assessment) for unrated corporates. This choice
     # applies to both regular SA calculations and the output floor S-TREA
     # computation (Art. 92 para 2A). The choice must be declared to the PRA.
+    crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE
+    # Art. 191A: Firm-wide election for financial collateral recognition.
+    # COMPREHENSIVE (default): EAD reduction via supervisory haircuts (Art. 223-224).
+    # SIMPLE: SA-only risk weight substitution (Art. 222), 20% RW floor on secured portion.
+    # IRB exposures always use Foundation Collateral Method regardless of this election.
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
@@ -770,6 +776,7 @@ class CalculationConfig:
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
+        crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -811,6 +818,7 @@ class CalculationConfig:
             scaling_factor=Decimal("1.06"),
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
+            crm_collateral_method=crm_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
         )
@@ -827,6 +835,7 @@ class CalculationConfig:
         gcra_amount: float = 0.0,
         sa_t2_credit: float = 0.0,
         art_40_deductions: float = 0.0,
+        crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -888,6 +897,7 @@ class CalculationConfig:
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             use_investment_grade_assessment=use_investment_grade_assessment,
+            crm_collateral_method=crm_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
         )

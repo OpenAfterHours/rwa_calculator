@@ -35,10 +35,12 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import CCFCalculator
+from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.materialise import materialise_barrier
 from rwa_calc.engine.utils import has_required_columns
 
@@ -433,7 +435,19 @@ class CRMProcessor:
         else:
             exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))
 
+        # Step 3.6: Pre-compute FCSM columns if Simple Method is elected
+        # Must run BEFORE Comprehensive Method (which is still needed for IRB LGD)
+        use_simple_method = (
+            config.crm_collateral_method == CRMCollateralMethod.SIMPLE
+        )
+        if use_simple_method and has_required_columns(
+            collateral, self.COLLATERAL_REQUIRED_COLUMNS
+        ):
+            exposures = compute_fcsm_columns(exposures, collateral, config)
+
         # Step 4: Apply collateral (if available and valid)
+        # Under Simple Method, the Comprehensive pipeline still runs for IRB LGD
+        # adjustment. SA EAD reduction is undone in Step 4b.
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
         else:
@@ -441,6 +455,17 @@ class CRMProcessor:
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
                 exposures, self._is_basel_3_1
             )
+            if use_simple_method:
+                # Add default (zero) FCSM columns when no collateral
+                from rwa_calc.engine.crm.simple_method import _add_default_fcsm_columns
+
+                exposures = _add_default_fcsm_columns(exposures)
+
+        # Step 4b: Under Simple Method, undo SA financial collateral EAD reduction.
+        # The Comprehensive pipeline reduced SA EAD by collateral_adjusted_value,
+        # but Art. 222 does not reduce EAD — it substitutes risk weights instead.
+        if use_simple_method:
+            exposures = undo_sa_ead_reduction(exposures)
 
         # Step 5: Apply guarantees (if available and valid)
         if (

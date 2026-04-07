@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.84 T2 cap floor isolation + P1.9a OF-ADJ implemented + P1.9a resolved)
-**Current version:** 0.1.121 | **Test suite:** ~3,523 collected (~3,490 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
+**Last updated:** 2026-04-07 (P1.7 Financial Collateral Simple Method implemented + P1.38(a) GCRA cap confirmed complete)
+**Current version:** 0.1.122 | **Test suite:** ~3,572 collected (~3,539 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -13,7 +13,7 @@
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ (a) fixed; (d) documentation remains), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ (a) fixed; (d) documentation remains), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.7 Financial Collateral Simple Method now fixed] [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(a) GCRA cap now fixed; (b) entity-type carve-outs now fixed; (c) reporting basis remains] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -195,12 +195,18 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Art. 124F(2)(b) pari passu pro-rata formula not implemented — requires `total_pari_passu_charges` and `charges_not_held` fields which are not yet in the schema. Current implementation covers the simpler sequential-charge case via `prior_charge_ltv`.
 
 ### P1.7 Financial Collateral Simple Method (Art. 222)
-- **Status:** [ ] Not implemented
-- **Impact:** CRR Art. 222 / CRM method taxonomy Part A allows a Simple Method for financial collateral (20% RW floor, SA-only). Only the Comprehensive (haircut) Method is implemented. COREP generator at line 1046 confirms: "simple method not implemented -> always 0".
-- **File:Line:** `engine/crm/collateral.py`, `reporting/corep/generator.py:1046`
-- **Spec ref:** `docs/specifications/crr/credit-risk-mitigation.md`
-- **Fix:** Add configuration option to select Simple vs Comprehensive. Implement Simple Method in `engine/crm/collateral.py`. Update COREP row 0070.
-- **Tests needed:** Unit and acceptance tests.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** CRR Art. 222 Financial Collateral Simple Method now fully implemented. Firms can elect Simple vs Comprehensive method via `CRMCollateralMethod` config enum. Implementation:
+  - **Config:** `CRMCollateralMethod` enum (`COMPREHENSIVE`/`SIMPLE`) added to `domain/enums.py`. `crm_collateral_method` field on `CalculationConfig` (default: COMPREHENSIVE). Both `crr()` and `basel_3_1()` factory methods accept the parameter.
+  - **Simple Method engine** (`engine/crm/simple_method.py`): Derives SA risk weight for financial collateral by type/CQS (cash/gold→0%, sovereign→Art.114, institution→Art.120, corporate→Art.122, equity→100%). Art. 222(4) zero-RW exceptions for same-currency cash and 0%-RW sovereign bonds. Multi-level collateral-to-exposure matching (direct/facility/counterparty with pro-rata allocation). Collateral value capped at EAD. Sets `fcsm_collateral_value` and `fcsm_collateral_rw` per exposure.
+  - **Pipeline integration** (`engine/crm/processor.py`): FCSM columns computed in Step 3.6 (before haircut-based collateral). When Simple Method elected, SA EAD reduction from Comprehensive Method is undone in Step 4b (Comprehensive still runs for IRB LGD adjustment).
+  - **SA RW substitution** (`engine/sa/calculator.py`): `_apply_fcsm_rw_substitution()` blends secured/unsecured risk weights with 20% floor on secured portion. Sets `pre_fcsm_risk_weight` for audit trail and `ead_calculation_method` column.
+  - **Schema:** 3 new fields in `CALCULATION_OUTPUT_SCHEMA`: `fcsm_collateral_value`, `fcsm_collateral_rw`, `pre_fcsm_risk_weight`.
+  - **COREP:** Row 0070 now reports actual FCSM collateral value sum (was hardcoded 0).
+- **File:Line:** `engine/crm/simple_method.py` (new), `domain/enums.py:305-313` (CRMCollateralMethod), `contracts/config.py` (field + factories), `engine/crm/processor.py` (Steps 3.6 + 4b), `engine/sa/calculator.py` (_apply_fcsm_rw_substitution), `data/schemas.py`, `reporting/corep/generator.py`
+- **Spec ref:** CRR Art. 222, Art. 191A, PRA PS1/26 Art. 222, `docs/specifications/crr/credit-risk-mitigation.md`
+- **Tests:** 49 new unit tests in `tests/unit/crm/test_simple_method.py`: 2 constant tests, 5 config tests, 20 parametric collateral RW derivation tests (cash/gold/deposit/sovereign CQS1-6/institution/corporate CQS1-5/equity), 6 compute-FCSM-columns tests (cash, no collateral, capped at EAD, ineligible excluded, sovereign bond RW, default columns utility), 3 zero-RW exception tests (Art. 222(4)), 3 undo-SA-EAD tests, 8 RW substitution tests (blended RW, 20% floor, sovereign/corporate bonds, no-op paths, RWA correctness, method flag), 2 capital comparison tests (Simple vs Comprehensive). All 3,539 tests pass (was 3,490). Test count: 3,539 passed, 33 skipped.
 
 ### P1.8 LGDFloors residential vs commercial RE distinction
 - **Status:** [x] Complete
@@ -589,10 +595,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Backward compatible:** When `underlying_risk_type` column is absent or null, no cap is applied — identical behavior to before.
 
 ### P1.38 Output floor GCRA 1.25% cap and entity-type carve-outs (Art. 92)
-- **Status:** [~] Partial ((b) complete; (a) and (c) remain)
+- **Status:** [~] Partial ((a) and (b) complete; (c) remains)
+- **Fixed (a):** 2026-04-07 (implemented as part of P1.9a OF-ADJ)
 - **Fixed (b):** 2026-04-07
 - **Impact:** Three output floor gaps from PDF analysis:
-  - **(a) GCRA cap:** GCRA component of OF-ADJ is capped at **1.25% of S-TREA** (para 3A amounts, not U-TREA). No cap logic exists. Depends on P1.9(a) OF-ADJ implementation.
+  - **(a) GCRA cap:** FIXED. GCRA component of OF-ADJ is capped at **1.25% of S-TREA** (para 3A amounts, not U-TREA). Implemented in `compute_of_adj()` in `_floor.py` as part of the P1.9a OF-ADJ work. The cap is applied before GCRA enters the OF-ADJ formula.
   - **(b) Entity-type carve-outs:** FIXED. Art. 92 para 2A defines THREE entity categories where the floor formula applies: (i) stand-alone UK institution on individual basis, (ii) ring-fenced body in sub-consolidation group on sub-consolidated basis, (iii) non-international-subsidiary CRR consolidation entity on consolidated basis. All OTHER entities use U-TREA (no floor). Implementation:
     - `InstitutionType` enum (5 members) and `ReportingBasis` enum (3 members) added to `domain/enums.py`
     - `OutputFloorConfig` extended with `institution_type` and `reporting_basis` fields
@@ -604,7 +611,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `domain/enums.py` (InstitutionType, ReportingBasis), `contracts/config.py` (OutputFloorConfig.is_floor_applicable, CalculationConfig.basel_3_1), `engine/aggregator/aggregator.py` (is_floor_applicable check)
 - **Spec ref:** PRA PS1/26 Art. 92 para 2A(a)-(d), Reporting (CRR) Part Rule 2.2A
 - **Tests:** 50 new unit tests in `tests/unit/test_output_floor_entity_type.py`: 18 is_floor_applicable unit tests (CRR, B31 default, None params backward compat, 3 applicable combos, 3 exempt combos, 6 wrong-basis combos), 4 CalculationConfig integration tests, 10 end-to-end aggregator tests (exempt entities keep original RWA, applicable entities get floored, backward compat), 15 parametrized exhaustive all-combinations test, 4 enum value tests. All 3057 tests pass. Test count: 3057 (was 3007).
-- **Fix remaining:** (a) Implement GCRA 1.25% cap once OF-ADJ (P1.9a) is available. (c) Add reporting basis conditionality to COREP output.
+- **Fix remaining:** (c) Add reporting basis conditionality to COREP output.
 
 ### P1.39 CRM haircut liquidation period dependency not modelled (Art. 224)
 - **Status:** [x] Complete

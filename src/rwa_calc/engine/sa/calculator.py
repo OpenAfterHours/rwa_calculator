@@ -94,7 +94,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -191,6 +191,9 @@ class SACalculator:
         # Step 1: Look up risk weights
         exposures = self._apply_risk_weights(exposures, config)
 
+        # Step 1b: Apply FCSM risk weight substitution (Art. 222 Simple Method)
+        exposures = self._apply_fcsm_rw_substitution(exposures, config)
+
         # Step 2: Apply guarantee substitution (blended risk weight)
         exposures = self._apply_guarantee_substitution(exposures, config)
 
@@ -244,6 +247,9 @@ class SACalculator:
         # Step 1-2: Apply risk weights (runs unconditionally — also provides
         # SA-equivalent RW for IRB output floor)
         exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 2b: FCSM risk weight substitution (Art. 222 Simple Method)
+        exposures = self._apply_fcsm_rw_substitution(exposures, config)
 
         # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
         exposures = self._apply_guarantee_substitution(exposures, config)
@@ -300,6 +306,9 @@ class SACalculator:
         """
         # Step 1-2: Apply risk weights
         exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 2b: FCSM risk weight substitution (Art. 222 Simple Method)
+        exposures = self._apply_fcsm_rw_substitution(exposures, config)
 
         # Step 3: Guarantee substitution
         exposures = self._apply_guarantee_substitution(exposures, config)
@@ -1210,6 +1219,75 @@ class SACalculator:
             .then(blended_rw)
             .otherwise(pl.col("risk_weight"))
             .alias("risk_weight")
+        )
+
+    def _apply_fcsm_rw_substitution(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """Apply Art. 222 Financial Collateral Simple Method risk weight substitution.
+
+        When the Simple Method is elected, the secured portion of each SA exposure
+        gets the collateral's SA risk weight (with a 20% floor) instead of the
+        exposure's own risk weight. The unsecured portion retains the original RW.
+
+        Blended RW = secured_pct × max(20%, collateral_rw) + unsecured_pct × exposure_rw
+
+        This method is a no-op when the Comprehensive Method is elected (default)
+        or when fcsm_collateral_value is zero/absent.
+
+        Args:
+            exposures: Exposures with risk_weight and fcsm_* columns.
+            config: Calculation configuration.
+
+        Returns:
+            Exposures with blended risk weight for FCSM-covered portion.
+        """
+        if config.crm_collateral_method != CRMCollateralMethod.SIMPLE:
+            return exposures
+
+        schema = exposures.collect_schema()
+        if "fcsm_collateral_value" not in schema.names():
+            return exposures
+
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        fcsm_rw_floor = 0.20  # Art. 222(1) minimum 20% floor
+
+        ead = pl.col(ead_col).fill_null(0.0)
+        fcsm_value = pl.col("fcsm_collateral_value").fill_null(0.0)
+        fcsm_rw = pl.col("fcsm_collateral_rw").fill_null(0.0)
+
+        # Secured percentage (capped at 100%)
+        secured_pct = pl.when(ead > 0).then((fcsm_value / ead).clip(0.0, 1.0)).otherwise(0.0)
+        unsecured_pct = pl.lit(1.0) - secured_pct
+
+        # Secured RW: apply 20% floor per Art. 222(1)
+        # Art. 222(4) 0% exceptions are already factored into fcsm_collateral_rw
+        # per-item by compute_fcsm_columns, so the weighted avg can be < 20% when
+        # 0%-RW items (same-currency cash) dominate. The floor applies to the
+        # aggregate secured portion RW.
+        secured_rw = pl.max_horizontal(fcsm_rw, pl.lit(fcsm_rw_floor))
+
+        # Blended risk weight
+        blended_rw = secured_pct * secured_rw + unsecured_pct * pl.col("risk_weight")
+
+        # Only apply when there is actual collateral value
+        has_fcsm = fcsm_value > 0
+
+        return exposures.with_columns(
+            # Save pre-FCSM risk weight for audit
+            pl.col("risk_weight").alias("pre_fcsm_risk_weight"),
+            # Apply blended RW
+            pl.when(has_fcsm)
+            .then(blended_rw)
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight"),
+            # Track method for audit/COREP
+            pl.when(has_fcsm)
+            .then(pl.lit("simple"))
+            .otherwise(pl.lit("comprehensive"))
+            .alias("ead_calculation_method"),
         )
 
     def _apply_guarantee_substitution(

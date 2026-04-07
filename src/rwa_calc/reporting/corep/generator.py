@@ -1067,9 +1067,13 @@ def _compute_c07_values(
     values["0060"] = cd_val if cd_val is not None else 0.0
 
     # --- CRM Substitution: Funded ---
-    # 0070: (-) Financial collateral: Simple method
-    # Comprehensive method is used; simple method not implemented → always 0
-    values["0070"] = 0.0
+    # 0070: (-) Financial collateral: Simple method (Art. 222)
+    # When Simple Method is elected, this is the total collateral value recognised.
+    # Under Comprehensive Method, this is always 0.
+    if "fcsm_collateral_value" in data.columns:
+        values["0070"] = data["fcsm_collateral_value"].sum()
+    else:
+        values["0070"] = 0.0
 
     # 0080: (-) Other funded credit protection (non-financial collateral)
     values["0080"] = _sum_cols_eager(

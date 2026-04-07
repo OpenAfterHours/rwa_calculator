@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.48 defaulted secured/unsecured split implemented)
-**Current version:** 0.1.104 | **Test suite:** ~2,983 collected (~2,436 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.9(b) portfolio-level output floor implemented)
+**Current version:** 0.1.104 | **Test suite:** ~3,007 collected (~2,460 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -14,7 +14,7 @@
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor portfolio-level), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -215,16 +215,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for residential vs commercial collateral LGD floor.
 
 ### P1.9 Output Floor -- OF-ADJ, portfolio-level application, U-TREA/S-TREA
-- **Status:** [ ] Not implemented (4 sub-issues)
+- **Status:** [~] Partial (3 sub-issues remain; (b) complete)
+- **Fixed (b):** 2026-04-07
 - **Impact:** The output floor implementation has four related gaps:
-  - **(a) OF-ADJ not implemented:** PRA PS1/26 Art. 92 para 2A defines `TREA = max(U-TREA, x * S-TREA + OF-ADJ)` where `OF-ADJ = 12.5 x (IRB_T2 - IRB_CET1 - GCRA + SA_T2)`. No code computes any OF-ADJ component. **Additional from PDF comparison:** `IRB_CET1` must include Art. 40 deductions (additional shortfall provisions), not just Art. 36(1)(d). `IRB_T2` = Art. 62(d) excess provisions (a T2 **credit/addition**, not a deduction — the spec description is backwards). `SA_T2` = Art. 62(c) general credit risk adjustments. The Art. 62(d) IRB T2 credit is **capped at 0.6% of IRB credit RWAs** — this cap is binding for many institutions and must be applied.
-  - **(b) Floor is exposure-level, not portfolio-level:** `_floor.py:67-96` applies `max(rwa_pre_floor, floor_rwa)` per exposure row. The regulatory formula operates on portfolio-level totals (U-TREA vs x × S-TREA). Exposure-level flooring **systematically overstates** capital for institutions near but above the aggregate floor.
-  - **(c) U-TREA/S-TREA not computed:** Neither `u_trea` nor `s_trea` fields exist in `_floor.py`, `_schemas.py`, or `AggregatedResultBundle`. The `OF 02.01` COREP template (requiring 4-column U-TREA/S-TREA comparison) cannot be produced.
+  - **(a) OF-ADJ not implemented:** PRA PS1/26 Art. 92 para 2A defines `TREA = max(U-TREA, x * S-TREA + OF-ADJ)` where `OF-ADJ = 12.5 x (IRB_T2 - IRB_CET1 - GCRA + SA_T2)`. No code computes any OF-ADJ component. **Additional from PDF comparison:** `IRB_CET1` must include Art. 40 deductions (additional shortfall provisions), not just Art. 36(1)(d). `IRB_T2` = Art. 62(d) excess provisions (a T2 **credit/addition**, not a deduction — the spec description is backwards). `SA_T2` = Art. 62(c) general credit risk adjustments. The Art. 62(d) IRB T2 credit is **capped at 0.6% of IRB credit RWAs** — this cap is binding for many institutions and must be applied. Requires capital-tier input data (IRB_T2, IRB_CET1, GCRA, SA_T2).
+  - **(b) Floor is exposure-level, not portfolio-level:** FIXED. Previously `_floor.py` applied `max(rwa_pre_floor, floor_rwa)` per exposure row, systematically overstating capital. Now computes portfolio-level U-TREA and S-TREA, applies `TREA = max(U-TREA, x * S-TREA)`, and distributes any shortfall pro-rata by `sa_rwa` share. Slotting exposures now included in floor scope via `FLOOR_ELIGIBLE_APPROACHES` (were previously excluded). `OutputFloorSummary` dataclass added to `contracts/bundles.py` with `u_trea`, `s_trea`, `floor_pct`, `floor_threshold`, `shortfall`, `portfolio_floor_binding`, `total_rwa_post_floor` fields, and attached to `AggregatedResultBundle`.
+  - **(c) U-TREA/S-TREA COREP export:** `OutputFloorSummary` is now on `AggregatedResultBundle` so U-TREA/S-TREA are accessible. Full `OF 02.01` COREP template wiring (4-column comparison) not yet done — tracked under P2.
   - **(d) Transitional floor rates are permissive, not mandatory:** Art. 92 para 5 says institutions "may apply" the 60/65/70% transitional rates — firms can voluntarily use 72.5% from day one. `OutputFloorConfig` should document this optionality.
-- **File:Line:** `engine/aggregator/_floor.py:67-96`
+- **File:Line:** `engine/aggregator/_floor.py`, `engine/aggregator/_schemas.py`, `engine/aggregator/aggregator.py`, `contracts/bundles.py`
 - **Spec ref:** `docs/specifications/output-reporting.md` lines 28-46, PRA PS1/26 Art. 92 para 2A/3A/5
-- **Fix:** Restructure `_floor.py` to compute portfolio-level U-TREA and S-TREA, apply the max formula with OF-ADJ (including Art. 62(d) 0.6% IRB T2 cap and Art. 40 CET1 deductions), then distribute the floor add-on back to exposures pro-rata. Add U-TREA/S-TREA to `AggregatedResultBundle` or a new `OutputFloorBundle`. Requires capital-tier data (EL shortfall, equity deductions, GCRA). Fix spec description of IRB_T2 from "deductions" to "T2 credit (excess provisions)".
-- **Tests needed:** Unit tests for portfolio-level floor, OF-ADJ components, IRB T2 0.6% cap. Update acceptance tests in B31-F.
+- **Fix remaining:** (a) Implement OF-ADJ once capital-tier data is available as pipeline input. (d) Document optionality in `OutputFloorConfig`.
+- **Tests:** 24 new unit tests in `tests/unit/test_portfolio_level_floor.py`. Acceptance test B31-F2 updated (`is_floor_binding` now portfolio-level flag). All tests pass.
 
 ### P1.9a EL T2 credit cap uses pre-floor IRB RWA
 - **Status:** [~] Potentially understated

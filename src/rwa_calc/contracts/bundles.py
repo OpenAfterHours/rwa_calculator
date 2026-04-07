@@ -335,6 +335,39 @@ class ELPortfolioSummary:
 
 
 @dataclass(frozen=True)
+class OutputFloorSummary:
+    """
+    Portfolio-level output floor summary (Basel 3.1).
+
+    The output floor is applied at portfolio level per PRA PS1/26 Art. 92
+    para 2A: TREA = max(U-TREA, x * S-TREA + OF-ADJ). When the floor binds,
+    the shortfall is distributed pro-rata across floor-eligible exposures
+    (IRB + slotting) proportional to each exposure's SA-equivalent RWA.
+
+    Attributes:
+        u_trea: Total RWA for floor-eligible exposures using actual approaches
+        s_trea: Total SA-equivalent RWA for the same exposures
+        floor_pct: Floor percentage applied (e.g. 0.725 for 72.5%)
+        floor_threshold: floor_pct * s_trea — the minimum acceptable RWA
+        shortfall: max(0, floor_threshold - u_trea) — add-on when floor binds
+        portfolio_floor_binding: True when the portfolio floor binds
+        total_rwa_post_floor: u_trea + shortfall (= max(u_trea, floor_threshold))
+
+    References:
+    - PRA PS1/26 Art. 92 para 2A
+    - CRE99.1-8: Output floor (Basel 3.1)
+    """
+
+    u_trea: float
+    s_trea: float
+    floor_pct: float
+    floor_threshold: float
+    shortfall: float
+    portfolio_floor_binding: bool
+    total_rwa_post_floor: float
+
+
+@dataclass(frozen=True)
 class AggregatedResultBundle:
     """
     Final aggregated output from the output aggregator.
@@ -348,7 +381,8 @@ class AggregatedResultBundle:
         irb_results: Original IRB results (before floor)
         slotting_results: Original slotting results
         equity_results: Equity calculation results
-        floor_impact: Output floor impact analysis
+        floor_impact: Output floor impact analysis (per-exposure)
+        output_floor_summary: Portfolio-level output floor summary
         supporting_factor_impact: Supporting factor impact (CRR only)
         summary_by_class: RWA summarised by exposure class
         summary_by_approach: RWA summarised by approach
@@ -365,6 +399,7 @@ class AggregatedResultBundle:
     slotting_results: pl.LazyFrame | None = None
     equity_results: pl.LazyFrame | None = None
     floor_impact: pl.LazyFrame | None = None
+    output_floor_summary: OutputFloorSummary | None = None
     supporting_factor_impact: pl.LazyFrame | None = None
     summary_by_class: pl.LazyFrame | None = None
     summary_by_approach: pl.LazyFrame | None = None

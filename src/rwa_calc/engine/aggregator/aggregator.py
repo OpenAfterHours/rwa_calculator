@@ -93,11 +93,12 @@ class OutputAggregator:
         summary_by_class = generate_summary_by_class(post_crm_detailed)
         summary_by_approach = generate_summary_by_approach(post_crm_detailed)
 
-        # Apply output floor if enabled
+        # Apply portfolio-level output floor if enabled (Art. 92 para 2A)
         floor_impact = None
+        output_floor_summary = None
         if config.output_floor.enabled:
             floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
-            combined, floor_impact = apply_floor_with_impact(
+            combined, floor_impact, output_floor_summary = apply_floor_with_impact(
                 combined,
                 combined,  # SA-equivalent RW already joined by SA calculator
                 floor_pct,
@@ -121,6 +122,7 @@ class OutputAggregator:
             slotting_results=slotting_results,
             equity_results=equity_results,
             floor_impact=floor_impact,
+            output_floor_summary=output_floor_summary,
             supporting_factor_impact=supporting_factor_impact,
             summary_by_class=summary_by_class,
             summary_by_approach=summary_by_approach,

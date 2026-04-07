@@ -20,7 +20,9 @@ References:
 - CRR Art. 62(d): T2 credit cap (0.6% of IRB credit risk RWA)
 - CRR Art. 158(6), Table B: Expected loss rates for slotting exposures
 - CRR Art. 158-159: EL shortfall/excess treatment
+- CRR Art. 159(1): Pool B composition (provisions + AVA + other own funds reductions)
 - CRR Art. 159(3): Two-branch no-cross-offset rule
+- CRR Art. 34, Art. 105: Additional value adjustments (AVAs)
 """
 
 from __future__ import annotations
@@ -65,11 +67,14 @@ def _aggregate_by_default_status(
     rwa_col: str,
     has_el: bool,
     has_provisions: bool,
+    has_ava: bool,
+    has_other_ofr: bool,
 ) -> tuple[dict[str, float], dict[str, float]]:
     """Split EL aggregation into non-defaulted and defaulted pools.
 
     Returns two dicts (non_defaulted, defaulted) each with keys:
-    el_shortfall, el_excess, irb_rwa, expected_loss, provisions_allocated.
+    el_shortfall, el_excess, irb_rwa, expected_loss, provisions_allocated,
+    ava_amount, other_own_funds_reductions.
 
     When is_defaulted column is absent, all exposures are treated as
     non-defaulted (conservative: no defaulted excess to offset shortfall).
@@ -93,6 +98,12 @@ def _aggregate_by_default_status(
         agg_exprs.append(pl.col("expected_loss").sum().alias("expected_loss"))
     if has_provisions:
         agg_exprs.append(pl.col("provision_allocated").sum().alias("provisions_allocated"))
+    if has_ava:
+        agg_exprs.append(pl.col("ava_amount").sum().alias("ava_amount"))
+    if has_other_ofr:
+        agg_exprs.append(
+            pl.col("other_own_funds_reductions").sum().alias("other_own_funds_reductions")
+        )
 
     # Group by default status
     grouped = (
@@ -111,6 +122,8 @@ def _aggregate_by_default_status(
                 "irb_rwa": 0.0,
                 "expected_loss": 0.0,
                 "provisions_allocated": 0.0,
+                "ava_amount": 0.0,
+                "other_own_funds_reductions": 0.0,
             }
         row = filtered.row(0, named=True)
         return {
@@ -119,6 +132,10 @@ def _aggregate_by_default_status(
             "irb_rwa": float(row.get("irb_rwa") or 0.0),
             "expected_loss": float(row.get("expected_loss", 0.0) or 0.0),
             "provisions_allocated": float(row.get("provisions_allocated", 0.0) or 0.0),
+            "ava_amount": float(row.get("ava_amount", 0.0) or 0.0),
+            "other_own_funds_reductions": float(
+                row.get("other_own_funds_reductions", 0.0) or 0.0
+            ),
         }
 
     non_defaulted = _extract(grouped, False)
@@ -164,9 +181,13 @@ def compute_el_portfolio_summary(
 
     has_el = "expected_loss" in cols
     has_provisions = "provision_allocated" in cols
+    has_ava = "ava_amount" in cols
+    has_other_ofr = "other_own_funds_reductions" in cols
 
     # Split aggregation by default status for Art. 159(3)
-    non_def, def_pool = _aggregate_by_default_status(combined, rwa_col, has_el, has_provisions)
+    non_def, def_pool = _aggregate_by_default_status(
+        combined, rwa_col, has_el, has_provisions, has_ava, has_other_ofr
+    )
 
     # Pool-level shortfall/excess
     nd_shortfall = non_def["el_shortfall"]
@@ -180,6 +201,11 @@ def compute_el_portfolio_summary(
     total_irb_rwa = non_def["irb_rwa"] + def_pool["irb_rwa"]
     total_expected_loss = non_def["expected_loss"] + def_pool["expected_loss"]
     total_provisions = non_def["provisions_allocated"] + def_pool["provisions_allocated"]
+    total_ava = non_def["ava_amount"] + def_pool["ava_amount"]
+    total_other_ofr = (
+        non_def["other_own_funds_reductions"] + def_pool["other_own_funds_reductions"]
+    )
+    total_pool_b = total_provisions + total_ava + total_other_ofr
 
     # Art. 159(3) two-branch condition:
     # A > B (non-defaulted EL > non-defaulted provisions) AND
@@ -223,4 +249,7 @@ def compute_el_portfolio_summary(
         defaulted_el_shortfall=d_shortfall,
         defaulted_el_excess=d_excess,
         art_159_3_applies=art_159_3_applies,
+        total_ava_amount=total_ava,
+        total_other_own_funds_reductions=total_other_ofr,
+        total_pool_b=total_pool_b,
     )

@@ -286,7 +286,8 @@ class ELPortfolioSummary:
     and applies the T2 credit cap per CRR Art. 62(d).
 
     Key responsibilities:
-    - Sum per-exposure EL, provisions, shortfall, and excess
+    - Sum per-exposure EL, provisions, AVAs, other own funds reductions,
+      shortfall, and excess
     - Compute T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d))
     - Compute T2 credit (min of total excess and cap)
     - Compute CET1/T2 deduction split (50/50 per CRR Art. 159)
@@ -295,15 +296,25 @@ class ELPortfolioSummary:
       EL simultaneously, shortfall and excess are computed separately
       for each pool — defaulted excess cannot offset non-defaulted shortfall
 
+    Pool B per Art. 159(1) includes:
+    (a) General credit risk adjustments (GCRA)
+    (b) Specific credit risk adjustments (SCRA) for non-defaulted
+    (c) Additional value adjustments (AVAs per Art. 34)
+    (d) Other own funds reductions
+
     References:
     - CRR Art. 62(d): T2 credit cap for EL excess
     - CRR Art. 158: EL shortfall deduction
-    - CRR Art. 159: 50/50 CET1/T2 deduction split
+    - CRR Art. 159(1): Pool B composition
     - CRR Art. 159(3): Two-branch no-cross-offset rule
+    - CRR Art. 34, Art. 105: Additional value adjustments
 
     Attributes:
         total_expected_loss: Sum of expected loss across all IRB exposures
         total_provisions_allocated: Sum of provisions allocated to IRB exposures
+        total_ava_amount: Sum of AVAs (Art. 34) allocated to IRB exposures
+        total_other_own_funds_reductions: Sum of other own funds reductions
+        total_pool_b: Total Pool B (provisions + AVA + other own funds reductions)
         total_el_shortfall: Effective shortfall after Art. 159(3) rule
         total_el_excess: Effective excess after Art. 159(3) rule
         total_irb_rwa: Total IRB RWA (denominator for T2 cap)
@@ -332,6 +343,9 @@ class ELPortfolioSummary:
     defaulted_el_shortfall: float = 0.0
     defaulted_el_excess: float = 0.0
     art_159_3_applies: bool = False
+    total_ava_amount: float = 0.0
+    total_other_own_funds_reductions: float = 0.0
+    total_pool_b: float = 0.0
 
 
 @dataclass(frozen=True)

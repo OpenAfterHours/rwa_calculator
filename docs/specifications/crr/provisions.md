@@ -104,15 +104,22 @@ The comparison pool 'B' (provisions side) includes:
 - Additional value adjustments (AVAs per Art. 34)
 - Other own funds reductions
 
-!!! warning "AVAs Not Implemented"
-    The current implementation uses only `provision_allocated` as the offset against EL. AVAs (Art. 34) and other own funds reductions are not included, which **overstates EL shortfall** for banks with material AVA positions.
+!!! success "Pool B Complete (P1.83)"
+    All four Art. 159(1) Pool B components are now included in the EL comparison:
+    `pool_b = provision_allocated + ava_amount + other_own_funds_reductions`.
+    When `ava_amount` or `other_own_funds_reductions` columns are absent, they
+    default to 0.0 (backward compatible). The `ELPortfolioSummary` reports
+    `total_ava_amount`, `total_other_own_funds_reductions`, and `total_pool_b`.
 
 ### Art. 159(3) Two-Branch Comparison
 
 When non-defaulted EL exceeds non-defaulted provisions (A>B) AND defaulted provisions exceed defaulted EL (D>C) simultaneously, Art. 159(3) requires **separate computation** of the non-defaulted shortfall and defaulted excess. The defaulted excess must **not** offset the non-defaulted shortfall.
 
-!!! warning "Not Implemented"
-    The current implementation uses a single combined comparison (`sum(el_shortfall)` vs `sum(el_excess)`) across all exposures, which allows cross-subsidisation between defaulted and non-defaulted books.
+!!! success "Implemented (P1.81)"
+    Art. 159(3) two-branch rule is implemented. When the condition holds,
+    `effective_shortfall = non_defaulted_shortfall` and `effective_excess =
+    defaulted_excess` — no cross-pool netting. The `art_159_3_applies` flag
+    on `ELPortfolioSummary` indicates when the two-branch rule is triggered.
 
 ### Portfolio-Level Summary (ELPortfolioSummary)
 
@@ -120,8 +127,12 @@ The aggregator computes a portfolio-level `ELPortfolioSummary` with:
 
 | Field | Formula | Regulatory Reference |
 |-------|---------|---------------------|
-| `total_el_shortfall` | `sum(el_shortfall)` across all IRB exposures | CRR Art. 159 |
-| `total_el_excess` | `sum(el_excess)` across all IRB exposures | CRR Art. 62(d) |
+| `total_provisions_allocated` | `sum(provision_allocated)` across all IRB exposures | CRR Art. 159(1)(a-b) |
+| `total_ava_amount` | `sum(ava_amount)` across all IRB exposures | CRR Art. 159(1)(c), Art. 34 |
+| `total_other_own_funds_reductions` | `sum(other_own_funds_reductions)` across all IRB exposures | CRR Art. 159(1)(d) |
+| `total_pool_b` | `provisions + AVA + other_own_funds_reductions` | CRR Art. 159(1) |
+| `total_el_shortfall` | `sum(el_shortfall)` after Art. 159(3) rule | CRR Art. 159 |
+| `total_el_excess` | `sum(el_excess)` after Art. 159(3) rule | CRR Art. 62(d) |
 | `t2_credit_cap` | `total_irb_rwa × 0.006` (must use **un-floored** IRB RWA, not post-output-floor TREA) | CRR Art. 62(d) |
 | `t2_credit` | `min(total_el_excess, t2_credit_cap)` | CRR Art. 62(d) |
 | `cet1_deduction` | `total_el_shortfall × 0.5` | Art. 36(1)(d) |

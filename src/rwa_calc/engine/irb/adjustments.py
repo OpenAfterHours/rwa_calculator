@@ -273,21 +273,33 @@ def compute_el_shortfall_excess(lf: pl.LazyFrame) -> pl.LazyFrame:
     """
     Compute EL shortfall and excess for IRB exposures.
 
-    Compares expected loss to allocated provisions to determine
-    whether the bank has a shortfall (EL > provisions) or excess
-    (provisions > EL). Shortfall reduces CET1/T2; excess may be
+    Compares expected loss against Art. 159(1) Pool B to determine
+    whether the bank has a shortfall (EL > Pool B) or excess
+    (Pool B > EL). Shortfall reduces CET1/T2; excess may be
     added to T2 capital (subject to 0.6% IRB RWA cap).
+
+    Pool B per Art. 159(1) includes:
+        (a) General credit risk adjustments (GCRA)
+        (b) Specific credit risk adjustments (SCRA) for non-defaulted
+        (c) Additional value adjustments (AVAs per Art. 34)
+        (d) Other own funds reductions
+
+    Components (a) and (b) are captured via ``provision_allocated``.
+    Components (c) and (d) are captured via ``ava_amount`` and
+    ``other_own_funds_reductions`` respectively.
 
     Requires ``expected_loss`` to be computed first. If
     ``provision_allocated`` is absent (no provisions in the input),
     shortfall equals the full EL and excess is zero.
 
     Produces:
-        el_shortfall: max(0, expected_loss - provision_allocated)
-        el_excess:    max(0, provision_allocated - expected_loss)
+        el_shortfall: max(0, expected_loss - pool_b)
+        el_excess:    max(0, pool_b - expected_loss)
 
     References:
         CRR Art. 158-159: EL shortfall treatment
+        CRR Art. 159(1): Pool B composition (provisions + AVA + other)
+        CRR Art. 34, Art. 105: Additional value adjustments
         CRR Art. 62(d): Excess provisions as T2 capital (capped)
         CRE35.1-3: Basel 3.1 expected loss calculation
     """
@@ -311,9 +323,23 @@ def compute_el_shortfall_excess(lf: pl.LazyFrame) -> pl.LazyFrame:
         # No provisions resolved — full EL is shortfall
         prov = pl.lit(0.0)
 
+    # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
+    ava = (
+        pl.col("ava_amount").fill_null(0.0) if "ava_amount" in cols else pl.lit(0.0)
+    )
+    # Art. 159(1)(d): Other own funds reductions
+    other_ofr = (
+        pl.col("other_own_funds_reductions").fill_null(0.0)
+        if "other_own_funds_reductions" in cols
+        else pl.lit(0.0)
+    )
+
+    # Pool B = provisions + AVA + other own funds reductions
+    pool_b = prov + ava + other_ofr
+
     return lf.with_columns(
         [
-            pl.max_horizontal(pl.lit(0.0), el - prov).alias("el_shortfall"),
-            pl.max_horizontal(pl.lit(0.0), prov - el).alias("el_excess"),
+            pl.max_horizontal(pl.lit(0.0), el - pool_b).alias("el_shortfall"),
+            pl.max_horizontal(pl.lit(0.0), pool_b - el).alias("el_excess"),
         ]
     )

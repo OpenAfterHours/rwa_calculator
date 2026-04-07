@@ -1058,8 +1058,10 @@ CALCULATION_OUTPUT_SCHEMA = {
     # -------------------------------------------------------------------------
     "irb_expected_loss": pl.Float64,  # PD × LGD × EAD
     "provision_held": pl.Float64,  # Total provision amount
-    "el_shortfall": pl.Float64,  # max(0, EL - provision)
-    "el_excess": pl.Float64,  # max(0, provision - EL)
+    "ava_amount": pl.Float64,  # Additional value adjustments (Art. 34) — Pool B component
+    "other_own_funds_reductions": pl.Float64,  # Other own funds reductions — Pool B component
+    "el_shortfall": pl.Float64,  # max(0, EL - pool_b) where pool_b = prov + AVA + other
+    "el_excess": pl.Float64,  # max(0, pool_b - EL)
     # -------------------------------------------------------------------------
     # BASEL 3.1 ADJUSTMENTS
     # -------------------------------------------------------------------------

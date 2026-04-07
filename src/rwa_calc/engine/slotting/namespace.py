@@ -243,12 +243,15 @@ class SlottingLazyFrame:
     def compute_el_shortfall_excess(self) -> pl.LazyFrame:
         """Compute EL shortfall and excess for slotting exposures.
 
-        Compares expected loss to allocated provisions. Same logic as IRB
+        Compares expected loss against Art. 159(1) Pool B. Same logic as IRB
         (CRR Art. 158-159) but using slotting-specific EL rates.
 
+        Pool B per Art. 159(1) includes provisions (a+b), AVAs (c), and
+        other own funds reductions (d).
+
         Produces:
-            el_shortfall: max(0, expected_loss - provision_allocated)
-            el_excess:    max(0, provision_allocated - expected_loss)
+            el_shortfall: max(0, expected_loss - pool_b)
+            el_excess:    max(0, pool_b - expected_loss)
         """
         schema = self._lf.collect_schema()
         cols = schema.names()
@@ -263,10 +266,19 @@ class SlottingLazyFrame:
         prov = (
             col("provision_allocated").fill_null(0.0) if "provision_allocated" in cols else lit(0.0)
         )
+        # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
+        ava = col("ava_amount").fill_null(0.0) if "ava_amount" in cols else lit(0.0)
+        # Art. 159(1)(d): Other own funds reductions
+        other_ofr = (
+            col("other_own_funds_reductions").fill_null(0.0)
+            if "other_own_funds_reductions" in cols
+            else lit(0.0)
+        )
+        pool_b = prov + ava + other_ofr
 
         return self._lf.with_columns(
-            el_shortfall=pl.max_horizontal(lit(0.0), el - prov),
-            el_excess=pl.max_horizontal(lit(0.0), prov - el),
+            el_shortfall=pl.max_horizontal(lit(0.0), el - pool_b),
+            el_excess=pl.max_horizontal(lit(0.0), pool_b - el),
         )
 
     def apply_all(self, config: CalculationConfig) -> pl.LazyFrame:

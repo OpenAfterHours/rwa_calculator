@@ -708,6 +708,22 @@ class CRMProcessor:
                 pl.lit(0.0).alias("provision_deducted"),
             ]
 
+        # Art. 159(1) Pool B additional components: AVAs (Art. 34) and other
+        # own funds reductions.  Preserve if already on the frame; default 0.0.
+        col_names = schema.names()
+        pool_b_cols = [
+            (
+                pl.col("ava_amount").fill_null(0.0)
+                if "ava_amount" in col_names
+                else pl.lit(0.0).alias("ava_amount")
+            ),
+            (
+                pl.col("other_own_funds_reductions").fill_null(0.0)
+                if "other_own_funds_reductions" in col_names
+                else pl.lit(0.0).alias("other_own_funds_reductions")
+            ),
+        ]
+
         return exposures.with_columns(
             [
                 # Pre-CRM attributes for regulatory reporting
@@ -728,6 +744,8 @@ class CRMProcessor:
                 pl.lit(None).cast(pl.Float64).alias("substitute_rw"),
                 # Provision-related columns
                 *provision_cols,
+                # Art. 159(1) Pool B additional components
+                *pool_b_cols,
                 # LGD for IRB (may be adjusted by collateral)
                 pl.col("lgd").fill_null(0.45).alias("lgd_pre_crm"),
                 pl.col("lgd").fill_null(0.45).alias("lgd_post_crm"),

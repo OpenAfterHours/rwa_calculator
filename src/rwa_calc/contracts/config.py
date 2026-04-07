@@ -399,8 +399,15 @@ class OutputFloorConfig:
         gcra_amount: float = 0.0,
         sa_t2_credit: float = 0.0,
         art_40_deductions: float = 0.0,
+        skip_transitional: bool = False,
     ) -> OutputFloorConfig:
         """Basel 3.1 output floor configuration with transitional period.
+
+        Art. 92 para 5 optionality:
+            The transitional floor rates (60%/65%/70%) are *permissive*, not
+            mandatory. Institutions may voluntarily apply the full 72.5% floor
+            from day one by passing ``skip_transitional=True``.  When skipped,
+            ``get_floor_percentage()`` returns 72.5% regardless of reporting date.
 
         Args:
             institution_type: Entity type per Art. 92 para 2A. When set, floor
@@ -411,20 +418,27 @@ class OutputFloorConfig:
             gcra_amount: General credit risk adjustments for OF-ADJ (Art. 92 para 2A).
             sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
             art_40_deductions: Art. 40 additional CET1 deductions (OF-ADJ input).
+            skip_transitional: When True, bypass the PRA transitional schedule
+                and apply the full 72.5% floor immediately (Art. 92 para 5).
         """
         # PRA PS1/26 Art. 92(5) transitional schedule
         # NOTE: PRA compressed the BCBS 6-year phase-in to 4 years (2027-2030).
-        transitional_schedule = {
-            date(2027, 1, 1): Decimal("0.60"),  # 60%
-            date(2028, 1, 1): Decimal("0.65"),  # 65%
-            date(2029, 1, 1): Decimal("0.70"),  # 70%
-            date(2030, 1, 1): Decimal("0.725"),  # 72.5% (fully phased)
-        }
+        # Art. 92 para 5: institutions "may apply" these rates — they are
+        # permissive.  Firms can voluntarily use 72.5% from day one.
+        if skip_transitional:
+            transitional_schedule: dict[date, Decimal] = {}
+        else:
+            transitional_schedule = {
+                date(2027, 1, 1): Decimal("0.60"),  # 60%
+                date(2028, 1, 1): Decimal("0.65"),  # 65%
+                date(2029, 1, 1): Decimal("0.70"),  # 70%
+                date(2030, 1, 1): Decimal("0.725"),  # 72.5% (fully phased)
+            }
         return cls(
             enabled=True,
             floor_percentage=Decimal("0.725"),
-            transitional_start_date=date(2027, 1, 1),
-            transitional_end_date=date(2030, 1, 1),
+            transitional_start_date=None if skip_transitional else date(2027, 1, 1),
+            transitional_end_date=None if skip_transitional else date(2030, 1, 1),
             transitional_floor_schedule=transitional_schedule,
             institution_type=institution_type,
             reporting_basis=reporting_basis,
@@ -872,6 +886,7 @@ class CalculationConfig:
         gcra_amount: float = 0.0,
         sa_t2_credit: float = 0.0,
         art_40_deductions: float = 0.0,
+        skip_transitional_floor: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         collect_engine: PolarsEngine = "cpu",
@@ -906,6 +921,10 @@ class CalculationConfig:
                 Capped at 1.25% of S-TREA.
             sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
             art_40_deductions: Art. 40 additional CET1 deductions (OF-ADJ input).
+            skip_transitional_floor: When True, bypass the PRA 4-year transitional
+                schedule (60%/65%/70%/72.5%) and apply the full 72.5% floor from
+                day one. Art. 92 para 5 says institutions "may apply" the transitional
+                rates — they are permissive, not mandatory.
             collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -925,6 +944,7 @@ class CalculationConfig:
                 gcra_amount=gcra_amount,
                 sa_t2_credit=sa_t2_credit,
                 art_40_deductions=art_40_deductions,
+                skip_transitional=skip_transitional_floor,
             ),
             post_model_adjustments=(
                 post_model_adjustments or PostModelAdjustmentConfig.basel_3_1()

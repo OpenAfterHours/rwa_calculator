@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.61 CIU look-through leverage adjustment + transitional floor fix implemented)
-**Current version:** 0.1.124 | **Test suite:** ~3,644 collected (~3,611 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
+**Last updated:** 2026-04-07 (P1.85 PMA sequencing + EL monotonicity fix implemented)
+**Current version:** 0.1.130 | **Test suite:** ~3,665 collected (~3,625 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.9a fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed, P1.83 Art. 159(1) Pool B AVAs now fixed, P1.9a OF-ADJ now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
@@ -1043,6 +1043,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `engine/irb/formulas.py:119-168` (both floor functions), `engine/irb/namespace.py:322-330,554-570` (callers pass has_exposure_class)
 - **Spec ref:** PRA PS1/26 Art. 161(5) (corporate = 25%), Art. 164(4)(b)(i) (retail QRRE = 50%)
 - **Tests:** 4 new unit tests in `test_basel31_engine.py`: corporate subordinated 25% with collateral_type, corporate subordinated 25% no collateral_type, retail QRRE subordinated 50% with exposure_class, corporate subordinated via namespace. All pass. Test count: 2535 (was 2531).
+
+### P1.85 PMA adjustment sequencing wrong + EL monotonicity missing (Art. 153(5A)/154(4A)/158(6A))
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** Two bugs in `apply_post_model_adjustments`:
+  - **(1) PMA sequencing (capital understatement):** General PMA and unrecognised exposure scalars were applied to pre-mortgage-floor RWEA instead of post-mortgage-floor RWEA. Art. 154(4A) requires: (b) mortgage RW floor first → (a) PMA scalars on resulting RWEA. For a mortgage with model RW=5%, floor=10%, PMA=10%: old code computed PMA as 10% × pre-floor RWEA; correct is 10% × post-floor RWEA (double the floor-affected amount). Fix: sequential application — mortgage floor applied to `rwa` first, then PMA/unrecognised scalars computed from updated `rwa`.
+  - **(2) EL monotonicity (Art. 158(6A)):** No guard prevented negative `pma_el_scalar` from decreasing expected loss. Art. 158(6A) requires PMA EL adjustments can only increase EL. Fix: (a) `PostModelAdjustmentConfig.__post_init__` rejects negative scalars (pma_rwa_scalar, pma_el_scalar, unrecognised_exposure_scalar, mortgage_rw_floor), (b) calculation floors `post_model_adjustment_el` at 0 as defense-in-depth.
+- **File:Line:** `engine/irb/adjustments.py:137-282` (sequencing fix + EL floor), `contracts/config.py:483-534` (validation + docstring)
+- **Spec ref:** PRA PS1/26 Art. 153(5A), Art. 154(4A)(a)-(b), Art. 158(6A)
+- **Tests:** 14 new unit tests in `test_irb_post_model_adjustments.py`: 6 sequencing tests (TestPMASequencing: post-floor PMA base, post-floor unrecognised base, non-binding floor, corporate no floor, mixed batch, pre-adjustment record), 8 EL monotonicity tests (TestPMAELMonotonicity: negative scalar rejection ×4, zero allowed, floor in calculation, positive increase, CRR defaults). 1 existing test updated (test_all_adjustments_combined: expected values corrected for post-floor base). Test count: 3625 passed (was 3611).
 
 ---
 

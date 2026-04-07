@@ -489,18 +489,46 @@ class PostModelAdjustmentConfig:
     These adjustments increase RWEA and EL to compensate for model limitations.
 
     Components:
-    - General PMAs: Firm-level scalar applied to modelled RWEA/EL (supervisory add-on)
+    - General PMAs: Firm-level scalar applied to post-floor RWEA/EL (supervisory add-on)
     - Mortgage RW floor: Minimum risk weight for residential mortgage IRB exposures
     - Unrecognised exposure adjustment: Scalar for exposures not fully captured by model
+
+    Adjustment sequencing per Art. 154(4A):
+        (b) Mortgage RW floor applied first — establishes post-floor RWEA base
+        (a) General PMA and unrecognised scalars applied to post-floor RWEA
+
+    Art. 158(6A): PMA EL adjustments can only increase EL, never decrease.
+    Negative scalars are rejected at construction time.
 
     CRR has no post-model adjustment framework.
     """
 
     enabled: bool = False
-    pma_rwa_scalar: Decimal = Decimal("0.0")  # Additive % of base RWEA (e.g., 0.05 = 5%)
-    pma_el_scalar: Decimal = Decimal("0.0")  # Additive % of base EL
-    mortgage_rw_floor: Decimal = Decimal("0.0")  # Min RW for residential mortgages (e.g., 0.15)
-    unrecognised_exposure_scalar: Decimal = Decimal("0.0")  # Additive % of base RWEA
+    pma_rwa_scalar: Decimal = Decimal("0.0")  # Additive % of post-floor RWEA (e.g., 0.05 = 5%)
+    pma_el_scalar: Decimal = Decimal("0.0")  # Additive % of base EL (must be >= 0)
+    mortgage_rw_floor: Decimal = Decimal("0.0")  # Min RW for residential mortgages (e.g., 0.10)
+    unrecognised_exposure_scalar: Decimal = Decimal("0.0")  # Additive % of post-floor RWEA
+
+    def __post_init__(self) -> None:
+        """Validate PMA scalars per Art. 158(6A) — PMAs can only increase, not decrease."""
+        if self.pma_rwa_scalar < 0:
+            msg = f"pma_rwa_scalar must be >= 0 (got {self.pma_rwa_scalar})"
+            raise ValueError(msg)
+        if self.pma_el_scalar < 0:
+            msg = (
+                f"pma_el_scalar must be >= 0 per Art. 158(6A) — PMAs cannot decrease EL "
+                f"(got {self.pma_el_scalar})"
+            )
+            raise ValueError(msg)
+        if self.unrecognised_exposure_scalar < 0:
+            msg = (
+                f"unrecognised_exposure_scalar must be >= 0 "
+                f"(got {self.unrecognised_exposure_scalar})"
+            )
+            raise ValueError(msg)
+        if self.mortgage_rw_floor < 0:
+            msg = f"mortgage_rw_floor must be >= 0 (got {self.mortgage_rw_floor})"
+            raise ValueError(msg)
 
     @classmethod
     def crr(cls) -> PostModelAdjustmentConfig:

@@ -141,11 +141,20 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
     PRA PS9/24 Art. 153(5A), 154(4A), 158(6A) require firms to apply
     adjustments for known model deficiencies. Three RWEA components:
 
-    1. General PMA: scalar add-on to base RWEA (supervisory requirement)
-    2. Mortgage RW floor: min risk weight for residential mortgage exposures
+    1. Mortgage RW floor: min risk weight for residential mortgage exposures
+    2. General PMA: scalar add-on to post-floor RWEA (supervisory requirement)
     3. Unrecognised exposure: scalar for model coverage gaps
 
-    EL adjustment mirrors the general PMA scalar.
+    Adjustment sequencing per Art. 154(4A):
+        (b) Mortgage RW floor applied first — establishes post-floor RWEA base
+        (a) General PMA and unrecognised scalars applied to post-floor RWEA
+
+    This ordering matters: PMA scalars must capture the mortgage floor
+    increase in their base, otherwise capital is understated for
+    exposures that hit the floor.
+
+    EL adjustment mirrors the general PMA scalar, floored at zero
+    per Art. 158(6A) — PMAs cannot decrease expected loss.
 
     Under CRR, no adjustments are applied (returns frame unchanged).
 
@@ -155,7 +164,7 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
         mortgage_rw_floor_adjustment: RWEA increase from mortgage floor
         unrecognised_exposure_adjustment: RWEA increase for unrecognised exposures
         el_pre_adjustment: EL before PMAs
-        post_model_adjustment_el: General PMA EL add-on
+        post_model_adjustment_el: General PMA EL add-on (floored at 0)
         el_after_adjustment: EL after all PMAs
 
     Args:
@@ -214,37 +223,48 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
     else:
         mortgage_adj_expr = pl.lit(0.0)
 
-    # General PMA and unrecognised exposure: scalar add-ons to base RWEA
+    # EL column detection
+    el_col = "expected_loss" if "expected_loss" in cols else None
+
+    # Step 1: Record pre-adjustment values and apply mortgage floor
+    # Art. 154(4A)(b) mortgage floor is applied FIRST to establish the post-floor RWEA base
+    lf = lf.with_columns(
+        [
+            pl.col("rwa").alias("rwa_pre_adjustments"),
+            mortgage_adj_expr.alias("mortgage_rw_floor_adjustment"),
+        ]
+    )
+
+    # Apply mortgage floor to RWA — creates the post-floor RWEA base
+    lf = lf.with_columns(
+        (pl.col("rwa") + pl.col("mortgage_rw_floor_adjustment")).alias("rwa")
+    )
+
+    # Step 2: Apply PMA and unrecognised scalars to POST-FLOOR RWEA
+    # Art. 154(4A)(a) / Art. 153(5A): scalars multiply the RWEA that already includes
+    # the mortgage floor increase, so the floor portion is also captured in the PMA base.
     general_pma_expr = pl.col("rwa") * pma_rwa_scalar
     unrecognised_expr = pl.col("rwa") * unrecognised_scalar
 
-    # EL adjustment
-    el_col = "expected_loss" if "expected_loss" in cols else None
-    el_pma_expr = pl.col(el_col) * pma_el_scalar if el_col else pl.lit(0.0)
-
     lf = lf.with_columns(
         [
-            # Record pre-adjustment values
-            pl.col("rwa").alias("rwa_pre_adjustments"),
-            # RWEA adjustments
             general_pma_expr.alias("post_model_adjustment_rwa"),
-            mortgage_adj_expr.alias("mortgage_rw_floor_adjustment"),
             unrecognised_expr.alias("unrecognised_exposure_adjustment"),
         ]
     )
 
-    # Apply adjustments to RWA
+    # Apply PMA and unrecognised adjustments to RWA
     lf = lf.with_columns(
         (
             pl.col("rwa")
             + pl.col("post_model_adjustment_rwa")
-            + pl.col("mortgage_rw_floor_adjustment")
             + pl.col("unrecognised_exposure_adjustment")
         ).alias("rwa")
     )
 
-    # EL adjustments
+    # Step 3: EL adjustments — Art. 158(6A) requires PMAs cannot decrease EL
     if el_col:
+        el_pma_expr = pl.max_horizontal(pl.lit(0.0), pl.col(el_col) * pma_el_scalar)
         lf = lf.with_columns(
             [
                 pl.col(el_col).alias("el_pre_adjustment"),

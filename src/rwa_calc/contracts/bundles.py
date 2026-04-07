@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import polars as pl
 
+    from rwa_calc.contracts.errors import CalculationError
+
 
 @dataclass(frozen=True)
 class RawDataBundle:
@@ -196,7 +198,7 @@ class CRMAdjustedBundle:
     ciu_holdings: pl.LazyFrame | None = None
     crm_audit: pl.LazyFrame | None = None
     collateral_allocation: pl.LazyFrame | None = None
-    crm_errors: list = field(default_factory=list)
+    crm_errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

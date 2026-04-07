@@ -408,36 +408,6 @@ class PipelineOrchestrator:
             )
             return None
 
-    def _run_crm_processor(
-        self,
-        data: ClassifiedExposuresBundle,
-        config: CalculationConfig,
-    ) -> CRMAdjustedBundle | None:
-        """Run CRM processing stage."""
-        try:
-            result = self._crm_processor.get_crm_adjusted_bundle(data, config)
-            # Accumulate CRM errors
-            if result.crm_errors:
-                for error in result.crm_errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="crm_processor",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                            context=getattr(error, "context", {}),
-                        )
-                    )
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="crm_processor",
-                    error_type="crm_error",
-                    message=str(e),
-                )
-            )
-            return None
-
     def _run_sa_calculator(
         self,
         data: CRMAdjustedBundle,
@@ -542,9 +512,8 @@ class PipelineOrchestrator:
                     self._errors.append(
                         PipelineError(
                             stage="crm_processor",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                            context=getattr(error, "context", {}),
+                            error_type=error.code,
+                            message=error.message,
                         )
                     )
             return result

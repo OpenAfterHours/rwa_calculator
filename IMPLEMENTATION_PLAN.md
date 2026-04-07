@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P6.18 CRM protocol gap fixed, P4.16 spec corrections complete)
-**Current version:** 0.1.131 | **Test suite:** ~3,666 collected (~3,626 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.9a, P6.18 fixed.
+**Last updated:** 2026-04-07 (P6.18, P6.19, P6.17 fixed, P4.16 spec corrections complete)
+**Current version:** 0.1.131 | **Test suite:** ~3,680 collected (~3,640 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.9a, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -668,7 +668,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 ### P6.1 Unparameterized `list` types in bundles and protocols
 - **Status:** [~] Weakens type safety
-- **Impact:** 12 bare `list` fields in `contracts/bundles.py` should be `list[CalculationError]`.
+- **Impact:** 11 bare `list` fields in `contracts/bundles.py` should be `list[CalculationError]` (one fixed: CRMAdjustedBundle.crm_errors now typed as list[CalculationError] per P6.19).
 - **Fix:** Add `CalculationError` type parameter to all error list fields.
 
 ### P6.2 Missing exports from `contracts/__init__.py` and `domain/__init__.py`
@@ -763,11 +763,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for invalid values in these columns being caught by validation.
 
 ### P6.17 Pipeline _run_crm_processor() is dead code
-- **Status:** [ ] Not started
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
 - **Impact:** `pipeline.py` contains `_run_crm_processor()` which is never called -- the pipeline uses a different CRM invocation path. Dead code creates maintenance burden and confusion.
 - **File:Line:** `engine/pipeline.py` (_run_crm_processor function)
 - **Fix:** Remove the dead function. Verify no tests reference it.
 - **Tests needed:** Verify pipeline tests pass after removal.
+- **Description:** Dead _run_crm_processor() method removed from pipeline.py. Test updated to use _run_crm_processor_unified() instead.
 
 ### P6.18 get_crm_unified_bundle not declared in CRMProcessorProtocol
 - **Status:** [x] Complete
@@ -776,11 +778,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `contracts/protocols.py:184-202` (protocol method), `tests/contracts/test_protocols.py:79-84` (stub), `tests/contracts/test_protocols.py:174-182` (test)
 
 ### P6.19 `apply_crm()` silently discards CRMErrors
-- **Status:** [ ] Not started
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
 - **Impact:** `engine/crm/processor.py:340-343` returns `LazyFrameResult(frame=..., errors=[])` with a comment about needing conversion from `CRMError` to `CalculationError`. Any CRM errors accumulated in the `errors: list[CRMError]` list are silently dropped. This means CRM data quality issues (ineligible collateral, missing fields, constraint violations) are invisible to callers using the `apply_crm()` interface. The `get_crm_unified_bundle` path may preserve errors differently.
 - **File:Line:** `engine/crm/processor.py:340-343`
 - **Fix:** Convert `CRMError` instances to `CalculationError` and include in the returned result's errors list. Alternatively, use `CalculationError` directly in the CRM module.
 - **Tests needed:** Unit test verifying CRM errors propagate to callers.
+- **Description:** CRMError class removed. CRM processor now uses CalculationError (via crm_warning() factory) directly. apply_crm() propagates errors from CRMAdjustedBundle.crm_errors. Error emissions added for: collateral data with missing required columns (CRM001), guarantee data with missing required columns (CRM005), guarantee data with missing counterparty lookup (CRM005). CRMAdjustedBundle.crm_errors typed as list[CalculationError]. Pipeline getattr defensive access replaced with direct attribute access. 14 new tests in tests/unit/crm/test_crm_error_propagation.py.
 
 ### P6.20 `collateral_allocation` always None in CRM output bundles
 - **Status:** [ ] Not started

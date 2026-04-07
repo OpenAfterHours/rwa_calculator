@@ -499,20 +499,21 @@ class EquityCalculator:
         """
         Apply Basel 3.1 PRA PS1/26 Art. 133 SA equity risk weights.
 
-        Risk weights:
-        - Central bank: 0%  (Art. 133(6))
-        - Government-supported (legislative programme): 100%
-        - Speculative / higher risk: 400%  (Art. 133(4))
-        - All other standard equity: 250%  (Art. 133(3))
-        - CIU fallback: 250%  (Art. 132(2) under B31)
-
-        Note: Subordinated debt / non-equity own funds = 150% (Art. 133(5))
-        requires EquityType.SUBORDINATED_DEBT — not yet implemented.
+        Risk weights (in priority order per classification decision tree):
+        1. Central bank: 0%  (Art. 133(6))
+        2. Subordinated debt / non-equity own funds: 150%  (Art. 133(1))
+        3. Speculative / higher risk: 400%  (Art. 133(4))
+        4. Government-supported (legislative programme): 100%
+        5. CIU: approach-dependent  (Art. 132-132C)
+        6. All other standard equity: 250%  (Art. 133(3))
         """
         return exposures.with_columns(
             [
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
                 .then(pl.lit(0.00))  # Art. 133(6): 0%
+                # Art. 133(1): subordinated debt / non-equity own funds = 150%
+                .when(pl.col("equity_type").str.to_lowercase() == "subordinated_debt")
+                .then(pl.lit(1.50))  # Art. 133(1): 150%
                 .when(pl.col("is_speculative") == True)  # noqa: E712
                 .then(pl.lit(4.00))  # Art. 133(4): 400% higher risk
                 .when(pl.col("equity_type").str.to_lowercase() == "speculative")
@@ -622,7 +623,24 @@ class EquityCalculator:
             else pl.lit(False)
         )
 
-        transitional_rw = pl.when(is_hr).then(pl.lit(float(hr_rw))).otherwise(pl.lit(float(std_rw)))
+        # PRA Rule 4.3: transitional does NOT apply to legislative equity
+        # (always 100%) or subordinated debt (always 150%)
+        eq_type_lower = pl.col("equity_type").str.to_lowercase()
+        is_excluded = (
+            (eq_type_lower == "central_bank")
+            | (eq_type_lower == "government_supported")
+            | (eq_type_lower == "subordinated_debt")
+        )
+        if "is_government_supported" in schema.names():
+            is_excluded = is_excluded | pl.col("is_government_supported").fill_null(False)
+
+        transitional_rw = (
+            pl.when(is_excluded)
+            .then(pl.lit(0.0))  # No floor for excluded types
+            .when(is_hr)
+            .then(pl.lit(float(hr_rw)))
+            .otherwise(pl.lit(float(std_rw)))
+        )
 
         return exposures.with_columns(
             pl.max_horizontal(pl.col("risk_weight"), transitional_rw).alias("risk_weight"),

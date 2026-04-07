@@ -436,6 +436,9 @@ class EquityType(StrEnum):
     PRIVATE_EQUITY_DIVERSIFIED = "private_equity_diversified"
     """PE in diversified portfolio - 100% CRR SA / 250% B31 SA / 190% IRB Simple"""
 
+    SUBORDINATED_DEBT = "subordinated_debt"
+    """Subordinated debt / non-equity own funds - 100% CRR SA / 150% B31 SA (Art. 133(1))"""
+
     CIU = "ciu"
     """Collective investment undertakings - 150% CRR SA (Art. 132(2)) / 250% B31 SA"""
 

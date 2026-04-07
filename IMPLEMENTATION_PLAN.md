@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.8 LGD floor immovable RE routing fixed)
-**Current version:** 0.1.111 | **Test suite:** ~3,226 collected (~3,193 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.59 subordinated debt equity + transitional floor exclusion)
+**Current version:** 0.1.112 | **Test suite:** ~3,257 collected (~3,224 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -50,7 +50,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 ### P1.42 Basel 3.1 equity SA weights wrong -- listed equity gets 100% instead of 250%
 - **Status:** [x] Complete
-- **Impact:** B31 SA equity weights now implemented with framework branching in `_apply_equity_weights_sa` → `_apply_b31_equity_weights_sa`. New data table at `data/tables/b31_equity_rw.py`. Weights applied: listed/exchange-traded = 250%, speculative unlisted = 400%, government-supported = 100%, CIU fallback = 250%. Note: subordinated debt (150%) is deferred pending `EquityType.SUBORDINATED_DEBT` enum addition (see P1.59).
+- **Impact:** B31 SA equity weights now implemented with framework branching in `_apply_equity_weights_sa` → `_apply_b31_equity_weights_sa`. New data table at `data/tables/b31_equity_rw.py`. Weights applied: listed/exchange-traded = 250%, speculative unlisted = 400%, government-supported = 100%, CIU fallback = 250%. Subordinated debt (150%) implemented in P1.59.
 - **File:Line:** `engine/equity/calculator.py`, `data/tables/b31_equity_rw.py`
 - **Spec ref:** PRA PS1/26 Art. 133(3)-(5)
 - **Fixed:** 2026-04-06
@@ -689,13 +689,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 24 new unit tests: 6 data table/constant tests, 10 CRR calculator tests, 8 B31 calculator tests. All pass. Test count: 1979 unit (was 1955).
 - **Limitation:** Repo-style transactions (Art. 134(5), asset RW) and nth-to-default credit derivatives (Art. 134(5), Art. 266-270) not implemented — these require underlying asset risk weight lookup which is architecturally non-trivial.
 
-### P1.59 IRB_SIMPLE_EQUITY_RISK_WEIGHTS exported under B31 config
-- **Status:** [ ] Not started (deferred)
-- **Impact:** Under Basel 3.1, equity exposures must use SA only (Art. 147A removes IRB for equity). The IRB Simple equity risk weight table (`crr_equity_rw.py`) is still exported and available under B31 configuration. While the equity calculator does not invoke it for B31 (P1.42 now implements B31 SA weights), the presence of the export is misleading and could lead to incorrect usage. Additionally, the `EquityType.SUBORDINATED_DEBT` enum member needed for the 150% subordinated debt weight (Art. 133(5)) is not yet added -- deferred from P1.42.
-- **File:Line:** `data/tables/crr_equity_rw.py`, `contracts/config.py`
-- **Spec ref:** PRA PS1/26 Art. 147A, Art. 133(5)
-- **Fix:** Gate the IRB_SIMPLE_EQUITY_RISK_WEIGHTS export behind a CRR-only check, or remove from B31 config namespace. Add a CalculationError if IRB equity is attempted under B31. Add `EquityType.SUBORDINATED_DEBT` enum member and wire 150% weight.
-- **Tests needed:** Unit test that B31 config does not expose IRB equity weights. Unit test for subordinated debt 150% RW.
+### P1.59 EquityType.SUBORDINATED_DEBT + B31 150% weight + transitional floor exclusion
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** Three changes implemented:
+  - **(a) EquityType.SUBORDINATED_DEBT enum:** New member added to `EquityType` enum in `domain/enums.py`. Added to all three risk weight tables: B31 SA (150%, Art. 133(1)), CRR SA (100%, Art. 133(2) flat), CRR IRB Simple (370%, OTHER category). Added to `VALID_EQUITY_TYPES` in `data/schemas.py`. Both dict constants and DataFrame generators updated.
+  - **(b) B31 equity calculator wiring:** `_apply_b31_equity_weights_sa` now has subordinated_debt branch at priority 2 (after central_bank, before speculative) → 150%. CRR path unchanged (100% covered by `.otherwise(1.00)`). IRB Simple path unchanged (370% covered by `.otherwise(3.70)`).
+  - **(c) Transitional floor exclusion (PRA Rule 4.3):** `_apply_transitional_floor` now excludes central_bank, government_supported, and subordinated_debt from the transitional risk weight floor. Previously, government_supported (100%) would have been raised to 160% in 2027 — this was a pre-existing bug. Subordinated debt (150%) would also have been incorrectly raised. The exclusion uses an `is_excluded` boolean expression that checks `equity_type` and `is_government_supported` flag.
+- **File:Line:** `domain/enums.py` (EquityType.SUBORDINATED_DEBT), `data/tables/b31_equity_rw.py` (B31_SA_EQUITY_RISK_WEIGHTS), `data/tables/crr_equity_rw.py` (SA + IRB_SIMPLE dicts), `engine/equity/calculator.py` (_apply_b31_equity_weights_sa + _apply_transitional_floor), `data/schemas.py` (VALID_EQUITY_TYPES)
+- **Spec ref:** PRA PS1/26 Art. 133(1), PRA Rules 4.1-4.3
+- **Tests:** 31 new unit tests in `tests/unit/test_equity_subordinated_debt.py`: 11 data table tests (B31/CRR/IRB constants + lookups + DataFrames + coverage), 6 B31 calculator tests (150% weight, RWA, priority over speculative/gov, regression), 1 CRR calculator test (100% flat), 9 transitional floor exclusion tests (sub debt 2027/2028/2029, gov 2027/2029, central bank 2027, listed still floored, speculative still floored, post-transitional), 3 enum tests (value, count=11, VALID_EQUITY_TYPES=11), 1 mixed batch test (4 equity types). 2 existing tests updated (CRR equity table row count 10→11). All 3,224 tests pass (was 3,193). Test count: 3,224 passed, 33 skipped.
 
 ### P1.60 No B31 FIRB LGD DataFrame generator
 - **Status:** [ ] Not started
@@ -1468,7 +1471,7 @@ These items are verified complete as of 0.1.64. Items with **[!]** have known ga
 - [x] F-IRB calculation (supervisory LGD, PD floors, correlation, maturity adjustment, FI scalar)
 - [x] A-IRB calculation (own LGD/CCF, LGD floors, post-model adjustments; mortgage RW floor 10% -- see P1.33 [fixed])
 - [x] Slotting (CRR 4 tables + Basel 3.1 3 tables + subgrades)
-- [x] **[!]** Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback 250%; CIU look-through/mandate partial -- see P1.61; B31 equity SA weights implemented -- see P1.42 [fixed]; transitional floor applied in pipeline -- see P1.43 [fixed]; IRB equity table still exported under B31 -- see P1.59)
+- [x] **[!]** Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback 250%; CIU look-through/mandate partial -- see P1.61; B31 equity SA weights implemented -- see P1.42 [fixed]; transitional floor applied in pipeline -- see P1.43 [fixed]; subordinated debt 150% + transitional floor exclusion -- P1.59 [fixed])
 - [x] **[!]** CRM (collateral haircuts CRR 3-band + Basel 3.1 5-band, FX mismatch, maturity mismatch, multi-level allocation, guarantee substitution, netting, provisions; gold haircut wrong -- P1.73; LGD* formula doesn't blend -- P1.75; P1.77 sequential fill fixed; P1.70 per-type OC threshold fixed; see also P1.7, P1.11, P1.30, P1.39-P1.41, P1.56)
 - [x] Basel 3.1 parameter substitution (CRE22.70-85) -- including EL adjustment for guaranteed portion
 - [x] Double default (CRR Art. 153(3), Art. 202-203)

@@ -34,6 +34,7 @@ from rwa_calc.domain.enums import EquityType
 
 B31_SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.CENTRAL_BANK: Decimal("0.00"),  # Art. 133(6): 0%
+    EquityType.SUBORDINATED_DEBT: Decimal("1.50"),  # Art. 133(1): 150%
     EquityType.LISTED: Decimal("2.50"),  # Art. 133(3): 250% standard
     EquityType.EXCHANGE_TRADED: Decimal("2.50"),  # Art. 133(3): 250% standard
     EquityType.GOVERNMENT_SUPPORTED: Decimal("1.00"),  # Legislative programme: 100%
@@ -44,8 +45,6 @@ B31_SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.CIU: Decimal("2.50"),  # Art. 132(2): 250% fallback (B31)
     EquityType.OTHER: Decimal("2.50"),  # Art. 133(3): 250% standard
 }
-# Note: Subordinated debt / non-equity own funds (Art. 133(5) = 150%) requires
-# a new EquityType.SUBORDINATED_DEBT enum member — tracked as future work.
 
 
 # =============================================================================

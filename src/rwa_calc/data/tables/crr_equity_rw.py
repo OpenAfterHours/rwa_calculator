@@ -37,6 +37,7 @@ SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     # Art. 133(2): "Equity exposures shall be assigned a risk weight of 100%"
     # Only exceptions: Art. 48(4) -> 250%, Art. 89(3) -> 1250%, Art. 128 -> 150%
     EquityType.CENTRAL_BANK: Decimal("0.00"),  # Sovereign treatment
+    EquityType.SUBORDINATED_DEBT: Decimal("1.00"),  # Art. 133(2) flat 100% under CRR
     EquityType.LISTED: Decimal("1.00"),
     EquityType.EXCHANGE_TRADED: Decimal("1.00"),
     EquityType.GOVERNMENT_SUPPORTED: Decimal("1.00"),
@@ -55,6 +56,7 @@ SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
 
 IRB_SIMPLE_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.CENTRAL_BANK: Decimal("0.00"),
+    EquityType.SUBORDINATED_DEBT: Decimal("3.70"),  # Other category under IRB Simple
     EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("1.90"),
     EquityType.PRIVATE_EQUITY: Decimal("3.70"),
     EquityType.EXCHANGE_TRADED: Decimal("2.90"),

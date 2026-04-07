@@ -498,6 +498,7 @@ VALID_SLOTTING_CATEGORIES = {"strong", "good", "satisfactory", "weak", "default"
 
 VALID_EQUITY_TYPES = {
     "central_bank",
+    "subordinated_debt",
     "listed",
     "exchange_traded",
     "government_supported",

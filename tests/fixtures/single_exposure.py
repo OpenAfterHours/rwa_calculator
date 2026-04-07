@@ -59,6 +59,10 @@ def calculate_single_sa_exposure(
     collateral_re_value: Decimal | None = None,
     collateral_receivables_value: Decimal | None = None,
     collateral_other_physical_value: Decimal | None = None,
+    cp_is_natural_person: bool = False,
+    cp_is_social_housing: bool = False,
+    prior_charge_ltv: Decimal | None = None,
+    is_payroll_loan: bool = False,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch."""
     data: dict = {
@@ -87,7 +91,12 @@ def calculate_single_sa_exposure(
         "residual_maturity_years": [residual_maturity_years],
         "cp_entity_type": [entity_type],
         "is_short_term_trade_lc": [is_short_term_trade_lc],
+        "cp_is_natural_person": [cp_is_natural_person],
+        "cp_is_social_housing": [cp_is_social_housing],
+        "is_payroll_loan": [is_payroll_loan],
     }
+    if prior_charge_ltv is not None:
+        data["prior_charge_ltv"] = [float(prior_charge_ltv)]
     if collateral_re_value is not None:
         data["collateral_re_value"] = [float(collateral_re_value)]
     if collateral_receivables_value is not None:

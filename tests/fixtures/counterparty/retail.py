@@ -85,6 +85,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "sector_code": None,
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
+            "is_natural_person": True,
         },
         {
             "counterparty_reference": "RTL_MTG_002",
@@ -97,6 +98,7 @@ def create_retail_counterparties() -> pl.DataFrame:
             "sector_code": None,
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
+            "is_natural_person": True,
         },
         # SME Retail - Turnover under £880k threshold (Scenario A10)
         {

@@ -1637,6 +1637,7 @@ class HierarchyResolver:
                     pl.lit(None).cast(pl.Utf8).alias("property_type"),
                     pl.lit(False).alias("has_income_cover"),
                     pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"),
+                    pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv"),
                 ]
             )
 
@@ -1646,6 +1647,7 @@ class HierarchyResolver:
         has_property_type = "property_type" in collateral_schema.names()
         has_income_producing = "is_income_producing" in collateral_schema.names()
         has_qualifying_re = "is_qualifying_re" in collateral_schema.names()
+        has_prior_charge_ltv = "prior_charge_ltv" in collateral_schema.names()
 
         # Filter for collateral with LTV data
         ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
@@ -1667,6 +1669,11 @@ class HierarchyResolver:
             if has_qualifying_re
             else pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re")
         )
+        _prior_charge_ltv = (
+            pl.col("prior_charge_ltv")
+            if has_prior_charge_ltv
+            else pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv")
+        )
 
         if not has_beneficiary_type:
             # Legacy behavior: assume direct exposure linking
@@ -1677,6 +1684,7 @@ class HierarchyResolver:
                     _prop_type.alias("property_type"),
                     _income_cover,
                     _qualifying_re,
+                    _prior_charge_ltv,
                 ]
             ).unique(subset=["beneficiary_reference"], keep="first")
 
@@ -1704,6 +1712,7 @@ class HierarchyResolver:
                     _prop_type.alias("direct_property_type"),
                     _income_cover.alias("direct_income_cover"),
                     _qualifying_re.alias("direct_qualifying_re"),
+                    _prior_charge_ltv.alias("direct_prior_charge_ltv"),
                 ]
             )
             .unique(subset=["direct_ref"], keep="first")
@@ -1719,6 +1728,7 @@ class HierarchyResolver:
                     _prop_type.alias("facility_property_type"),
                     _income_cover.alias("facility_income_cover"),
                     _qualifying_re.alias("facility_qualifying_re"),
+                    _prior_charge_ltv.alias("facility_prior_charge_ltv"),
                 ]
             )
             .unique(subset=["facility_ref"], keep="first")
@@ -1734,6 +1744,7 @@ class HierarchyResolver:
                     _prop_type.alias("cp_property_type"),
                     _income_cover.alias("cp_income_cover"),
                     _qualifying_re.alias("cp_qualifying_re"),
+                    _prior_charge_ltv.alias("cp_prior_charge_ltv"),
                 ]
             )
             .unique(subset=["cp_ref"], keep="first")
@@ -1786,6 +1797,11 @@ class HierarchyResolver:
                     pl.col("facility_qualifying_re"),
                     pl.col("cp_qualifying_re"),
                 ).alias("is_qualifying_re"),
+                pl.coalesce(
+                    pl.col("direct_prior_charge_ltv"),
+                    pl.col("facility_prior_charge_ltv"),
+                    pl.col("cp_prior_charge_ltv"),
+                ).alias("prior_charge_ltv"),
             ]
         ).drop(
             [
@@ -1801,6 +1817,9 @@ class HierarchyResolver:
                 "direct_qualifying_re",
                 "facility_qualifying_re",
                 "cp_qualifying_re",
+                "direct_prior_charge_ltv",
+                "facility_prior_charge_ltv",
+                "cp_prior_charge_ltv",
             ]
         )
 

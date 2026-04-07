@@ -289,6 +289,12 @@ class ExposureClassifier:
                 pl.col("is_natural_person").alias("cp_is_natural_person")
             )
 
+        # Social housing flag — Art. 124L RRE residual RW routing (optional in input data)
+        if "is_social_housing" in cp_col_names:
+            select_cols.append(
+                pl.col("is_social_housing").alias("cp_is_social_housing")
+            )
+
         # FSE flag — Art. 147A(1)(e) approach restriction (optional in input data)
         if "is_financial_sector_entity" in cp_col_names:
             select_cols.append(

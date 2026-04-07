@@ -156,6 +156,7 @@ class TestB31ResidentialGeneral:
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=ltv,
+            cp_is_natural_person=True,
             config=b31_config,
         )
 
@@ -172,6 +173,7 @@ class TestB31ResidentialGeneral:
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=None,
+            cp_is_natural_person=True,
             config=b31_config,
         )
 
@@ -193,6 +195,7 @@ class TestB31ResidentialGeneral:
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.65"),
+            cp_is_natural_person=True,
             config=b31_config,
         )
 
@@ -1642,6 +1645,7 @@ class TestCRRvsBasel31Comparison:
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.10"),
+            cp_is_natural_person=True,
             config=crr_config,
         )
 
@@ -1650,6 +1654,7 @@ class TestCRRvsBasel31Comparison:
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.10"),
+            cp_is_natural_person=True,
             config=b31_config,
         )
 

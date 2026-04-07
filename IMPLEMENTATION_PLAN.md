@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.14 Other Real Estate Art. 124J implemented)
-**Current version:** 0.1.108 | **Test suite:** ~3,102 collected (~2,573 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~12 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L implemented)
+**Current version:** 0.1.109 | **Test suite:** ~3,141 collected (~2,618 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -14,7 +14,7 @@
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -186,17 +186,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 4 new unit tests in `test_irb_el_guarantee.py`: `test_irb_guarantor_el_substituted_with_pd` (full guarantee, EL=2250), `test_irb_guarantor_el_unchanged_without_pd` (backward compat), `test_partial_irb_guarantee_blended_el` (60% guarantee, EL=2340), `test_irb_guarantor_pd_floored_to_crr_minimum` (PD below 0.03% floor). Previous gap test replaced. All 2637 tests pass. Test count: 2637 (was 2634).
 
 ### P1.6 Junior charges for residential RE loan-splitting (Art. 124F(2))
-- **Status:** [ ] Not modelled
-- **Impact:** Under Basel 3.1, the 55% secured ratio threshold for residential RE loan-splitting should be reduced when a junior/second charge exists. `b31_risk_weights.py:49` has explicit comment: "Junior charges (Art. 124F(2)) reduce the 55% threshold but are not yet modelled." Both `b31_residential_rw_expr()` (line 228) and `b31_commercial_rw_expr()` (line 285) hardcode `0.55` with no lien position adjustment.
-  **Additional scope from agent findings:** Also missing:
-  - Art. 124G(2) junior charge **1.25x multiplier** for residential income-producing
-  - Art. 124H(2) other counterparties max/min formula for CRE
-  - Art. 124I(3) junior charge **1.25x/1.375x multipliers** for CRE income-producing
-  - Art. 124L counterparty type table for RRE residual RW: `b31_risk_weights.py:261` caps at 75% for all types, but Art. 124L specifies: natural person/retail SME=75%, other SME (unrated)=85%, social housing=max(75%, unsecured RW), other=full unsecured CP RW
-- **File:Line:** `engine/sa/b31_risk_weights.py:49,228,285`
-- **Spec ref:** PRA PS1/26 Art. 124F(2), Art. 124G(2), Art. 124H(2), Art. 124I(3). `docs/specifications/crr/sa-risk-weights.md`
-- **Fix:** Add `prior_charge_amount` or `lien_position` field to loan/facility schema. In `b31_residential_rw_expr()`, reduce the 55% threshold by the prior charge amount. Also implement the **pari passu pro-rata formula** from Art. 124F(2)(b): eligible amount = `(55% - prior_charges) x (charges_not_held / total_pari_passu_charges)`. Implement RW multipliers for junior positions per Art. 124G(2) and Art. 124I(3).
-- **Tests needed:** Unit tests for junior charge, pari passu, and RW multiplier scenarios. Acceptance tests in B31-A.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Implementation:** Full implementation of Art. 124F(2) junior charge threshold reduction, Art. 124G(2) income-producing RESI 1.25x junior multiplier, Art. 124I(3) CRE income-producing tiered junior multipliers (1.0x/1.25x/1.375x), and Art. 124L counterparty type table for RRE residual RW (natural person/retail SME=75%, other SME=85%, social housing=max(75%, cp RW), other=full cp RW).
+- **Schema:** Added `prior_charge_ltv` to COLLATERAL_SCHEMA, `is_social_housing` to COUNTERPARTY_SCHEMA. Propagated through hierarchy resolver (three-level coalesce) and classifier (`cp_is_social_housing`).
+- **File:Line:** `data/tables/b31_risk_weights.py` (constants + `b31_residential_rw_expr()` + `b31_commercial_rw_expr()` + scalar lookups), `data/schemas.py`, `engine/hierarchy.py`, `engine/classifier.py`, `engine/sa/calculator.py` (_ensure_columns defaults)
+- **Spec ref:** PRA PS1/26 Art. 124F(2), Art. 124G(2), Art. 124I(3), Art. 124L. `docs/specifications/crr/sa-risk-weights.md`
+- **Tests:** 45 new unit tests in `test_b31_re_junior_charges.py`: constants (9), Art. 124L counterparty type routing (8), Art. 124F(2) RRE threshold reduction (6), Art. 124F(2) CRE threshold reduction (2), Art. 124G(2) RESI income junior multiplier (6), Art. 124I(3) CRE income tiered multipliers (6), scalar lookups (5), CRR regression (2), mixed batch (1). Existing tests updated: `test_b31_sa_risk_weights.py` (added `cp_is_natural_person=True` for natural person mortgage tests), fixture data (`retail.py` counterparty: added `is_natural_person: True` for mortgage borrowers).
+- **Limitation:** Art. 124F(2)(b) pari passu pro-rata formula not implemented — requires `total_pari_passu_charges` and `charges_not_held` fields which are not yet in the schema. Current implementation covers the simpler sequential-charge case via `prior_charge_ltv`.
 
 ### P1.7 Financial Collateral Simple Method (Art. 222)
 - **Status:** [ ] Not implemented

@@ -398,6 +398,12 @@ class SACalculator:
         # Art. 124A qualifying RE flag for Other RE treatment (Art. 124J)
         if "is_qualifying_re" not in schema.names():
             missing_cols.append(pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"))
+        # Art. 124F(2) prior charge LTV for junior lien threshold reduction
+        if "prior_charge_ltv" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("prior_charge_ltv"))
+        # Art. 124L social housing counterparty type for RRE residual RW
+        if "cp_is_social_housing" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("cp_is_social_housing"))
         # CRM collateral columns for Art. 127 secured/unsecured split
         if "collateral_re_value" not in schema.names():
             missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))

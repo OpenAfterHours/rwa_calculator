@@ -338,12 +338,17 @@ class HaircutCalculator:
         else:
             _is_art227 = pl.lit(False)
 
-        # Assign haircut: Art. 227 zero → ineligible bond 100% → standard lookup → 40% default
+        # Art. 232: life insurance uses surrender value directly — no supervisory haircut
+        _is_life_insurance = pl.col("_lookup_type") == "life_insurance"
+
+        # Assign haircut: life insurance 0% → Art. 227 zero → ineligible bond 100% → lookup → 40%
         collateral = collateral.with_columns(
             [
                 _ineligible_bond.alias("_bond_ineligible"),
                 _is_art227.alias("_is_zero_haircut"),
-                pl.when(_is_art227)
+                pl.when(_is_life_insurance)
+                .then(pl.lit(0.0))
+                .when(_is_art227)
                 .then(pl.lit(0.0))
                 .when(_ineligible_bond)
                 .then(pl.lit(1.0))
@@ -367,10 +372,12 @@ class HaircutCalculator:
         """Map collateral_type aliases to canonical types for haircut table lookup."""
         ct = pl.col("collateral_type").str.to_lowercase()
         return (
-            pl.when(ct.is_in(["cash", "deposit"]))
+            pl.when(ct.is_in(["cash", "deposit", "credit_linked_note"]))
             .then(pl.lit("cash"))
             .when(ct == "gold")
             .then(pl.lit("gold"))
+            .when(ct == "life_insurance")
+            .then(pl.lit("life_insurance"))
             .when(
                 ct.is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
                 | ((ct == "bond") & (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
@@ -567,6 +574,28 @@ class HaircutCalculator:
                         f"(type={collateral_type}); Adj={adjusted:,.0f}"
                     ),
                 )
+
+        # Art. 232: Life insurance — no supervisory haircut (surrender value IS the value)
+        if collateral_type.lower() == "life_insurance":
+            fx_h = lookup_fx_haircut(
+                exposure_currency, collateral_currency, liquidation_period_days
+            )
+            adjusted = market_value * (1 - fx_h)
+            return HaircutResult(
+                original_value=market_value,
+                collateral_haircut=Decimal("0"),
+                fx_haircut=fx_h,
+                maturity_adjustment=Decimal("1.0"),
+                adjusted_value=adjusted,
+                description=(
+                    f"MV={market_value:,.0f}; Art.232 life insurance "
+                    f"Hc=0%; Hfx={fx_h:.1%}; Adj={adjusted:,.0f}"
+                ),
+            )
+
+        # Art. 218: CLN → treat as cash collateral
+        if collateral_type.lower() == "credit_linked_note":
+            collateral_type = "cash"
 
         # Get collateral haircut scaled for liquidation period (None = ineligible per Art. 197)
         coll_haircut = lookup_collateral_haircut(

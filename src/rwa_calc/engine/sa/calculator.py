@@ -194,6 +194,9 @@ class SACalculator:
         # Step 1b: Apply FCSM risk weight substitution (Art. 222 Simple Method)
         exposures = self._apply_fcsm_rw_substitution(exposures, config)
 
+        # Step 1c: Apply life insurance risk weight mapping (Art. 232)
+        exposures = self._apply_life_insurance_rw_mapping(exposures)
+
         # Step 2: Apply guarantee substitution (blended risk weight)
         exposures = self._apply_guarantee_substitution(exposures, config)
 
@@ -250,6 +253,9 @@ class SACalculator:
 
         # Step 2b: FCSM risk weight substitution (Art. 222 Simple Method)
         exposures = self._apply_fcsm_rw_substitution(exposures, config)
+
+        # Step 2c: Life insurance risk weight mapping (Art. 232)
+        exposures = self._apply_life_insurance_rw_mapping(exposures)
 
         # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
         exposures = self._apply_guarantee_substitution(exposures, config)
@@ -309,6 +315,9 @@ class SACalculator:
 
         # Step 2b: FCSM risk weight substitution (Art. 222 Simple Method)
         exposures = self._apply_fcsm_rw_substitution(exposures, config)
+
+        # Step 2c: Life insurance risk weight mapping (Art. 232)
+        exposures = self._apply_life_insurance_rw_mapping(exposures)
 
         # Step 3: Guarantee substitution
         exposures = self._apply_guarantee_substitution(exposures, config)
@@ -1288,6 +1297,55 @@ class SACalculator:
             .then(pl.lit("simple"))
             .otherwise(pl.lit("comprehensive"))
             .alias("ead_calculation_method"),
+        )
+
+    @staticmethod
+    def _apply_life_insurance_rw_mapping(
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Apply Art. 232 life insurance risk weight mapping for SA exposures.
+
+        When life insurance collateral secures an exposure, the secured portion
+        receives a mapped risk weight (not direct substitution):
+            Insurer RW 20%           -> 20%
+            Insurer RW 30% or 50%    -> 35%
+            Insurer RW 65%-135%      -> 70%
+            Insurer RW 150%          -> 150%
+
+        Blended RW = secured_pct x mapped_rw + unsecured_pct x exposure_rw
+
+        This method is a no-op when no life insurance collateral is present.
+
+        Args:
+            exposures: Exposures with risk_weight and life_ins_* columns.
+
+        Returns:
+            Exposures with blended risk weight for life-insurance-covered portion.
+        """
+        schema = exposures.collect_schema()
+        if "life_ins_collateral_value" not in schema.names():
+            return exposures
+
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        ead = pl.col(ead_col).fill_null(0.0)
+        li_value = pl.col("life_ins_collateral_value").fill_null(0.0)
+        li_rw = pl.col("life_ins_secured_rw").fill_null(0.0)
+
+        # Secured percentage (capped at 100%)
+        secured_pct = pl.when(ead > 0).then((li_value / ead).clip(0.0, 1.0)).otherwise(0.0)
+        unsecured_pct = pl.lit(1.0) - secured_pct
+
+        # Blended risk weight: no floor — Art. 232 has no 20% floor like FCSM
+        blended_rw = secured_pct * li_rw + unsecured_pct * pl.col("risk_weight")
+
+        # Only apply when there is actual life insurance collateral
+        has_li = li_value > 0
+
+        return exposures.with_columns(
+            pl.when(has_li)
+            .then(blended_rw)
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight"),
         )
 
     def _apply_guarantee_substitution(

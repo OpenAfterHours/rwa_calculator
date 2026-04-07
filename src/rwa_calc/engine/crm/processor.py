@@ -43,6 +43,7 @@ from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.materialise import materialise_barrier
 from rwa_calc.engine.utils import has_required_columns
@@ -468,6 +469,19 @@ class CRMProcessor:
         if use_simple_method:
             exposures = undo_sa_ead_reduction(exposures)
 
+        # Step 4c: Pre-compute life insurance method columns (Art. 232).
+        # Life insurance uses mapped risk weight for SA (not EAD reduction).
+        # IRB LGD handled via the waterfall (LGDS = 40%).
+        # SA EAD is not reduced because life_insurance has
+        # is_eligible_financial_collateral=False — the Comprehensive Method's
+        # eligible-only filter (collateral.py _cv aggregation) already excludes it.
+        if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = compute_life_insurance_columns(exposures, collateral, config)
+        else:
+            from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
+
+            exposures = _add_default_life_ins_columns(exposures)
+
         # Step 5: Apply guarantees (if available and valid)
         if (
             has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
@@ -608,6 +622,14 @@ class CRMProcessor:
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
                 exposures, self._is_basel_3_1, config=config
             )
+
+        # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
+        if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = compute_life_insurance_columns(exposures, collateral, config)
+        else:
+            from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
+
+            exposures = _add_default_life_ins_columns(exposures)
 
         # Materialise after collateral before guarantee processing.
         # Collateral adds 3 lookup joins + haircuts + unified allocation;

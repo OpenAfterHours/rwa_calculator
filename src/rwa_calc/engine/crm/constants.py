@@ -26,6 +26,7 @@ FINANCIAL_TYPES: list[str] = [
     "government_bond",
     "corporate_bond",
     "equity",
+    "credit_linked_note",
 ]
 
 RECEIVABLE_TYPES: list[str] = ["receivables", "trade_receivables"]
@@ -46,6 +47,10 @@ REAL_ESTATE_TYPES: list[str] = [
 OTHER_PHYSICAL_TYPES: list[str] = ["other_physical", "equipment", "inventory", "other"]
 
 COVERED_BOND_TYPES: list[str] = ["covered_bond", "covered_bonds"]
+
+LIFE_INSURANCE_TYPES: list[str] = ["life_insurance"]
+
+CREDIT_LINKED_NOTE_TYPES: list[str] = ["credit_linked_note"]
 
 # Art. 227(2)(a): collateral types eligible for zero-haircut treatment in repos.
 # Both the exposure and collateral must be cash or 0%-RW sovereign debt securities.
@@ -91,6 +96,7 @@ CRR_SUPERVISORY_LGD: dict[str, float] = {
     "other_physical": 0.40,
     "unsecured": 0.45,
     "covered_bond": 0.1125,
+    "life_insurance": 0.40,  # Art. 232(2)(b): secured portion LGD = 40%
 }
 
 BASEL31_SUPERVISORY_LGD: dict[str, float] = {
@@ -101,6 +107,7 @@ BASEL31_SUPERVISORY_LGD: dict[str, float] = {
     "unsecured": 0.40,  # Art. 161(1)(aa): non-FSE corporates
     "unsecured_fse": 0.45,  # Art. 161(1)(a): financial sector entities
     "covered_bond": 0.1125,  # Art. 161(1)(d)
+    "life_insurance": 0.40,  # Art. 232(2)(b): secured portion LGD = 40%
 }
 
 # ---------------------------------------------------------------------------
@@ -113,6 +120,7 @@ OVERCOLLATERALISATION_RATIOS: dict[str, float] = {
     "receivables": 1.25,
     "real_estate": 1.40,
     "other_physical": 1.40,
+    "life_insurance": 1.0,  # Art. 232: no overcollateralisation required
 }
 
 # ---------------------------------------------------------------------------
@@ -124,6 +132,7 @@ MIN_COLLATERALISATION_THRESHOLDS: dict[str, float] = {
     "receivables": 0.0,
     "real_estate": 0.30,
     "other_physical": 0.30,
+    "life_insurance": 0.0,  # Art. 232: no minimum collateralisation threshold
 }
 
 
@@ -152,7 +161,9 @@ def collateral_lgd_expr(is_basel_3_1: bool) -> pl.Expr:
     lgd = supervisory_lgd_values(is_basel_3_1)
     ct = _coll_type_lower()
     return (
-        pl.when(ct.is_in(FINANCIAL_TYPES))
+        pl.when(ct.is_in(LIFE_INSURANCE_TYPES))
+        .then(pl.lit(lgd["life_insurance"]))
+        .when(ct.is_in(FINANCIAL_TYPES))
         .then(pl.lit(lgd["financial"]))
         .when(ct.is_in(COVERED_BOND_TYPES))
         .then(pl.lit(lgd["covered_bond"]))
@@ -170,7 +181,9 @@ def overcollateralisation_ratio_expr() -> pl.Expr:
     """Build expression mapping collateral_type to overcollateralisation ratio."""
     ct = _coll_type_lower()
     return (
-        pl.when(ct.is_in(FINANCIAL_TYPES))
+        pl.when(ct.is_in(LIFE_INSURANCE_TYPES))
+        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["life_insurance"]))
+        .when(ct.is_in(FINANCIAL_TYPES))
         .then(pl.lit(OVERCOLLATERALISATION_RATIOS["financial"]))
         .when(ct.is_in(RECEIVABLE_TYPES))
         .then(pl.lit(OVERCOLLATERALISATION_RATIOS["receivables"]))
@@ -186,7 +199,9 @@ def min_collateralisation_threshold_expr() -> pl.Expr:
     """Build expression mapping collateral_type to minimum collateralisation threshold."""
     ct = _coll_type_lower()
     return (
-        pl.when(ct.is_in(FINANCIAL_TYPES))
+        pl.when(ct.is_in(LIFE_INSURANCE_TYPES))
+        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["life_insurance"]))
+        .when(ct.is_in(FINANCIAL_TYPES))
         .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["financial"]))
         .when(ct.is_in(RECEIVABLE_TYPES))
         .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["receivables"]))
@@ -207,7 +222,9 @@ def collateral_category_expr() -> pl.Expr:
     """Build expression classifying collateral into COREP categories (C 08.01 cols 0170-0210)."""
     ct = _coll_type_lower()
     return (
-        pl.when(ct.is_in(["cash", "deposit"]))
+        pl.when(ct.is_in(LIFE_INSURANCE_TYPES))
+        .then(pl.lit("life_insurance"))
+        .when(ct.is_in(["cash", "deposit"]))
         .then(pl.lit("cash"))
         .when(ct.is_in(COVERED_BOND_TYPES))
         .then(pl.lit("covered_bond"))
@@ -231,6 +248,7 @@ WATERFALL_ORDER: list[tuple[list[str], str, str]] = [
     (["receivables"], "receivables", "rec"),
     (["real_estate"], "real_estate", "re"),
     (["other_physical", "other"], "other_physical", "op"),
+    (["life_insurance"], "life_insurance", "li"),  # Art. 232: LGDS = 40% (same as other_physical/CRR)
 ]
 
 

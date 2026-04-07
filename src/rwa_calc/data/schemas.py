@@ -223,6 +223,10 @@ COLLATERAL_SCHEMA = {
     "liquidation_period_days": pl.Int32,  # Art. 224(2): 5=repo, 10=capital market (default), 20=secured lending
     # Art. 227 zero-haircut eligibility for repo-style transactions
     "qualifies_for_zero_haircut": pl.Boolean,  # Art. 227: all 8 conditions (a)-(h) met (institution certification)
+    # Life insurance collateral (Art. 232)
+    "insurer_risk_weight": pl.Float64,  # SA risk weight of insurer (0.20, 0.30, 0.50, 0.65, 1.00, 1.35, 1.50)
+    # Credit-linked notes (Art. 218): set market_value = nominal_value - credit_event_reduction
+    "credit_event_reduction": pl.Float64,  # Reduction in CLN nominal from credit events
 }
 
 GUARANTEE_SCHEMA = {
@@ -486,6 +490,8 @@ VALID_COLLATERAL_TYPES = {
     "real_estate",
     "receivables",
     "other_physical",
+    "life_insurance",
+    "credit_linked_note",
 }
 
 VALID_PROPERTY_TYPES = {"residential", "commercial"}

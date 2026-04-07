@@ -797,6 +797,12 @@ class HierarchyResolver:
             pl.col("lgd").cast(pl.Float64, strict=False)
             if "lgd" in facility_cols
             else pl.lit(None).cast(pl.Float64).alias("lgd"),
+            pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+            if "lgd_unsecured" in facility_cols
+            else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+            pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+            if "has_sufficient_collateral_data" in facility_cols
+            else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
             pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
             if "beel" in facility_cols
             else pl.lit(0.0).alias("beel"),
@@ -915,6 +921,12 @@ class HierarchyResolver:
             pl.lit(0.0).alias("undrawn_amount"),
             pl.lit(0.0).alias("nominal_amount"),
             pl.col("lgd").cast(pl.Float64, strict=False),
+            pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+            if "lgd_unsecured" in loan_cols
+            else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+            pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+            if "has_sufficient_collateral_data" in loan_cols
+            else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
             pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
             if "beel" in loan_cols
             else pl.lit(0.0).alias("beel"),
@@ -987,6 +999,12 @@ class HierarchyResolver:
                     .otherwise(pl.col("nominal_amount"))
                     .alias("nominal_amount"),
                     pl.col("lgd").cast(pl.Float64, strict=False),
+                    pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+                    if "lgd_unsecured" in cont_cols
+                    else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+                    pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+                    if "has_sufficient_collateral_data" in cont_cols
+                    else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
                     pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
                     if "beel" in cont_cols
                     else pl.lit(0.0).alias("beel"),

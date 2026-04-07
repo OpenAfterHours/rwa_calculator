@@ -66,6 +66,8 @@ FACILITY_SCHEMA = {
     "limit": pl.Float64,
     "committed": pl.Boolean,
     "lgd": pl.Float64,
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
     "beel": pl.Float64,
     "is_revolving": pl.Boolean,
     "is_qrre_transactor": pl.Boolean,  # QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period
@@ -92,6 +94,8 @@ LOAN_SCHEMA = {
     "drawn_amount": pl.Float64,
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "lgd": pl.Float64,  # A-IRB modelled LGD (optional)
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
@@ -114,6 +118,8 @@ CONTINGENTS_SCHEMA = {
     "currency": pl.String,
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
     "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
@@ -606,6 +612,8 @@ RAW_EXPOSURE_SCHEMA = {
     "undrawn_amount": pl.Float64,  # Undrawn commitment (limit - drawn for facilities)
     "nominal_amount": pl.Float64,  # Total nominal (for contingents)
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=LGD modelling, False=Foundation fallback
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
     "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
@@ -639,6 +647,8 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "undrawn_amount": pl.Float64,
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=LGD modelling, False=Foundation fallback
     "seniority": pl.String,
     "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
     "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
@@ -682,6 +692,9 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    # A-IRB LGD modelling (Art. 169A/169B)
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=LGD modelling, False=Foundation fallback
     # Classification additions
     "exposure_class": pl.String,  # central_govt_central_bank, institution, corporate, retail, etc.
     "exposure_class_reason": pl.String,  # Explanation of classification

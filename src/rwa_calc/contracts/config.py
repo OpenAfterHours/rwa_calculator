@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from rwa_calc.domain.enums import (
+    AIRBCollateralMethod,
     ApproachType,
     CRMCollateralMethod,
     CollateralType,
@@ -742,6 +743,12 @@ class CalculationConfig:
     # COMPREHENSIVE (default): EAD reduction via supervisory haircuts (Art. 223-224).
     # SIMPLE: SA-only risk weight substitution (Art. 222), 20% RW floor on secured portion.
     # IRB exposures always use Foundation Collateral Method regardless of this election.
+    airb_collateral_method: AIRBCollateralMethod | None = None
+    # Art. 169A/169B: A-IRB collateral recognition method (Basel 3.1 only).
+    # LGD_MODELLING (default under B31): own LGD captures collateral effects;
+    #   Art. 169B fallback uses Foundation formula with own unsecured LGD.
+    # FOUNDATION: uses supervisory LGDS/LGDU, same as F-IRB.
+    # None: not applicable under CRR (A-IRB is free-form).
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
@@ -836,6 +843,7 @@ class CalculationConfig:
         sa_t2_credit: float = 0.0,
         art_40_deductions: float = 0.0,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
+        airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -898,6 +906,7 @@ class CalculationConfig:
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             use_investment_grade_assessment=use_investment_grade_assessment,
             crm_collateral_method=crm_collateral_method,
+            airb_collateral_method=airb_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
         )

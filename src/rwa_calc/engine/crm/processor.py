@@ -451,9 +451,10 @@ class CRMProcessor:
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
         else:
-            # No collateral: still need to set F-IRB supervisory LGD based on seniority
+            # No collateral: still need to set F-IRB supervisory LGD based on seniority.
+            # Under B31, AIRB Foundation/169B exposures also get formula-based LGD.
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-                exposures, self._is_basel_3_1
+                exposures, self._is_basel_3_1, config=config
             )
             if use_simple_method:
                 # Add default (zero) FCSM columns when no collateral
@@ -580,7 +581,7 @@ class CRMProcessor:
             exposures = self.apply_collateral(exposures, collateral, config)
         else:
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-                exposures, self._is_basel_3_1
+                exposures, self._is_basel_3_1, config=config
             )
 
         # Materialise after collateral before guarantee processing.
@@ -642,10 +643,11 @@ class CRMProcessor:
     def _apply_firb_supervisory_lgd_no_collateral(
         self,
         exposures: pl.LazyFrame,
+        config: CalculationConfig | None = None,
     ) -> pl.LazyFrame:
         """Apply F-IRB supervisory LGD when no collateral is available."""
         return collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-            exposures, self._is_basel_3_1
+            exposures, self._is_basel_3_1, config=config
         )
 
     def _generate_netting_collateral(

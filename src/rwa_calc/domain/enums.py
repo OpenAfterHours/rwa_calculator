@@ -551,3 +551,33 @@ class CRMCollateralMethod(StrEnum):
     collateral's own SA risk weight, subject to a 20% floor. EAD is NOT reduced.
     Special 0% RW for same-currency cash deposits and 0%-RW sovereign bonds.
     """
+
+
+class AIRBCollateralMethod(StrEnum):
+    """
+    A-IRB collateral recognition method under Basel 3.1 (Art. 169A/169B).
+
+    Under Basel 3.1, A-IRB firms must use one of two methods to recognise
+    collateral in LGD estimates. Under CRR, A-IRB is free-form (no method
+    constraint). Art. 191A Part 2 governs the choice.
+    """
+
+    LGD_MODELLING = "lgd_modelling"
+    """LGD Modelling Collateral Method (Art. 169A).
+
+    Default for A-IRB under Basel 3.1.  The firm models collateral effects
+    directly in its LGD estimates.  When the firm has sufficient data to model
+    a collateral type in a jurisdiction (Art. 169A(1)(a)), own LGD captures
+    collateral effects — the calculator keeps the modelled LGD.  When data is
+    insufficient (Art. 169B), the calculator falls back to the Foundation
+    Collateral Method formula (Art. 230/231) with the firm's own unsecured LGD
+    as LGDU instead of the supervisory value.
+    """
+
+    FOUNDATION = "foundation"
+    """Foundation Collateral Method (Art. 229-231).
+
+    A-IRB firm elects to use the same Foundation Collateral Method as F-IRB,
+    with supervisory LGDS values and supervisory LGDU.  Same formula and
+    parameters as F-IRB collateral recognition.
+    """

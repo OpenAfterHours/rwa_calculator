@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.30d Art. 227 zero-haircut conditions implemented)
-**Current version:** 0.1.123 | **Test suite:** ~3,607 collected (~3,573 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
+**Last updated:** 2026-04-07 (P1.50 Art. 169A/169B LGD Modelling Collateral Method implemented)
+**Current version:** 0.1.124 | **Test suite:** ~3,634 collected (~3,601 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -707,12 +707,21 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Validation tests for due diligence flag. Documentation test that spec covers Art. 110A.
 
 ### P1.50 Art. 169A/169B LGD Modelling Collateral Method (new Basel 3.1 AIRB method)
-- **Status:** [ ] Not started
-- **Impact:** PRA PS1/26 Art. 169A/169B introduces a new AIRB method for recognising collateral directly in LGD estimates (LGD Modelling Collateral Method). This is an alternative to the Foundation Collateral Method for AIRB firms. No spec file exists, no code exists. Firms using AIRB with collateral would need this method to correctly model LGD. Without it, AIRB collateral recognition may be incomplete.
-- **File:Line:** No code exists; would go in `engine/irb/` or `engine/crm/`
+- **Status:** [x] Complete (v0.1.124)
+- **Impact:** PRA PS1/26 Art. 169A/169B introduces a new AIRB method for recognising collateral directly in LGD estimates (LGD Modelling Collateral Method). This is an alternative to the Foundation Collateral Method for AIRB firms.
+- **File:Line:** `engine/crm/collateral.py:278-394` (no-collateral path), `collateral.py:720-777` (with-collateral path), `domain/enums.py` (`AIRBCollateralMethod`), `contracts/config.py` (`airb_collateral_method`), `data/schemas.py` (`lgd_unsecured`, `has_sufficient_collateral_data`), `engine/hierarchy.py` (field propagation)
 - **Spec ref:** PRA PS1/26 Art. 169A/169B
-- **Fix:** Create spec document for LGD Modelling Collateral Method. Implement in IRB calculator as an alternative collateral recognition path for AIRB exposures. Should integrate with CRM method selection (P1.30).
-- **Tests needed:** Unit tests for LGD modelling collateral method. Acceptance tests comparing FCCM vs LGD modelling results.
+- **What was done:**
+  - Added `AIRBCollateralMethod` enum (LGD_MODELLING, FOUNDATION) to `domain/enums.py`
+  - Added `airb_collateral_method` config field to `CalculationConfig` (defaults to LGD_MODELLING for Basel 3.1, None for CRR)
+  - Added `lgd_unsecured` and `has_sufficient_collateral_data` fields to all exposure schemas and hierarchy propagation
+  - Implemented three AIRB collateral paths in CRM collateral processing:
+    - Art. 169A(1)(a) full modelling: sufficient data → own LGD kept unchanged (existing default)
+    - Art. 169B fallback: insufficient data → Foundation formula with firm's own LGDU (not supervisory)
+    - Foundation election: all AIRB use Foundation Collateral Method with supervisory LGDU (same as FIRB)
+  - Both no-collateral (`apply_firb_supervisory_lgd_no_collateral`) and with-collateral (`_apply_collateral_unified`) paths handle all three methods
+  - Full backward compatibility: CRR and config=None preserve existing AIRB behaviour
+- **Tests:** 28 tests in `tests/unit/crm/test_art169_lgd_modelling.py` — config/enum, full modelling, 169B fallback, Foundation election, CRR compat, mixed batch, capital impact, financial collateral
 
 ### P1.55 Art. 134 "Other Items" risk weights missing (cash 0%, items in collection 20%, residual lease)
 - **Status:** [x] Complete

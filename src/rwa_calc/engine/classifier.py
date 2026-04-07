@@ -40,6 +40,11 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.contracts.errors import (
+    ERROR_QRRE_COLUMNS_MISSING,
+    CalculationError,
+    classification_warning,
+)
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
@@ -198,6 +203,29 @@ class ExposureClassifier:
         # Single schema check for conditional column logic
         schema_names = set(exposures.collect_schema().names())
 
+        # Accumulate classification warnings/errors
+        classification_errors: list[CalculationError] = []
+
+        # Check for QRRE classification prerequisites — missing columns
+        # cause all revolving retail to silently become RETAIL_OTHER
+        missing_qrre_cols = [
+            c for c in ("is_revolving", "facility_limit") if c not in schema_names
+        ]
+        if missing_qrre_cols:
+            classification_errors.append(
+                classification_warning(
+                    code=ERROR_QRRE_COLUMNS_MISSING,
+                    message=(
+                        f"QRRE classification disabled — column(s) "
+                        f"{', '.join(missing_qrre_cols)} missing from exposure data. "
+                        f"All qualifying revolving retail exposures will be classified "
+                        f"as RETAIL_OTHER instead of RETAIL_QRRE, which may affect "
+                        f"risk weights and IRB parameters."
+                    ),
+                    regulatory_reference="CRR Art. 147(5)",
+                )
+            )
+
         # Step 2: Derive all independent flags (1 .with_columns)
         classified = self._derive_independent_flags(exposures, config, schema_names)
 
@@ -248,7 +276,7 @@ class ExposureClassifier:
             provisions=data.provisions,
             counterparty_lookup=data.counterparty_lookup,
             classification_audit=classification_audit,
-            classification_errors=[],
+            classification_errors=classification_errors,
         )
 
     # =========================================================================

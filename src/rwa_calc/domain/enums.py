@@ -218,6 +218,9 @@ class ErrorCategory(StrEnum):
     CRM = "crm"
     """CRM application issues"""
 
+    CLASSIFICATION = "classification"
+    """Exposure classification issues"""
+
 
 class SlottingCategory(StrEnum):
     """

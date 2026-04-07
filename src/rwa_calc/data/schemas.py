@@ -70,7 +70,7 @@ FACILITY_SCHEMA = {
     "is_revolving": pl.Boolean,
     "is_qrre_transactor": pl.Boolean,  # QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -115,7 +115,7 @@ CONTINGENTS_SCHEMA = {
     "lgd": pl.Float64,
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
@@ -519,7 +519,7 @@ VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
-VALID_RISK_TYPES_INPUT = {"FR", "MR", "OC", "MLR", "LR"}
+VALID_RISK_TYPES_INPUT = {"FR", "FRC", "MR", "OC", "MLR", "LR"}
 
 VALID_BS_TYPES = {"ONB", "OFB"}
 

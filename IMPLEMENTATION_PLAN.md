@@ -1,19 +1,19 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.67 SA SL classified as corporate sub-type)
-**Current version:** 0.1.119 | **Test suite:** ~3,431 collected (~3,398 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.65 SA Table A1 Row 2 100% CCF instrument types complete)
+**Current version:** 0.1.119 | **Test suite:** ~3,448 collected (~3,415 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -788,12 +788,22 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Art. 166D(6) "unrecognised exposure adjustment" (COREP column 0254 reporting for when floors bind) is not yet reported. The adjustment amount (floor EAD - modelled EAD) could be tracked as an audit column in a future increment.
 
 ### P1.65 SA Table A1 Row 2 (100% CCF) instrument types incomplete
-- **Status:** [ ] Not started
-- **Impact:** SA Table A1 Row 2 (100% CCF) covers: factoring/invoice discount facilities, outright forward purchase agreements, asset sale and repurchase agreements, forward deposits, partly-paid shares/securities, and other commitments with "certain drawdowns." The spec and code describe this row as "commitments to lend, purchase securities, provide guarantees" which conflates it with Row 1 (guarantees). Factoring, repos, and forward deposits would be incorrectly assigned to the 40-50% buckets instead of 100%, **understating capital**.
-- **File:Line:** `engine/ccf.py` (SA CCF assignment); `docs/specifications/crr/credit-conversion-factors.md` (Row 2 description)
-- **Spec ref:** PRA PS1/26 Art. 111 Table A1 Row 2
-- **Fix:** Add instrument-type classification logic to CCF assignment. Map factoring, repos, forward deposits, and partly-paid shares to 100% CCF. Add `commitment_type` refinements for these instrument types.
-- **Tests needed:** Unit tests for each Row 2 instrument type.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** PRA PS1/26 Art. 111 Table A1 Row 2 defines 100% CCF for certain-drawdown commitments (factoring, repos, forward deposits, forward purchases, partly-paid shares). Previously, these had no distinct risk_type code — they shared FR (Row 1: credit subs, guarantees) or risked being misclassified as OC (40%) or MR (50%), **understating capital by up to 60pp of notional**.
+  **Implementation:**
+  - **RiskType enum:** New `FRC = "full_risk_commitment"` member added to `RiskType` in `domain/enums.py`. Covers all Row 2 instrument types: factoring/invoice discounting, outright forward purchase agreements, repos, forward deposits, partly-paid shares.
+  - **SA CCF expression:** `sa_ccf_expression()` now handles `frc`/`full_risk_commitment` → 100% CCF under both CRR and Basel 3.1.
+  - **F-IRB CRR path:** `_compute_ccf()` CRR F-IRB branch handles FRC → 100% (CRR Annex I para 2 items).
+  - **F-IRB B31 path:** Automatically 100% via `sa_ccf_expression(is_basel_3_1=True)` per Art. 166C.
+  - **A-IRB B31:** FRC items excluded from own-estimate CCFs (SA CCF = 100% triggers Art. 166D(1)(a) carve-out automatically). CRR A-IRB can still use own-estimate.
+  - **Validation:** Added `frc` to `VALID_RISK_TYPE_CODES`, `full_risk_commitment` to `VALID_RISK_TYPES`, `FRC` to `VALID_RISK_TYPES_INPUT`, and mapping in `RISK_TYPE_CODE_TO_VALUE`.
+  - **Schema comments:** Updated `risk_type` field comments to include FRC across all schemas.
+  - **Spec fix:** `credit-conversion-factors.md` Row 2 description corrected from "Commitments to lend, purchase securities, provide guarantees or acceptances" to "Certain-drawdown commitments: factoring, repos, forward deposits/purchases, partly-paid shares" in all three CCF tables (SA, F-IRB, B31 SA).
+- **File:Line:** `domain/enums.py` (RiskType.FRC), `engine/ccf.py` (sa_ccf_expression + _compute_ccf F-IRB), `contracts/validation.py` (VALID_RISK_TYPE_CODES/TYPES/MAPPING), `data/schemas.py` (VALID_RISK_TYPES_INPUT + comments)
+- **Spec ref:** PRA PS1/26 Art. 111 Table A1 Row 2, CRR Annex I para 2, Art. 166D(1)(a)
+- **Tests:** 17 new unit tests in `tests/unit/test_ccf.py` (TestFullRiskCommitmentCCF): FRC short code 100% (CRR+B31), full name 100%, case insensitive, same as FR, B31=CRR, SA pipeline B31 100%, SA pipeline CRR 100%, F-IRB B31 100%, F-IRB CRR 100%, A-IRB revolving B31 uses SA 100% (carve-out), A-IRB non-revolving B31 uses SA 100%, A-IRB CRR uses modelled, FRC vs OC capital impact (2.5x), validation sets check, input validation check, enum member check, mixed batch all 6 risk types. 5 existing tests updated (full_value_names, all_risk_types_batch, all_risk_types_b31_batch, all_risk_types_crr_batch, firb_all_risk_types_b31). All 3,415 tests pass (was 3,398). Test count: 3,415 passed, 33 skipped.
+- **Limitation:** Institution data must classify instruments with the correct `risk_type = "FRC"` code. The calculator does not auto-derive instrument type from product features — classification is expected to happen upstream in data preparation.
 
 ### P1.66 Basel 3.1 QRRE threshold wrong — GBP 100k in code, should be GBP 90k (Art. 147(5A)(c))
 - **Status:** [x] Complete — false positive on the value; per-facility vs portfolio-level remains a separate consideration

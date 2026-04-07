@@ -346,9 +346,26 @@ class RiskType(StrEnum):
 
     FR = "full_risk"
     """
-    Full Risk - 100% CCF under SA and F-IRB
+    Full Risk - 100% CCF under SA and F-IRB (Table A1 Row 1)
 
-    -- Direct credit substitutes, guarantees, acceptances
+    -- Direct credit substitutes, guarantees, acceptances, credit derivatives
+    """
+
+    FRC = "full_risk_commitment"
+    """
+    Full Risk Commitment - 100% CCF under SA and F-IRB (Table A1 Row 2)
+
+    Commitments with certain drawdown, distinct from Row 1 (credit substitutes).
+    -- Factoring / invoice discounting facilities
+    -- Outright forward purchase agreements
+    -- Asset sale and repurchase agreements (repos)
+    -- Forward deposits
+    -- Partly-paid shares and securities
+    -- Other commitments with certain drawdowns
+
+    Ref: PRA PS1/26 Art. 111 Table A1 Row 2, CRR Annex I para 2
+    Under Basel 3.1 A-IRB, these cannot use own-estimate CCFs even if revolving
+    (Art. 166D(1)(a) carve-out).
     """
 
     MR = "medium_risk"

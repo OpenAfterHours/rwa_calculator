@@ -12,7 +12,8 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 
 | CCF Category | CCF | Description |
 |-------------|-----|-------------|
-| Full Risk (FR) | 100% | Direct credit substitutes, guarantees |
+| Full Risk (FR) | 100% | Direct credit substitutes, guarantees, acceptances |
+| Full Risk Commitment (FRC) | 100% | Certain-drawdown commitments: repos, factoring, forward deposits/purchases, partly-paid shares (Annex I para 2) |
 | Medium Risk (MR) | 50% | Undrawn commitments > 1 year |
 | Medium-Low Risk (MLR) | 20% | Undrawn commitments ≤ 1 year, trade-related LCs |
 | Low Risk (LR) | 0% | Unconditionally cancellable commitments |
@@ -22,6 +23,7 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 | CCF Category | CCF | Notes |
 |-------------|-----|-------|
 | Full Risk (FR) | 100% | Same as SA |
+| Full Risk Commitment (FRC) | 100% | Same as SA — repos, factoring, forward deposits (Annex I para 2) |
 | Medium Risk (MR) | 75% | Higher than SA 50% |
 | Medium-Low Risk (MLR) | 75% | Higher than SA 20% (general case) |
 | MLR (trade LCs) | 20% | Short-term trade LCs for goods movement (Art. 166(9) exception) |
@@ -31,8 +33,8 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 
 | Row | CCF Category | CRR | Basel 3.1 | Description |
 |-----|-------------|-----|-----------|-------------|
-| 1 | Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees |
-| 2 | Commitments | — | **100%** | Commitments to lend, purchase securities, provide guarantees or acceptances |
+| 1 | Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees, acceptances, credit derivatives |
+| 2 | Full Risk Commitment (FRC) | 100% | **100%** | Certain-drawdown commitments: factoring, repos, forward deposits/purchases, partly-paid shares |
 | 3 | Other OBS | — | **50%** | Other off-balance sheet items (NIFs, RUFs, UK resi mortgage commitments) |
 | 4 | Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
 | 5 | Other commitments | 0% | **40%** | All other commitments not in other categories |
@@ -51,8 +53,8 @@ Under Basel 3.1, F-IRB CCFs are aligned to **SA CCFs** (Art. 166C). The separate
 
 | CCF Category | CRR F-IRB | Basel 3.1 F-IRB | Description |
 |-------------|-----------|-----------------|-------------|
-| Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees |
-| Commitments (Row 2) | 75% | **100%** | Commitments to lend, purchase securities, provide guarantees |
+| Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees, acceptances |
+| Full Risk Commitment (FRC) | 100% | **100%** | Certain-drawdown commitments: factoring, repos, forward deposits/purchases, partly-paid shares |
 | Medium Risk (MR) | 75% | **50%** | NIFs, RUFs, UK resi mortgage commitments |
 | Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
 | Other commitments | — | **40%** | All other commitments not in other categories |

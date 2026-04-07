@@ -76,13 +76,15 @@ def sa_ccf_expression(
     Return a Polars expression that maps risk_type to SA CCFs.
 
     CRR (Art. 111):
-    - FR / full_risk: 100%
+    - FR / full_risk: 100% (Row 1 — credit substitutes, guarantees)
+    - FRC / full_risk_commitment: 100% (Row 2 — repos, factoring, forward deposits)
     - MR / medium_risk: 50%
     - MLR / medium_low_risk: 20%
     - OC / other_commit: 0% (no separate category under CRR)
     - LR / low_risk: 0%
 
     Basel 3.1 (PRA Art. 111 Table A1):
+    - FRC / full_risk_commitment: 100% (Row 2 — certain drawdown commitments)
     - OC / other_commit: 40% (new category — Row 5)
     - LR (unconditionally cancellable): 10% (Row 6)
 
@@ -100,7 +102,7 @@ def sa_ccf_expression(
     # separate category — these were 0% (lumped with LR/UCC).
     oc_ccf = 0.40 if is_basel_3_1 else 0.0
     return (
-        pl.when(normalized.is_in(["fr", "full_risk"]))
+        pl.when(normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"]))
         .then(pl.lit(1.0))
         .when(normalized.is_in(["mr", "medium_risk"]))
         .then(pl.lit(0.5))
@@ -245,7 +247,9 @@ class CCFCalculator:
         else:
             # CRR Art. 166(8): F-IRB = 75% for commitments, with exceptions
             firb_ccf = (
-                pl.when(normalized.is_in(["fr", "full_risk"]))
+                pl.when(
+                    normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"])
+                )
                 .then(pl.lit(1.0))
                 .when(normalized.is_in(["lr", "low_risk", "oc", "other_commit"]))
                 .then(pl.lit(0.0))  # UCC = 0% under CRR; OC has no CRR category (0%)

@@ -128,7 +128,7 @@ class ResolvedHierarchyBundle:
     ciu_holdings: pl.LazyFrame | None = None
     specialised_lending: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
-    hierarchy_errors: list = field(default_factory=list)
+    hierarchy_errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -164,7 +164,7 @@ class ClassifiedExposuresBundle:
     provisions: pl.LazyFrame | None = None
     counterparty_lookup: CounterpartyLookup | None = None
     classification_audit: pl.LazyFrame | None = None
-    classification_errors: list = field(default_factory=list)
+    classification_errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -216,7 +216,7 @@ class SAResultBundle:
 
     results: pl.LazyFrame
     calculation_audit: pl.LazyFrame | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -236,7 +236,7 @@ class IRBResultBundle:
     results: pl.LazyFrame
     expected_loss: pl.LazyFrame | None = None
     calculation_audit: pl.LazyFrame | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -254,7 +254,7 @@ class SlottingResultBundle:
 
     results: pl.LazyFrame
     calculation_audit: pl.LazyFrame | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -276,7 +276,7 @@ class EquityResultBundle:
     results: pl.LazyFrame
     calculation_audit: pl.LazyFrame | None = None
     approach: str = "sa"
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -437,7 +437,7 @@ class AggregatedResultBundle:
     post_crm_detailed: pl.LazyFrame | None = None
     post_crm_summary: pl.LazyFrame | None = None
     el_summary: ELPortfolioSummary | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 # =============================================================================
@@ -472,7 +472,7 @@ class ComparisonBundle:
     exposure_deltas: pl.LazyFrame
     summary_by_class: pl.LazyFrame
     summary_by_approach: pl.LazyFrame
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -508,7 +508,7 @@ class TransitionalScheduleBundle:
 
     timeline: pl.LazyFrame
     yearly_results: dict[int, AggregatedResultBundle] = field(default_factory=dict)
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -543,7 +543,7 @@ class CapitalImpactBundle:
     portfolio_waterfall: pl.LazyFrame
     summary_by_class: pl.LazyFrame
     summary_by_approach: pl.LazyFrame
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 # =============================================================================

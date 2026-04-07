@@ -36,7 +36,7 @@ if TYPE_CHECKING:
         ResolvedHierarchyBundle,
     )
     from rwa_calc.contracts.config import CalculationConfig
-    from rwa_calc.contracts.errors import LazyFrameResult
+    from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
 
 
 @runtime_checkable
@@ -615,7 +615,7 @@ class DataQualityCheckerProtocol(Protocol):
         self,
         data: RawDataBundle,
         config: CalculationConfig,
-    ) -> list:
+    ) -> list[CalculationError]:
         """
         Run data quality checks on raw data.
 

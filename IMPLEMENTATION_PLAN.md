@@ -1,8 +1,8 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P5.10 B31 defaulted acceptance tests)
-**Current version:** 0.1.142 | **Test suite:** 3,927 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P5.10, P6.1, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
-**CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (147 tests) | **Comparison:** 100% (60 tests)
+**Last updated:** 2026-04-07 (P5.9 equity acceptance tests)
+**Current version:** 0.1.143 | **Test suite:** 4,004 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P5.9, P5.10, P6.1, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (192 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
@@ -683,9 +683,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** This IS the test gap item.
 
 ### P5.9 No equity acceptance tests (CRR or Basel 3.1)
-- **Status:** [ ] Not started
-- **Impact:** `tests/unit/crr/test_crr_equity.py` has 49 unit tests, but no end-to-end acceptance scenario exists for equity under either framework. Given the multiple equity bugs (P1.42, P1.43, P1.71, P1.72), acceptance tests are critical for regression detection.
-- **Fix:** Add acceptance test scenarios for: CRR SA equity (listed/unlisted/PE), CRR IRB simple equity, B31 SA equity (250%/400%/150%/100%), equity transitional schedule, CIU look-through/mandate/fallback.
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** `tests/unit/crr/test_crr_equity.py` has 49 unit tests, but no end-to-end acceptance scenario existed for equity under either framework. Given the multiple equity bugs (P1.42, P1.43, P1.71, P1.72), acceptance tests are critical for regression detection.
+- **Fix:** Added 77 acceptance tests across 2 files:
+  - **CRR equity (`tests/acceptance/crr/test_scenario_crr_j_equity.py`, 32 tests):** 20 scenarios across SA (CRR-J1 to J9: listed/unlisted/exchange-traded/PE/govt-supported/speculative/central_bank/subordinated_debt/CIU fallback — all flat 100% except central_bank 0% and CIU 150%), IRB Simple (CRR-J10 to J14: exchange-traded 290%, diversified PE 190%, other 370%, central_bank 0%, govt-supported 190%), CIU (CRR-J15 to J17: mandate-based 80%, third-party 1.2× multiplier, no-approach fallback 150%), and RWA arithmetic (CRR-J18 to J20: SA/IRB precision, zero EAD).
+  - **Basel 3.1 equity (`tests/acceptance/basel31/test_scenario_b31_l_equity.py`, 45 tests):** 23 scenarios across SA weights (B31-L1 to L9: listed 250%, exchange-traded 250%, unlisted 250%, speculative 400%, govt-supported 100%, subordinated_debt 150%, central_bank 0%, PE 250%, is_speculative flag override), Art. 147A IRB removal (B31-L10: IRB config→SA 250%, not 290%), transitional schedule (B31-L11 to L16: year 1-3 floor never bites for 250%/400% base weights, subordinated_debt/govt-supported/central_bank excluded across all years), CIU (B31-L17 to L19: fallback 250%, mandate-based, third-party 1.2×), RWA/edge cases (B31-L20 to L22: arithmetic, zero EAD), CRR vs B31 regression contrast (B31-L23: listed 100%→250%, CIU 150%→250%, subordinated 100%→150%).
+- **File:Line:** `tests/acceptance/crr/test_scenario_crr_j_equity.py` (32 tests), `tests/acceptance/basel31/test_scenario_b31_l_equity.py` (45 tests)
+- **Tests:** All 4,004 tests pass (was 3,927). CRR acceptance: 133 (was 101). B31 acceptance: 192 (was 147).
 
 ### P5.10 No Basel 3.1 defaulted exposure acceptance tests
 - **Status:** [x] Complete (2026-04-07)

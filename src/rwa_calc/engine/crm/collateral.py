@@ -29,6 +29,7 @@ import polars as pl
 
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.constants import (
+    CRM_ALLOC_COLUMNS,
     MIN_COLLATERALISATION_THRESHOLDS,
     NON_ELIGIBLE_RE_TYPES,
     WATERFALL_ORDER,
@@ -698,13 +699,18 @@ def _apply_collateral_unified(
     )
 
     # --- Drop intermediate allocation columns ---
+    # Preserve _es_* columns (renamed to crm_alloc_*) for the A-IRB blended
+    # LGD floor (Art. 164(4)(c)).  These encode the dollar amount of EAD
+    # absorbed by each collateral category in the Art. 231 waterfall.
     drop_cols = (
         [f"{c}_{sfx}" for sfx in ["d", "f", "c"] for c in _agg]
         + ["_fac_ead_total", "_cp_ead_total", "_fw", "_cw", "_raw_nf_a"]
         + [f"_eff_{s}_a" for s in _wf_suffixes]
-        + [f"_es_{s}" for s in _wf_suffixes]
     )
     exposures = exposures.drop(drop_cols)
+    exposures = exposures.rename(
+        {f"_es_{s}": CRM_ALLOC_COLUMNS[s] for s in _wf_suffixes}
+    )
 
     # --- Apply EAD reduction + determine seniority-based LGDU ---
     # Supervisory LGDU for unsecured portion: FSE-aware under Basel 3.1

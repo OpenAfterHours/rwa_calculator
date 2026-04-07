@@ -251,6 +251,18 @@ WATERFALL_ORDER: list[tuple[list[str], str, str]] = [
     (["life_insurance"], "life_insurance", "li"),  # Art. 232: LGDS = 40% (same as other_physical/CRR)
 ]
 
+# Per-type allocation column names preserved from the Art. 231 waterfall.
+# These encode the dollar amount of EAD absorbed by each collateral category
+# in sequential fill order. Used by the A-IRB blended LGD floor (Art. 164(4)(c)).
+CRM_ALLOC_COLUMNS: dict[str, str] = {
+    "fin": "crm_alloc_financial",
+    "cb": "crm_alloc_covered_bond",
+    "rec": "crm_alloc_receivables",
+    "re": "crm_alloc_real_estate",
+    "op": "crm_alloc_other_physical",
+    "li": "crm_alloc_life_insurance",
+}
+
 
 def beneficiary_level_expr(bt_col: str = "beneficiary_type") -> pl.Expr:
     """Build expression classifying beneficiary_type into direct/facility/counterparty."""

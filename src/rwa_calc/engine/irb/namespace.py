@@ -46,6 +46,7 @@ from rwa_calc.engine.irb.adjustments import (
     compute_el_shortfall_excess as _compute_el_shortfall_excess,
 )
 from rwa_calc.engine.irb.formulas import (
+    _lgd_floor_blended_expression,
     _lgd_floor_expression,
     _lgd_floor_expression_with_collateral,
     _pd_floor_expression,
@@ -360,6 +361,7 @@ class IRBLazyFrame:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
             has_exposure_class = "exposure_class" in schema_names
+            has_alloc = "crm_alloc_financial" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
                     config,
@@ -371,6 +373,17 @@ class IRBLazyFrame:
                     config,
                     has_seniority=has_seniority,
                     has_exposure_class=has_exposure_class,
+                )
+
+            # Art. 164(4)(c) blended floor for retail with mixed collateral
+            if has_alloc and has_exposure_class:
+                blended_expr = _lgd_floor_blended_expression(config)
+                # Use blended floor where applicable (retail_other/qrre with collateral),
+                # fall back to single-type floor otherwise
+                lgd_floor_expr = (
+                    pl.when(blended_expr.is_not_null())
+                    .then(blended_expr)
+                    .otherwise(lgd_floor_expr)
                 )
 
             # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
@@ -607,6 +620,7 @@ class IRBLazyFrame:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
             has_exposure_class = "exposure_class" in schema_names
+            has_alloc = "crm_alloc_financial" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
                     config,
@@ -618,6 +632,14 @@ class IRBLazyFrame:
                     config,
                     has_seniority=has_seniority,
                     has_exposure_class=has_exposure_class,
+                )
+            # Art. 164(4)(c) blended floor for retail with mixed collateral
+            if has_alloc and has_exposure_class:
+                blended_expr = _lgd_floor_blended_expression(config)
+                lgd_floor_expr = (
+                    pl.when(blended_expr.is_not_null())
+                    .then(blended_expr)
+                    .otherwise(lgd_floor_expr)
                 )
             is_airb = (
                 pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)

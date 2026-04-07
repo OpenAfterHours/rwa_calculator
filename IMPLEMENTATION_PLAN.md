@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P6.1 type safety fix for bundle/protocol error lists)
-**Current version:** 0.1.136 | **Test suite:** 3,705 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.9a, P6.1, P6.10, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-07 (P1.87 A-IRB blended LGD floor for retail with mixed collateral)
+**Current version:** 0.1.137 | **Test suite:** 3,737 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P6.1, P6.10, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 77 (+P1.9a sub-item, +P1.86; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed, P1.83 Art. 159(1) Pool B AVAs now fixed, P1.9a OF-ADJ now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired)]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
@@ -339,6 +339,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** CRR Art. 129(5), CRR Art. 120 Tables 3/4
 - **Tests:** 18 new tests added to `tests/unit/test_covered_bonds.py`: 6 UK institution CQS parametrized tests, 6 standard institution CQS parametrized tests, 1 UK unrated institution fallback, 1 standard unrated institution fallback, 1 rated-ignores-institution-cqs, 1 UK-vs-standard RWA comparison, 3 table consistency cross-checks. All 3705 tests pass (was 3687).
 
+### P1.87 A-IRB blended LGD floor for retail with mixed collateral (Art. 164(4)(c))
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** `_lgd_floor_expression_with_collateral()` in `engine/irb/formulas.py` used a single `collateral_type` column to select ONE floor value per exposure. Art. 164(4)(c) requires a weighted-average floor using the per-type coverage proportions from the Art. 231 waterfall: `LGD_floor = (E_unsecured/EAD) × LGDU + Σ(E_i/EAD) × LGDS_i`. For retail_other (LGDU=30%) and retail_qrre (LGDU=50%), the single-type approach could understate capital — e.g., an exposure 60% covered by physical collateral (15% floor) and 40% unsecured got floor=15% instead of correct blended floor=21%. The `retail_lgdu` config field (Decimal("0.30")) was defined but never used.
+- **Fix:** CRM waterfall allocation columns (`crm_alloc_financial`, `crm_alloc_covered_bond`, `crm_alloc_receivables`, `crm_alloc_real_estate`, `crm_alloc_other_physical`, `crm_alloc_life_insurance`) now preserved through CRM output (previously dropped). New `_lgd_floor_blended_expression()` function in `formulas.py` computes weighted average floor using these allocations. Wired into both `apply_lgd_floor()` in namespace.py and `apply_all_formulas()` in formulas.py. Returns null for non-eligible exposures (corporate, retail_mortgage), falling through to single-type floor. `retail_lgdu` config field now consumed.
+- **File:Line:** `engine/crm/collateral.py:700-710` (preserve alloc columns), `engine/crm/constants.py:254-264` (CRM_ALLOC_COLUMNS), `engine/irb/formulas.py:245-339` (blended expression), `engine/irb/namespace.py:360-370,613-623` (dispatch wiring)
+- **Spec ref:** PRA PS1/26 Art. 164(4)(c)
+- **Tests:** 32 new unit tests in `tests/unit/test_lgd_floor_blended.py`: 15 direct blended expression tests (CRR zero, unsecured null, fully secured financial/physical, mixed physical+unsecured, financial+receivables, three-type mix, all-six-types, QRRE 50% LGDU, mortgage/corporate null, zero EAD, overcollateralised), 6 namespace integration tests (A-IRB blended applied, LGD above floor, F-IRB not floored, CRR no floor, corporate single-type, mortgage flat 5%), 1 CRM column mapping test, 10 edge cases (null columns, precision, parametrized two-type mix, receivables+RE blend, life insurance, covered bonds). All 3,737 tests pass (was 3,705).
+
 ---
 
 ## Priority 2 -- COREP Reporting Completeness
@@ -592,6 +600,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
   - `firb-calculation.md` SME formula: already has both EUR (CRR) and GBP (B31) sections
   - Art. 146(3): added as root PMA obligation reference in PMA section heading (Art. 146(3) / Art. 158(6A))
   - All other sub-items were already fixed in earlier increments (strikethrough entries)
+  - Stale spec markers fixed: Art. 147A 'Critical Gap' → 'Implemented (P1.4)', FSE 'not implemented' → 'implemented'. Equity-approach.md FR-1.7a/b/c updated to Done.
 
 ### P4.17 Hierarchy-classification spec missing Art. 123A retail qualifying criteria
 - **Status:** [x] Complete

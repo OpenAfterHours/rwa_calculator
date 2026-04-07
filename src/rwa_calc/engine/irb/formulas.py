@@ -242,6 +242,100 @@ def _lgd_floor_expression_with_collateral(
     )
 
 
+def _lgd_floor_blended_expression(
+    config: CalculationConfig,
+) -> pl.Expr:
+    """
+    Build Polars expression for the Art. 164(4)(c) blended LGD floor.
+
+    For retail "other secured" exposures with mixed collateral, the LGD floor
+    is a weighted average of per-type LGDS floors and the unsecured LGDU,
+    weighted by the proportion of EAD covered by each collateral type:
+
+        LGD_floor = (E_unsecured / EAD) × LGDU
+                  + Σ_i (E_i / EAD) × LGDS_i
+
+    Where E_i comes from the Art. 231 sequential waterfall (crm_alloc_* columns)
+    and E_unsecured = EAD - total_collateral_for_lgd.
+
+    Applies to:
+        - retail_other (LGDU = 30%)
+        - retail_qrre (LGDU = 50%)
+    Does NOT apply to:
+        - retail_mortgage (flat 5% floor per Art. 164(4)(a))
+        - CRR (no LGD floors)
+
+    Requires crm_alloc_* columns from CRM waterfall and ead_gross.
+    Falls back to _lgd_floor_expression_with_collateral() for non-retail or
+    when allocation columns are absent.
+
+    References:
+        PRA PS1/26 Art. 164(4)(c)
+    """
+    if config.is_crr:
+        return pl.lit(0.0)
+
+    floors = config.lgd_floors
+
+    ead = pl.col("ead_gross")
+    total_coll = pl.col("total_collateral_for_lgd").fill_null(0.0)
+    unsecured_portion = (ead - total_coll).clip(lower_bound=0.0)
+
+    alloc_fin = pl.col("crm_alloc_financial").fill_null(0.0)
+    alloc_cb = pl.col("crm_alloc_covered_bond").fill_null(0.0)
+    alloc_rec = pl.col("crm_alloc_receivables").fill_null(0.0)
+    alloc_re = pl.col("crm_alloc_real_estate").fill_null(0.0)
+    alloc_op = pl.col("crm_alloc_other_physical").fill_null(0.0)
+    alloc_li = pl.col("crm_alloc_life_insurance").fill_null(0.0)
+
+    # Per-type LGDS floors for retail (Art. 164(4)(c))
+    lgds_fin = float(floors.financial_collateral)      # 0%
+    lgds_cb = float(floors.financial_collateral)        # 0% (treated as financial)
+    lgds_rec = float(floors.receivables)                # 10%
+    lgds_re = float(floors.commercial_real_estate)      # 10% (non-RRE immovable property)
+    lgds_op = float(floors.other_physical)              # 15%
+    lgds_li = float(floors.financial_collateral)        # 0% (treated as financial)
+
+    numerator = (
+        alloc_fin * lgds_fin
+        + alloc_cb * lgds_cb
+        + alloc_rec * lgds_rec
+        + alloc_re * lgds_re
+        + alloc_op * lgds_op
+        + alloc_li * lgds_li
+    )
+
+    # LGDU depends on exposure class:
+    # - retail_other: 30% (Art. 164(4)(c))
+    # - retail_qrre: 50% (Art. 164(4)(b)(i))
+    exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
+    lgdu_expr = (
+        pl.when(exp_class.is_in(["retail_qrre"]))
+        .then(pl.lit(float(floors.retail_qrre_unsecured)))   # 50%
+        .otherwise(pl.lit(float(floors.retail_lgdu)))          # 30%
+    )
+
+    numerator_with_unsecured = numerator + unsecured_portion * lgdu_expr
+
+    blended = (
+        pl.when(ead > 0)
+        .then(numerator_with_unsecured / ead)
+        .otherwise(pl.lit(0.0))
+    )
+
+    # Apply blended floor only to retail_other and retail_qrre with collateral.
+    # retail_mortgage uses flat 5% (Art. 164(4)(a)).
+    # Corporate uses single-type floor from _lgd_floor_expression_with_collateral().
+    is_blended_eligible = exp_class.is_in(["retail_other", "retail_qrre"])
+    has_collateral = total_coll > 0
+
+    return (
+        pl.when(is_blended_eligible & has_collateral)
+        .then(blended)
+        .otherwise(pl.lit(None))
+    )
+
+
 # =============================================================================
 # MAIN VECTORIZED FUNCTION (pure Polars with polars-normal-stats)
 # =============================================================================
@@ -299,6 +393,7 @@ def apply_irb_formulas(
         has_collateral_type = "collateral_type" in schema_names
         has_seniority = "seniority" in schema_names
         has_exposure_class = "exposure_class" in schema_names
+        has_alloc = "crm_alloc_financial" in schema_names
         if has_collateral_type:
             lgd_floor_expr = _lgd_floor_expression_with_collateral(
                 config,
@@ -310,6 +405,14 @@ def apply_irb_formulas(
                 config,
                 has_seniority=has_seniority,
                 has_exposure_class=has_exposure_class,
+            )
+        # Art. 164(4)(c) blended floor for retail with mixed collateral
+        if has_alloc and has_exposure_class:
+            blended_expr = _lgd_floor_blended_expression(config)
+            lgd_floor_expr = (
+                pl.when(blended_expr.is_not_null())
+                .then(blended_expr)
+                .otherwise(lgd_floor_expr)
             )
         is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
         floored_lgd = pl.max_horizontal(pl.col("lgd"), lgd_floor_expr)

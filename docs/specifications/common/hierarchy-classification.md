@@ -163,7 +163,7 @@ Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500
 - Applying the FI scalar (1.25x correlation multiplier)
 - Determining approach restrictions under Art. 147A(1)(e) (**all** FSEs → F-IRB only, not just large FSEs)
 
-The `is_financial_sector_entity` flag should be derived from entity type and/or regulatory classification data. Currently not implemented in the classifier.
+The `cp_is_financial_sector_entity` flag is sourced from the counterparty schema and propagated through the classifier. It is used for the Art. 147A(1)(e) F-IRB-only block and for applying the 45% FSE LGD floor.
 
 ### Defaulted Exposures
 
@@ -190,8 +190,8 @@ Under Basel 3.1, PRA PS1/26 Art. 147A mandates specific approaches by exposure s
 | Retail — other | A-IRB (if approved) | Art. 147A(3) |
 | Specialised lending (OF/PF/CF) | **Slotting** (default); F-IRB or A-IRB with explicit permission | Art. 147A(1)(d) |
 
-!!! warning "Critical Gap — Not Implemented"
-    Art. 147A restrictions are **not enforced** in the classifier. The current implementation routes exposures based on `IRBPermissions` configuration without checking Basel 3.1 mandatory approach assignments. This is a P1 item.
+!!! note "Implementation Status — Implemented (P1.4 Complete)"
+    Art. 147A restrictions are enforced via `IRBPermissions.full_irb_b31()`, which encodes the mandatory approach assignments for sovereign/institution/IPRE/HVCRE/FSE/large corporate/equity sub-classes. The classifier enforces IPRE and HVCRE slotting routing, and blocks FSE and large-corporate exposures from A-IRB (F-IRB only). Equity is restricted to SA. Sovereign sub-classes (RGLA, PSE, MDB, international org with 0% RW) are forced to SA.
 
 ### Art. 112 Table A2 Priority Ordering
 

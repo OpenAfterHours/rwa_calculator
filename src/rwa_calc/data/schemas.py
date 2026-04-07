@@ -496,7 +496,7 @@ VALID_COLLATERAL_TYPES = {
     "credit_linked_note",
 }
 
-VALID_PROPERTY_TYPES = {"residential", "commercial"}
+VALID_PROPERTY_TYPES = {"residential", "commercial", "adc"}
 
 VALID_ISSUER_TYPES = {"sovereign", "pse", "corporate", "securitisation"}
 
@@ -546,6 +546,8 @@ VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 
 VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting"}
 
+VALID_CIU_APPROACHES = {"look_through", "mandate_based", "fallback"}
+
 # Registry: maps table_name -> {column_name -> valid_values_set}
 # Used by validate_bundle_values() for input validation.
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
@@ -588,6 +590,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "equity_exposures": {
         "equity_type": VALID_EQUITY_TYPES,
+        "ciu_approach": VALID_CIU_APPROACHES,
     },
     "guarantees": {
         "beneficiary_type": VALID_BENEFICIARY_TYPES,

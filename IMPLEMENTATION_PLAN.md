@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P5.6 IRB unit test coverage)
-**Current version:** 0.1.140 | **Test suite:** 3,886 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P6.1, P6.5, P6.10, P6.12, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-07 (P6.14/P6.16 enum validation completeness)
+**Current version:** 0.1.141 | **Test suite:** 3,896 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P6.1, P6.5, P6.10, P6.12, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -765,16 +765,17 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Remove.
 
 ### P6.14 Missing enum values across domain/enums.py
-- **Status:** [ ] Partially resolved (HIGH_RISK added; others remain)
-- **Impact:** Multiple enum classes are missing values needed for full regulatory coverage:
-  - `ExposureClass`: SECURITISATION, INTERNATIONAL_ORGANISATION, CIU (CIU may exist as fallback only). **HIGH_RISK added** (Art. 112(1)(l)) — resolved as part of P1.62.
-  - `SCRAGrade`: A_ENHANCED (needed for P1.12)
-  - `RiskType`: OTHER_COMMIT (needed for P1.29 40% CCF)
-  - `EquityType`: SUBORDINATED_DEBT, LEGISLATIVE (needed for P1.42 B31 equity weights)
-  - `CollateralType`: misaligned with VALID_COLLATERAL_TYPES string set
-- **File:Line:** `domain/enums.py` (multiple classes)
-- **Fix:** Add all missing enum members. Ensure consistency between enum members and string-based validation sets. Note: A_ENHANCED and OTHER_COMMIT are prerequisites for P1.12 and P1.29 respectively.
-- **Tests needed:** Contract tests verifying enum completeness against regulatory tables. Unit tests for new enum values in risk weight lookups.
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** Multiple enum classes were reported as missing values. Investigation confirmed most are already present:
+  - `ExposureClass`: SECURITISATION, INTERNATIONAL_ORGANISATION, CIU — intentionally out of scope (tracked in P7.4).
+  - ~~`SCRAGrade`: A_ENHANCED~~ — **already exists** (line 313 of enums.py, added for P1.12).
+  - ~~`RiskType`: OTHER_COMMIT~~ — **already exists** as `RiskType.OC` with value `"other_commit"` (line 388, added for P1.29).
+  - ~~`EquityType`: SUBORDINATED_DEBT~~ — **already exists** (line 459, added for P1.59).
+  - `EquityType`: LEGISLATIVE — **not needed as separate value**. The existing `GOVERNMENT_SUPPORTED` handles Art. 133(6) legislative equity (100% B31 weight, excluded from transitional floor). Calculator comments explicitly call it "Government-supported (legislative programme)".
+  - `CollateralType` vs `VALID_COLLATERAL_TYPES` — **by design**: `CollateralType` enum represents CRM category groupings (FINANCIAL, IMMOVABLE, etc.) while `VALID_COLLATERAL_TYPES` represents granular input strings (cash, gold, bond, etc.). No misalignment.
+  - `PropertyType.ADC` was in enum but missing from `VALID_PROPERTY_TYPES` validator — **fixed** (2026-04-07), `"adc"` added to `VALID_PROPERTY_TYPES`.
+- **File:Line:** `data/schemas.py:499` (VALID_PROPERTY_TYPES), `domain/enums.py` (all verified)
+- **Tests:** 1 new test in `tests/contracts/test_validation.py` for ADC property type acceptance.
 
 ### P6.15 4 missing schema fields for plan items
 - **Status:** [~] Partially resolved
@@ -795,11 +796,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Schema validation tests for new fields.
 
 ### P6.16 risk_type/scra_grade/ciu_approach not in COLUMN_VALUE_CONSTRAINTS
-- **Status:** [ ] Not started
-- **Impact:** Three columns that accept enum-like values are not validated by COLUMN_VALUE_CONSTRAINTS in `data/schemas.py`. Invalid values in these columns would pass schema validation silently, potentially causing incorrect risk weight assignment downstream.
-- **File:Line:** `data/schemas.py` (COLUMN_VALUE_CONSTRAINTS dict)
-- **Fix:** Add validation entries for `risk_type` (against RiskType enum values), `scra_grade` (against SCRAGrade enum values), and `ciu_approach` (against valid CIU approach strings).
-- **Tests needed:** Unit tests for invalid values in these columns being caught by validation.
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** Investigation found that `risk_type` (facilities, contingents) and `scra_grade` (counterparties) were **already validated** in COLUMN_VALUE_CONSTRAINTS. Only `ciu_approach` was missing — invalid CIU approach values (e.g., "invalid") would pass silently and be ignored by the equity calculator, potentially masking data quality issues.
+- **Fix:** Added `VALID_CIU_APPROACHES = {"look_through", "mandate_based", "fallback"}` constant to `data/schemas.py`. Added `"ciu_approach": VALID_CIU_APPROACHES` to the `equity_exposures` entry in `COLUMN_VALUE_CONSTRAINTS`. The validation is case-insensitive and null-tolerant (null ciu_approach is valid for non-CIU equity).
+- **File:Line:** `data/schemas.py:549` (VALID_CIU_APPROACHES constant), `data/schemas.py:592` (constraint entry)
+- **Tests:** 10 new tests in `tests/contracts/test_validation.py`: valid ciu_approach accepted, invalid ciu_approach detected, ADC property type accepted, invalid property type detected, valid risk_type accepted, invalid risk_type detected, valid scra_grade accepted, invalid scra_grade detected, null ciu_approach skipped, equity_exposures multiple constraints. All 3,896 tests pass (was 3,886). Contract tests: 135 (was 125).
 
 ### P6.17 Pipeline _run_crm_processor() is dead code
 - **Status:** [x] Complete

@@ -575,9 +575,6 @@ class SACalculator:
             non_inv_grade_rw = float(B31_CORPORATE_NON_INVESTMENT_GRADE_RW)
             sme_corp_rw = float(B31_CORPORATE_SME_RW)
             sub_debt_rw = float(B31_SUBORDINATED_DEBT_RW)
-            b31_def_threshold = float(B31_DEFAULTED_PROVISION_THRESHOLD)
-            b31_def_high_rw = float(B31_DEFAULTED_RW_HIGH_PROVISION)
-            b31_def_low_rw = float(B31_DEFAULTED_RW_LOW_PROVISION)
 
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()
@@ -888,9 +885,6 @@ class SACalculator:
             cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
             cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
             cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
-            crr_def_threshold = float(CRR_DEFAULTED_PROVISION_THRESHOLD)
-            crr_def_high_rw = float(CRR_DEFAULTED_RW_HIGH_PROVISION)
-            crr_def_low_rw = float(CRR_DEFAULTED_RW_LOW_PROVISION)
 
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()

@@ -341,7 +341,6 @@ def apply_firb_supervisory_lgd_no_collateral(
 
     if is_basel_3_1 and airb_method == AIRBCollateralMethod.FOUNDATION:
         # AIRB Foundation election: use supervisory LGDU (same as FIRB)
-        airb_lgd_expr = pl.when(is_subordinated).then(pl.lit(0.75)).otherwise(lgd_senior_expr)
         uses_formula = (pl.col("approach") == ApproachType.FIRB.value) | is_airb
     elif (
         is_basel_3_1

@@ -1160,6 +1160,211 @@ class TestLGDFloors:
         result = lf.irb.apply_lgd_floor(basel31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.40)
 
+    # --- P1.8: Generic 'immovable' collateral_type routing for RRE/CRE ---
+
+    def test_immovable_collateral_retail_mortgage_floor_5pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8 bug fix: collateral_type 'immovable' with retail_mortgage gets 5% floor.
+
+        Previously, the generic 'immovable' branch always returned 10% (CRE floor)
+        regardless of exposure class. Art. 164(4)(a) mandates 5% for retail RRE.
+        Since retail_mortgage exposures are by definition RRE-secured (Art. 147(5A)(a)),
+        'immovable' collateral on a retail_mortgage must use the 5% floor.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02, 0.02],
+                "collateral_type": ["immovable", "immovable"],
+                "exposure_class": ["retail_mortgage", "CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        # Retail mortgage + immovable: 5% (Art. 164(4)(a))
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+        # Corporate + immovable: 10% (Art. 161(5))
+        assert result["lgd_floor"][1] == pytest.approx(0.10)
+
+    def test_real_estate_collateral_retail_mortgage_floor_5pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8: collateral_type 'real_estate' with retail_mortgage also gets 5%.
+
+        The alias 'real_estate' is another common name for immovable property
+        and must also route correctly.
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02],
+                "collateral_type": ["real_estate"],
+                "exposure_class": ["retail_mortgage"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+
+    def test_property_collateral_retail_mortgage_floor_5pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8: collateral_type 'property' with retail_mortgage also gets 5%."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02],
+                "collateral_type": ["property"],
+                "exposure_class": ["retail_mortgage"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.05)
+
+    def test_immovable_corporate_still_10pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8 regression: corporate + immovable stays at 10% (Art. 161(5))."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02],
+                "collateral_type": ["immovable"],
+                "exposure_class": ["CORPORATE"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.10)
+
+    def test_immovable_retail_other_10pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8: retail_other with immovable collateral gets 10% (corporate LGDS).
+
+        Art. 164(4)(a) 5% only applies to retail_mortgage (RRE-secured).
+        Other retail with RE collateral uses the same LGDS as corporate (10%).
+        """
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02],
+                "collateral_type": ["immovable"],
+                "exposure_class": ["retail_other"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.10)
+
+    def test_immovable_without_exposure_class_defaults_10pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8: Without exposure_class, immovable defaults to 10% (conservative)."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02],
+                "collateral_type": ["immovable"],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config).alias("lgd_floor")
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.10)
+
+    def test_apply_irb_formulas_immovable_retail_mortgage_5pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8: apply_irb_formulas() passes has_exposure_class for correct routing.
+
+        Previously, apply_irb_formulas() did not pass has_exposure_class to
+        _lgd_floor_expression_with_collateral(), so retail_mortgage with
+        'immovable' collateral always got 10% instead of 5%.
+        """
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_mortgage"],
+                "pd": [0.01],
+                "lgd": [0.02],
+                "ead_final": [500_000.0],
+                "collateral_type": ["immovable"],
+                "is_airb": [True],
+            }
+        )
+        result = apply_irb_formulas(lf, basel31_config).collect()
+        # Retail mortgage + immovable: floored to 5% (Art. 164(4)(a))
+        assert result["lgd_floored"][0] == pytest.approx(0.05)
+
+    def test_namespace_immovable_retail_mortgage_5pct(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8: Namespace pipeline correctly floors retail_mortgage + immovable at 5%."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_class": ["retail_mortgage"],
+                "lgd_input": [0.02],
+                "is_airb": [True],
+                "collateral_type": ["immovable"],
+            }
+        )
+        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        assert result["lgd_floored"][0] == pytest.approx(0.05)
+
+    def test_mixed_immovable_collateral_types_batch(
+        self,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """P1.8: Mixed batch with different collateral aliases all route correctly."""
+        lf = pl.LazyFrame(
+            {
+                "lgd": [0.02, 0.02, 0.02, 0.02, 0.02],
+                "collateral_type": [
+                    "residential_re",  # Explicit RRE
+                    "immovable",  # Generic — should use rre_floor
+                    "real_estate",  # Generic — should use rre_floor
+                    "commercial_re",  # Explicit CRE
+                    "immovable",  # Generic — corporate → 10%
+                ],
+                "exposure_class": [
+                    "retail_mortgage",
+                    "retail_mortgage",
+                    "retail_mortgage",
+                    "retail_mortgage",
+                    "CORPORATE",
+                ],
+            }
+        )
+        result = lf.with_columns(
+            _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
+                "lgd_floor"
+            )
+        ).collect()
+        assert result["lgd_floor"][0] == pytest.approx(0.05)  # residential_re → 5%
+        assert result["lgd_floor"][1] == pytest.approx(0.05)  # immovable + retail_mortgage → 5%
+        assert result["lgd_floor"][2] == pytest.approx(0.05)  # real_estate + retail_mortgage → 5%
+        assert result["lgd_floor"][3] == pytest.approx(0.10)  # commercial_re → always 10%
+        assert result["lgd_floor"][4] == pytest.approx(0.10)  # immovable + corporate → 10%
+
     def test_apply_all_formulas_lgd_floor_airb_only(
         self,
         basel31_config: CalculationConfig,

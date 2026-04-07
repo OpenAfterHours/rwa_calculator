@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.23 duplicate IRB defaulted treatment consolidated)
-**Current version:** 0.1.111 | **Test suite:** ~3,227 collected (~3,184 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.8 LGD floor immovable RE routing fixed)
+**Current version:** 0.1.111 | **Test suite:** ~3,226 collected (~3,193 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -203,12 +203,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit and acceptance tests.
 
 ### P1.8 LGDFloors residential vs commercial RE distinction
-- **Status:** [~] Field exists but routing incomplete
-- **Impact:** `LGDFloors.get_floor()` at `config.py:125` maps `CollateralType.IMMOVABLE` solely to `self.commercial_real_estate`. There is no `CollateralType` member for residential RE. `PropertyType` has RESIDENTIAL/COMMERCIAL but `CollateralType` only has IMMOVABLE. Currently both corporate LGD floors are 10% so no incorrect result, but code cannot distinguish when floors diverge (and retail RRE floor IS 5% per P1.2).
-- **File:Line:** `contracts/config.py:125`
-- **Spec ref:** PRA PS1/26 Art. 161(5), Art. 164(4)
-- **Fix:** Either split `CollateralType.IMMOVABLE` into `IMMOVABLE_RESIDENTIAL` / `IMMOVABLE_COMMERCIAL`, or add a secondary lookup parameter to `get_floor()`.
-- **Tests needed:** Unit tests for residential vs commercial collateral LGD floor.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** Two bugs fixed in LGD floor routing for generic 'immovable' collateral type:
+  - **(a) Vectorized path bug:** `_lgd_floor_expression_with_collateral()` generic 'immovable'/'real_estate'/'property' branch always returned CRE floor (10%), ignoring exposure class. Retail mortgage exposures with `CollateralType.IMMOVABLE` (the canonical enum value) got 10% instead of the correct 5% per Art. 164(4)(a). Fixed by routing the generic immovable branch through `rre_floor`, which returns 5% for retail_mortgage and 10% for corporate/other (both correct).
+  - **(b) apply_irb_formulas missing has_exposure_class:** `apply_irb_formulas()` did not pass `has_exposure_class` to the LGD floor expression builders, so the retail-specific routing from P1.2 was inactive through the standalone formula path. Now passes `has_exposure_class` consistently.
+  - Scalar `get_floor()` was already correct (line 163-164 handles retail_mortgage + IMMOVABLE → 5%).
+  - No `CollateralType` enum split needed — the fix routes based on exposure class, which is the correct regulatory indicator (retail_mortgage is by definition RRE-secured per Art. 147(5A)(a)).
+- **File:Line:** `engine/irb/formulas.py:237-238` (generic immovable branch), `engine/irb/formulas.py:298-306` (apply_irb_formulas has_exposure_class)
+- **Spec ref:** PRA PS1/26 Art. 164(4)(a), Art. 161(5), Art. 147(5A)(a)
+- **Tests:** 9 new unit tests in `tests/unit/test_basel31_engine.py` (TestLGDFloors P1.8 section): immovable+retail_mortgage→5%, real_estate+retail_mortgage→5%, property+retail_mortgage→5%, immovable+corporate→10%, immovable+retail_other→10%, immovable without exposure_class→10%, apply_irb_formulas pipeline→5%, namespace pipeline→5%, mixed batch 5 rows. All 3,193 tests pass (was ~3,184). Test count: 3,193 passed, 33 skipped.
 
 ### P1.9 Output Floor -- OF-ADJ, portfolio-level application, U-TREA/S-TREA
 - **Status:** [~] Partial (3 sub-issues remain; (b) complete)

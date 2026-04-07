@@ -235,7 +235,7 @@ def _lgd_floor_expression_with_collateral(
         .when(coll.is_in(["commercial_re", "cre", "commercial", "commercial_property"]))
         .then(pl.lit(float(floors.commercial_real_estate)))
         .when(coll.is_in(["real_estate", "property", "immovable"]))
-        .then(pl.lit(float(floors.commercial_real_estate)))
+        .then(rre_floor)  # Routes to 5% for retail_mortgage, 10% for corporate (P1.8)
         .when(coll.is_in(["other_physical", "equipment", "inventory"]))
         .then(pl.lit(float(floors.other_physical)))
         .otherwise(unsecured_floor)
@@ -298,12 +298,19 @@ def apply_irb_formulas(
     if config.is_basel_3_1:
         has_collateral_type = "collateral_type" in schema_names
         has_seniority = "seniority" in schema_names
+        has_exposure_class = "exposure_class" in schema_names
         if has_collateral_type:
             lgd_floor_expr = _lgd_floor_expression_with_collateral(
-                config, has_seniority=has_seniority
+                config,
+                has_seniority=has_seniority,
+                has_exposure_class=has_exposure_class,
             )
         else:
-            lgd_floor_expr = _lgd_floor_expression(config, has_seniority=has_seniority)
+            lgd_floor_expr = _lgd_floor_expression(
+                config,
+                has_seniority=has_seniority,
+                has_exposure_class=has_exposure_class,
+            )
         is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
         floored_lgd = pl.max_horizontal(pl.col("lgd"), lgd_floor_expr)
         exposures = exposures.with_columns(

@@ -81,10 +81,12 @@ B31_COMMERCIAL_INCOME_LTV_BANDS: list[dict[str, Decimal]] = [
 
 # =============================================================================
 # COMMERCIAL REAL ESTATE — GENERAL (PRA PS1/26 Art. 124H)
-# Not materially dependent on cash flows
-# Loan-splitting: 60% on portion up to 55% of property value,
-# counterparty RW on the residual (for natural person / SME)
-# Other counterparties: max(60%, min(counterparty RW, Art 124I RW))
+# Not materially dependent on cash flows.
+# Two treatments by counterparty type:
+#   (1-2) Natural person / SME: Loan-splitting — 60% on portion up to 55% of
+#         property value, counterparty RW on the residual.
+#   (3)   Other counterparties: max(60%, min(counterparty RW, Art. 124I RW))
+#         where Art. 124I RW is 100% (LTV ≤ 80%) or 110% (LTV > 80%).
 #
 # NOTE: The PRA adopted loan-splitting for CRE (Art. 124H), NOT the BCBS
 # CRE20.85 preferential min(60%, counterparty RW) approach.
@@ -392,11 +394,17 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     """
     Polars expression for Basel 3.1 commercial RE risk weights.
 
-    General CRE (PRA Art. 124H): Loan-splitting — 60% on portion up to 55% of
-    property value, counterparty RW on the residual.
+    General CRE routes by counterparty type (PRA Art. 124H):
+      - Natural person / SME (Art. 124H(1-2)): Loan-splitting — 60% on portion
+        up to 55% of property value, counterparty RW on the residual.
+      - Other counterparties (Art. 124H(3)): max(60%, min(counterparty_RW,
+        Art. 124I income-producing RW)). This prevents large corporates from
+        getting the favourable loan-splitting treatment.
+
     Income-producing CRE (PRA Art. 124I): 100% (LTV ≤ 80%), 110% (LTV > 80%).
 
-    Requires columns: ltv, has_income_cover, and the counterparty RW column
+    Requires columns: ltv, has_income_cover, cp_is_natural_person, is_sme,
+        and the counterparty RW column
 
     Args:
         counterparty_rw_col: Column containing the CQS-based counterparty risk weight
@@ -408,16 +416,34 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     is_income = pl.col("has_income_cover").fill_null(False)
     cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
 
-    # Income-producing CRE (PRA Art. 124I): 100% ≤80% LTV, 110% >80% LTV
-    income = pl.when(ltv <= 0.80).then(pl.lit(1.00)).otherwise(pl.lit(1.10))
+    # Counterparty type for Art. 124H routing:
+    # Natural person or SME → loan-splitting (Art. 124H(1-2))
+    # Other counterparties → max/min formula (Art. 124H(3))
+    # Default: False (other counterparty) — conservative, gives higher RW
+    is_person_or_sme = (
+        pl.col("cp_is_natural_person").fill_null(False)
+        | pl.col("is_sme").fill_null(False)
+    )
 
-    # General CRE (PRA Art. 124H): loan-splitting at 55% of property value
+    # Income-producing CRE (PRA Art. 124I): 100% ≤80% LTV, 110% >80% LTV
+    income_rw = pl.when(ltv <= 0.80).then(pl.lit(1.00)).otherwise(pl.lit(1.10))
+
+    # General CRE — natural person/SME (Art. 124H(1-2)): loan-splitting
     # secured_share = min(1.0, 0.55 / LTV)
     # RW = 0.60 × secured_share + counterparty_RW × (1.0 - secured_share)
     secured_share = pl.min_horizontal(pl.lit(1.0), pl.lit(0.55) / ltv)
-    general = pl.lit(0.60) * secured_share + cp_rw * (pl.lit(1.0) - secured_share)
+    loan_split_rw = pl.lit(0.60) * secured_share + cp_rw * (pl.lit(1.0) - secured_share)
 
-    return pl.when(is_income).then(income).otherwise(general)
+    # General CRE — other counterparties (Art. 124H(3)):
+    # max(60%, min(counterparty_RW, Art. 124I income-producing RW))
+    # The income-producing RW serves as a cap; the 60% floor ensures CRE
+    # never gets a lower RW than the secured portion weight.
+    other_cp_rw = pl.max_horizontal(pl.lit(0.60), pl.min_horizontal(cp_rw, income_rw))
+
+    # Route general CRE based on counterparty type
+    general = pl.when(is_person_or_sme).then(loan_split_rw).otherwise(other_cp_rw)
+
+    return pl.when(is_income).then(income_rw).otherwise(general)
 
 
 def b31_adc_rw_expr() -> pl.Expr:
@@ -518,14 +544,22 @@ def lookup_b31_commercial_rw(
     ltv: Decimal,
     counterparty_rw: Decimal = Decimal("1.00"),
     is_income_producing: bool = False,
+    is_natural_person_or_sme: bool = True,
 ) -> tuple[Decimal, str]:
     """
     Look up Basel 3.1 commercial RE risk weight for a single exposure.
+
+    General CRE routes by counterparty type (PRA Art. 124H):
+      - Natural person / SME (Art. 124H(1-2)): loan-splitting
+      - Other counterparties (Art. 124H(3)): max(60%, min(cp_rw, income_rw))
 
     Args:
         ltv: Loan-to-value ratio
         counterparty_rw: CQS-based risk weight of the counterparty (for general CRE)
         is_income_producing: Whether materially dependent on property cash flows
+        is_natural_person_or_sme: Whether the counterparty is a natural person
+            or SME. True = loan-splitting (Art. 124H(1-2)); False = max/min
+            formula (Art. 124H(3)). Default True for backward compatibility.
 
     Returns:
         Tuple of (risk_weight, description)
@@ -538,13 +572,23 @@ def lookup_b31_commercial_rw(
         rw = B31_COMMERCIAL_INCOME_LTV_BANDS[-1]["risk_weight"]
         return rw, f"B31 CRE (income-producing): {float(rw):.0%} (LTV > 80%)"
 
-    # General CRE (PRA Art. 124H) — loan-splitting at 55% of property value
-    secured_ratio = min(Decimal("1.0"), B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO / ltv)
-    rw = B31_COMMERCIAL_GENERAL_SECURED_RW * secured_ratio + counterparty_rw * (
-        Decimal("1.0") - secured_ratio
-    )
+    if is_natural_person_or_sme:
+        # General CRE — natural person/SME (PRA Art. 124H(1-2)): loan-splitting
+        secured_ratio = min(Decimal("1.0"), B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO / ltv)
+        rw = B31_COMMERCIAL_GENERAL_SECURED_RW * secured_ratio + counterparty_rw * (
+            Decimal("1.0") - secured_ratio
+        )
+        return rw, (
+            f"B31 CRE (general, loan-split): {float(rw):.1%} "
+            f"(LTV {float(ltv):.0%}, secured {float(secured_ratio):.0%} @ 60%, "
+            f"residual @ {float(counterparty_rw):.0%})"
+        )
+
+    # General CRE — other counterparties (PRA Art. 124H(3)):
+    # max(60%, min(counterparty_RW, Art. 124I income-producing RW))
+    income_rw = Decimal("1.00") if ltv <= Decimal("0.80") else Decimal("1.10")
+    rw = max(Decimal("0.60"), min(counterparty_rw, income_rw))
     return rw, (
-        f"B31 CRE (general, loan-split): {float(rw):.1%} "
-        f"(LTV {float(ltv):.0%}, secured {float(secured_ratio):.0%} @ 60%, "
-        f"residual @ {float(counterparty_rw):.0%})"
+        f"B31 CRE (general, Art. 124H(3)): {float(rw):.0%} "
+        f"(max(60%, min({float(counterparty_rw):.0%}, {float(income_rw):.0%})))"
     )

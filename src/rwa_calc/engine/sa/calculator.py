@@ -389,6 +389,11 @@ class SACalculator:
             missing_cols.append(pl.lit(False).alias("is_short_term_trade_lc"))
         if "is_payroll_loan" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_payroll_loan"))
+        # Art. 124H counterparty type for CRE general treatment routing
+        if "cp_is_natural_person" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("cp_is_natural_person"))
+        if "is_sme" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_sme"))
         # CRM collateral columns for Art. 127 secured/unsecured split
         if "collateral_re_value" not in schema.names():
             missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))

@@ -283,6 +283,12 @@ class ExposureClassifier:
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ]
 
+        # Natural person flag — Art. 124H CRE counterparty type (optional in input data)
+        if "is_natural_person" in cp_col_names:
+            select_cols.append(
+                pl.col("is_natural_person").alias("cp_is_natural_person")
+            )
+
         # FSE flag — Art. 147A(1)(e) approach restriction (optional in input data)
         if "is_financial_sector_entity" in cp_col_names:
             select_cols.append(

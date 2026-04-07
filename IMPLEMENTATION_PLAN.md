@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.38b output floor entity-type carve-outs implemented)
-**Current version:** 0.1.107 | **Test suite:** ~3,057 collected (~2,460 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.13 CRE other counterparties Art. 124H(3) implemented)
+**Current version:** 0.1.108 | **Test suite:** ~3,076 collected (~2,573 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~12 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.13, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -275,12 +275,24 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Note:** Short-term ECRA (rated institution ≤3m, Art. 120 Tables 4/4A) is NOT yet implemented — tracked separately as P1.26.
 
 ### P1.13 CRE general "other counterparties" formula (Art. 124H)
-- **Status:** [ ] Not implemented
-- **Impact:** For CRE general (non-income-producing), Basel 3.1 specifies two distinct treatments: **natural person/SME** uses loan-splitting at 55% with 60% secured weight, but **other counterparties** (e.g. rated corporates) use `max(60%, min(counterparty_RW, income-producing_RW))`. Code at `b31_commercial_rw_expr()` (`b31_risk_weights.py:285-314`) applies loan-splitting unconditionally. No `is_natural_person`/`is_sme` fork exists. Comment at `b31_risk_weights.py:86-88` acknowledges "Other counterparties".
-- **File:Line:** `engine/sa/b31_risk_weights.py:285-314`
-- **Spec ref:** PRA PS1/26 Art. 124H, `docs/specifications/crr/sa-risk-weights.md`
-- **Fix:** Add counterparty type check. For non-natural-person/non-SME, apply the max/min formula.
-- **Tests needed:** Unit tests for both counterparty types. Acceptance test in B31-A.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** PRA PS1/26 Art. 124H now enforces counterparty-type routing for general CRE:
+  - **Natural person / SME (Art. 124H(1-2)):** Loan-splitting at 55% with 60% secured RW (unchanged)
+  - **Other counterparties (Art. 124H(3)):** `max(60%, min(counterparty_RW, Art. 124I income_RW))` where Art. 124I gives 100% (LTV ≤ 80%) or 110% (LTV > 80%)
+  - Income-producing CRE (Art. 124I) is unaffected by counterparty type
+  - Previous behavior: loan-splitting applied unconditionally, understating capital for non-SME/non-natural-person counterparties (e.g., unrated corporate at LTV 50% got 60% instead of correct 100%)
+  **Implementation:**
+  - **Schema:** `is_natural_person` Boolean field added to `COUNTERPARTY_SCHEMA`
+  - **Classifier:** `cp_is_natural_person` propagated via counterparty join (optional; absent defaults to False)
+  - **SA calculator:** `cp_is_natural_person` and `is_sme` added to missing_cols defaults (both False = conservative = other counterparty = max/min formula)
+  - **b31_risk_weights.py:** `b31_commercial_rw_expr()` now routes on `cp_is_natural_person | is_sme`: True → loan-splitting, False → max/min formula
+  - **Scalar:** `lookup_b31_commercial_rw()` extended with `is_natural_person_or_sme` parameter (default True for backward compatibility)
+  - **Backward compatible:** Missing `cp_is_natural_person` column defaults to False (conservative: higher RW). Existing tests updated to explicitly mark counterparty type.
+- **File:Line:** `data/schemas.py` (COUNTERPARTY_SCHEMA), `engine/classifier.py` (cp_is_natural_person propagation), `engine/sa/calculator.py` (missing_cols defaults), `data/tables/b31_risk_weights.py` (b31_commercial_rw_expr + lookup_b31_commercial_rw)
+- **Spec ref:** PRA PS1/26 Art. 124H(1-3), Art. 124I
+- **Tests:** 13 new unit tests in `tests/unit/test_b31_sa_risk_weights.py` (TestB31CommercialREOtherCounterparties): unrated corporate 100%, CQS 1 floored at 60%, CQS 5 capped by income RW at 110%, CQS 5 low LTV capped at 100%, SME gets loan-splitting, RWA correctness, null defaults to other, missing column defaults to other, income-producing unaffected, other vs natural person comparison, 3 scalar lookup tests (unrated, CQS 1, CQS 5). 3 existing tests updated with explicit `cp_is_natural_person=True`. All 3064 tests pass (2573 unit + 367 acceptance/integration + 124 contracts). Test count: 3076 collected (was 3057).
+- **Limitation:** CRE exposures in existing data without `is_natural_person` field will default to "other counterparty" treatment (max/min formula). This is regulatory-conservative but changes the effective RW for CRE exposures that were previously loan-split. Institutions should set `is_natural_person=True` on counterparties where applicable.
 
 ### P1.14 "Other Real Estate" exposure class (Art. 124J)
 - **Status:** [ ] Not implemented

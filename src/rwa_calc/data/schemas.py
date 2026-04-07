@@ -189,6 +189,8 @@ COUNTERPARTY_SCHEMA = {
     # Sovereign floor for FX institution exposures (Art. 121(6) / CRE20.22)
     "sovereign_cqs": pl.Int32,  # CQS of the sovereign of the institution's jurisdiction (1-6)
     "local_currency": pl.String,  # ISO 4217 domestic currency of the institution's jurisdiction
+    # Covered bond issuer institution CQS (Art. 129(5) derivation)
+    "institution_cqs": pl.Int8,  # CQS of the issuing institution (1-6); null = unrated
 }
 
 COLLATERAL_SCHEMA = {

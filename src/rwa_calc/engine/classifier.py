@@ -326,6 +326,10 @@ class ExposureClassifier:
         if "local_currency" in cp_col_names:
             select_cols.append(pl.col("local_currency").alias("cp_local_currency"))
 
+        # Covered bond issuer institution CQS (Art. 129(5) derivation)
+        if "institution_cqs" in cp_col_names:
+            select_cols.append(pl.col("institution_cqs").alias("cp_institution_cqs"))
+
         cp_cols = counterparties.select(select_cols)
 
         return exposures.join(

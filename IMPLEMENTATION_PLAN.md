@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.30b, P1.30c implemented; P6.18, P6.19, P6.17 fixed, P4.16 spec corrections complete; P6.10 fixed)
-**Current version:** 0.1.133 | **Test suite:** ~3,699 collected (~3,687 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.9a, P6.10, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-07 (P1.30b, P1.30c implemented; P6.18, P6.19, P6.17 fixed, P4.16 spec corrections complete; P6.10 fixed; P1.86 Art. 129(5) derivation wired)
+**Current version:** 0.1.133 | **Test suite:** ~3,717 collected (~3,705 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.9a, P6.10, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -9,7 +9,7 @@
 
 **Gap summary:** P1 (calculation correctness): 77 (+P1.9a sub-item, +P1.86; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed, P1.83 Art. 159(1) Pool B AVAs now fixed, P1.9a OF-ADJ now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed)]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
@@ -332,12 +332,12 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Status:** [x] Complete (2026-04-07)
 
 ### P1.86 CRR unrated covered bond RW hardcoded to 20% — Art. 129(5) derivation not wired
-- **Status:** [ ] Not started
-- **Impact:** `engine/sa/calculator.py:968-972` hardcodes 0.20 (20%) for ALL unrated covered bonds under CRR. Art. 129(5) requires derivation from the issuing institution's risk weight: institution 20% → CB 10%, institution 50% → CB 20%, institution 100% → CB 50%, institution 150% → CB 100%. The code's 20% is only correct when the institution gets 50% RW (e.g., CQS 2). For UK institutions (typically unrated, sovereign-derived 40%), the 20% is a reasonable approximation. For non-UK issuers with 100% or 150% RW, capital is **understated** (20% vs 50% or 100%). The `COVERED_BOND_UNRATED_DERIVATION` table exists in `data/tables/crr_risk_weights.py:473-483` but is not wired to the SA calculator. The Basel 3.1 path correctly uses `cp_scra_grade` for derivation (`calculator.py:786-794`). This is the only TODO remaining in the source code.
-- **File:Line:** `engine/sa/calculator.py:967-972`, `data/tables/crr_risk_weights.py:473-483`
-- **Spec ref:** CRR Art. 129(5), PRA PS1/26 Art. 129A(5)
-- **Fix:** Add an issuer institution CQS field (e.g., `cp_institution_cqs`) to the loan schema. Use it to look up institution RW via Art. 120, then derive CB RW via `COVERED_BOND_UNRATED_DERIVATION`. Fall back to 20% when field is null (backward compatible).
-- **Tests needed:** Unit tests for each derivation step (institution CQS → institution RW → CB RW). Edge case: null institution CQS falls back to 20%.
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** `engine/sa/calculator.py:968-972` previously hardcoded 0.20 (20%) for ALL unrated covered bonds under CRR. Art. 129(5) requires derivation from the issuing institution's risk weight: institution 20% → CB 10%, institution 30% → CB 15%, institution 40% → CB 20%, institution 50% → CB 25%, institution 75% → CB 35%, institution 100% → CB 50%, institution 150% → CB 100%. The code's 20% was only correct when the institution gets 40% RW (UK unrated sovereign-derived). For non-UK issuers with 100% or 150% RW, capital was **understated** (20% vs 50% or 100%).
+- **Fix:** Added `institution_cqs` field (pl.Int8, nullable) to `COUNTERPARTY_SCHEMA` in `data/schemas.py`. Classifier propagates it as `cp_institution_cqs` to exposure rows. SA calculator's `_crr_unrated_cb_rw_expr()` helper builds a Polars expression that chains institution CQS → institution RW (via Art. 120 Table 3/4, respecting UK deviation) → covered bond RW (via `COVERED_BOND_UNRATED_DERIVATION`). When `cp_institution_cqs` is null (unrated institution), uses sovereign-derived institution RW: UK 40% → CB 20%, standard 100% → CB 50%. Backward compatible: null field gives same 20% result for UK firms as before.
+- **File:Line:** `engine/sa/calculator.py:107-142` (helper function), `engine/sa/calculator.py:1012-1019` (expression), `data/schemas.py:192` (schema), `engine/classifier.py:327-328` (propagation), `tests/fixtures/single_exposure.py:68,100` (test helper)
+- **Spec ref:** CRR Art. 129(5), CRR Art. 120 Tables 3/4
+- **Tests:** 18 new tests added to `tests/unit/test_covered_bonds.py`: 6 UK institution CQS parametrized tests, 6 standard institution CQS parametrized tests, 1 UK unrated institution fallback, 1 standard unrated institution fallback, 1 rated-ignores-institution-cqs, 1 UK-vs-standard RWA comparison, 3 table consistency cross-checks. All 3705 tests pass (was 3687).
 
 ---
 
@@ -761,6 +761,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
   - ~~`original_maturity_years`~~ (P1.40 — now added to COLLATERAL_SCHEMA)
   - `due_diligence_override_rw` (P1.49 Art. 110A)
   - `liquidation_period` (P1.39 haircut dependency)
+  - ~~`institution_cqs`~~ (P1.86 — now added to COUNTERPARTY_SCHEMA as pl.Int8 nullable; classifier propagates as `cp_institution_cqs`)
 - **File:Line:** `data/schemas.py`
 - **Fix:** Add all missing fields with appropriate types and defaults. Some fields are prerequisites for their corresponding P1 items.
 - **Tests needed:** Schema validation tests for new fields.

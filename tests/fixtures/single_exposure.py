@@ -65,6 +65,7 @@ def calculate_single_sa_exposure(
     is_payroll_loan: bool = False,
     sovereign_cqs: int | None = None,
     local_currency: str | None = None,
+    institution_cqs: int | None = None,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch."""
     data: dict = {
@@ -98,6 +99,7 @@ def calculate_single_sa_exposure(
         "is_payroll_loan": [is_payroll_loan],
         "cp_sovereign_cqs": [sovereign_cqs],
         "cp_local_currency": [local_currency],
+        "cp_institution_cqs": [institution_cqs],
     }
     if prior_charge_ltv is not None:
         data["prior_charge_ltv"] = [float(prior_charge_ltv)]

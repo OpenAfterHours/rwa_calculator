@@ -72,10 +72,13 @@ from rwa_calc.data.tables.b31_risk_weights import (
 )
 from rwa_calc.data.tables.crr_risk_weights import (
     COMMERCIAL_RE_PARAMS,
+    COVERED_BOND_UNRATED_DERIVATION,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     HIGH_RISK_RW,
+    INSTITUTION_RISK_WEIGHTS_STANDARD,
+    INSTITUTION_RISK_WEIGHTS_UK,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
@@ -99,6 +102,44 @@ from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+
+def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
+    """Build Polars expression for CRR Art. 129(5) unrated covered bond RW derivation.
+
+    Derives covered bond RW from the issuing institution's CQS via two-step lookup:
+      1. Institution CQS → institution RW (Art. 120, Table 3/4)
+      2. Institution RW → covered bond RW (Art. 129(5) derivation table)
+
+    When ``cp_institution_cqs`` is null (institution itself is unrated), uses
+    sovereign-derived institution RW: 40% (UK) → CB 20%, or 100% (standard) → CB 50%.
+
+    References:
+        CRR Art. 120: Institution risk weights (UK Table 4, standard Table 3)
+        CRR Art. 129(5): Unrated covered bond derivation from institution RW
+    """
+    inst_table = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+    from rwa_calc.domain.enums import CQS
+
+    # Pre-compute CQS → CB RW by chaining institution RW through the derivation table
+    cqs_to_cb_rw: dict[int, float] = {}
+    for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
+        inst_rw = inst_table[cqs_val]
+        cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
+        cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
+
+    # Unrated institution: sovereign-derived
+    unrated_inst_rw = inst_table[CQS.UNRATED]
+    unrated_cb_rw = float(COVERED_BOND_UNRATED_DERIVATION[unrated_inst_rw])
+
+    # Build when/then chain from cp_institution_cqs
+    expr = pl.when(pl.col("cp_institution_cqs") == 1).then(pl.lit(cqs_to_cb_rw[1]))
+    for cqs_int in [2, 3, 4, 5, 6]:
+        expr = expr.when(pl.col("cp_institution_cqs") == cqs_int).then(
+            pl.lit(cqs_to_cb_rw[cqs_int])
+        )
+    # Fallback: cp_institution_cqs is null (unrated institution) or unexpected value
+    return expr.otherwise(pl.lit(unrated_cb_rw))
 
 
 @dataclass
@@ -434,6 +475,9 @@ class SACalculator:
             missing_cols.append(pl.lit(None).cast(pl.Int32).alias("cp_sovereign_cqs"))
         if "cp_local_currency" not in schema.names():
             missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_local_currency"))
+        # Art. 129(5): issuing institution CQS for unrated covered bond derivation
+        if "cp_institution_cqs" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Int8).alias("cp_institution_cqs"))
         # CRM collateral columns for Art. 127 secured/unsecured split
         if "collateral_re_value" not in schema.names():
             missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))
@@ -963,13 +1007,15 @@ class SACalculator:
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 7. Unrated covered bonds: derive from issuer institution RW
-                    # (CRR Art. 129(5)) — UK: unrated institution 40% → CB 20%
-                    # TODO: non-UK issuers with standard treatment (100%) should get CB 50%
+                    # (CRR Art. 129(5)) — institution CQS → institution RW → CB RW
+                    # via COVERED_BOND_UNRATED_DERIVATION table. When issuing
+                    # institution is also unrated, uses sovereign-derived RW:
+                    # UK (40%) → CB 20%, standard (100%) → CB 50%.
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
-                    .then(pl.lit(0.20))
+                    .then(_crr_unrated_cb_rw_expr(use_uk_deviation))
                     # 7a. High-risk items → 150% (Art. 128)
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.

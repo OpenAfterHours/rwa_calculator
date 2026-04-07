@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.16 CRR unrated institution standard risk weight)
-**Current version:** 0.1.118 | **Test suite:** ~3,397 collected (~3,364 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.31 SME supporting factor missing counterparty_reference warning)
+**Current version:** 0.1.119 | **Test suite:** ~3,404 collected (~3,371 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -510,12 +510,18 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for method selection routing and each sub-method.
 
 ### P1.31 SME supporting factor silent per-exposure fallback (CRR Art. 501)
-- **Status:** [~] Silent correctness issue
-- **Impact:** `supporting_factors.py:231-249` aggregates drawn amounts at counterparty level for the EUR 2.5m SME threshold. When `counterparty_reference` is absent, code silently falls back to per-exposure drawn amounts with no warning. This can **under-apply the threshold** -- individual exposures may appear under EUR 2.5m when the counterparty aggregate is above it, producing an incorrectly low supporting factor (0.7619 instead of 0.85 or vice versa).
-- **File:Line:** `engine/sa/supporting_factors.py:231-249`
-- **Spec ref:** CRR Art. 501, `docs/specifications/crr/supporting-factors.md` line 39
-- **Fix:** Record a `CalculationError` when `counterparty_reference` is missing and fallback fires. Consider making the field mandatory for SME exposures.
-- **Tests needed:** Unit test for missing counterparty_reference with aggregate above threshold.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** `supporting_factors.py` now emits an `SF001` `CalculationError` (WARNING, DATA_QUALITY) when `counterparty_reference` column is absent and SME exposures are present. The per-exposure fallback still runs (calculation continues) but the warning alerts institutions that the EUR 2.5m tier threshold is being evaluated per-exposure instead of per-counterparty as required by CRR Art. 501. Without this warning, institutions could silently understate capital when multiple exposures to the same counterparty individually fall below the threshold but aggregate above it.
+  **Changes:**
+  - **Error code:** `ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"` added to `contracts/errors.py`
+  - **Warning emission:** `apply_factors()` now accepts optional `errors: list[CalculationError] | None` parameter. When `counterparty_reference` column is absent and `is_sme` column is present and supporting factors are enabled, appends SF001 warning.
+  - **Error propagation:** SA calculator (`_apply_supporting_factors`, `get_sa_result_bundle`, `calculate`), IRB calculator (`_apply_supporting_factors`, `_run_irb_chain`, `get_irb_result_bundle`, `calculate`), and slotting calculator (`_apply_supporting_factors`, `get_slotting_result_bundle`) all thread errors through to their result bundles. The `calculate()` methods in SA/IRB now handle mixed error types (native `CalculationError` objects pass through; other error types get wrapped).
+  - **Backward compatible:** `errors` parameter defaults to `None`. Callers that don't provide it see no behavior change.
+- **File:Line:** `contracts/errors.py` (SF001 code), `engine/sa/supporting_factors.py:248-266` (warning emission), `engine/sa/calculator.py` (error threading), `engine/irb/calculator.py` (error threading), `engine/slotting/calculator.py` (error threading)
+- **Spec ref:** CRR Art. 501, `docs/specifications/crr/supporting-factors.md`
+- **Tests:** 7 new unit tests in `tests/unit/test_supporting_factors.py` (TestMissingCounterpartyReferenceWarning): warning emitted when absent, no warning when present, no warning without SME, no warning without errors param, no warning under Basel 3.1, per-exposure fallback demonstrates wrong tier (1.5m+1.5m=3m above threshold but each below individually), warning field_name check. All 3,371 tests pass (was 3,364). Test count: 3,371 passed, 33 skipped.
+- **Limitation:** The warning is emitted once per `apply_factors` call (not per-exposure). SME rows with null `counterparty_reference` values when the column IS present still fall back silently to per-exposure drawn amounts — this is by design (null values indicate unknown counterparty, conservative per-exposure treatment is appropriate).
 
 ### P1.32 F-IRB supervisory LGD: FSE 45% vs non-FSE corporate 40% (Art. 161(1))
 - **Status:** [x] Complete

@@ -34,6 +34,12 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.errors import (
+    ERROR_SME_MISSING_COUNTERPARTY_REF,
+    CalculationError,
+)
+from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -155,6 +161,8 @@ class SupportingFactorCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply supporting factors to exposures LazyFrame.
@@ -186,6 +194,7 @@ class SupportingFactorCalculator:
         Args:
             exposures: Exposures with RWA calculated
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             Exposures with supporting factors applied
@@ -245,7 +254,28 @@ class SupportingFactorCalculator:
                 # Use counterparty total drawn for tier calculation
                 ead_for_tier = pl.col("total_cp_drawn")
             else:
-                # No counterparty reference column - use individual drawn amount
+                # No counterparty reference column — per-exposure fallback.
+                # This can misclassify the tier when multiple exposures to the
+                # same counterparty individually fall below the EUR 2.5m threshold
+                # but aggregate above it (Art. 501 requires counterparty-level aggregation).
+                if errors is not None:
+                    errors.append(
+                        CalculationError(
+                            code=ERROR_SME_MISSING_COUNTERPARTY_REF,
+                            message=(
+                                "SME supporting factor: counterparty_reference column is absent. "
+                                "Tier threshold (EUR 2.5m) evaluated per-exposure instead of "
+                                "per-counterparty as required by CRR Art. 501. This may produce "
+                                "an incorrectly low supporting factor when multiple exposures to "
+                                "the same counterparty individually fall below the threshold but "
+                                "aggregate above it."
+                            ),
+                            severity=ErrorSeverity.WARNING,
+                            category=ErrorCategory.DATA_QUALITY,
+                            regulatory_reference="CRR Art. 501",
+                            field_name="counterparty_reference",
+                        )
+                    )
                 ead_for_tier = drawn_expr
 
             # Calculate tiered factor based on aggregated drawn exposure

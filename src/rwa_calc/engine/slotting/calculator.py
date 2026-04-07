@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
+from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -110,6 +111,8 @@ class SlottingCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SME and infrastructure supporting factors (CRR Art. 501/501a).
@@ -121,6 +124,7 @@ class SlottingCalculator:
         Args:
             exposures: Exposures with rwa computed
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             Exposures with supporting factors applied
@@ -139,7 +143,7 @@ class SlottingCalculator:
             exposures = exposures.with_columns(pl.lit(False).alias("is_infrastructure"))
 
         sf_calc = SupportingFactorCalculator()
-        exposures = sf_calc.apply_factors(exposures, config)
+        exposures = sf_calc.apply_factors(exposures, config, errors=errors)
 
         # Update rwa and rwa_final with post-factor values
         if "rwa_post_factor" in exposures.collect_schema().names():
@@ -186,8 +190,18 @@ class SlottingCalculator:
                 errors=[],
             )
 
-        # Apply calculation pipeline
-        exposures = self.calculate_branch(exposures, config)
+        # Apply calculation pipeline (with error collection)
+        sf_errors: list[CalculationError] = []
+        exposures = (
+            exposures.slotting.prepare_columns(config)
+            .slotting.apply_slotting_weights(config)
+            .slotting.calculate_rwa()
+        )
+        exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
+        exposures = (
+            exposures.slotting.apply_el_rates(config)
+            .slotting.compute_el_shortfall_excess()
+        )
 
         # Build audit trail
         audit = exposures.slotting.build_audit()
@@ -195,7 +209,7 @@ class SlottingCalculator:
         return SlottingResultBundle(
             results=exposures,
             calculation_audit=audit,
-            errors=[],
+            errors=sf_errors,
         )
 
 

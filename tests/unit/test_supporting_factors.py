@@ -7,6 +7,7 @@ Tests cover:
   NOT ead_final (which includes CCF-adjusted undrawn commitments)
 - Infrastructure factor interaction with BTL
 - Backward compatibility when drawn_amount column is missing
+- Missing counterparty_reference warning (P1.31)
 """
 
 from datetime import date
@@ -15,6 +16,8 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ERROR_SME_MISSING_COUNTERPARTY_REF, CalculationError
+from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 
@@ -32,6 +35,7 @@ def _make_exposures(
     rows: list[dict],
     include_btl: bool = True,
     include_drawn: bool = True,
+    include_counterparty: bool = True,
 ) -> pl.LazyFrame:
     """Build a LazyFrame of exposures for supporting factor tests.
 
@@ -39,14 +43,15 @@ def _make_exposures(
         ref, cp, ead, rwa, drawn (defaults to ead), interest (defaults to 0),
         is_sme (True), is_infra (False), is_btl (False).
     """
-    data = {
+    data: dict = {
         "exposure_reference": [r["ref"] for r in rows],
-        "counterparty_reference": [r["cp"] for r in rows],
         "ead_final": [r["ead"] for r in rows],
         "rwa_pre_factor": [r["rwa"] for r in rows],
         "is_sme": [r.get("is_sme", True) for r in rows],
         "is_infrastructure": [r.get("is_infra", False) for r in rows],
     }
+    if include_counterparty:
+        data["counterparty_reference"] = [r["cp"] for r in rows]
     if include_drawn:
         data["drawn_amount"] = [r.get("drawn", r["ead"]) for r in rows]
         data["interest"] = [r.get("interest", 0.0) for r in rows]
@@ -424,3 +429,178 @@ class TestDrawnOnlyTierWeighting:
         assert sf == pytest.approx(expected_factor, rel=0.001), (
             f"Factor should be based on 5m drawn ({expected_factor:.4f}), got {sf}"
         )
+
+
+class TestMissingCounterpartyReferenceWarning:
+    """P1.31: Missing counterparty_reference emits SF001 warning.
+
+    CRR Art. 501 requires the EUR 2.5m tier threshold to be evaluated at the
+    counterparty level. When counterparty_reference is absent, the calculator
+    falls back to per-exposure drawn amounts, which can produce an incorrect
+    tier classification and a wrong supporting factor.
+    """
+
+    def test_warning_emitted_when_counterparty_absent(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SF001 warning emitted when counterparty_reference column is absent."""
+        exposures = _make_exposures(
+            [{"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000}],
+            include_counterparty=False,
+        )
+
+        errors: list[CalculationError] = []
+        calculator.apply_factors(exposures, crr_config, errors=errors)
+
+        assert len(errors) == 1
+        assert errors[0].code == ERROR_SME_MISSING_COUNTERPARTY_REF
+        assert errors[0].severity == ErrorSeverity.WARNING
+        assert errors[0].category == ErrorCategory.DATA_QUALITY
+        assert "counterparty_reference" in errors[0].message
+        assert "CRR Art. 501" in (errors[0].regulatory_reference or "")
+
+    def test_no_warning_when_counterparty_present(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """No SF001 warning when counterparty_reference column is present."""
+        exposures = _make_exposures(
+            [{"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000}],
+            include_counterparty=True,
+        )
+
+        errors: list[CalculationError] = []
+        calculator.apply_factors(exposures, crr_config, errors=errors)
+
+        assert len(errors) == 0
+
+    def test_no_warning_when_no_sme_exposures(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """No warning when is_sme column is absent (no SME exposures)."""
+        data = {
+            "exposure_reference": ["E1"],
+            "ead_final": [1_000_000.0],
+            "rwa_pre_factor": [400_000.0],
+            "is_infrastructure": [False],
+        }
+        exposures = pl.LazyFrame(data)
+
+        errors: list[CalculationError] = []
+        calculator.apply_factors(exposures, crr_config, errors=errors)
+
+        assert len(errors) == 0
+
+    def test_no_warning_when_errors_not_provided(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """No error when errors parameter is not provided (backward compat)."""
+        exposures = _make_exposures(
+            [{"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000}],
+            include_counterparty=False,
+        )
+
+        # Should not raise — errors=None by default
+        result = calculator.apply_factors(exposures, crr_config).collect()
+        assert result["supporting_factor"][0] < 1.0
+
+    def test_no_warning_under_basel_31(
+        self,
+        calculator: SupportingFactorCalculator,
+    ) -> None:
+        """No warning under Basel 3.1 (supporting factors disabled)."""
+        b31_config = CalculationConfig.basel_3_1(reporting_date=date(2030, 6, 30))
+        exposures = _make_exposures(
+            [{"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000}],
+            include_counterparty=False,
+        )
+
+        errors: list[CalculationError] = []
+        calculator.apply_factors(exposures, b31_config, errors=errors)
+
+        assert len(errors) == 0
+
+    def test_per_exposure_fallback_wrong_tier_for_aggregate_above_threshold(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """
+        Demonstrates the tier misclassification when counterparty_reference is absent.
+
+        Two exposures to the same counterparty: 1.5m + 1.5m = 3m aggregate.
+        With counterparty aggregation: 3m > EUR 2.5m threshold → blended factor.
+        Without aggregation: each 1.5m < threshold → pure tier 1 factor (0.7619).
+
+        The per-exposure fallback produces an incorrectly low factor because
+        it doesn't see the counterparty aggregate exceeding the threshold.
+        """
+        threshold_gbp = float(
+            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
+        )
+
+        # WITH counterparty reference — correct aggregation
+        exposures_with_cp = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000},
+                {"ref": "E2", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000},
+            ],
+            include_counterparty=True,
+        )
+        result_correct = calculator.apply_factors(exposures_with_cp, crr_config).collect()
+        sf_correct = result_correct["supporting_factor"][0]
+
+        # WITHOUT counterparty reference — per-exposure fallback
+        exposures_no_cp = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000},
+                {"ref": "E2", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000},
+            ],
+            include_counterparty=False,
+        )
+        errors: list[CalculationError] = []
+        result_fallback = calculator.apply_factors(exposures_no_cp, crr_config, errors=errors).collect()
+        sf_fallback = result_fallback["supporting_factor"][0]
+
+        # Correct factor: blended for 3m aggregate (above threshold)
+        expected_correct = (
+            min(3_000_000, threshold_gbp) * 0.7619
+            + max(3_000_000 - threshold_gbp, 0) * 0.85
+        ) / 3_000_000
+        assert sf_correct == pytest.approx(expected_correct, rel=0.001)
+
+        # Fallback factor: pure tier 1 for 1.5m each (below threshold)
+        assert sf_fallback == pytest.approx(0.7619, rel=0.001)
+
+        # The fallback produces a LOWER factor (more capital relief) — incorrect
+        assert sf_fallback < sf_correct, (
+            f"Fallback factor {sf_fallback:.4f} should be lower than correct "
+            f"{sf_correct:.4f}, demonstrating capital understatement"
+        )
+
+        # Warning was emitted
+        assert len(errors) == 1
+        assert errors[0].code == ERROR_SME_MISSING_COUNTERPARTY_REF
+
+    def test_warning_field_name_is_counterparty_reference(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SF001 warning has field_name set for diagnostic filtering."""
+        exposures = _make_exposures(
+            [{"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000}],
+            include_counterparty=False,
+        )
+
+        errors: list[CalculationError] = []
+        calculator.apply_factors(exposures, crr_config, errors=errors)
+
+        assert errors[0].field_name == "counterparty_reference"

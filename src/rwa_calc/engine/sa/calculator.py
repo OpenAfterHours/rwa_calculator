@@ -147,16 +147,21 @@ class SACalculator:
         """
         bundle = self.get_sa_result_bundle(data, config)
 
-        # Convert bundle errors to CalculationErrors
-        calc_errors = [
-            CalculationError(
-                code="SA001",
-                message=str(err),
-                severity=ErrorSeverity.ERROR,
-                category=ErrorCategory.CALCULATION,
-            )
-            for err in bundle.errors
-        ]
+        # Convert bundle errors to CalculationErrors, preserving any
+        # CalculationError objects already created by sub-components
+        calc_errors: list[CalculationError] = []
+        for err in bundle.errors:
+            if isinstance(err, CalculationError):
+                calc_errors.append(err)
+            else:
+                calc_errors.append(
+                    CalculationError(
+                        code="SA001",
+                        message=str(err),
+                        severity=ErrorSeverity.ERROR,
+                        category=ErrorCategory.CALCULATION,
+                    )
+                )
 
         return LazyFrameResult(
             frame=bundle.results,
@@ -178,7 +183,7 @@ class SACalculator:
         Returns:
             SAResultBundle with results and audit trail
         """
-        errors: list[SACalculationError] = []
+        errors: list = []
 
         # Get SA exposures
         exposures = data.sa_exposures
@@ -196,7 +201,9 @@ class SACalculator:
         exposures = self._calculate_rwa(exposures)
 
         # Step 4: Apply supporting factors (CRR only)
-        exposures = self._apply_supporting_factors(exposures, config)
+        sf_errors: list[CalculationError] = []
+        exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
+        errors.extend(sf_errors)
 
         # Step 5: Build audit trail
         audit = self._build_audit(exposures)
@@ -1583,6 +1590,8 @@ class SACalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SME and infrastructure supporting factors.
@@ -1590,6 +1599,7 @@ class SACalculator:
         Args:
             exposures: Exposures with rwa_pre_factor
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             Exposures with supporting factors applied
@@ -1618,7 +1628,9 @@ class SACalculator:
                 ]
             )
 
-        return self._supporting_factor_calc.apply_factors(exposures, config)
+        return self._supporting_factor_calc.apply_factors(
+            exposures, config, errors=errors
+        )
 
     def _build_audit(
         self,

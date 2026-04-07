@@ -56,37 +56,46 @@ def calculate_single_sa_exposure(
     residual_maturity_years: float | None = None,
     entity_type: str | None = None,
     is_short_term_trade_lc: bool = False,
+    collateral_re_value: Decimal | None = None,
+    collateral_receivables_value: Decimal | None = None,
+    collateral_other_physical_value: Decimal | None = None,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch."""
-    df = pl.DataFrame(
-        {
-            "exposure_reference": ["SINGLE"],
-            "ead_final": [float(ead)],
-            "exposure_class": [exposure_class],
-            "cqs": [cqs],
-            "ltv": [float(ltv) if ltv is not None else None],
-            "is_sme": [is_sme],
-            "is_infrastructure": [is_infrastructure],
-            "has_income_cover": [has_income_cover],
-            "cp_is_managed_as_retail": [is_managed_as_retail],
-            "qualifies_as_retail": [qualifies_as_retail],
-            "property_type": [property_type],
-            "is_adc": [is_adc],
-            "is_presold": [is_presold],
-            "seniority": [seniority],
-            "cp_scra_grade": [scra_grade],
-            "cp_is_investment_grade": [is_investment_grade],
-            "is_defaulted": [is_defaulted],
-            "provision_allocated": [float(provision_allocated) if provision_allocated else 0.0],
-            "provision_deducted": [float(provision_deducted) if provision_deducted else 0.0],
-            "currency": [currency],
-            "cp_country_code": [country_code],
-            "borrower_income_currency": [borrower_income_currency],
-            "residual_maturity_years": [residual_maturity_years],
-            "cp_entity_type": [entity_type],
-            "is_short_term_trade_lc": [is_short_term_trade_lc],
-        }
-    ).lazy()
+    data: dict = {
+        "exposure_reference": ["SINGLE"],
+        "ead_final": [float(ead)],
+        "exposure_class": [exposure_class],
+        "cqs": [cqs],
+        "ltv": [float(ltv) if ltv is not None else None],
+        "is_sme": [is_sme],
+        "is_infrastructure": [is_infrastructure],
+        "has_income_cover": [has_income_cover],
+        "cp_is_managed_as_retail": [is_managed_as_retail],
+        "qualifies_as_retail": [qualifies_as_retail],
+        "property_type": [property_type],
+        "is_adc": [is_adc],
+        "is_presold": [is_presold],
+        "seniority": [seniority],
+        "cp_scra_grade": [scra_grade],
+        "cp_is_investment_grade": [is_investment_grade],
+        "is_defaulted": [is_defaulted],
+        "provision_allocated": [float(provision_allocated) if provision_allocated else 0.0],
+        "provision_deducted": [float(provision_deducted) if provision_deducted else 0.0],
+        "currency": [currency],
+        "cp_country_code": [country_code],
+        "borrower_income_currency": [borrower_income_currency],
+        "residual_maturity_years": [residual_maturity_years],
+        "cp_entity_type": [entity_type],
+        "is_short_term_trade_lc": [is_short_term_trade_lc],
+    }
+    if collateral_re_value is not None:
+        data["collateral_re_value"] = [float(collateral_re_value)]
+    if collateral_receivables_value is not None:
+        data["collateral_receivables_value"] = [float(collateral_receivables_value)]
+    if collateral_other_physical_value is not None:
+        data["collateral_other_physical_value"] = [float(collateral_other_physical_value)]
+
+    df = pl.DataFrame(data).lazy()
 
     result = calculator.calculate_branch(df, config).collect().to_dicts()[0]
     # Alias rwa_post_factor as rwa for consistency with other calculators

@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.20 revolving maturity implemented)
-**Current version:** 0.1.104 | **Test suite:** ~2,960 collected (~2,436 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.48 defaulted secured/unsecured split implemented)
+**Current version:** 0.1.104 | **Test suite:** ~2,983 collected (~2,436 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -10,7 +10,7 @@
 **Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
-- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified]
+- *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
@@ -610,12 +610,23 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** Existing test expectation corrected (40% → 150%). 2 new tests added: null SCRA RWA verification (institution), null SCRA covered bond (100%). Test count: 2360 (was 2358).
 
 ### P1.48 CRR defaulted exposure secured/unsecured split (Art. 127)
-- **Status:** [ ] Not implemented
-- **Impact:** CRR Art. 127 requires splitting defaulted exposures into secured and unsecured portions -- the collateral RW applies to the secured part, while the provision-coverage 100%/150% test applies only to the unsecured portion. Code at `sa/calculator.py:590-600` applies the provision-coverage RW to the entire EAD without splitting. This can overstate capital for well-collateralised defaulted exposures.
-- **File:Line:** `engine/sa/calculator.py:590-600`
-- **Spec ref:** CRR Art. 127
-- **Fix:** Split defaulted EAD into secured (collateral RW) and unsecured (provision-coverage RW) portions.
-- **Tests needed:** Unit tests for collateralised defaulted exposures.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** CRR Art. 127(1)-(2) / CRE20.89-90 defaulted exposure secured/unsecured split now implemented. When a defaulted exposure has non-financial collateral (RE, receivables, other physical), the risk weight is blended:
+  - **Secured portion**: retains the base (non-defaulted) risk weight for that exposure class
+  - **Unsecured portion**: 100% if provisions >= 20% of unsecured value, else 150%
+  - **Blended RW** = unsecured_pct × defaulted_rw + secured_pct × base_rw
+  - Financial collateral already reduces EAD (via collateral_adjusted_value) — unchanged
+  - Provision ratio denominator now uses unsecured part only (CRR: unsecured + provision_deducted; B31: unsecured EAD)
+  - B31 RESI RE non-income exception: 100% flat for whole exposure (CRE20.88) — no split
+  - HIGH_RISK: unaffected (always 150% per Art. 128)
+  - When no non-financial collateral present: identical to prior behaviour (backward compatible)
+  - CRM collateral columns (`collateral_re_value`, `collateral_receivables_value`, `collateral_other_physical_value`) default to 0 when absent
+  **Architecture**: Defaulted logic extracted from the main risk weight when-chain into a separate `_apply_defaulted_risk_weight()` method. The base when-chain now computes non-defaulted RWs for all exposures; the defaulted override runs as a post-processing step with blending. This is cleaner than inline defaulted branches and enables the secured/unsecured split.
+- **File:Line:** `engine/sa/calculator.py` (_apply_defaulted_risk_weight method + removal from when-chains), `tests/fixtures/single_exposure.py` (collateral parameters)
+- **Spec ref:** CRR Art. 127(1)-(2), CRE20.89-90, PRA PS1/26 Art. 127
+- **Tests:** 23 new unit tests in `tests/unit/test_defaulted_secured_split.py`: 4 CRR backward compat (low/high/zero provision, missing CRM cols), 6 CRR secured split (RE blended, fully secured, provision threshold unsecured, mixed collateral types, provision_deducted denominator, RWA correctness), 2 B31 backward compat (low/high provision), 2 B31 secured split (RE blended, provision threshold), 3 B31 RESI RE (non-income no split, income-dependent with split, non-income no collateral), 6 edge cases (HIGH_RISK unaffected, non-defaulted unaffected, CRR/B31 parity, CRR mortgage split, zero EAD, retail with receivables). All 2983 tests pass. Test count: 2983 (was 2960).
+- **Limitation:** The base risk weight for the secured portion is whatever the SA when-chain computes for that exposure class (e.g., LTV-based for RE, 75% for retail, CQS-based for corporate). This is correct per Art. 127 but means the secured portion's RW depends on the exposure's non-defaulted classification, not on the collateral type directly.
 
 ### P1.49 Art. 110A due diligence obligation (new SA requirement)
 - **Status:** [ ] Not started

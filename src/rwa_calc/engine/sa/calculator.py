@@ -389,6 +389,13 @@ class SACalculator:
             missing_cols.append(pl.lit(False).alias("is_short_term_trade_lc"))
         if "is_payroll_loan" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_payroll_loan"))
+        # CRM collateral columns for Art. 127 secured/unsecured split
+        if "collateral_re_value" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))
+        if "collateral_receivables_value" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("collateral_receivables_value"))
+        if "collateral_other_physical_value" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("collateral_other_physical_value"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -490,29 +497,9 @@ class SACalculator:
                     # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
                     pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
-                    # 1. Defaulted exposures: 150% or 100% (PRA PS1/26 Art. 127)
-                    # HIGH_RISK excluded: Art. 128 (150%) takes priority over
-                    # Art. 127 per Art. 112 Table A2 classification ordering.
-                    # B31 provision ratio = provision_allocated / ead (exposure value)
-                    # NOT (ead + provision_deducted) — that is the CRR denominator.
-                    # Exception: general RESI RE (non-income-dependent) always 100%
-                    # per CRE20.88 / Art. 127 — Basel 3.1 simplification.
-                    .when(pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK"))
-                    .then(
-                        # RESI RE non-income-dependent: 100% flat (CRE20.88)
-                        pl.when(
-                            (
-                                _uc.str.contains("MORTGAGE", literal=True)
-                                | _uc.str.contains("RESIDENTIAL", literal=True)
-                            )
-                            & ~pl.col("has_income_cover").fill_null(False)
-                        )
-                        .then(pl.lit(float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW)))
-                        # All other defaulted: provision-based (Art. 127)
-                        .when(pl.col("provision_allocated") >= b31_def_threshold * pl.col(_ead_col))
-                        .then(pl.lit(b31_def_high_rw))
-                        .otherwise(pl.lit(b31_def_low_rw))
-                    )
+                    # 1. Defaulted exposures: handled in _apply_defaulted_risk_weight()
+                    # after the base RW when-chain, to support Art. 127(2)
+                    # secured/unsecured split with non-financial collateral.
                     # 2. QCCP trade exposures: 2% proprietary / 4% client-cleared
                     # (CRR Art. 306, CRE54.14-15)
                     .when(pl.col("cp_entity_type") == "ccp")
@@ -801,20 +788,9 @@ class SACalculator:
                     # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
                     pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
-                    # 1. Defaulted exposures: 100% or 150% (CRR Art. 127)
-                    # HIGH_RISK excluded: Art. 128 (150%) takes priority over
-                    # Art. 127 per Art. 112 Table A2 classification ordering.
-                    # Provision ratio = provision_allocated / (ead + provision_deducted)
-                    # where denominator reconstructs pre-provision unsecured EAD
-                    .when(pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK"))
-                    .then(
-                        pl.when(
-                            pl.col("provision_allocated")
-                            >= crr_def_threshold * (pl.col(_ead_col) + pl.col("provision_deducted"))
-                        )
-                        .then(pl.lit(crr_def_high_rw))
-                        .otherwise(pl.lit(crr_def_low_rw))
-                    )
+                    # 1. Defaulted exposures: handled in _apply_defaulted_risk_weight()
+                    # after the base RW when-chain, to support Art. 127(2)
+                    # secured/unsecured split with non-financial collateral.
                     # 2. QCCP trade exposures: 2% proprietary / 4% client-cleared
                     # (CRR Art. 306, CRE54.14-15)
                     .when(pl.col("cp_entity_type") == "ccp")
@@ -968,6 +944,13 @@ class SACalculator:
                 ]
             )
 
+        # Apply Art. 127 defaulted risk weight (secured/unsecured split)
+        # Runs after the base RW when-chain so defaulted exposures have their
+        # non-defaulted base RW available for blending with collateral coverage.
+        schema_for_ead = exposures.collect_schema()
+        _ead_col = "ead_final" if "ead_final" in schema_for_ead.names() else "ead"
+        exposures = self._apply_defaulted_risk_weight(exposures, config, _ead_col)
+
         # Clean up temporary columns
         exposures = exposures.drop(
             [
@@ -984,6 +967,112 @@ class SACalculator:
         )
 
         return exposures
+
+    def _apply_defaulted_risk_weight(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+        ead_col: str,
+    ) -> pl.LazyFrame:
+        """
+        Apply Art. 127 defaulted risk weight with secured/unsecured split.
+
+        CRR Art. 127(1)-(2) / CRE20.89-90 require splitting defaulted exposures
+        into secured and unsecured portions based on eligible CRM:
+        - Secured portion (non-financial collateral): retains the base risk weight
+        - Unsecured portion: 100% if provisions >= 20% of unsecured value, else 150%
+
+        Financial collateral already reduces EAD via collateral_adjusted_value
+        before this method is called. Non-financial collateral (RE, receivables,
+        other physical) provides additional secured coverage that reduces the
+        portion subject to the defaulted 100%/150% override.
+
+        When no non-financial collateral is present, the entire exposure gets
+        the provision-based 100%/150% (identical to prior behaviour).
+
+        Basel 3.1 exception: non-income-dependent RESI RE defaults always get
+        100% flat regardless of provisions or collateral (CRE20.88).
+
+        References:
+        - CRR Art. 127(1): unsecured part risk weight (100%/150%)
+        - CRR Art. 127(2): secured/unsecured split via eligible CRM
+        - CRE20.88: B31 RESI RE non-income flat 100%
+        - CRE20.89-90: B31 defaulted provision test and CRM eligibility
+        """
+        _uc = pl.col("exposure_class").fill_null("").str.to_uppercase()
+
+        # Non-financial collateral coverage (Art. 127(2))
+        # Financial collateral already reduced EAD; these are additional
+        # non-financial CRM items that define the secured portion.
+        non_fin_collateral = (
+            pl.col("collateral_re_value").fill_null(0.0)
+            + pl.col("collateral_receivables_value").fill_null(0.0)
+            + pl.col("collateral_other_physical_value").fill_null(0.0)
+        )
+
+        # Secured/unsecured split — guard against zero EAD
+        ead = pl.col(ead_col)
+        secured_pct = pl.when(ead > 0).then(
+            (non_fin_collateral / ead).clip(0.0, 1.0)
+        ).otherwise(pl.lit(0.0))
+        unsecured_pct = pl.lit(1.0) - secured_pct
+
+        # Compute provision-based defaulted risk weight for the unsecured portion
+        if config.is_basel_3_1:
+            b31_threshold = float(B31_DEFAULTED_PROVISION_THRESHOLD)
+            b31_high = float(B31_DEFAULTED_RW_HIGH_PROVISION)
+            b31_low = float(B31_DEFAULTED_RW_LOW_PROVISION)
+
+            # B31 RESI RE non-income-dependent: 100% flat for whole exposure (CRE20.88)
+            is_resi_re_non_income = (
+                (
+                    _uc.str.contains("MORTGAGE", literal=True)
+                    | _uc.str.contains("RESIDENTIAL", literal=True)
+                )
+                & ~pl.col("has_income_cover").fill_null(False)
+            )
+
+            # B31 provision ratio: provision / unsecured_ead
+            unsecured_ead = ead * unsecured_pct
+            provision_rw = (
+                pl.when(pl.col("provision_allocated") >= b31_threshold * unsecured_ead)
+                .then(pl.lit(b31_high))
+                .otherwise(pl.lit(b31_low))
+            )
+
+            # RESI RE non-income: 100% flat for the whole exposure (no split)
+            # All other defaulted: blend base RW (secured) + provision RW (unsecured)
+            blended_rw = (
+                pl.when(is_resi_re_non_income)
+                .then(pl.lit(float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW)))
+                .otherwise(unsecured_pct * provision_rw + secured_pct * pl.col("risk_weight"))
+            )
+        else:
+            crr_threshold = float(CRR_DEFAULTED_PROVISION_THRESHOLD)
+            crr_high = float(CRR_DEFAULTED_RW_HIGH_PROVISION)
+            crr_low = float(CRR_DEFAULTED_RW_LOW_PROVISION)
+
+            # CRR provision ratio: provision / (unsecured_ead + provision_deducted)
+            # Denominator reconstructs pre-provision unsecured value per Art. 127(1)
+            unsecured_pre_prov = (ead + pl.col("provision_deducted")) * unsecured_pct
+            provision_rw = (
+                pl.when(pl.col("provision_allocated") >= crr_threshold * unsecured_pre_prov)
+                .then(pl.lit(crr_high))
+                .otherwise(pl.lit(crr_low))
+            )
+
+            # Blend base RW (secured) + provision RW (unsecured)
+            blended_rw = unsecured_pct * provision_rw + secured_pct * pl.col("risk_weight")
+
+        # Apply only to defaulted, non-HIGH_RISK exposures
+        is_defaulted = pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
+
+        return exposures.with_columns(
+            pl.when(is_defaulted)
+            .then(blended_rw)
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight")
+        )
 
     def _apply_guarantee_substitution(
         self,

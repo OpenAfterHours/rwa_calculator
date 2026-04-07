@@ -37,15 +37,15 @@ Under Basel 3.1, senior unsecured LGD is differentiated by whether the counterpa
 
 | Collateral Type | CRR LGD | Basel 3.1 LGD | Reference |
 |----------------|---------|---------------|-----------|
-| Unsecured (senior, non-FSE) | 45% | **40%** | Art. 161(1)(a) |
-| Unsecured (senior, FSE) | 45% | **45%** | Art. 161(1)(b) |
+| Unsecured (senior, non-FSE) | 45% | **40%** | Art. 161(1)(aa) |
+| Unsecured (senior, FSE) | 45% | **45%** | Art. 161(1)(a) |
 | Subordinated | 75% | 75% | Art. 161(1)(b) |
 | Covered bonds | — | **11.25%** | Art. 161(1B) |
 | Financial collateral | 0% | 0% | Art. 161(1)(d) |
-| Receivables | 35% | 35% | Art. 161(1)(e) |
-| Residential real estate | 35% | 35% | Art. 161(1)(f) |
-| Commercial real estate | 35% | 35% | Art. 161(1)(g) |
-| Other physical | 40% | 40% | Art. 161(1)(h) |
+| Receivables | 35% | **20%** | CRE32.9 |
+| Residential real estate | 35% | **20%** | CRE32.10 |
+| Commercial real estate | 35% | **20%** | CRE32.11 |
+| Other physical | 40% | **25%** | CRE32.12 |
 
 !!! note "FSE Definition"
     Financial sector entity includes banks, building societies, investment firms, insurance companies, and any entity primarily engaged in financial intermediation. See Art. 4(1)(27) CRR.

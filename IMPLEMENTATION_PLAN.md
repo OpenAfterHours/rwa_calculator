@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.59 subordinated debt equity + transitional floor exclusion)
-**Current version:** 0.1.112 | **Test suite:** ~3,257 collected (~3,224 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.60 B31 FIRB LGD DataFrame generator)
+**Current version:** 0.1.113 | **Test suite:** ~3,331 collected (~3,298 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -701,12 +701,19 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 31 new unit tests in `tests/unit/test_equity_subordinated_debt.py`: 11 data table tests (B31/CRR/IRB constants + lookups + DataFrames + coverage), 6 B31 calculator tests (150% weight, RWA, priority over speculative/gov, regression), 1 CRR calculator test (100% flat), 9 transitional floor exclusion tests (sub debt 2027/2028/2029, gov 2027/2029, central bank 2027, listed still floored, speculative still floored, post-transitional), 3 enum tests (value, count=11, VALID_EQUITY_TYPES=11), 1 mixed batch test (4 equity types). 2 existing tests updated (CRR equity table row count 10→11). All 3,224 tests pass (was 3,193). Test count: 3,224 passed, 33 skipped.
 
 ### P1.60 No B31 FIRB LGD DataFrame generator
-- **Status:** [ ] Not started
-- **Impact:** B31 FIRB LGD values exist as a Python dict in `constants.py` but there is no DataFrame generator equivalent to the CRR version (`crr_firb_lgd.py`). The CRM module uses the dict directly rather than a structured DataFrame. This is inconsistent with the pattern used for other data tables and makes it harder to validate/test LGD values systematically.
-- **File:Line:** `data/tables/crr_firb_lgd.py` (CRR version exists); `engine/irb/constants.py` (B31 dict only)
-- **Spec ref:** PRA PS1/26 Art. 161(1)
-- **Fix:** Create `b31_firb_lgd.py` DataFrame generator following the `crr_firb_lgd.py` pattern. Include FSE vs non-FSE distinction (45% vs 40% per P1.32). Add covered bond LGD 11.25%.
-- **Tests needed:** Unit tests for B31 FIRB LGD DataFrame contents and FSE/non-FSE routing.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** Basel 3.1 F-IRB supervisory LGD values now have a proper DataFrame generator (`b31_firb_lgd.py`) following the `crr_firb_lgd.py` pattern. Provides structured access to all B31-revised LGD values with FSE distinction and overcollateralisation parameters.
+  **Implementation:**
+  - **Named constants:** 9 `Decimal` constants for all B31 FIRB LGD values (e.g., `B31_FIRB_LGD_UNSECURED_SENIOR = 0.40`, `B31_FIRB_LGD_UNSECURED_SENIOR_FSE = 0.45`, `B31_FIRB_LGD_COVERED_BOND = 0.1125`, `B31_FIRB_LGD_RECEIVABLES = 0.20`, etc.)
+  - **DataFrame generator:** `get_b31_firb_lgd_table()` returns 11-row DataFrame with columns: `collateral_type`, `seniority`, `is_fse`, `lgd`, `overcollateralisation_ratio`, `min_threshold`, `description`. Includes FSE/non-FSE split for unsecured, covered bond row, and all reduced LGDS values.
+  - **Scalar lookup:** `lookup_b31_firb_lgd(collateral_type, is_subordinated, is_financial_sector_entity)` returns `(Decimal, str)` with FSE-aware routing and all collateral type aliases (case-insensitive).
+  - **Comparison table:** `get_b31_vs_crr_lgd_comparison()` returns DataFrame showing CRR→B31 changes in basis points for audit/validation.
+  - **Exports:** All constants and functions exported via `data/tables/__init__.py`.
+  - **Spec fix:** `firb-calculation.md` B31 LGD table corrected — receivables/RE/other physical LGDS values were shown as unchanged from CRR but are actually reduced (35%→20%/35%→20%/40%→25% per CRE32.9-12). Art. reference for non-FSE corrected from Art. 161(1)(a) to Art. 161(1)(aa).
+- **File:Line:** `data/tables/b31_firb_lgd.py` (new), `data/tables/__init__.py` (exports), `docs/specifications/crr/firb-calculation.md` (spec fix)
+- **Spec ref:** PRA PS1/26 Art. 161(1), Art. 161(1B), CRE32.9-12
+- **Tests:** 74 new unit tests in `tests/unit/test_b31_firb_lgd.py`: 10 constant value tests, 8 CRR-to-B31 change tests, 16 DataFrame generator tests (schema, row count, all values, overcollateralisation ratios, thresholds), 24 scalar lookup tests (all collateral types, aliases, FSE routing, case insensitivity, unknown collateral defaults), 8 comparison table tests, 8 consistency tests (constants vs DataFrame vs lookup, value bounds). All 3,298 tests pass (was 3,224). Test count: 3,298 passed, 33 skipped.
 
 ### P1.61 CIU look-through and mandate-based approach incomplete (Art. 132A/132B)
 - **Status:** [~] Fallback implemented; look-through/mandate partial

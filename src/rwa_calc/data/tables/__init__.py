@@ -11,11 +11,26 @@ Modules:
     crr_haircuts: CRM supervisory haircuts
     crr_slotting: CRR specialised lending slotting risk weights
     b31_slotting: Basel 3.1 specialised lending slotting risk weights
-    crr_firb_lgd: F-IRB supervisory LGD values
+    crr_firb_lgd: F-IRB supervisory LGD values (CRR)
+    b31_firb_lgd: F-IRB supervisory LGD values (Basel 3.1)
     crr_equity_rw: CRR equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
     b31_equity_rw: Basel 3.1 equity risk weights (PRA PS1/26 Art. 133)
 """
 
+from .b31_firb_lgd import (
+    B31_FIRB_LGD_COMMERCIAL_RE,
+    B31_FIRB_LGD_COVERED_BOND,
+    B31_FIRB_LGD_FINANCIAL_COLLATERAL,
+    B31_FIRB_LGD_OTHER_PHYSICAL,
+    B31_FIRB_LGD_RECEIVABLES,
+    B31_FIRB_LGD_RESIDENTIAL_RE,
+    B31_FIRB_LGD_SUBORDINATED,
+    B31_FIRB_LGD_UNSECURED_SENIOR,
+    B31_FIRB_LGD_UNSECURED_SENIOR_FSE,
+    get_b31_firb_lgd_table,
+    get_b31_vs_crr_lgd_comparison,
+    lookup_b31_firb_lgd,
+)
 from .b31_equity_rw import (
     B31_SA_EQUITY_RISK_WEIGHTS,
     get_b31_equity_risk_weights,
@@ -128,11 +143,24 @@ __all__ = [
     "B31_SLOTTING_RISK_WEIGHTS_PREOP",
     "B31_SLOTTING_RISK_WEIGHTS_HVCRE",
     "lookup_b31_slotting_rw",
-    # F-IRB LGD
+    # F-IRB LGD — CRR
     "FIRB_SUPERVISORY_LGD",
     "BASEL31_FIRB_SUPERVISORY_LGD",
     "get_firb_lgd_table",
     "get_firb_lgd_table_for_framework",
+    # F-IRB LGD — Basel 3.1
+    "B31_FIRB_LGD_UNSECURED_SENIOR",
+    "B31_FIRB_LGD_UNSECURED_SENIOR_FSE",
+    "B31_FIRB_LGD_SUBORDINATED",
+    "B31_FIRB_LGD_COVERED_BOND",
+    "B31_FIRB_LGD_FINANCIAL_COLLATERAL",
+    "B31_FIRB_LGD_RECEIVABLES",
+    "B31_FIRB_LGD_RESIDENTIAL_RE",
+    "B31_FIRB_LGD_COMMERCIAL_RE",
+    "B31_FIRB_LGD_OTHER_PHYSICAL",
+    "get_b31_firb_lgd_table",
+    "lookup_b31_firb_lgd",
+    "get_b31_vs_crr_lgd_comparison",
     # EU sovereign treatment
     "EU_MEMBER_STATES",
     "EU_COUNTRY_DOMESTIC_CURRENCY",

@@ -22,6 +22,13 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.errors import (
+    ERROR_MISSING_EXPECTED_LOSS,
+    CalculationError,
+    ErrorCategory,
+    ErrorSeverity,
+)
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -289,7 +296,10 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
 # =============================================================================
 
 
-def compute_el_shortfall_excess(lf: pl.LazyFrame) -> pl.LazyFrame:
+def compute_el_shortfall_excess(
+    lf: pl.LazyFrame,
+    errors: list[CalculationError] | None = None,
+) -> pl.LazyFrame:
     """
     Compute EL shortfall and excess for IRB exposures.
 
@@ -327,7 +337,20 @@ def compute_el_shortfall_excess(lf: pl.LazyFrame) -> pl.LazyFrame:
     cols = schema.names()
 
     if "expected_loss" not in cols:
-        # EL not yet computed — nothing to compare
+        if errors is not None:
+            errors.append(
+                CalculationError(
+                    code=ERROR_MISSING_EXPECTED_LOSS,
+                    message=(
+                        "expected_loss column absent — EL shortfall/excess defaulted "
+                        "to zero. T2 credit cap and CET1 deduction may be affected."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    field_name="expected_loss",
+                    regulatory_reference="CRR Art. 158-159",
+                )
+            )
         return lf.with_columns(
             [
                 pl.lit(0.0).alias("el_shortfall"),

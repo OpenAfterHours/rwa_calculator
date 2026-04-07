@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.30b, P1.30c implemented; P6.18, P6.19, P6.17 fixed, P4.16 spec corrections complete)
-**Current version:** 0.1.132 | **Test suite:** ~3,682 collected (~3,675 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.9a, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-07 (P1.30b, P1.30c implemented; P6.18, P6.19, P6.17 fixed, P4.16 spec corrections complete; P6.10 fixed)
+**Current version:** 0.1.133 | **Test suite:** ~3,699 collected (~3,687 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.9a, P6.10, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed, P1.83 Art. 159(1) Pool B AVAs now fixed, P1.9a OF-ADJ now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 77 (+P1.9a sub-item, +P1.86; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed, P1.83 Art. 159(1) Pool B AVAs now fixed, P1.9a OF-ADJ now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -330,6 +330,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 ### P1.85 PMA adjustment sequencing wrong + EL monotonicity missing (Art. 153(5A)/154(4A)/158(6A))
 - **Status:** [x] Complete (2026-04-07)
+
+### P1.86 CRR unrated covered bond RW hardcoded to 20% — Art. 129(5) derivation not wired
+- **Status:** [ ] Not started
+- **Impact:** `engine/sa/calculator.py:968-972` hardcodes 0.20 (20%) for ALL unrated covered bonds under CRR. Art. 129(5) requires derivation from the issuing institution's risk weight: institution 20% → CB 10%, institution 50% → CB 20%, institution 100% → CB 50%, institution 150% → CB 100%. The code's 20% is only correct when the institution gets 50% RW (e.g., CQS 2). For UK institutions (typically unrated, sovereign-derived 40%), the 20% is a reasonable approximation. For non-UK issuers with 100% or 150% RW, capital is **understated** (20% vs 50% or 100%). The `COVERED_BOND_UNRATED_DERIVATION` table exists in `data/tables/crr_risk_weights.py:473-483` but is not wired to the SA calculator. The Basel 3.1 path correctly uses `cp_scra_grade` for derivation (`calculator.py:786-794`). This is the only TODO remaining in the source code.
+- **File:Line:** `engine/sa/calculator.py:967-972`, `data/tables/crr_risk_weights.py:473-483`
+- **Spec ref:** CRR Art. 129(5), PRA PS1/26 Art. 129A(5)
+- **Fix:** Add an issuer institution CQS field (e.g., `cp_institution_cqs`) to the loan schema. Use it to look up institution RW via Art. 120, then derive CB RW via `COVERED_BOND_UNRATED_DERIVATION`. Fall back to 20% when field is null (backward compatible).
+- **Tests needed:** Unit tests for each derivation step (institution CQS → institution RW → CB RW). Edge case: null institution CQS falls back to 20%.
 
 ---
 
@@ -708,9 +716,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Either update spec to match implementation, or move provision step post-CCF.
 
 ### P6.10 IRB EL shortfall silently returns zero when `expected_loss` column absent
-- **Status:** [~] Silent failure
-- **Impact:** `irb/adjustments.py:297-304` -- when `expected_loss` column is not present, function returns `el_shortfall=0, el_excess=0` with no warning. In pipelines where EL was not computed upstream (e.g., missing provision step), this silently zeros the EL shortfall rather than flagging missing computation. Affects T2 credit cap.
-- **Fix:** Emit a `CalculationError` when `expected_loss` is absent but IRB exposures exist.
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** `irb/adjustments.py:329-336` — when `expected_loss` column is not present, function returned `el_shortfall=0, el_excess=0` with no warning. In pipelines where EL was not computed upstream (e.g., missing provision step), this silently zeroed the EL shortfall rather than flagging missing computation. Affected T2 credit cap.
+- **Fix:** Added `errors: list[CalculationError] | None = None` parameter to `compute_el_shortfall_excess()` in both `irb/adjustments.py` and `slotting/namespace.py`. When `expected_loss` column is absent, emits `CalculationError(code="IRB006", severity=WARNING, category=DATA_QUALITY)` with regulatory reference CRR Art. 158-159. Error wired through IRB namespace, IRB calculator chain (`_run_irb_chain` passes `sf_errors`), slotting calculator (`calculate_branch` and `get_slotting_result_bundle` pass errors). Backward compatible: `errors=None` default means no crash for existing callers.
+- **File:Line:** `engine/irb/adjustments.py:292-348`, `engine/irb/namespace.py:539-556`, `engine/irb/calculator.py:194-203`, `engine/slotting/namespace.py:248-291`, `engine/slotting/calculator.py:77-108,196-206`, `contracts/errors.py:190`
+- **Tests:** 12 new unit tests in `tests/unit/test_el_shortfall_error_reporting.py`: IRB direct (6 tests: emits warning, returns zeros, no warning when present, None param compat, omitted param compat, regulatory reference), slotting namespace (4 tests: emits warning, no warning when present, returns zeros, no errors param compat), IRB namespace wrapper (2 tests: passes errors through, no errors when present). All 3687 tests pass (was 3675).
 
 ### P6.11 No `ApproachType.EQUITY` enum value
 - **Status:** [~] Gap

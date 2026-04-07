@@ -536,12 +536,19 @@ class IRBLazyFrame:
     # EL SHORTFALL / EXCESS
     # =========================================================================
 
-    def compute_el_shortfall_excess(self) -> pl.LazyFrame:
+    def compute_el_shortfall_excess(
+        self,
+        errors: list | None = None,
+    ) -> pl.LazyFrame:
         """Compute EL shortfall and excess for IRB exposures.
+
+        Args:
+            errors: Optional error accumulator. Receives a warning if
+                ``expected_loss`` column is absent (EL not yet computed).
 
         Delegates to ``adjustments.compute_el_shortfall_excess``.
         """
-        return _compute_el_shortfall_excess(self._lf)
+        return _compute_el_shortfall_excess(self._lf, errors=errors)
 
     # =========================================================================
     # GUARANTEE SUBSTITUTION

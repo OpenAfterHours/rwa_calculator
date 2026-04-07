@@ -33,6 +33,12 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars import col, lit
 
+from rwa_calc.contracts.errors import (
+    ERROR_MISSING_EXPECTED_LOSS,
+    CalculationError,
+    ErrorCategory,
+    ErrorSeverity,
+)
 from rwa_calc.data.tables.b31_slotting import (
     B31_SLOTTING_EL_RATES,
     B31_SLOTTING_EL_RATES_HVCRE,
@@ -240,7 +246,10 @@ class SlottingLazyFrame:
             expected_loss=el_rate_expr * col("ead_final"),
         )
 
-    def compute_el_shortfall_excess(self) -> pl.LazyFrame:
+    def compute_el_shortfall_excess(
+        self,
+        errors: list[CalculationError] | None = None,
+    ) -> pl.LazyFrame:
         """Compute EL shortfall and excess for slotting exposures.
 
         Compares expected loss against Art. 159(1) Pool B. Same logic as IRB
@@ -248,6 +257,10 @@ class SlottingLazyFrame:
 
         Pool B per Art. 159(1) includes provisions (a+b), AVAs (c), and
         other own funds reductions (d).
+
+        Args:
+            errors: Optional error accumulator. Receives a warning if
+                ``expected_loss`` column is absent (EL not yet computed).
 
         Produces:
             el_shortfall: max(0, expected_loss - pool_b)
@@ -257,6 +270,21 @@ class SlottingLazyFrame:
         cols = schema.names()
 
         if "expected_loss" not in cols:
+            if errors is not None:
+                errors.append(
+                    CalculationError(
+                        code=ERROR_MISSING_EXPECTED_LOSS,
+                        message=(
+                            "expected_loss column absent in slotting exposures — "
+                            "EL shortfall/excess defaulted to zero. "
+                            "T2 credit cap and CET1 deduction may be affected."
+                        ),
+                        severity=ErrorSeverity.WARNING,
+                        category=ErrorCategory.DATA_QUALITY,
+                        field_name="expected_loss",
+                        regulatory_reference="CRR Art. 158-159",
+                    )
+                )
             return self._lf.with_columns(
                 el_shortfall=lit(0.0),
                 el_excess=lit(0.0),

@@ -78,6 +78,8 @@ class SlottingCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate Slotting RWA and Expected Loss on pre-filtered slotting-only rows.
@@ -89,6 +91,7 @@ class SlottingCalculator:
         Args:
             exposures: Pre-filtered slotting rows only
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             LazyFrame with slotting RWA, expected_loss, el_shortfall, el_excess
@@ -100,11 +103,11 @@ class SlottingCalculator:
         )
 
         # Apply supporting factors (CRR Art. 501/501a) — same pattern as IRB
-        exposures = self._apply_supporting_factors(exposures, config)
+        exposures = self._apply_supporting_factors(exposures, config, errors=errors)
 
         return (
             exposures.slotting.apply_el_rates(config)
-            .slotting.compute_el_shortfall_excess()
+            .slotting.compute_el_shortfall_excess(errors=errors)
         )
 
     def _apply_supporting_factors(
@@ -200,7 +203,7 @@ class SlottingCalculator:
         exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
         exposures = (
             exposures.slotting.apply_el_rates(config)
-            .slotting.compute_el_shortfall_excess()
+            .slotting.compute_el_shortfall_excess(errors=sf_errors)
         )
 
         # Build audit trail

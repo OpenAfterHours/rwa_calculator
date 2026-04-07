@@ -197,7 +197,7 @@ class IRBCalculator:
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
             .irb.apply_post_model_adjustments(config)
-            .irb.compute_el_shortfall_excess()
+            .irb.compute_el_shortfall_excess(errors=sf_errors)
             .irb.apply_guarantee_substitution(config)
         )
         return self._apply_supporting_factors(exposures, config, errors=sf_errors)

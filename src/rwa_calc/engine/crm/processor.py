@@ -98,9 +98,7 @@ def _build_exposure_lookups(
         if has_floor_col:
             # Conservative: if ANY exposure in facility has 1-day floor, flag whole facility
             facility_agg.append(
-                pl.col("has_one_day_maturity_floor").fill_null(False).max().alias(
-                    "_floor_facility"
-                )
+                pl.col("has_one_day_maturity_floor").fill_null(False).max().alias("_floor_facility")
             )
         else:
             facility_agg.append(pl.lit(False).alias("_floor_facility"))
@@ -431,12 +429,8 @@ class CRMProcessor:
 
         # Step 3.6: Pre-compute FCSM columns if Simple Method is elected
         # Must run BEFORE Comprehensive Method (which is still needed for IRB LGD)
-        use_simple_method = (
-            config.crm_collateral_method == CRMCollateralMethod.SIMPLE
-        )
-        if use_simple_method and has_required_columns(
-            collateral, self.COLLATERAL_REQUIRED_COLUMNS
-        ):
+        use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
+        if use_simple_method and has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = compute_fcsm_columns(exposures, collateral, config)
 
         # Step 4: Apply collateral (if available and valid)
@@ -446,12 +440,14 @@ class CRMProcessor:
             exposures = self.apply_collateral(exposures, collateral, config)
         else:
             if collateral is not None:
-                errors.append(crm_warning(
-                    ERROR_INELIGIBLE_COLLATERAL,
-                    "Collateral data provided but missing required columns "
-                    f"{self.COLLATERAL_REQUIRED_COLUMNS}; collateral CRM skipped",
-                    regulatory_reference="CRR Art. 223-224",
-                ))
+                errors.append(
+                    crm_warning(
+                        ERROR_INELIGIBLE_COLLATERAL,
+                        "Collateral data provided but missing required columns "
+                        f"{self.COLLATERAL_REQUIRED_COLUMNS}; collateral CRM skipped",
+                        regulatory_reference="CRR Art. 223-224",
+                    )
+                )
             # No collateral: still need to set F-IRB supervisory LGD based on seniority.
             # Under B31, AIRB Foundation/169B exposures also get formula-based LGD.
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
@@ -504,22 +500,24 @@ class CRMProcessor:
             )
         else:
             if data.guarantees is not None:
-                if not has_required_columns(
-                    data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS
-                ):
-                    errors.append(crm_warning(
-                        ERROR_INVALID_GUARANTEE,
-                        "Guarantee data provided but missing required columns "
-                        f"{self.GUARANTEE_REQUIRED_COLUMNS}; guarantee CRM skipped",
-                        regulatory_reference="CRR Art. 213-217",
-                    ))
+                if not has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS):
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but missing required columns "
+                            f"{self.GUARANTEE_REQUIRED_COLUMNS}; guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
                 elif data.counterparty_lookup is None:
-                    errors.append(crm_warning(
-                        ERROR_INVALID_GUARANTEE,
-                        "Guarantee data provided but counterparty lookup is missing; "
-                        "guarantee CRM skipped",
-                        regulatory_reference="CRR Art. 213-217",
-                    ))
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but counterparty lookup is missing; "
+                            "guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
 
         # Step 6: Calculate final EAD after all CRM adjustments
         # Provisions already baked into ead_pre_crm — no double deduction
@@ -613,12 +611,14 @@ class CRMProcessor:
             exposures = self.apply_collateral(exposures, collateral, config)
         else:
             if collateral is not None:
-                errors.append(crm_warning(
-                    ERROR_INELIGIBLE_COLLATERAL,
-                    "Collateral data provided but missing required columns "
-                    f"{self.COLLATERAL_REQUIRED_COLUMNS}; collateral CRM skipped",
-                    regulatory_reference="CRR Art. 223-224",
-                ))
+                errors.append(
+                    crm_warning(
+                        ERROR_INELIGIBLE_COLLATERAL,
+                        "Collateral data provided but missing required columns "
+                        f"{self.COLLATERAL_REQUIRED_COLUMNS}; collateral CRM skipped",
+                        regulatory_reference="CRR Art. 223-224",
+                    )
+                )
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
                 exposures, self._is_basel_3_1, config=config
             )
@@ -660,22 +660,24 @@ class CRMProcessor:
             )
         else:
             if data.guarantees is not None:
-                if not has_required_columns(
-                    data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS
-                ):
-                    errors.append(crm_warning(
-                        ERROR_INVALID_GUARANTEE,
-                        "Guarantee data provided but missing required columns "
-                        f"{self.GUARANTEE_REQUIRED_COLUMNS}; guarantee CRM skipped",
-                        regulatory_reference="CRR Art. 213-217",
-                    ))
+                if not has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS):
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but missing required columns "
+                            f"{self.GUARANTEE_REQUIRED_COLUMNS}; guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
                 elif data.counterparty_lookup is None:
-                    errors.append(crm_warning(
-                        ERROR_INVALID_GUARANTEE,
-                        "Guarantee data provided but counterparty lookup is missing; "
-                        "guarantee CRM skipped",
-                        regulatory_reference="CRR Art. 213-217",
-                    ))
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but counterparty lookup is missing; "
+                            "guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
             exposures = materialise_barrier(exposures, config, "crm_no_guarantee")
 
         exposures = self._finalize_ead(exposures)

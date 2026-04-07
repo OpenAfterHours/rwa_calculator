@@ -341,11 +341,7 @@ def apply_firb_supervisory_lgd_no_collateral(
 
     if is_basel_3_1 and airb_method == AIRBCollateralMethod.FOUNDATION:
         # AIRB Foundation election: use supervisory LGDU (same as FIRB)
-        airb_lgd_expr = (
-            pl.when(is_subordinated)
-            .then(pl.lit(0.75))
-            .otherwise(lgd_senior_expr)
-        )
+        airb_lgd_expr = pl.when(is_subordinated).then(pl.lit(0.75)).otherwise(lgd_senior_expr)
         uses_formula = (pl.col("approach") == ApproachType.FIRB.value) | is_airb
     elif (
         is_basel_3_1
@@ -478,10 +474,7 @@ def _apply_collateral_unified(
     waterfall_aggs = []
     for cat_values, _lgds_key, suffix in WATERFALL_ORDER:
         waterfall_aggs.append(
-            pl.col("effectively_secured")
-            .filter(cat.is_in(cat_values))
-            .sum()
-            .alias(f"_e{suffix}")
+            pl.col("effectively_secured").filter(cat.is_in(cat_values)).sum().alias(f"_e{suffix}")
         )
 
     all_coll = (
@@ -497,26 +490,11 @@ def _apply_collateral_unified(
                 # Raw non-financial adjusted_value for 30% threshold
                 pl.col("adjusted_value").filter(~is_fin).sum().alias("_rn"),
                 # Per-type collateral values for COREP
-                pl.col("adjusted_value")
-                .filter(cat == "financial")
-                .sum()
-                .alias("_adj_fin"),
-                pl.col("adjusted_value")
-                .filter(cat == "cash")
-                .sum()
-                .alias("_adj_cash"),
-                pl.col("adjusted_value")
-                .filter(cat == "real_estate")
-                .sum()
-                .alias("_adj_re"),
-                pl.col("adjusted_value")
-                .filter(cat == "receivables")
-                .sum()
-                .alias("_adj_rec"),
-                pl.col("adjusted_value")
-                .filter(cat == "other_physical")
-                .sum()
-                .alias("_adj_oth"),
+                pl.col("adjusted_value").filter(cat == "financial").sum().alias("_adj_fin"),
+                pl.col("adjusted_value").filter(cat == "cash").sum().alias("_adj_cash"),
+                pl.col("adjusted_value").filter(cat == "real_estate").sum().alias("_adj_re"),
+                pl.col("adjusted_value").filter(cat == "receivables").sum().alias("_adj_rec"),
+                pl.col("adjusted_value").filter(cat == "other_physical").sum().alias("_adj_oth"),
             ]
             + waterfall_aggs
         )
@@ -683,7 +661,7 @@ def _apply_collateral_unified(
 
     # Blended lgd_secured = sum(lgds_i * es_i) / total_secured
     lgd_num = pl.lit(0.0)
-    for (_, lgds_key, suffix) in WATERFALL_ORDER:
+    for _, lgds_key, suffix in WATERFALL_ORDER:
         lgd_num = lgd_num + pl.lit(lgds[lgds_key]) * pl.col(f"_es_{suffix}")
 
     # Compute sequential allocations, then total + lgd_secured
@@ -708,9 +686,7 @@ def _apply_collateral_unified(
         + [f"_eff_{s}_a" for s in _wf_suffixes]
     )
     exposures = exposures.drop(drop_cols)
-    exposures = exposures.rename(
-        {f"_es_{s}": CRM_ALLOC_COLUMNS[s] for s in _wf_suffixes}
-    )
+    exposures = exposures.rename({f"_es_{s}": CRM_ALLOC_COLUMNS[s] for s in _wf_suffixes})
 
     # --- Apply EAD reduction + determine seniority-based LGDU ---
     # Supervisory LGDU for unsecured portion: FSE-aware under Basel 3.1
@@ -776,11 +752,7 @@ def _apply_collateral_unified(
             .otherwise(supervisory_lgdu_expr)
         )
     else:
-        lgdu_expr = (
-            pl.when(is_subordinated)
-            .then(pl.lit(0.75))
-            .otherwise(supervisory_lgdu_expr)
-        )
+        lgdu_expr = pl.when(is_subordinated).then(pl.lit(0.75)).otherwise(supervisory_lgdu_expr)
 
     exposures = exposures.with_columns(
         [

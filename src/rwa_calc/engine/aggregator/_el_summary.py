@@ -140,9 +140,7 @@ def _aggregate_by_default_status(
             "expected_loss": float(row.get("expected_loss", 0.0) or 0.0),
             "provisions_allocated": float(row.get("provisions_allocated", 0.0) or 0.0),
             "ava_amount": float(row.get("ava_amount", 0.0) or 0.0),
-            "other_own_funds_reductions": float(
-                row.get("other_own_funds_reductions", 0.0) or 0.0
-            ),
+            "other_own_funds_reductions": float(row.get("other_own_funds_reductions", 0.0) or 0.0),
         }
 
     non_defaulted = _extract(grouped, False)
@@ -209,9 +207,7 @@ def compute_el_portfolio_summary(
     total_expected_loss = non_def["expected_loss"] + def_pool["expected_loss"]
     total_provisions = non_def["provisions_allocated"] + def_pool["provisions_allocated"]
     total_ava = non_def["ava_amount"] + def_pool["ava_amount"]
-    total_other_ofr = (
-        non_def["other_own_funds_reductions"] + def_pool["other_own_funds_reductions"]
-    )
+    total_other_ofr = non_def["other_own_funds_reductions"] + def_pool["other_own_funds_reductions"]
     total_pool_b = total_provisions + total_ava + total_other_ofr
 
     # Art. 159(3) two-branch condition:

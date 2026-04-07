@@ -569,7 +569,9 @@ class TestSlottingELAggregatorIntegration:
         assert float(summary.total_expected_loss) == pytest.approx(150_000.0)  # 100k + 50k
         assert float(summary.total_el_shortfall) == pytest.approx(40_000.0)  # 20k + 20k
         assert float(summary.total_irb_rwa) == pytest.approx(1_500_000.0)  # 1m + 500k
-        assert float(summary.t2_credit_cap) == pytest.approx(1_500_000.0 * 0.006)  # 0.6% of combined
+        assert float(summary.t2_credit_cap) == pytest.approx(
+            1_500_000.0 * 0.006
+        )  # 0.6% of combined
 
     def test_slotting_only_el_summary(self) -> None:
         """When only slotting has EL, portfolio summary still works."""

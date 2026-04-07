@@ -1191,17 +1191,17 @@ class TestOtherCommitCCF:
 
     def test_all_risk_types_b31_batch(self) -> None:
         """Verify all SA CCFs including OC and FRC in a single Basel 3.1 batch."""
-        df = pl.DataFrame(
-            {"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}
-        ).select(sa_ccf_expression(is_basel_3_1=True).alias("ccf"))
+        df = pl.DataFrame({"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}).select(
+            sa_ccf_expression(is_basel_3_1=True).alias("ccf")
+        )
         expected = [1.0, 1.0, 0.5, 0.4, 0.2, 0.1]
         assert df["ccf"].to_list() == pytest.approx(expected)
 
     def test_all_risk_types_crr_batch(self) -> None:
         """Verify all SA CCFs including OC and FRC in a CRR batch."""
-        df = pl.DataFrame(
-            {"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}
-        ).select(sa_ccf_expression(is_basel_3_1=False).alias("ccf"))
+        df = pl.DataFrame({"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}).select(
+            sa_ccf_expression(is_basel_3_1=False).alias("ccf")
+        )
         expected = [1.0, 1.0, 0.5, 0.0, 0.2, 0.0]
         assert df["ccf"].to_list() == pytest.approx(expected)
 
@@ -1424,16 +1424,14 @@ class TestFullRiskCommitmentCCF:
 
     def test_frc_case_insensitive(self) -> None:
         """FRC matching should be case insensitive."""
-        df = pl.DataFrame(
-            {"risk_type": ["frc", "Frc", "FRC", "FULL_RISK_COMMITMENT"]}
-        ).select(sa_ccf_expression().alias("ccf"))
+        df = pl.DataFrame({"risk_type": ["frc", "Frc", "FRC", "FULL_RISK_COMMITMENT"]}).select(
+            sa_ccf_expression().alias("ccf")
+        )
         assert df["ccf"].to_list() == pytest.approx([1.0, 1.0, 1.0, 1.0])
 
     def test_frc_same_as_fr(self) -> None:
         """FRC and FR should produce identical CCF values (both 100%)."""
-        df = pl.DataFrame({"risk_type": ["FR", "FRC"]}).select(
-            sa_ccf_expression().alias("ccf")
-        )
+        df = pl.DataFrame({"risk_type": ["FR", "FRC"]}).select(sa_ccf_expression().alias("ccf"))
         assert df["ccf"][0] == df["ccf"][1]
 
     def test_frc_b31_sa_same_as_crr(self) -> None:
@@ -1629,9 +1627,7 @@ class TestFullRiskCommitmentCCF:
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
 
-        frc_ead = result.filter(pl.col("exposure_reference") == "REPO_CORRECT")[
-            "ead_from_ccf"
-        ][0]
+        frc_ead = result.filter(pl.col("exposure_reference") == "REPO_CORRECT")["ead_from_ccf"][0]
         oc_ead = result.filter(pl.col("exposure_reference") == "REPO_MISCLASSIFIED")[
             "ead_from_ccf"
         ][0]
@@ -1705,9 +1701,9 @@ class TestFullRiskCommitmentCCF:
         for ref, exp_ccf in expected_ccf.items():
             row = result.filter(pl.col("exposure_reference") == ref)
             assert row["ccf"][0] == pytest.approx(exp_ccf), f"CCF mismatch for {ref}"
-            assert row["ead_from_ccf"][0] == pytest.approx(
-                100000.0 * exp_ccf
-            ), f"EAD mismatch for {ref}"
+            assert row["ead_from_ccf"][0] == pytest.approx(100000.0 * exp_ccf), (
+                f"EAD mismatch for {ref}"
+            )
 
 
 # =============================================================================
@@ -2651,9 +2647,7 @@ class TestAIRBEADFloorBasel31:
 
     # ----- CRR: no Art. 166D floors -----
 
-    def test_crr_no_ead_floors_applied(
-        self, ccf_calculator: CCFCalculator
-    ) -> None:
+    def test_crr_no_ead_floors_applied(self, ccf_calculator: CCFCalculator) -> None:
         """Under CRR, ead_modelled is ignored — standard CCF approach only.
 
         Art. 166D floors are Basel 3.1 only. CRR A-IRB uses modelled CCF directly.
@@ -2736,10 +2730,10 @@ class TestAIRBEADFloorBasel31:
         exposures = pl.DataFrame(
             {
                 "exposure_reference": [
-                    "AIRB_MOD_LOW",   # ead_modelled below floor → floor binds
+                    "AIRB_MOD_LOW",  # ead_modelled below floor → floor binds
                     "AIRB_MOD_HIGH",  # ead_modelled above floor → passes through
-                    "AIRB_STD",       # no ead_modelled → standard CCF path
-                    "SA_IGNORE",      # SA → ead_modelled ignored
+                    "AIRB_STD",  # no ead_modelled → standard CCF path
+                    "SA_IGNORE",  # SA → ead_modelled ignored
                 ],
                 "drawn_amount": [100_000.0, 100_000.0, 100_000.0, 100_000.0],
                 "nominal_amount": [200_000.0, 200_000.0, 200_000.0, 200_000.0],
@@ -2755,10 +2749,10 @@ class TestAIRBEADFloorBasel31:
 
         # Floor (b) = 100k + 0.5 * 200k * 0.50 = 150k for all MR A-IRB
         expected = {
-            "AIRB_MOD_LOW": 150_000.0,   # floor (b) binds: 120k → 150k
+            "AIRB_MOD_LOW": 150_000.0,  # floor (b) binds: 120k → 150k
             "AIRB_MOD_HIGH": 300_000.0,  # ead_modelled passes: 300k > 150k
-            "AIRB_STD": 180_000.0,       # standard: 100k + 200k*0.40 = 180k
-            "SA_IGNORE": 200_000.0,      # SA: 100k + 200k*0.50 = 200k
+            "AIRB_STD": 180_000.0,  # standard: 100k + 200k*0.40 = 180k
+            "SA_IGNORE": 200_000.0,  # SA: 100k + 200k*0.50 = 200k
         }
         for ref, exp_ead in expected.items():
             row = result.filter(pl.col("exposure_reference") == ref)
@@ -2859,13 +2853,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """OC commitment (40%) to issue FR guarantee (100%) → min(40%,100%) = 40%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["COMMIT_OC_FR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["OC"],
-            "underlying_risk_type": ["FR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["COMMIT_OC_FR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["OC"],
+                "underlying_risk_type": ["FR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.40)
@@ -2874,13 +2870,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """FR commitment (100%) to issue LR item (10%) → min(100%,10%) = 10%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["COMMIT_FR_LR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["FR"],
-            "underlying_risk_type": ["LR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["COMMIT_FR_LR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["FR"],
+                "underlying_risk_type": ["LR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.10)
@@ -2889,13 +2887,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """MR commitment (50%) to issue MLR item (20%) → min(50%,20%) = 20%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["COMMIT_MR_MLR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MR"],
-            "underlying_risk_type": ["MLR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["COMMIT_MR_MLR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MR"],
+                "underlying_risk_type": ["MLR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.20)
@@ -2904,13 +2904,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """MLR commitment (20%) to issue MR item (50%) → min(20%,50%) = 20%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["COMMIT_MLR_MR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MLR"],
-            "underlying_risk_type": ["MR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["COMMIT_MLR_MR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MLR"],
+                "underlying_risk_type": ["MR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.20)
@@ -2919,13 +2921,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """MR commitment (50%) to issue MR item (50%) → min(50%,50%) = 50%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["COMMIT_MR_MR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MR"],
-            "underlying_risk_type": ["MR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["COMMIT_MR_MR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MR"],
+                "underlying_risk_type": ["MR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.50)
@@ -2934,13 +2938,16 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """Null underlying_risk_type means no commitment-to-issue cap."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["NO_UNDERLYING"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["FR"],
-            "underlying_risk_type": [None],
-        }, schema_overrides={"underlying_risk_type": pl.String}).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["NO_UNDERLYING"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["FR"],
+                "underlying_risk_type": [None],
+            },
+            schema_overrides={"underlying_risk_type": pl.String},
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(1.0)
@@ -2949,12 +2956,14 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """Missing underlying_risk_type column means no cap (backward compatible)."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["NO_COL"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["FR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["NO_COL"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["FR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(1.0)
@@ -2963,13 +2972,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """EAD reflects the capped CCF: 100k * 40% = 40k."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["EAD_CHECK"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["OC"],
-            "underlying_risk_type": ["FR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EAD_CHECK"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["OC"],
+                "underlying_risk_type": ["FR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ead_from_ccf"][0] == pytest.approx(40_000.0)
@@ -2981,13 +2992,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
     ) -> None:
         """CRR: MR commitment (50%) to issue LR item (0%) → min(50%,0%) = 0%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["CRR_MR_LR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MR"],
-            "underlying_risk_type": ["LR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRR_MR_LR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MR"],
+                "underlying_risk_type": ["LR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
         assert result["ccf"][0] == pytest.approx(0.0)
@@ -2996,13 +3009,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
     ) -> None:
         """CRR: OC commitment (0%) to issue FR guarantee (100%) → min(0%,100%) = 0%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["CRR_OC_FR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["OC"],
-            "underlying_risk_type": ["FR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRR_OC_FR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["OC"],
+                "underlying_risk_type": ["FR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
         assert result["ccf"][0] == pytest.approx(0.0)
@@ -3013,14 +3028,16 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """B31 F-IRB: MR (50%) to issue LR (10%) → min(50%,10%) = 10%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["FIRB_B31_MR_LR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MR"],
-            "underlying_risk_type": ["LR"],
-            "approach": ["foundation_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_B31_MR_LR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MR"],
+                "underlying_risk_type": ["LR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.10)
@@ -3029,14 +3046,16 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
     ) -> None:
         """CRR F-IRB: MR (75%) to issue LR (0%) → min(75%,0%) = 0%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["FIRB_CRR_MR_LR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MR"],
-            "underlying_risk_type": ["LR"],
-            "approach": ["foundation_irb"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_CRR_MR_LR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MR"],
+                "underlying_risk_type": ["LR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
         assert result["ccf"][0] == pytest.approx(0.0)
@@ -3056,16 +3075,18 @@ class TestCommitmentToIssueLowerOf:
         Wait — the A-IRB eligible path: max(ccf_modelled, _sa_ccf * 0.5) where
         _sa_ccf is already capped to 10%. So max(0.30, 0.05) = 0.30.
         """
-        exposures = pl.DataFrame({
-            "exposure_reference": ["AIRB_B31_MR_LR"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MR"],
-            "underlying_risk_type": ["LR"],
-            "approach": ["advanced_irb"],
-            "ccf_modelled": [0.30],
-            "is_revolving": [True],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_B31_MR_LR"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MR"],
+                "underlying_risk_type": ["LR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [True],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         # SA CCF capped to 10% (underlying LR), but modelled 30% > floor (5%)
@@ -3078,16 +3099,18 @@ class TestCommitmentToIssueLowerOf:
 
         Non-revolving → must use SA CCF. Capped SA = 10%.
         """
-        exposures = pl.DataFrame({
-            "exposure_reference": ["AIRB_B31_NONREV"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["MR"],
-            "underlying_risk_type": ["LR"],
-            "approach": ["advanced_irb"],
-            "ccf_modelled": [0.30],
-            "is_revolving": [False],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_B31_NONREV"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["MR"],
+                "underlying_risk_type": ["LR"],
+                "approach": ["advanced_irb"],
+                "ccf_modelled": [0.30],
+                "is_revolving": [False],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         # Non-revolving A-IRB uses SA CCF, which is capped to 10%
@@ -3099,13 +3122,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """Audit trail includes underlying_risk_type when column present in original."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["AUDIT"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["OC"],
-            "underlying_risk_type": ["FR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AUDIT"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["OC"],
+                "underlying_risk_type": ["FR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         audit = result["ccf_calculation"][0]
@@ -3115,12 +3140,14 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """Audit trail omits underlying_risk_type when column not in original input."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["AUDIT_NO_UND"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["FR"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AUDIT_NO_UND"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["FR"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         audit = result["ccf_calculation"][0]
@@ -3132,13 +3159,16 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """Mixed batch: some exposures have underlying, some don't."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["WITH_UND", "NO_UND", "SAME_TYPE"],
-            "drawn_amount": [0.0, 0.0, 0.0],
-            "nominal_amount": [100_000.0, 100_000.0, 100_000.0],
-            "risk_type": ["OC", "FR", "MR"],
-            "underlying_risk_type": ["FR", None, "MR"],
-        }, schema_overrides={"underlying_risk_type": pl.String}).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["WITH_UND", "NO_UND", "SAME_TYPE"],
+                "drawn_amount": [0.0, 0.0, 0.0],
+                "nominal_amount": [100_000.0, 100_000.0, 100_000.0],
+                "risk_type": ["OC", "FR", "MR"],
+                "underlying_risk_type": ["FR", None, "MR"],
+            },
+            schema_overrides={"underlying_risk_type": pl.String},
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         expected = {"WITH_UND": 0.40, "NO_UND": 1.0, "SAME_TYPE": 0.50}
@@ -3152,13 +3182,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """underlying_risk_type accepts full enum names like 'full_risk'."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["FULL_NAME"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["other_commit"],
-            "underlying_risk_type": ["full_risk"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FULL_NAME"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["other_commit"],
+                "underlying_risk_type": ["full_risk"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.40)
@@ -3169,13 +3201,15 @@ class TestCommitmentToIssueLowerOf:
         self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
     ) -> None:
         """OC (40%) to issue FRC (100%) → min(40%,100%) = 40%."""
-        exposures = pl.DataFrame({
-            "exposure_reference": ["OC_FRC"],
-            "drawn_amount": [0.0],
-            "nominal_amount": [100_000.0],
-            "risk_type": ["OC"],
-            "underlying_risk_type": ["FRC"],
-        }).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_FRC"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["OC"],
+                "underlying_risk_type": ["FRC"],
+            }
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         assert result["ccf"][0] == pytest.approx(0.40)
@@ -3193,13 +3227,16 @@ class TestCommitmentToIssueLowerOf:
         - With lower-of: CCF=10%, EAD=10k → 10k exposure
         - Capital saving: 90k exposure reduction
         """
-        exposures = pl.DataFrame({
-            "exposure_reference": ["WITH_RULE", "WITHOUT_RULE"],
-            "drawn_amount": [0.0, 0.0],
-            "nominal_amount": [100_000.0, 100_000.0],
-            "risk_type": ["FR", "FR"],
-            "underlying_risk_type": ["LR", None],
-        }, schema_overrides={"underlying_risk_type": pl.String}).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["WITH_RULE", "WITHOUT_RULE"],
+                "drawn_amount": [0.0, 0.0],
+                "nominal_amount": [100_000.0, 100_000.0],
+                "risk_type": ["FR", "FR"],
+                "underlying_risk_type": ["LR", None],
+            },
+            schema_overrides={"underlying_risk_type": pl.String},
+        ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
         with_rule = result.filter(pl.col("exposure_reference") == "WITH_RULE")

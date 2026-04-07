@@ -403,9 +403,7 @@ class TestPMAELMonotonicity:
     def test_negative_unrecognised_scalar_rejected(self) -> None:
         """Negative unrecognised_exposure_scalar raises ValueError."""
         with pytest.raises(ValueError, match="unrecognised_exposure_scalar must be >= 0"):
-            PostModelAdjustmentConfig.basel_3_1(
-                unrecognised_exposure_scalar=Decimal("-0.10")
-            )
+            PostModelAdjustmentConfig.basel_3_1(unrecognised_exposure_scalar=Decimal("-0.10"))
 
     def test_negative_mortgage_floor_rejected(self) -> None:
         """Negative mortgage_rw_floor raises ValueError."""
@@ -434,9 +432,7 @@ class TestPMAELMonotonicity:
         """Positive EL scalar correctly increases expected loss."""
         config = _b31_config(pma_el_scalar=Decimal("0.20"))
         result = (
-            _make_irb_frame(expected_loss=100.0)
-            .irb.apply_post_model_adjustments(config)
-            .collect()
+            _make_irb_frame(expected_loss=100.0).irb.apply_post_model_adjustments(config).collect()
         )
         assert result["el_pre_adjustment"][0] == pytest.approx(100.0)
         assert result["post_model_adjustment_el"][0] == pytest.approx(20.0)

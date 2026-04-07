@@ -289,12 +289,12 @@ def _lgd_floor_blended_expression(
     alloc_li = pl.col("crm_alloc_life_insurance").fill_null(0.0)
 
     # Per-type LGDS floors for retail (Art. 164(4)(c))
-    lgds_fin = float(floors.financial_collateral)      # 0%
-    lgds_cb = float(floors.financial_collateral)        # 0% (treated as financial)
-    lgds_rec = float(floors.receivables)                # 10%
-    lgds_re = float(floors.commercial_real_estate)      # 10% (non-RRE immovable property)
-    lgds_op = float(floors.other_physical)              # 15%
-    lgds_li = float(floors.financial_collateral)        # 0% (treated as financial)
+    lgds_fin = float(floors.financial_collateral)  # 0%
+    lgds_cb = float(floors.financial_collateral)  # 0% (treated as financial)
+    lgds_rec = float(floors.receivables)  # 10%
+    lgds_re = float(floors.commercial_real_estate)  # 10% (non-RRE immovable property)
+    lgds_op = float(floors.other_physical)  # 15%
+    lgds_li = float(floors.financial_collateral)  # 0% (treated as financial)
 
     numerator = (
         alloc_fin * lgds_fin
@@ -311,17 +311,13 @@ def _lgd_floor_blended_expression(
     exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
     lgdu_expr = (
         pl.when(exp_class.is_in(["retail_qrre"]))
-        .then(pl.lit(float(floors.retail_qrre_unsecured)))   # 50%
-        .otherwise(pl.lit(float(floors.retail_lgdu)))          # 30%
+        .then(pl.lit(float(floors.retail_qrre_unsecured)))  # 50%
+        .otherwise(pl.lit(float(floors.retail_lgdu)))  # 30%
     )
 
     numerator_with_unsecured = numerator + unsecured_portion * lgdu_expr
 
-    blended = (
-        pl.when(ead > 0)
-        .then(numerator_with_unsecured / ead)
-        .otherwise(pl.lit(0.0))
-    )
+    blended = pl.when(ead > 0).then(numerator_with_unsecured / ead).otherwise(pl.lit(0.0))
 
     # Apply blended floor only to retail_other and retail_qrre with collateral.
     # retail_mortgage uses flat 5% (Art. 164(4)(a)).
@@ -329,11 +325,7 @@ def _lgd_floor_blended_expression(
     is_blended_eligible = exp_class.is_in(["retail_other", "retail_qrre"])
     has_collateral = total_coll > 0
 
-    return (
-        pl.when(is_blended_eligible & has_collateral)
-        .then(blended)
-        .otherwise(pl.lit(None))
-    )
+    return pl.when(is_blended_eligible & has_collateral).then(blended).otherwise(pl.lit(None))
 
 
 # =============================================================================
@@ -410,9 +402,7 @@ def apply_irb_formulas(
         if has_alloc and has_exposure_class:
             blended_expr = _lgd_floor_blended_expression(config)
             lgd_floor_expr = (
-                pl.when(blended_expr.is_not_null())
-                .then(blended_expr)
-                .otherwise(lgd_floor_expr)
+                pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
             )
         is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
         floored_lgd = pl.max_horizontal(pl.col("lgd"), lgd_floor_expr)

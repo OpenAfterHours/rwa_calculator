@@ -62,20 +62,22 @@ def _irb_frame_with_el(
     Default values produce a binding floor scenario:
     IRB RWA 50m vs SA RWA 100m × 72.5% = 72.5m floor.
     """
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001"],
-        "exposure_class": ["CORPORATE"],
-        "approach_applied": ["FIRB"],
-        "ead_final": [200_000_000.0],
-        "risk_weight": [rwa / 200_000_000.0],
-        "rwa_post_factor": [rwa],
-        "rwa_final": [rwa],
-        "sa_rwa": [sa_rwa],
-        "expected_loss": [100_000.0],
-        "provision_allocated": [100_000.0 + excess],
-        "el_shortfall": [0.0],
-        "el_excess": [excess],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001"],
+            "exposure_class": ["CORPORATE"],
+            "approach_applied": ["FIRB"],
+            "ead_final": [200_000_000.0],
+            "risk_weight": [rwa / 200_000_000.0],
+            "rwa_post_factor": [rwa],
+            "rwa_final": [rwa],
+            "sa_rwa": [sa_rwa],
+            "expected_loss": [100_000.0],
+            "provision_allocated": [100_000.0 + excess],
+            "el_shortfall": [0.0],
+            "el_excess": [excess],
+        }
+    )
 
 
 # =============================================================================
@@ -115,7 +117,9 @@ class TestT2CapFloorIsolation:
         assert el is not None
         pre_floor_rwa = 50_000_000.0
         assert float(el.total_irb_rwa) == pytest.approx(pre_floor_rwa, rel=0.001)
-        assert float(el.t2_credit_cap) == pytest.approx(pre_floor_rwa * T2_CREDIT_CAP_RATE, rel=0.001)
+        assert float(el.t2_credit_cap) == pytest.approx(
+            pre_floor_rwa * T2_CREDIT_CAP_RATE, rel=0.001
+        )
         assert float(el.t2_credit_cap) == pytest.approx(300_000.0, rel=0.001)
 
     def test_t2_cap_equals_pre_floor_irb_rwa_times_rate(
@@ -181,35 +185,39 @@ class TestT2CapWithSlottingAndFloor:
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
     ) -> None:
         """Slotting RWA feeds T2 cap denominator (Art. 153(5) is in IRB chapter)."""
-        irb = pl.LazyFrame({
-            "exposure_reference": ["IRB001"],
-            "exposure_class": ["CORPORATE"],
-            "approach_applied": ["FIRB"],
-            "ead_final": [100_000_000.0],
-            "risk_weight": [0.3],
-            "rwa_post_factor": [30_000_000.0],
-            "rwa_final": [30_000_000.0],
-            "sa_rwa": [50_000_000.0],
-            "expected_loss": [50_000.0],
-            "provision_allocated": [150_000.0],
-            "el_shortfall": [0.0],
-            "el_excess": [100_000.0],
-        })
-        slotting = pl.LazyFrame({
-            "exposure_reference": ["SL001"],
-            "exposure_class": ["SPECIALISED_LENDING"],
-            "approach_applied": ["SLOTTING"],
-            "ead_final": [50_000_000.0],
-            "risk_weight": [0.7],
-            "rwa_post_factor": [35_000_000.0],
-            "rwa_final": [35_000_000.0],
-            "sa_rwa": [50_000_000.0],
-            "slotting_el_rate": [0.004],
-            "expected_loss": [200_000.0],
-            "provision_allocated": [300_000.0],
-            "el_shortfall": [0.0],
-            "el_excess": [100_000.0],
-        })
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["IRB001"],
+                "exposure_class": ["CORPORATE"],
+                "approach_applied": ["FIRB"],
+                "ead_final": [100_000_000.0],
+                "risk_weight": [0.3],
+                "rwa_post_factor": [30_000_000.0],
+                "rwa_final": [30_000_000.0],
+                "sa_rwa": [50_000_000.0],
+                "expected_loss": [50_000.0],
+                "provision_allocated": [150_000.0],
+                "el_shortfall": [0.0],
+                "el_excess": [100_000.0],
+            }
+        )
+        slotting = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "exposure_class": ["SPECIALISED_LENDING"],
+                "approach_applied": ["SLOTTING"],
+                "ead_final": [50_000_000.0],
+                "risk_weight": [0.7],
+                "rwa_post_factor": [35_000_000.0],
+                "rwa_final": [35_000_000.0],
+                "sa_rwa": [50_000_000.0],
+                "slotting_el_rate": [0.004],
+                "expected_loss": [200_000.0],
+                "provision_allocated": [300_000.0],
+                "el_shortfall": [0.0],
+                "el_excess": [100_000.0],
+            }
+        )
         result = aggregator.aggregate(EMPTY, irb, slotting, None, b31_config)
 
         # Floor may or may not bind — doesn't matter for this test
@@ -252,20 +260,22 @@ class TestT2CapCapitalImpact:
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
     ) -> None:
         """Multi-exposure portfolio: floor binds, T2 cap uses sum of pre-floor IRB RWAs."""
-        irb = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-            "exposure_class": ["CORPORATE", "CORPORATE", "INSTITUTION"],
-            "approach_applied": ["FIRB", "AIRB", "FIRB"],
-            "ead_final": [80_000_000.0, 60_000_000.0, 60_000_000.0],
-            "risk_weight": [0.25, 0.20, 0.30],
-            "rwa_post_factor": [20_000_000.0, 12_000_000.0, 18_000_000.0],
-            "rwa_final": [20_000_000.0, 12_000_000.0, 18_000_000.0],
-            "sa_rwa": [80_000_000.0, 45_000_000.0, 60_000_000.0],
-            "expected_loss": [40_000.0, 30_000.0, 30_000.0],
-            "provision_allocated": [80_000.0, 60_000.0, 60_000.0],
-            "el_shortfall": [0.0, 0.0, 0.0],
-            "el_excess": [40_000.0, 30_000.0, 30_000.0],
-        })
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "exposure_class": ["CORPORATE", "CORPORATE", "INSTITUTION"],
+                "approach_applied": ["FIRB", "AIRB", "FIRB"],
+                "ead_final": [80_000_000.0, 60_000_000.0, 60_000_000.0],
+                "risk_weight": [0.25, 0.20, 0.30],
+                "rwa_post_factor": [20_000_000.0, 12_000_000.0, 18_000_000.0],
+                "rwa_final": [20_000_000.0, 12_000_000.0, 18_000_000.0],
+                "sa_rwa": [80_000_000.0, 45_000_000.0, 60_000_000.0],
+                "expected_loss": [40_000.0, 30_000.0, 30_000.0],
+                "provision_allocated": [80_000.0, 60_000.0, 60_000.0],
+                "el_shortfall": [0.0, 0.0, 0.0],
+                "el_excess": [40_000.0, 30_000.0, 30_000.0],
+            }
+        )
         result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
 
         # Pre-floor IRB RWA = 20m + 12m + 18m = 50m
@@ -286,15 +296,17 @@ class TestT2CapDirectFunction:
 
     def test_direct_call_uses_input_frame_rwa(self) -> None:
         """compute_el_portfolio_summary uses RWA from the frames it receives."""
-        irb = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "approach_applied": ["FIRB"],
-            "rwa_post_factor": [50_000_000.0],
-            "expected_loss": [100_000.0],
-            "provision_allocated": [200_000.0],
-            "el_shortfall": [0.0],
-            "el_excess": [100_000.0],
-        })
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "approach_applied": ["FIRB"],
+                "rwa_post_factor": [50_000_000.0],
+                "expected_loss": [100_000.0],
+                "provision_allocated": [200_000.0],
+                "el_shortfall": [0.0],
+                "el_excess": [100_000.0],
+            }
+        )
 
         el = compute_el_portfolio_summary(irb)
         assert el is not None
@@ -303,4 +315,4 @@ class TestT2CapDirectFunction:
 
     def test_rate_constant_is_0_006(self) -> None:
         """T2_CREDIT_CAP_RATE must be 0.6% = 0.006 per Art. 62(d)."""
-        assert T2_CREDIT_CAP_RATE == pytest.approx(0.006)
+        assert pytest.approx(0.006) == T2_CREDIT_CAP_RATE

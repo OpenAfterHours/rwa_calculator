@@ -848,9 +848,7 @@ def _filter_re(
     result = data.filter(pl.col("property_type").is_not_null())
 
     if is_qualifying is not None and "is_qualifying_re" in cols:
-        result = result.filter(
-            pl.col("is_qualifying_re").fill_null(True) == is_qualifying
-        )
+        result = result.filter(pl.col("is_qualifying_re").fill_null(True) == is_qualifying)
     elif is_qualifying is False:
         # No is_qualifying_re column — no non-qualifying RE to report
         return data.clear()

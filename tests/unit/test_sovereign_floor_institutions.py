@@ -532,9 +532,7 @@ class TestRWACorrectness:
 class TestMixedBatch:
     """Mixed batch with floor-eligible and non-eligible exposures."""
 
-    def test_mixed_batch(
-        self, sa_calculator: SACalculator, b31_config: CalculationConfig
-    ) -> None:
+    def test_mixed_batch(self, sa_calculator: SACalculator, b31_config: CalculationConfig) -> None:
         """3 institution exposures: domestic (no floor), FX floor binds, FX no floor."""
         data = {
             "exposure_reference": ["INST_DOM", "INST_FX_FLOOR", "INST_FX_NOFX"],

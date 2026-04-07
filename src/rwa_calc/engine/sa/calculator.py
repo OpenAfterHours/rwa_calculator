@@ -118,7 +118,9 @@ def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
         CRR Art. 120: Institution risk weights (UK Table 4, standard Table 3)
         CRR Art. 129(5): Unrated covered bond derivation from institution RW
     """
-    inst_table = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+    inst_table = (
+        INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+    )
     from rwa_calc.domain.enums import CQS
 
     # Pre-compute CQS → CB RW by chaining institution RW through the derivation table
@@ -622,9 +624,11 @@ class SACalculator:
                             | _uc.str.contains("RESIDENTIAL", literal=True)
                             | _uc.str.contains("COMMERCIAL", literal=True)
                             | _uc.str.contains("CRE", literal=True)
-                            | (pl.col("property_type").fill_null("").is_in(
-                                ["residential", "commercial"]
-                            ))
+                            | (
+                                pl.col("property_type")
+                                .fill_null("")
+                                .is_in(["residential", "commercial"])
+                            )
                         )
                     )
                     .then(b31_other_re_rw_expr("_cqs_risk_weight"))
@@ -1061,9 +1065,7 @@ class SACalculator:
         # The risk weight cannot be lower than the sovereign's risk weight when
         # the exposure is not in the institution's domestic currency.
         # Exception: self-liquidating trade items with original maturity ≤ 1yr.
-        exposures = self._apply_sovereign_floor_for_institutions(
-            exposures, _is_domestic_currency
-        )
+        exposures = self._apply_sovereign_floor_for_institutions(exposures, _is_domestic_currency)
 
         # Apply Art. 127 defaulted risk weight (secured/unsecured split)
         # Runs after the base RW when-chain so defaulted exposures have their
@@ -1139,9 +1141,11 @@ class SACalculator:
 
         # FX detection: exposure currency != institution's domestic currency.
         # Use cp_local_currency if available; fall back to UK/EU domestic check.
-        _is_fx = pl.when(pl.col("cp_local_currency").is_not_null()).then(
-            pl.col("currency").fill_null("") != pl.col("cp_local_currency")
-        ).otherwise(~is_domestic_currency_expr)
+        _is_fx = (
+            pl.when(pl.col("cp_local_currency").is_not_null())
+            .then(pl.col("currency").fill_null("") != pl.col("cp_local_currency"))
+            .otherwise(~is_domestic_currency_expr)
+        )
 
         # Exception: self-liquidating trade items ≤ 1yr original maturity
         _is_trade_exempt = pl.col("is_short_term_trade_lc").fill_null(False) & (
@@ -1214,9 +1218,9 @@ class SACalculator:
 
         # Secured/unsecured split — guard against zero EAD
         ead = pl.col(ead_col)
-        secured_pct = pl.when(ead > 0).then(
-            (non_fin_collateral / ead).clip(0.0, 1.0)
-        ).otherwise(pl.lit(0.0))
+        secured_pct = (
+            pl.when(ead > 0).then((non_fin_collateral / ead).clip(0.0, 1.0)).otherwise(pl.lit(0.0))
+        )
         unsecured_pct = pl.lit(1.0) - secured_pct
 
         # Compute provision-based defaulted risk weight for the unsecured portion
@@ -1227,12 +1231,9 @@ class SACalculator:
 
             # B31 RESI RE non-income-dependent: 100% flat for whole exposure (CRE20.88)
             is_resi_re_non_income = (
-                (
-                    _uc.str.contains("MORTGAGE", literal=True)
-                    | _uc.str.contains("RESIDENTIAL", literal=True)
-                )
-                & ~pl.col("has_income_cover").fill_null(False)
-            )
+                _uc.str.contains("MORTGAGE", literal=True)
+                | _uc.str.contains("RESIDENTIAL", literal=True)
+            ) & ~pl.col("has_income_cover").fill_null(False)
 
             # B31 provision ratio: provision / unsecured_ead
             unsecured_ead = ead * unsecured_pct
@@ -1388,10 +1389,7 @@ class SACalculator:
         has_li = li_value > 0
 
         return exposures.with_columns(
-            pl.when(has_li)
-            .then(blended_rw)
-            .otherwise(pl.col("risk_weight"))
-            .alias("risk_weight"),
+            pl.when(has_li).then(blended_rw).otherwise(pl.col("risk_weight")).alias("risk_weight"),
         )
 
     def _apply_guarantee_substitution(
@@ -1810,9 +1808,7 @@ class SACalculator:
                 ]
             )
 
-        return self._supporting_factor_calc.apply_factors(
-            exposures, config, errors=errors
-        )
+        return self._supporting_factor_calc.apply_factors(exposures, config, errors=errors)
 
     def _build_audit(
         self,

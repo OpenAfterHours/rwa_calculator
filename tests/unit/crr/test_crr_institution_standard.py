@@ -13,6 +13,7 @@ References:
 - CRR Art. 120(2), Table 3
 - CRR Art. 121(6) (sovereign floor for FX unrated institutions)
 """
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -20,6 +21,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.crr_risk_weights import (
@@ -30,9 +32,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
 )
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa.calculator import SACalculator
-
-from tests.fixtures.single_exposure import calculate_single_sa_exposure
-
 
 # =============================================================================
 # Fixtures
@@ -84,10 +83,9 @@ class TestInstitutionRiskWeightsStandard:
     def test_standard_rated_values_unchanged(self) -> None:
         """Rated institution weights unchanged between UK and standard (except CQS 2)."""
         for cqs in [CQS.CQS1, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
-            assert (
-                INSTITUTION_RISK_WEIGHTS_STANDARD[cqs]
-                == INSTITUTION_RISK_WEIGHTS_UK[cqs]
-            ), f"CQS {cqs.value} should be same in both tables"
+            assert INSTITUTION_RISK_WEIGHTS_STANDARD[cqs] == INSTITUTION_RISK_WEIGHTS_UK[cqs], (
+                f"CQS {cqs.value} should be same in both tables"
+            )
 
 
 # =============================================================================
@@ -132,21 +130,15 @@ class TestLookupInstitutionStandard:
 
     def test_lookup_unrated_standard_hundred_percent(self) -> None:
         """Unrated institution with standard treatment gets 100%."""
-        assert lookup_risk_weight("INSTITUTION", None, use_uk_deviation=False) == Decimal(
-            "1.00"
-        )
+        assert lookup_risk_weight("INSTITUTION", None, use_uk_deviation=False) == Decimal("1.00")
 
     def test_lookup_unrated_uk_forty_percent(self) -> None:
         """Unrated institution with UK deviation gets 40%."""
-        assert lookup_risk_weight("INSTITUTION", None, use_uk_deviation=True) == Decimal(
-            "0.40"
-        )
+        assert lookup_risk_weight("INSTITUTION", None, use_uk_deviation=True) == Decimal("0.40")
 
     def test_lookup_cqs_zero_treated_as_unrated(self) -> None:
         """CQS 0 treated as unrated → 100% under standard."""
-        assert lookup_risk_weight("INSTITUTION", 0, use_uk_deviation=False) == Decimal(
-            "1.00"
-        )
+        assert lookup_risk_weight("INSTITUTION", 0, use_uk_deviation=False) == Decimal("1.00")
 
 
 # =============================================================================
@@ -282,9 +274,7 @@ class TestGuarantorInstitutionStandard:
     """Tests for guarantor substitution with non-UK institution guarantors."""
 
     @staticmethod
-    def _make_guaranteed_exposure(
-        currency: str, country_code: str, guarantor_country: str
-    ) -> dict:
+    def _make_guaranteed_exposure(currency: str, country_code: str, guarantor_country: str) -> dict:
         """Build a corporate exposure fully guaranteed by an unrated institution."""
         return {
             "exposure_reference": ["EXP_001"],

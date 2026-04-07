@@ -23,8 +23,8 @@ from typing import TYPE_CHECKING, Literal
 from rwa_calc.domain.enums import (
     AIRBCollateralMethod,
     ApproachType,
-    CRMCollateralMethod,
     CollateralType,
+    CRMCollateralMethod,
     ExposureClass,
     InstitutionType,
     PermissionMode,
@@ -328,11 +328,13 @@ class OutputFloorConfig:
 
     # Art. 92 para 2A(a): combinations where the output floor applies
     _FLOOR_APPLICABLE_COMBINATIONS: frozenset[tuple[InstitutionType, ReportingBasis]] = field(
-        default=frozenset({
-            (InstitutionType.STANDALONE_UK, ReportingBasis.INDIVIDUAL),
-            (InstitutionType.RING_FENCED_BODY, ReportingBasis.SUB_CONSOLIDATED),
-            (InstitutionType.CRR_CONSOLIDATION_ENTITY, ReportingBasis.CONSOLIDATED),
-        }),
+        default=frozenset(
+            {
+                (InstitutionType.STANDALONE_UK, ReportingBasis.INDIVIDUAL),
+                (InstitutionType.RING_FENCED_BODY, ReportingBasis.SUB_CONSOLIDATED),
+                (InstitutionType.CRR_CONSOLIDATION_ENTITY, ReportingBasis.CONSOLIDATED),
+            }
+        ),
         init=False,
         repr=False,
     )

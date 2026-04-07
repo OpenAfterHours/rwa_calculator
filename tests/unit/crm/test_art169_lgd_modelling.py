@@ -23,7 +23,6 @@ Test structure:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -32,19 +31,17 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import (
     AIRBCollateralMethod,
     ApproachType,
-    CRMCollateralMethod,
     PermissionMode,
 )
 from rwa_calc.engine.crm.collateral import (
     _apply_collateral_unified,
     apply_firb_supervisory_lgd_no_collateral,
 )
-from rwa_calc.engine.crm.constants import supervisory_lgd_values
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _b31_config(
     airb_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
@@ -98,35 +95,42 @@ def _make_collateral(
     collateral_type: str = "real_estate",
     market_value: float = 500_000.0,
 ) -> pl.LazyFrame:
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL_001"],
-        "beneficiary_reference": [beneficiary],
-        "beneficiary_type": ["exposure"],
-        "collateral_type": [collateral_type],
-        "market_value": [market_value],
-        "value_after_haircut": [market_value],
-        "value_after_maturity_adj": [market_value],
-        "is_eligible_financial_collateral": [True],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL_001"],
+            "beneficiary_reference": [beneficiary],
+            "beneficiary_type": ["exposure"],
+            "collateral_type": [collateral_type],
+            "market_value": [market_value],
+            "value_after_haircut": [market_value],
+            "value_after_maturity_adj": [market_value],
+            "is_eligible_financial_collateral": [True],
+        }
+    )
 
 
 def _empty_ead_totals() -> pl.LazyFrame:
-    return pl.LazyFrame({
-        "parent_facility_reference": pl.Series([], dtype=pl.String),
-        "_fac_ead_total": pl.Series([], dtype=pl.Float64),
-    })
+    return pl.LazyFrame(
+        {
+            "parent_facility_reference": pl.Series([], dtype=pl.String),
+            "_fac_ead_total": pl.Series([], dtype=pl.Float64),
+        }
+    )
 
 
 def _empty_cp_totals() -> pl.LazyFrame:
-    return pl.LazyFrame({
-        "counterparty_reference": pl.Series([], dtype=pl.String),
-        "_cp_ead_total": pl.Series([], dtype=pl.Float64),
-    })
+    return pl.LazyFrame(
+        {
+            "counterparty_reference": pl.Series([], dtype=pl.String),
+            "_cp_ead_total": pl.Series([], dtype=pl.Float64),
+        }
+    )
 
 
 # ===========================================================================
 # 1. Config and enum tests
 # ===========================================================================
+
 
 class TestConfigAndEnum:
     def test_airb_collateral_method_enum_values(self):
@@ -156,6 +160,7 @@ class TestConfigAndEnum:
 # ===========================================================================
 # 2. Art. 169A — Full modelling (sufficient data, own LGD kept)
 # ===========================================================================
+
 
 class TestArt169AFullModelling:
     """When AIRB has sufficient data, own LGD captures collateral effects."""
@@ -208,6 +213,7 @@ class TestArt169AFullModelling:
 # ===========================================================================
 # 3. Art. 169B — Insufficient data fallback (FCM formula with own LGDU)
 # ===========================================================================
+
 
 class TestArt169BFallback:
     """When AIRB lacks sufficient data, FCM formula with own unsecured LGD."""
@@ -274,8 +280,11 @@ class TestArt169BFallback:
             market_value=700_000.0,
         )
         result = _apply_collateral_unified(
-            exposures, collateral, config,
-            _empty_ead_totals(), _empty_cp_totals(),
+            exposures,
+            collateral,
+            config,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
             is_basel_3_1=True,
         )
         df = result.collect()
@@ -306,14 +315,20 @@ class TestArt169BFallback:
         collateral = _make_collateral(collateral_type="real_estate", market_value=700_000.0)
 
         airb_result = _apply_collateral_unified(
-            airb_exp, collateral, config,
-            _empty_ead_totals(), _empty_cp_totals(),
+            airb_exp,
+            collateral,
+            config,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
 
         firb_result = _apply_collateral_unified(
-            firb_exp, collateral, config,
-            _empty_ead_totals(), _empty_cp_totals(),
+            firb_exp,
+            collateral,
+            config,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
 
@@ -343,6 +358,7 @@ class TestArt169BFallback:
 # ===========================================================================
 # 4. Foundation election (supervisory LGDU, same as FIRB)
 # ===========================================================================
+
 
 class TestFoundationElection:
     """AIRB firm elects Foundation Collateral Method — same as FIRB."""
@@ -378,8 +394,11 @@ class TestFoundationElection:
             market_value=700_000.0,
         )
         result = _apply_collateral_unified(
-            exposures, collateral, config,
-            _empty_ead_totals(), _empty_cp_totals(),
+            exposures,
+            collateral,
+            config,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
             is_basel_3_1=True,
         )
         df = result.collect()
@@ -420,6 +439,7 @@ class TestFoundationElection:
 # 5. CRR backward compatibility
 # ===========================================================================
 
+
 class TestCRRBackwardCompat:
     """Under CRR, AIRB is free-form — no method constraint."""
 
@@ -449,8 +469,11 @@ class TestCRRBackwardCompat:
         )
         collateral = _make_collateral(collateral_type="real_estate", market_value=700_000.0)
         result = _apply_collateral_unified(
-            exposures, collateral, config,
-            _empty_ead_totals(), _empty_cp_totals(),
+            exposures,
+            collateral,
+            config,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
             is_basel_3_1=False,
         )
         df = result.collect()
@@ -471,24 +494,21 @@ class TestCRRBackwardCompat:
 # 6. No-config backward compatibility
 # ===========================================================================
 
+
 class TestNoConfigBackwardCompat:
     """When config is not passed, default to original behavior."""
 
     def test_no_config_airb_keeps_own_lgd(self):
         """config=None → AIRB keeps own LGD (backward compat)."""
         exposures = _make_exposures(approach=ApproachType.AIRB.value, lgd=0.12)
-        result = apply_firb_supervisory_lgd_no_collateral(
-            exposures, is_basel_3_1=True, config=None
-        )
+        result = apply_firb_supervisory_lgd_no_collateral(exposures, is_basel_3_1=True, config=None)
         df = result.collect()
         assert df["lgd_post_crm"][0] == pytest.approx(0.12)
 
     def test_no_config_firb_uses_supervisory(self):
         """config=None → FIRB uses supervisory LGD."""
         exposures = _make_exposures(approach=ApproachType.FIRB.value, lgd=0.12)
-        result = apply_firb_supervisory_lgd_no_collateral(
-            exposures, is_basel_3_1=True, config=None
-        )
+        result = apply_firb_supervisory_lgd_no_collateral(exposures, is_basel_3_1=True, config=None)
         df = result.collect()
         assert df["lgd_post_crm"][0] == pytest.approx(0.40)  # B31 non-FSE
 
@@ -496,6 +516,7 @@ class TestNoConfigBackwardCompat:
 # ===========================================================================
 # 7. Mixed batch tests
 # ===========================================================================
+
 
 class TestMixedBatch:
     """Multiple exposures with different approaches in one batch."""
@@ -530,17 +551,21 @@ class TestMixedBatch:
         df = result.collect()
 
         # SA: keeps lgd_pre_crm = 0.0
-        assert df.filter(pl.col("exposure_reference") == "SA_001")["lgd_post_crm"][0] == \
-            pytest.approx(0.0)
+        assert df.filter(pl.col("exposure_reference") == "SA_001")["lgd_post_crm"][
+            0
+        ] == pytest.approx(0.0)
         # FIRB: supervisory 40% (B31 non-FSE)
-        assert df.filter(pl.col("exposure_reference") == "FIRB_001")["lgd_post_crm"][0] == \
-            pytest.approx(0.40)
+        assert df.filter(pl.col("exposure_reference") == "FIRB_001")["lgd_post_crm"][
+            0
+        ] == pytest.approx(0.40)
         # AIRB sufficient: keeps own LGD = 0.12
-        assert df.filter(pl.col("exposure_reference") == "AIRB_SUFF")["lgd_post_crm"][0] == \
-            pytest.approx(0.12)
+        assert df.filter(pl.col("exposure_reference") == "AIRB_SUFF")["lgd_post_crm"][
+            0
+        ] == pytest.approx(0.12)
         # AIRB insufficient: own lgd_unsecured = 0.30
-        assert df.filter(pl.col("exposure_reference") == "AIRB_INSUFF")["lgd_post_crm"][0] == \
-            pytest.approx(0.30)
+        assert df.filter(pl.col("exposure_reference") == "AIRB_INSUFF")["lgd_post_crm"][
+            0
+        ] == pytest.approx(0.30)
 
     def test_mixed_approaches_with_collateral(self):
         """FIRB + AIRB(169B) + AIRB(sufficient) with shared collateral."""
@@ -567,20 +592,25 @@ class TestMixedBatch:
         exposures = pl.LazyFrame(data)
 
         # Collateral: one per exposure, same type and value
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["C1", "C2", "C3"],
-            "beneficiary_reference": ["FIRB_001", "AIRB_169B", "AIRB_FULL"],
-            "beneficiary_type": ["exposure", "exposure", "exposure"],
-            "collateral_type": ["real_estate", "real_estate", "real_estate"],
-            "market_value": [700_000.0, 700_000.0, 700_000.0],
-            "value_after_haircut": [700_000.0, 700_000.0, 700_000.0],
-            "value_after_maturity_adj": [700_000.0, 700_000.0, 700_000.0],
-            "is_eligible_financial_collateral": [True, True, True],
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["C1", "C2", "C3"],
+                "beneficiary_reference": ["FIRB_001", "AIRB_169B", "AIRB_FULL"],
+                "beneficiary_type": ["exposure", "exposure", "exposure"],
+                "collateral_type": ["real_estate", "real_estate", "real_estate"],
+                "market_value": [700_000.0, 700_000.0, 700_000.0],
+                "value_after_haircut": [700_000.0, 700_000.0, 700_000.0],
+                "value_after_maturity_adj": [700_000.0, 700_000.0, 700_000.0],
+                "is_eligible_financial_collateral": [True, True, True],
+            }
+        )
 
         result = _apply_collateral_unified(
-            exposures, collateral, config,
-            _empty_ead_totals(), _empty_cp_totals(),
+            exposures,
+            collateral,
+            config,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
 
@@ -602,6 +632,7 @@ class TestMixedBatch:
 # 8. Capital impact tests
 # ===========================================================================
 
+
 class TestCapitalImpact:
     """Demonstrate capital impact of Art. 169B vs Foundation vs full modelling."""
 
@@ -611,24 +642,34 @@ class TestCapitalImpact:
         config_fcm = _b31_config(AIRBCollateralMethod.FOUNDATION)
 
         exposures_169b = _make_exposures(
-            approach=ApproachType.AIRB.value, lgd=0.12,
+            approach=ApproachType.AIRB.value,
+            lgd=0.12,
             lgd_unsecured=0.25,  # Below supervisory 40%
             has_sufficient_collateral_data=False,
         )
         exposures_fcm = _make_exposures(
-            approach=ApproachType.AIRB.value, lgd=0.12,
+            approach=ApproachType.AIRB.value,
+            lgd=0.12,
             lgd_unsecured=0.25,
         )
         collateral = _make_collateral(collateral_type="real_estate", market_value=700_000.0)
 
         result_169b = _apply_collateral_unified(
-            exposures_169b, collateral, config_169b,
-            _empty_ead_totals(), _empty_cp_totals(), is_basel_3_1=True,
+            exposures_169b,
+            collateral,
+            config_169b,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
+            is_basel_3_1=True,
         ).collect()
 
         result_fcm = _apply_collateral_unified(
-            exposures_fcm, collateral, config_fcm,
-            _empty_ead_totals(), _empty_cp_totals(), is_basel_3_1=True,
+            exposures_fcm,
+            collateral,
+            config_fcm,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
+            is_basel_3_1=True,
         ).collect()
 
         # 169B: (0.20×500k + 0.25×500k)/1M = 0.225
@@ -640,12 +681,14 @@ class TestCapitalImpact:
         config = _b31_config()
 
         exp_full = _make_exposures(
-            approach=ApproachType.AIRB.value, lgd=0.12,
+            approach=ApproachType.AIRB.value,
+            lgd=0.12,
             lgd_unsecured=0.30,
             has_sufficient_collateral_data=True,
         )
         exp_169b = _make_exposures(
-            approach=ApproachType.AIRB.value, lgd=0.12,
+            approach=ApproachType.AIRB.value,
+            lgd=0.12,
             lgd_unsecured=0.30,
             has_sufficient_collateral_data=False,
         )
@@ -668,6 +711,7 @@ class TestCapitalImpact:
 # 9. Financial collateral with Art. 169B
 # ===========================================================================
 
+
 class TestArt169BFinancialCollateral:
     """Art. 169B with financial collateral (LGDS = 0%)."""
 
@@ -675,7 +719,8 @@ class TestArt169BFinancialCollateral:
         """Cash collateral: LGDS=0% reduces LGD significantly."""
         config = _b31_config()
         exposures = _make_exposures(
-            approach=ApproachType.AIRB.value, lgd=0.12,
+            approach=ApproachType.AIRB.value,
+            lgd=0.12,
             lgd_unsecured=0.30,
             has_sufficient_collateral_data=False,
             ead_gross=1_000_000.0,
@@ -685,8 +730,11 @@ class TestArt169BFinancialCollateral:
             market_value=500_000.0,
         )
         result = _apply_collateral_unified(
-            exposures, collateral, config,
-            _empty_ead_totals(), _empty_cp_totals(),
+            exposures,
+            collateral,
+            config,
+            _empty_ead_totals(),
+            _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
 

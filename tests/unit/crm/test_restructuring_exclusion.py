@@ -199,9 +199,7 @@ class TestCDSRestructuringExclusionHaircut:
     ) -> None:
         """CDS excluding restructuring → guaranteed_portion reduced by 40%."""
         exposures = _make_exposure()
-        guarantees = _make_credit_derivative(
-            amount=500_000.0, includes_restructuring=False
-        )
+        guarantees = _make_credit_derivative(amount=500_000.0, includes_restructuring=False)
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
@@ -217,9 +215,7 @@ class TestCDSRestructuringExclusionHaircut:
     ) -> None:
         """CDS including restructuring → no reduction applied."""
         exposures = _make_exposure()
-        guarantees = _make_credit_derivative(
-            amount=500_000.0, includes_restructuring=True
-        )
+        guarantees = _make_credit_derivative(amount=500_000.0, includes_restructuring=True)
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
@@ -234,9 +230,7 @@ class TestCDSRestructuringExclusionHaircut:
     ) -> None:
         """Regular guarantee (not credit derivative) → no restructuring haircut."""
         exposures = _make_exposure()
-        guarantees = _make_guarantee(
-            amount=500_000.0, includes_restructuring=False
-        )
+        guarantees = _make_guarantee(amount=500_000.0, includes_restructuring=False)
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
@@ -251,9 +245,7 @@ class TestCDSRestructuringExclusionHaircut:
     ) -> None:
         """Null includes_restructuring → assumes restructuring IS included (no haircut)."""
         exposures = _make_exposure()
-        guarantees = _make_credit_derivative(
-            amount=500_000.0, includes_restructuring=None
-        )
+        guarantees = _make_credit_derivative(amount=500_000.0, includes_restructuring=None)
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
@@ -296,9 +288,7 @@ class TestCDSRestructuringExclusionHaircut:
         """Full CDS coverage without restructuring → capped at 60% of EAD."""
         ead = 1_000_000.0
         exposures = _make_exposure(ead=ead)
-        guarantees = _make_credit_derivative(
-            amount=ead, includes_restructuring=False
-        )
+        guarantees = _make_credit_derivative(amount=ead, includes_restructuring=False)
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
@@ -315,9 +305,7 @@ class TestCDSRestructuringExclusionHaircut:
         """Verify RWA correctness: 40% reduction means more unguaranteed EAD."""
         ead = 1_000_000.0
         exposures = _make_exposure(ead=ead)
-        guarantees = _make_credit_derivative(
-            amount=ead, includes_restructuring=False
-        )
+        guarantees = _make_credit_derivative(amount=ead, includes_restructuring=False)
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
@@ -333,9 +321,7 @@ class TestCDSRestructuringExclusionHaircut:
     ) -> None:
         """40% restructuring exclusion applies identically under Basel 3.1."""
         exposures = _make_exposure()
-        guarantees = _make_credit_derivative(
-            amount=500_000.0, includes_restructuring=False
-        )
+        guarantees = _make_credit_derivative(amount=500_000.0, includes_restructuring=False)
 
         df = _run_crm(crm_processor, basel31_config, exposures, guarantees)
 
@@ -422,4 +408,4 @@ class TestRestructuringHaircutConstant:
 
         from rwa_calc.data.tables.crr_haircuts import RESTRUCTURING_EXCLUSION_HAIRCUT
 
-        assert RESTRUCTURING_EXCLUSION_HAIRCUT == Decimal("0.40")
+        assert Decimal("0.40") == RESTRUCTURING_EXCLUSION_HAIRCUT

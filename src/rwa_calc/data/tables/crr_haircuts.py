@@ -974,9 +974,7 @@ def calculate_maturity_mismatch_adjustment(
 
     # Art. 237(2): original maturity of protection < 1 year → ineligible
     if original_maturity_years is not None and original_maturity_years < 1.0:
-        return Decimal("0"), (
-            "Original maturity < 1 year, protection ineligible (Art. 237(2))"
-        )
+        return Decimal("0"), ("Original maturity < 1 year, protection ineligible (Art. 237(2))")
 
     # Art. 162(3)/237(2): 1-day M floor exposure → any mismatch → ineligible
     if has_one_day_maturity_floor:

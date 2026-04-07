@@ -566,13 +566,14 @@ class TestMissingCounterpartyReferenceWarning:
             include_counterparty=False,
         )
         errors: list[CalculationError] = []
-        result_fallback = calculator.apply_factors(exposures_no_cp, crr_config, errors=errors).collect()
+        result_fallback = calculator.apply_factors(
+            exposures_no_cp, crr_config, errors=errors
+        ).collect()
         sf_fallback = result_fallback["supporting_factor"][0]
 
         # Correct factor: blended for 3m aggregate (above threshold)
         expected_correct = (
-            min(3_000_000, threshold_gbp) * 0.7619
-            + max(3_000_000 - threshold_gbp, 0) * 0.85
+            min(3_000_000, threshold_gbp) * 0.7619 + max(3_000_000 - threshold_gbp, 0) * 0.85
         ) / 3_000_000
         assert sf_correct == pytest.approx(expected_correct, rel=0.001)
 

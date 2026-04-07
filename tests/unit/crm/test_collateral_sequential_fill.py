@@ -33,7 +33,6 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -94,9 +93,7 @@ def _create_bundle(
 
     exposures = pl.DataFrame(exposures_data).lazy()
     if "parent_facility_reference" in exposures.collect_schema().names():
-        exposures = exposures.with_columns(
-            pl.col("parent_facility_reference").cast(pl.String)
-        )
+        exposures = exposures.with_columns(pl.col("parent_facility_reference").cast(pl.String))
 
     coll_n = len(list(collateral_data.values())[0])
     coll_defaults = {
@@ -145,9 +142,7 @@ def _create_bundle(
             (pl.col("approach") == ApproachType.FIRB.value)
             | (pl.col("approach") == ApproachType.AIRB.value)
         ),
-        slotting_exposures=exposures.filter(
-            pl.col("approach") == ApproachType.SLOTTING.value
-        ),
+        slotting_exposures=exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value),
         equity_exposures=None,
         collateral=collateral,
         guarantees=None,
@@ -535,9 +530,7 @@ class TestSequentialFillEdgeCases:
             }
         ).lazy()
         if "parent_facility_reference" in exposures.collect_schema().names():
-            exposures = exposures.with_columns(
-                pl.col("parent_facility_reference").cast(pl.String)
-            )
+            exposures = exposures.with_columns(pl.col("parent_facility_reference").cast(pl.String))
 
         empty_cp = CounterpartyLookup(
             counterparties=pl.LazyFrame(
@@ -566,16 +559,12 @@ class TestSequentialFillEdgeCases:
         )
         bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures.filter(
-                pl.col("approach") == ApproachType.SA.value
-            ),
+            sa_exposures=exposures.filter(pl.col("approach") == ApproachType.SA.value),
             irb_exposures=exposures.filter(
                 (pl.col("approach") == ApproachType.FIRB.value)
                 | (pl.col("approach") == ApproachType.AIRB.value)
             ),
-            slotting_exposures=exposures.filter(
-                pl.col("approach") == ApproachType.SLOTTING.value
-            ),
+            slotting_exposures=exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value),
             equity_exposures=None,
             collateral=None,
             guarantees=None,

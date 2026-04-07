@@ -122,9 +122,8 @@ class OutputAggregator:
             # ELPortfolioSummary stores Decimal; convert to float for floor arithmetic.
             irb_t2 = float(el_summary.t2_credit) if el_summary else 0.0
             irb_cet1 = (
-                (float(el_summary.cet1_deduction) if el_summary else 0.0)
-                + config.output_floor.art_40_deductions
-            )
+                float(el_summary.cet1_deduction) if el_summary else 0.0
+            ) + config.output_floor.art_40_deductions
             gcra = config.output_floor.gcra_amount
             sa_t2 = config.output_floor.sa_t2_credit
 

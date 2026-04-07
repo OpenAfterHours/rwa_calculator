@@ -22,7 +22,6 @@ References:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -45,15 +44,17 @@ def _irb_corporate_frame(
     ref: str = "EXP1",
 ) -> pl.LazyFrame:
     """Build a minimal IRB corporate exposure with pre-baked sa_rwa."""
-    return pl.LazyFrame({
-        "exposure_reference": [ref],
-        "exposure_class": [exposure_class],
-        "approach_applied": ["FIRB"],
-        "ead_final": [ead],
-        "risk_weight": [rwa / ead if ead > 0 else 0.0],
-        "rwa_final": [rwa],
-        "sa_rwa": [sa_rwa],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [ref],
+            "exposure_class": [exposure_class],
+            "approach_applied": ["FIRB"],
+            "ead_final": [ead],
+            "risk_weight": [rwa / ead if ead > 0 else 0.0],
+            "rwa_final": [rwa],
+            "sa_rwa": [sa_rwa],
+        }
+    )
 
 
 def _b31_config(
@@ -91,14 +92,16 @@ class TestSACalculatorIGForFloor:
         ead: float = 1_000_000.0,
     ) -> pl.LazyFrame:
         """Build a minimal unrated corporate frame for unified path."""
-        return pl.LazyFrame({
-            "exposure_reference": ["CORP1"],
-            "exposure_class": ["CORPORATE"],
-            "approach": [approach],
-            "ead_final": [ead],
-            "cqs": [None],
-            "cp_is_investment_grade": [is_ig],
-        })
+        return pl.LazyFrame(
+            {
+                "exposure_reference": ["CORP1"],
+                "exposure_class": ["CORPORATE"],
+                "approach": [approach],
+                "ead_final": [ead],
+                "cqs": [None],
+                "cp_is_investment_grade": [is_ig],
+            }
+        )
 
     def test_sa_rwa_100pct_without_ig_flag(
         self,
@@ -136,14 +139,16 @@ class TestSACalculatorIGForFloor:
     ) -> None:
         """Rated corporates (CQS present) use CQS table regardless of IG flag."""
         config = _b31_config(use_ig=True)
-        frame = pl.LazyFrame({
-            "exposure_reference": ["CORP_RATED"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["firb"],
-            "ead_final": [1_000_000.0],
-            "cqs": [3],
-            "cp_is_investment_grade": [True],
-        })
+        frame = pl.LazyFrame(
+            {
+                "exposure_reference": ["CORP_RATED"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["firb"],
+                "ead_final": [1_000_000.0],
+                "cqs": [3],
+                "cp_is_investment_grade": [True],
+            }
+        )
         result = sa_calculator.calculate_unified(frame, config).collect()
         # CQS 3 corporate → 75% (B31 Table 6) regardless of IG flag
         assert float(result["sa_rwa"][0]) == pytest.approx(750_000.0)
@@ -154,14 +159,16 @@ class TestSACalculatorIGForFloor:
     ) -> None:
         """Corporate SME exposures get 85% regardless of IG flag (SME gate in when-chain)."""
         config = _b31_config(use_ig=True)
-        frame = pl.LazyFrame({
-            "exposure_reference": ["CORP_SME"],
-            "exposure_class": ["CORPORATE_SME"],
-            "approach": ["firb"],
-            "ead_final": [500_000.0],
-            "cqs": [None],
-            "cp_is_investment_grade": [True],
-        })
+        frame = pl.LazyFrame(
+            {
+                "exposure_reference": ["CORP_SME"],
+                "exposure_class": ["CORPORATE_SME"],
+                "approach": ["firb"],
+                "ead_final": [500_000.0],
+                "cqs": [None],
+                "cp_is_investment_grade": [True],
+            }
+        )
         result = sa_calculator.calculate_unified(frame, config).collect()
         # Corporate SME → 85% always (Art. 122A), not affected by IG
         assert float(result["sa_rwa"][0]) == pytest.approx(425_000.0)
@@ -172,15 +179,17 @@ class TestSACalculatorIGForFloor:
     ) -> None:
         """Institution exposures use SCRA/ECRA regardless of IG flag."""
         config = _b31_config(use_ig=True)
-        frame = pl.LazyFrame({
-            "exposure_reference": ["INST1"],
-            "exposure_class": ["INSTITUTION"],
-            "approach": ["firb"],
-            "ead_final": [1_000_000.0],
-            "cqs": [None],
-            "cp_is_investment_grade": [False],
-            "cp_scra_grade": ["B"],
-        })
+        frame = pl.LazyFrame(
+            {
+                "exposure_reference": ["INST1"],
+                "exposure_class": ["INSTITUTION"],
+                "approach": ["firb"],
+                "ead_final": [1_000_000.0],
+                "cqs": [None],
+                "cp_is_investment_grade": [False],
+                "cp_scra_grade": ["B"],
+            }
+        )
         result = sa_calculator.calculate_unified(frame, config).collect()
         # SCRA grade B → 75%, not affected by corporate IG assessment
         assert float(result["sa_rwa"][0]) == pytest.approx(750_000.0)
@@ -294,15 +303,17 @@ class TestOutputFloorSTeaIG:
         corporate counterparties. S-TREA is the sum of all sa_rwa values.
         """
         config = _b31_config(use_ig=True)
-        irb = pl.LazyFrame({
-            "exposure_reference": ["IG_CORP", "NON_IG_CORP"],
-            "exposure_class": ["CORPORATE", "CORPORATE"],
-            "approach_applied": ["FIRB", "FIRB"],
-            "ead_final": [1_000_000.0, 1_000_000.0],
-            "risk_weight": [0.5, 0.5],
-            "rwa_final": [500_000.0, 500_000.0],
-            "sa_rwa": [650_000.0, 1_350_000.0],  # IG=65%, non-IG=135%
-        })
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["IG_CORP", "NON_IG_CORP"],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "approach_applied": ["FIRB", "FIRB"],
+                "ead_final": [1_000_000.0, 1_000_000.0],
+                "risk_weight": [0.5, 0.5],
+                "rwa_final": [500_000.0, 500_000.0],
+                "sa_rwa": [650_000.0, 1_350_000.0],  # IG=65%, non-IG=135%
+            }
+        )
         result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
         summary = result.output_floor_summary
         assert summary is not None

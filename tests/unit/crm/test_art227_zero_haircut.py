@@ -41,8 +41,7 @@ from rwa_calc.engine.crm.constants import (
     ZERO_HAIRCUT_ELIGIBLE_TYPES,
     ZERO_HAIRCUT_MAX_SOVEREIGN_CQS,
 )
-from rwa_calc.engine.crm.haircuts import HaircutCalculator, HaircutResult
-
+from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
 # =============================================================================
 # Constants
@@ -132,9 +131,7 @@ class TestSingleItemArt227:
         assert result.adjusted_value == Decimal("1000000")
         assert "Art.227" in result.description
 
-    def test_sovereign_bond_cqs1_standard_without_flag(
-        self, crr_calc: HaircutCalculator
-    ) -> None:
+    def test_sovereign_bond_cqs1_standard_without_flag(self, crr_calc: HaircutCalculator) -> None:
         """Without Art. 227 flag, CQS 1 sovereign bond gets standard haircut (>0%)."""
         result = crr_calc.calculate_single_haircut(
             collateral_type="govt_bond",
@@ -219,9 +216,7 @@ class TestSingleItemArt227:
         assert result.fx_haircut == Decimal("0.0")
         assert result.adjusted_value == Decimal("1000000")
 
-    def test_b31_sovereign_bond_cqs1_zero_haircut(
-        self, b31_calc: HaircutCalculator
-    ) -> None:
+    def test_b31_sovereign_bond_cqs1_zero_haircut(self, b31_calc: HaircutCalculator) -> None:
         """Art. 227 applies identically under Basel 3.1."""
         result = b31_calc.calculate_single_haircut(
             collateral_type="government_bond",
@@ -440,17 +435,19 @@ class TestPipelineArt227:
     def test_null_flag_treated_as_false(self, crr_config) -> None:
         """Pipeline: null qualifies_for_zero_haircut → treated as False (conservative)."""
         calc = HaircutCalculator(is_basel_3_1=False)
-        coll = pl.LazyFrame({
-            "collateral_reference": ["COLL_001"],
-            "collateral_type": ["govt_bond"],
-            "market_value": [500_000.0],
-            "currency": ["GBP"],
-            "exposure_currency": ["GBP"],
-            "issuer_cqs": [1],
-            "residual_maturity_years": [3.0],
-            "qualifies_for_zero_haircut": [None],
-            "is_eligible_financial_collateral": [True],
-        })
+        coll = pl.LazyFrame(
+            {
+                "collateral_reference": ["COLL_001"],
+                "collateral_type": ["govt_bond"],
+                "market_value": [500_000.0],
+                "currency": ["GBP"],
+                "exposure_currency": ["GBP"],
+                "issuer_cqs": [1],
+                "residual_maturity_years": [3.0],
+                "qualifies_for_zero_haircut": [None],
+                "is_eligible_financial_collateral": [True],
+            }
+        )
         result = calc.apply_haircuts(coll, crr_config).collect()
         assert result["collateral_haircut"][0] > 0.0
 
@@ -502,22 +499,24 @@ class TestArt227MixedBatch:
     def test_mixed_qualifying_and_non_qualifying(self, crr_config) -> None:
         """Batch: only qualifying items get zero haircut; others get standard."""
         calc = HaircutCalculator(is_basel_3_1=False)
-        coll = pl.LazyFrame({
-            "collateral_reference": [
-                "REPO_CASH",
-                "REPO_GILT",
-                "NORMAL_GILT",
-                "REPO_CORP",
-            ],
-            "collateral_type": ["cash", "govt_bond", "govt_bond", "corp_bond"],
-            "market_value": [1_000_000.0, 500_000.0, 500_000.0, 300_000.0],
-            "currency": ["GBP", "GBP", "GBP", "GBP"],
-            "exposure_currency": ["GBP", "GBP", "GBP", "GBP"],
-            "issuer_cqs": [None, 1, 1, 1],
-            "residual_maturity_years": [None, 3.0, 3.0, 3.0],
-            "qualifies_for_zero_haircut": [True, True, False, True],
-            "is_eligible_financial_collateral": [True, True, True, True],
-        })
+        coll = pl.LazyFrame(
+            {
+                "collateral_reference": [
+                    "REPO_CASH",
+                    "REPO_GILT",
+                    "NORMAL_GILT",
+                    "REPO_CORP",
+                ],
+                "collateral_type": ["cash", "govt_bond", "govt_bond", "corp_bond"],
+                "market_value": [1_000_000.0, 500_000.0, 500_000.0, 300_000.0],
+                "currency": ["GBP", "GBP", "GBP", "GBP"],
+                "exposure_currency": ["GBP", "GBP", "GBP", "GBP"],
+                "issuer_cqs": [None, 1, 1, 1],
+                "residual_maturity_years": [None, 3.0, 3.0, 3.0],
+                "qualifies_for_zero_haircut": [True, True, False, True],
+                "is_eligible_financial_collateral": [True, True, True, True],
+            }
+        )
         result = calc.apply_haircuts(coll, crr_config).collect()
 
         # REPO_CASH: Art. 227 → 0%

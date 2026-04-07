@@ -35,12 +35,10 @@ from rwa_calc.data.tables.crr_haircuts import (
     get_haircut_table,
     lookup_collateral_haircut,
     lookup_fx_haircut,
-    scale_haircut_for_liquidation_period,
 )
 from rwa_calc.engine.crm.constants import (
     REAL_ESTATE_TYPES,
     RECEIVABLE_TYPES,
-    ZERO_HAIRCUT_ELIGIBLE_TYPES,
     ZERO_HAIRCUT_MAX_SOVEREIGN_CQS,
 )
 
@@ -155,11 +153,7 @@ class HaircutCalculator:
             .otherwise(pl.lit(0.0))
         )
         if has_zero_flag:
-            fx_expr = (
-                pl.when(pl.col("_is_zero_haircut"))
-                .then(pl.lit(0.0))
-                .otherwise(fx_expr)
-            )
+            fx_expr = pl.when(pl.col("_is_zero_haircut")).then(pl.lit(0.0)).otherwise(fx_expr)
         collateral = collateral.with_columns([fx_expr.alias("fx_haircut")])
 
         # Calculate adjusted value after haircuts
@@ -332,9 +326,7 @@ class HaircutCalculator:
         )
 
         if has_zero_haircut_col:
-            _is_art227 = (
-                pl.col("qualifies_for_zero_haircut").fill_null(False) & _zero_type_eligible
-            )
+            _is_art227 = pl.col("qualifies_for_zero_haircut").fill_null(False) & _zero_type_eligible
         else:
             _is_art227 = pl.lit(False)
 
@@ -497,9 +489,7 @@ class HaircutCalculator:
             ]
         )
 
-        return collateral.drop(
-            ["_exposure_maturity_years", "_orig_maturity", "_has_1d_floor"]
-        )
+        return collateral.drop(["_exposure_maturity_years", "_orig_maturity", "_has_1d_floor"])
 
     def calculate_single_haircut(
         self,

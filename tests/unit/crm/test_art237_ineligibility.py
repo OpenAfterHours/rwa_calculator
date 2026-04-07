@@ -27,7 +27,6 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.crr_haircuts import calculate_maturity_mismatch_adjustment
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -123,9 +122,7 @@ class TestOriginalMaturityIneligibility:
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
         assert result["value_after_maturity_adj"][0] == pytest.approx(0.0)
 
-    def test_original_maturity_no_mismatch_not_checked(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_original_maturity_no_mismatch_not_checked(self, crr_config: CalculationConfig) -> None:
         """When collateral >= exposure maturity: original maturity check skipped."""
         exposure_date = crr_config.reporting_date + timedelta(days=int(1 * 365.25))
         lf = _make_collateral(
@@ -207,9 +204,7 @@ class TestOneDayMaturityFloorIneligibility:
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
         assert result["value_after_maturity_adj"][0] == pytest.approx(0.0)
 
-    def test_one_day_floor_no_mismatch_not_checked(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_one_day_floor_no_mismatch_not_checked(self, crr_config: CalculationConfig) -> None:
         """When collateral >= exposure maturity: 1-day floor doesn't trigger."""
         exposure_date = crr_config.reporting_date + timedelta(days=int(1 * 365.25))
         lf = _make_collateral(
@@ -254,9 +249,7 @@ class TestOneDayMaturityFloorIneligibility:
         # Should get positive CVAM factor (null treated as False)
         assert result["maturity_adjustment_factor"][0] > 0.0
 
-    def test_missing_floor_column_defaults_permissive(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_missing_floor_column_defaults_permissive(self, crr_config: CalculationConfig) -> None:
         """When exposure_has_one_day_maturity_floor column absent: no check applied."""
         exposure_date = crr_config.reporting_date + timedelta(days=int(3 * 365.25))
         lf = _make_collateral(

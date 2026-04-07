@@ -105,9 +105,8 @@ class SlottingCalculator:
         # Apply supporting factors (CRR Art. 501/501a) — same pattern as IRB
         exposures = self._apply_supporting_factors(exposures, config, errors=errors)
 
-        return (
-            exposures.slotting.apply_el_rates(config)
-            .slotting.compute_el_shortfall_excess(errors=errors)
+        return exposures.slotting.apply_el_rates(config).slotting.compute_el_shortfall_excess(
+            errors=errors
         )
 
     def _apply_supporting_factors(
@@ -201,9 +200,8 @@ class SlottingCalculator:
             .slotting.calculate_rwa()
         )
         exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
-        exposures = (
-            exposures.slotting.apply_el_rates(config)
-            .slotting.compute_el_shortfall_excess(errors=sf_errors)
+        exposures = exposures.slotting.apply_el_rates(config).slotting.compute_el_shortfall_excess(
+            errors=sf_errors
         )
 
         # Build audit trail

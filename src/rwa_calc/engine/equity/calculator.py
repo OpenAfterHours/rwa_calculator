@@ -667,8 +667,7 @@ class EquityCalculator:
         # CIU fallback (250%) is already >= transitional max, so exclusion is moot.
         eq_type_lower = pl.col("equity_type").str.to_lowercase()
         is_ciu_non_fallback = (eq_type_lower == "ciu") & (
-            (pl.col("ciu_approach") == "look_through")
-            | (pl.col("ciu_approach") == "mandate_based")
+            (pl.col("ciu_approach") == "look_through") | (pl.col("ciu_approach") == "mandate_based")
         )
         is_excluded = (
             (eq_type_lower == "central_bank")

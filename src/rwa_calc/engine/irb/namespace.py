@@ -252,9 +252,9 @@ class IRBLazyFrame:
                 maturity_from_date = (
                     pl.when(pl.col("maturity_date").is_not_null())
                     .then(
-                        _exact_fractional_years_expr(
-                            config.reporting_date, "maturity_date"
-                        ).clip(1.0, 5.0)
+                        _exact_fractional_years_expr(config.reporting_date, "maturity_date").clip(
+                            1.0, 5.0
+                        )
                     )
                     .otherwise(pl.lit(2.5))
                 )
@@ -381,9 +381,7 @@ class IRBLazyFrame:
                 # Use blended floor where applicable (retail_other/qrre with collateral),
                 # fall back to single-type floor otherwise
                 lgd_floor_expr = (
-                    pl.when(blended_expr.is_not_null())
-                    .then(blended_expr)
-                    .otherwise(lgd_floor_expr)
+                    pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
                 )
 
             # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
@@ -637,9 +635,7 @@ class IRBLazyFrame:
             if has_alloc and has_exposure_class:
                 blended_expr = _lgd_floor_blended_expression(config)
                 lgd_floor_expr = (
-                    pl.when(blended_expr.is_not_null())
-                    .then(blended_expr)
-                    .otherwise(lgd_floor_expr)
+                    pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
                 )
             is_airb = (
                 pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)

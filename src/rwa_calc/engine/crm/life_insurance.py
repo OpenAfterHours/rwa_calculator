@@ -97,9 +97,7 @@ def compute_life_insurance_columns(
     if ctype_col not in coll_schema.names():
         return _add_default_life_ins_columns(exposures)
 
-    li_coll = collateral.filter(
-        pl.col(ctype_col).str.to_lowercase().is_in(LIFE_INSURANCE_TYPES)
-    )
+    li_coll = collateral.filter(pl.col(ctype_col).str.to_lowercase().is_in(LIFE_INSURANCE_TYPES))
 
     # Check if insurer_risk_weight column exists
     has_insurer_rw = "insurer_risk_weight" in coll_schema.names()
@@ -108,16 +106,12 @@ def compute_life_insurance_columns(
 
     # Use market_value as the surrender value (documented convention)
     # Apply Art. 232 mapped RW per item
-    li_coll = li_coll.with_columns(
-        _map_insurer_rw_to_secured_rw_expr().alias("_li_item_rw")
-    )
+    li_coll = li_coll.with_columns(_map_insurer_rw_to_secured_rw_expr().alias("_li_item_rw"))
 
     # Build exposure reference lookups for multi-level matching
     exp_schema = exposures.collect_schema()
     exp_ref_col = (
-        "exposure_reference"
-        if "exposure_reference" in exp_schema.names()
-        else "loan_reference"
+        "exposure_reference" if "exposure_reference" in exp_schema.names() else "loan_reference"
     )
     ead_col = "ead_gross" if "ead_gross" in exp_schema.names() else "ead"
 

@@ -28,7 +28,6 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
 from rwa_calc.domain.enums import InstitutionType, ReportingBasis
 from rwa_calc.engine.aggregator import OutputAggregator
@@ -55,15 +54,17 @@ def _b31_config(
 
 def _irb_frame(rwa: float = 50_000.0, sa_rwa: float = 100_000.0) -> pl.LazyFrame:
     """Single IRB exposure where floor binds when applicable (50k < 72.5k)."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP1"],
-        "exposure_class": ["CORPORATE"],
-        "approach_applied": ["FIRB"],
-        "ead_final": [100_000.0],
-        "risk_weight": [rwa / 100_000.0],
-        "rwa_final": [rwa],
-        "sa_rwa": [sa_rwa],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP1"],
+            "exposure_class": ["CORPORATE"],
+            "approach_applied": ["FIRB"],
+            "ead_final": [100_000.0],
+            "risk_weight": [rwa / 100_000.0],
+            "rwa_final": [rwa],
+            "sa_rwa": [sa_rwa],
+        }
+    )
 
 
 # =============================================================================
@@ -349,9 +350,7 @@ class TestAggregatorEntityTypeCarveOuts:
         df = result.results.collect()
         assert df["rwa_final"][0] == pytest.approx(72_500.0, rel=0.001)
 
-    def test_exempt_entity_summary_and_impact_none(
-        self, aggregator: OutputAggregator
-    ) -> None:
+    def test_exempt_entity_summary_and_impact_none(self, aggregator: OutputAggregator) -> None:
         """Exempt entity: no OutputFloorSummary, no floor_impact frame."""
         config = _b31_config(
             institution_type=InstitutionType.NON_RING_FENCED,

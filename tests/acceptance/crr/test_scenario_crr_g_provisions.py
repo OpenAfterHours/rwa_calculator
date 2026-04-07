@@ -261,12 +261,12 @@ class TestCRRGroupG_PortfolioELSummary:
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.cet1_deduction) == pytest.approx(float(el.total_el_shortfall) * 0.5, rel=1e-6), (
-            f"CET1 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
-        )
-        assert float(el.t2_deduction) == pytest.approx(float(el.total_el_shortfall) * 0.5, rel=1e-6), (
-            f"T2 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
-        )
+        assert float(el.cet1_deduction) == pytest.approx(
+            float(el.total_el_shortfall) * 0.5, rel=1e-6
+        ), f"CET1 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
+        assert float(el.t2_deduction) == pytest.approx(
+            float(el.total_el_shortfall) * 0.5, rel=1e-6
+        ), f"T2 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
 
 
 class TestCRRGroupG_ParameterizedValidation:

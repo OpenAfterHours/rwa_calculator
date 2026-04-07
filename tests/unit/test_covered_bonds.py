@@ -254,12 +254,12 @@ class TestCoveredBondSACRR:
         [
             # CRR Art. 129(5) derivation chain — UK deviation (base_currency=GBP):
             # Institution CQS → institution RW (Table 4) → CB RW (derivation table)
-            (1, 0.10),   # inst 20% → CB 10%
-            (2, 0.15),   # inst 30% (UK deviation) → CB 15%
-            (3, 0.25),   # inst 50% → CB 25%
-            (4, 0.50),   # inst 100% → CB 50%
-            (5, 0.50),   # inst 100% → CB 50%
-            (6, 1.00),   # inst 150% → CB 100%
+            (1, 0.10),  # inst 20% → CB 10%
+            (2, 0.15),  # inst 30% (UK deviation) → CB 15%
+            (3, 0.25),  # inst 50% → CB 25%
+            (4, 0.50),  # inst 100% → CB 50%
+            (5, 0.50),  # inst 100% → CB 50%
+            (6, 1.00),  # inst 150% → CB 100%
         ],
     )
     def test_unrated_covered_bond_crr_uk_by_institution_cqs(
@@ -285,12 +285,12 @@ class TestCoveredBondSACRR:
         [
             # CRR Art. 129(5) derivation chain — standard (non-UK, base_currency≠GBP):
             # Institution CQS → institution RW (Table 3) → CB RW (derivation table)
-            (1, 0.10),   # inst 20% → CB 10%
-            (2, 0.25),   # inst 50% (standard) → CB 25%
-            (3, 0.25),   # inst 50% → CB 25%
-            (4, 0.50),   # inst 100% → CB 50%
-            (5, 0.50),   # inst 100% → CB 50%
-            (6, 1.00),   # inst 150% → CB 100%
+            (1, 0.10),  # inst 20% → CB 10%
+            (2, 0.25),  # inst 50% (standard) → CB 25%
+            (3, 0.25),  # inst 50% → CB 25%
+            (4, 0.50),  # inst 100% → CB 50%
+            (5, 0.50),  # inst 100% → CB 50%
+            (6, 1.00),  # inst 150% → CB 100%
         ],
     )
     def test_unrated_covered_bond_crr_standard_by_institution_cqs(
@@ -374,12 +374,18 @@ class TestCoveredBondSACRR:
             base_currency="EUR",
         )
         uk_result = calculate_single_sa_exposure(
-            sa_calculator, ead=ead, exposure_class="COVERED_BOND",
-            cqs=None, config=uk_config,
+            sa_calculator,
+            ead=ead,
+            exposure_class="COVERED_BOND",
+            cqs=None,
+            config=uk_config,
         )
         std_result = calculate_single_sa_exposure(
-            sa_calculator, ead=ead, exposure_class="COVERED_BOND",
-            cqs=None, config=std_config,
+            sa_calculator,
+            ead=ead,
+            exposure_class="COVERED_BOND",
+            cqs=None,
+            config=std_config,
         )
         assert uk_result["risk_weight"] == pytest.approx(0.20)
         assert std_result["risk_weight"] == pytest.approx(0.50)
@@ -645,8 +651,9 @@ class TestCoveredBondDerivationTraceability:
         Why this matters: SCRA A_ENHANCED institutions have a lower RW (30%)
         than standard A (40%), so the derived CB RW must also be lower.
         """
-        assert B31_COVERED_BOND_UNRATED_FROM_SCRA["A_ENHANCED"] < (
-            B31_COVERED_BOND_UNRATED_FROM_SCRA["A"]
+        assert (
+            B31_COVERED_BOND_UNRATED_FROM_SCRA["A_ENHANCED"]
+            < (B31_COVERED_BOND_UNRATED_FROM_SCRA["A"])
         )
 
 

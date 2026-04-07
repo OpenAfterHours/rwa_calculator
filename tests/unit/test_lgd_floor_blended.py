@@ -19,16 +19,12 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-from polars.testing import assert_frame_equal
 
+import rwa_calc.engine.irb.namespace  # register .irb namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb.formulas import (
     _lgd_floor_blended_expression,
-    _lgd_floor_expression_with_collateral,
-    apply_irb_formulas,
 )
-import rwa_calc.engine.irb.namespace  # register .irb namespace  # noqa: F401
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -91,42 +87,32 @@ class TestBlendedExpressionDirect:
     def test_crr_returns_zero(self):
         """CRR has no LGD floors — blended expression returns 0."""
         lf = _make_df(crm_alloc_other_physical=60_000.0)
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(CRR).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(CRR).alias("floor")).collect()
         assert result["floor"][0] == 0.0
 
     def test_fully_unsecured_retail_other_returns_null(self):
         """Fully unsecured retail_other: blended returns null (defers to fallback)."""
         lf = _make_df()  # all allocations zero, total_collateral_for_lgd = 0
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         # No collateral → not eligible for blended floor → null (single-type fallback)
         assert result["floor"][0] is None
 
     def test_fully_secured_by_financial(self):
         """100% financial collateral: floor = 0% (LGDS_financial)."""
         lf = _make_df(crm_alloc_financial=100_000.0)
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.0)
 
     def test_fully_secured_by_other_physical(self):
         """100% other physical: floor = 15% (LGDS_other_physical)."""
         lf = _make_df(crm_alloc_other_physical=100_000.0)
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.15)
 
     def test_mixed_physical_and_unsecured(self):
         """60% physical + 40% unsecured: floor = 0.6*15% + 0.4*30% = 21%."""
         lf = _make_df(crm_alloc_other_physical=60_000.0)
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.21)
 
     def test_mixed_financial_and_receivables(self):
@@ -135,9 +121,7 @@ class TestBlendedExpressionDirect:
             crm_alloc_financial=50_000.0,
             crm_alloc_receivables=50_000.0,
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.05)
 
     def test_three_type_mix(self):
@@ -146,30 +130,26 @@ class TestBlendedExpressionDirect:
             crm_alloc_financial=30_000.0,
             crm_alloc_real_estate=40_000.0,
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.13)
 
     def test_all_collateral_types(self):
         """All 6 types used; compute weighted average correctly."""
         lf = _make_df(
             ead_gross=100_000.0,
-            crm_alloc_financial=10_000.0,      # 10% × 0% = 0%
-            crm_alloc_covered_bond=10_000.0,   # 10% × 0% = 0%
-            crm_alloc_receivables=20_000.0,    # 20% × 10% = 2%
-            crm_alloc_real_estate=20_000.0,    # 20% × 10% = 2%
-            crm_alloc_other_physical=20_000.0, # 20% × 15% = 3%
-            crm_alloc_life_insurance=10_000.0, # 10% × 0% = 0%
+            crm_alloc_financial=10_000.0,  # 10% × 0% = 0%
+            crm_alloc_covered_bond=10_000.0,  # 10% × 0% = 0%
+            crm_alloc_receivables=20_000.0,  # 20% × 10% = 2%
+            crm_alloc_real_estate=20_000.0,  # 20% × 10% = 2%
+            crm_alloc_other_physical=20_000.0,  # 20% × 15% = 3%
+            crm_alloc_life_insurance=10_000.0,  # 10% × 0% = 0%
         )
         # 10% unsecured × 30% = 3% — total = 10%
         # Wait: total collateral = 90k, unsecured = 10k
         # floor = (10/100)*30% + (10/100)*0% + (10/100)*0% + (20/100)*10%
         #       + (20/100)*10% + (20/100)*15% + (10/100)*0%
         # = 3% + 0% + 0% + 2% + 2% + 3% + 0% = 10%
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.10)
 
     def test_retail_qrre_uses_50pct_lgdu(self):
@@ -180,9 +160,7 @@ class TestBlendedExpressionDirect:
         )
         # 60% physical + 40% unsecured
         # floor = 0.6 * 15% + 0.4 * 50% = 9% + 20% = 29%
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.29)
 
     def test_retail_mortgage_returns_null(self):
@@ -191,9 +169,7 @@ class TestBlendedExpressionDirect:
             exposure_class="retail_mortgage",
             crm_alloc_real_estate=80_000.0,
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] is None
 
     def test_corporate_returns_null(self):
@@ -202,9 +178,7 @@ class TestBlendedExpressionDirect:
             exposure_class="CORPORATE",
             crm_alloc_financial=80_000.0,
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] is None
 
     def test_zero_ead_returns_null(self):
@@ -214,9 +188,7 @@ class TestBlendedExpressionDirect:
             crm_alloc_financial=50_000.0,
             total_collateral_for_lgd=0.0,
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         # total_collateral_for_lgd=0 → not eligible → null
         assert result["floor"][0] is None
 
@@ -235,17 +207,13 @@ class TestBlendedExpressionDirect:
                 "crm_alloc_life_insurance": [0.0],
             }
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.0)
 
     def test_no_collateral_retail_other(self):
         """No collateral on retail_other: blended returns null (not eligible)."""
         lf = _make_df()  # all alloc = 0, total_collateral_for_lgd = 0
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         # total_collateral_for_lgd == 0, so has_collateral is False → null
         assert result["floor"][0] is None
 
@@ -266,9 +234,7 @@ class TestBlendedExpressionDirect:
             crm_alloc_other_physical=100_000.0,
             total_collateral_for_lgd=100_000.0,
         )
-        result = lf2.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf2.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.15)
 
 
@@ -431,9 +397,7 @@ class TestBlendedFloorEdgeCases:
                 "crm_alloc_life_insurance": [None],
             }
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         # 50% physical + 50% unsecured = 0.5*15% + 0.5*30% = 22.5%
         assert result["floor"][0] == pytest.approx(0.225)
 
@@ -443,20 +407,18 @@ class TestBlendedFloorEdgeCases:
             ead_gross=1.0,
             crm_alloc_other_physical=0.6,
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         # 60% physical + 40% unsecured = 0.6*15% + 0.4*30% = 21%
         assert result["floor"][0] == pytest.approx(0.21, abs=1e-10)
 
     @pytest.mark.parametrize(
         "alloc_fin,alloc_op,expected_floor",
         [
-            (100_000, 0, 0.0),         # 100% financial → 0%
-            (0, 100_000, 0.15),        # 100% other_physical → 15%
-            (50_000, 50_000, 0.075),   # 50/50 → 7.5%
-            (80_000, 20_000, 0.03),    # 80% fin + 20% phys → 3%
-            (20_000, 80_000, 0.12),    # 20% fin + 80% phys → 12%
+            (100_000, 0, 0.0),  # 100% financial → 0%
+            (0, 100_000, 0.15),  # 100% other_physical → 15%
+            (50_000, 50_000, 0.075),  # 50/50 → 7.5%
+            (80_000, 20_000, 0.03),  # 80% fin + 20% phys → 3%
+            (20_000, 80_000, 0.12),  # 20% fin + 80% phys → 12%
         ],
     )
     def test_parametrized_two_type_mix(self, alloc_fin, alloc_op, expected_floor):
@@ -465,9 +427,7 @@ class TestBlendedFloorEdgeCases:
             crm_alloc_financial=alloc_fin,
             crm_alloc_other_physical=alloc_op,
         )
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(expected_floor)
 
     def test_receivables_and_re_blend(self):
@@ -477,9 +437,7 @@ class TestBlendedFloorEdgeCases:
             crm_alloc_real_estate=40_000.0,
         )
         # 40% rec + 40% re + 20% unsecured = 0.4*10% + 0.4*10% + 0.2*30% = 14%
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.14)
 
     def test_life_insurance_treated_as_financial(self):
@@ -488,9 +446,7 @@ class TestBlendedFloorEdgeCases:
             crm_alloc_life_insurance=60_000.0,
         )
         # 60% life ins (0%) + 40% unsecured (30%) = 12%
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.12)
 
     def test_covered_bond_treated_as_financial(self):
@@ -499,7 +455,5 @@ class TestBlendedFloorEdgeCases:
             crm_alloc_covered_bond=70_000.0,
         )
         # 70% covered bond (0%) + 30% unsecured (30%) = 9%
-        result = lf.with_columns(
-            _lgd_floor_blended_expression(B31).alias("floor")
-        ).collect()
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.09)

@@ -248,7 +248,11 @@ WATERFALL_ORDER: list[tuple[list[str], str, str]] = [
     (["receivables"], "receivables", "rec"),
     (["real_estate"], "real_estate", "re"),
     (["other_physical", "other"], "other_physical", "op"),
-    (["life_insurance"], "life_insurance", "li"),  # Art. 232: LGDS = 40% (same as other_physical/CRR)
+    (
+        ["life_insurance"],
+        "life_insurance",
+        "li",
+    ),  # Art. 232: LGDS = 40% (same as other_physical/CRR)
 ]
 
 # Per-type allocation column names preserved from the Art. 231 waterfall.

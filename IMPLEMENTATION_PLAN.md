@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P6.5 ELPortfolioSummary float→Decimal)
-**Current version:** 0.1.139 | **Test suite:** 3,748 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P6.1, P6.5, P6.10, P6.12, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-07 (P5.6 IRB unit test coverage)
+**Current version:** 0.1.140 | **Test suite:** 3,886 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.9a, P5.6, P6.1, P6.5, P6.10, P6.12, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -649,11 +649,24 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Run `uv sync` or reinstall polars packages.
 
 ### P5.6 IRB unit tests extremely low (~72 tests)
-- **Status:** [ ] Not started
-- **Impact:** ~72 IRB unit tests total (30 in `tests/unit/irb/` + 42 in `crr/test_crr_irb.py`). The IRB engine is one of the most complex modules with `formulas.py`, `adjustments.py`, `namespace.py`, `config.py`, `guarantee.py`, and `calculator.py`. Key untested areas: correlation formulas, maturity adjustment, FI scalar application, PD floor enforcement, LGD floor enforcement, defaulted treatment branching, K formula edge cases. `irb/stats_backend.py` (44 lines, `normal_cdf`/`normal_ppf` wrappers) has **zero** test coverage.
-- **File:Line:** `tests/unit/irb/` (only 3 test files)
-- **Fix:** Add comprehensive unit tests for: (a) `irb/formulas.py` -- K formula, correlation, maturity adjustment; (b) `irb/adjustments.py` -- defaulted treatment, EL shortfall; (c) `irb/config.py` -- PD/LGD floor selection; (d) `irb/namespace.py` -- pipeline chain; (e) `irb/stats_backend.py` -- CDF/PPF wrappers. Target at least 150 IRB unit tests.
-- **Tests needed:** This IS the test gap item.
+- **Status:** [x] Complete (2026-04-07)
+- **Impact:** IRB unit test count was ~322 across 12 files, but key areas had zero or minimal coverage. `irb/stats_backend.py` had **zero** tests. PD floor per-class enforcement under Basel 3.1, LGD floor per-class/collateral enforcement, correlation FI scalar, SME B31 GBP thresholds, F-IRB FSE/non-FSE LGD distinction, and full pipeline integration were all untested or under-tested.
+- **Fix:** Added 138 new unit tests in `tests/unit/irb/test_irb_formulas.py` covering:
+  - (a) **Stats backend** (14 tests): `normal_cdf` and `normal_ppf` — known values, symmetry, monotonicity, CDF(0)=0.5, PPF(0.999)≈G_999, CDF↔PPF roundtrip identity, critical quantiles
+  - (b) **PD floors** (17 tests): CRR uniform 0.03% across 7 exposure classes, Basel 3.1 per-class (corporate 0.05%, mortgage 0.10%, QRRE transactor 0.05%, revolver 0.10%, retail_other 0.05%), null→corporate fallback, missing transactor column→revolver default
+  - (c) **LGD floors** (13 tests): CRR no floors, B31 corporate unsecured 25%, retail mortgage 5%, QRRE 50%, retail_other 30%, F-IRB not floored, financial collateral 0%, other_physical 15%, subordinated with/without exposure_class
+  - (d) **Correlation** (23 tests): all 5 exposure class families (corporate [0.12-0.24], mortgage fixed 0.15, QRRE fixed 0.04, retail_other [0.03-0.16], institution/sovereign→corporate), SME adjustment (CRR EUR vs B31 GBP thresholds, max 0.04 reduction, null turnover, only corporate), FI scalar (1.25× multiplier, can exceed 0.24), get_correlation_params() substring matching
+  - (e) **Capital K** (12 tests): positivity, PD=0→0, PD=1→LGD, LGD=0→0, monotonicity (PD, LGD, correlation), K≤LGD always, K≥0 always, realistic range, manual formula verification, vectorized-scalar consistency
+  - (f) **Maturity adjustment** (10 tests): MA=1 at M=1.0 floor, MA>1 at M=2.5/5.0, monotonicity, floor/cap clipping, low PD higher sensitivity, always positive, manual formula verification, vectorized-scalar consistency
+  - (g) **Double default** (4 tests): formula 0.15+160×PD_g, low PD_g, zero K_obligor, investment-grade reduction
+  - (h) **Expected loss** (4 tests): EL=PD×LGD×EAD, zero inputs
+  - (i) **calculate_irb_rwa scalar** (9 tests): CRR/B31 scaling, PD/LGD floor application, MA toggle, risk weight/RWA formula consistency, zero EAD
+  - (j) **F-IRB LGD pipeline** (8 tests): CRR senior 45%, CRR subordinated 75%, B31 non-FSE 40%, B31 FSE 45%, B31 subordinated 75%, A-IRB own LGD, lgd_post_crm, missing FSE column
+  - (k) **Full pipeline integration** (10 tests): all output columns, CRR end-to-end, B31 vs CRR 6% scaling ratio, retail no MA, default maturity, missing turnover, mixed classes, row count, FI scalar
+  - (l) **Config factories** (11 tests): PDFloors.crr/basel_3_1 values, get_floor QRRE transactor/revolver, LGDFloors.crr/basel_3_1 values, get_floor retail_mortgage_immovable/corporate_immovable/QRRE/retail_other
+- **File:Line:** `tests/unit/irb/test_irb_formulas.py` (138 tests, ~1040 lines)
+- **Tests:** All 3,886 tests pass (was 3,748). IRB test count now ~460 across 13 files.
+- **Learnings:** MA=1.0 at maturity floor M=1.0 (not M=2.5 as commonly assumed — formula numerator (M-2.5)×b cancels denominator only at M=1.0). Subordinated corporate LGD floor is 25% when exposure_class present (Art. 161(5) applies uniformly); the 50% subordinated_unsecured config value is only a conservative fallback when exposure_class is absent.
 
 ### P5.7 No direct CRM submodule unit tests
 - **Status:** [ ] Not started

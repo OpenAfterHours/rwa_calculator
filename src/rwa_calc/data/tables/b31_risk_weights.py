@@ -477,9 +477,8 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     # Natural person or SME → loan-splitting (Art. 124H(1-2))
     # Other counterparties → max/min formula (Art. 124H(3))
     # Default: False (other counterparty) — conservative, gives higher RW
-    is_person_or_sme = (
-        pl.col("cp_is_natural_person").fill_null(False)
-        | pl.col("is_sme").fill_null(False)
+    is_person_or_sme = pl.col("cp_is_natural_person").fill_null(False) | pl.col("is_sme").fill_null(
+        False
     )
 
     # Income-producing CRE (PRA Art. 124I): 100% ≤80% LTV, 110% >80% LTV
@@ -645,8 +644,7 @@ def lookup_b31_residential_rw(
         if _is_junior and ltv > Decimal("0.50"):
             rw = min(base_rw * B31_RESI_INCOME_JUNIOR_MULTIPLIER, Decimal("1.05"))
             return rw, (
-                f"B31 RRE (income-producing, junior 1.25x): "
-                f"{float(rw):.0%} (LTV {float(ltv):.0%})"
+                f"B31 RRE (income-producing, junior 1.25x): {float(rw):.0%} (LTV {float(ltv):.0%})"
             )
         return base_rw, f"B31 RRE (income-producing): {float(base_rw):.0%} (LTV {float(ltv):.0%})"
 

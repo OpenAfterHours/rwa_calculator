@@ -17,6 +17,12 @@ Modules:
     b31_equity_rw: Basel 3.1 equity risk weights (PRA PS1/26 Art. 133)
 """
 
+from .b31_equity_rw import (
+    B31_SA_EQUITY_RISK_WEIGHTS,
+    get_b31_equity_risk_weights,
+    get_b31_equity_rw_table,
+    lookup_b31_equity_rw,
+)
 from .b31_firb_lgd import (
     B31_FIRB_LGD_COMMERCIAL_RE,
     B31_FIRB_LGD_COVERED_BOND,
@@ -30,12 +36,6 @@ from .b31_firb_lgd import (
     get_b31_firb_lgd_table,
     get_b31_vs_crr_lgd_comparison,
     lookup_b31_firb_lgd,
-)
-from .b31_equity_rw import (
-    B31_SA_EQUITY_RISK_WEIGHTS,
-    get_b31_equity_risk_weights,
-    get_b31_equity_rw_table,
-    lookup_b31_equity_rw,
 )
 from .b31_risk_weights import (
     B31_ADC_PRESOLD_RISK_WEIGHT,

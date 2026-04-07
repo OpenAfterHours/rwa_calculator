@@ -24,7 +24,6 @@ from rwa_calc.contracts.errors import (
 )
 from rwa_calc.engine.irb.adjustments import compute_el_shortfall_excess
 
-
 # =============================================================================
 # HELPERS
 # =============================================================================
@@ -109,9 +108,7 @@ class TestIRBELShortfallErrorReporting:
     def test_error_has_regulatory_reference(self) -> None:
         """Error includes CRR Art. 158-159 regulatory reference."""
         errors: list[CalculationError] = []
-        compute_el_shortfall_excess(
-            _frame_without_expected_loss(), errors=errors
-        ).collect()
+        compute_el_shortfall_excess(_frame_without_expected_loss(), errors=errors).collect()
 
         assert errors[0].regulatory_reference == "CRR Art. 158-159"
 

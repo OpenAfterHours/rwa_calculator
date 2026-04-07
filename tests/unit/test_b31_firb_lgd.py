@@ -37,7 +37,6 @@ from rwa_calc.data.tables.crr_firb_lgd import (
     FIRB_SUPERVISORY_LGD,
 )
 
-
 # =============================================================================
 # CONSTANT VALUE TESTS — PRA PS1/26 Art. 161(1) values
 # =============================================================================
@@ -48,57 +47,57 @@ class TestB31FIRBLGDConstants:
 
     def test_non_fse_senior_unsecured_forty_percent(self) -> None:
         """Non-FSE senior unsecured is 40% under B31 (Art. 161(1)(aa))."""
-        assert B31_FIRB_LGD_UNSECURED_SENIOR == Decimal("0.40")
+        assert Decimal("0.40") == B31_FIRB_LGD_UNSECURED_SENIOR
 
     def test_fse_senior_unsecured_forty_five_percent(self) -> None:
         """FSE senior unsecured remains 45% under B31 (Art. 161(1)(a))."""
-        assert B31_FIRB_LGD_UNSECURED_SENIOR_FSE == Decimal("0.45")
+        assert Decimal("0.45") == B31_FIRB_LGD_UNSECURED_SENIOR_FSE
 
     def test_subordinated_seventy_five_percent(self) -> None:
         """Subordinated is 75%, unchanged from CRR (Art. 161(1)(b))."""
-        assert B31_FIRB_LGD_SUBORDINATED == Decimal("0.75")
+        assert Decimal("0.75") == B31_FIRB_LGD_SUBORDINATED
 
     def test_covered_bond_eleven_point_two_five_percent(self) -> None:
         """Covered bonds get 11.25% LGD (Art. 161(1B))."""
-        assert B31_FIRB_LGD_COVERED_BOND == Decimal("0.1125")
+        assert Decimal("0.1125") == B31_FIRB_LGD_COVERED_BOND
 
     def test_financial_collateral_zero_percent(self) -> None:
         """Financial collateral is 0%, unchanged from CRR."""
-        assert B31_FIRB_LGD_FINANCIAL_COLLATERAL == Decimal("0.00")
+        assert Decimal("0.00") == B31_FIRB_LGD_FINANCIAL_COLLATERAL
 
     def test_receivables_twenty_percent(self) -> None:
         """Receivables LGDS is 20% under B31 (CRR: 35%, CRE32.9)."""
-        assert B31_FIRB_LGD_RECEIVABLES == Decimal("0.20")
+        assert Decimal("0.20") == B31_FIRB_LGD_RECEIVABLES
 
     def test_residential_re_twenty_percent(self) -> None:
         """Residential RE LGDS is 20% under B31 (CRR: 35%, CRE32.10)."""
-        assert B31_FIRB_LGD_RESIDENTIAL_RE == Decimal("0.20")
+        assert Decimal("0.20") == B31_FIRB_LGD_RESIDENTIAL_RE
 
     def test_commercial_re_twenty_percent(self) -> None:
         """Commercial RE LGDS is 20% under B31 (CRR: 35%, CRE32.11)."""
-        assert B31_FIRB_LGD_COMMERCIAL_RE == Decimal("0.20")
+        assert Decimal("0.20") == B31_FIRB_LGD_COMMERCIAL_RE
 
     def test_other_physical_twenty_five_percent(self) -> None:
         """Other physical LGDS is 25% under B31 (CRR: 40%, CRE32.12)."""
-        assert B31_FIRB_LGD_OTHER_PHYSICAL == Decimal("0.25")
+        assert Decimal("0.25") == B31_FIRB_LGD_OTHER_PHYSICAL
 
     def test_constants_match_dict(self) -> None:
         """Named constants are consistent with the BASEL31_FIRB_SUPERVISORY_LGD dict."""
-        assert B31_FIRB_LGD_UNSECURED_SENIOR == BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior"]
+        assert BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior"] == B31_FIRB_LGD_UNSECURED_SENIOR
         assert (
-            B31_FIRB_LGD_UNSECURED_SENIOR_FSE
-            == BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior_fse"]
+            BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior_fse"]
+            == B31_FIRB_LGD_UNSECURED_SENIOR_FSE
         )
-        assert B31_FIRB_LGD_SUBORDINATED == BASEL31_FIRB_SUPERVISORY_LGD["subordinated"]
-        assert B31_FIRB_LGD_COVERED_BOND == BASEL31_FIRB_SUPERVISORY_LGD["covered_bond"]
+        assert BASEL31_FIRB_SUPERVISORY_LGD["subordinated"] == B31_FIRB_LGD_SUBORDINATED
+        assert BASEL31_FIRB_SUPERVISORY_LGD["covered_bond"] == B31_FIRB_LGD_COVERED_BOND
         assert (
-            B31_FIRB_LGD_FINANCIAL_COLLATERAL
-            == BASEL31_FIRB_SUPERVISORY_LGD["financial_collateral"]
+            BASEL31_FIRB_SUPERVISORY_LGD["financial_collateral"]
+            == B31_FIRB_LGD_FINANCIAL_COLLATERAL
         )
-        assert B31_FIRB_LGD_RECEIVABLES == BASEL31_FIRB_SUPERVISORY_LGD["receivables"]
-        assert B31_FIRB_LGD_RESIDENTIAL_RE == BASEL31_FIRB_SUPERVISORY_LGD["residential_re"]
-        assert B31_FIRB_LGD_COMMERCIAL_RE == BASEL31_FIRB_SUPERVISORY_LGD["commercial_re"]
-        assert B31_FIRB_LGD_OTHER_PHYSICAL == BASEL31_FIRB_SUPERVISORY_LGD["other_physical"]
+        assert BASEL31_FIRB_SUPERVISORY_LGD["receivables"] == B31_FIRB_LGD_RECEIVABLES
+        assert BASEL31_FIRB_SUPERVISORY_LGD["residential_re"] == B31_FIRB_LGD_RESIDENTIAL_RE
+        assert BASEL31_FIRB_SUPERVISORY_LGD["commercial_re"] == B31_FIRB_LGD_COMMERCIAL_RE
+        assert BASEL31_FIRB_SUPERVISORY_LGD["other_physical"] == B31_FIRB_LGD_OTHER_PHYSICAL
 
 
 class TestB31VsCRRChanges:
@@ -107,42 +106,42 @@ class TestB31VsCRRChanges:
     def test_non_fse_senior_reduced_from_crr(self) -> None:
         """Non-FSE senior unsecured reduced from 45% (CRR) to 40% (B31)."""
         assert FIRB_SUPERVISORY_LGD["unsecured_senior"] == Decimal("0.45")
-        assert B31_FIRB_LGD_UNSECURED_SENIOR == Decimal("0.40")
+        assert Decimal("0.40") == B31_FIRB_LGD_UNSECURED_SENIOR
 
     def test_fse_senior_unchanged_from_crr(self) -> None:
         """FSE senior unsecured unchanged at 45%."""
         assert FIRB_SUPERVISORY_LGD["unsecured_senior"] == Decimal("0.45")
-        assert B31_FIRB_LGD_UNSECURED_SENIOR_FSE == Decimal("0.45")
+        assert Decimal("0.45") == B31_FIRB_LGD_UNSECURED_SENIOR_FSE
 
     def test_receivables_reduced_from_crr(self) -> None:
         """Receivables reduced from 35% (CRR) to 20% (B31)."""
         assert FIRB_SUPERVISORY_LGD["receivables"] == Decimal("0.35")
-        assert B31_FIRB_LGD_RECEIVABLES == Decimal("0.20")
+        assert Decimal("0.20") == B31_FIRB_LGD_RECEIVABLES
 
     def test_residential_re_reduced_from_crr(self) -> None:
         """Residential RE reduced from 35% (CRR) to 20% (B31)."""
         assert FIRB_SUPERVISORY_LGD["residential_re"] == Decimal("0.35")
-        assert B31_FIRB_LGD_RESIDENTIAL_RE == Decimal("0.20")
+        assert Decimal("0.20") == B31_FIRB_LGD_RESIDENTIAL_RE
 
     def test_commercial_re_reduced_from_crr(self) -> None:
         """Commercial RE reduced from 35% (CRR) to 20% (B31)."""
         assert FIRB_SUPERVISORY_LGD["commercial_re"] == Decimal("0.35")
-        assert B31_FIRB_LGD_COMMERCIAL_RE == Decimal("0.20")
+        assert Decimal("0.20") == B31_FIRB_LGD_COMMERCIAL_RE
 
     def test_other_physical_reduced_from_crr(self) -> None:
         """Other physical reduced from 40% (CRR) to 25% (B31)."""
         assert FIRB_SUPERVISORY_LGD["other_physical"] == Decimal("0.40")
-        assert B31_FIRB_LGD_OTHER_PHYSICAL == Decimal("0.25")
+        assert Decimal("0.25") == B31_FIRB_LGD_OTHER_PHYSICAL
 
     def test_subordinated_unchanged(self) -> None:
         """Subordinated unchanged at 75%."""
         assert FIRB_SUPERVISORY_LGD["subordinated"] == Decimal("0.75")
-        assert B31_FIRB_LGD_SUBORDINATED == Decimal("0.75")
+        assert Decimal("0.75") == B31_FIRB_LGD_SUBORDINATED
 
     def test_financial_collateral_unchanged(self) -> None:
         """Financial collateral unchanged at 0%."""
         assert FIRB_SUPERVISORY_LGD["financial_collateral"] == Decimal("0.00")
-        assert B31_FIRB_LGD_FINANCIAL_COLLATERAL == Decimal("0.00")
+        assert Decimal("0.00") == B31_FIRB_LGD_FINANCIAL_COLLATERAL
 
 
 # =============================================================================
@@ -274,9 +273,7 @@ class TestB31FIRBLGDDataFrame:
     def test_dataframe_financial_no_overcoll(self) -> None:
         """Financial collateral has no overcollateralisation requirement."""
         df = get_b31_firb_lgd_table()
-        fin = df.filter(
-            pl.col("collateral_type").is_in(["financial_collateral", "cash"])
-        )
+        fin = df.filter(pl.col("collateral_type").is_in(["financial_collateral", "cash"]))
         assert all(r == 1.0 for r in fin["overcollateralisation_ratio"].to_list())
         assert all(t == 0.0 for t in fin["min_threshold"].to_list())
 

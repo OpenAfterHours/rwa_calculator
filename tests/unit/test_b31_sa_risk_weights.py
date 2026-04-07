@@ -3686,4 +3686,4 @@ class TestB31PayrollPensionLoan:
 
     def test_payroll_loan_constant_value(self) -> None:
         """B31_RETAIL_PAYROLL_LOAN_RW constant should be 0.35 (35%)."""
-        assert B31_RETAIL_PAYROLL_LOAN_RW == Decimal("0.35")
+        assert Decimal("0.35") == B31_RETAIL_PAYROLL_LOAN_RW

@@ -26,7 +26,6 @@ import pytest
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.irb.adjustments import compute_el_shortfall_excess
 
-
 # =============================================================================
 # HELPERS
 # =============================================================================

@@ -65,20 +65,22 @@ def _irb_frame(
     shortfall: float = 0.0,
 ) -> pl.LazyFrame:
     """IRB frame with EL columns for OF-ADJ testing."""
-    return pl.LazyFrame({
-        "exposure_reference": ["EXP001"],
-        "exposure_class": ["CORPORATE"],
-        "approach_applied": ["FIRB"],
-        "ead_final": [200_000_000.0],
-        "risk_weight": [rwa / 200_000_000.0],
-        "rwa_post_factor": [rwa],
-        "rwa_final": [rwa],
-        "sa_rwa": [sa_rwa],
-        "expected_loss": [100_000.0],
-        "provision_allocated": [100_000.0 + excess],
-        "el_shortfall": [shortfall],
-        "el_excess": [excess],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001"],
+            "exposure_class": ["CORPORATE"],
+            "approach_applied": ["FIRB"],
+            "ead_final": [200_000_000.0],
+            "risk_weight": [rwa / 200_000_000.0],
+            "rwa_post_factor": [rwa],
+            "rwa_final": [rwa],
+            "sa_rwa": [sa_rwa],
+            "expected_loss": [100_000.0],
+            "provision_allocated": [100_000.0 + excess],
+            "el_shortfall": [shortfall],
+            "el_excess": [excess],
+        }
+    )
 
 
 # =============================================================================
@@ -179,7 +181,7 @@ class TestComputeOfAdj:
 
     def test_gcra_cap_rate_constant(self) -> None:
         """GCRA_CAP_RATE must be 1.25% = 0.0125."""
-        assert GCRA_CAP_RATE == pytest.approx(0.0125)
+        assert pytest.approx(0.0125) == GCRA_CAP_RATE
 
     def test_12_5_multiplier(self) -> None:
         """The 12.5 multiplier converts capital to RWA (1/8% capital requirement)."""
@@ -292,8 +294,9 @@ class TestOfAdjAggregator:
         GCRA = 200k (below cap). SA_T2 = 100k.
         OF-ADJ = 12.5 × (300k - 50k - 200k + 100k) = 12.5 × 150k = 1.875m.
         """
-        config = _b31_config(gcra_amount=200_000.0, sa_t2_credit=100_000.0,
-                             art_40_deductions=50_000.0)
+        config = _b31_config(
+            gcra_amount=200_000.0, sa_t2_credit=100_000.0, art_40_deductions=50_000.0
+        )
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
         result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
 
@@ -305,9 +308,7 @@ class TestOfAdjAggregator:
         assert summary.gcra_amount == pytest.approx(200_000.0, rel=0.001)
         assert summary.sa_t2_credit == pytest.approx(100_000.0, rel=0.001)
 
-    def test_of_adj_gcra_capped_at_1_25_pct_of_s_trea(
-        self, aggregator: OutputAggregator
-    ) -> None:
+    def test_of_adj_gcra_capped_at_1_25_pct_of_s_trea(self, aggregator: OutputAggregator) -> None:
         """GCRA input exceeding 1.25% of S-TREA is capped.
 
         S-TREA (for floor-eligible) = 100m → GCRA cap = 1.25m.
@@ -324,20 +325,20 @@ class TestOfAdjAggregator:
         assert summary.gcra_amount == pytest.approx(1_250_000.0, rel=0.001)
         assert summary.of_adj == pytest.approx(-15_625_000.0, rel=0.001)
 
-    def test_of_adj_zero_when_no_el_summary_no_config(
-        self, aggregator: OutputAggregator
-    ) -> None:
+    def test_of_adj_zero_when_no_el_summary_no_config(self, aggregator: OutputAggregator) -> None:
         """No EL data and no config inputs → OF-ADJ = 0 (backward compat)."""
         config = _b31_config()
-        irb = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach_applied": ["FIRB"],
-            "ead_final": [200_000_000.0],
-            "risk_weight": [0.25],
-            "rwa_final": [50_000_000.0],
-            "sa_rwa": [100_000_000.0],
-        })
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach_applied": ["FIRB"],
+                "ead_final": [200_000_000.0],
+                "risk_weight": [0.25],
+                "rwa_final": [50_000_000.0],
+                "sa_rwa": [100_000_000.0],
+            }
+        )
         result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
 
         summary = result.output_floor_summary
@@ -346,9 +347,7 @@ class TestOfAdjAggregator:
         # Original floor behavior: 72.5% × 100m = 72.5m
         assert summary.floor_threshold == pytest.approx(72_500_000.0, rel=0.001)
 
-    def test_negative_of_adj_lowers_floor_threshold(
-        self, aggregator: OutputAggregator
-    ) -> None:
+    def test_negative_of_adj_lowers_floor_threshold(self, aggregator: OutputAggregator) -> None:
         """Negative OF-ADJ can make the floor NOT bind when it otherwise would.
 
         IRB RWA = 70m, SA RWA = 100m.
@@ -376,8 +375,9 @@ class TestOfAdjAggregator:
 
     def test_of_adj_summary_fields_populated(self, aggregator: OutputAggregator) -> None:
         """OutputFloorSummary has all OF-ADJ breakdown fields."""
-        config = _b31_config(gcra_amount=300_000.0, sa_t2_credit=200_000.0,
-                             art_40_deductions=75_000.0)
+        config = _b31_config(
+            gcra_amount=300_000.0, sa_t2_credit=200_000.0, art_40_deductions=75_000.0
+        )
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
         result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
 

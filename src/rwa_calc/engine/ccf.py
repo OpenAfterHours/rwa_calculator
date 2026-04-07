@@ -296,9 +296,7 @@ class CCFCalculator:
         # When underlying_risk_type is specified, cap CCFs at the underlying item's CCF.
         # "the lower of (i) the CCF applicable to the underlying OBS item and
         #  (ii) the CCF applicable to the commitment type"
-        has_underlying = (
-            pl.col("underlying_risk_type").fill_null("").str.len_chars() > 0
-        )
+        has_underlying = pl.col("underlying_risk_type").fill_null("").str.len_chars() > 0
         underlying_sa = sa_ccf_expression("underlying_risk_type", is_basel_3_1=is_b31)
         exposures = exposures.with_columns(
             pl.when(has_underlying)
@@ -390,9 +388,9 @@ class CCFCalculator:
             # Floor (b): facility-level EAD floor for Art. 166D(3) single-EAD approach
             # EAD >= on-BS EAD + 50% x (nominal x SA_CCF)
             # Under B31, F-IRB CCFs = SA CCFs (Art. 166C)
-            floor_b = on_bal + pl.col("nominal_after_provision") * pl.col(
-                "_sa_ccf_from_risk_type"
-            ) * 0.5
+            floor_b = (
+                on_bal + pl.col("nominal_after_provision") * pl.col("_sa_ccf_from_risk_type") * 0.5
+            )
 
             # Floor (c): fully-drawn EAD floor — Art. 166D(5)(c)
             # EAD >= on-balance-sheet EAD (ignoring Art. 166D)

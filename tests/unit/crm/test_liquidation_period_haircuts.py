@@ -19,7 +19,6 @@ import math
 from decimal import Decimal
 
 import polars as pl
-import pytest
 
 from rwa_calc.data.tables.crr_haircuts import (
     BASEL31_COLLATERAL_HAIRCUTS,
@@ -33,7 +32,6 @@ from rwa_calc.data.tables.crr_haircuts import (
     scale_haircut_for_liquidation_period,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
-
 
 # =============================================================================
 # B31 Haircut Value Corrections (PRA PS1/26 Art. 224 Table 3)
@@ -74,16 +72,12 @@ class TestB31HaircutValueCorrections:
 
     def test_lookup_b31_equity_main_index(self) -> None:
         """Scalar lookup returns corrected 20% for B31 main index equity."""
-        result = lookup_collateral_haircut(
-            "equity", is_main_index=True, is_basel_3_1=True
-        )
+        result = lookup_collateral_haircut("equity", is_main_index=True, is_basel_3_1=True)
         assert result == Decimal("0.20")
 
     def test_lookup_b31_equity_other(self) -> None:
         """Scalar lookup returns corrected 30% for B31 other equity."""
-        result = lookup_collateral_haircut(
-            "equity", is_main_index=False, is_basel_3_1=True
-        )
+        result = lookup_collateral_haircut("equity", is_main_index=False, is_basel_3_1=True)
         assert result == Decimal("0.30")
 
 
@@ -181,8 +175,11 @@ class TestScalarLookupWithLiquidationPeriod:
     def test_govt_bond_cqs1_5day(self) -> None:
         """CRR govt bond CQS1 1-5y: 2% at 10-day → 1.414% at 5-day."""
         result = lookup_collateral_haircut(
-            "govt_bond", cqs=1, residual_maturity_years=3.0,
-            is_basel_3_1=False, liquidation_period_days=5,
+            "govt_bond",
+            cqs=1,
+            residual_maturity_years=3.0,
+            is_basel_3_1=False,
+            liquidation_period_days=5,
         )
         assert result is not None
         expected = 0.02 * math.sqrt(0.5)
@@ -191,8 +188,11 @@ class TestScalarLookupWithLiquidationPeriod:
     def test_corp_bond_cqs1_20day(self) -> None:
         """B31 corp bond CQS1 10y+: 12% at 10-day → 16.97% at 20-day."""
         result = lookup_collateral_haircut(
-            "corp_bond", cqs=1, residual_maturity_years=15.0,
-            is_basel_3_1=True, liquidation_period_days=20,
+            "corp_bond",
+            cqs=1,
+            residual_maturity_years=15.0,
+            is_basel_3_1=True,
+            liquidation_period_days=20,
         )
         assert result is not None
         expected = 0.12 * math.sqrt(2.0)
@@ -201,24 +201,33 @@ class TestScalarLookupWithLiquidationPeriod:
     def test_receivables_not_scaled(self) -> None:
         """Receivables (non-financial, Art. 230) are not scaled by liquidation period."""
         result_10 = lookup_collateral_haircut(
-            "receivables", is_basel_3_1=True, liquidation_period_days=10,
+            "receivables",
+            is_basel_3_1=True,
+            liquidation_period_days=10,
         )
         result_5 = lookup_collateral_haircut(
-            "receivables", is_basel_3_1=True, liquidation_period_days=5,
+            "receivables",
+            is_basel_3_1=True,
+            liquidation_period_days=5,
         )
         assert result_10 == result_5  # Both 40%, no scaling
 
     def test_default_10day_backward_compat(self) -> None:
         """Default liquidation_period_days=10 produces unchanged results."""
         result = lookup_collateral_haircut(
-            "equity", is_main_index=True, is_basel_3_1=True,
+            "equity",
+            is_main_index=True,
+            is_basel_3_1=True,
         )
         assert result == Decimal("0.20")  # No scaling applied
 
     def test_equity_main_b31_5day_scalar(self) -> None:
         """B31 main index equity at 5-day: 20% × sqrt(0.5) ≈ 14.14%."""
         result = lookup_collateral_haircut(
-            "equity", is_main_index=True, is_basel_3_1=True, liquidation_period_days=5,
+            "equity",
+            is_main_index=True,
+            is_basel_3_1=True,
+            liquidation_period_days=5,
         )
         assert result is not None
         assert abs(float(result) - 0.14142) < 0.001
@@ -337,16 +346,18 @@ class TestCalculatorPipelineLiquidationPeriod:
         """Pipeline with liquidation_period_days=5 scales equity haircut down."""
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
-        df = pl.LazyFrame({
-            "collateral_type": ["equity"],
-            "market_value": [1_000_000.0],
-            "currency": ["GBP"],
-            "exposure_currency": ["GBP"],
-            "residual_maturity_years": [None],
-            "issuer_cqs": [None],
-            "is_eligible_financial_collateral": [True],
-            "liquidation_period_days": [5],
-        })
+        df = pl.LazyFrame(
+            {
+                "collateral_type": ["equity"],
+                "market_value": [1_000_000.0],
+                "currency": ["GBP"],
+                "exposure_currency": ["GBP"],
+                "residual_maturity_years": [None],
+                "issuer_cqs": [None],
+                "is_eligible_financial_collateral": [True],
+                "liquidation_period_days": [5],
+            }
+        )
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
         # B31 main index equity 20% × sqrt(0.5) ≈ 14.14%
@@ -356,16 +367,18 @@ class TestCalculatorPipelineLiquidationPeriod:
         """Pipeline with liquidation_period_days=20 scales equity haircut up."""
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
-        df = pl.LazyFrame({
-            "collateral_type": ["equity"],
-            "market_value": [1_000_000.0],
-            "currency": ["GBP"],
-            "exposure_currency": ["GBP"],
-            "residual_maturity_years": [None],
-            "issuer_cqs": [None],
-            "is_eligible_financial_collateral": [True],
-            "liquidation_period_days": [20],
-        })
+        df = pl.LazyFrame(
+            {
+                "collateral_type": ["equity"],
+                "market_value": [1_000_000.0],
+                "currency": ["GBP"],
+                "exposure_currency": ["GBP"],
+                "residual_maturity_years": [None],
+                "issuer_cqs": [None],
+                "is_eligible_financial_collateral": [True],
+                "liquidation_period_days": [20],
+            }
+        )
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
         # B31 main index equity 20% × sqrt(2) ≈ 28.28%
@@ -375,15 +388,17 @@ class TestCalculatorPipelineLiquidationPeriod:
         """Pipeline without liquidation_period_days column uses 10-day base."""
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
-        df = pl.LazyFrame({
-            "collateral_type": ["equity"],
-            "market_value": [1_000_000.0],
-            "currency": ["GBP"],
-            "exposure_currency": ["GBP"],
-            "residual_maturity_years": [None],
-            "issuer_cqs": [None],
-            "is_eligible_financial_collateral": [True],
-        })
+        df = pl.LazyFrame(
+            {
+                "collateral_type": ["equity"],
+                "market_value": [1_000_000.0],
+                "currency": ["GBP"],
+                "exposure_currency": ["GBP"],
+                "residual_maturity_years": [None],
+                "issuer_cqs": [None],
+                "is_eligible_financial_collateral": [True],
+            }
+        )
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
         # 20% (10-day base, no scaling)
@@ -393,16 +408,18 @@ class TestCalculatorPipelineLiquidationPeriod:
         """Null liquidation_period_days defaults to 10 (no scaling)."""
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
-        df = pl.LazyFrame({
-            "collateral_type": ["equity"],
-            "market_value": [1_000_000.0],
-            "currency": ["GBP"],
-            "exposure_currency": ["GBP"],
-            "residual_maturity_years": [None],
-            "issuer_cqs": [None],
-            "is_eligible_financial_collateral": [True],
-            "liquidation_period_days": [None],
-        }).cast({"liquidation_period_days": pl.Int32})
+        df = pl.LazyFrame(
+            {
+                "collateral_type": ["equity"],
+                "market_value": [1_000_000.0],
+                "currency": ["GBP"],
+                "exposure_currency": ["GBP"],
+                "residual_maturity_years": [None],
+                "issuer_cqs": [None],
+                "is_eligible_financial_collateral": [True],
+                "liquidation_period_days": [None],
+            }
+        ).cast({"liquidation_period_days": pl.Int32})
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
         assert abs(hc - 0.20) < 0.01
@@ -411,16 +428,18 @@ class TestCalculatorPipelineLiquidationPeriod:
         """FX mismatch haircut scaled for 5-day liquidation."""
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
-        df = pl.LazyFrame({
-            "collateral_type": ["cash"],
-            "market_value": [1_000_000.0],
-            "currency": ["USD"],
-            "exposure_currency": ["GBP"],
-            "residual_maturity_years": [None],
-            "issuer_cqs": [None],
-            "is_eligible_financial_collateral": [True],
-            "liquidation_period_days": [5],
-        })
+        df = pl.LazyFrame(
+            {
+                "collateral_type": ["cash"],
+                "market_value": [1_000_000.0],
+                "currency": ["USD"],
+                "exposure_currency": ["GBP"],
+                "residual_maturity_years": [None],
+                "issuer_cqs": [None],
+                "is_eligible_financial_collateral": [True],
+                "liquidation_period_days": [5],
+            }
+        )
         result = calc.apply_haircuts(df, config).collect()
         fx = result["fx_haircut"][0]
         # FX 8% × sqrt(0.5) ≈ 5.657%
@@ -430,16 +449,18 @@ class TestCalculatorPipelineLiquidationPeriod:
         """Batch with different liquidation periods produces correct haircuts."""
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
-        df = pl.LazyFrame({
-            "collateral_type": ["gold", "gold", "gold"],
-            "market_value": [100_000.0, 100_000.0, 100_000.0],
-            "currency": ["GBP", "GBP", "GBP"],
-            "exposure_currency": ["GBP", "GBP", "GBP"],
-            "residual_maturity_years": [None, None, None],
-            "issuer_cqs": [None, None, None],
-            "is_eligible_financial_collateral": [None, None, None],
-            "liquidation_period_days": [5, 10, 20],
-        })
+        df = pl.LazyFrame(
+            {
+                "collateral_type": ["gold", "gold", "gold"],
+                "market_value": [100_000.0, 100_000.0, 100_000.0],
+                "currency": ["GBP", "GBP", "GBP"],
+                "exposure_currency": ["GBP", "GBP", "GBP"],
+                "residual_maturity_years": [None, None, None],
+                "issuer_cqs": [None, None, None],
+                "is_eligible_financial_collateral": [None, None, None],
+                "liquidation_period_days": [5, 10, 20],
+            }
+        )
         result = calc.apply_haircuts(df, config).collect()
         hc_5 = result["collateral_haircut"][0]
         hc_10 = result["collateral_haircut"][1]
@@ -454,15 +475,17 @@ class TestCalculatorPipelineLiquidationPeriod:
         """CRR gold at 10-day remains 15% (not changed by B31 fix)."""
         config = self._make_config(is_b31=False)
         calc = HaircutCalculator(is_basel_3_1=False)
-        df = pl.LazyFrame({
-            "collateral_type": ["gold"],
-            "market_value": [100_000.0],
-            "currency": ["GBP"],
-            "exposure_currency": ["GBP"],
-            "residual_maturity_years": [None],
-            "issuer_cqs": [None],
-            "is_eligible_financial_collateral": [None],
-        })
+        df = pl.LazyFrame(
+            {
+                "collateral_type": ["gold"],
+                "market_value": [100_000.0],
+                "currency": ["GBP"],
+                "exposure_currency": ["GBP"],
+                "residual_maturity_years": [None],
+                "issuer_cqs": [None],
+                "is_eligible_financial_collateral": [None],
+            }
+        )
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
         assert abs(hc - 0.15) < 0.005

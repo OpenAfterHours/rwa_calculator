@@ -57,27 +57,42 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
     is_cash_or_gold = ctype.is_in(["cash", "deposit", "gold"])
 
     # Sovereign/central government bonds → Art. 114 Table 1
-    is_sovereign = pl.col("issuer_type").fill_null("").str.to_lowercase().is_in(
-        ["sovereign", "central_government", "central_bank"]
+    is_sovereign = (
+        pl.col("issuer_type")
+        .fill_null("")
+        .str.to_lowercase()
+        .is_in(["sovereign", "central_government", "central_bank"])
     )
     sovereign_rw = (
-        pl.when(cqs == 1).then(0.0)
-        .when(cqs == 2).then(0.20)
-        .when(cqs == 3).then(0.50)
-        .when(cqs.is_in([4, 5])).then(1.00)
-        .when(cqs == 6).then(1.50)
+        pl.when(cqs == 1)
+        .then(0.0)
+        .when(cqs == 2)
+        .then(0.20)
+        .when(cqs == 3)
+        .then(0.50)
+        .when(cqs.is_in([4, 5]))
+        .then(1.00)
+        .when(cqs == 6)
+        .then(1.50)
         .otherwise(1.00)  # unrated sovereign → conservative 100%
     )
 
     # Institution bonds → Art. 120 Table 3 (standard treatment)
-    is_institution = pl.col("issuer_type").fill_null("").str.to_lowercase().is_in(
-        ["institution", "bank", "credit_institution"]
+    is_institution = (
+        pl.col("issuer_type")
+        .fill_null("")
+        .str.to_lowercase()
+        .is_in(["institution", "bank", "credit_institution"])
     )
     institution_rw = (
-        pl.when(cqs == 1).then(0.20)
-        .when(cqs.is_in([2, 3])).then(0.50)
-        .when(cqs.is_in([4, 5])).then(1.00)
-        .when(cqs == 6).then(1.50)
+        pl.when(cqs == 1)
+        .then(0.20)
+        .when(cqs.is_in([2, 3]))
+        .then(0.50)
+        .when(cqs.is_in([4, 5]))
+        .then(1.00)
+        .when(cqs == 6)
+        .then(1.50)
         .otherwise(1.00)  # unrated institution → conservative 100%
     )
 
@@ -88,20 +103,30 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
     # Corporate bonds → Art. 122 Table 5 (CRR) / Table 6 (B31)
     corp_cqs5_rw = 1.50 if is_basel_3_1 else 1.00  # B31 Art. 122(2) CQS 5 = 150%
     corporate_rw = (
-        pl.when(cqs == 1).then(0.20)
-        .when(cqs == 2).then(0.50)
-        .when(cqs == 3).then(1.00)
-        .when(cqs == 4).then(1.00)
-        .when(cqs == 5).then(corp_cqs5_rw)
-        .when(cqs == 6).then(1.50)
+        pl.when(cqs == 1)
+        .then(0.20)
+        .when(cqs == 2)
+        .then(0.50)
+        .when(cqs == 3)
+        .then(1.00)
+        .when(cqs == 4)
+        .then(1.00)
+        .when(cqs == 5)
+        .then(corp_cqs5_rw)
+        .when(cqs == 6)
+        .then(1.50)
         .otherwise(1.00)  # unrated corporate → 100%
     )
 
     return (
-        pl.when(is_cash_or_gold).then(pl.lit(0.0))
-        .when(is_sovereign).then(sovereign_rw)
-        .when(is_institution).then(institution_rw)
-        .when(is_equity).then(pl.lit(1.00))
+        pl.when(is_cash_or_gold)
+        .then(pl.lit(0.0))
+        .when(is_sovereign)
+        .then(sovereign_rw)
+        .when(is_institution)
+        .then(institution_rw)
+        .when(is_equity)
+        .then(pl.lit(1.00))
         .otherwise(corporate_rw)  # default: treat as corporate bond
     )
 
@@ -123,8 +148,10 @@ def _is_zero_rw_exception_expr() -> pl.Expr:
 
     # (b) 0%-RW sovereign bond in same currency (CQS 1 sovereign → 0% RW)
     is_zero_rw_sovereign = (
-        pl.col("_fcsm_item_rw") == 0.0
-    ) & is_same_currency & ~ctype.is_in(["cash", "deposit", "gold", "equity", "equity_main_index", "equity_other"])
+        (pl.col("_fcsm_item_rw") == 0.0)
+        & is_same_currency
+        & ~ctype.is_in(["cash", "deposit", "gold", "equity", "equity_main_index", "equity_other"])
+    )
 
     return is_cash_same_ccy | is_zero_rw_sovereign
 
@@ -160,14 +187,10 @@ def compute_fcsm_columns(
     is_b31 = config.is_basel_3_1
 
     # 1. Filter to eligible financial collateral
-    eligible = collateral.filter(
-        pl.col("is_eligible_financial_collateral").fill_null(False)
-    )
+    eligible = collateral.filter(pl.col("is_eligible_financial_collateral").fill_null(False))
 
     # 2. Derive collateral risk weight per item
-    eligible = eligible.with_columns(
-        _derive_collateral_rw_expr(is_b31).alias("_fcsm_item_rw")
-    )
+    eligible = eligible.with_columns(_derive_collateral_rw_expr(is_b31).alias("_fcsm_item_rw"))
 
     # 3. Join to exposures to get currency for same-currency check
     # Multi-level matching: direct (loan/exposure), facility, counterparty
@@ -176,9 +199,7 @@ def compute_fcsm_columns(
 
     # Build reference-to-currency/EAD lookup from exposures
     exp_ref_col = (
-        "exposure_reference"
-        if "exposure_reference" in schema.names()
-        else "loan_reference"
+        "exposure_reference" if "exposure_reference" in schema.names() else "loan_reference"
     )
     facility_col = "parent_facility_reference"
     cp_col = "counterparty_reference"
@@ -186,7 +207,8 @@ def compute_fcsm_columns(
     # Direct-level lookup
     exp_lookup = exposures.select(
         pl.col(exp_ref_col).alias("_exp_ref"),
-        pl.col("currency").alias("_exp_currency") if "currency" in schema.names()
+        pl.col("currency").alias("_exp_currency")
+        if "currency" in schema.names()
         else pl.lit("GBP").alias("_exp_currency"),
         pl.col(ead_col).alias("_exp_ead"),
     ).unique(subset=["_exp_ref"])
@@ -245,8 +267,9 @@ def compute_fcsm_columns(
 
     # Determine exposure currency via coalesce (direct → facility → counterparty)
     coll_with_exp = coll_with_exp.with_columns(
-        pl.coalesce("_exp_currency", "_fac_currency", "_cp_currency")
-        .alias("_resolved_exp_currency"),
+        pl.coalesce("_exp_currency", "_fac_currency", "_cp_currency").alias(
+            "_resolved_exp_currency"
+        ),
     )
 
     # 4. Same-currency check for Art. 222(4)
@@ -256,21 +279,19 @@ def compute_fcsm_columns(
         else pl.lit("")
     )
     coll_with_exp = coll_with_exp.with_columns(
-        (
-            coll_currency
-            == pl.col("_resolved_exp_currency").fill_null("").str.to_uppercase()
-        ).alias("_fcsm_same_currency"),
+        (coll_currency == pl.col("_resolved_exp_currency").fill_null("").str.to_uppercase()).alias(
+            "_fcsm_same_currency"
+        ),
     )
 
     # 5. Apply Art. 222(4)(b) 20% discount for 0%-RW sovereign bonds
     is_sovereign_bond = (
-        pl.col("issuer_type").fill_null("").str.to_lowercase().is_in(
-            ["sovereign", "central_government", "central_bank"]
-        )
+        pl.col("issuer_type")
+        .fill_null("")
+        .str.to_lowercase()
+        .is_in(["sovereign", "central_government", "central_bank"])
         & (pl.col("_fcsm_item_rw") == 0.0)
-        & ~pl.col("collateral_type").str.to_lowercase().is_in(
-            ["cash", "deposit", "gold"]
-        )
+        & ~pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit", "gold"])
     )
     coll_with_exp = coll_with_exp.with_columns(
         pl.when(is_sovereign_bond & pl.col("_fcsm_same_currency"))
@@ -289,8 +310,7 @@ def compute_fcsm_columns(
 
     # 7. Aggregate per beneficiary_reference: total value and weighted-avg RW
     agg = (
-        coll_with_exp
-        .group_by("beneficiary_reference")
+        coll_with_exp.group_by("beneficiary_reference")
         .agg(
             pl.col("_fcsm_effective_value").sum().alias("_fcsm_total_value"),
             (pl.col("_fcsm_effective_value") * pl.col("_fcsm_effective_rw"))
@@ -324,25 +344,29 @@ def compute_fcsm_columns(
         fac_ead = exposures.group_by(facility_col).agg(
             pl.col(ead_col).sum().alias("_fac_ead_total"),
         )
-        result = result.join(
-            agg.select(
-                pl.col("beneficiary_reference").alias("_agg_ref_f"),
-                pl.col("_fcsm_total_value").alias("_fcsm_val_f"),
-                pl.col("_fcsm_avg_rw").alias("_fcsm_rw_f"),
-            ),
-            left_on=facility_col,
-            right_on="_agg_ref_f",
-            how="left",
-        ).join(
-            fac_ead,
-            on=facility_col,
-            how="left",
-        ).with_columns(
-            # Pro-rata share within facility
-            pl.when(pl.col("_fac_ead_total") > 0)
-            .then(pl.col(ead_col) / pl.col("_fac_ead_total"))
-            .otherwise(0.0)
-            .alias("_fcsm_fac_share"),
+        result = (
+            result.join(
+                agg.select(
+                    pl.col("beneficiary_reference").alias("_agg_ref_f"),
+                    pl.col("_fcsm_total_value").alias("_fcsm_val_f"),
+                    pl.col("_fcsm_avg_rw").alias("_fcsm_rw_f"),
+                ),
+                left_on=facility_col,
+                right_on="_agg_ref_f",
+                how="left",
+            )
+            .join(
+                fac_ead,
+                on=facility_col,
+                how="left",
+            )
+            .with_columns(
+                # Pro-rata share within facility
+                pl.when(pl.col("_fac_ead_total") > 0)
+                .then(pl.col(ead_col) / pl.col("_fac_ead_total"))
+                .otherwise(0.0)
+                .alias("_fcsm_fac_share"),
+            )
         )
     else:
         result = result.with_columns(
@@ -357,24 +381,28 @@ def compute_fcsm_columns(
         cp_ead = exposures.group_by(cp_col).agg(
             pl.col(ead_col).sum().alias("_cp_ead_total"),
         )
-        result = result.join(
-            agg.select(
-                pl.col("beneficiary_reference").alias("_agg_ref_c"),
-                pl.col("_fcsm_total_value").alias("_fcsm_val_c"),
-                pl.col("_fcsm_avg_rw").alias("_fcsm_rw_c"),
-            ),
-            left_on=cp_col,
-            right_on="_agg_ref_c",
-            how="left",
-        ).join(
-            cp_ead,
-            on=cp_col,
-            how="left",
-        ).with_columns(
-            pl.when(pl.col("_cp_ead_total") > 0)
-            .then(pl.col(ead_col) / pl.col("_cp_ead_total"))
-            .otherwise(0.0)
-            .alias("_fcsm_cp_share"),
+        result = (
+            result.join(
+                agg.select(
+                    pl.col("beneficiary_reference").alias("_agg_ref_c"),
+                    pl.col("_fcsm_total_value").alias("_fcsm_val_c"),
+                    pl.col("_fcsm_avg_rw").alias("_fcsm_rw_c"),
+                ),
+                left_on=cp_col,
+                right_on="_agg_ref_c",
+                how="left",
+            )
+            .join(
+                cp_ead,
+                on=cp_col,
+                how="left",
+            )
+            .with_columns(
+                pl.when(pl.col("_cp_ead_total") > 0)
+                .then(pl.col(ead_col) / pl.col("_cp_ead_total"))
+                .otherwise(0.0)
+                .alias("_fcsm_cp_share"),
+            )
         )
     else:
         result = result.with_columns(
@@ -392,9 +420,7 @@ def compute_fcsm_columns(
             + pl.col("_fcsm_val_c").fill_null(0.0) * pl.col("_fcsm_cp_share")
         ).alias("_fcsm_raw_value"),
         # Weighted-average RW: use the RW from the highest-value level
-        pl.coalesce("_fcsm_rw_d", "_fcsm_rw_f", "_fcsm_rw_c")
-        .fill_null(0.0)
-        .alias("_fcsm_raw_rw"),
+        pl.coalesce("_fcsm_rw_d", "_fcsm_rw_f", "_fcsm_rw_c").fill_null(0.0).alias("_fcsm_raw_rw"),
     )
 
     # 10. Cap at EAD, apply 20% floor (Art. 222(1))
@@ -413,9 +439,13 @@ def compute_fcsm_columns(
 
     # Drop temporary columns
     temp_cols = [
-        c for c in result.collect_schema().names()
-        if c.startswith("_fcsm_") or c in (
-            "_fac_ead_total", "_cp_ead_total",
+        c
+        for c in result.collect_schema().names()
+        if c.startswith("_fcsm_")
+        or c
+        in (
+            "_fac_ead_total",
+            "_cp_ead_total",
         )
     ]
     result = result.drop(temp_cols)

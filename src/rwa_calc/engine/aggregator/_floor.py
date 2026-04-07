@@ -182,11 +182,7 @@ def apply_floor_with_impact(
             .otherwise(0.0)
             .sum()
             .alias("_u_trea"),
-            pl.when(is_eligible)
-            .then(sa_rwa_filled)
-            .otherwise(0.0)
-            .sum()
-            .alias("_s_trea"),
+            pl.when(is_eligible).then(sa_rwa_filled).otherwise(0.0).sum().alias("_s_trea"),
         )
         # Step 2: Floor threshold = x * S-TREA + OF-ADJ
         .with_columns(
@@ -264,8 +260,14 @@ def apply_floor_with_impact(
 
     # Drop internal columns
     result = result.drop(
-        ["_u_trea", "_s_trea", "_floor_threshold", "_shortfall",
-         "_portfolio_floor_binds", "_sa_share"],
+        [
+            "_u_trea",
+            "_s_trea",
+            "_floor_threshold",
+            "_shortfall",
+            "_portfolio_floor_binds",
+            "_sa_share",
+        ],
         strict=False,
     )
 

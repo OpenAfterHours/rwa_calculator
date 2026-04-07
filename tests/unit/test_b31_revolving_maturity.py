@@ -22,7 +22,6 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401 - registers namespace
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -89,9 +88,7 @@ class TestB31RevolvingMaturity:
         # M should be ~1.0, derived from maturity_date (not termination date)
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.05)
 
-    def test_crr_revolving_ignores_termination_date(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_crr_revolving_ignores_termination_date(self, crr_config: CalculationConfig) -> None:
         """Under CRR, revolving exposures use maturity_date regardless of termination date."""
         lf = pl.LazyFrame(
             {
@@ -148,9 +145,7 @@ class TestB31RevolvingMaturity:
         # No termination date column → use maturity_date → M ≈ 3.0
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
-    def test_revolving_termination_date_capped_at_5yr(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_revolving_termination_date_capped_at_5yr(self, b31_config: CalculationConfig) -> None:
         """Revolving maturity from termination date is still capped at 5 years."""
         lf = pl.LazyFrame(
             {
@@ -168,9 +163,7 @@ class TestB31RevolvingMaturity:
         # 10 years from reporting but capped at 5.0
         assert result["maturity"][0] == pytest.approx(5.0, abs=0.01)
 
-    def test_revolving_termination_date_floored_at_1yr(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_revolving_termination_date_floored_at_1yr(self, b31_config: CalculationConfig) -> None:
         """Revolving maturity from termination date is floored at 1 year."""
         lf = pl.LazyFrame(
             {
@@ -188,9 +181,7 @@ class TestB31RevolvingMaturity:
         # 0.25yr from reporting but floored at 1.0
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.01)
 
-    def test_mixed_revolving_non_revolving_batch(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_mixed_revolving_non_revolving_batch(self, b31_config: CalculationConfig) -> None:
         """Mixed batch: revolving uses termination date, non-revolving uses maturity_date."""
         lf = pl.LazyFrame(
             {
@@ -286,9 +277,7 @@ class TestB31RevolvingMaturity:
         # With 5yr vs 1yr M, the difference should be substantial
         assert rwa_revolving > rwa_non_revolving * 1.1
 
-    def test_retail_revolving_no_maturity_adjustment(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_retail_revolving_no_maturity_adjustment(self, b31_config: CalculationConfig) -> None:
         """Retail revolving exposures still get MA=1.0 (retail exemption overrides maturity)."""
         lf = pl.LazyFrame(
             {
@@ -302,11 +291,7 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = (
-            lf.irb.prepare_columns(b31_config)
-            .irb.apply_all_formulas(b31_config)
-            .collect()
-        )
+        result = lf.irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
         # Retail always gets MA = 1.0 regardless of maturity source
         assert result["maturity_adjustment"][0] == pytest.approx(1.0)
 

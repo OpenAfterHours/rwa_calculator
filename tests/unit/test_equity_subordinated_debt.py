@@ -38,7 +38,6 @@ from rwa_calc.data.tables.crr_equity_rw import (
 from rwa_calc.domain.enums import EquityType, PermissionMode
 from rwa_calc.engine.equity import EquityCalculator
 
-
 # =============================================================================
 # Data Table Constants
 # =============================================================================
@@ -95,16 +94,12 @@ class TestSubordinatedDebtDataTables:
     def test_all_equity_types_still_covered_in_b31_table(self) -> None:
         """All EquityType members should have a B31 weight (including new member)."""
         for equity_type in EquityType:
-            assert equity_type in B31_SA_EQUITY_RISK_WEIGHTS, (
-                f"Missing {equity_type} in B31 table"
-            )
+            assert equity_type in B31_SA_EQUITY_RISK_WEIGHTS, f"Missing {equity_type} in B31 table"
 
     def test_all_equity_types_still_covered_in_crr_tables(self) -> None:
         """All EquityType members should have CRR SA and IRB Simple weights."""
         for equity_type in EquityType:
-            assert equity_type in SA_EQUITY_RISK_WEIGHTS, (
-                f"Missing {equity_type} in CRR SA table"
-            )
+            assert equity_type in SA_EQUITY_RISK_WEIGHTS, f"Missing {equity_type} in CRR SA table"
             assert equity_type in IRB_SIMPLE_EQUITY_RISK_WEIGHTS, (
                 f"Missing {equity_type} in CRR IRB Simple table"
             )
@@ -167,9 +162,9 @@ class TestB31SubordinatedDebtCalculator:
     def test_subordinated_debt_priority_over_speculative(self) -> None:
         """Subordinated debt type takes priority even if is_speculative flag set."""
         # The equity_type match should fire before is_speculative flag check
-        assert self._apply_b31_weight(
-            "subordinated_debt", is_speculative=True
-        ) == pytest.approx(1.50)
+        assert self._apply_b31_weight("subordinated_debt", is_speculative=True) == pytest.approx(
+            1.50
+        )
 
     def test_subordinated_debt_not_affected_by_government_supported(self) -> None:
         """Subordinated debt type is not affected by is_government_supported flag."""

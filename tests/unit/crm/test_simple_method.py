@@ -34,9 +34,7 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import (
-    ApproachType,
     CRMCollateralMethod,
-    PermissionMode,
 )
 from rwa_calc.engine.crm.simple_method import (
     FCSM_RW_FLOOR,
@@ -47,7 +45,6 @@ from rwa_calc.engine.crm.simple_method import (
     undo_sa_ead_reduction,
 )
 from rwa_calc.engine.sa.calculator import SACalculator
-
 
 # =============================================================================
 # Fixtures
@@ -90,18 +87,20 @@ def _make_exposures(
     cqs: int = 0,
 ) -> pl.LazyFrame:
     """Create a single-exposure LazyFrame for testing."""
-    return pl.LazyFrame({
-        "exposure_reference": [exposure_reference],
-        "ead_gross": [ead],
-        "ead_pre_crm": [ead],
-        "ead": [ead],
-        "ead_final": [ead],
-        "currency": [currency],
-        "approach": [approach],
-        "exposure_class": [exposure_class],
-        "cqs": [cqs],
-        "risk_weight": [1.0],  # 100% default
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [exposure_reference],
+            "ead_gross": [ead],
+            "ead_pre_crm": [ead],
+            "ead": [ead],
+            "ead_final": [ead],
+            "currency": [currency],
+            "approach": [approach],
+            "exposure_class": [exposure_class],
+            "cqs": [cqs],
+            "risk_weight": [1.0],  # 100% default
+        }
+    )
 
 
 def _make_collateral(
@@ -114,17 +113,19 @@ def _make_collateral(
     is_eligible: bool = True,
 ) -> pl.LazyFrame:
     """Create a single-collateral LazyFrame for testing."""
-    return pl.LazyFrame({
-        "collateral_reference": ["COLL_001"],
-        "collateral_type": [collateral_type],
-        "market_value": [market_value],
-        "currency": [currency],
-        "beneficiary_reference": [beneficiary_reference],
-        "beneficiary_type": ["loan"],
-        "issuer_cqs": [issuer_cqs],
-        "issuer_type": [issuer_type],
-        "is_eligible_financial_collateral": [is_eligible],
-    })
+    return pl.LazyFrame(
+        {
+            "collateral_reference": ["COLL_001"],
+            "collateral_type": [collateral_type],
+            "market_value": [market_value],
+            "currency": [currency],
+            "beneficiary_reference": [beneficiary_reference],
+            "beneficiary_type": ["loan"],
+            "issuer_cqs": [issuer_cqs],
+            "issuer_type": [issuer_type],
+            "is_eligible_financial_collateral": [is_eligible],
+        }
+    )
 
 
 # =============================================================================
@@ -136,10 +137,10 @@ class TestFCSMConstants:
     """Test FCSM module constants."""
 
     def test_rw_floor_is_20_pct(self):
-        assert FCSM_RW_FLOOR == Decimal("0.20")
+        assert Decimal("0.20") == FCSM_RW_FLOOR
 
     def test_sovereign_bond_discount_is_20_pct(self):
-        assert SOVEREIGN_BOND_DISCOUNT == Decimal("0.20")
+        assert Decimal("0.20") == SOVEREIGN_BOND_DISCOUNT
 
 
 # =============================================================================
@@ -193,14 +194,14 @@ class TestCollateralRWDerivation:
         is_basel_3_1: bool = False,
     ) -> float:
         """Helper to compute single collateral RW."""
-        df = pl.DataFrame({
-            "collateral_type": [collateral_type],
-            "issuer_type": [issuer_type],
-            "issuer_cqs": [issuer_cqs],
-        })
-        result = df.with_columns(
-            _derive_collateral_rw_expr(is_basel_3_1).alias("rw")
+        df = pl.DataFrame(
+            {
+                "collateral_type": [collateral_type],
+                "issuer_type": [issuer_type],
+                "issuer_cqs": [issuer_cqs],
+            }
         )
+        result = df.with_columns(_derive_collateral_rw_expr(is_basel_3_1).alias("rw"))
         return result["rw"][0]
 
     def test_cash_zero_rw(self):
@@ -333,7 +334,9 @@ class TestZeroRWExceptions:
         """Art. 222(4)(a): cash deposit in same currency → 0% RW."""
         exposures = _make_exposures(currency="GBP")
         collateral = _make_collateral(
-            collateral_type="cash", currency="GBP", market_value=500_000.0,
+            collateral_type="cash",
+            currency="GBP",
+            market_value=500_000.0,
         )
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
         # Cash always has 0% RW, and same-currency means 0% exception applies
@@ -343,7 +346,9 @@ class TestZeroRWExceptions:
         """Cash has 0% intrinsic RW regardless of currency — but 20% floor applies."""
         exposures = _make_exposures(currency="GBP")
         collateral = _make_collateral(
-            collateral_type="cash", currency="EUR", market_value=500_000.0,
+            collateral_type="cash",
+            currency="EUR",
+            market_value=500_000.0,
         )
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
         # Cash RW is 0%, but Art. 222(4) 0% exception only applies in same currency
@@ -376,35 +381,41 @@ class TestUndoSAEADReduction:
 
     def test_sa_ead_restored(self):
         """SA exposure EAD should be restored to ead_gross."""
-        exposures = pl.LazyFrame({
-            "approach": ["standardised"],
-            "ead_gross": [1_000_000.0],
-            "ead_after_collateral": [700_000.0],
-            "collateral_adjusted_value": [300_000.0],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "approach": ["standardised"],
+                "ead_gross": [1_000_000.0],
+                "ead_after_collateral": [700_000.0],
+                "collateral_adjusted_value": [300_000.0],
+            }
+        )
         result = undo_sa_ead_reduction(exposures).collect()
         assert result["ead_after_collateral"][0] == pytest.approx(1_000_000.0)
         assert result["collateral_adjusted_value"][0] == pytest.approx(0.0)
 
     def test_irb_ead_unchanged(self):
         """IRB exposure should NOT have EAD restored."""
-        exposures = pl.LazyFrame({
-            "approach": ["foundation_irb"],
-            "ead_gross": [1_000_000.0],
-            "ead_after_collateral": [1_000_000.0],
-            "collateral_adjusted_value": [0.0],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "approach": ["foundation_irb"],
+                "ead_gross": [1_000_000.0],
+                "ead_after_collateral": [1_000_000.0],
+                "collateral_adjusted_value": [0.0],
+            }
+        )
         result = undo_sa_ead_reduction(exposures).collect()
         assert result["ead_after_collateral"][0] == pytest.approx(1_000_000.0)
 
     def test_mixed_approaches(self):
         """Only SA rows have EAD restored; IRB unchanged."""
-        exposures = pl.LazyFrame({
-            "approach": ["standardised", "foundation_irb"],
-            "ead_gross": [1_000_000.0, 2_000_000.0],
-            "ead_after_collateral": [700_000.0, 2_000_000.0],
-            "collateral_adjusted_value": [300_000.0, 0.0],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "approach": ["standardised", "foundation_irb"],
+                "ead_gross": [1_000_000.0, 2_000_000.0],
+                "ead_after_collateral": [700_000.0, 2_000_000.0],
+                "collateral_adjusted_value": [300_000.0, 0.0],
+            }
+        )
         result = undo_sa_ead_reduction(exposures).collect()
         assert result["ead_after_collateral"][0] == pytest.approx(1_000_000.0)  # SA restored
         assert result["ead_after_collateral"][1] == pytest.approx(2_000_000.0)  # IRB unchanged
@@ -422,15 +433,17 @@ class TestFCSMRWSubstitution:
         """50% secured by cash (0% RW → floored to 20%), 50% unsecured (100% RW).
         Blended = 0.5 * 20% + 0.5 * 100% = 60%.
         """
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],  # 100%
-            "fcsm_collateral_value": [500_000.0],
-            "fcsm_collateral_rw": [0.0],  # cash
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],  # 100%
+                "fcsm_collateral_value": [500_000.0],
+                "fcsm_collateral_rw": [0.0],  # cash
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.60, rel=0.001)
@@ -440,15 +453,17 @@ class TestFCSMRWSubstitution:
         """Fully secured by cash → secured RW = max(20%, 0%) = 20%.
         Blended = 1.0 * 20% + 0.0 * RW = 20%.
         """
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "fcsm_collateral_value": [1_000_000.0],
-            "fcsm_collateral_rw": [0.0],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "fcsm_collateral_value": [1_000_000.0],
+                "fcsm_collateral_rw": [0.0],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.20, rel=0.001)
@@ -457,15 +472,17 @@ class TestFCSMRWSubstitution:
         """Secured by CQS 2 sovereign bond (20% RW), 20% floor doesn't bind.
         Fully secured: blended = 1.0 * max(20%, 20%) = 20%.
         """
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "fcsm_collateral_value": [1_000_000.0],
-            "fcsm_collateral_rw": [0.20],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "fcsm_collateral_value": [1_000_000.0],
+                "fcsm_collateral_rw": [0.20],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.20, rel=0.001)
@@ -475,58 +492,66 @@ class TestFCSMRWSubstitution:
         50% secured: blended = 0.5 * max(20%, 100%) + 0.5 * 100% = 100%.
         No benefit — collateral RW >= exposure RW.
         """
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "fcsm_collateral_value": [500_000.0],
-            "fcsm_collateral_rw": [1.00],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "fcsm_collateral_value": [500_000.0],
+                "fcsm_collateral_rw": [1.00],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.0, rel=0.001)
 
     def test_no_fcsm_columns_no_change(self, comprehensive_config):
         """Comprehensive Method: no FCSM columns → risk weight unchanged."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, comprehensive_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.0)
 
     def test_zero_fcsm_value_no_change(self, crr_simple_config):
         """Zero collateral value → risk weight unchanged."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "fcsm_collateral_value": [0.0],
-            "fcsm_collateral_rw": [0.0],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "fcsm_collateral_value": [0.0],
+                "fcsm_collateral_rw": [0.0],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.0)
 
     def test_rwa_correctness(self, crr_simple_config):
         """RWA = EAD × blended_rw. 50% secured by cash: RWA = 1m × 60% = 600k."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "fcsm_collateral_value": [500_000.0],
-            "fcsm_collateral_rw": [0.0],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "fcsm_collateral_value": [500_000.0],
+                "fcsm_collateral_rw": [0.0],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config)
         result = result.with_columns(
@@ -536,15 +561,17 @@ class TestFCSMRWSubstitution:
 
     def test_ead_calculation_method_set(self, crr_simple_config):
         """When FCSM applies, ead_calculation_method should be 'simple'."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP_001"],
-            "ead_final": [1_000_000.0],
-            "risk_weight": [1.0],
-            "fcsm_collateral_value": [500_000.0],
-            "fcsm_collateral_rw": [0.0],
-            "approach": ["standardised"],
-            "exposure_class": ["corporate"],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "fcsm_collateral_value": [500_000.0],
+                "fcsm_collateral_rw": [0.0],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["ead_calculation_method"][0] == "simple"
@@ -610,17 +637,19 @@ class TestFCSMMixedBatch:
     def test_multi_collateral_weighted_average_rw(self, crr_simple_config):
         """Two collateral items → weighted-average RW."""
         exposures = _make_exposures(ead=1_000_000.0)
-        collateral = pl.LazyFrame({
-            "collateral_reference": ["C1", "C2"],
-            "collateral_type": ["cash", "government_bond"],
-            "market_value": [200_000.0, 300_000.0],
-            "currency": ["GBP", "GBP"],
-            "beneficiary_reference": ["EXP_001", "EXP_001"],
-            "beneficiary_type": ["loan", "loan"],
-            "issuer_cqs": [None, 2],
-            "issuer_type": [None, "sovereign"],
-            "is_eligible_financial_collateral": [True, True],
-        })
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["C1", "C2"],
+                "collateral_type": ["cash", "government_bond"],
+                "market_value": [200_000.0, 300_000.0],
+                "currency": ["GBP", "GBP"],
+                "beneficiary_reference": ["EXP_001", "EXP_001"],
+                "beneficiary_type": ["loan", "loan"],
+                "issuer_cqs": [None, 2],
+                "issuer_type": [None, "sovereign"],
+                "is_eligible_financial_collateral": [True, True],
+            }
+        )
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
         # Cash: 200k at 0%, Sovereign CQS 2: 300k at 20%
         # Weighted avg = (200k×0% + 300k×20%) / 500k = 60k/500k = 12%

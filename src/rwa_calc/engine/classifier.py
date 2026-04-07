@@ -208,9 +208,7 @@ class ExposureClassifier:
 
         # Check for QRRE classification prerequisites — missing columns
         # cause all revolving retail to silently become RETAIL_OTHER
-        missing_qrre_cols = [
-            c for c in ("is_revolving", "facility_limit") if c not in schema_names
-        ]
+        missing_qrre_cols = [c for c in ("is_revolving", "facility_limit") if c not in schema_names]
         if missing_qrre_cols:
             classification_errors.append(
                 classification_warning(
@@ -316,15 +314,11 @@ class ExposureClassifier:
 
         # Natural person flag — Art. 124H CRE counterparty type (optional in input data)
         if "is_natural_person" in cp_col_names:
-            select_cols.append(
-                pl.col("is_natural_person").alias("cp_is_natural_person")
-            )
+            select_cols.append(pl.col("is_natural_person").alias("cp_is_natural_person"))
 
         # Social housing flag — Art. 124L RRE residual RW routing (optional in input data)
         if "is_social_housing" in cp_col_names:
-            select_cols.append(
-                pl.col("is_social_housing").alias("cp_is_social_housing")
-            )
+            select_cols.append(pl.col("is_social_housing").alias("cp_is_social_housing"))
 
         # FSE flag — Art. 147A(1)(e) approach restriction (optional in input data)
         if "is_financial_sector_entity" in cp_col_names:

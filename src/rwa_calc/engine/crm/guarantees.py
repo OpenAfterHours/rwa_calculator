@@ -342,9 +342,7 @@ def _apply_guarantee_splits(
         agg_exprs.append(pl.col("currency").first().alias("guarantee_currency"))
     # Preserve includes_restructuring for CDS restructuring exclusion haircut (Art. 233(2)).
     if "includes_restructuring" in guar_cols:
-        agg_exprs.append(
-            pl.col("includes_restructuring").first().alias("includes_restructuring")
-        )
+        agg_exprs.append(pl.col("includes_restructuring").first().alias("includes_restructuring"))
 
     guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
 

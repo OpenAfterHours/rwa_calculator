@@ -243,9 +243,7 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
     )
 
     # Apply mortgage floor to RWA — creates the post-floor RWEA base
-    lf = lf.with_columns(
-        (pl.col("rwa") + pl.col("mortgage_rw_floor_adjustment")).alias("rwa")
-    )
+    lf = lf.with_columns((pl.col("rwa") + pl.col("mortgage_rw_floor_adjustment")).alias("rwa"))
 
     # Step 2: Apply PMA and unrecognised scalars to POST-FLOOR RWEA
     # Art. 154(4A)(a) / Art. 153(5A): scalars multiply the RWEA that already includes
@@ -367,9 +365,7 @@ def compute_el_shortfall_excess(
         prov = pl.lit(0.0)
 
     # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
-    ava = (
-        pl.col("ava_amount").fill_null(0.0) if "ava_amount" in cols else pl.lit(0.0)
-    )
+    ava = pl.col("ava_amount").fill_null(0.0) if "ava_amount" in cols else pl.lit(0.0)
     # Art. 159(1)(d): Other own funds reductions
     other_ofr = (
         pl.col("other_own_funds_reductions").fill_null(0.0)

@@ -43,7 +43,6 @@ from rwa_calc.engine.classifier import (
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.reporting.corep.generator import COREPGenerator
 
-
 # =============================================================================
 # Helpers (same pattern as test_b31_approach_restrictions.py)
 # =============================================================================
@@ -252,8 +251,7 @@ class TestEntityTypeMappingConstants:
     def test_sa_class_corporate_matches_direct_corporate(self) -> None:
         """SL entity_type under SA should give the same class as 'corporate'."""
         assert (
-            ENTITY_TYPE_TO_SA_CLASS["specialised_lending"]
-            == ENTITY_TYPE_TO_SA_CLASS["corporate"]
+            ENTITY_TYPE_TO_SA_CLASS["specialised_lending"] == ENTITY_TYPE_TO_SA_CLASS["corporate"]
         )
 
 

@@ -19,7 +19,6 @@ import pytest
 from rwa_calc.engine.crm.constants import (
     BASEL31_SUPERVISORY_LGD,
     CRR_SUPERVISORY_LGD,
-    LIFE_INSURANCE_TYPES,
     WATERFALL_ORDER,
     collateral_category_expr,
     collateral_lgd_expr,
@@ -33,7 +32,6 @@ from rwa_calc.engine.crm.life_insurance import (
     _map_insurer_rw_to_secured_rw_expr,
     compute_life_insurance_columns,
 )
-
 
 # --- Art. 232: Risk Weight Mapping Table ---
 
@@ -211,16 +209,12 @@ class TestLifeInsuranceConstants:
 
     def test_overcollateralisation_ratio_is_1(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
-        result = df.with_columns(
-            overcollateralisation_ratio_expr().alias("oc")
-        ).collect()
+        result = df.with_columns(overcollateralisation_ratio_expr().alias("oc")).collect()
         assert result["oc"][0] == pytest.approx(1.0)
 
     def test_min_collateralisation_threshold_is_0(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
-        result = df.with_columns(
-            min_collateralisation_threshold_expr().alias("thresh")
-        ).collect()
+        result = df.with_columns(min_collateralisation_threshold_expr().alias("thresh")).collect()
         assert result["thresh"][0] == pytest.approx(0.0)
 
     def test_collateral_category_is_life_insurance(self) -> None:

@@ -63,6 +63,8 @@ def calculate_single_sa_exposure(
     cp_is_social_housing: bool = False,
     prior_charge_ltv: Decimal | None = None,
     is_payroll_loan: bool = False,
+    sovereign_cqs: int | None = None,
+    local_currency: str | None = None,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch."""
     data: dict = {
@@ -94,6 +96,8 @@ def calculate_single_sa_exposure(
         "cp_is_natural_person": [cp_is_natural_person],
         "cp_is_social_housing": [cp_is_social_housing],
         "is_payroll_loan": [is_payroll_loan],
+        "cp_sovereign_cqs": [sovereign_cqs],
+        "cp_local_currency": [local_currency],
     }
     if prior_charge_ltv is not None:
         data["prior_charge_ltv"] = [float(prior_charge_ltv)]

@@ -317,6 +317,12 @@ class ExposureClassifier:
                 pl.col("borrower_income_currency").alias("cp_borrower_income_currency")
             )
 
+        # Sovereign floor for FX institution exposures (Art. 121(6) / CRE20.22)
+        if "sovereign_cqs" in cp_col_names:
+            select_cols.append(pl.col("sovereign_cqs").alias("cp_sovereign_cqs"))
+        if "local_currency" in cp_col_names:
+            select_cols.append(pl.col("local_currency").alias("cp_local_currency"))
+
         cp_cols = counterparties.select(select_cols)
 
         return exposures.join(

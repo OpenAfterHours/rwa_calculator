@@ -178,6 +178,9 @@ COUNTERPARTY_SCHEMA = {
     "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
     # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
     "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income source
+    # Sovereign floor for FX institution exposures (Art. 121(6) / CRE20.22)
+    "sovereign_cqs": pl.Int32,  # CQS of the sovereign of the institution's jurisdiction (1-6)
+    "local_currency": pl.String,  # ISO 4217 domestic currency of the institution's jurisdiction
 }
 
 COLLATERAL_SCHEMA = {

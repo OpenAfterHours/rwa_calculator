@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.28 output floor Art. 122(8) IG assessment)
-**Current version:** 0.1.116 | **Test suite:** ~3,348 collected (~3,315 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.28, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.27 sovereign floor for FX institution exposures)
+**Current version:** 0.1.117 | **Test suite:** ~3,378 collected (~3,345 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -81,7 +81,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `data/tables/crr_risk_weights.py` (PSE tables + _create_pse_df), `engine/sa/calculator.py` (PSE branches in both B31 and CRR when-chains + guarantee substitution)
 - **Spec ref:** CRR Art. 116, PRA PS1/26 Art. 116
 - **Tests:** 29 new unit tests: 9 data table tests, 11 CRR calculator tests, 9 B31 calculator tests. All pass. Test count: 2389 (was 2360).
-- **Limitation:** Non-UK unrated PSEs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (not yet in schema). UK PSEs are the primary use case for a PRA-regulated calculator.
+- **Limitation:** Non-UK unrated PSEs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (now available on COUNTERPARTY_SCHEMA, added in P1.27). UK PSEs are the primary use case for a PRA-regulated calculator.
 
 ### P1.53 RGLA risk weight tables missing from code (Art. 115)
 - **Status:** [x] Complete
@@ -96,7 +96,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `data/tables/crr_risk_weights.py` (RGLA tables + _create_rgla_df), `engine/sa/calculator.py` (RGLA branches in B31/CRR when-chains + guarantee substitution), `data/tables/b31_risk_weights.py` (RGLA in combined B31 table)
 - **Spec ref:** CRR Art. 115, PRA PS1/26 Art. 115
 - **Tests:** 30 new unit tests: 11 data table tests, 10 CRR calculator tests, 9 B31 calculator tests. All pass. Test count: 1925 unit (was 1895).
-- **Limitation:** Non-UK unrated RGLAs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (not yet in schema). UK RGLAs are the primary use case for a PRA-regulated calculator.
+- **Limitation:** Non-UK unrated RGLAs get 100% conservative default. Full sovereign-CQS lookup requires a `sovereign_cqs` column (now available on COUNTERPARTY_SCHEMA, added in P1.27). UK RGLAs are the primary use case for a PRA-regulated calculator.
 
 ### P1.54 MDB 0% risk weight lookup missing from code (Art. 117-118)
 - **Status:** [x] Complete
@@ -444,12 +444,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** Table 4A (short-term ECAI assessment: CQS 1=20%, 2=50%, 3=100%, other=150%) not yet implemented — requires a `has_short_term_ecai` flag in the schema to distinguish long-term vs short-term ECAI assessments. CRR short-term institution treatment (Art. 120(2), domestic currency only) not implemented — requires separate treatment with sovereign floor.
 
 ### P1.27 Sovereign RW floor for FX unrated institution exposures (Art. 121(6))
-- **Status:** [ ] Not implemented
-- **Impact:** Under CRR/Basel 3.1, unrated institution exposures denominated in a foreign currency (not local currency of debtor's jurisdiction) cannot receive a risk weight lower than the sovereign RW of the institution's jurisdiction. Exception: self-liquidating trade items with original maturity <1 year. No sovereign-floor check exists in the SA calculator or SCRA logic. Classifier and SA calculator agents both confirm: no sovereign-floor check exists anywhere.
-- **File:Line:** `engine/sa/calculator.py` (no sovereign-floor check)
-- **Spec ref:** PRA PS1/26 Art. 121(6)
-- **Fix:** After computing institution SCRA RW, apply `max(scra_rw, sovereign_rw)` when exposure currency != institution's local currency.
-- **Tests needed:** Unit tests for FX vs domestic currency unrated institution exposures.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** CRR Art. 121(6) / PRA PS1/26 Art. 121(6) / CRE20.22 sovereign RW floor now implemented for unrated institution exposures in foreign currency. When the exposure currency differs from the institution's domestic currency, the risk weight cannot be lower than the sovereign risk weight of the institution's jurisdiction.
+  **Implementation:**
+  - **Schema:** `sovereign_cqs` (Int32) and `local_currency` (String) added to `COUNTERPARTY_SCHEMA`. `sovereign_cqs` maps to the CQS of the institution's home sovereign (1-6); `local_currency` is the ISO 4217 domestic currency of the institution's jurisdiction.
+  - **Classifier:** `cp_sovereign_cqs` and `cp_local_currency` propagated through `_add_counterparty_attributes()` (optional fields, same pattern as `scra_grade`).
+  - **SA calculator:** New `_apply_sovereign_floor_for_institutions()` method runs after the main RW when-chain and before the defaulted override. Computes sovereign RW from CQS via Art. 114 table (CQS 1=0%, 2=20%, 3=50%, 4-5=100%, 6=150%). FX detection uses `cp_local_currency` when available, falls back to `_is_domestic_currency` (UK/EU) when absent. Floor applies only to unrated institution exposures (`cqs` is null or ≤ 0) in FX.
+  - **Trade exemption:** Self-liquidating trade LCs (`is_short_term_trade_lc=True`) with `residual_maturity_years ≤ 1.0` are exempt per CRE20.22 footnote 13.
+  - **Backward compatible:** When `cp_sovereign_cqs` is null or absent, no floor is applied. Missing `cp_local_currency` falls back to UK/EU domestic currency check. Existing data without sovereign fields behaves identically to before.
+  - **Both frameworks:** Floor applies identically under CRR (Art. 121(6)) and Basel 3.1 (CRE20.22 / Art. 121(6) as amended).
+- **File:Line:** `data/schemas.py` (COUNTERPARTY_SCHEMA), `engine/classifier.py` (_add_counterparty_attributes), `engine/sa/calculator.py` (_apply_sovereign_floor_for_institutions + missing_cols defaults + cleanup), `tests/fixtures/single_exposure.py` (sovereign_cqs + local_currency params)
+- **Spec ref:** CRR Art. 121(6), PRA PS1/26 Art. 121(6), CRE20.22
+- **Tests:** 30 new unit tests in `tests/unit/test_sovereign_floor_institutions.py`: 6 B31 SCRA floor tests (Grade A CQS 4 binds, Grade B CQS 4 binds, Grade C doesn't bind, CQS 6 binds, CQS 1 never binds, A_ENHANCED CQS 3 binds), 3 domestic currency tests (local_currency match, UK GBP fallback, UK USD applies), 1 rated institution no floor, 4 trade exemption tests (≤1yr exempt, >1yr not exempt, non-trade not exempt, exactly 1yr boundary), 3 backward compat tests (null CQS, missing columns, null local_currency fallback), 4 CRR tests (floor binds, rated no floor, domestic no floor, null no floor), 1 non-institution no floor, 1 RWA correctness, 1 mixed batch (3 exposures), 6 parametrized CQS→RW mapping tests. All 3,345 tests pass (was 3,315). Test count: 3,345 passed, 33 skipped.
+- **Limitation:** For institutions in jurisdictions not covered by the UK/EU domestic currency mapping (`_is_domestic_currency`), the `cp_local_currency` field must be provided for accurate FX detection. Without it, the fallback treats non-UK/EU exposures as FX (conservative: may apply the floor when the exposure is actually in the institution's domestic currency). Institutions should populate `sovereign_cqs` and `local_currency` on counterparty records for non-UK/EU institution counterparties.
 
 ### P1.28 Output floor -- IRB corporate SA RW choice (Art. 122(8))
 - **Status:** [x] Complete

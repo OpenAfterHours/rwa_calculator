@@ -404,6 +404,11 @@ class SACalculator:
         # Art. 124L social housing counterparty type for RRE residual RW
         if "cp_is_social_housing" not in schema.names():
             missing_cols.append(pl.lit(False).alias("cp_is_social_housing"))
+        # Art. 121(6) / CRE20.22: Sovereign floor for FX institution exposures
+        if "cp_sovereign_cqs" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Int32).alias("cp_sovereign_cqs"))
+        if "cp_local_currency" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_local_currency"))
         # CRM collateral columns for Art. 127 secured/unsecured split
         if "collateral_re_value" not in schema.names():
             missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))
@@ -979,6 +984,15 @@ class SACalculator:
                 ]
             )
 
+        # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
+        # FX-denominated unrated institution exposures.
+        # The risk weight cannot be lower than the sovereign's risk weight when
+        # the exposure is not in the institution's domestic currency.
+        # Exception: self-liquidating trade items with original maturity ≤ 1yr.
+        exposures = self._apply_sovereign_floor_for_institutions(
+            exposures, _is_domestic_currency
+        )
+
         # Apply Art. 127 defaulted risk weight (secured/unsecured split)
         # Runs after the base RW when-chain so defaulted exposures have their
         # non-defaulted base RW available for blending with collateral coverage.
@@ -995,10 +1009,91 @@ class SACalculator:
                     "_lookup_cqs",
                     "_upper_class",
                     "_cqs_risk_weight",
+                    "_sovereign_rw",
                     "risk_weight_rw",
                 ]
                 if col in exposures.collect_schema().names()
             ]
+        )
+
+        return exposures
+
+    def _apply_sovereign_floor_for_institutions(
+        self,
+        exposures: pl.LazyFrame,
+        is_domestic_currency_expr: pl.Expr,
+    ) -> pl.LazyFrame:
+        """
+        Apply sovereign RW floor for FX unrated institution exposures.
+
+        Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): The risk weight for an
+        unrated institution exposure not denominated in the institution's
+        domestic currency cannot be lower than the sovereign risk weight of
+        the institution's jurisdiction.
+
+        Exception: Self-liquidating trade-related contingent items arising
+        from the movement of goods with original maturity ≤ 1 year are not
+        subject to this floor (CRE20.22 footnote 13).
+
+        Requires ``cp_sovereign_cqs`` to be present and non-null on the
+        exposure. When absent or null, no floor is applied (backward
+        compatible). ``cp_local_currency`` enables accurate FX detection;
+        when absent, falls back to the UK/EU domestic currency expression.
+
+        References:
+        - CRR Art. 121(6)
+        - PRA PS1/26 Art. 121(6)
+        - CRE20.22 (Basel 3.1 SCRA sovereign floor)
+        """
+        _uc = pl.col("_upper_class")
+
+        # Sovereign CQS → risk weight mapping (Art. 114 table)
+        _sovereign_rw = (
+            pl.when(pl.col("cp_sovereign_cqs") == 1)
+            .then(pl.lit(0.0))
+            .when(pl.col("cp_sovereign_cqs") == 2)
+            .then(pl.lit(0.20))
+            .when(pl.col("cp_sovereign_cqs") == 3)
+            .then(pl.lit(0.50))
+            .when(pl.col("cp_sovereign_cqs").is_in([4, 5]))
+            .then(pl.lit(1.0))
+            .when(pl.col("cp_sovereign_cqs") == 6)
+            .then(pl.lit(1.50))
+            .otherwise(pl.lit(None).cast(pl.Float64))
+        )
+
+        # Compute sovereign RW as a temporary column
+        exposures = exposures.with_columns(_sovereign_rw.alias("_sovereign_rw"))
+
+        # FX detection: exposure currency != institution's domestic currency.
+        # Use cp_local_currency if available; fall back to UK/EU domestic check.
+        _is_fx = pl.when(pl.col("cp_local_currency").is_not_null()).then(
+            pl.col("currency").fill_null("") != pl.col("cp_local_currency")
+        ).otherwise(~is_domestic_currency_expr)
+
+        # Exception: self-liquidating trade items ≤ 1yr original maturity
+        _is_trade_exempt = pl.col("is_short_term_trade_lc").fill_null(False) & (
+            pl.col("residual_maturity_years").fill_null(5.0) <= 1.0
+        )
+
+        # Floor applies to: unrated institution exposures in FX with
+        # a known sovereign CQS, excluding trade-exempt items.
+        _is_unrated = pl.col("cqs").is_null() | (pl.col("cqs") <= 0)
+        _is_institution = _uc.str.contains("INSTITUTION", literal=True)
+
+        _floor_applies = (
+            _is_institution
+            & _is_unrated
+            & _is_fx
+            & ~_is_trade_exempt
+            & pl.col("_sovereign_rw").is_not_null()
+        )
+
+        exposures = exposures.with_columns(
+            pl.when(_floor_applies)
+            .then(pl.max_horizontal(pl.col("risk_weight"), pl.col("_sovereign_rw")))
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight")
         )
 
         return exposures

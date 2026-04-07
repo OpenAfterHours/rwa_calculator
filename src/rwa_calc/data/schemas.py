@@ -151,8 +151,8 @@ COUNTERPARTY_SCHEMA = {
     #   Retail class (CRR Art. 112(h)):
     #     - "individual"          → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
     #     - "retail"              → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
-    #   Specialised lending (CRR Art. 147(8)):
-    #     - "specialised_lending" → SA: SPECIALISED_LENDING, IRB: SPECIALISED_LENDING
+    #   Specialised lending (CRR Art. 112(1)(g) / Art. 147(8)):
+    #     - "specialised_lending" → SA: CORPORATE (sub-type), IRB: SPECIALISED_LENDING
     #   Other items class (CRR Art. 112(q), Art. 134):
     #     - "other_cash"              → SA: OTHER, 0% RW (Art. 134(1))
     #     - "other_gold"              → SA: OTHER, 0% RW (Art. 134(4))

@@ -74,7 +74,10 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "company": ExposureClass.CORPORATE.value,
     "individual": ExposureClass.RETAIL_OTHER.value,
     "retail": ExposureClass.RETAIL_OTHER.value,
-    "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
+    # Art. 112(1)(g): SL is a corporate sub-type under SA, not a separate class.
+    # The sl_type column (from the specialised_lending join) drives SL-specific
+    # risk weight lookup; the exposure_class_sa column is CORPORATE.
+    "specialised_lending": ExposureClass.CORPORATE.value,
     "equity": ExposureClass.EQUITY.value,
     "covered_bond": ExposureClass.COVERED_BOND.value,
     "other_cash": ExposureClass.OTHER.value,
@@ -376,19 +379,27 @@ class ExposureClassifier:
         )
 
         sl_class = pl.lit(ExposureClass.SPECIALISED_LENDING.value)
+        # Art. 112 Table A2: Under SA, specialised lending is a corporate sub-type
+        # (Art. 112(1)(g)), not a separate exposure class.  exposure_class_sa reflects
+        # this by mapping SL → CORPORATE.  exposure_class retains SPECIALISED_LENDING
+        # because approach routing (Phase 5) needs it for slotting/AIRB selection.
+        sl_sa_class = pl.lit(ExposureClass.CORPORATE.value)
 
         # Batch 2: Derive all flags from pre-computed intermediates.
         return exposures.with_columns(
             [
                 # --- Exposure class mappings (SL table overrides entity_type) ---
+                # SA class: SL is a corporate sub-type (Art. 112(1)(g))
                 pl.when(sl_override)
-                .then(sl_class)
+                .then(sl_sa_class)
                 .otherwise(pl.col("_sa_class"))
                 .alias("exposure_class_sa"),
+                # IRB class: SL is a legitimate sub-class (Art. 147(8))
                 pl.when(sl_override)
                 .then(sl_class)
                 .otherwise(pl.col("_irb_class"))
                 .alias("exposure_class_irb"),
+                # Primary class: retains SPECIALISED_LENDING for approach routing
                 pl.when(sl_override)
                 .then(sl_class)
                 .otherwise(pl.col("_sa_class"))
@@ -407,7 +418,7 @@ class ExposureClassifier:
                 )
                 .then(pl.lit(ExposureClass.DEFAULTED.value))
                 .when(sl_override)
-                .then(sl_class)
+                .then(sl_sa_class)
                 .otherwise(pl.col("_sa_class"))
                 .alias("exposure_class_for_sa"),
                 # --- Infrastructure flag (uses _pt_upper) ---

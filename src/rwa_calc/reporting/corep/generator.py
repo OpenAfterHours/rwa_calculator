@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
     IRB_EXPOSURE_CLASS_ROWS,
     PD_BANDS,
@@ -230,6 +231,17 @@ class COREPGenerator:
         sa_df: pl.DataFrame = sa_data.collect()
         if len(sa_df) == 0:
             return {}
+
+        # Art. 112 Table A2: Under SA, specialised lending is a corporate
+        # sub-type (Art. 112(1)(g)), not a separate exposure class.  Merge SL
+        # into corporate so C 07.00 reports SL under the corporate sheet; the
+        # SL "of which" sub-rows (0021-0026) still populate via sl_type.
+        sa_df = sa_df.with_columns(
+            pl.when(pl.col(ec_col) == ExposureClass.SPECIALISED_LENDING.value)
+            .then(pl.lit(ExposureClass.CORPORATE.value))
+            .otherwise(pl.col(ec_col))
+            .alias(ec_col)
+        )
 
         data_cols = set(sa_df.columns)
         classes = sa_df[ec_col].unique().sort().to_list()

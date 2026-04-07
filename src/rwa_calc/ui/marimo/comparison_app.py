@@ -172,12 +172,12 @@ def _(Path, data_path_input, format_dropdown, mo):
         )
     elif validation_result:
         missing = ", ".join(str(f) for f in validation_result.files_missing[:3])
-        more = (
+        _more = (
             f" (+{len(validation_result.files_missing) - 3} more)"
             if len(validation_result.files_missing) > 3
             else ""
         )
-        validation_status = mo.callout(f"Missing files: {missing}{more}", kind="danger")
+        validation_status = mo.callout(f"Missing files: {missing}{_more}", kind="danger")
     else:
         validation_status = mo.callout("Unable to validate path", kind="warn")
 
@@ -429,29 +429,30 @@ def _(impact_bundle, mo, pl):
 @app.cell
 def _(comparison_bundle, mo, pl):
     if comparison_bundle is not None:
-        class_df = comparison_bundle.summary_by_class.collect()
+        _class_df = comparison_bundle.summary_by_class.collect()
 
-        if class_df.height > 0:
+        if _class_df.height > 0:
             # Select and format relevant columns
-            schema = class_df.columns
-            display_cols = [
+            _schema = _class_df.columns
+            _display_cols = [
                 c
                 for c in [
                     "exposure_class",
-                    "count_crr",
-                    "count_b31",
+                    "exposure_count",
                     "total_ead_crr",
                     "total_ead_b31",
                     "total_rwa_crr",
                     "total_rwa_b31",
-                    "delta_rwa",
+                    "total_delta_rwa",
                     "delta_rwa_pct",
                 ]
-                if c in schema
+                if c in _schema
             ]
 
-            if display_cols:
-                sorted_df = class_df.select(display_cols).sort("delta_rwa", descending=True)
+            if _display_cols:
+                _sorted_df = _class_df.select(_display_cols).sort(
+                    "total_delta_rwa", descending=True
+                )
                 mo.output.replace(
                     mo.vstack(
                         [
@@ -459,7 +460,7 @@ def _(comparison_bundle, mo, pl):
                             mo.md(
                                 "Positive delta = Basel 3.1 RWA higher than CRR (increased capital)."
                             ),
-                            mo.ui.table(sorted_df, selection=None),
+                            mo.ui.table(_sorted_df, selection=None),
                         ]
                     )
                 )
@@ -474,33 +475,34 @@ def _(comparison_bundle, mo, pl):
 @app.cell
 def _(comparison_bundle, mo, pl):
     if comparison_bundle is not None:
-        approach_df = comparison_bundle.summary_by_approach.collect()
+        _approach_df = comparison_bundle.summary_by_approach.collect()
 
-        if approach_df.height > 0:
-            schema = approach_df.columns
-            display_cols = [
+        if _approach_df.height > 0:
+            _schema = _approach_df.columns
+            _display_cols = [
                 c
                 for c in [
                     "approach_applied",
-                    "count_crr",
-                    "count_b31",
+                    "exposure_count",
                     "total_ead_crr",
                     "total_ead_b31",
                     "total_rwa_crr",
                     "total_rwa_b31",
-                    "delta_rwa",
+                    "total_delta_rwa",
                     "delta_rwa_pct",
                 ]
-                if c in schema
+                if c in _schema
             ]
 
-            if display_cols:
-                sorted_df = approach_df.select(display_cols).sort("delta_rwa", descending=True)
+            if _display_cols:
+                _sorted_df = _approach_df.select(_display_cols).sort(
+                    "total_delta_rwa", descending=True
+                )
                 mo.output.replace(
                     mo.vstack(
                         [
                             mo.md("## Comparison by Approach"),
-                            mo.ui.table(sorted_df, selection=None),
+                            mo.ui.table(_sorted_df, selection=None),
                         ]
                     )
                 )
@@ -518,22 +520,24 @@ def _(impact_bundle, mo, pl):
         class_attr_df = impact_bundle.summary_by_class.collect()
 
         if class_attr_df.height > 0:
-            schema = class_attr_df.columns
-            display_cols = [
+            _schema = class_attr_df.columns
+            _display_cols = [
                 c
                 for c in [
                     "exposure_class",
-                    "delta_rwa",
-                    "scaling_factor_impact",
-                    "supporting_factor_impact",
-                    "output_floor_impact",
-                    "methodology_impact",
+                    "total_delta_rwa",
+                    "total_scaling_factor_impact",
+                    "total_supporting_factor_impact",
+                    "total_output_floor_impact",
+                    "total_methodology_impact",
                 ]
-                if c in schema
+                if c in _schema
             ]
 
-            if display_cols:
-                sorted_df = class_attr_df.select(display_cols).sort("delta_rwa", descending=True)
+            if _display_cols:
+                _sorted_df = class_attr_df.select(_display_cols).sort(
+                    "total_delta_rwa", descending=True
+                )
                 mo.output.replace(
                     mo.vstack(
                         [
@@ -542,7 +546,7 @@ def _(impact_bundle, mo, pl):
                                 "Breakdown of each driver's contribution to the RWA delta "
                                 "per exposure class. All four drivers sum to delta_rwa."
                             ),
-                            mo.ui.table(sorted_df, selection=None),
+                            mo.ui.table(_sorted_df, selection=None),
                         ]
                     )
                 )
@@ -637,17 +641,17 @@ def _(mo, pl, schedule_bundle, year_slider):
         year_result = schedule_bundle.yearly_results.get(selected_year)
 
         if year_result is not None and year_result.summary_by_approach is not None:
-            approach_df = year_result.summary_by_approach.collect()
+            _approach_df = year_result.summary_by_approach.collect()
 
             output_parts = [
                 mo.md(f"#### {selected_year} Summary by Approach"),
-                mo.ui.table(approach_df, selection=None),
+                mo.ui.table(_approach_df, selection=None),
             ]
 
             if year_result.summary_by_class is not None:
-                class_df = year_result.summary_by_class.collect()
+                _class_df = year_result.summary_by_class.collect()
                 output_parts.append(mo.md(f"#### {selected_year} Summary by Exposure Class"))
-                output_parts.append(mo.ui.table(class_df, selection=None))
+                output_parts.append(mo.ui.table(_class_df, selection=None))
 
             mo.output.replace(mo.vstack(output_parts))
     return
@@ -661,18 +665,18 @@ def _(mo, pl, schedule_bundle, year_slider):
 @app.cell
 def _(comparison_bundle, mo, pl):
     if comparison_bundle is not None:
-        deltas_lf = comparison_bundle.exposure_deltas
-        schema = deltas_lf.collect_schema().names()
+        _deltas_lf = comparison_bundle.exposure_deltas
+        _schema = _deltas_lf.collect_schema().names()
 
         # Get unique classes for filter
         exposure_classes = ["All"]
-        if "exposure_class" in schema:
-            classes = deltas_lf.select("exposure_class").unique().collect().to_series().to_list()
+        if "exposure_class" in _schema:
+            classes = _deltas_lf.select("exposure_class").unique().collect().to_series().to_list()
             exposure_classes += sorted(c for c in classes if c is not None)
 
         approaches = ["All"]
-        if "approach_applied" in schema:
-            apps = deltas_lf.select("approach_applied").unique().collect().to_series().to_list()
+        if "approach_applied" in _schema:
+            apps = _deltas_lf.select("approach_applied").unique().collect().to_series().to_list()
             approaches += sorted(a for a in apps if a is not None)
 
         drill_class_filter = mo.ui.dropdown(
@@ -724,25 +728,25 @@ def _(comparison_bundle, mo, pl):
 @app.cell
 def _(comparison_bundle, drill_approach_filter, drill_class_filter, drill_sort, mo, pl):
     if comparison_bundle is not None and drill_class_filter is not None:
-        deltas_lf = comparison_bundle.exposure_deltas
-        schema = deltas_lf.collect_schema().names()
+        _deltas_lf = comparison_bundle.exposure_deltas
+        _schema = _deltas_lf.collect_schema().names()
 
         # Apply filters
         predicates = []
-        if drill_class_filter.value != "All" and "exposure_class" in schema:
+        if drill_class_filter.value != "All" and "exposure_class" in _schema:
             predicates.append(pl.col("exposure_class") == drill_class_filter.value)
-        if drill_approach_filter.value != "All" and "approach_applied" in schema:
+        if drill_approach_filter.value != "All" and "approach_applied" in _schema:
             predicates.append(pl.col("approach_applied") == drill_approach_filter.value)
 
-        filtered = deltas_lf
+        _filtered = _deltas_lf
         if predicates:
             combined = predicates[0]
             for p in predicates[1:]:
                 combined = combined & p
-            filtered = deltas_lf.filter(combined)
+            _filtered = _deltas_lf.filter(combined)
 
         # Select display columns
-        display_cols = [
+        _display_cols = [
             c
             for c in [
                 "exposure_reference",
@@ -758,27 +762,27 @@ def _(comparison_bundle, drill_approach_filter, drill_class_filter, drill_sort, 
                 "delta_risk_weight",
                 "delta_rwa_pct",
             ]
-            if c in schema
+            if c in _schema
         ]
 
-        if not display_cols:
-            display_cols = [c for c in schema if c != "exposure_reference"][:10]
-            if "exposure_reference" in schema:
-                display_cols = ["exposure_reference"] + display_cols
+        if not _display_cols:
+            _display_cols = [c for c in _schema if c != "exposure_reference"][:10]
+            if "exposure_reference" in _schema:
+                _display_cols = ["exposure_reference"] + _display_cols
 
         # Apply sort
         sort_val = drill_sort.value if drill_sort else "delta_rwa_desc"
-        if sort_val == "delta_rwa_desc" and "delta_rwa" in schema:
-            filtered = filtered.sort("delta_rwa", descending=True)
-        elif sort_val == "delta_rwa_asc" and "delta_rwa" in schema:
-            filtered = filtered.sort("delta_rwa", descending=False)
-        elif sort_val == "delta_rwa_abs" and "delta_rwa" in schema:
-            filtered = filtered.sort(pl.col("delta_rwa").abs(), descending=True)
+        if sort_val == "delta_rwa_desc" and "delta_rwa" in _schema:
+            _filtered = _filtered.sort("delta_rwa", descending=True)
+        elif sort_val == "delta_rwa_asc" and "delta_rwa" in _schema:
+            _filtered = _filtered.sort("delta_rwa", descending=False)
+        elif sort_val == "delta_rwa_abs" and "delta_rwa" in _schema:
+            _filtered = _filtered.sort(pl.col("delta_rwa").abs(), descending=True)
 
-        result_df = filtered.select(display_cols).head(200).collect()
+        result_df = _filtered.select(_display_cols).head(200).collect()
 
         # Summary stats for filtered set
-        stats = filtered.select(
+        stats = _filtered.select(
             [
                 pl.len().alias("count"),
                 pl.col("delta_rwa").sum().alias("total_delta"),
@@ -817,10 +821,10 @@ def _(comparison_bundle, drill_approach_filter, drill_class_filter, drill_sort, 
 @app.cell
 def _(impact_bundle, mo, pl):
     if impact_bundle is not None:
-        attr_lf = impact_bundle.exposure_attribution
-        schema = attr_lf.collect_schema().names()
+        _attr_lf = impact_bundle.exposure_attribution
+        _schema = _attr_lf.collect_schema().names()
 
-        display_cols = [
+        _display_cols = [
             c
             for c in [
                 "exposure_reference",
@@ -834,17 +838,17 @@ def _(impact_bundle, mo, pl):
                 "output_floor_impact",
                 "methodology_impact",
             ]
-            if c in schema
+            if c in _schema
         ]
 
-        if display_cols:
+        if _display_cols:
             # Show top 100 by absolute delta
-            if "delta_rwa" in schema:
-                sorted_lf = attr_lf.sort(pl.col("delta_rwa").abs(), descending=True)
+            if "delta_rwa" in _schema:
+                _sorted_lf = _attr_lf.sort(pl.col("delta_rwa").abs(), descending=True)
             else:
-                sorted_lf = attr_lf
+                _sorted_lf = _attr_lf
 
-            attr_df = sorted_lf.select(display_cols).head(100).collect()
+            attr_df = _sorted_lf.select(_display_cols).head(100).collect()
 
             mo.output.replace(
                 mo.vstack(
@@ -944,11 +948,11 @@ def _(comparison_bundle, mo):
         errors = comparison_bundle.errors
         # Show first 10 errors
         error_items = "\n".join([f"- {e}" for e in errors[:10]])
-        more = f"\n\n*({len(errors) - 10} more errors)*" if len(errors) > 10 else ""
+        _more = f"\n\n*({len(errors) - 10} more errors)*" if len(errors) > 10 else ""
 
         mo.output.replace(
             mo.callout(
-                mo.md(f"### Data Quality Issues ({len(errors)})\n\n{error_items}{more}"),
+                mo.md(f"### Data Quality Issues ({len(errors)})\n\n{error_items}{_more}"),
                 kind="warn",
             )
         )

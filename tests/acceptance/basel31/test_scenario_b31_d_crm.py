@@ -6,17 +6,17 @@ CRM treatments under the Basel 3.1 framework, including revised collateral
 haircuts, guarantee substitution, and maturity/FX mismatch adjustments.
 
 Why these tests matter:
-    Basel 3.1 (CRE22.52-53) revises supervisory haircut tables from CRR's
-    3 maturity bands to 5 bands, and increases equity haircuts (main index
-    15% → 25%, other 25% → 35%). Long-dated corporate bond haircuts increase
-    significantly (>5yr). Running the same CRM portfolio under both frameworks
-    validates that the framework toggle correctly selects the right haircut
-    table and produces the expected capital impact.
+    Basel 3.1 (PRA PS1/26 Art. 224 Table 3) revises supervisory haircut tables
+    from CRR's 3 maturity bands to 5 bands, and increases equity haircuts (main
+    index 15% → 20%, other 25% → 30%). Long-dated corporate bond haircuts
+    increase significantly (>5yr). Running the same CRM portfolio under both
+    frameworks validates that the framework toggle correctly selects the right
+    haircut table and produces the expected capital impact.
 
 Key Basel 3.1 CRM differences from CRR:
 - 5 maturity bands (0-1y, 1-3y, 3-5y, 5-10y, 10y+) vs CRR's 3 (0-1y, 1-5y, 5y+)
-- Main index equity haircut: 25% (was 15%)
-- Other listed equity haircut: 35% (was 25%)
+- Main index equity haircut: 20% (was 15%)
+- Other listed equity haircut: 30% (was 25%)
 - Sovereign CQS 2-3 10y+: 12% (was 6%)
 - FX mismatch haircut: 8% (unchanged)
 - Maturity mismatch formula: unchanged
@@ -122,14 +122,14 @@ class TestB31GroupD_CreditRiskMitigation:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-D3: Equity collateral (main index) — 25% haircut (was CRR 15%).
+        B31-D3: Equity collateral (main index) — 20% haircut (was CRR 15%).
 
         Input: £1M exposure, £400k FTSE 100 equity collateral
-        Expected: EAD = £700k, RWA = £700k
+        Expected: EAD = £680k, RWA = £680k
 
-        This is the key Basel 3.1 CRM change: main index equity haircut
-        increases from 15% to 25%. Adjusted collateral = £400k × 0.75 = £300k
-        (was £340k under CRR). RWA increases by £40k (+6%) to £700k.
+        PRA PS1/26 Art. 224 Table 3: main index equity haircut is 20% at 10-day.
+        Adjusted collateral = £400k × 0.80 = £320k (was £340k under CRR).
+        RWA increases by £20k (+3%) to £680k.
         """
         expected = expected_outputs_dict["B31-D3"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["B31-D3"]
@@ -242,14 +242,14 @@ class TestB31GroupD_FrameworkDifferences:
         """
         Verify D3 equity scenario produces higher RWA under Basel 3.1.
 
-        Basel 3.1 equity haircut (25%) > CRR (15%), so less collateral
-        protection → higher RWA. Expected: B31 RWA 700k > CRR RWA 660k.
+        Basel 3.1 equity haircut (20%) > CRR (15%), so less collateral
+        protection → higher RWA. Expected: B31 RWA 680k > CRR RWA 660k.
         """
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_CRM_D3")
         if result is None:
             pytest.skip("LOAN_CRM_D3 not found in B31 SA results")
 
-        # Under Basel 3.1, equity haircut 25% → EAD = 1M - 400k×0.75 = 700k
+        # Under Basel 3.1, equity haircut 20% → EAD = 1M - 400k×0.80 = 680k
         # Under CRR, equity haircut 15% → EAD = 1M - 400k×0.85 = 660k
         crr_expected_rwa = 660_000.0
         assert result["rwa_post_factor"] > crr_expected_rwa, (

@@ -33,6 +33,7 @@ from rwa_calc.data.tables.crr_haircuts import (
     get_haircut_table,
     lookup_collateral_haircut,
     lookup_fx_haircut,
+    scale_haircut_for_liquidation_period,
 )
 from rwa_calc.engine.crm.constants import REAL_ESTATE_TYPES, RECEIVABLE_TYPES
 
@@ -56,19 +57,28 @@ class HaircutCalculator:
     """
     Calculate and apply haircuts to collateral.
 
-    Supports both CRR and Basel 3.1 frameworks:
+    Supports both CRR and Basel 3.1 frameworks with liquidation period scaling.
+
+    Base haircuts (10-day liquidation period):
 
     CRR (Art. 224) — 3 maturity bands:
     - Government bonds: 0.5% - 6%
     - Corporate bonds: 1% - 8%
     - Equity (main index): 15%, (other): 25%
+    - Gold: 15%
 
-    Basel 3.1 (CRE22.52-53) — 5 maturity bands:
+    Basel 3.1 (PRA PS1/26 Art. 224) — 5 maturity bands:
     - Government bonds: 0.5% - 12% (higher for long-dated CQS 2-3)
     - Corporate bonds: 1% - 15% (significantly higher for long-dated)
-    - Equity (main index): 25%, (other): 35%
+    - Equity (main index): 20%, (other): 30%
+    - Gold: 20%
 
-    Cash: 0%, Gold: 15%, FX mismatch: 8% — same under both frameworks.
+    FX mismatch: 8% (10-day base, same under both frameworks).
+
+    Liquidation period scaling (Art. 226(2)): H_m = H_10 × sqrt(T_m / 10)
+    - 5-day (repos): haircut × 0.7071
+    - 10-day (capital market): no scaling [default]
+    - 20-day (secured lending): haircut × 1.4142
     """
 
     def __init__(self, is_basel_3_1: bool = False) -> None:
@@ -108,11 +118,32 @@ class HaircutCalculator:
         # Calculate collateral-specific haircut based on type
         collateral = self._apply_collateral_haircuts(collateral, is_b31)
 
-        # Apply FX haircut
+        # Scale collateral haircut and FX haircut by liquidation period (Art. 226(2))
+        # H_m = H_10 × sqrt(T_m / 10)
+        schema = collateral.collect_schema()
+        has_liq_period = "liquidation_period_days" in schema.names()
+
+        if has_liq_period:
+            liq = pl.col("liquidation_period_days").fill_null(10).cast(pl.Float64)
+            scaling_factor = (liq / 10.0).sqrt()
+        else:
+            scaling_factor = pl.lit(1.0)
+
+        # Scale collateral haircut by liquidation period
+        # Non-financial collateral (real_estate, receivables, other_physical) uses Art. 230
+        # HC values, not Art. 224 — do not scale those. However, the table join already
+        # returns the correct base value; scaling only affects financial collateral and gold.
+        if has_liq_period:
+            collateral = collateral.with_columns(
+                (pl.col("collateral_haircut") * scaling_factor).alias("collateral_haircut")
+            )
+
+        # Apply FX haircut (also subject to liquidation period scaling per Art. 224 Table 4)
+        fx_base = float(FX_HAIRCUT)
         collateral = collateral.with_columns(
             [
                 pl.when(pl.col("currency") != pl.col("exposure_currency"))
-                .then(pl.lit(float(FX_HAIRCUT)))
+                .then(pl.lit(fx_base) * scaling_factor)
                 .otherwise(pl.lit(0.0))
                 .alias("fx_haircut"),
             ]
@@ -434,6 +465,7 @@ class HaircutCalculator:
         exposure_maturity_years: float | None = None,
         original_maturity_years: float | None = None,
         has_one_day_maturity_floor: bool = False,
+        liquidation_period_days: int = 10,
     ) -> HaircutResult:
         """
         Calculate haircut for a single collateral item (convenience method).
@@ -450,17 +482,19 @@ class HaircutCalculator:
             exposure_maturity_years: For maturity mismatch
             original_maturity_years: Original contract term of protection (Art. 237(2))
             has_one_day_maturity_floor: Art. 162(3) 1-day M floor exposure
+            liquidation_period_days: Liquidation period in business days (default 10)
 
         Returns:
             HaircutResult with all haircut details
         """
-        # Get collateral haircut (None means ineligible per Art. 197)
+        # Get collateral haircut scaled for liquidation period (None = ineligible per Art. 197)
         coll_haircut = lookup_collateral_haircut(
             collateral_type=collateral_type,
             cqs=cqs,
             residual_maturity_years=residual_maturity_years,
             is_main_index=is_main_index,
             is_basel_3_1=self._is_basel_3_1,
+            liquidation_period_days=liquidation_period_days,
         )
 
         # Ineligible bonds: zero adjusted value
@@ -477,8 +511,10 @@ class HaircutCalculator:
                 ),
             )
 
-        # Get FX haircut
-        fx_haircut = lookup_fx_haircut(exposure_currency, collateral_currency)
+        # Get FX haircut (scaled for liquidation period)
+        fx_haircut = lookup_fx_haircut(
+            exposure_currency, collateral_currency, liquidation_period_days
+        )
 
         # Calculate adjusted value after haircuts
         adjusted = calculate_adjusted_collateral_value(

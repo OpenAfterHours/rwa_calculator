@@ -209,6 +209,7 @@ COLLATERAL_SCHEMA = {
     "is_presold": pl.Boolean,  # ADC pre-sold to qualifying buyer - 100% RW
     "is_qualifying_re": pl.Boolean,  # Art. 124A: meets regulatory RE criteria (valuation, lien, etc.)
     "prior_charge_ltv": pl.Float64,  # Art. 124F(2): LTV occupied by prior/pari passu charges (0.0 = first charge)
+    "liquidation_period_days": pl.Int32,  # Art. 224(2): 5=repo, 10=capital market (default), 20=secured lending
 }
 
 GUARANTEE_SCHEMA = {

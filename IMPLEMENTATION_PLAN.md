@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L implemented)
-**Current version:** 0.1.109 | **Test suite:** ~3,141 collected (~2,618 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.39/P1.73/P1.74 liquidation period haircut scaling + B31 haircut value corrections implemented)
+**Current version:** 0.1.110 | **Test suite:** ~3,227 collected (~3,184 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -11,10 +11,9 @@
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed]
-- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
-  (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
+- *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -570,12 +569,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix remaining:** (a) Implement GCRA 1.25% cap once OF-ADJ (P1.9a) is available. (c) Add reporting basis conditionality to COREP output.
 
 ### P1.39 CRM haircut liquidation period dependency not modelled (Art. 224)
-- **Status:** [ ] Not implemented
-- **Impact:** Art. 224 Tables 1-4 define three liquidation-period-dependent haircut columns: **20-day** (secured lending), **10-day** (capital market transactions), **5-day** (repo/SFT). Code uses single haircut values per instrument type with no liquidation period dimension. FX mismatch haircut also varies: 11.3%/8%/5.66% by period -- code uses flat 8%. Equity haircuts differ similarly. B31 `equity_other = 0.35` in code doesn't match any PDF column exactly (10-day = 30%, 20-day = 42.4%).
-- **File:Line:** `data/tables/crr_haircuts.py`, `engine/crm/haircuts.py`
-- **Spec ref:** PRA PS1/26 Art. 224 Tables 1-4, Art. 226
-- **Fix:** Add `liquidation_period` parameter to haircut lookup. Restructure haircut tables to include all three columns. Default to 10-day for capital market transactions.
-- **Tests needed:** Unit tests for each liquidation period.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Implementation:** Art. 224/226 liquidation period scaling now implemented. All haircut values stored as 10-day base; `scale_haircut_for_liquidation_period()` scales via `H_m = H_10 × sqrt(T_m / 10)`. Standard periods: 5-day (repos), 10-day (capital market, default), 20-day (secured lending). Three constants `LIQUIDATION_PERIOD_REPO/CAPITAL_MARKET/SECURED_LENDING` exported. Schema: `liquidation_period_days` (Int32) added to `COLLATERAL_SCHEMA` (default null → 10). Both scalar (`lookup_collateral_haircut`, `lookup_fx_haircut`, `calculate_single_haircut`) and pipeline (`HaircutCalculator.apply_haircuts`) paths scale haircuts. FX mismatch also scaled (5-day=5.657%, 10-day=8%, 20-day=11.314%). Non-financial collateral (receivables, other_physical) NOT scaled — uses Art. 230 HC values, not Art. 224.
+- **File:Line:** `data/tables/crr_haircuts.py` (scaling function + constants), `engine/crm/haircuts.py` (pipeline + single-item scaling), `data/schemas.py` (COLLATERAL_SCHEMA)
+- **Spec ref:** PRA PS1/26 Art. 224(2), Art. 226(2)
+- **Tests:** 43 new tests in `tests/unit/crm/test_liquidation_period_haircuts.py`: 9 B31 value correction tests, 11 scaling formula tests, 8 scalar lookup with period tests, 4 FX scaling tests, 4 calculator single-item tests, 7 pipeline LazyFrame tests.
+- **Limitation:** Art. 226(1) non-daily revaluation adjustment (`H = H_m × sqrt((NR + T_m - 1) / T_m)`) not yet implemented — requires `revaluation_frequency_days` input field. Art. 227 zero-haircut conditions for qualifying repos not implemented.
 
 ### P1.40 CRM maturity mismatch additional ineligibility conditions (Art. 237(2))
 - **Status:** [x] Complete
@@ -833,22 +833,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** CRR Art. 132(2), PRA PS1/26 Art. 133, `docs/specifications/crr/equity-approach.md` §Fallback/Look-Through/Mandate-Based
 
 ### P1.73 Gold haircut 0% in code/spec, PRA Art. 224 Table 3 says 20%
-- **Status:** [~] Needs regulatory PDF verification — code may be correct
-- **Impact:** Code has 15% for gold haircut, which matches CRR Art. 224 (10-day liquidation period) per the CRM changes reference (crm-changes.md confirms CRR gold = 15%). The spec was corrected to 20% on 2026-04-06, but this may reflect the 20-day liquidation period value (Art. 224 Table 3 gives 20% at 10-day, 28.28% at 20-day, 14.14% at 5-day). If the code uses the 10-day period, 15% is the correct CRR value; the capital understatement claim was premature. The spec fix may have introduced a wrong value. Requires verification against the regulatory PDF to confirm which liquidation period the code targets.
-  **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected — gold haircut changed from 0% to 20% (may need re-verification).
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** B31 gold haircut corrected from 15% to 20% per PRA PS1/26 Art. 224 Table 3 (10-day base). CRR gold remains 15%. The skill reference `crm-changes.md` had an incorrect value (unchanged from CRR) — the PRA PS1/26 PDF confirms gold is 20% at 10-day. Both dict constant and DataFrame generator updated.
 - **File:Line:** `data/tables/crr_haircuts.py` (gold haircut entry)
 - **Spec ref:** PRA PS1/26 Art. 224, Table 3
-- **Fix:** Verify gold haircut value against regulatory PDF for 10-day liquidation period. Confirm whether 15% (code) or 20% (spec) is correct. Add liquidation-period variants (cross-ref P1.39).
-- **Tests needed:** Unit test for gold collateral haircut confirming correct liquidation-period basis.
+- **Tests:** Covered by `test_liquidation_period_haircuts.py` TestB31HaircutValueCorrections.
 
 ### P1.74 Main index equity haircut 15% in spec, PRA Art. 224 Table 3 says 20%
-- **Status:** [~] Needs regulatory PDF verification — code may be correct
-- **Impact:** Code has 15% (CRR) and 25% (B31) for main index equity haircut, both matching the CRM changes reference (crm-changes.md confirms CRR equity main index = 15% and B31 = 15%). The spec was corrected to 20% on 2026-04-06, but this may reflect the 20-day liquidation period value rather than the standard 10-day period. If the code uses the 10-day period, 15% may be the correct CRR value. The capital understatement claim was premature. Requires verification against the regulatory PDF to confirm which liquidation period applies.
-  **Spec fix (2026-04-06):** credit-risk-mitigation.md corrected — main index equity haircut changed from 15% to 20% (may need re-verification).
-- **File:Line:** `data/tables/crr_haircuts.py` (equity_main_index haircut entry)
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** B31 equity haircuts corrected: main index from 25% to 20%, other from 35% to 30% per PRA PS1/26 Art. 224 Table 3 (10-day base). CRR values (15%/25%) unchanged. The skill reference `crm-changes.md` had incorrect values — the PRA PS1/26 PDF confirms 20%/30% at 10-day. Existing tests updated to expect new values. Golden file B31-D3 EAD updated from 700k to 680k.
+- **File:Line:** `data/tables/crr_haircuts.py` (equity_main_index and equity_other haircut entries)
 - **Spec ref:** PRA PS1/26 Art. 224, Table 3
-- **Fix:** Verify main index equity haircut against regulatory PDF for 10-day liquidation period. Confirm whether 15% (code/CRM reference) or 20% (spec correction) is correct. Cross-ref P1.39.
-- **Tests needed:** Unit test for main index equity haircut confirming correct liquidation-period basis.
+- **Tests:** Covered by `test_liquidation_period_haircuts.py` TestB31HaircutValueCorrections + existing tests updated in `test_crm_basel31.py`.
 
 ### P1.75 LGD* formula does not blend LGDU/LGDS — single LGD applied to residual
 - **Status:** [x] Complete — code already correct

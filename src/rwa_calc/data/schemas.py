@@ -206,6 +206,7 @@ COLLATERAL_SCHEMA = {
     "is_income_producing": pl.Boolean,  # Material income dependence affects commercial RE RW
     "is_adc": pl.Boolean,  # Acquisition/Development/Construction - 150% RW unless pre-sold
     "is_presold": pl.Boolean,  # ADC pre-sold to qualifying buyer - 100% RW
+    "is_qualifying_re": pl.Boolean,  # Art. 124A: meets regulatory RE criteria (valuation, lien, etc.)
 }
 
 GUARANTEE_SCHEMA = {
@@ -1010,6 +1011,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "ltv_band": pl.String,  # LTV band for RW lookup
     "is_income_producing": pl.Boolean,  # CRE income flag
     "is_adc": pl.Boolean,  # ADC exposure flag
+    "is_qualifying_re": pl.Boolean,  # Art. 124A: meets regulatory RE qualifying criteria
     "materially_dependent_on_property": pl.Boolean,  # Cash-flow dependency on property (B3.1)
     "mortgage_risk_weight": pl.Float64,  # LTV-based RW
     # -------------------------------------------------------------------------

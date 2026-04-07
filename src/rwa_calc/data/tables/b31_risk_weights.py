@@ -103,6 +103,18 @@ B31_ADC_RISK_WEIGHT = Decimal("1.50")
 B31_ADC_PRESOLD_RISK_WEIGHT = Decimal("1.00")
 
 # =============================================================================
+# OTHER REAL ESTATE — NON-QUALIFYING RE (PRA PS1/26 Art. 124J)
+# RE that doesn't meet Art. 124A qualifying criteria (valuation, lien, etc.)
+# Three sub-treatments based on property type and income dependence:
+#   - Income-dependent: 150% flat
+#   - RESI non-dependent: counterparty RW (no floor)
+#   - CRE non-dependent: max(60%, counterparty RW)
+# =============================================================================
+
+B31_OTHER_RE_INCOME_DEPENDENT_RW = Decimal("1.50")
+B31_OTHER_RE_CRE_FLOOR_RW = Decimal("0.60")
+
+# =============================================================================
 # CORPORATE CQS-BASED RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 122(2) Table 6)
 # Differs from CRR: CQS3 = 75% (was 100%). PRA retains CQS5 = 150% (BCBS: 100%).
 # =============================================================================
@@ -461,6 +473,40 @@ def b31_adc_rw_expr() -> pl.Expr:
     return pl.when(pl.col("is_presold").fill_null(False)).then(pl.lit(1.00)).otherwise(pl.lit(1.50))
 
 
+def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Expr:
+    """
+    Polars expression for Basel 3.1 Other RE risk weights (Art. 124J).
+
+    Applies to non-qualifying RE — real estate that fails Art. 124A criteria
+    (e.g., incomplete property, no independent valuation, no first charge).
+
+    Three sub-treatments:
+    - Income-dependent: 150% flat
+    - RESI non-dependent: counterparty RW (no floor)
+    - CRE non-dependent: max(60%, counterparty RW)
+
+    Requires columns: has_income_cover (Boolean), property_type (String),
+                      counterparty_rw_col (Float64)
+
+    Returns:
+        Expression resolving to Art. 124J risk weight
+    """
+    is_income = pl.col("has_income_cover").fill_null(False)
+    cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
+    is_resi = pl.col("property_type").fill_null("").str.to_lowercase() == "residential"
+
+    # Income-dependent: 150% regardless of property type
+    # Non-dependent RESI: counterparty RW (no floor)
+    # Non-dependent CRE: max(60%, counterparty RW)
+    return (
+        pl.when(is_income)
+        .then(pl.lit(float(B31_OTHER_RE_INCOME_DEPENDENT_RW)))
+        .when(is_resi)
+        .then(cp_rw)
+        .otherwise(pl.max_horizontal(pl.lit(float(B31_OTHER_RE_CRE_FLOOR_RW)), cp_rw))
+    )
+
+
 def b31_sa_sl_rw_expr() -> pl.Expr:
     """
     Polars expression for Basel 3.1 SA specialised lending risk weights.
@@ -591,4 +637,41 @@ def lookup_b31_commercial_rw(
     return rw, (
         f"B31 CRE (general, Art. 124H(3)): {float(rw):.0%} "
         f"(max(60%, min({float(counterparty_rw):.0%}, {float(income_rw):.0%})))"
+    )
+
+
+def lookup_b31_other_re_rw(
+    property_type: str = "commercial",
+    is_income_producing: bool = False,
+    counterparty_rw: Decimal = Decimal("1.00"),
+) -> tuple[Decimal, str]:
+    """
+    Look up Basel 3.1 Other RE risk weight for a single exposure.
+
+    PRA PS1/26 Art. 124J: non-qualifying RE that fails Art. 124A criteria.
+
+    Args:
+        property_type: "residential" or "commercial"
+        is_income_producing: Whether materially dependent on property cash flows
+        counterparty_rw: Counterparty's unsecured risk weight
+
+    Returns:
+        Tuple of (risk_weight, description)
+    """
+    if is_income_producing:
+        return (
+            B31_OTHER_RE_INCOME_DEPENDENT_RW,
+            "B31 Other RE (income-dependent, Art. 124J): 150%",
+        )
+    if property_type.lower() == "residential":
+        return (
+            counterparty_rw,
+            f"B31 Other RE (RESI non-dependent, Art. 124J): {float(counterparty_rw):.0%}",
+        )
+    # CRE non-dependent: max(60%, counterparty RW)
+    rw = max(B31_OTHER_RE_CRE_FLOOR_RW, counterparty_rw)
+    return (
+        rw,
+        f"B31 Other RE (CRE non-dependent, Art. 124J): {float(rw):.0%} "
+        f"(max(60%, {float(counterparty_rw):.0%}))",
     )

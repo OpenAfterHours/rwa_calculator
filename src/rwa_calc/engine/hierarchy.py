@@ -1607,10 +1607,11 @@ class HierarchyResolver:
         """
         Add LTV and property metadata from collateral for real estate risk weights.
 
-        Joins collateral property_ltv, property_type, and is_income_producing to
-        exposures where collateral is linked via beneficiary_reference. For mortgages
-        and commercial RE, LTV determines risk weight. For CRE (CRR Art. 126),
-        income cover status determines 50% vs 100% risk weight.
+        Joins collateral property_ltv, property_type, is_income_producing, and
+        is_qualifying_re to exposures where collateral is linked via
+        beneficiary_reference. For mortgages and commercial RE, LTV determines risk
+        weight. For CRE (CRR Art. 126), income cover status determines 50% vs 100%
+        risk weight. Non-qualifying RE (Art. 124J) gets separate treatment under B31.
 
         Supports three levels of collateral linking based on beneficiary_type:
         1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
@@ -1622,7 +1623,8 @@ class HierarchyResolver:
             collateral: Collateral data with beneficiary_reference and property_ltv (optional)
 
         Returns:
-            Exposures with ltv, property_type, and has_income_cover columns added
+            Exposures with ltv, property_type, has_income_cover, and
+            is_qualifying_re columns added
         """
         # Check if collateral is valid for LTV processing
         # Requires beneficiary_reference and property_ltv columns
@@ -1634,6 +1636,7 @@ class HierarchyResolver:
                     pl.lit(None).cast(pl.Float64).alias("ltv"),
                     pl.lit(None).cast(pl.Utf8).alias("property_type"),
                     pl.lit(False).alias("has_income_cover"),
+                    pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"),
                 ]
             )
 
@@ -1642,6 +1645,7 @@ class HierarchyResolver:
         has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
         has_property_type = "property_type" in collateral_schema.names()
         has_income_producing = "is_income_producing" in collateral_schema.names()
+        has_qualifying_re = "is_qualifying_re" in collateral_schema.names()
 
         # Filter for collateral with LTV data
         ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
@@ -1658,6 +1662,11 @@ class HierarchyResolver:
             if has_income_producing
             else pl.lit(False).alias("has_income_cover")
         )
+        _qualifying_re = (
+            pl.col("is_qualifying_re")
+            if has_qualifying_re
+            else pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re")
+        )
 
         if not has_beneficiary_type:
             # Legacy behavior: assume direct exposure linking
@@ -1667,6 +1676,7 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("ltv"),
                     _prop_type.alias("property_type"),
                     _income_cover,
+                    _qualifying_re,
                 ]
             ).unique(subset=["beneficiary_reference"], keep="first")
 
@@ -1693,6 +1703,7 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("direct_ltv"),
                     _prop_type.alias("direct_property_type"),
                     _income_cover.alias("direct_income_cover"),
+                    _qualifying_re.alias("direct_qualifying_re"),
                 ]
             )
             .unique(subset=["direct_ref"], keep="first")
@@ -1707,6 +1718,7 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("facility_ltv"),
                     _prop_type.alias("facility_property_type"),
                     _income_cover.alias("facility_income_cover"),
+                    _qualifying_re.alias("facility_qualifying_re"),
                 ]
             )
             .unique(subset=["facility_ref"], keep="first")
@@ -1721,6 +1733,7 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("cp_ltv"),
                     _prop_type.alias("cp_property_type"),
                     _income_cover.alias("cp_income_cover"),
+                    _qualifying_re.alias("cp_qualifying_re"),
                 ]
             )
             .unique(subset=["cp_ref"], keep="first")
@@ -1768,6 +1781,11 @@ class HierarchyResolver:
                 )
                 .fill_null(False)
                 .alias("has_income_cover"),
+                pl.coalesce(
+                    pl.col("direct_qualifying_re"),
+                    pl.col("facility_qualifying_re"),
+                    pl.col("cp_qualifying_re"),
+                ).alias("is_qualifying_re"),
             ]
         ).drop(
             [
@@ -1780,6 +1798,9 @@ class HierarchyResolver:
                 "direct_income_cover",
                 "facility_income_cover",
                 "cp_income_cover",
+                "direct_qualifying_re",
+                "facility_qualifying_re",
+                "cp_qualifying_re",
             ]
         )
 

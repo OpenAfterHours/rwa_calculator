@@ -657,12 +657,15 @@ _RE_ROW_FILTERS: dict[str, dict[str, object]] = {
     "0342": {"property_type": "commercial", "materially_dependent": True},
     "0343": {"property_type": "commercial", "materially_dependent": False, "is_sme": True},
     "0344": {"property_type": "commercial", "materially_dependent": True, "is_sme": True},
+    # Other real estate (Art. 124J) — non-qualifying RE
+    "0350": {"is_qualifying": False},
+    "0351": {"is_qualifying": False, "property_type": "residential", "materially_dependent": False},
+    "0352": {"is_qualifying": False, "property_type": "residential", "materially_dependent": True},
+    "0353": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": False},
+    "0354": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": True},
     # Land ADC (CRE20.88)
     "0360": {"is_adc": True},
 }
-# Note: Rows 0350-0354 ("Other real estate") require a separate "other" RE
-# classification not yet in the pipeline. They remain null until a
-# regulatory_re_category field is added to distinguish regulatory vs other RE.
 
 # =============================================================================
 # EQUITY TRANSITIONAL ROW CONFIGURATION (Basel 3.1 OF 07.00 rows 0371-0374)
@@ -816,6 +819,7 @@ def _filter_re(
     materially_dependent: bool | None = None,
     is_sme: bool | None = None,
     is_adc: bool | None = None,
+    is_qualifying: bool | None = None,
 ) -> pl.DataFrame:
     """Filter to real estate exposures with optional sub-criteria.
 
@@ -824,11 +828,20 @@ def _filter_re(
         materially_dependent: True/False filter on materially_dependent_on_property
         is_sme: True/False filter for SME sub-split (uses _filter_sme logic)
         is_adc: True/False filter on is_adc column
+        is_qualifying: True/False filter on is_qualifying_re (Art. 124A)
     """
     if "property_type" not in cols:
         return data.clear()
 
     result = data.filter(pl.col("property_type").is_not_null())
+
+    if is_qualifying is not None and "is_qualifying_re" in cols:
+        result = result.filter(
+            pl.col("is_qualifying_re").fill_null(True) == is_qualifying
+        )
+    elif is_qualifying is False:
+        # No is_qualifying_re column — no non-qualifying RE to report
+        return data.clear()
 
     if property_type is not None:
         result = result.filter(pl.col("property_type") == property_type)

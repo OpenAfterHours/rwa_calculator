@@ -65,6 +65,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_SUBORDINATED_DEBT_RW,
     b31_adc_rw_expr,
     b31_commercial_rw_expr,
+    b31_other_re_rw_expr,
     b31_residential_rw_expr,
     b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
@@ -394,6 +395,9 @@ class SACalculator:
             missing_cols.append(pl.lit(False).alias("cp_is_natural_person"))
         if "is_sme" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_sme"))
+        # Art. 124A qualifying RE flag for Other RE treatment (Art. 124J)
+        if "is_qualifying_re" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"))
         # CRM collateral columns for Art. 127 secured/unsecured split
         if "collateral_re_value" not in schema.names():
             missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))
@@ -526,6 +530,24 @@ class SACalculator:
                     # 4. ADC: 150% or 100% pre-sold (CRE20.87-88)
                     .when(pl.col("is_adc").fill_null(False))
                     .then(b31_adc_rw_expr())
+                    # 4b. Other RE (Art. 124J): non-qualifying RE that fails Art. 124A
+                    # criteria. Routes before qualifying RE branches so non-qualifying
+                    # exposures get 150% (income) / cp RW (resi) / max(60%,cp) (cre).
+                    # Null is_qualifying_re defaults to qualifying (True) — backward
+                    # compatible: existing data without this flag gets standard treatment.
+                    .when(
+                        (pl.col("is_qualifying_re").fill_null(True) == False)  # noqa: E712
+                        & (
+                            _uc.str.contains("MORTGAGE", literal=True)
+                            | _uc.str.contains("RESIDENTIAL", literal=True)
+                            | _uc.str.contains("COMMERCIAL", literal=True)
+                            | _uc.str.contains("CRE", literal=True)
+                            | (pl.col("property_type").fill_null("").is_in(
+                                ["residential", "commercial"]
+                            ))
+                        )
+                    )
+                    .then(b31_other_re_rw_expr("_cqs_risk_weight"))
                     # 2. Residential mortgage: loan-split (Art. 124F) / LTV-band (Art. 124G)
                     .when(
                         _uc.str.contains("MORTGAGE", literal=True)

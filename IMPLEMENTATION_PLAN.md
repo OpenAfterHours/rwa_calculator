@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.13 CRE other counterparties Art. 124H(3) implemented)
-**Current version:** 0.1.108 | **Test suite:** ~3,076 collected (~2,573 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~12 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.13, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.14 Other Real Estate Art. 124J implemented)
+**Current version:** 0.1.108 | **Test suite:** ~3,102 collected (~2,573 unit + 265 acceptance + 124 contracts + 102 integration + 35 benchmarks), ~12 skipped | P1.3, P1.4, P1.5, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -14,7 +14,7 @@
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented] P1.73 (gold haircut — code 15%, spec corrected to 20%; may be false positive), P1.74 (main-index equity — code 15%/25%, spec corrected to 20%; may be false positive), P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5), P1.78 (FX mismatch on guarantees — now fixed)
   (P1.73/P1.74 may be false positives — code matches CRM changes reference for 10-day liquidation period)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -295,12 +295,24 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Limitation:** CRE exposures in existing data without `is_natural_person` field will default to "other counterparty" treatment (max/min formula). This is regulatory-conservative but changes the effective RW for CRE exposures that were previously loan-split. Institutions should set `is_natural_person=True` on counterparties where applicable.
 
 ### P1.14 "Other Real Estate" exposure class (Art. 124J)
-- **Status:** [ ] Not implemented
-- **Impact:** RE that doesn't meet Art. 124A qualifying criteria has three treatments under Basel 3.1: income-dependent = 150%, RESI non-dependent = counterparty RW, CRE non-dependent = max(60%, counterparty RW). No `OTHER_RE` exposure class or risk weight logic exists. COREP generator at `generator.py:663` confirms gap. Also blocks COREP rows 0350-0354 (see P2.5).
-- **File:Line:** `engine/sa/calculator.py`, `reporting/corep/generator.py:663`
-- **Spec ref:** PRA PS1/26 Art. 124J, `docs/specifications/crr/sa-risk-weights.md`
-- **Fix:** Add "other RE" classification to classifier. Add risk weight logic to SA calculator.
-- **Tests needed:** Unit and acceptance tests.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** PRA PS1/26 Art. 124J "Other Real Estate" (non-qualifying RE) now fully implemented. RE that doesn't meet Art. 124A qualifying criteria (independent valuation, first charge, etc.) gets three sub-treatments under Basel 3.1:
+  - **Income-dependent**: 150% flat (regardless of property type)
+  - **RESI non-dependent**: counterparty RW (no floor — can be as low as 20% for CQS 1)
+  - **CRE non-dependent**: max(60%, counterparty RW) — 60% floor ensures CRE never gets lower than secured portion weight
+  **Implementation:**
+  - **Schema:** `is_qualifying_re` Boolean field added to `COLLATERAL_SCHEMA` and `INTERMEDIATE_RESULT_SCHEMA` — represents whether the RE collateral meets Art. 124A regulatory criteria
+  - **Hierarchy:** `is_qualifying_re` propagated through `_add_collateral_ltv` at all three linking levels (direct, facility, counterparty) using the same coalesce pattern as `property_type` and `has_income_cover`
+  - **Data tables:** `B31_OTHER_RE_INCOME_DEPENDENT_RW` (150%) and `B31_OTHER_RE_CRE_FLOOR_RW` (60%) constants added to `b31_risk_weights.py`. `b31_other_re_rw_expr()` Polars expression builder and `lookup_b31_other_re_rw()` scalar lookup function added.
+  - **SA calculator:** New when-chain branch in B31 path between ADC and qualifying RESI/CRE branches. Matches on `is_qualifying_re == False` combined with RE exposure class detection. `_ensure_columns` defaults null/missing `is_qualifying_re` to null (treated as qualifying=True for backward compatibility).
+  - **COREP:** `_RE_ROW_FILTERS` updated with entries for rows 0350-0354 (Other RE). `_filter_re()` extended with `is_qualifying` parameter. Rows now filter on `is_qualifying_re` column.
+  - **CRR path:** Unchanged — CRR has no separate "Other RE" concept. The `is_qualifying_re` flag is ignored under CRR.
+  - **Backward compatible:** Null/missing `is_qualifying_re` defaults to True (qualifying) — existing data gets standard RE treatment.
+- **File:Line:** `data/schemas.py` (COLLATERAL_SCHEMA, INTERMEDIATE_RESULT_SCHEMA), `engine/hierarchy.py` (_add_collateral_ltv), `data/tables/b31_risk_weights.py` (constants + expression + scalar), `engine/sa/calculator.py` (B31 when-chain + _ensure_columns), `reporting/corep/generator.py` (_RE_ROW_FILTERS + _filter_re)
+- **Spec ref:** PRA PS1/26 Art. 124J, Art. 124A, `docs/specifications/crr/sa-risk-weights.md`
+- **Tests:** 26 new unit tests in `tests/unit/test_b31_other_re.py`: 2 constant tests, 8 expression builder tests (income RESI/CRE 150%, non-dep RESI cp RW, non-dep CRE max(60%, cp), null defaults), 4 scalar lookup tests, 12 SA calculator integration tests (non-qualifying RESI income 150%, non-qualifying RESI non-income cp RW, non-qualifying CRE income 150%, non-qualifying CRE non-income max(60%, cp), rated CQS 1 floor binds, qualifying unchanged, null defaults qualifying, missing column defaults qualifying, RWA correctness, CRR no Other RE, qualifying vs non-qualifying comparison, mixed batch). All 3102 tests pass. Test count: 3102 (was 3076).
+- **Limitation:** Art. 124A qualifying criteria are not auto-validated — institutions must set `is_qualifying_re=False` on collateral that fails the criteria. The calculator does not assess property valuation independence, lien priority, or market robustness from input data.
 
 ### P1.15 Rated SA specialised lending fallback (Art. 122A(3))
 - **Status:** [x] Complete

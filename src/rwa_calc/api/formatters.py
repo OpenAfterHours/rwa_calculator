@@ -269,14 +269,14 @@ class ResultFormatter:
             except Exception:
                 pass
 
-        # EL summary fields
+        # EL summary fields (ELPortfolioSummary stores Decimal natively)
         el_shortfall = Decimal("0")
         el_excess = Decimal("0")
         t2_credit = Decimal("0")
         if el_summary is not None:
-            el_shortfall = Decimal(str(el_summary.total_el_shortfall))
-            el_excess = Decimal(str(el_summary.total_el_excess))
-            t2_credit = Decimal(str(el_summary.t2_credit))
+            el_shortfall = el_summary.total_el_shortfall
+            el_excess = el_summary.total_el_excess
+            t2_credit = el_summary.t2_credit
 
         summary = SummaryStatistics(
             total_ead=total_ead,

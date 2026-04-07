@@ -36,7 +36,7 @@ if TYPE_CHECKING:
         ResolvedHierarchyBundle,
     )
     from rwa_calc.contracts.config import CalculationConfig
-    from rwa_calc.contracts.errors import LazyFrameResult
+    from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
 
 
 @runtime_checkable
@@ -170,14 +170,38 @@ class CRMProcessorProtocol(Protocol):
         config: CalculationConfig,
     ) -> CRMAdjustedBundle:
         """
-        Apply CRM and return as a bundle (alternative interface).
+        Apply CRM and return as a bundle with approach-split exposures.
+
+        Performs full CRM pipeline including collateral, guarantees, provisions,
+        and CCF, then splits exposures by approach (SA/IRB/Slotting).
 
         Args:
             data: Classified exposures
             config: Calculation configuration
 
         Returns:
-            CRMAdjustedBundle with adjusted exposures
+            CRMAdjustedBundle with adjusted exposures split by approach
+        """
+        ...
+
+    def get_crm_unified_bundle(
+        self,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        """
+        Apply CRM and return a unified bundle without approach splitting.
+
+        Performs the same CRM pipeline as get_crm_adjusted_bundle but returns
+        all exposures in a single unified LazyFrame without splitting by
+        approach. Used by the pipeline for single-pass calculator processing.
+
+        Args:
+            data: Classified exposures
+            config: Calculation configuration
+
+        Returns:
+            CRMAdjustedBundle with all exposures in the unified frame
         """
         ...
 
@@ -591,7 +615,7 @@ class DataQualityCheckerProtocol(Protocol):
         self,
         data: RawDataBundle,
         config: CalculationConfig,
-    ) -> list:
+    ) -> list[CalculationError]:
         """
         Run data quality checks on raw data.
 

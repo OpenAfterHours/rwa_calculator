@@ -173,6 +173,7 @@ ERROR_HIERARCHY_DEPTH = "HIE003"
 ERROR_UNKNOWN_EXPOSURE_CLASS = "CLS001"
 ERROR_APPROACH_NOT_PERMITTED = "CLS002"
 ERROR_MISSING_RATING = "CLS003"
+ERROR_QRRE_COLUMNS_MISSING = "CLS004"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -187,11 +188,15 @@ ERROR_LGD_OUT_OF_RANGE = "IRB002"
 ERROR_MATURITY_INVALID = "IRB003"
 ERROR_MISSING_PD = "IRB004"
 ERROR_MISSING_LGD = "IRB005"
+ERROR_MISSING_EXPECTED_LOSS = "IRB006"
 
 # SA error codes
 ERROR_INVALID_CQS = "SA001"
 ERROR_MISSING_RISK_WEIGHT = "SA002"
 ERROR_INVALID_LTV = "SA003"
+
+# Supporting factor error codes
+ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"
 
 # Configuration error codes
 ERROR_INVALID_CONFIG = "CFG001"
@@ -289,5 +294,20 @@ def crm_warning(
         severity=ErrorSeverity.WARNING,
         category=ErrorCategory.CRM,
         exposure_reference=exposure_reference,
+        regulatory_reference=regulatory_reference,
+    )
+
+
+def classification_warning(
+    code: str,
+    message: str,
+    regulatory_reference: str | None = None,
+) -> CalculationError:
+    """Create a classification-related warning."""
+    return CalculationError(
+        code=code,
+        message=message,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.CLASSIFICATION,
         regulatory_reference=regulatory_reference,
     )

@@ -13,9 +13,9 @@ Equity exposure treatment under SA and IRB, including CIU look-through and Basel
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-1.7 | Equity risk weights: SA (Art. 133) and IRB Simple (Art. 155) | P1 | Done |
-| FR-1.7a | Basel 3.1 equity SA weights (Art. 133(3)-(6)) | P1 | Pending |
-| FR-1.7b | CIU treatment (Art. 132/132A/132B) | P2 | Partial |
-| FR-1.7c | Equity transitional schedule (PRA Rules 4.1-4.3) | P2 | Pending |
+| FR-1.7a | Basel 3.1 equity SA weights (Art. 133(3)-(6)) | P1 | Done |
+| FR-1.7b | CIU treatment (Art. 132/132A/132B) | P2 | Done |
+| FR-1.7c | Equity transitional schedule (PRA Rules 4.1-4.3) | P2 | Done |
 
 ---
 

@@ -446,14 +446,22 @@ def validate_lgd_range(
 # =============================================================================
 
 # Valid risk type codes (short form)
-VALID_RISK_TYPE_CODES = {"fr", "mr", "oc", "mlr", "lr"}
+VALID_RISK_TYPE_CODES = {"fr", "frc", "mr", "oc", "mlr", "lr"}
 
 # Valid risk type full values
-VALID_RISK_TYPES = {"full_risk", "medium_risk", "other_commit", "medium_low_risk", "low_risk"}
+VALID_RISK_TYPES = {
+    "full_risk",
+    "full_risk_commitment",
+    "medium_risk",
+    "other_commit",
+    "medium_low_risk",
+    "low_risk",
+}
 
 # Mapping from codes to full values
 RISK_TYPE_CODE_TO_VALUE = {
     "fr": "full_risk",
+    "frc": "full_risk_commitment",
     "mr": "medium_risk",
     "oc": "other_commit",
     "mlr": "medium_low_risk",

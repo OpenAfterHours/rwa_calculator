@@ -56,6 +56,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO,
     B31_RESIDENTIAL_GENERAL_SECURED_RW,
     B31_RESIDENTIAL_INCOME_LTV_BANDS,
+    B31_RETAIL_PAYROLL_LOAN_RW,
     B31_SCRA_RISK_WEIGHTS,
     B31_SCRA_SHORT_TERM_RISK_WEIGHTS,
     B31_SUBORDINATED_DEBT_RW,
@@ -155,6 +156,7 @@ class TestB31ResidentialGeneral:
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=ltv,
+            cp_is_natural_person=True,
             config=b31_config,
         )
 
@@ -171,6 +173,7 @@ class TestB31ResidentialGeneral:
             ead=Decimal("500000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=None,
+            cp_is_natural_person=True,
             config=b31_config,
         )
 
@@ -192,6 +195,7 @@ class TestB31ResidentialGeneral:
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("0.65"),
+            cp_is_natural_person=True,
             config=b31_config,
         )
 
@@ -263,8 +267,8 @@ class TestB31CommercialREGeneral:
     """Basel 3.1 commercial RE (general) — loan-splitting (PRA Art. 124H).
 
     For CRE not materially dependent on property cash flows:
-    - 60% on portion up to 55% of property value
-    - Counterparty risk weight on the residual
+    - Natural person / SME (Art. 124H(1-2)): loan-splitting at 55%, 60% secured RW
+    - Other counterparties (Art. 124H(3)): max(60%, min(cp_rw, income_rw))
     - Formula: secured_share = min(1.0, 0.55/LTV)
     -          RW = 0.60 × secured_share + cp_rw × (1 - secured_share)
     """
@@ -274,7 +278,7 @@ class TestB31CommercialREGeneral:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """LTV ≤ 55%: entire exposure at 60% (fully within secured portion)."""
+        """LTV ≤ 55%: natural person, entire exposure at 60% (fully within secured)."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRE001"],
@@ -285,6 +289,7 @@ class TestB31CommercialREGeneral:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "has_income_cover": [False],
+                "cp_is_natural_person": [True],
             }
         ).lazy()
 
@@ -337,7 +342,7 @@ class TestB31CommercialREGeneral:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CRE LTV 75% → blended loan-split RW."""
+        """CRE LTV 75%, natural person → blended loan-split RW."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRE001"],
@@ -348,6 +353,7 @@ class TestB31CommercialREGeneral:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "has_income_cover": [False],
+                "cp_is_natural_person": [True],
             }
         ).lazy()
 
@@ -370,7 +376,7 @@ class TestB31CommercialREGeneral:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """LTV exactly 55%: entire exposure within secured portion → 60%."""
+        """LTV exactly 55%: natural person, entire exposure within secured → 60%."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRE001"],
@@ -381,6 +387,7 @@ class TestB31CommercialREGeneral:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "has_income_cover": [False],
+                "cp_is_natural_person": [True],
             }
         ).lazy()
 
@@ -458,6 +465,363 @@ class TestB31CommercialREIncomeProducing:
         df = result.frame.collect()
 
         assert df["risk_weight"][0] == pytest.approx(float(expected_rw))
+
+
+# =============================================================================
+# COMMERCIAL RE — OTHER COUNTERPARTIES (PRA Art. 124H(3))
+# =============================================================================
+
+
+class TestB31CommercialREOtherCounterparties:
+    """Basel 3.1 commercial RE (general) — other counterparties (PRA Art. 124H(3)).
+
+    For non-natural-person / non-SME counterparties:
+    - RW = max(60%, min(counterparty_RW, Art. 124I income-producing RW))
+    - Art. 124I income-producing RW: 100% (LTV ≤ 80%), 110% (LTV > 80%)
+    - This prevents large corporates from benefiting from loan-splitting.
+    """
+
+    def test_unrated_corporate_100pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Unrated corporate (100% cp RW), LTV 50%: max(60%, min(100%, 100%)) = 100%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.50],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "cp_is_natural_person": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # max(60%, min(100%, 100%)) = 100%
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+
+    def test_rated_cqs1_corporate_floored_at_60pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """CQS 1 corporate (20% cp RW): max(60%, min(20%, 100%)) = 60% floor."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [1],
+                "ltv": [0.50],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "property_type": ["commercial"],
+                "cp_is_natural_person": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # max(60%, min(20%, 100%)) = max(60%, 20%) = 60%
+        assert df["risk_weight"][0] == pytest.approx(0.60)
+
+    def test_cqs5_corporate_capped_by_income_rw(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """CQS 5 corporate (150% cp RW), LTV 90%: max(60%, min(150%, 110%)) = 110%.
+
+        Uses exposure_class=CORPORATE + property_type=commercial so CQS join
+        picks up the corporate CQS 5 risk weight (150%).
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [5],
+                "ltv": [0.90],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "property_type": ["commercial"],
+                "cp_is_natural_person": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # CQS 5 corporate cp_rw = 150%, LTV 90% > 80% → income_rw = 110%
+        # max(60%, min(150%, 110%)) = max(60%, 110%) = 110%
+        assert df["risk_weight"][0] == pytest.approx(1.10)
+
+    def test_cqs5_low_ltv_capped_at_100pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """CQS 5 corporate (150% cp RW), LTV 60%: max(60%, min(150%, 100%)) = 100%.
+
+        Uses exposure_class=CORPORATE + property_type=commercial.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [5],
+                "ltv": [0.60],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "property_type": ["commercial"],
+                "cp_is_natural_person": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # CQS 5 corporate cp_rw = 150%, LTV 60% ≤ 80% → income_rw = 100%
+        # max(60%, min(150%, 100%)) = max(60%, 100%) = 100%
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+
+    def test_sme_gets_loan_splitting_not_max_min(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """SME counterparty uses loan-splitting (Art. 124H(2)), not max/min."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.50],
+                "is_sme": [True],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "cp_is_natural_person": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # SME → loan-splitting: LTV 50% ≤ 55% → secured_share = 1.0 → RW = 60%
+        assert df["risk_weight"][0] == pytest.approx(0.60)
+
+    def test_rwa_correctness_other_counterparty(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Verify RWA = EAD × RW for other counterparty."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [2000000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.70],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "cp_is_natural_person": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # max(60%, min(100%, 100%)) = 100%
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+        assert df["rwa_post_factor"][0] == pytest.approx(2000000.0)
+
+    def test_null_cp_is_natural_person_defaults_to_other(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null cp_is_natural_person defaults to False (other counterparty, conservative)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.50],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "cp_is_natural_person": [None],
+            },
+            schema_overrides={"cp_is_natural_person": pl.Boolean},
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # Null → False → other counterparty: max(60%, min(100%, 100%)) = 100%
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+
+    def test_missing_column_defaults_to_other(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Missing cp_is_natural_person column defaults to False (conservative)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.50],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # No cp_is_natural_person column → defaults to False → max/min formula
+        # max(60%, min(100%, 100%)) = 100%
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+
+    def test_income_producing_unaffected_by_counterparty_type(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Income-producing CRE ignores counterparty type — always uses Art. 124I."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CRE001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["COMMERCIAL_RE"],
+                "cqs": [None],
+                "ltv": [0.70],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [True],
+                "cp_is_natural_person": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # Income-producing: 100% (LTV ≤ 80%) — counterparty type irrelevant
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+
+    def test_other_vs_natural_person_comparison(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Other counterparty gets higher RW than natural person for same CRE exposure."""
+        base = {
+            "exposure_reference": ["CRE001"],
+            "ead_final": [1000000.0],
+            "exposure_class": ["COMMERCIAL_RE"],
+            "cqs": [None],
+            "ltv": [0.75],
+            "is_sme": [False],
+            "is_infrastructure": [False],
+            "has_income_cover": [False],
+        }
+
+        # Natural person: loan-splitting
+        np_exp = pl.DataFrame({**base, "cp_is_natural_person": [True]}).lazy()
+        np_bundle = CRMAdjustedBundle(
+            exposures=np_exp, sa_exposures=np_exp, irb_exposures=pl.LazyFrame()
+        )
+        np_result = sa_calculator.calculate(np_bundle, b31_config)
+        np_rw = np_result.frame.collect()["risk_weight"][0]
+
+        # Other counterparty: max/min formula
+        oc_exp = pl.DataFrame({**base, "cp_is_natural_person": [False]}).lazy()
+        oc_bundle = CRMAdjustedBundle(
+            exposures=oc_exp, sa_exposures=oc_exp, irb_exposures=pl.LazyFrame()
+        )
+        oc_result = sa_calculator.calculate(oc_bundle, b31_config)
+        oc_rw = oc_result.frame.collect()["risk_weight"][0]
+
+        # Loan-splitting at LTV 75%: 0.60 × (0.55/0.75) + 1.00 × (1 - 0.55/0.75) ≈ 70.7%
+        # Max/min for 100% cp: max(60%, min(100%, 100%)) = 100%
+        assert np_rw < oc_rw
+        secured_share = 0.55 / 0.75
+        assert np_rw == pytest.approx(0.60 * secured_share + 1.00 * (1 - secured_share))
+        assert oc_rw == pytest.approx(1.00)
 
 
 # =============================================================================
@@ -610,6 +974,42 @@ class TestScalarLookups:
             ltv = band["ltv_lower"] + Decimal("0.01") if band["ltv_lower"] > 0 else Decimal("0.10")
             rw, _ = lookup_b31_commercial_rw(ltv, is_income_producing=True)
             assert rw == band["risk_weight"]
+
+    def test_commercial_other_cp_unrated_100pct(self) -> None:
+        """Scalar lookup: other counterparty, unrated (100% cp RW) → 100%."""
+        rw, desc = lookup_b31_commercial_rw(
+            Decimal("0.50"),
+            counterparty_rw=Decimal("1.00"),
+            is_income_producing=False,
+            is_natural_person_or_sme=False,
+        )
+        # max(60%, min(100%, 100%)) = 100%
+        assert rw == Decimal("1.00")
+        assert "Art. 124H(3)" in desc
+
+    def test_commercial_other_cp_rated_cqs1_floored(self) -> None:
+        """Scalar lookup: other counterparty, CQS 1 (20% cp RW) → 60% floor."""
+        rw, desc = lookup_b31_commercial_rw(
+            Decimal("0.50"),
+            counterparty_rw=Decimal("0.20"),
+            is_income_producing=False,
+            is_natural_person_or_sme=False,
+        )
+        # max(60%, min(20%, 100%)) = 60%
+        assert rw == Decimal("0.60")
+        assert "Art. 124H(3)" in desc
+
+    def test_commercial_other_cp_high_rw_capped_by_income(self) -> None:
+        """Scalar lookup: other CP, CQS 5 (150% cp RW), LTV 90% → 110% cap."""
+        rw, _ = lookup_b31_commercial_rw(
+            Decimal("0.90"),
+            counterparty_rw=Decimal("1.50"),
+            is_income_producing=False,
+            is_natural_person_or_sme=False,
+        )
+        # LTV > 80% → income_rw = 110%
+        # max(60%, min(150%, 110%)) = 110%
+        assert rw == Decimal("1.10")
 
 
 # =============================================================================
@@ -1245,6 +1645,7 @@ class TestCRRvsBasel31Comparison:
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.10"),
+            cp_is_natural_person=True,
             config=crr_config,
         )
 
@@ -1253,6 +1654,7 @@ class TestCRRvsBasel31Comparison:
             ead=Decimal("400000"),
             exposure_class="RESIDENTIAL_MORTGAGE",
             ltv=Decimal("1.10"),
+            cp_is_natural_person=True,
             config=b31_config,
         )
 
@@ -3053,3 +3455,235 @@ class TestDefaultedResiREBasel31:
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.50)
+
+
+# =============================================================================
+# PAYROLL / PENSION LOAN — 35% (PRA PS1/26 Art. 123(3)(a-b))
+# =============================================================================
+
+
+class TestB31PayrollPensionLoan:
+    """Basel 3.1 payroll/pension loan — 35% risk weight (Art. 123(3)(a-b)).
+
+    Why these tests matter:
+        Under Basel 3.1, loans secured by assignment of the borrower's payroll
+        or pension income receive a preferential 35% risk weight instead of the
+        standard 75% regulatory retail rate. This is a new Basel 3.1 retail
+        sub-category not present in CRR. Without this treatment, payroll/pension
+        loans are overcharged by 40pp (75% vs 35%), overstating capital.
+
+    References:
+    - PRA PS1/26 Art. 123(3)(a-b): payroll/pension loans = 35%
+    - PRA PS1/26 Art. 123A: qualifying criteria for regulatory retail
+    """
+
+    def test_payroll_loan_gets_35pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Payroll loan exposure should get 35% RW under Basel 3.1."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.35)
+
+    def test_payroll_loan_rwa_correctness(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Payroll loan RWA should be EAD * 35%."""
+        ead = 40000.0
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_002"],
+                "ead_final": [ead],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["rwa_pre_factor"][0] == pytest.approx(ead * 0.35)
+
+    def test_non_payroll_retail_still_gets_75pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Non-payroll retail should still get 75% RW."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_payroll_loan_qrre_transactor_gets_45pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """QRRE transactor takes priority over payroll loan in the when-chain."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_QRRE_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_QRRE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [True],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        # QRRE transactor (45%) takes priority over payroll (35%) in the when-chain
+        assert df["risk_weight"][0] == pytest.approx(0.45)
+
+    def test_null_payroll_flag_defaults_to_non_payroll(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Null is_payroll_loan defaults to False (standard 75% retail)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_NULL_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [None],
+            },
+            schema_overrides={"is_payroll_loan": pl.Boolean},
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_missing_payroll_column_defaults_to_non_payroll(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """When is_payroll_loan column is absent, defaults to False (75% retail)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["RTL_NO_COL_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_crr_payroll_loan_gets_75pct(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Under CRR, payroll loans get standard 75% retail RW (no 35% category)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["PAY_CRR_001"],
+                "ead_final": [25000.0],
+                "exposure_class": ["RETAIL_OTHER"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_payroll_loan": [True],
+            }
+        ).lazy()
+
+        bundle = CRMAdjustedBundle(
+            exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+        )
+
+        result = sa_calculator.calculate(bundle, crr_config)
+        df = result.frame.collect()
+
+        # CRR has no payroll/pension category — all retail is 75%
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+
+    def test_payroll_loan_constant_value(self) -> None:
+        """B31_RETAIL_PAYROLL_LOAN_RW constant should be 0.35 (35%)."""
+        assert Decimal("0.35") == B31_RETAIL_PAYROLL_LOAN_RW

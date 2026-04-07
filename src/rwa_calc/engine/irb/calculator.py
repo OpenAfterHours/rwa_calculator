@@ -83,16 +83,21 @@ class IRBCalculator:
         """
         bundle = self.get_irb_result_bundle(data, config)
 
-        # Convert bundle errors to CalculationErrors
-        calc_errors = [
-            CalculationError(
-                code="IRB001",
-                message=str(err),
-                severity=ErrorSeverity.ERROR,
-                category=ErrorCategory.CALCULATION,
-            )
-            for err in bundle.errors
-        ]
+        # Convert bundle errors to CalculationErrors, preserving any
+        # CalculationError objects already created by sub-components
+        calc_errors: list[CalculationError] = []
+        for err in bundle.errors:
+            if isinstance(err, CalculationError):
+                calc_errors.append(err)
+            else:
+                calc_errors.append(
+                    CalculationError(
+                        code="IRB001",
+                        message=str(err),
+                        severity=ErrorSeverity.ERROR,
+                        category=ErrorCategory.CALCULATION,
+                    )
+                )
 
         return LazyFrameResult(
             frame=bundle.results,
@@ -114,13 +119,14 @@ class IRBCalculator:
         Returns:
             IRBResultBundle with results, expected loss, and audit trail
         """
-        exposures = self._run_irb_chain(data.irb_exposures, config)
+        sf_errors: list[CalculationError] = []
+        exposures = self._run_irb_chain(data.irb_exposures, config, sf_errors=sf_errors)
 
         return IRBResultBundle(
             results=exposures,
             expected_loss=exposures.irb.select_expected_loss(),
             calculation_audit=exposures.irb.build_audit(),
-            errors=[],
+            errors=sf_errors,
         )
 
     def calculate_branch(
@@ -181,6 +187,8 @@ class IRBCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        sf_errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """Run the full IRB namespace chain plus supporting factors."""
         exposures = (
@@ -189,15 +197,17 @@ class IRBCalculator:
             .irb.prepare_columns(config)
             .irb.apply_all_formulas(config)
             .irb.apply_post_model_adjustments(config)
-            .irb.compute_el_shortfall_excess()
+            .irb.compute_el_shortfall_excess(errors=sf_errors)
             .irb.apply_guarantee_substitution(config)
         )
-        return self._apply_supporting_factors(exposures, config)
+        return self._apply_supporting_factors(exposures, config, errors=sf_errors)
 
     def _apply_supporting_factors(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SME and infrastructure supporting factors (CRR Art. 501).
@@ -226,7 +236,7 @@ class IRBCalculator:
 
         # Use the SA supporting factor calculator
         sf_calc = SupportingFactorCalculator()
-        exposures = sf_calc.apply_factors(exposures, config)
+        exposures = sf_calc.apply_factors(exposures, config, errors=errors)
 
         # Rename rwa_post_factor back to rwa for consistency
         if "rwa_post_factor" in exposures.collect_schema().names():

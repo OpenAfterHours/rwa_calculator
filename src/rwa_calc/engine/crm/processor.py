@@ -23,7 +23,6 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -32,18 +31,26 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CRMAdjustedBundle,
 )
-from rwa_calc.contracts.errors import LazyFrameResult
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.contracts.errors import (
+    ERROR_INELIGIBLE_COLLATERAL,
+    ERROR_INVALID_GUARANTEE,
+    LazyFrameResult,
+    crm_warning,
+)
+from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod
 from rwa_calc.engine.ccf import CCFCalculator
 from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
+from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.materialise import materialise_barrier
 from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.errors import CalculationError
 
 
 def _build_exposure_lookups(
@@ -63,28 +70,42 @@ def _build_exposure_lookups(
     """
     exp_schema = exposures.collect_schema()
 
+    # Determine whether has_one_day_maturity_floor is available
+    has_floor_col = "has_one_day_maturity_floor" in exp_schema.names()
+
     # Direct: one row per exposure
-    direct_lookup = exposures.select(
-        [
-            pl.col("exposure_reference").alias("_ben_ref_direct"),
-            pl.col("ead_gross").alias("_ead_direct"),
-            pl.col("currency").alias("_currency_direct"),
-            pl.col("maturity_date").alias("_maturity_direct"),
-        ]
-    )
+    direct_cols = [
+        pl.col("exposure_reference").alias("_ben_ref_direct"),
+        pl.col("ead_gross").alias("_ead_direct"),
+        pl.col("currency").alias("_currency_direct"),
+        pl.col("maturity_date").alias("_maturity_direct"),
+    ]
+    if has_floor_col:
+        direct_cols.append(
+            pl.col("has_one_day_maturity_floor").fill_null(False).alias("_floor_direct")
+        )
+    else:
+        direct_cols.append(pl.lit(False).alias("_floor_direct"))
+    direct_lookup = exposures.select(direct_cols)
 
     # Facility: aggregated per parent_facility_reference
     if "parent_facility_reference" in exp_schema.names():
+        facility_agg = [
+            pl.col("ead_gross").sum().alias("_ead_facility"),
+            pl.col("currency").first().alias("_currency_facility"),
+            pl.col("maturity_date").first().alias("_maturity_facility"),
+        ]
+        if has_floor_col:
+            # Conservative: if ANY exposure in facility has 1-day floor, flag whole facility
+            facility_agg.append(
+                pl.col("has_one_day_maturity_floor").fill_null(False).max().alias("_floor_facility")
+            )
+        else:
+            facility_agg.append(pl.lit(False).alias("_floor_facility"))
         facility_lookup = (
             exposures.filter(pl.col("parent_facility_reference").is_not_null())
             .group_by("parent_facility_reference")
-            .agg(
-                [
-                    pl.col("ead_gross").sum().alias("_ead_facility"),
-                    pl.col("currency").first().alias("_currency_facility"),
-                    pl.col("maturity_date").first().alias("_maturity_facility"),
-                ]
-            )
+            .agg(facility_agg)
             .with_columns(
                 pl.col("parent_facility_reference").cast(pl.String),
             )
@@ -97,19 +118,26 @@ def _build_exposure_lookups(
                 "_ead_facility": pl.Float64,
                 "_currency_facility": pl.String,
                 "_maturity_facility": pl.Date,
+                "_floor_facility": pl.Boolean,
             }
         )
 
     # Counterparty: aggregated per counterparty_reference
+    cp_agg = [
+        pl.col("ead_gross").sum().alias("_ead_cp"),
+        pl.col("currency").first().alias("_currency_cp"),
+        pl.col("maturity_date").first().alias("_maturity_cp"),
+    ]
+    if has_floor_col:
+        # Conservative: if ANY exposure for counterparty has 1-day floor, flag whole group
+        cp_agg.append(
+            pl.col("has_one_day_maturity_floor").fill_null(False).max().alias("_floor_cp")
+        )
+    else:
+        cp_agg.append(pl.lit(False).alias("_floor_cp"))
     cp_lookup = (
         exposures.group_by("counterparty_reference")
-        .agg(
-            [
-                pl.col("ead_gross").sum().alias("_ead_cp"),
-                pl.col("currency").first().alias("_currency_cp"),
-                pl.col("maturity_date").first().alias("_maturity_cp"),
-            ]
-        )
+        .agg(cp_agg)
         .rename({"counterparty_reference": "_ben_ref_cp"})
     )
 
@@ -143,6 +171,7 @@ def _join_collateral_to_lookups(
                 pl.col("_ead_direct").alias("_beneficiary_ead"),
                 pl.col("_currency_direct").alias("exposure_currency"),
                 pl.col("_maturity_direct").alias("exposure_maturity"),
+                pl.col("_floor_direct").alias("exposure_has_one_day_maturity_floor"),
             ),
             left_on="beneficiary_reference",
             right_on="_ben_ref_direct",
@@ -200,6 +229,15 @@ def _join_collateral_to_lookups(
             .then(pl.col("_maturity_cp"))
             .otherwise(pl.lit(None).cast(pl.Date))
             .alias("exposure_maturity"),
+            # Art. 162(3) 1-day maturity floor flag — for Art. 237(2) ineligibility
+            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
+            .then(pl.col("_floor_direct"))
+            .when(bt_lower == "facility")
+            .then(pl.col("_floor_facility"))
+            .when(bt_lower == "counterparty")
+            .then(pl.col("_floor_cp"))
+            .otherwise(pl.lit(False))
+            .alias("exposure_has_one_day_maturity_floor"),
         ]
     ).drop(
         [
@@ -212,6 +250,9 @@ def _join_collateral_to_lookups(
             "_maturity_direct",
             "_maturity_facility",
             "_maturity_cp",
+            "_floor_direct",
+            "_floor_facility",
+            "_floor_cp",
         ]
     )
 
@@ -277,16 +318,6 @@ def _join_netting_amounts(
     return exposures
 
 
-@dataclass
-class CRMError:
-    """Error encountered during CRM processing."""
-
-    error_type: str
-    message: str
-    exposure_reference: str | None = None
-    context: dict = field(default_factory=dict)
-
-
 class CRMProcessor:
     """
     Apply credit risk mitigation to exposures.
@@ -336,10 +367,9 @@ class CRMProcessor:
         """
         bundle = self.get_crm_adjusted_bundle(data, config)
 
-        # Convert to LazyFrameResult format
         return LazyFrameResult(
             frame=bundle.exposures,
-            errors=[],  # CRMError objects would need conversion to CalculationError
+            errors=bundle.crm_errors,
         )
 
     def get_crm_adjusted_bundle(
@@ -357,7 +387,7 @@ class CRMProcessor:
         Returns:
             CRMAdjustedBundle with adjusted exposures
         """
-        errors: list[CRMError] = []
+        errors: list[CalculationError] = []
 
         # Start with all exposures
         exposures = data.all_exposures
@@ -397,14 +427,56 @@ class CRMProcessor:
         else:
             exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))
 
+        # Step 3.6: Pre-compute FCSM columns if Simple Method is elected
+        # Must run BEFORE Comprehensive Method (which is still needed for IRB LGD)
+        use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
+        if use_simple_method and has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = compute_fcsm_columns(exposures, collateral, config)
+
         # Step 4: Apply collateral (if available and valid)
+        # Under Simple Method, the Comprehensive pipeline still runs for IRB LGD
+        # adjustment. SA EAD reduction is undone in Step 4b.
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
         else:
-            # No collateral: still need to set F-IRB supervisory LGD based on seniority
+            if collateral is not None:
+                errors.append(
+                    crm_warning(
+                        ERROR_INELIGIBLE_COLLATERAL,
+                        "Collateral data provided but missing required columns "
+                        f"{self.COLLATERAL_REQUIRED_COLUMNS}; collateral CRM skipped",
+                        regulatory_reference="CRR Art. 223-224",
+                    )
+                )
+            # No collateral: still need to set F-IRB supervisory LGD based on seniority.
+            # Under B31, AIRB Foundation/169B exposures also get formula-based LGD.
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-                exposures, self._is_basel_3_1
+                exposures, self._is_basel_3_1, config=config
             )
+            if use_simple_method:
+                # Add default (zero) FCSM columns when no collateral
+                from rwa_calc.engine.crm.simple_method import _add_default_fcsm_columns
+
+                exposures = _add_default_fcsm_columns(exposures)
+
+        # Step 4b: Under Simple Method, undo SA financial collateral EAD reduction.
+        # The Comprehensive pipeline reduced SA EAD by collateral_adjusted_value,
+        # but Art. 222 does not reduce EAD — it substitutes risk weights instead.
+        if use_simple_method:
+            exposures = undo_sa_ead_reduction(exposures)
+
+        # Step 4c: Pre-compute life insurance method columns (Art. 232).
+        # Life insurance uses mapped risk weight for SA (not EAD reduction).
+        # IRB LGD handled via the waterfall (LGDS = 40%).
+        # SA EAD is not reduced because life_insurance has
+        # is_eligible_financial_collateral=False — the Comprehensive Method's
+        # eligible-only filter (collateral.py _cv aggregation) already excludes it.
+        if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = compute_life_insurance_columns(exposures, collateral, config)
+        else:
+            from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
+
+            exposures = _add_default_life_ins_columns(exposures)
 
         # Step 5: Apply guarantees (if available and valid)
         if (
@@ -426,6 +498,26 @@ class CRMProcessor:
                 config,
                 ri_df.lazy(),
             )
+        else:
+            if data.guarantees is not None:
+                if not has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS):
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but missing required columns "
+                            f"{self.GUARANTEE_REQUIRED_COLUMNS}; guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
+                elif data.counterparty_lookup is None:
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but counterparty lookup is missing; "
+                            "guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
 
         # Step 6: Calculate final EAD after all CRM adjustments
         # Provisions already baked into ead_pre_crm — no double deduction
@@ -481,7 +573,7 @@ class CRMProcessor:
         Returns:
             CRMAdjustedBundle with unified exposures (split fields empty)
         """
-        errors: list[CRMError] = []
+        errors: list[CalculationError] = []
 
         exposures = data.all_exposures
 
@@ -518,9 +610,26 @@ class CRMProcessor:
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
         else:
+            if collateral is not None:
+                errors.append(
+                    crm_warning(
+                        ERROR_INELIGIBLE_COLLATERAL,
+                        "Collateral data provided but missing required columns "
+                        f"{self.COLLATERAL_REQUIRED_COLUMNS}; collateral CRM skipped",
+                        regulatory_reference="CRR Art. 223-224",
+                    )
+                )
             exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-                exposures, self._is_basel_3_1
+                exposures, self._is_basel_3_1, config=config
             )
+
+        # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
+        if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            exposures = compute_life_insurance_columns(exposures, collateral, config)
+        else:
+            from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
+
+            exposures = _add_default_life_ins_columns(exposures)
 
         # Materialise after collateral before guarantee processing.
         # Collateral adds 3 lookup joins + haircuts + unified allocation;
@@ -550,6 +659,25 @@ class CRMProcessor:
                 ri_df.lazy(),
             )
         else:
+            if data.guarantees is not None:
+                if not has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS):
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but missing required columns "
+                            f"{self.GUARANTEE_REQUIRED_COLUMNS}; guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
+                elif data.counterparty_lookup is None:
+                    errors.append(
+                        crm_warning(
+                            ERROR_INVALID_GUARANTEE,
+                            "Guarantee data provided but counterparty lookup is missing; "
+                            "guarantee CRM skipped",
+                            regulatory_reference="CRR Art. 213-217",
+                        )
+                    )
             exposures = materialise_barrier(exposures, config, "crm_no_guarantee")
 
         exposures = self._finalize_ead(exposures)
@@ -581,10 +709,11 @@ class CRMProcessor:
     def _apply_firb_supervisory_lgd_no_collateral(
         self,
         exposures: pl.LazyFrame,
+        config: CalculationConfig | None = None,
     ) -> pl.LazyFrame:
         """Apply F-IRB supervisory LGD when no collateral is available."""
         return collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-            exposures, self._is_basel_3_1
+            exposures, self._is_basel_3_1, config=config
         )
 
     def _generate_netting_collateral(
@@ -672,6 +801,22 @@ class CRMProcessor:
                 pl.lit(0.0).alias("provision_deducted"),
             ]
 
+        # Art. 159(1) Pool B additional components: AVAs (Art. 34) and other
+        # own funds reductions.  Preserve if already on the frame; default 0.0.
+        col_names = schema.names()
+        pool_b_cols = [
+            (
+                pl.col("ava_amount").fill_null(0.0)
+                if "ava_amount" in col_names
+                else pl.lit(0.0).alias("ava_amount")
+            ),
+            (
+                pl.col("other_own_funds_reductions").fill_null(0.0)
+                if "other_own_funds_reductions" in col_names
+                else pl.lit(0.0).alias("other_own_funds_reductions")
+            ),
+        ]
+
         return exposures.with_columns(
             [
                 # Pre-CRM attributes for regulatory reporting
@@ -692,6 +837,8 @@ class CRMProcessor:
                 pl.lit(None).cast(pl.Float64).alias("substitute_rw"),
                 # Provision-related columns
                 *provision_cols,
+                # Art. 159(1) Pool B additional components
+                *pool_b_cols,
                 # LGD for IRB (may be adjusted by collateral)
                 pl.col("lgd").fill_null(0.45).alias("lgd_pre_crm"),
                 pl.col("lgd").fill_null(0.45).alias("lgd_post_crm"),
@@ -713,6 +860,8 @@ class CRMProcessor:
                 pl.lit(None).cast(pl.String).alias("protection_type"),
                 # FX mismatch haircut on guarantees (Art. 233(3-4))
                 pl.lit(0.0).alias("guarantee_fx_haircut"),
+                # CDS restructuring exclusion haircut (Art. 233(2))
+                pl.lit(0.0).alias("guarantee_restructuring_haircut"),
             ]
         )
 

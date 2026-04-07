@@ -46,6 +46,7 @@ from rwa_calc.engine.irb.adjustments import (
     compute_el_shortfall_excess as _compute_el_shortfall_excess,
 )
 from rwa_calc.engine.irb.formulas import (
+    _lgd_floor_blended_expression,
     _lgd_floor_expression,
     _lgd_floor_expression_with_collateral,
     _pd_floor_expression,
@@ -244,9 +245,11 @@ class IRBLazyFrame:
                 exprs.append(pl.lit(0.0).alias("ead_final"))
 
         # Maturity
+        # Basel 3.1 Art. 162(2A)(k): revolving exposures use facility_termination_date
+        # for M instead of the drawing's maturity_date. CRR path is unchanged.
         if "maturity" not in names:
             if "maturity_date" in names:
-                exprs.append(
+                maturity_from_date = (
                     pl.when(pl.col("maturity_date").is_not_null())
                     .then(
                         _exact_fractional_years_expr(config.reporting_date, "maturity_date").clip(
@@ -254,8 +257,28 @@ class IRBLazyFrame:
                         )
                     )
                     .otherwise(pl.lit(2.5))
-                    .alias("maturity"),
                 )
+                has_termination = "facility_termination_date" in names
+                has_revolving = "is_revolving" in names
+                if config.is_basel_3_1 and has_termination and has_revolving:
+                    # Revolving + non-null termination date → use termination date
+                    maturity_from_termination = (
+                        pl.when(pl.col("facility_termination_date").is_not_null())
+                        .then(
+                            _exact_fractional_years_expr(
+                                config.reporting_date, "facility_termination_date"
+                            ).clip(1.0, 5.0)
+                        )
+                        .otherwise(maturity_from_date)
+                    )
+                    exprs.append(
+                        pl.when(pl.col("is_revolving").fill_null(False))
+                        .then(maturity_from_termination)
+                        .otherwise(maturity_from_date)
+                        .alias("maturity"),
+                    )
+                else:
+                    exprs.append(maturity_from_date.alias("maturity"))
             else:
                 exprs.append(pl.lit(2.5).alias("maturity"))
 
@@ -338,6 +361,7 @@ class IRBLazyFrame:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
             has_exposure_class = "exposure_class" in schema_names
+            has_alloc = "crm_alloc_financial" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
                     config,
@@ -349,6 +373,15 @@ class IRBLazyFrame:
                     config,
                     has_seniority=has_seniority,
                     has_exposure_class=has_exposure_class,
+                )
+
+            # Art. 164(4)(c) blended floor for retail with mixed collateral
+            if has_alloc and has_exposure_class:
+                blended_expr = _lgd_floor_blended_expression(config)
+                # Use blended floor where applicable (retail_other/qrre with collateral),
+                # fall back to single-type floor otherwise
+                lgd_floor_expr = (
+                    pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
                 )
 
             # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
@@ -514,12 +547,19 @@ class IRBLazyFrame:
     # EL SHORTFALL / EXCESS
     # =========================================================================
 
-    def compute_el_shortfall_excess(self) -> pl.LazyFrame:
+    def compute_el_shortfall_excess(
+        self,
+        errors: list | None = None,
+    ) -> pl.LazyFrame:
         """Compute EL shortfall and excess for IRB exposures.
+
+        Args:
+            errors: Optional error accumulator. Receives a warning if
+                ``expected_loss`` column is absent (EL not yet computed).
 
         Delegates to ``adjustments.compute_el_shortfall_excess``.
         """
-        return _compute_el_shortfall_excess(self._lf)
+        return _compute_el_shortfall_excess(self._lf, errors=errors)
 
     # =========================================================================
     # GUARANTEE SUBSTITUTION
@@ -578,6 +618,7 @@ class IRBLazyFrame:
             has_collateral_type = "collateral_type" in schema_names
             has_seniority = "seniority" in schema_names
             has_exposure_class = "exposure_class" in schema_names
+            has_alloc = "crm_alloc_financial" in schema_names
             if has_collateral_type:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
                     config,
@@ -589,6 +630,12 @@ class IRBLazyFrame:
                     config,
                     has_seniority=has_seniority,
                     has_exposure_class=has_exposure_class,
+                )
+            # Art. 164(4)(c) blended floor for retail with mixed collateral
+            if has_alloc and has_exposure_class:
+                blended_expr = _lgd_floor_blended_expression(config)
+                lgd_floor_expr = (
+                    pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
                 )
             is_airb = (
                 pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)

@@ -218,6 +218,9 @@ class ErrorCategory(StrEnum):
     CRM = "crm"
     """CRM application issues"""
 
+    CLASSIFICATION = "classification"
+    """Exposure classification issues"""
+
 
 class SlottingCategory(StrEnum):
     """
@@ -346,9 +349,26 @@ class RiskType(StrEnum):
 
     FR = "full_risk"
     """
-    Full Risk - 100% CCF under SA and F-IRB
+    Full Risk - 100% CCF under SA and F-IRB (Table A1 Row 1)
 
-    -- Direct credit substitutes, guarantees, acceptances
+    -- Direct credit substitutes, guarantees, acceptances, credit derivatives
+    """
+
+    FRC = "full_risk_commitment"
+    """
+    Full Risk Commitment - 100% CCF under SA and F-IRB (Table A1 Row 2)
+
+    Commitments with certain drawdown, distinct from Row 1 (credit substitutes).
+    -- Factoring / invoice discounting facilities
+    -- Outright forward purchase agreements
+    -- Asset sale and repurchase agreements (repos)
+    -- Forward deposits
+    -- Partly-paid shares and securities
+    -- Other commitments with certain drawdowns
+
+    Ref: PRA PS1/26 Art. 111 Table A1 Row 2, CRR Annex I para 2
+    Under Basel 3.1 A-IRB, these cannot use own-estimate CCFs even if revolving
+    (Art. 166D(1)(a) carve-out).
     """
 
     MR = "medium_risk"
@@ -436,6 +456,9 @@ class EquityType(StrEnum):
     PRIVATE_EQUITY_DIVERSIFIED = "private_equity_diversified"
     """PE in diversified portfolio - 100% CRR SA / 250% B31 SA / 190% IRB Simple"""
 
+    SUBORDINATED_DEBT = "subordinated_debt"
+    """Subordinated debt / non-equity own funds - 100% CRR SA / 150% B31 SA (Art. 133(1))"""
+
     CIU = "ciu"
     """Collective investment undertakings - 150% CRR SA (Art. 132(2)) / 250% B31 SA"""
 
@@ -461,4 +484,103 @@ class EquityApproach(StrEnum):
     - 190% for diversified private equity
     - 290% for exchange-traded
     - 370% for other equity
+    """
+
+
+class InstitutionType(StrEnum):
+    """
+    Institution type for output floor applicability (PRA PS1/26 Art. 92 para 2A).
+
+    The output floor applies only to specific (institution_type, reporting_basis)
+    combinations. Exempt entities use U-TREA (no floor add-on).
+    """
+
+    STANDALONE_UK = "standalone_uk"
+    """Stand-alone UK institution — floor applies on individual basis (para 2A(a)(i))."""
+
+    RING_FENCED_BODY = "ring_fenced_body"
+    """Ring-fenced body in a sub-consolidation group — floor applies on
+    sub-consolidated basis (para 2A(a)(ii)). Exempt at individual level (para 2A(c))."""
+
+    NON_RING_FENCED = "non_ring_fenced"
+    """Non-ring-fenced institution on sub-consolidated basis — exempt (para 2A(b))."""
+
+    INTERNATIONAL_SUBSIDIARY = "international_subsidiary"
+    """International subsidiary CRR consolidation entity — exempt (para 2A(d))."""
+
+    CRR_CONSOLIDATION_ENTITY = "crr_consolidation_entity"
+    """Non-international-subsidiary CRR consolidation entity — floor applies
+    on consolidated basis (para 2A(a)(iii))."""
+
+
+class ReportingBasis(StrEnum):
+    """
+    Basis on which the capital calculation is performed.
+
+    Determines output floor applicability in combination with InstitutionType
+    (PRA PS1/26 Art. 92 para 2A, Reporting (CRR) Part Rule 2.2A).
+    """
+
+    INDIVIDUAL = "individual"
+    """Individual entity basis — applies to stand-alone UK institutions."""
+
+    SUB_CONSOLIDATED = "sub_consolidated"
+    """Sub-consolidated basis — applies to ring-fenced body sub-groups."""
+
+    CONSOLIDATED = "consolidated"
+    """Consolidated basis — applies to UK group-level CRR consolidation entities."""
+
+
+class CRMCollateralMethod(StrEnum):
+    """
+    Method for recognising financial collateral in credit risk mitigation.
+
+    Institutions must elect one method for financial collateral recognition.
+    The choice applies firm-wide for all SA exposures (CRR Art. 191A / PRA PS1/26 Art. 191A).
+    IRB exposures always use the Foundation Collateral Method regardless.
+    """
+
+    COMPREHENSIVE = "comprehensive"
+    """Financial Collateral Comprehensive Method (Art. 223-224).
+
+    Default method. Reduces EAD via supervisory haircuts applied to collateral
+    market values (H_c, H_fx, maturity mismatch). Both SA and IRB eligible.
+    """
+
+    SIMPLE = "simple"
+    """Financial Collateral Simple Method (Art. 222).
+
+    SA-only. Substitutes the risk weight on the collateralised portion with the
+    collateral's own SA risk weight, subject to a 20% floor. EAD is NOT reduced.
+    Special 0% RW for same-currency cash deposits and 0%-RW sovereign bonds.
+    """
+
+
+class AIRBCollateralMethod(StrEnum):
+    """
+    A-IRB collateral recognition method under Basel 3.1 (Art. 169A/169B).
+
+    Under Basel 3.1, A-IRB firms must use one of two methods to recognise
+    collateral in LGD estimates. Under CRR, A-IRB is free-form (no method
+    constraint). Art. 191A Part 2 governs the choice.
+    """
+
+    LGD_MODELLING = "lgd_modelling"
+    """LGD Modelling Collateral Method (Art. 169A).
+
+    Default for A-IRB under Basel 3.1.  The firm models collateral effects
+    directly in its LGD estimates.  When the firm has sufficient data to model
+    a collateral type in a jurisdiction (Art. 169A(1)(a)), own LGD captures
+    collateral effects — the calculator keeps the modelled LGD.  When data is
+    insufficient (Art. 169B), the calculator falls back to the Foundation
+    Collateral Method formula (Art. 230/231) with the firm's own unsecured LGD
+    as LGDU instead of the supervisory value.
+    """
+
+    FOUNDATION = "foundation"
+    """Foundation Collateral Method (Art. 229-231).
+
+    A-IRB firm elects to use the same Foundation Collateral Method as F-IRB,
+    with supervisory LGDS values and supervisory LGDU.  Same formula and
+    parameters as F-IRB collateral recognition.
     """

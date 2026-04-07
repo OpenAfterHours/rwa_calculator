@@ -593,14 +593,19 @@ class HierarchyResolver:
                     "beel": pl.Float64,
                     "seniority": pl.String,
                     "risk_type": pl.String,
+                    "underlying_risk_type": pl.String,
                     "ccf_modelled": pl.Float64,
+                    "ead_modelled": pl.Float64,
                     "is_short_term_trade_lc": pl.Boolean,
+                    "is_payroll_loan": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
+                    "has_one_day_maturity_floor": pl.Boolean,
                     "has_netting_agreement": pl.Boolean,
                     "is_revolving": pl.Boolean,
                     "is_qrre_transactor": pl.Boolean,
                     "facility_limit": pl.Float64,
                     "source_facility_reference": pl.String,
+                    "facility_termination_date": pl.Date,
                 }
             )
 
@@ -792,6 +797,12 @@ class HierarchyResolver:
             pl.col("lgd").cast(pl.Float64, strict=False)
             if "lgd" in facility_cols
             else pl.lit(None).cast(pl.Float64).alias("lgd"),
+            pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+            if "lgd_unsecured" in facility_cols
+            else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+            pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+            if "has_sufficient_collateral_data" in facility_cols
+            else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
             pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
             if "beel" in facility_cols
             else pl.lit(0.0).alias("beel"),
@@ -801,18 +812,34 @@ class HierarchyResolver:
             pl.col("risk_type")
             if "risk_type" in facility_cols
             else pl.lit(None).cast(pl.String).alias("risk_type"),
+            pl.col("underlying_risk_type")
+            if "underlying_risk_type" in facility_cols
+            else pl.lit(None).cast(pl.String).alias("underlying_risk_type"),
             pl.col("ccf_modelled").cast(pl.Float64, strict=False)
             if "ccf_modelled" in facility_cols
             else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
+            pl.col("ead_modelled").cast(pl.Float64, strict=False)
+            if "ead_modelled" in facility_cols
+            else pl.lit(None).cast(pl.Float64).alias("ead_modelled"),
             (
                 pl.col("is_short_term_trade_lc").fill_null(False)
                 if "is_short_term_trade_lc" in facility_cols
                 else pl.lit(False).alias("is_short_term_trade_lc")
             ),
             (
+                pl.col("is_payroll_loan").fill_null(False)
+                if "is_payroll_loan" in facility_cols
+                else pl.lit(False).alias("is_payroll_loan")
+            ),
+            (
                 pl.col("is_buy_to_let").fill_null(False)
                 if "is_buy_to_let" in facility_cols
                 else pl.lit(False).alias("is_buy_to_let")
+            ),
+            (
+                pl.col("has_one_day_maturity_floor").fill_null(False)
+                if "has_one_day_maturity_floor" in facility_cols
+                else pl.lit(False).alias("has_one_day_maturity_floor")
             ),
             pl.lit(False).alias("has_netting_agreement"),
             # QRRE classification fields (CRR Art. 147(5), CRE30.55)
@@ -830,6 +857,12 @@ class HierarchyResolver:
                 pl.col("limit").alias("facility_limit")
                 if "limit" in facility_cols
                 else pl.lit(None).cast(pl.Float64).alias("facility_limit")
+            ),
+            # Art. 162(2A)(k): max contractual termination date for revolving M under B31
+            (
+                pl.col("facility_termination_date")
+                if "facility_termination_date" in facility_cols
+                else pl.lit(None).cast(pl.Date).alias("facility_termination_date")
             ),
             # Propagate facility reference for collateral allocation
             # This allows facility-level collateral to be linked to undrawn exposures
@@ -888,23 +921,43 @@ class HierarchyResolver:
             pl.lit(0.0).alias("undrawn_amount"),
             pl.lit(0.0).alias("nominal_amount"),
             pl.col("lgd").cast(pl.Float64, strict=False),
+            pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+            if "lgd_unsecured" in loan_cols
+            else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+            pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+            if "has_sufficient_collateral_data" in loan_cols
+            else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
             pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
             if "beel" in loan_cols
             else pl.lit(0.0).alias("beel"),
             pl.col("seniority"),
             pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
+            pl.lit(None).cast(pl.String).alias("underlying_risk_type"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
+            pl.lit(None).cast(pl.Float64).alias("ead_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
+            (
+                pl.col("is_payroll_loan").fill_null(False)
+                if "is_payroll_loan" in loan_cols
+                else pl.lit(False).alias("is_payroll_loan")
+            ),
             (
                 pl.col("is_buy_to_let").fill_null(False)
                 if "is_buy_to_let" in loan_cols
                 else pl.lit(False).alias("is_buy_to_let")
             ),
             (
+                pl.col("has_one_day_maturity_floor").fill_null(False)
+                if "has_one_day_maturity_floor" in loan_cols
+                else pl.lit(False).alias("has_one_day_maturity_floor")
+            ),
+            (
                 pl.col("has_netting_agreement").fill_null(False)
                 if "has_netting_agreement" in loan_cols
                 else pl.lit(False).alias("has_netting_agreement")
             ),
+            # facility_termination_date is facility-level; inherited via facility join later
+            pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
         ]
         loans_unified = loans.select(loan_select_exprs)
 
@@ -946,6 +999,12 @@ class HierarchyResolver:
                     .otherwise(pl.col("nominal_amount"))
                     .alias("nominal_amount"),
                     pl.col("lgd").cast(pl.Float64, strict=False),
+                    pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+                    if "lgd_unsecured" in cont_cols
+                    else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+                    pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+                    if "has_sufficient_collateral_data" in cont_cols
+                    else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
                     pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
                     if "beel" in cont_cols
                     else pl.lit(0.0).alias("beel"),
@@ -955,17 +1014,43 @@ class HierarchyResolver:
                     .otherwise(pl.col("risk_type"))
                     .alias("risk_type"),
                     pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.String))
+                    .otherwise(
+                        pl.col("underlying_risk_type")
+                        if "underlying_risk_type" in cont_cols
+                        else pl.lit(None).cast(pl.String)
+                    )
+                    .alias("underlying_risk_type"),
+                    pl.when(is_drawn)
                     .then(pl.lit(None).cast(pl.Float64))
                     .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))
                     .alias("ccf_modelled"),
+                    pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.Float64))
+                    .otherwise(
+                        pl.col("ead_modelled").cast(pl.Float64, strict=False)
+                        if "ead_modelled" in cont_cols
+                        else pl.lit(None).cast(pl.Float64)
+                    )
+                    .alias("ead_modelled"),
                     pl.when(is_drawn)
                     .then(pl.lit(None).cast(pl.Boolean))
                     .otherwise(pl.col("is_short_term_trade_lc"))
                     .alias("is_short_term_trade_lc"),
                     pl.lit(False).alias(
+                        "is_payroll_loan"
+                    ),  # Payroll loans are term loans, not contingents
+                    pl.lit(False).alias(
                         "is_buy_to_let"
                     ),  # BTL is a property lending characteristic, not for contingents
+                    (
+                        pl.col("has_one_day_maturity_floor").fill_null(False)
+                        if "has_one_day_maturity_floor" in cont_cols
+                        else pl.lit(False).alias("has_one_day_maturity_floor")
+                    ),
                     pl.lit(False).alias("has_netting_agreement"),
+                    # facility_termination_date is facility-level; inherited via facility join later
+                    pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
                 ]
             )
             exposure_frames.append(contingents_unified)
@@ -1089,6 +1174,10 @@ class HierarchyResolver:
                 )
             if "limit" in fac_cols:
                 fac_select.append(pl.col("limit").alias("_fac_limit"))
+            if "facility_termination_date" in fac_cols:
+                fac_select.append(
+                    pl.col("facility_termination_date").alias("_fac_termination_date")
+                )
 
             fac_lookup = facilities.select(fac_select)
             exposures = exposures.join(
@@ -1124,6 +1213,15 @@ class HierarchyResolver:
                     if "facility_limit" in exp_schema
                     else pl.col("_fac_limit").alias("facility_limit")
                 )
+            if "_fac_termination_date" in exp_schema:
+                coalesce_cols.append(
+                    pl.coalesce(
+                        pl.col("facility_termination_date"),
+                        pl.col("_fac_termination_date"),
+                    ).alias("facility_termination_date")
+                    if "facility_termination_date" in exp_schema
+                    else pl.col("_fac_termination_date").alias("facility_termination_date")
+                )
 
             if coalesce_cols:
                 exposures = exposures.with_columns(coalesce_cols)
@@ -1135,6 +1233,8 @@ class HierarchyResolver:
                 temp_cols.append("_fac_transactor")
             if "limit" in fac_cols:
                 temp_cols.append("_fac_limit")
+            if "facility_termination_date" in fac_cols:
+                temp_cols.append("_fac_termination_date")
             if temp_cols:
                 exposures = exposures.drop(temp_cols)
 
@@ -1538,10 +1638,11 @@ class HierarchyResolver:
         """
         Add LTV and property metadata from collateral for real estate risk weights.
 
-        Joins collateral property_ltv, property_type, and is_income_producing to
-        exposures where collateral is linked via beneficiary_reference. For mortgages
-        and commercial RE, LTV determines risk weight. For CRE (CRR Art. 126),
-        income cover status determines 50% vs 100% risk weight.
+        Joins collateral property_ltv, property_type, is_income_producing, and
+        is_qualifying_re to exposures where collateral is linked via
+        beneficiary_reference. For mortgages and commercial RE, LTV determines risk
+        weight. For CRE (CRR Art. 126), income cover status determines 50% vs 100%
+        risk weight. Non-qualifying RE (Art. 124J) gets separate treatment under B31.
 
         Supports three levels of collateral linking based on beneficiary_type:
         1. Direct (exposure/loan): beneficiary_reference matches exposure_reference
@@ -1553,7 +1654,8 @@ class HierarchyResolver:
             collateral: Collateral data with beneficiary_reference and property_ltv (optional)
 
         Returns:
-            Exposures with ltv, property_type, and has_income_cover columns added
+            Exposures with ltv, property_type, has_income_cover, and
+            is_qualifying_re columns added
         """
         # Check if collateral is valid for LTV processing
         # Requires beneficiary_reference and property_ltv columns
@@ -1565,6 +1667,8 @@ class HierarchyResolver:
                     pl.lit(None).cast(pl.Float64).alias("ltv"),
                     pl.lit(None).cast(pl.Utf8).alias("property_type"),
                     pl.lit(False).alias("has_income_cover"),
+                    pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"),
+                    pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv"),
                 ]
             )
 
@@ -1573,6 +1677,8 @@ class HierarchyResolver:
         has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
         has_property_type = "property_type" in collateral_schema.names()
         has_income_producing = "is_income_producing" in collateral_schema.names()
+        has_qualifying_re = "is_qualifying_re" in collateral_schema.names()
+        has_prior_charge_ltv = "prior_charge_ltv" in collateral_schema.names()
 
         # Filter for collateral with LTV data
         ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
@@ -1589,6 +1695,16 @@ class HierarchyResolver:
             if has_income_producing
             else pl.lit(False).alias("has_income_cover")
         )
+        _qualifying_re = (
+            pl.col("is_qualifying_re")
+            if has_qualifying_re
+            else pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re")
+        )
+        _prior_charge_ltv = (
+            pl.col("prior_charge_ltv")
+            if has_prior_charge_ltv
+            else pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv")
+        )
 
         if not has_beneficiary_type:
             # Legacy behavior: assume direct exposure linking
@@ -1598,6 +1714,8 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("ltv"),
                     _prop_type.alias("property_type"),
                     _income_cover,
+                    _qualifying_re,
+                    _prior_charge_ltv,
                 ]
             ).unique(subset=["beneficiary_reference"], keep="first")
 
@@ -1624,6 +1742,8 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("direct_ltv"),
                     _prop_type.alias("direct_property_type"),
                     _income_cover.alias("direct_income_cover"),
+                    _qualifying_re.alias("direct_qualifying_re"),
+                    _prior_charge_ltv.alias("direct_prior_charge_ltv"),
                 ]
             )
             .unique(subset=["direct_ref"], keep="first")
@@ -1638,6 +1758,8 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("facility_ltv"),
                     _prop_type.alias("facility_property_type"),
                     _income_cover.alias("facility_income_cover"),
+                    _qualifying_re.alias("facility_qualifying_re"),
+                    _prior_charge_ltv.alias("facility_prior_charge_ltv"),
                 ]
             )
             .unique(subset=["facility_ref"], keep="first")
@@ -1652,6 +1774,8 @@ class HierarchyResolver:
                     pl.col("property_ltv").alias("cp_ltv"),
                     _prop_type.alias("cp_property_type"),
                     _income_cover.alias("cp_income_cover"),
+                    _qualifying_re.alias("cp_qualifying_re"),
+                    _prior_charge_ltv.alias("cp_prior_charge_ltv"),
                 ]
             )
             .unique(subset=["cp_ref"], keep="first")
@@ -1699,6 +1823,16 @@ class HierarchyResolver:
                 )
                 .fill_null(False)
                 .alias("has_income_cover"),
+                pl.coalesce(
+                    pl.col("direct_qualifying_re"),
+                    pl.col("facility_qualifying_re"),
+                    pl.col("cp_qualifying_re"),
+                ).alias("is_qualifying_re"),
+                pl.coalesce(
+                    pl.col("direct_prior_charge_ltv"),
+                    pl.col("facility_prior_charge_ltv"),
+                    pl.col("cp_prior_charge_ltv"),
+                ).alias("prior_charge_ltv"),
             ]
         ).drop(
             [
@@ -1711,6 +1845,12 @@ class HierarchyResolver:
                 "direct_income_cover",
                 "facility_income_cover",
                 "cp_income_cover",
+                "direct_qualifying_re",
+                "facility_qualifying_re",
+                "cp_qualifying_re",
+                "direct_prior_charge_ltv",
+                "facility_prior_charge_ltv",
+                "cp_prior_charge_ltv",
             ]
         )
 

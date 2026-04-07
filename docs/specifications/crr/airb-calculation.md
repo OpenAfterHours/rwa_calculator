@@ -121,9 +121,9 @@ Basel 3.1 introduces a minimum risk weight floor for UK residential property exp
 !!! warning "Correction"
     The regulatory floor is **10%**, not 15%. Art. 154(4A)(b) specifies the 10% minimum risk weight for residential property exposures under A-IRB. The previous 15% was an early implementation assumption.
 
-### General Post-Model Adjustments (Art. 158(6A))
+### General Post-Model Adjustments (Art. 146(3) / Art. 158(6A))
 
-Firms must apply post-model adjustments (PMAs) to compensate for known model deficiencies:
+Art. 146(3) establishes the root obligation: firms using IRB must apply post-model adjustments to compensate for known model deficiencies. Art. 158(6A) specifies the EL monotonicity constraint. Firms must apply PMAs to both RWEA and EL:
 
 - **PMA on RWEA**: `RWEA_adjusted = RWEA_modelled × (1 + pma_rwa_scalar)`
 - **PMA on EL**: `EL_adjusted = EL_modelled × (1 + pma_el_scalar)`
@@ -131,10 +131,19 @@ Firms must apply post-model adjustments (PMAs) to compensate for known model def
 
 ### Adjustment Sequencing (Art. 153(5A) / Art. 154(4A))
 
-Under Basel 3.1, RWEA adjustments must be applied in order:
-1. PMAs on RWEA (Art. 146(3)(a)/(b))
-2. Mortgage RW floor comparison (Art. 154(4A)(b)) — applied **after** PMAs
-3. Unrecognised exposure adjustment (Art. 166D(6)) — for A-IRB revolving facilities where own-EAD estimates produce less than the FIRB floor
+Art. 154(4A) prescribes the following sequential order for RWEA adjustments:
+
+1. **Mortgage RW floor** — Art. 154(4A)(b): applied first to establish the post-floor RWEA base
+2. **General PMA scalars and unrecognised-exposure adjustments** — Art. 154(4A)(a): applied to the post-floor RWEA from step 1
+
+!!! warning "Sequencing is mandatory"
+    The mortgage floor (step 1) must be computed before general PMAs (step 2) are applied. PMAs scale the already-floored RWEA, not the raw modelled RWEA.
+
+!!! note "EL monotonicity — Art. 158(6A)"
+    PMA adjustments to Expected Loss can only **increase** EL, never decrease it. The PMA EL scalar must satisfy `pma_el_scalar ≥ 0`. An adjustment that would reduce EL below the pre-PMA model output is not permitted.
+
+!!! note "Implementation Status"
+    Sequential ordering (mortgage floor before PMA scalars) and EL monotonicity are both **implemented**.
 
 ### Double Default Removal (Basel 3.1)
 

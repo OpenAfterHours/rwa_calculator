@@ -759,13 +759,13 @@
     {
       "scenario_id": "B31-D3",
       "scenario_group": "B31-D",
-      "description": "Equity collateral main index — 25% haircut (was CRR 15%)",
+      "description": "Equity collateral main index — 20% haircut (was CRR 15%)",
       "regulatory_framework": "Basel 3.1",
       "approach": "SA-CRM",
       "exposure_class": "CORPORATE",
       "exposure_reference": "LOAN_CRM_D3",
       "counterparty_reference": "CORP_UR_001",
-      "ead": 700000.0,
+      "ead": 680000.0,
       "pd": null,
       "lgd": null,
       "maturity": null,
@@ -773,12 +773,12 @@
       "ltv": null,
       "turnover": null,
       "risk_weight": 1.0,
-      "rwa_before_sf": 700000.0,
+      "rwa_before_sf": 680000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 700000.0,
+      "rwa_after_sf": 680000.0,
       "expected_loss": null,
-      "regulatory_reference": "CRE22.52",
-      "calculation_notes": "Basel 3.1 main index equity haircut 25% (CRR was 15%). EAD = £1M - £400k×0.75 = £700k. RWA increases £40k vs CRR (£660k)."
+      "regulatory_reference": "PRA PS1/26 Art. 224 Table 3",
+      "calculation_notes": "Basel 3.1 main index equity haircut 20% per PRA PS1/26 Art. 224 Table 3 (CRR was 15%). EAD = £1M - £400k×0.80 = £680k. RWA increases £20k vs CRR (£660k)."
     },
     {
       "scenario_id": "B31-D4",

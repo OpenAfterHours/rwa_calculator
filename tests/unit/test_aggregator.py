@@ -738,10 +738,10 @@ class TestELPortfolioSummary:
 
         el = result.el_summary
         assert el is not None
-        assert el.total_el_shortfall == pytest.approx(40000.0)
-        assert el.total_el_excess == pytest.approx(0.0)
-        assert el.cet1_deduction == pytest.approx(20000.0)
-        assert el.t2_deduction == pytest.approx(20000.0)
+        assert float(el.total_el_shortfall) == pytest.approx(40000.0)
+        assert float(el.total_el_excess) == pytest.approx(0.0)
+        assert float(el.cet1_deduction) == pytest.approx(20000.0)
+        assert float(el.t2_deduction) == pytest.approx(20000.0)
 
     def test_basic_excess_computation(
         self,
@@ -771,10 +771,10 @@ class TestELPortfolioSummary:
 
         el = result.el_summary
         assert el is not None
-        assert el.total_el_excess == pytest.approx(50000.0)
-        assert el.total_irb_rwa == pytest.approx(8000000.0)
-        assert el.t2_credit_cap == pytest.approx(48000.0)
-        assert el.t2_credit == pytest.approx(48000.0)
+        assert float(el.total_el_excess) == pytest.approx(50000.0)
+        assert float(el.total_irb_rwa) == pytest.approx(8000000.0)
+        assert float(el.t2_credit_cap) == pytest.approx(48000.0)
+        assert float(el.t2_credit) == pytest.approx(48000.0)
 
     def test_t2_credit_uncapped(
         self,
@@ -804,8 +804,8 @@ class TestELPortfolioSummary:
 
         el = result.el_summary
         assert el is not None
-        assert el.t2_credit_cap == pytest.approx(60000.0)
-        assert el.t2_credit == pytest.approx(20000.0)
+        assert float(el.t2_credit_cap) == pytest.approx(60000.0)
+        assert float(el.t2_credit) == pytest.approx(20000.0)
 
     def test_t2_credit_cap_rate(
         self,
@@ -833,8 +833,8 @@ class TestELPortfolioSummary:
 
         el = result.el_summary
         assert el is not None
-        assert el.t2_credit_cap == pytest.approx(600000.0)
-        assert el.t2_credit == pytest.approx(600000.0)
+        assert float(el.t2_credit_cap) == pytest.approx(600000.0)
+        assert float(el.t2_credit) == pytest.approx(600000.0)
 
     def test_mixed_shortfall_and_excess(
         self,
@@ -864,15 +864,15 @@ class TestELPortfolioSummary:
 
         el = result.el_summary
         assert el is not None
-        assert el.total_expected_loss == pytest.approx(80000.0)
-        assert el.total_provisions_allocated == pytest.approx(120000.0)
-        assert el.total_el_shortfall == pytest.approx(20000.0)
-        assert el.total_el_excess == pytest.approx(60000.0)
-        assert el.total_irb_rwa == pytest.approx(10000000.0)
-        assert el.t2_credit_cap == pytest.approx(60000.0)
-        assert el.t2_credit == pytest.approx(60000.0)
-        assert el.cet1_deduction == pytest.approx(10000.0)
-        assert el.t2_deduction == pytest.approx(10000.0)
+        assert float(el.total_expected_loss) == pytest.approx(80000.0)
+        assert float(el.total_provisions_allocated) == pytest.approx(120000.0)
+        assert float(el.total_el_shortfall) == pytest.approx(20000.0)
+        assert float(el.total_el_excess) == pytest.approx(60000.0)
+        assert float(el.total_irb_rwa) == pytest.approx(10000000.0)
+        assert float(el.t2_credit_cap) == pytest.approx(60000.0)
+        assert float(el.t2_credit) == pytest.approx(60000.0)
+        assert float(el.cet1_deduction) == pytest.approx(10000.0)
+        assert float(el.t2_deduction) == pytest.approx(10000.0)
 
     def test_uses_rwa_final_fallback(
         self,
@@ -900,5 +900,5 @@ class TestELPortfolioSummary:
 
         el = result.el_summary
         assert el is not None
-        assert el.total_irb_rwa == pytest.approx(2000000.0)
-        assert el.t2_credit_cap == pytest.approx(12000.0)
+        assert float(el.total_irb_rwa) == pytest.approx(2000000.0)
+        assert float(el.t2_credit_cap) == pytest.approx(12000.0)

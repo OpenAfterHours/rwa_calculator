@@ -1,23 +1,31 @@
 """
-CRM supervisory haircuts (CRR Art. 224 / CRE22.52-53).
+CRM supervisory haircuts (CRR Art. 224 / PRA PS1/26 Art. 224).
 
 Provides collateral haircut lookup tables as Polars DataFrames for efficient
 joins in the RWA calculation pipeline. Supports both CRR and Basel 3.1 frameworks.
 
-Key differences under Basel 3.1 (CRE22.52-53):
+All haircut values are the 10-business-day base haircuts (Art. 224(2)(b) default).
+For other liquidation periods, use ``scale_haircut_for_liquidation_period()``:
+- 5 days: repo-style transactions (Art. 224(2)(a))
+- 10 days: other capital market transactions (Art. 224(2)(b))  [default]
+- 20 days: secured lending (Art. 224(2)(c))
+
+Key differences under Basel 3.1 (PRA PS1/26 Art. 224):
 - 5 maturity bands (0-1y, 1-3y, 3-5y, 5-10y, 10y+) instead of CRR's 3 (0-1y, 1-5y, 5y+)
 - Higher haircuts for long-dated corporate bonds (CQS 1-2: 10%/12%, CQS 3: 15%)
-- Higher equity haircuts (main index: 25%, other: 35%)
+- Higher equity haircuts (main index: 20%, other: 30%)  — CRR: 15%/25%
+- Gold haircut increased to 20% (CRR: 15%)
 - Sovereign CQS 2-3 10y+ increased to 12%
 
 Reference:
-    CRR Art. 224: Supervisory haircuts under the Financial Collateral
-    Comprehensive Method
-    CRE22.52-53: Basel 3.1 supervisory haircuts
+    CRR Art. 224: Supervisory haircuts under the FCCM
+    PRA PS1/26 Art. 224: Basel 3.1 supervisory haircuts (Tables 1-4)
+    Art. 226: Scaling to different holding/liquidation periods
 """
 
 from __future__ import annotations
 
+import math
 from decimal import Decimal
 
 import polars as pl
@@ -72,7 +80,8 @@ COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
 BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     # Cash and equivalents (unchanged)
     "cash": Decimal("0.00"),
-    "gold": Decimal("0.15"),
+    # Gold — PRA PS1/26 Art. 224 Table 3: 20% at 10-day (CRR: 15%)
+    "gold": Decimal("0.20"),
     # Government bonds CQS 1 — same as CRR for short/medium, split long-dated
     "govt_bond_cqs1_0_1y": Decimal("0.005"),
     "govt_bond_cqs1_1_3y": Decimal("0.02"),
@@ -103,9 +112,9 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "corp_bond_cqs2_3_3_5y": Decimal("0.08"),
     "corp_bond_cqs2_3_5_10y": Decimal("0.15"),
     "corp_bond_cqs2_3_10y_plus": Decimal("0.15"),
-    # Equity — increased under Basel 3.1
-    "equity_main_index": Decimal("0.25"),  # CRR: 15%
-    "equity_other": Decimal("0.35"),  # CRR: 25%
+    # Equity — PRA PS1/26 Art. 224 Table 3: 20%/30% at 10-day (CRR: 15%/25%)
+    "equity_main_index": Decimal("0.20"),  # CRR: 15%
+    "equity_other": Decimal("0.30"),  # CRR: 25%
     # Non-financial collateral — Art. 230(2) HC values (PRA PS1/26)
     # B31 Art. 230 uses HC in LGD* formula: ES = min(C(1-HC-Hfx), E(1+HE))
     # HC=40% for all non-financial types; only LGDS differs (20% rec/RE, 25% other)
@@ -114,8 +123,46 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "other_physical": Decimal("0.40"),
 }
 
-# Currency mismatch haircut (CRR Art. 224 / CRE22.54) — same under both frameworks
+# Currency mismatch haircut — 10-day base value (Art. 224 Table 4)
+# 5-day: 5.657%, 10-day: 8%, 20-day: 11.314%
 FX_HAIRCUT: Decimal = Decimal("0.08")
+
+# CDS restructuring exclusion haircut (CRR Art. 233(2) / PRA PS1/26 Art. 233(2))
+# If a credit derivative does not include restructuring as a credit event,
+# protection value is reduced by 40% (capped at 60% of exposure value).
+RESTRUCTURING_EXCLUSION_HAIRCUT: Decimal = Decimal("0.40")
+
+
+# Standard liquidation periods per Art. 224(2)
+LIQUIDATION_PERIOD_REPO: int = 5  # (a) Repo-style transactions
+LIQUIDATION_PERIOD_CAPITAL_MARKET: int = 10  # (b) Other capital market transactions
+LIQUIDATION_PERIOD_SECURED_LENDING: int = 20  # (c) Secured lending
+
+
+def scale_haircut_for_liquidation_period(
+    base_haircut_10day: float,
+    liquidation_period_days: int = 10,
+) -> float:
+    """
+    Scale a 10-day base supervisory haircut for a different liquidation period.
+
+    Art. 226(2): H_m = H_10 × sqrt(T_m / 10)
+
+    Standard periods per Art. 224(2):
+    - 5 days: repo-style transactions → haircut × sqrt(0.5) ≈ ×0.7071
+    - 10 days: capital market transactions → no scaling (default)
+    - 20 days: secured lending → haircut × sqrt(2) ≈ ×1.4142
+
+    Args:
+        base_haircut_10day: Haircut at 10-business-day liquidation period
+        liquidation_period_days: Target liquidation period in business days
+
+    Returns:
+        Scaled haircut for the target liquidation period
+    """
+    if liquidation_period_days == 10 or base_haircut_10day == 0.0:
+        return base_haircut_10day
+    return base_haircut_10day * math.sqrt(liquidation_period_days / 10.0)
 
 
 def _create_haircut_df(is_basel_3_1: bool = False) -> pl.DataFrame:
@@ -345,7 +392,7 @@ def _create_crr_haircut_df() -> pl.DataFrame:
 def _create_basel31_haircut_df() -> pl.DataFrame:
     """Create Basel 3.1 haircut lookup DataFrame (5 maturity bands per CRE22.52-53)."""
     rows = [
-        # Cash and gold (unchanged)
+        # Cash (unchanged) and gold (20% under B31, was 15% under CRR)
         {
             "collateral_type": "cash",
             "cqs": None,
@@ -357,7 +404,7 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "collateral_type": "gold",
             "cqs": None,
             "maturity_band": None,
-            "haircut": 0.15,
+            "haircut": 0.20,
             "is_main_index": None,
         },
         # Government bonds CQS 1
@@ -610,19 +657,19 @@ def _create_basel31_haircut_df() -> pl.DataFrame:
             "haircut": 0.15,
             "is_main_index": None,
         },
-        # Equity — higher under Basel 3.1
+        # Equity — PRA PS1/26 Art. 224 Table 3: main=20%, other=30% (10-day)
         {
             "collateral_type": "equity",
             "cqs": None,
             "maturity_band": None,
-            "haircut": 0.25,
+            "haircut": 0.20,
             "is_main_index": True,
         },
         {
             "collateral_type": "equity",
             "cqs": None,
             "maturity_band": None,
-            "haircut": 0.35,
+            "haircut": 0.30,
             "is_main_index": False,
         },
         # Non-financial collateral — Art. 230(2) HC values (PRA PS1/26)
@@ -742,9 +789,10 @@ def lookup_collateral_haircut(
     residual_maturity_years: float | None = None,
     is_main_index: bool = False,
     is_basel_3_1: bool = False,
+    liquidation_period_days: int = 10,
 ) -> Decimal | None:
     """
-    Look up supervisory haircut for collateral.
+    Look up supervisory haircut for collateral, scaled for liquidation period.
 
     This is a convenience function for single lookups. For bulk processing,
     use the DataFrame tables with joins.
@@ -754,21 +802,30 @@ def lookup_collateral_haircut(
         cqs: Credit quality step of issuer (for debt securities)
         residual_maturity_years: Remaining maturity in years
         is_main_index: For equity, whether it's on a main index
-        is_basel_3_1: Whether to use Basel 3.1 haircuts (CRE22.52-53)
+        is_basel_3_1: Whether to use Basel 3.1 haircuts
+        liquidation_period_days: Liquidation period in business days (default 10)
 
     Returns:
-        Haircut as Decimal, or None if collateral is ineligible per Art. 197
+        Haircut as Decimal scaled for liquidation period,
+        or None if collateral is ineligible per Art. 197
     """
     table = BASEL31_COLLATERAL_HAIRCUTS if is_basel_3_1 else COLLATERAL_HAIRCUTS
     coll_lower = collateral_type.lower()
+
+    def _scale(h: Decimal) -> Decimal:
+        """Scale 10-day base haircut if liquidation period differs."""
+        if liquidation_period_days == 10 or h == Decimal("0"):
+            return h
+        scaled = scale_haircut_for_liquidation_period(float(h), liquidation_period_days)
+        return Decimal(str(round(scaled, 6)))
 
     # Cash - 0%
     if coll_lower in ("cash", "deposit"):
         return table["cash"]
 
-    # Gold - 15%
+    # Gold
     if coll_lower == "gold":
-        return table["gold"]
+        return _scale(table["gold"])
 
     # Government bonds — Art. 197(1)(b): CQS 1-4 eligible, CQS 5-6/unrated ineligible
     if coll_lower in ("govt_bond", "sovereign_bond", "government_bond", "gilt"):
@@ -787,7 +844,7 @@ def lookup_collateral_haircut(
         else:
             return None  # Should not reach here after eligibility check
 
-        return table.get(key, Decimal("0.15"))
+        return _scale(table.get(key, Decimal("0.15")))
 
     # Corporate/institution bonds — Art. 197(1)(d): CQS 1-3 eligible, CQS 4-6/unrated ineligible
     if coll_lower in ("corp_bond", "corporate_bond"):
@@ -804,15 +861,16 @@ def lookup_collateral_haircut(
         else:
             return None  # Should not reach here after eligibility check
 
-        return table.get(key, Decimal("0.20"))
+        return _scale(table.get(key, Decimal("0.20")))
 
     # Equity
     if coll_lower in ("equity", "shares", "stock"):
         if is_main_index:
-            return table["equity_main_index"]
-        return table["equity_other"]
+            return _scale(table["equity_main_index"])
+        return _scale(table["equity_other"])
 
-    # Receivables
+    # Receivables — not subject to Art. 224 liquidation period scaling
+    # (Art. 230 non-financial collateral HC, not Art. 224 Tables)
     if coll_lower in ("receivables", "trade_receivables"):
         return table["receivables"]
 
@@ -820,27 +878,35 @@ def lookup_collateral_haircut(
     if coll_lower in ("real_estate", "property", "rre", "cre"):
         return Decimal("0.00")
 
-    # Other physical collateral
+    # Other physical collateral — not subject to Art. 224 scaling
     return table["other_physical"]
 
 
 def lookup_fx_haircut(
     exposure_currency: str,
     collateral_currency: str,
+    liquidation_period_days: int = 10,
 ) -> Decimal:
     """
-    Get FX mismatch haircut.
+    Get FX mismatch haircut, scaled for liquidation period.
+
+    Art. 224 Table 4 base (10-day): 8%
+    Scaled by Art. 226(2): H_m = 8% × sqrt(T_m / 10)
 
     Args:
         exposure_currency: Currency of exposure
         collateral_currency: Currency of collateral
+        liquidation_period_days: Liquidation period in business days (default 10)
 
     Returns:
-        FX haircut (0% if same currency, 8% if different)
+        FX haircut (0% if same currency, scaled 8% if different)
     """
     if exposure_currency.upper() == collateral_currency.upper():
         return Decimal("0.00")
-    return FX_HAIRCUT
+    if liquidation_period_days == 10:
+        return FX_HAIRCUT
+    scaled = scale_haircut_for_liquidation_period(float(FX_HAIRCUT), liquidation_period_days)
+    return Decimal(str(round(scaled, 6)))
 
 
 def calculate_adjusted_collateral_value(
@@ -870,15 +936,24 @@ def calculate_maturity_mismatch_adjustment(
     collateral_maturity_years: float,
     exposure_maturity_years: float,
     minimum_maturity_years: float = 0.25,
+    original_maturity_years: float | None = None,
+    has_one_day_maturity_floor: bool = False,
 ) -> tuple[Decimal, str]:
     """
-    Apply maturity mismatch adjustment (CRR Art. 238).
+    Apply maturity mismatch adjustment (CRR Art. 237-238).
+
+    Art. 237(2) ineligibility conditions (applied when mismatch exists):
+    - (a) Residual maturity < 3 months → no protection
+    - (b) Original maturity of protection < 1 year → no protection
+    - Art. 162(3) 1-day M floor exposures → any mismatch makes protection ineligible
 
     Args:
         collateral_value: Adjusted collateral value
         collateral_maturity_years: Residual maturity of collateral
         exposure_maturity_years: Residual maturity of exposure
         minimum_maturity_years: Minimum maturity threshold (default 3 months)
+        original_maturity_years: Original contract term of protection (Art. 237(2))
+        has_one_day_maturity_floor: Art. 162(3) 1-day M floor exposure
 
     Returns:
         Tuple of (adjusted_value, description)
@@ -891,11 +966,24 @@ def calculate_maturity_mismatch_adjustment(
     if collateral_maturity_years >= exposure_maturity_years:
         return collateral_value, "No maturity mismatch adjustment"
 
-    # If collateral maturity < 3 months, no protection
-    if collateral_maturity_years < minimum_maturity_years:
-        return Decimal("0"), "Collateral maturity < 3 months, no protection"
+    # --- Mismatch exists: apply Art. 237(2) ineligibility conditions ---
 
-    # Apply adjustment
+    # Art. 237(2)(a): collateral maturity < 3 months → no protection
+    if collateral_maturity_years < minimum_maturity_years:
+        return Decimal("0"), "Collateral maturity < 3 months, no protection (Art. 237(2))"
+
+    # Art. 237(2): original maturity of protection < 1 year → ineligible
+    if original_maturity_years is not None and original_maturity_years < 1.0:
+        return Decimal("0"), ("Original maturity < 1 year, protection ineligible (Art. 237(2))")
+
+    # Art. 162(3)/237(2): 1-day M floor exposure → any mismatch → ineligible
+    if has_one_day_maturity_floor:
+        return Decimal("0"), (
+            "1-day maturity floor exposure, mismatch makes protection ineligible "
+            "(Art. 237(2)/162(3))"
+        )
+
+    # Apply CVAM adjustment (Art. 238)
     t = max(collateral_maturity_years, minimum_maturity_years)
     T = min(max(exposure_maturity_years, minimum_maturity_years), 5.0)
 

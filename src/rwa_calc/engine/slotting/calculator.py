@@ -14,6 +14,7 @@ Key responsibilities:
 - Handle maturity-based splits (CRR: <2.5yr / >=2.5yr)
 - Handle PF pre-operational vs operational distinction (Basel 3.1)
 - Calculate RWA = EAD x RW
+- Apply supporting factors (CRR Art. 501/501a: SME + infrastructure)
 - Calculate EL = EL_rate x EAD
 - Compute EL shortfall/excess for T2 credit cap and CET1/T2 deductions
 - Build audit trail of calculations
@@ -30,6 +31,7 @@ References:
 - CRR Art. 147(8): Specialised lending definition
 - CRR Art. 158(6), Table B: Expected loss rates for slotting
 - CRR Art. 159: EL shortfall/excess treatment
+- CRR Art. 501a: Infrastructure supporting factor (0.75)
 - BCBS CRE33: Basel 3.1 specialised lending slotting
 """
 
@@ -40,6 +42,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
+from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -74,27 +78,83 @@ class SlottingCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate Slotting RWA and Expected Loss on pre-filtered slotting-only rows.
 
-        Computes risk weights (Art. 153(5)), RWA, expected loss rates (Art. 158(6)
-        Table B), and EL shortfall/excess for the portfolio EL summary.
+        Computes risk weights (Art. 153(5)), RWA, supporting factors (Art. 501/501a),
+        expected loss rates (Art. 158(6) Table B), and EL shortfall/excess for the
+        portfolio EL summary.
 
         Args:
             exposures: Pre-filtered slotting rows only
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             LazyFrame with slotting RWA, expected_loss, el_shortfall, el_excess
         """
-        return (
+        exposures = (
             exposures.slotting.prepare_columns(config)
             .slotting.apply_slotting_weights(config)
             .slotting.calculate_rwa()
-            .slotting.apply_el_rates(config)
-            .slotting.compute_el_shortfall_excess()
         )
+
+        # Apply supporting factors (CRR Art. 501/501a) — same pattern as IRB
+        exposures = self._apply_supporting_factors(exposures, config, errors=errors)
+
+        return exposures.slotting.apply_el_rates(config).slotting.compute_el_shortfall_excess(
+            errors=errors
+        )
+
+    def _apply_supporting_factors(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
+    ) -> pl.LazyFrame:
+        """
+        Apply SME and infrastructure supporting factors (CRR Art. 501/501a).
+
+        Infrastructure project finance in slotting can qualify for the 0.75
+        infrastructure supporting factor. Under Basel 3.1, supporting factors
+        are disabled.
+
+        Args:
+            exposures: Exposures with rwa computed
+            config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
+
+        Returns:
+            Exposures with supporting factors applied
+        """
+        if not config.supporting_factors.enabled:
+            return exposures.with_columns(pl.lit(1.0).alias("supporting_factor"))
+
+        # Rename rwa to rwa_pre_factor for the SupportingFactorCalculator
+        exposures = exposures.with_columns(pl.col("rwa").alias("rwa_pre_factor"))
+
+        # Ensure required columns exist
+        schema = exposures.collect_schema()
+        if "is_sme" not in schema.names():
+            exposures = exposures.with_columns(pl.lit(False).alias("is_sme"))
+        if "is_infrastructure" not in schema.names():
+            exposures = exposures.with_columns(pl.lit(False).alias("is_infrastructure"))
+
+        sf_calc = SupportingFactorCalculator()
+        exposures = sf_calc.apply_factors(exposures, config, errors=errors)
+
+        # Update rwa and rwa_final with post-factor values
+        if "rwa_post_factor" in exposures.collect_schema().names():
+            exposures = exposures.with_columns(
+                pl.col("rwa_post_factor").alias("rwa"),
+                pl.col("rwa_post_factor").alias("rwa_final"),
+            )
+
+        return exposures
 
     def get_slotting_result_bundle(
         self,
@@ -132,8 +192,17 @@ class SlottingCalculator:
                 errors=[],
             )
 
-        # Apply calculation pipeline
-        exposures = self.calculate_branch(exposures, config)
+        # Apply calculation pipeline (with error collection)
+        sf_errors: list[CalculationError] = []
+        exposures = (
+            exposures.slotting.prepare_columns(config)
+            .slotting.apply_slotting_weights(config)
+            .slotting.calculate_rwa()
+        )
+        exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
+        exposures = exposures.slotting.apply_el_rates(config).slotting.compute_el_shortfall_excess(
+            errors=sf_errors
+        )
 
         # Build audit trail
         audit = exposures.slotting.build_audit()
@@ -141,7 +210,7 @@ class SlottingCalculator:
         return SlottingResultBundle(
             results=exposures,
             calculation_audit=audit,
-            errors=[],
+            errors=sf_errors,
         )
 
 

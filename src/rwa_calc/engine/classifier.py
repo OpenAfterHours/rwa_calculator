@@ -40,6 +40,11 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.contracts.errors import (
+    ERROR_QRRE_COLUMNS_MISSING,
+    CalculationError,
+    classification_warning,
+)
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
@@ -74,7 +79,10 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "company": ExposureClass.CORPORATE.value,
     "individual": ExposureClass.RETAIL_OTHER.value,
     "retail": ExposureClass.RETAIL_OTHER.value,
-    "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
+    # Art. 112(1)(g): SL is a corporate sub-type under SA, not a separate class.
+    # The sl_type column (from the specialised_lending join) drives SL-specific
+    # risk weight lookup; the exposure_class_sa column is CORPORATE.
+    "specialised_lending": ExposureClass.CORPORATE.value,
     "equity": ExposureClass.EQUITY.value,
     "covered_bond": ExposureClass.COVERED_BOND.value,
     "other_cash": ExposureClass.OTHER.value,
@@ -195,6 +203,27 @@ class ExposureClassifier:
         # Single schema check for conditional column logic
         schema_names = set(exposures.collect_schema().names())
 
+        # Accumulate classification warnings/errors
+        classification_errors: list[CalculationError] = []
+
+        # Check for QRRE classification prerequisites — missing columns
+        # cause all revolving retail to silently become RETAIL_OTHER
+        missing_qrre_cols = [c for c in ("is_revolving", "facility_limit") if c not in schema_names]
+        if missing_qrre_cols:
+            classification_errors.append(
+                classification_warning(
+                    code=ERROR_QRRE_COLUMNS_MISSING,
+                    message=(
+                        f"QRRE classification disabled — column(s) "
+                        f"{', '.join(missing_qrre_cols)} missing from exposure data. "
+                        f"All qualifying revolving retail exposures will be classified "
+                        f"as RETAIL_OTHER instead of RETAIL_QRRE, which may affect "
+                        f"risk weights and IRB parameters."
+                    ),
+                    regulatory_reference="CRR Art. 147(5)",
+                )
+            )
+
         # Step 2: Derive all independent flags (1 .with_columns)
         classified = self._derive_independent_flags(exposures, config, schema_names)
 
@@ -245,7 +274,7 @@ class ExposureClassifier:
             provisions=data.provisions,
             counterparty_lookup=data.counterparty_lookup,
             classification_audit=classification_audit,
-            classification_errors=[],
+            classification_errors=classification_errors,
         )
 
     # =========================================================================
@@ -283,6 +312,14 @@ class ExposureClassifier:
             pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ]
 
+        # Natural person flag — Art. 124H CRE counterparty type (optional in input data)
+        if "is_natural_person" in cp_col_names:
+            select_cols.append(pl.col("is_natural_person").alias("cp_is_natural_person"))
+
+        # Social housing flag — Art. 124L RRE residual RW routing (optional in input data)
+        if "is_social_housing" in cp_col_names:
+            select_cols.append(pl.col("is_social_housing").alias("cp_is_social_housing"))
+
         # FSE flag — Art. 147A(1)(e) approach restriction (optional in input data)
         if "is_financial_sector_entity" in cp_col_names:
             select_cols.append(
@@ -304,6 +341,16 @@ class ExposureClassifier:
             select_cols.append(
                 pl.col("borrower_income_currency").alias("cp_borrower_income_currency")
             )
+
+        # Sovereign floor for FX institution exposures (Art. 121(6) / CRE20.22)
+        if "sovereign_cqs" in cp_col_names:
+            select_cols.append(pl.col("sovereign_cqs").alias("cp_sovereign_cqs"))
+        if "local_currency" in cp_col_names:
+            select_cols.append(pl.col("local_currency").alias("cp_local_currency"))
+
+        # Covered bond issuer institution CQS (Art. 129(5) derivation)
+        if "institution_cqs" in cp_col_names:
+            select_cols.append(pl.col("institution_cqs").alias("cp_institution_cqs"))
 
         cp_cols = counterparties.select(select_cols)
 
@@ -358,19 +405,27 @@ class ExposureClassifier:
         )
 
         sl_class = pl.lit(ExposureClass.SPECIALISED_LENDING.value)
+        # Art. 112 Table A2: Under SA, specialised lending is a corporate sub-type
+        # (Art. 112(1)(g)), not a separate exposure class.  exposure_class_sa reflects
+        # this by mapping SL → CORPORATE.  exposure_class retains SPECIALISED_LENDING
+        # because approach routing (Phase 5) needs it for slotting/AIRB selection.
+        sl_sa_class = pl.lit(ExposureClass.CORPORATE.value)
 
         # Batch 2: Derive all flags from pre-computed intermediates.
         return exposures.with_columns(
             [
                 # --- Exposure class mappings (SL table overrides entity_type) ---
+                # SA class: SL is a corporate sub-type (Art. 112(1)(g))
                 pl.when(sl_override)
-                .then(sl_class)
+                .then(sl_sa_class)
                 .otherwise(pl.col("_sa_class"))
                 .alias("exposure_class_sa"),
+                # IRB class: SL is a legitimate sub-class (Art. 147(8))
                 pl.when(sl_override)
                 .then(sl_class)
                 .otherwise(pl.col("_irb_class"))
                 .alias("exposure_class_irb"),
+                # Primary class: retains SPECIALISED_LENDING for approach routing
                 pl.when(sl_override)
                 .then(sl_class)
                 .otherwise(pl.col("_sa_class"))
@@ -389,7 +444,7 @@ class ExposureClassifier:
                 )
                 .then(pl.lit(ExposureClass.DEFAULTED.value))
                 .when(sl_override)
-                .then(sl_class)
+                .then(sl_sa_class)
                 .otherwise(pl.col("_sa_class"))
                 .alias("exposure_class_for_sa"),
                 # --- Infrastructure flag (uses _pt_upper) ---

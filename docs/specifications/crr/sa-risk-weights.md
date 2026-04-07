@@ -538,7 +538,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Pending
-- **Payroll/pension loans** (Art. 123): 35% — Pending
+- **Payroll/pension loans** (Art. 123): 35% — Done
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Pending
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done

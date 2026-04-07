@@ -22,10 +22,13 @@ and efficient memory usage with Polars.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import polars as pl
+
+    from rwa_calc.contracts.errors import CalculationError
 
 
 @dataclass(frozen=True)
@@ -126,7 +129,7 @@ class ResolvedHierarchyBundle:
     ciu_holdings: pl.LazyFrame | None = None
     specialised_lending: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
-    hierarchy_errors: list = field(default_factory=list)
+    hierarchy_errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -162,7 +165,7 @@ class ClassifiedExposuresBundle:
     provisions: pl.LazyFrame | None = None
     counterparty_lookup: CounterpartyLookup | None = None
     classification_audit: pl.LazyFrame | None = None
-    classification_errors: list = field(default_factory=list)
+    classification_errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -196,7 +199,7 @@ class CRMAdjustedBundle:
     ciu_holdings: pl.LazyFrame | None = None
     crm_audit: pl.LazyFrame | None = None
     collateral_allocation: pl.LazyFrame | None = None
-    crm_errors: list = field(default_factory=list)
+    crm_errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -214,7 +217,7 @@ class SAResultBundle:
 
     results: pl.LazyFrame
     calculation_audit: pl.LazyFrame | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -234,7 +237,7 @@ class IRBResultBundle:
     results: pl.LazyFrame
     expected_loss: pl.LazyFrame | None = None
     calculation_audit: pl.LazyFrame | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -252,7 +255,7 @@ class SlottingResultBundle:
 
     results: pl.LazyFrame
     calculation_audit: pl.LazyFrame | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -274,7 +277,7 @@ class EquityResultBundle:
     results: pl.LazyFrame
     calculation_audit: pl.LazyFrame | None = None
     approach: str = "sa"
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -286,7 +289,8 @@ class ELPortfolioSummary:
     and applies the T2 credit cap per CRR Art. 62(d).
 
     Key responsibilities:
-    - Sum per-exposure EL, provisions, shortfall, and excess
+    - Sum per-exposure EL, provisions, AVAs, other own funds reductions,
+      shortfall, and excess
     - Compute T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d))
     - Compute T2 credit (min of total excess and cap)
     - Compute CET1/T2 deduction split (50/50 per CRR Art. 159)
@@ -295,15 +299,25 @@ class ELPortfolioSummary:
       EL simultaneously, shortfall and excess are computed separately
       for each pool — defaulted excess cannot offset non-defaulted shortfall
 
+    Pool B per Art. 159(1) includes:
+    (a) General credit risk adjustments (GCRA)
+    (b) Specific credit risk adjustments (SCRA) for non-defaulted
+    (c) Additional value adjustments (AVAs per Art. 34)
+    (d) Other own funds reductions
+
     References:
     - CRR Art. 62(d): T2 credit cap for EL excess
     - CRR Art. 158: EL shortfall deduction
-    - CRR Art. 159: 50/50 CET1/T2 deduction split
+    - CRR Art. 159(1): Pool B composition
     - CRR Art. 159(3): Two-branch no-cross-offset rule
+    - CRR Art. 34, Art. 105: Additional value adjustments
 
     Attributes:
         total_expected_loss: Sum of expected loss across all IRB exposures
         total_provisions_allocated: Sum of provisions allocated to IRB exposures
+        total_ava_amount: Sum of AVAs (Art. 34) allocated to IRB exposures
+        total_other_own_funds_reductions: Sum of other own funds reductions
+        total_pool_b: Total Pool B (provisions + AVA + other own funds reductions)
         total_el_shortfall: Effective shortfall after Art. 159(3) rule
         total_el_excess: Effective excess after Art. 159(3) rule
         total_irb_rwa: Total IRB RWA (denominator for T2 cap)
@@ -318,20 +332,70 @@ class ELPortfolioSummary:
         art_159_3_applies: True when two-branch condition is triggered
     """
 
-    total_expected_loss: float
-    total_provisions_allocated: float
-    total_el_shortfall: float
-    total_el_excess: float
-    total_irb_rwa: float
-    t2_credit_cap: float
-    t2_credit: float
-    cet1_deduction: float
-    t2_deduction: float
-    non_defaulted_el_shortfall: float = 0.0
-    non_defaulted_el_excess: float = 0.0
-    defaulted_el_shortfall: float = 0.0
-    defaulted_el_excess: float = 0.0
+    total_expected_loss: Decimal
+    total_provisions_allocated: Decimal
+    total_el_shortfall: Decimal
+    total_el_excess: Decimal
+    total_irb_rwa: Decimal
+    t2_credit_cap: Decimal
+    t2_credit: Decimal
+    cet1_deduction: Decimal
+    t2_deduction: Decimal
+    non_defaulted_el_shortfall: Decimal = Decimal("0")
+    non_defaulted_el_excess: Decimal = Decimal("0")
+    defaulted_el_shortfall: Decimal = Decimal("0")
+    defaulted_el_excess: Decimal = Decimal("0")
     art_159_3_applies: bool = False
+    total_ava_amount: Decimal = Decimal("0")
+    total_other_own_funds_reductions: Decimal = Decimal("0")
+    total_pool_b: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True)
+class OutputFloorSummary:
+    """
+    Portfolio-level output floor summary (Basel 3.1).
+
+    The output floor is applied at portfolio level per PRA PS1/26 Art. 92
+    para 2A: TREA = max(U-TREA, x * S-TREA + OF-ADJ). When the floor binds,
+    the shortfall is distributed pro-rata across floor-eligible exposures
+    (IRB + slotting) proportional to each exposure's SA-equivalent RWA.
+
+    OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2) reconciles the
+    different provision treatments between IRB (EL shortfall/excess) and SA
+    (general credit risk adjustments) so the floor comparison is like-for-like.
+
+    Attributes:
+        u_trea: Total RWA for floor-eligible exposures using actual approaches
+        s_trea: Total SA-equivalent RWA for the same exposures
+        floor_pct: Floor percentage applied (e.g. 0.725 for 72.5%)
+        floor_threshold: x * s_trea + of_adj — the minimum acceptable RWA
+        shortfall: max(0, floor_threshold - u_trea) — add-on when floor binds
+        portfolio_floor_binding: True when the portfolio floor binds
+        total_rwa_post_floor: u_trea + shortfall (= max(u_trea, floor_threshold))
+        of_adj: Output Floor Adjustment per Art. 92 para 2A
+        irb_t2_credit: Art. 62(d) IRB T2 credit (capped at 0.6% of IRB RWA)
+        irb_cet1_deduction: Art. 36(1)(d) + Art. 40 CET1 deductions
+        gcra_amount: General credit risk adjustments (capped at 1.25% of S-TREA)
+        sa_t2_credit: Art. 62(c) SA T2 credit
+
+    References:
+    - PRA PS1/26 Art. 92 para 2A
+    - CRE99.1-8: Output floor (Basel 3.1)
+    """
+
+    u_trea: float
+    s_trea: float
+    floor_pct: float
+    floor_threshold: float
+    shortfall: float
+    portfolio_floor_binding: bool
+    total_rwa_post_floor: float
+    of_adj: float = 0.0
+    irb_t2_credit: float = 0.0
+    irb_cet1_deduction: float = 0.0
+    gcra_amount: float = 0.0
+    sa_t2_credit: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -348,7 +412,8 @@ class AggregatedResultBundle:
         irb_results: Original IRB results (before floor)
         slotting_results: Original slotting results
         equity_results: Equity calculation results
-        floor_impact: Output floor impact analysis
+        floor_impact: Output floor impact analysis (per-exposure)
+        output_floor_summary: Portfolio-level output floor summary
         supporting_factor_impact: Supporting factor impact (CRR only)
         summary_by_class: RWA summarised by exposure class
         summary_by_approach: RWA summarised by approach
@@ -365,6 +430,7 @@ class AggregatedResultBundle:
     slotting_results: pl.LazyFrame | None = None
     equity_results: pl.LazyFrame | None = None
     floor_impact: pl.LazyFrame | None = None
+    output_floor_summary: OutputFloorSummary | None = None
     supporting_factor_impact: pl.LazyFrame | None = None
     summary_by_class: pl.LazyFrame | None = None
     summary_by_approach: pl.LazyFrame | None = None
@@ -372,7 +438,7 @@ class AggregatedResultBundle:
     post_crm_detailed: pl.LazyFrame | None = None
     post_crm_summary: pl.LazyFrame | None = None
     el_summary: ELPortfolioSummary | None = None
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 # =============================================================================
@@ -407,7 +473,7 @@ class ComparisonBundle:
     exposure_deltas: pl.LazyFrame
     summary_by_class: pl.LazyFrame
     summary_by_approach: pl.LazyFrame
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -443,7 +509,7 @@ class TransitionalScheduleBundle:
 
     timeline: pl.LazyFrame
     yearly_results: dict[int, AggregatedResultBundle] = field(default_factory=dict)
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -478,7 +544,7 @@ class CapitalImpactBundle:
     portfolio_waterfall: pl.LazyFrame
     summary_by_class: pl.LazyFrame
     summary_by_approach: pl.LazyFrame
-    errors: list = field(default_factory=list)
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 # =============================================================================

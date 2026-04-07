@@ -22,6 +22,13 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.errors import (
+    ERROR_MISSING_EXPECTED_LOSS,
+    CalculationError,
+    ErrorCategory,
+    ErrorSeverity,
+)
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -141,11 +148,20 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
     PRA PS9/24 Art. 153(5A), 154(4A), 158(6A) require firms to apply
     adjustments for known model deficiencies. Three RWEA components:
 
-    1. General PMA: scalar add-on to base RWEA (supervisory requirement)
-    2. Mortgage RW floor: min risk weight for residential mortgage exposures
+    1. Mortgage RW floor: min risk weight for residential mortgage exposures
+    2. General PMA: scalar add-on to post-floor RWEA (supervisory requirement)
     3. Unrecognised exposure: scalar for model coverage gaps
 
-    EL adjustment mirrors the general PMA scalar.
+    Adjustment sequencing per Art. 154(4A):
+        (b) Mortgage RW floor applied first — establishes post-floor RWEA base
+        (a) General PMA and unrecognised scalars applied to post-floor RWEA
+
+    This ordering matters: PMA scalars must capture the mortgage floor
+    increase in their base, otherwise capital is understated for
+    exposures that hit the floor.
+
+    EL adjustment mirrors the general PMA scalar, floored at zero
+    per Art. 158(6A) — PMAs cannot decrease expected loss.
 
     Under CRR, no adjustments are applied (returns frame unchanged).
 
@@ -155,7 +171,7 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
         mortgage_rw_floor_adjustment: RWEA increase from mortgage floor
         unrecognised_exposure_adjustment: RWEA increase for unrecognised exposures
         el_pre_adjustment: EL before PMAs
-        post_model_adjustment_el: General PMA EL add-on
+        post_model_adjustment_el: General PMA EL add-on (floored at 0)
         el_after_adjustment: EL after all PMAs
 
     Args:
@@ -214,37 +230,46 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
     else:
         mortgage_adj_expr = pl.lit(0.0)
 
-    # General PMA and unrecognised exposure: scalar add-ons to base RWEA
+    # EL column detection
+    el_col = "expected_loss" if "expected_loss" in cols else None
+
+    # Step 1: Record pre-adjustment values and apply mortgage floor
+    # Art. 154(4A)(b) mortgage floor is applied FIRST to establish the post-floor RWEA base
+    lf = lf.with_columns(
+        [
+            pl.col("rwa").alias("rwa_pre_adjustments"),
+            mortgage_adj_expr.alias("mortgage_rw_floor_adjustment"),
+        ]
+    )
+
+    # Apply mortgage floor to RWA — creates the post-floor RWEA base
+    lf = lf.with_columns((pl.col("rwa") + pl.col("mortgage_rw_floor_adjustment")).alias("rwa"))
+
+    # Step 2: Apply PMA and unrecognised scalars to POST-FLOOR RWEA
+    # Art. 154(4A)(a) / Art. 153(5A): scalars multiply the RWEA that already includes
+    # the mortgage floor increase, so the floor portion is also captured in the PMA base.
     general_pma_expr = pl.col("rwa") * pma_rwa_scalar
     unrecognised_expr = pl.col("rwa") * unrecognised_scalar
 
-    # EL adjustment
-    el_col = "expected_loss" if "expected_loss" in cols else None
-    el_pma_expr = pl.col(el_col) * pma_el_scalar if el_col else pl.lit(0.0)
-
     lf = lf.with_columns(
         [
-            # Record pre-adjustment values
-            pl.col("rwa").alias("rwa_pre_adjustments"),
-            # RWEA adjustments
             general_pma_expr.alias("post_model_adjustment_rwa"),
-            mortgage_adj_expr.alias("mortgage_rw_floor_adjustment"),
             unrecognised_expr.alias("unrecognised_exposure_adjustment"),
         ]
     )
 
-    # Apply adjustments to RWA
+    # Apply PMA and unrecognised adjustments to RWA
     lf = lf.with_columns(
         (
             pl.col("rwa")
             + pl.col("post_model_adjustment_rwa")
-            + pl.col("mortgage_rw_floor_adjustment")
             + pl.col("unrecognised_exposure_adjustment")
         ).alias("rwa")
     )
 
-    # EL adjustments
+    # Step 3: EL adjustments — Art. 158(6A) requires PMAs cannot decrease EL
     if el_col:
+        el_pma_expr = pl.max_horizontal(pl.lit(0.0), pl.col(el_col) * pma_el_scalar)
         lf = lf.with_columns(
             [
                 pl.col(el_col).alias("el_pre_adjustment"),
@@ -269,25 +294,40 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
 # =============================================================================
 
 
-def compute_el_shortfall_excess(lf: pl.LazyFrame) -> pl.LazyFrame:
+def compute_el_shortfall_excess(
+    lf: pl.LazyFrame,
+    errors: list[CalculationError] | None = None,
+) -> pl.LazyFrame:
     """
     Compute EL shortfall and excess for IRB exposures.
 
-    Compares expected loss to allocated provisions to determine
-    whether the bank has a shortfall (EL > provisions) or excess
-    (provisions > EL). Shortfall reduces CET1/T2; excess may be
+    Compares expected loss against Art. 159(1) Pool B to determine
+    whether the bank has a shortfall (EL > Pool B) or excess
+    (Pool B > EL). Shortfall reduces CET1/T2; excess may be
     added to T2 capital (subject to 0.6% IRB RWA cap).
+
+    Pool B per Art. 159(1) includes:
+        (a) General credit risk adjustments (GCRA)
+        (b) Specific credit risk adjustments (SCRA) for non-defaulted
+        (c) Additional value adjustments (AVAs per Art. 34)
+        (d) Other own funds reductions
+
+    Components (a) and (b) are captured via ``provision_allocated``.
+    Components (c) and (d) are captured via ``ava_amount`` and
+    ``other_own_funds_reductions`` respectively.
 
     Requires ``expected_loss`` to be computed first. If
     ``provision_allocated`` is absent (no provisions in the input),
     shortfall equals the full EL and excess is zero.
 
     Produces:
-        el_shortfall: max(0, expected_loss - provision_allocated)
-        el_excess:    max(0, provision_allocated - expected_loss)
+        el_shortfall: max(0, expected_loss - pool_b)
+        el_excess:    max(0, pool_b - expected_loss)
 
     References:
         CRR Art. 158-159: EL shortfall treatment
+        CRR Art. 159(1): Pool B composition (provisions + AVA + other)
+        CRR Art. 34, Art. 105: Additional value adjustments
         CRR Art. 62(d): Excess provisions as T2 capital (capped)
         CRE35.1-3: Basel 3.1 expected loss calculation
     """
@@ -295,7 +335,20 @@ def compute_el_shortfall_excess(lf: pl.LazyFrame) -> pl.LazyFrame:
     cols = schema.names()
 
     if "expected_loss" not in cols:
-        # EL not yet computed — nothing to compare
+        if errors is not None:
+            errors.append(
+                CalculationError(
+                    code=ERROR_MISSING_EXPECTED_LOSS,
+                    message=(
+                        "expected_loss column absent — EL shortfall/excess defaulted "
+                        "to zero. T2 credit cap and CET1 deduction may be affected."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    field_name="expected_loss",
+                    regulatory_reference="CRR Art. 158-159",
+                )
+            )
         return lf.with_columns(
             [
                 pl.lit(0.0).alias("el_shortfall"),
@@ -311,9 +364,21 @@ def compute_el_shortfall_excess(lf: pl.LazyFrame) -> pl.LazyFrame:
         # No provisions resolved — full EL is shortfall
         prov = pl.lit(0.0)
 
+    # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
+    ava = pl.col("ava_amount").fill_null(0.0) if "ava_amount" in cols else pl.lit(0.0)
+    # Art. 159(1)(d): Other own funds reductions
+    other_ofr = (
+        pl.col("other_own_funds_reductions").fill_null(0.0)
+        if "other_own_funds_reductions" in cols
+        else pl.lit(0.0)
+    )
+
+    # Pool B = provisions + AVA + other own funds reductions
+    pool_b = prov + ava + other_ofr
+
     return lf.with_columns(
         [
-            pl.max_horizontal(pl.lit(0.0), el - prov).alias("el_shortfall"),
-            pl.max_horizontal(pl.lit(0.0), prov - el).alias("el_excess"),
+            pl.max_horizontal(pl.lit(0.0), el - pool_b).alias("el_shortfall"),
+            pl.max_horizontal(pl.lit(0.0), pool_b - el).alias("el_excess"),
         ]
     )

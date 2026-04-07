@@ -4,7 +4,7 @@ Tests cover the key differences between CRR and Basel 3.1 for CRM:
 1. Revised supervisory haircut tables (CRE22.52-53):
    - 5 maturity bands instead of CRR's 3
    - Higher haircuts for long-dated corporate bonds
-   - Higher equity haircuts (25%/35% vs 15%/25%)
+   - Higher equity haircuts (20%/30% vs 15%/25%)
    - Sovereign CQS 2-3 10y+ increased to 12%
 2. Revised F-IRB supervisory LGD (CRE32.9-12):
    - Senior unsecured: 40% (CRR: 45%)
@@ -20,7 +20,7 @@ Why these tests matter:
 
 References:
     CRR Art. 224: CRR supervisory haircuts
-    CRE22.52-53: Basel 3.1 supervisory haircuts
+    PRA PS1/26 Art. 224 Table 3: Basel 3.1 supervisory haircuts
     CRR Art. 161: CRR F-IRB supervisory LGD
     CRE32.9-12: Basel 3.1 F-IRB supervisory LGD
 """
@@ -148,11 +148,11 @@ class TestBasel31EquityHaircuts:
     def test_crr_equity_other_25pct(self) -> None:
         assert COLLATERAL_HAIRCUTS["equity_other"] == Decimal("0.25")
 
-    def test_b31_equity_main_index_25pct(self) -> None:
-        assert BASEL31_COLLATERAL_HAIRCUTS["equity_main_index"] == Decimal("0.25")
+    def test_b31_equity_main_index_20pct(self) -> None:
+        assert BASEL31_COLLATERAL_HAIRCUTS["equity_main_index"] == Decimal("0.20")
 
-    def test_b31_equity_other_35pct(self) -> None:
-        assert BASEL31_COLLATERAL_HAIRCUTS["equity_other"] == Decimal("0.35")
+    def test_b31_equity_other_30pct(self) -> None:
+        assert BASEL31_COLLATERAL_HAIRCUTS["equity_other"] == Decimal("0.30")
 
     def test_lookup_equity_haircut_crr(self) -> None:
         assert lookup_collateral_haircut(
@@ -165,10 +165,10 @@ class TestBasel31EquityHaircuts:
     def test_lookup_equity_haircut_b31(self) -> None:
         assert lookup_collateral_haircut(
             "equity", is_main_index=True, is_basel_3_1=True
-        ) == Decimal("0.25")
+        ) == Decimal("0.20")
         assert lookup_collateral_haircut(
             "equity", is_main_index=False, is_basel_3_1=True
-        ) == Decimal("0.35")
+        ) == Decimal("0.30")
 
 
 class TestBasel31ReceivablesHaircut:
@@ -341,10 +341,10 @@ class TestBasel31BondHaircuts:
         assert crr == Decimal("0.12")
         assert b31 == Decimal("0.15")
 
-    def test_cash_and_gold_unchanged(self) -> None:
-        """Cash 0% and gold 15% are unchanged under Basel 3.1."""
+    def test_cash_and_gold_b31(self) -> None:
+        """Cash 0% unchanged; gold is 20% under Basel 3.1 (PRA PS1/26 Art. 224 Table 3)."""
         assert lookup_collateral_haircut("cash", is_basel_3_1=True) == Decimal("0.00")
-        assert lookup_collateral_haircut("gold", is_basel_3_1=True) == Decimal("0.15")
+        assert lookup_collateral_haircut("gold", is_basel_3_1=True) == Decimal("0.20")
 
 
 # =============================================================================
@@ -421,7 +421,7 @@ class TestHaircutCalculatorFrameworkBranching:
         assert result.adjusted_value == Decimal("850000")
 
     def test_b31_calculator_uses_b31_haircuts(self) -> None:
-        """Basel 3.1 calculator returns 25% for main index equity."""
+        """Basel 3.1 calculator returns 20% for main index equity (PRA PS1/26 Art. 224 Table 3)."""
         calc = HaircutCalculator(is_basel_3_1=True)
         result = calc.calculate_single_haircut(
             collateral_type="equity",
@@ -430,8 +430,8 @@ class TestHaircutCalculatorFrameworkBranching:
             exposure_currency="GBP",
             is_main_index=True,
         )
-        assert result.collateral_haircut == Decimal("0.25")
-        assert result.adjusted_value == Decimal("750000")
+        assert result.collateral_haircut == Decimal("0.20")
+        assert result.adjusted_value == Decimal("800000")
 
     def test_b31_corp_bond_long_dated_higher_haircut(self) -> None:
         """Basel 3.1 produces higher haircut for 7y corporate bond CQS 2."""

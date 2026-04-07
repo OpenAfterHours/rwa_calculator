@@ -10,11 +10,13 @@ Key responsibilities:
 - Multi-level collateral allocation (direct / facility / counterparty)
 - SA EAD reduction via eligible financial collateral
 - F-IRB LGD calculation with supervisory values
+- A-IRB LGD Modelling Collateral Method (Art. 169A/169B)
 - Overcollateralisation and minimum threshold checks
 
 References:
     CRR Art. 223-224, 230: Collateral haircuts and allocation
     CRR Art. 161: F-IRB supervisory LGD
+    PRA PS1/26 Art. 169A/169B: LGD Modelling Collateral Method
     CRE22.52-53, CRE32.9-12: Basel 3.1 equivalents
 """
 
@@ -25,8 +27,9 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.constants import (
+    CRM_ALLOC_COLUMNS,
     MIN_COLLATERALISATION_THRESHOLDS,
     NON_ELIGIBLE_RE_TYPES,
     WATERFALL_ORDER,
@@ -276,6 +279,7 @@ def apply_collateral(
 def apply_firb_supervisory_lgd_no_collateral(
     exposures: pl.LazyFrame,
     is_basel_3_1: bool,
+    config: CalculationConfig | None = None,
 ) -> pl.LazyFrame:
     """
     Apply F-IRB supervisory LGD when no collateral is available.
@@ -284,14 +288,20 @@ def apply_firb_supervisory_lgd_no_collateral(
     - CRR Art. 161(1)(a): Senior unsecured 45%, Subordinated 75%
     - Basel 3.1 Art. 161(1)(a)/(aa): FSE senior 45%, non-FSE senior 40%, Sub 75%
 
-    A-IRB exposures keep their modelled LGD.
+    For A-IRB exposures under Basel 3.1:
+    - LGD Modelling + insufficient data (Art. 169B): own lgd_unsecured as LGDU
+    - Foundation election: supervisory LGDU (same as F-IRB)
+    - LGD Modelling + sufficient data: keep modelled LGD unchanged
+
+    Under CRR, A-IRB exposures always keep their modelled LGD.
 
     Args:
         exposures: Exposures with lgd_pre_crm
         is_basel_3_1: Whether Basel 3.1 framework applies
+        config: CalculationConfig (optional, for AIRB collateral method)
 
     Returns:
-        Exposures with lgd_post_crm set for F-IRB
+        Exposures with lgd_post_crm set for F-IRB (and qualifying A-IRB)
     """
     lgd_values = supervisory_lgd_values(is_basel_3_1)
     lgd_senior = lgd_values["unsecured"]
@@ -325,11 +335,52 @@ def apply_firb_supervisory_lgd_no_collateral(
     else:
         lgd_senior_expr = pl.lit(lgd_senior)
 
+    # --- Determine AIRB treatment (Art. 169A/169B) ---
+    airb_method = config.airb_collateral_method if config else None
+    is_airb = pl.col("approach") == ApproachType.AIRB.value
+
+    if is_basel_3_1 and airb_method == AIRBCollateralMethod.FOUNDATION:
+        # AIRB Foundation election: use supervisory LGDU (same as FIRB)
+        uses_formula = (pl.col("approach") == ApproachType.FIRB.value) | is_airb
+    elif (
+        is_basel_3_1
+        and airb_method == AIRBCollateralMethod.LGD_MODELLING
+        and "has_sufficient_collateral_data" in schema_names
+    ):
+        # Art. 169B: AIRB with insufficient data → use own lgd_unsecured
+        _is_169b = is_airb & (
+            pl.col("has_sufficient_collateral_data").fill_null(True) == False  # noqa: E712
+        )
+        own_lgdu = (
+            pl.coalesce(pl.col("lgd_unsecured"), pl.col("lgd_pre_crm"))
+            if "lgd_unsecured" in schema_names
+            else pl.col("lgd_pre_crm")
+        )
+        # Build the expression: FIRB uses supervisory, AIRB 169B uses own, AIRB full keeps modelled
+        exposures = exposures.with_columns(
+            [
+                pl.when((pl.col("approach") == ApproachType.FIRB.value) & is_subordinated)
+                .then(pl.lit(0.75))
+                .when(pl.col("approach") == ApproachType.FIRB.value)
+                .then(lgd_senior_expr)
+                .when(_is_169b & is_subordinated)
+                .then(pl.lit(0.75))
+                .when(_is_169b)
+                .then(own_lgdu)
+                .otherwise(pl.col("lgd_pre_crm"))
+                .alias("lgd_post_crm"),
+            ]
+        )
+        return exposures
+    else:
+        # CRR or no method: standard FIRB/AIRB split
+        uses_formula = pl.col("approach") == ApproachType.FIRB.value
+
     exposures = exposures.with_columns(
         [
-            pl.when((pl.col("approach") == ApproachType.FIRB.value) & is_subordinated)
+            pl.when(uses_formula & is_subordinated)
             .then(pl.lit(0.75))  # Subordinated (same both frameworks)
-            .when(pl.col("approach") == ApproachType.FIRB.value)
+            .when(uses_formula)
             .then(lgd_senior_expr)  # Senior unsecured (FSE-aware under B31)
             .otherwise(pl.col("lgd_pre_crm"))  # A-IRB or SA: keep existing
             .alias("lgd_post_crm"),
@@ -422,10 +473,7 @@ def _apply_collateral_unified(
     waterfall_aggs = []
     for cat_values, _lgds_key, suffix in WATERFALL_ORDER:
         waterfall_aggs.append(
-            pl.col("effectively_secured")
-            .filter(cat.is_in(cat_values))
-            .sum()
-            .alias(f"_e{suffix}")
+            pl.col("effectively_secured").filter(cat.is_in(cat_values)).sum().alias(f"_e{suffix}")
         )
 
     all_coll = (
@@ -441,26 +489,11 @@ def _apply_collateral_unified(
                 # Raw non-financial adjusted_value for 30% threshold
                 pl.col("adjusted_value").filter(~is_fin).sum().alias("_rn"),
                 # Per-type collateral values for COREP
-                pl.col("adjusted_value")
-                .filter(cat == "financial")
-                .sum()
-                .alias("_adj_fin"),
-                pl.col("adjusted_value")
-                .filter(cat == "cash")
-                .sum()
-                .alias("_adj_cash"),
-                pl.col("adjusted_value")
-                .filter(cat == "real_estate")
-                .sum()
-                .alias("_adj_re"),
-                pl.col("adjusted_value")
-                .filter(cat == "receivables")
-                .sum()
-                .alias("_adj_rec"),
-                pl.col("adjusted_value")
-                .filter(cat == "other_physical")
-                .sum()
-                .alias("_adj_oth"),
+                pl.col("adjusted_value").filter(cat == "financial").sum().alias("_adj_fin"),
+                pl.col("adjusted_value").filter(cat == "cash").sum().alias("_adj_cash"),
+                pl.col("adjusted_value").filter(cat == "real_estate").sum().alias("_adj_re"),
+                pl.col("adjusted_value").filter(cat == "receivables").sum().alias("_adj_rec"),
+                pl.col("adjusted_value").filter(cat == "other_physical").sum().alias("_adj_oth"),
             ]
             + waterfall_aggs
         )
@@ -627,7 +660,7 @@ def _apply_collateral_unified(
 
     # Blended lgd_secured = sum(lgds_i * es_i) / total_secured
     lgd_num = pl.lit(0.0)
-    for (_, lgds_key, suffix) in WATERFALL_ORDER:
+    for _, lgds_key, suffix in WATERFALL_ORDER:
         lgd_num = lgd_num + pl.lit(lgds[lgds_key]) * pl.col(f"_es_{suffix}")
 
     # Compute sequential allocations, then total + lgd_secured
@@ -643,24 +676,82 @@ def _apply_collateral_unified(
     )
 
     # --- Drop intermediate allocation columns ---
+    # Preserve _es_* columns (renamed to crm_alloc_*) for the A-IRB blended
+    # LGD floor (Art. 164(4)(c)).  These encode the dollar amount of EAD
+    # absorbed by each collateral category in the Art. 231 waterfall.
     drop_cols = (
         [f"{c}_{sfx}" for sfx in ["d", "f", "c"] for c in _agg]
         + ["_fac_ead_total", "_cp_ead_total", "_fw", "_cw", "_raw_nf_a"]
         + [f"_eff_{s}_a" for s in _wf_suffixes]
-        + [f"_es_{s}" for s in _wf_suffixes]
     )
     exposures = exposures.drop(drop_cols)
+    exposures = exposures.rename({f"_es_{s}": CRM_ALLOC_COLUMNS[s] for s in _wf_suffixes})
 
-    # --- Apply EAD reduction + determine seniority-based LGD ---
-    # LGDU for unsecured portion: FSE-aware under Basel 3.1 (Art. 161(1)(a) vs (aa))
+    # --- Apply EAD reduction + determine seniority-based LGDU ---
+    # Supervisory LGDU for unsecured portion: FSE-aware under Basel 3.1
+    # (Art. 161(1)(a) vs (aa))
     if _has_fse_col:
-        lgd_unsecured_expr = (
+        supervisory_lgdu_expr = (
             pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
             .then(pl.lit(lgd_unsecured_fse))
             .otherwise(pl.lit(lgd_unsecured))
         )
     else:
-        lgd_unsecured_expr = pl.lit(lgd_unsecured)
+        supervisory_lgdu_expr = pl.lit(lgd_unsecured)
+
+    # --- Determine which AIRB exposures use the Foundation formula ---
+    # Art. 169A/169B (Basel 3.1 only): AIRB exposures may use the Foundation
+    # Collateral Method formula under two scenarios:
+    #   (1) Foundation election: firm opts for FCM instead of LGD Modelling
+    #   (2) Art. 169B fallback: insufficient data → FCM formula with own LGDU
+    # Under CRR, AIRB is free-form — own LGD always kept unchanged.
+    exposure_schema = exposures.collect_schema()
+    _has_lgd_unsecured_col = "lgd_unsecured" in exposure_schema.names()
+    _has_suff_data_col = "has_sufficient_collateral_data" in exposure_schema.names()
+
+    airb_method = config.airb_collateral_method
+    is_airb = pl.col("approach") == ApproachType.AIRB.value
+
+    # AIRB exposures that use the Foundation formula (like FIRB):
+    if is_basel_3_1 and airb_method == AIRBCollateralMethod.FOUNDATION:
+        # All AIRB exposures use Foundation Collateral Method with supervisory LGDU
+        _airb_uses_formula = is_airb
+        _airb_own_lgdu = False  # Use supervisory LGDU
+    elif is_basel_3_1 and airb_method == AIRBCollateralMethod.LGD_MODELLING:
+        # Art. 169B: AIRB with insufficient data → Foundation formula with own LGDU
+        if _has_suff_data_col:
+            _airb_uses_formula = is_airb & (
+                pl.col("has_sufficient_collateral_data").fill_null(True) == False  # noqa: E712
+            )
+        else:
+            _airb_uses_formula = pl.lit(False)  # No flag → assume sufficient data
+        _airb_own_lgdu = True  # Art. 169B(2)(c): use firm's own unsecured LGD
+    else:
+        # CRR or None: AIRB keeps own modelled LGD, no formula applied
+        _airb_uses_formula = pl.lit(False)
+        _airb_own_lgdu = False
+
+    # Combined condition: FIRB OR qualifying AIRB exposures use the formula
+    _uses_formula = (pl.col("approach") == ApproachType.FIRB.value) | _airb_uses_formula
+
+    # Build per-exposure LGDU expression
+    # For AIRB Art. 169B: LGDU = own lgd_unsecured (Art. 169B(2)(c))
+    # For FIRB and AIRB Foundation: LGDU = supervisory value
+    is_subordinated = pl.col("seniority").str.to_lowercase().is_in(["subordinated", "junior"])
+
+    if _airb_own_lgdu and _has_lgd_unsecured_col:
+        # Art. 169B: AIRB exposures with insufficient data use own lgd_unsecured,
+        # falling back to lgd_pre_crm if lgd_unsecured not provided.
+        own_lgdu = pl.coalesce(pl.col("lgd_unsecured"), pl.col("lgd_pre_crm"))
+        lgdu_expr = (
+            pl.when(is_subordinated)
+            .then(pl.lit(0.75))
+            .when(_airb_uses_formula)
+            .then(own_lgdu)
+            .otherwise(supervisory_lgdu_expr)
+        )
+    else:
+        lgdu_expr = pl.when(is_subordinated).then(pl.lit(0.75)).otherwise(supervisory_lgdu_expr)
 
     exposures = exposures.with_columns(
         [
@@ -668,37 +759,31 @@ def _apply_collateral_unified(
             .then((pl.col("ead_gross") - pl.col("collateral_adjusted_value")).clip(lower_bound=0))
             .otherwise(pl.col("ead_gross"))
             .alias("ead_after_collateral"),
-            pl.when(pl.col("seniority").str.to_lowercase().is_in(["subordinated", "junior"]))
-            .then(pl.lit(0.75))
-            .otherwise(lgd_unsecured_expr)
-            .alias("lgd_unsecured"),
+            lgdu_expr.alias("lgd_unsecured"),
         ]
     )
 
     # --- Calculate LGD post-CRM + audit ---
+    # LGD* formula (Art. 230/231) applies to FIRB and qualifying AIRB exposures.
+    # Non-qualifying AIRB and SA keep lgd_pre_crm.
+    lgd_star_expr = (
+        (
+            pl.col("lgd_secured")
+            * pl.col("total_collateral_for_lgd").clip(upper_bound=pl.col("ead_gross"))
+        )
+        + (
+            pl.col("lgd_unsecured")
+            * (pl.col("ead_gross") - pl.col("total_collateral_for_lgd")).clip(lower_bound=0)
+        )
+    ) / pl.col("ead_gross")
+
     exposures = exposures.with_columns(
         [
             pl.when(
-                (pl.col("approach") == ApproachType.FIRB.value)
-                & (pl.col("ead_gross") > 0)
-                & (pl.col("total_collateral_for_lgd") > 0)
+                _uses_formula & (pl.col("ead_gross") > 0) & (pl.col("total_collateral_for_lgd") > 0)
             )
-            .then(
-                (
-                    (
-                        pl.col("lgd_secured")
-                        * pl.col("total_collateral_for_lgd").clip(upper_bound=pl.col("ead_gross"))
-                    )
-                    + (
-                        pl.col("lgd_unsecured")
-                        * (pl.col("ead_gross") - pl.col("total_collateral_for_lgd")).clip(
-                            lower_bound=0
-                        )
-                    )
-                )
-                / pl.col("ead_gross")
-            )
-            .when((pl.col("approach") == ApproachType.FIRB.value) & (pl.col("ead_gross") > 0))
+            .then(lgd_star_expr)
+            .when(_uses_formula & (pl.col("ead_gross") > 0))
             .then(pl.col("lgd_unsecured"))
             .otherwise(pl.col("lgd_pre_crm"))
             .alias("lgd_post_crm"),

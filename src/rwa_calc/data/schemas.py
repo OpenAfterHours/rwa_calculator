@@ -66,14 +66,21 @@ FACILITY_SCHEMA = {
     "limit": pl.Float64,
     "committed": pl.Boolean,
     "lgd": pl.Float64,
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
     "beel": pl.Float64,
     "is_revolving": pl.Boolean,
     "is_qrre_transactor": pl.Boolean,  # QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Optional: Art. 111(1)(c) - risk type of OBS item the commitment issues
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
+    "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
+    "facility_termination_date": pl.Date,  # Art. 162(2A)(k): max contractual termination date for revolving facilities (Basel 3.1 M)
 }
 
 LOAN_SCHEMA = {
@@ -87,9 +94,13 @@ LOAN_SCHEMA = {
     "drawn_amount": pl.Float64,
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "lgd": pl.Float64,  # A-IRB modelled LGD (optional)
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
+    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
     "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
@@ -107,11 +118,16 @@ CONTINGENTS_SCHEMA = {
     "currency": pl.String,
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
     "beel": pl.Float64,
     "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Optional: Art. 111(1)(c) - risk type of OBS item the commitment issues
     "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
+    "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
 }
 
@@ -143,8 +159,8 @@ COUNTERPARTY_SCHEMA = {
     #   Retail class (CRR Art. 112(h)):
     #     - "individual"          → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
     #     - "retail"              → SA: RETAIL_OTHER, IRB: RETAIL_OTHER
-    #   Specialised lending (CRR Art. 147(8)):
-    #     - "specialised_lending" → SA: SPECIALISED_LENDING, IRB: SPECIALISED_LENDING
+    #   Specialised lending (CRR Art. 112(1)(g) / Art. 147(8)):
+    #     - "specialised_lending" → SA: CORPORATE (sub-type), IRB: SPECIALISED_LENDING
     #   Other items class (CRR Art. 112(q), Art. 134):
     #     - "other_cash"              → SA: OTHER, 0% RW (Art. 134(1))
     #     - "other_gold"              → SA: OTHER, 0% RW (Art. 134(4))
@@ -160,6 +176,8 @@ COUNTERPARTY_SCHEMA = {
     # Retained boolean flags - orthogonal to entity_type classification
     "apply_fi_scalar": pl.Boolean,  # 1.25x IRB correlation for LFSE/unregulated FSE (CRR Art. 153(2))
     "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
+    "is_natural_person": pl.Boolean,  # Natural person counterparty — Art. 124H(1) CRE loan-splitting
+    "is_social_housing": pl.Boolean,  # Art. 124L: social housing provider — max(75%, unsecured RW) for RRE
     "is_financial_sector_entity": pl.Boolean,  # All FSEs → F-IRB only under B31 (Art. 147A(1)(e))
     # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
     "scra_grade": pl.String,  # SCRA grade: "A"/"A_ENHANCED"/"B"/"C" (Basel 3.1 CRE20.16-21)
@@ -168,6 +186,11 @@ COUNTERPARTY_SCHEMA = {
     "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
     # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
     "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income source
+    # Sovereign floor for FX institution exposures (Art. 121(6) / CRE20.22)
+    "sovereign_cqs": pl.Int32,  # CQS of the sovereign of the institution's jurisdiction (1-6)
+    "local_currency": pl.String,  # ISO 4217 domestic currency of the institution's jurisdiction
+    # Covered bond issuer institution CQS (Art. 129(5) derivation)
+    "institution_cqs": pl.Int8,  # CQS of the issuing institution (1-6); null = unrated
 }
 
 COLLATERAL_SCHEMA = {
@@ -184,6 +207,7 @@ COLLATERAL_SCHEMA = {
     "issuer_cqs": pl.Int8,  # Credit Quality Step of issuer (1-6) for haircut lookup
     "issuer_type": pl.String,  # sovereign, pse, corporate, securitisation - for haircut table
     "residual_maturity_years": pl.Float64,  # For haircut bands: <=1yr, 1-3yr, 3-5yr, 5-10yr, >10yr
+    "original_maturity_years": pl.Float64,  # Original contract term — Art. 237(2): <1yr makes protection ineligible
     # Eligibility flags
     "is_eligible_financial_collateral": pl.Boolean,  # Meets SA eligibility (CRR Art 197, CRE22.40)
     "is_eligible_irb_collateral": pl.Boolean,  # Meets IRB eligibility - wider pool (CRR Art 199)
@@ -196,6 +220,15 @@ COLLATERAL_SCHEMA = {
     "is_income_producing": pl.Boolean,  # Material income dependence affects commercial RE RW
     "is_adc": pl.Boolean,  # Acquisition/Development/Construction - 150% RW unless pre-sold
     "is_presold": pl.Boolean,  # ADC pre-sold to qualifying buyer - 100% RW
+    "is_qualifying_re": pl.Boolean,  # Art. 124A: meets regulatory RE criteria (valuation, lien, etc.)
+    "prior_charge_ltv": pl.Float64,  # Art. 124F(2): LTV occupied by prior/pari passu charges (0.0 = first charge)
+    "liquidation_period_days": pl.Int32,  # Art. 224(2): 5=repo, 10=capital market (default), 20=secured lending
+    # Art. 227 zero-haircut eligibility for repo-style transactions
+    "qualifies_for_zero_haircut": pl.Boolean,  # Art. 227: all 8 conditions (a)-(h) met (institution certification)
+    # Life insurance collateral (Art. 232)
+    "insurer_risk_weight": pl.Float64,  # SA risk weight of insurer (0.20, 0.30, 0.50, 0.65, 1.00, 1.35, 1.50)
+    # Credit-linked notes (Art. 218): set market_value = nominal_value - credit_event_reduction
+    "credit_event_reduction": pl.Float64,  # Reduction in CLN nominal from credit events
 }
 
 GUARANTEE_SCHEMA = {
@@ -209,6 +242,7 @@ GUARANTEE_SCHEMA = {
     "beneficiary_type": pl.String,
     "beneficiary_reference": pl.String,
     "protection_type": pl.String,  # "guarantee" or "credit_derivative" (CDS/CLN/TRS)
+    "includes_restructuring": pl.Boolean,  # CDS credit event coverage (Art. 233(2))
 }
 
 PROVISION_SCHEMA = {
@@ -268,6 +302,7 @@ EQUITY_EXPOSURE_SCHEMA = {
     "ciu_mandate_rw": pl.Float64,  # Pre-computed mandate-based risk weight (Art. 132A)
     "ciu_third_party_calc": pl.Boolean,  # Third-party calc → 1.2x factor (Art. 132(4))
     "fund_reference": pl.String,  # CIU fund reference for look-through join
+    "fund_nav": pl.Float64,  # CIU fund NAV for leverage adjustment (Art. 132a(3))
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
 }
 
@@ -457,6 +492,8 @@ VALID_COLLATERAL_TYPES = {
     "real_estate",
     "receivables",
     "other_physical",
+    "life_insurance",
+    "credit_linked_note",
 }
 
 VALID_PROPERTY_TYPES = {"residential", "commercial"}
@@ -483,6 +520,7 @@ VALID_SLOTTING_CATEGORIES = {"strong", "good", "satisfactory", "weak", "default"
 
 VALID_EQUITY_TYPES = {
     "central_bank",
+    "subordinated_debt",
     "listed",
     "exchange_traded",
     "government_supported",
@@ -500,7 +538,7 @@ VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
-VALID_RISK_TYPES_INPUT = {"FR", "MR", "OC", "MLR", "LR"}
+VALID_RISK_TYPES_INPUT = {"FR", "FRC", "MR", "OC", "MLR", "LR"}
 
 VALID_BS_TYPES = {"ONB", "OFB"}
 
@@ -514,6 +552,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
         "risk_type": VALID_RISK_TYPES_INPUT,
+        "underlying_risk_type": VALID_RISK_TYPES_INPUT,
     },
     "loans": {
         "seniority": VALID_SENIORITY,
@@ -522,6 +561,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
         "risk_type": VALID_RISK_TYPES_INPUT,
+        "underlying_risk_type": VALID_RISK_TYPES_INPUT,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
@@ -581,12 +621,19 @@ RAW_EXPOSURE_SCHEMA = {
     "undrawn_amount": pl.Float64,  # Undrawn commitment (limit - drawn for facilities)
     "nominal_amount": pl.Float64,  # Total nominal (for contingents)
     "lgd": pl.Float64,  # Internal LGD estimate (if available)
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=LGD modelling, False=Foundation fallback
     "beel": pl.Float64,  # Best estimate expected loss
     "seniority": pl.String,  # senior, subordinated
-    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
+    "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
+    "facility_termination_date": pl.Date,  # Art. 162(2A)(k): max contractual termination date for revolving facilities (Basel 3.1 M)
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,  # Currency before FX conversion
     "original_amount": pl.Float64,  # Amount before FX conversion (drawn + interest + nominal)
@@ -609,9 +656,13 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "undrawn_amount": pl.Float64,
     "nominal_amount": pl.Float64,
     "lgd": pl.Float64,
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=LGD modelling, False=Foundation fallback
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
+    "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # Counterparty hierarchy additions
@@ -644,10 +695,15 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
     "undrawn_amount": pl.Float64,
     "seniority": pl.String,
-    "risk_type": pl.String,  # FR, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "risk_type": pl.String,  # FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
+    "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
+    "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
+    # A-IRB LGD modelling (Art. 169A/169B)
+    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate
+    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=LGD modelling, False=Foundation fallback
     # Classification additions
     "exposure_class": pl.String,  # central_govt_central_bank, institution, corporate, retail, etc.
     "exposure_class_reason": pl.String,  # Explanation of classification
@@ -693,6 +749,7 @@ CRM_ADJUSTED_SCHEMA = {
     "guarantee_coverage_pct": pl.Float64,
     "guaranteed_amount": pl.Float64,
     "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
+    "guarantee_restructuring_haircut": pl.Float64,  # CDS restructuring exclusion (40% or 0%)
     "ead_after_guarantee": pl.Float64,
     # Final EAD
     "final_ead": pl.Float64,
@@ -907,6 +964,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "guarantee_coverage_pct": pl.Float64,  # % of exposure guaranteed
     "guaranteed_amount": pl.Float64,  # Amount covered by guarantee
     "guarantee_fx_haircut": pl.Float64,  # FX mismatch haircut on guarantee (8% or 0%)
+    "guarantee_restructuring_haircut": pl.Float64,  # CDS restructuring exclusion (40% or 0%)
     "guarantor_risk_weight": pl.Float64,  # RW of guarantor (for substitution)
     "guarantee_benefit": pl.Float64,  # RWA reduction from guarantee
     # -------------------------------------------------------------------------
@@ -947,6 +1005,10 @@ CALCULATION_OUTPUT_SCHEMA = {
     "ead_after_guarantee": pl.Float64,  # Portion not guaranteed
     "final_ead": pl.Float64,  # Final EAD for RWA calculation
     "ead_calculation_method": pl.String,  # "simple", "comprehensive", "supervisory_haircut"
+    # Art. 222 Financial Collateral Simple Method (FCSM)
+    "fcsm_collateral_value": pl.Float64,  # Total eligible financial collateral (raw market value)
+    "fcsm_collateral_rw": pl.Float64,  # Weighted-average SA RW of collateral
+    "pre_fcsm_risk_weight": pl.Float64,  # Risk weight before FCSM substitution
     # -------------------------------------------------------------------------
     # RISK WEIGHT DETERMINATION - SA
     # -------------------------------------------------------------------------
@@ -991,6 +1053,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "ltv_band": pl.String,  # LTV band for RW lookup
     "is_income_producing": pl.Boolean,  # CRE income flag
     "is_adc": pl.Boolean,  # ADC exposure flag
+    "is_qualifying_re": pl.Boolean,  # Art. 124A: meets regulatory RE qualifying criteria
     "materially_dependent_on_property": pl.Boolean,  # Cash-flow dependency on property (B3.1)
     "mortgage_risk_weight": pl.Float64,  # LTV-based RW
     # -------------------------------------------------------------------------
@@ -1030,8 +1093,10 @@ CALCULATION_OUTPUT_SCHEMA = {
     # -------------------------------------------------------------------------
     "irb_expected_loss": pl.Float64,  # PD × LGD × EAD
     "provision_held": pl.Float64,  # Total provision amount
-    "el_shortfall": pl.Float64,  # max(0, EL - provision)
-    "el_excess": pl.Float64,  # max(0, provision - EL)
+    "ava_amount": pl.Float64,  # Additional value adjustments (Art. 34) — Pool B component
+    "other_own_funds_reductions": pl.Float64,  # Other own funds reductions — Pool B component
+    "el_shortfall": pl.Float64,  # max(0, EL - pool_b) where pool_b = prov + AVA + other
+    "el_excess": pl.Float64,  # max(0, pool_b - EL)
     # -------------------------------------------------------------------------
     # BASEL 3.1 ADJUSTMENTS
     # -------------------------------------------------------------------------

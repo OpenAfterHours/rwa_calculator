@@ -21,11 +21,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from rwa_calc.domain.enums import (
+    AIRBCollateralMethod,
     ApproachType,
     CollateralType,
+    CRMCollateralMethod,
     ExposureClass,
+    InstitutionType,
     PermissionMode,
     RegulatoryFramework,
+    ReportingBasis,
 )
 
 if TYPE_CHECKING:
@@ -273,6 +277,33 @@ class OutputFloorConfig:
     to be at least 72.5% of the equivalent SA RWAs.
 
     Not applicable under CRR.
+
+    Entity-type carve-outs (Art. 92 para 2A):
+        The floor applies only to specific (institution_type, reporting_basis)
+        combinations. When institution_type and reporting_basis are set, the
+        ``is_floor_applicable()`` method checks Art. 92 para 2A rules. When
+        not set (None), the floor defaults to applicable if enabled — backward
+        compatible with existing configurations.
+
+    Art. 92 para 2A applicability:
+        (a)(i)   stand-alone UK institution on individual basis → FLOOR
+        (a)(ii)  ring-fenced body on sub-consolidated basis → FLOOR
+        (a)(iii) non-international-subsidiary CRR consolidation entity
+                 on consolidated basis → FLOOR
+        (b)      non-ring-fenced on sub-consolidated basis → EXEMPT
+        (c)      ring-fenced body at individual level / non-stand-alone → EXEMPT
+        (d)      international subsidiary → EXEMPT
+
+    Art. 92 para 5 optionality:
+        Transitional floor rates (60/65/70%) are permissive — institutions
+        may voluntarily apply the full 72.5% from day one.
+
+    Art. 122(8) corporate SA treatment for S-TREA:
+        IRB institutions must choose between 100% flat (Art. 122(2)) or
+        65%/135% IG assessment (Art. 122(6)) for unrated corporate exposures
+        in the output floor S-TREA computation. This choice is configured via
+        ``CalculationConfig.use_investment_grade_assessment`` and flows to the
+        SA calculator's unified path, which produces ``sa_rwa`` for the floor.
     """
 
     enabled: bool = False
@@ -280,6 +311,56 @@ class OutputFloorConfig:
     transitional_start_date: date | None = None
     transitional_end_date: date | None = None
     transitional_floor_schedule: dict[date, Decimal] = field(default_factory=dict)
+    institution_type: InstitutionType | None = None
+    reporting_basis: ReportingBasis | None = None
+
+    # OF-ADJ capital-tier inputs (Art. 92 para 2A)
+    # These are institution-level capital parameters that cannot be derived
+    # from exposure-level data.  When all are zero (default), OF-ADJ = 0
+    # and the floor formula simplifies to max(U-TREA, x * S-TREA).
+    gcra_amount: float = 0.0
+    """General credit risk adjustments, gross of tax effects.
+    Capped internally at 1.25% of S-TREA per Art. 92 para 2A."""
+    sa_t2_credit: float = 0.0
+    """Art. 62(c) SA T2 credit for general credit risk adjustments."""
+    art_40_deductions: float = 0.0
+    """Art. 40 additional CET1 deductions (supervisory add-on beyond Art. 36(1)(d))."""
+
+    # Art. 92 para 2A(a): combinations where the output floor applies
+    _FLOOR_APPLICABLE_COMBINATIONS: frozenset[tuple[InstitutionType, ReportingBasis]] = field(
+        default=frozenset(
+            {
+                (InstitutionType.STANDALONE_UK, ReportingBasis.INDIVIDUAL),
+                (InstitutionType.RING_FENCED_BODY, ReportingBasis.SUB_CONSOLIDATED),
+                (InstitutionType.CRR_CONSOLIDATION_ENTITY, ReportingBasis.CONSOLIDATED),
+            }
+        ),
+        init=False,
+        repr=False,
+    )
+
+    def is_floor_applicable(self) -> bool:
+        """Determine if the output floor applies per Art. 92 para 2A.
+
+        Returns True when:
+        - Floor is enabled, AND
+        - Either institution_type/reporting_basis are not set (backward compatible
+          default: assumes user has already determined applicability), OR
+        - The (institution_type, reporting_basis) pair is in the Art. 92 para 2A(a)
+          applicability set.
+
+        Returns False when:
+        - Floor is disabled (CRR), OR
+        - The entity is exempt under Art. 92 para 2A(b)-(d): non-ring-fenced
+          institutions on sub-consolidated basis, ring-fenced bodies at individual
+          level, international subsidiaries.
+        """
+        if not self.enabled:
+            return False
+        # Backward compatible: when entity type not specified, default to applicable
+        if self.institution_type is None or self.reporting_basis is None:
+            return True
+        return (self.institution_type, self.reporting_basis) in self._FLOOR_APPLICABLE_COMBINATIONS
 
     def get_floor_percentage(self, calculation_date: date) -> Decimal:
         """Get the applicable floor percentage for a given date.
@@ -311,8 +392,26 @@ class OutputFloorConfig:
         return cls(enabled=False)
 
     @classmethod
-    def basel_3_1(cls) -> OutputFloorConfig:
-        """Basel 3.1 output floor configuration with transitional period."""
+    def basel_3_1(
+        cls,
+        institution_type: InstitutionType | None = None,
+        reporting_basis: ReportingBasis | None = None,
+        gcra_amount: float = 0.0,
+        sa_t2_credit: float = 0.0,
+        art_40_deductions: float = 0.0,
+    ) -> OutputFloorConfig:
+        """Basel 3.1 output floor configuration with transitional period.
+
+        Args:
+            institution_type: Entity type per Art. 92 para 2A. When set, floor
+                applicability is checked against the regulatory carve-outs.
+                When None, the floor is assumed applicable (backward compatible).
+            reporting_basis: Basis of calculation per Rule 2.2A. Required with
+                institution_type for floor applicability determination.
+            gcra_amount: General credit risk adjustments for OF-ADJ (Art. 92 para 2A).
+            sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
+            art_40_deductions: Art. 40 additional CET1 deductions (OF-ADJ input).
+        """
         # PRA PS1/26 Art. 92(5) transitional schedule
         # NOTE: PRA compressed the BCBS 6-year phase-in to 4 years (2027-2030).
         transitional_schedule = {
@@ -327,6 +426,11 @@ class OutputFloorConfig:
             transitional_start_date=date(2027, 1, 1),
             transitional_end_date=date(2030, 1, 1),
             transitional_floor_schedule=transitional_schedule,
+            institution_type=institution_type,
+            reporting_basis=reporting_basis,
+            gcra_amount=gcra_amount,
+            sa_t2_credit=sa_t2_credit,
+            art_40_deductions=art_40_deductions,
         )
 
 
@@ -387,18 +491,46 @@ class PostModelAdjustmentConfig:
     These adjustments increase RWEA and EL to compensate for model limitations.
 
     Components:
-    - General PMAs: Firm-level scalar applied to modelled RWEA/EL (supervisory add-on)
+    - General PMAs: Firm-level scalar applied to post-floor RWEA/EL (supervisory add-on)
     - Mortgage RW floor: Minimum risk weight for residential mortgage IRB exposures
     - Unrecognised exposure adjustment: Scalar for exposures not fully captured by model
+
+    Adjustment sequencing per Art. 154(4A):
+        (b) Mortgage RW floor applied first — establishes post-floor RWEA base
+        (a) General PMA and unrecognised scalars applied to post-floor RWEA
+
+    Art. 158(6A): PMA EL adjustments can only increase EL, never decrease.
+    Negative scalars are rejected at construction time.
 
     CRR has no post-model adjustment framework.
     """
 
     enabled: bool = False
-    pma_rwa_scalar: Decimal = Decimal("0.0")  # Additive % of base RWEA (e.g., 0.05 = 5%)
-    pma_el_scalar: Decimal = Decimal("0.0")  # Additive % of base EL
-    mortgage_rw_floor: Decimal = Decimal("0.0")  # Min RW for residential mortgages (e.g., 0.15)
-    unrecognised_exposure_scalar: Decimal = Decimal("0.0")  # Additive % of base RWEA
+    pma_rwa_scalar: Decimal = Decimal("0.0")  # Additive % of post-floor RWEA (e.g., 0.05 = 5%)
+    pma_el_scalar: Decimal = Decimal("0.0")  # Additive % of base EL (must be >= 0)
+    mortgage_rw_floor: Decimal = Decimal("0.0")  # Min RW for residential mortgages (e.g., 0.10)
+    unrecognised_exposure_scalar: Decimal = Decimal("0.0")  # Additive % of post-floor RWEA
+
+    def __post_init__(self) -> None:
+        """Validate PMA scalars per Art. 158(6A) — PMAs can only increase, not decrease."""
+        if self.pma_rwa_scalar < 0:
+            msg = f"pma_rwa_scalar must be >= 0 (got {self.pma_rwa_scalar})"
+            raise ValueError(msg)
+        if self.pma_el_scalar < 0:
+            msg = (
+                f"pma_el_scalar must be >= 0 per Art. 158(6A) — PMAs cannot decrease EL "
+                f"(got {self.pma_el_scalar})"
+            )
+            raise ValueError(msg)
+        if self.unrecognised_exposure_scalar < 0:
+            msg = (
+                f"unrecognised_exposure_scalar must be >= 0 "
+                f"(got {self.unrecognised_exposure_scalar})"
+            )
+            raise ValueError(msg)
+        if self.mortgage_rw_floor < 0:
+            msg = f"mortgage_rw_floor must be >= 0 (got {self.mortgage_rw_floor})"
+            raise ValueError(msg)
 
     @classmethod
     def crr(cls) -> PostModelAdjustmentConfig:
@@ -631,7 +763,22 @@ class CalculationConfig:
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
-    use_investment_grade_assessment: bool = False  # Art. 122(6): IG=65% / non-IG=135%
+    use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
+    # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
+    # or para 6 (65%/135% IG assessment) for unrated corporates. This choice
+    # applies to both regular SA calculations and the output floor S-TREA
+    # computation (Art. 92 para 2A). The choice must be declared to the PRA.
+    crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE
+    # Art. 191A: Firm-wide election for financial collateral recognition.
+    # COMPREHENSIVE (default): EAD reduction via supervisory haircuts (Art. 223-224).
+    # SIMPLE: SA-only risk weight substitution (Art. 222), 20% RW floor on secured portion.
+    # IRB exposures always use Foundation Collateral Method regardless of this election.
+    airb_collateral_method: AIRBCollateralMethod | None = None
+    # Art. 169A/169B: A-IRB collateral recognition method (Basel 3.1 only).
+    # LGD_MODELLING (default under B31): own LGD captures collateral effects;
+    #   Art. 169B fallback uses Foundation formula with own unsecured LGD.
+    # FOUNDATION: uses supervisory LGDS/LGDU, same as F-IRB.
+    # None: not applicable under CRR (A-IRB is free-form).
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
 
@@ -666,6 +813,7 @@ class CalculationConfig:
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
+        crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -707,6 +855,7 @@ class CalculationConfig:
             scaling_factor=Decimal("1.06"),
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
+            crm_collateral_method=crm_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
         )
@@ -718,6 +867,13 @@ class CalculationConfig:
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
         use_investment_grade_assessment: bool = False,
+        institution_type: InstitutionType | None = None,
+        reporting_basis: ReportingBasis | None = None,
+        gcra_amount: float = 0.0,
+        sa_t2_credit: float = 0.0,
+        art_40_deductions: float = 0.0,
+        crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
+        airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -728,7 +884,7 @@ class CalculationConfig:
         - Differentiated PD floors by exposure class
         - LGD floors for A-IRB by collateral type
         - No supporting factors (SME/infrastructure)
-        - Output floor (72.5%, transitional)
+        - Output floor (72.5%, transitional) with OF-ADJ
         - 1.06 scaling factor removed (PRA PS1/26 confirms)
         - Post-model adjustments (mortgage RW floor, PMAs)
 
@@ -736,9 +892,20 @@ class CalculationConfig:
             reporting_date: As-of date for calculation
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             post_model_adjustments: PMA configuration (optional, defaults to B3.1)
-            use_investment_grade_assessment: Art. 122(6) election — when True,
+            use_investment_grade_assessment: Art. 122(6)/(8) election — when True,
                 unrated IG corporates get 65% and non-IG get 135%. When False
-                (default), all unrated corporates get 100%.
+                (default), all unrated corporates get 100%. Under Art. 122(8),
+                this choice also determines the SA-equivalent risk weight used
+                for the output floor S-TREA computation (Art. 92 para 2A).
+                Must be declared to the PRA.
+            institution_type: Entity type per Art. 92 para 2A for output floor
+                applicability. When None, floor is assumed applicable.
+            reporting_basis: Calculation basis per Rule 2.2A. Required with
+                institution_type for floor applicability check.
+            gcra_amount: General credit risk adjustments for OF-ADJ (Art. 92 para 2A).
+                Capped at 1.25% of S-TREA.
+            sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
+            art_40_deductions: Art. 40 additional CET1 deductions (OF-ADJ input).
             collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -752,7 +919,13 @@ class CalculationConfig:
             pd_floors=PDFloors.basel_3_1(),
             lgd_floors=LGDFloors.basel_3_1(),
             supporting_factors=SupportingFactors.basel_3_1(),
-            output_floor=OutputFloorConfig.basel_3_1(),
+            output_floor=OutputFloorConfig.basel_3_1(
+                institution_type=institution_type,
+                reporting_basis=reporting_basis,
+                gcra_amount=gcra_amount,
+                sa_t2_credit=sa_t2_credit,
+                art_40_deductions=art_40_deductions,
+            ),
             post_model_adjustments=(
                 post_model_adjustments or PostModelAdjustmentConfig.basel_3_1()
             ),
@@ -762,6 +935,8 @@ class CalculationConfig:
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
             eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
             use_investment_grade_assessment=use_investment_grade_assessment,
+            crm_collateral_method=crm_collateral_method,
+            airb_collateral_method=airb_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
         )

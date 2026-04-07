@@ -57,13 +57,13 @@ class TestArt1593TwoBranch:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is True
-        assert result.non_defaulted_el_shortfall == pytest.approx(20_000.0)
-        assert result.non_defaulted_el_excess == pytest.approx(0.0)
-        assert result.defaulted_el_shortfall == pytest.approx(0.0)
-        assert result.defaulted_el_excess == pytest.approx(30_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(0.0)
+        assert float(result.defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(30_000.0)
         # Effective values: no cross-offset
-        assert result.total_el_shortfall == pytest.approx(20_000.0)
-        assert result.total_el_excess == pytest.approx(30_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.total_el_excess) == pytest.approx(30_000.0)
 
     def test_two_branch_cet1_t2_deductions_use_non_defaulted_shortfall_only(self) -> None:
         """CET1/T2 deductions should be based on non-defaulted shortfall when 159(3) applies.
@@ -88,8 +88,8 @@ class TestArt1593TwoBranch:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is True
-        assert result.cet1_deduction == pytest.approx(20_000.0)
-        assert result.t2_deduction == pytest.approx(20_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(20_000.0)
+        assert float(result.t2_deduction) == pytest.approx(20_000.0)
 
     def test_two_branch_t2_credit_uses_defaulted_excess_only(self) -> None:
         """T2 credit should use defaulted excess (not combined) when 159(3) applies.
@@ -115,8 +115,8 @@ class TestArt1593TwoBranch:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is True
-        assert result.t2_credit == pytest.approx(25_000.0)
-        assert result.t2_credit_cap == pytest.approx(60_000.0)
+        assert float(result.t2_credit) == pytest.approx(25_000.0)
+        assert float(result.t2_credit_cap) == pytest.approx(60_000.0)
 
 
 class TestArt1593NotTriggered:
@@ -140,8 +140,8 @@ class TestArt1593NotTriggered:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.total_el_shortfall == pytest.approx(40_000.0)
-        assert result.total_el_excess == pytest.approx(0.0)
+        assert float(result.total_el_shortfall) == pytest.approx(40_000.0)
+        assert float(result.total_el_excess) == pytest.approx(0.0)
 
     def test_all_defaulted_excess_no_two_branch(self) -> None:
         """Pure defaulted portfolio with excess — standard combined approach."""
@@ -161,8 +161,8 @@ class TestArt1593NotTriggered:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.total_el_excess == pytest.approx(50_000.0)
-        assert result.total_el_shortfall == pytest.approx(0.0)
+        assert float(result.total_el_excess) == pytest.approx(50_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(0.0)
 
     def test_both_pools_have_shortfall_no_two_branch(self) -> None:
         """Both defaulted and non-defaulted have shortfall — no cross-offset issue.
@@ -187,7 +187,7 @@ class TestArt1593NotTriggered:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.total_el_shortfall == pytest.approx(30_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(30_000.0)
 
     def test_both_pools_have_excess_no_two_branch(self) -> None:
         """Both defaulted and non-defaulted have excess — no cross-offset issue."""
@@ -207,7 +207,7 @@ class TestArt1593NotTriggered:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.total_el_excess == pytest.approx(55_000.0)
+        assert float(result.total_el_excess) == pytest.approx(55_000.0)
 
     def test_non_defaulted_excess_defaulted_shortfall_no_two_branch(self) -> None:
         """Non-defaulted has excess, defaulted has shortfall — opposite of 159(3) trigger.
@@ -231,8 +231,8 @@ class TestArt1593NotTriggered:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.total_el_shortfall == pytest.approx(10_000.0)
-        assert result.total_el_excess == pytest.approx(30_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(10_000.0)
+        assert float(result.total_el_excess) == pytest.approx(30_000.0)
 
 
 class TestArt1593BackwardCompatibility:
@@ -259,10 +259,10 @@ class TestArt1593BackwardCompatibility:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.total_el_shortfall == pytest.approx(40_000.0)
-        assert result.non_defaulted_el_shortfall == pytest.approx(40_000.0)
-        assert result.defaulted_el_shortfall == pytest.approx(0.0)
-        assert result.defaulted_el_excess == pytest.approx(0.0)
+        assert float(result.total_el_shortfall) == pytest.approx(40_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(40_000.0)
+        assert float(result.defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(0.0)
 
     def test_mixed_shortfall_excess_without_is_defaulted(self) -> None:
         """Mixed portfolio without is_defaulted — standard combined approach."""
@@ -282,11 +282,11 @@ class TestArt1593BackwardCompatibility:
         assert result is not None
         assert result.art_159_3_applies is False
         # All treated as non-defaulted
-        assert result.non_defaulted_el_shortfall == pytest.approx(20_000.0)
-        assert result.non_defaulted_el_excess == pytest.approx(60_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(60_000.0)
         # Standard combined approach: shortfall=20k, excess=60k
-        assert result.total_el_shortfall == pytest.approx(20_000.0)
-        assert result.total_el_excess == pytest.approx(60_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.total_el_excess) == pytest.approx(60_000.0)
 
     def test_null_is_defaulted_defaults_to_non_defaulted(self) -> None:
         """Null is_defaulted values should be treated as non-defaulted (conservative)."""
@@ -306,10 +306,10 @@ class TestArt1593BackwardCompatibility:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.non_defaulted_el_shortfall == pytest.approx(20_000.0)
-        assert result.non_defaulted_el_excess == pytest.approx(30_000.0)
-        assert result.defaulted_el_shortfall == pytest.approx(0.0)
-        assert result.defaulted_el_excess == pytest.approx(0.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(30_000.0)
+        assert float(result.defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(0.0)
 
 
 class TestArt1593PoolBreakdown:
@@ -332,10 +332,10 @@ class TestArt1593PoolBreakdown:
 
         result = compute_el_portfolio_summary(irb)
         assert result is not None
-        assert result.non_defaulted_el_shortfall == pytest.approx(20_000.0)
-        assert result.non_defaulted_el_excess == pytest.approx(0.0)
-        assert result.defaulted_el_shortfall == pytest.approx(7_000.0)
-        assert result.defaulted_el_excess == pytest.approx(12_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(0.0)
+        assert float(result.defaulted_el_shortfall) == pytest.approx(7_000.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(12_000.0)
 
     def test_pool_rwa_totals_correct(self) -> None:
         """Total IRB RWA should be sum of both pools."""
@@ -352,7 +352,7 @@ class TestArt1593PoolBreakdown:
 
         result = compute_el_portfolio_summary(irb)
         assert result is not None
-        assert result.total_irb_rwa == pytest.approx(10_000_000.0)
+        assert float(result.total_irb_rwa) == pytest.approx(10_000_000.0)
 
     def test_two_branch_with_t2_credit_capped(self) -> None:
         """T2 credit from defaulted excess should still respect the 0.6% cap.
@@ -376,9 +376,9 @@ class TestArt1593PoolBreakdown:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is True
-        assert result.total_el_excess == pytest.approx(100_000.0)
-        assert result.t2_credit_cap == pytest.approx(30_000.0)
-        assert result.t2_credit == pytest.approx(30_000.0)
+        assert float(result.total_el_excess) == pytest.approx(100_000.0)
+        assert float(result.t2_credit_cap) == pytest.approx(30_000.0)
+        assert float(result.t2_credit) == pytest.approx(30_000.0)
 
     def test_two_branch_with_slotting_results(self) -> None:
         """Art. 159(3) should work across combined IRB + slotting portfolios.
@@ -415,11 +415,11 @@ class TestArt1593PoolBreakdown:
         result = compute_el_portfolio_summary(irb, slotting)
         assert result is not None
         assert result.art_159_3_applies is True
-        assert result.non_defaulted_el_shortfall == pytest.approx(15_000.0)
-        assert result.defaulted_el_excess == pytest.approx(25_000.0)
-        assert result.total_el_shortfall == pytest.approx(15_000.0)
-        assert result.total_el_excess == pytest.approx(25_000.0)
-        assert result.total_irb_rwa == pytest.approx(8_000_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(15_000.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(25_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(15_000.0)
+        assert float(result.total_el_excess) == pytest.approx(25_000.0)
+        assert float(result.total_irb_rwa) == pytest.approx(8_000_000.0)
 
 
 class TestArt1593CapitalImpact:
@@ -462,9 +462,9 @@ class TestArt1593CapitalImpact:
         assert result is not None
         assert result.art_159_3_applies is True
         # Non-defaulted shortfall is not reduced by defaulted excess
-        assert result.total_el_shortfall == pytest.approx(50_000.0)
-        assert result.cet1_deduction == pytest.approx(25_000.0)
-        assert result.t2_deduction == pytest.approx(25_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(50_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(25_000.0)
+        assert float(result.t2_deduction) == pytest.approx(25_000.0)
 
     def test_two_branch_flag_false_when_no_cross_offset_possible(self) -> None:
         """When there's no defaulted excess, Art. 159(3) doesn't apply.
@@ -488,6 +488,6 @@ class TestArt1593CapitalImpact:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert result.total_el_shortfall == pytest.approx(40_000.0)
-        assert result.cet1_deduction == pytest.approx(20_000.0)
-        assert result.t2_deduction == pytest.approx(20_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(40_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(20_000.0)
+        assert float(result.t2_deduction) == pytest.approx(20_000.0)

@@ -33,6 +33,12 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars import col, lit
 
+from rwa_calc.contracts.errors import (
+    ERROR_MISSING_EXPECTED_LOSS,
+    CalculationError,
+    ErrorCategory,
+    ErrorSeverity,
+)
 from rwa_calc.data.tables.b31_slotting import (
     B31_SLOTTING_EL_RATES,
     B31_SLOTTING_EL_RATES_HVCRE,
@@ -217,9 +223,9 @@ class SlottingLazyFrame:
         return self._lf.with_columns(risk_weight=rw_expr)
 
     def calculate_rwa(self) -> pl.LazyFrame:
-        """Calculate RWA = EAD x Risk Weight."""
+        """Calculate RWA = EAD x Risk Weight (pre-supporting-factor)."""
         rwa = col("ead_final") * col("risk_weight")
-        return self._lf.with_columns(rwa=rwa, rwa_final=rwa)
+        return self._lf.with_columns(rwa=rwa)
 
     def apply_el_rates(self, config: CalculationConfig) -> pl.LazyFrame:
         """Apply slotting expected loss rates per Art. 158(6) Table B.
@@ -240,20 +246,45 @@ class SlottingLazyFrame:
             expected_loss=el_rate_expr * col("ead_final"),
         )
 
-    def compute_el_shortfall_excess(self) -> pl.LazyFrame:
+    def compute_el_shortfall_excess(
+        self,
+        errors: list[CalculationError] | None = None,
+    ) -> pl.LazyFrame:
         """Compute EL shortfall and excess for slotting exposures.
 
-        Compares expected loss to allocated provisions. Same logic as IRB
+        Compares expected loss against Art. 159(1) Pool B. Same logic as IRB
         (CRR Art. 158-159) but using slotting-specific EL rates.
 
+        Pool B per Art. 159(1) includes provisions (a+b), AVAs (c), and
+        other own funds reductions (d).
+
+        Args:
+            errors: Optional error accumulator. Receives a warning if
+                ``expected_loss`` column is absent (EL not yet computed).
+
         Produces:
-            el_shortfall: max(0, expected_loss - provision_allocated)
-            el_excess:    max(0, provision_allocated - expected_loss)
+            el_shortfall: max(0, expected_loss - pool_b)
+            el_excess:    max(0, pool_b - expected_loss)
         """
         schema = self._lf.collect_schema()
         cols = schema.names()
 
         if "expected_loss" not in cols:
+            if errors is not None:
+                errors.append(
+                    CalculationError(
+                        code=ERROR_MISSING_EXPECTED_LOSS,
+                        message=(
+                            "expected_loss column absent in slotting exposures — "
+                            "EL shortfall/excess defaulted to zero. "
+                            "T2 credit cap and CET1 deduction may be affected."
+                        ),
+                        severity=ErrorSeverity.WARNING,
+                        category=ErrorCategory.DATA_QUALITY,
+                        field_name="expected_loss",
+                        regulatory_reference="CRR Art. 158-159",
+                    )
+                )
             return self._lf.with_columns(
                 el_shortfall=lit(0.0),
                 el_excess=lit(0.0),
@@ -263,10 +294,19 @@ class SlottingLazyFrame:
         prov = (
             col("provision_allocated").fill_null(0.0) if "provision_allocated" in cols else lit(0.0)
         )
+        # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
+        ava = col("ava_amount").fill_null(0.0) if "ava_amount" in cols else lit(0.0)
+        # Art. 159(1)(d): Other own funds reductions
+        other_ofr = (
+            col("other_own_funds_reductions").fill_null(0.0)
+            if "other_own_funds_reductions" in cols
+            else lit(0.0)
+        )
+        pool_b = prov + ava + other_ofr
 
         return self._lf.with_columns(
-            el_shortfall=pl.max_horizontal(lit(0.0), el - prov),
-            el_excess=pl.max_horizontal(lit(0.0), prov - el),
+            el_shortfall=pl.max_horizontal(lit(0.0), el - pool_b),
+            el_excess=pl.max_horizontal(lit(0.0), pool_b - el),
         )
 
     def apply_all(self, config: CalculationConfig) -> pl.LazyFrame:
@@ -295,6 +335,7 @@ class SlottingLazyFrame:
             "ead_final",
             "risk_weight",
             "rwa",
+            "supporting_factor",
         ]
 
         select_cols = [c for c in base_cols + optional_cols if c in schema]

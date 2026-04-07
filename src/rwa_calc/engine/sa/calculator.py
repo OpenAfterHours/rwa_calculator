@@ -65,16 +65,20 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_SUBORDINATED_DEBT_RW,
     b31_adc_rw_expr,
     b31_commercial_rw_expr,
+    b31_other_re_rw_expr,
     b31_residential_rw_expr,
     b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.crr_risk_weights import (
     COMMERCIAL_RE_PARAMS,
+    COVERED_BOND_UNRATED_DERIVATION,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     HIGH_RISK_RW,
+    INSTITUTION_RISK_WEIGHTS_STANDARD,
+    INSTITUTION_RISK_WEIGHTS_UK,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
@@ -93,11 +97,51 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+
+def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
+    """Build Polars expression for CRR Art. 129(5) unrated covered bond RW derivation.
+
+    Derives covered bond RW from the issuing institution's CQS via two-step lookup:
+      1. Institution CQS → institution RW (Art. 120, Table 3/4)
+      2. Institution RW → covered bond RW (Art. 129(5) derivation table)
+
+    When ``cp_institution_cqs`` is null (institution itself is unrated), uses
+    sovereign-derived institution RW: 40% (UK) → CB 20%, or 100% (standard) → CB 50%.
+
+    References:
+        CRR Art. 120: Institution risk weights (UK Table 4, standard Table 3)
+        CRR Art. 129(5): Unrated covered bond derivation from institution RW
+    """
+    inst_table = (
+        INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+    )
+    from rwa_calc.domain.enums import CQS
+
+    # Pre-compute CQS → CB RW by chaining institution RW through the derivation table
+    cqs_to_cb_rw: dict[int, float] = {}
+    for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
+        inst_rw = inst_table[cqs_val]
+        cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
+        cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
+
+    # Unrated institution: sovereign-derived
+    unrated_inst_rw = inst_table[CQS.UNRATED]
+    unrated_cb_rw = float(COVERED_BOND_UNRATED_DERIVATION[unrated_inst_rw])
+
+    # Build when/then chain from cp_institution_cqs
+    expr = pl.when(pl.col("cp_institution_cqs") == 1).then(pl.lit(cqs_to_cb_rw[1]))
+    for cqs_int in [2, 3, 4, 5, 6]:
+        expr = expr.when(pl.col("cp_institution_cqs") == cqs_int).then(
+            pl.lit(cqs_to_cb_rw[cqs_int])
+        )
+    # Fallback: cp_institution_cqs is null (unrated institution) or unexpected value
+    return expr.otherwise(pl.lit(unrated_cb_rw))
 
 
 @dataclass
@@ -146,16 +190,21 @@ class SACalculator:
         """
         bundle = self.get_sa_result_bundle(data, config)
 
-        # Convert bundle errors to CalculationErrors
-        calc_errors = [
-            CalculationError(
-                code="SA001",
-                message=str(err),
-                severity=ErrorSeverity.ERROR,
-                category=ErrorCategory.CALCULATION,
-            )
-            for err in bundle.errors
-        ]
+        # Convert bundle errors to CalculationErrors, preserving any
+        # CalculationError objects already created by sub-components
+        calc_errors: list[CalculationError] = []
+        for err in bundle.errors:
+            if isinstance(err, CalculationError):
+                calc_errors.append(err)
+            else:
+                calc_errors.append(
+                    CalculationError(
+                        code="SA001",
+                        message=str(err),
+                        severity=ErrorSeverity.ERROR,
+                        category=ErrorCategory.CALCULATION,
+                    )
+                )
 
         return LazyFrameResult(
             frame=bundle.results,
@@ -177,13 +226,19 @@ class SACalculator:
         Returns:
             SAResultBundle with results and audit trail
         """
-        errors: list[SACalculationError] = []
+        errors: list = []
 
         # Get SA exposures
         exposures = data.sa_exposures
 
         # Step 1: Look up risk weights
         exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 1b: Apply FCSM risk weight substitution (Art. 222 Simple Method)
+        exposures = self._apply_fcsm_rw_substitution(exposures, config)
+
+        # Step 1c: Apply life insurance risk weight mapping (Art. 232)
+        exposures = self._apply_life_insurance_rw_mapping(exposures)
 
         # Step 2: Apply guarantee substitution (blended risk weight)
         exposures = self._apply_guarantee_substitution(exposures, config)
@@ -195,7 +250,9 @@ class SACalculator:
         exposures = self._calculate_rwa(exposures)
 
         # Step 4: Apply supporting factors (CRR only)
-        exposures = self._apply_supporting_factors(exposures, config)
+        sf_errors: list[CalculationError] = []
+        exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
+        errors.extend(sf_errors)
 
         # Step 5: Build audit trail
         audit = self._build_audit(exposures)
@@ -236,6 +293,12 @@ class SACalculator:
         # Step 1-2: Apply risk weights (runs unconditionally — also provides
         # SA-equivalent RW for IRB output floor)
         exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 2b: FCSM risk weight substitution (Art. 222 Simple Method)
+        exposures = self._apply_fcsm_rw_substitution(exposures, config)
+
+        # Step 2c: Life insurance risk weight mapping (Art. 232)
+        exposures = self._apply_life_insurance_rw_mapping(exposures)
 
         # Step 3: Guarantee substitution (already conditional on guaranteed_portion > 0)
         exposures = self._apply_guarantee_substitution(exposures, config)
@@ -292,6 +355,12 @@ class SACalculator:
         """
         # Step 1-2: Apply risk weights
         exposures = self._apply_risk_weights(exposures, config)
+
+        # Step 2b: FCSM risk weight substitution (Art. 222 Simple Method)
+        exposures = self._apply_fcsm_rw_substitution(exposures, config)
+
+        # Step 2c: Life insurance risk weight mapping (Art. 232)
+        exposures = self._apply_life_insurance_rw_mapping(exposures)
 
         # Step 3: Guarantee substitution
         exposures = self._apply_guarantee_substitution(exposures, config)
@@ -387,6 +456,37 @@ class SACalculator:
             missing_cols.append(pl.lit(None).cast(pl.Float64).alias("residual_maturity_years"))
         if "is_short_term_trade_lc" not in schema.names():
             missing_cols.append(pl.lit(False).alias("is_short_term_trade_lc"))
+        if "is_payroll_loan" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_payroll_loan"))
+        # Art. 124H counterparty type for CRE general treatment routing
+        if "cp_is_natural_person" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("cp_is_natural_person"))
+        if "is_sme" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("is_sme"))
+        # Art. 124A qualifying RE flag for Other RE treatment (Art. 124J)
+        if "is_qualifying_re" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"))
+        # Art. 124F(2) prior charge LTV for junior lien threshold reduction
+        if "prior_charge_ltv" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("prior_charge_ltv"))
+        # Art. 124L social housing counterparty type for RRE residual RW
+        if "cp_is_social_housing" not in schema.names():
+            missing_cols.append(pl.lit(False).alias("cp_is_social_housing"))
+        # Art. 121(6) / CRE20.22: Sovereign floor for FX institution exposures
+        if "cp_sovereign_cqs" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Int32).alias("cp_sovereign_cqs"))
+        if "cp_local_currency" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_local_currency"))
+        # Art. 129(5): issuing institution CQS for unrated covered bond derivation
+        if "cp_institution_cqs" not in schema.names():
+            missing_cols.append(pl.lit(None).cast(pl.Int8).alias("cp_institution_cqs"))
+        # CRM collateral columns for Art. 127 secured/unsecured split
+        if "collateral_re_value" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))
+        if "collateral_receivables_value" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("collateral_receivables_value"))
+        if "collateral_other_physical_value" not in schema.names():
+            missing_cols.append(pl.lit(0.0).alias("collateral_other_physical_value"))
         if missing_cols:
             exposures = exposures.with_columns(missing_cols)
 
@@ -475,9 +575,6 @@ class SACalculator:
             non_inv_grade_rw = float(B31_CORPORATE_NON_INVESTMENT_GRADE_RW)
             sme_corp_rw = float(B31_CORPORATE_SME_RW)
             sub_debt_rw = float(B31_SUBORDINATED_DEBT_RW)
-            b31_def_threshold = float(B31_DEFAULTED_PROVISION_THRESHOLD)
-            b31_def_high_rw = float(B31_DEFAULTED_RW_HIGH_PROVISION)
-            b31_def_low_rw = float(B31_DEFAULTED_RW_LOW_PROVISION)
 
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()
@@ -488,29 +585,9 @@ class SACalculator:
                     # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
                     pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
-                    # 1. Defaulted exposures: 150% or 100% (PRA PS1/26 Art. 127)
-                    # HIGH_RISK excluded: Art. 128 (150%) takes priority over
-                    # Art. 127 per Art. 112 Table A2 classification ordering.
-                    # B31 provision ratio = provision_allocated / ead (exposure value)
-                    # NOT (ead + provision_deducted) — that is the CRR denominator.
-                    # Exception: general RESI RE (non-income-dependent) always 100%
-                    # per CRE20.88 / Art. 127 — Basel 3.1 simplification.
-                    .when(pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK"))
-                    .then(
-                        # RESI RE non-income-dependent: 100% flat (CRE20.88)
-                        pl.when(
-                            (
-                                _uc.str.contains("MORTGAGE", literal=True)
-                                | _uc.str.contains("RESIDENTIAL", literal=True)
-                            )
-                            & ~pl.col("has_income_cover").fill_null(False)
-                        )
-                        .then(pl.lit(float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW)))
-                        # All other defaulted: provision-based (Art. 127)
-                        .when(pl.col("provision_allocated") >= b31_def_threshold * pl.col(_ead_col))
-                        .then(pl.lit(b31_def_high_rw))
-                        .otherwise(pl.lit(b31_def_low_rw))
-                    )
+                    # 1. Defaulted exposures: handled in _apply_defaulted_risk_weight()
+                    # after the base RW when-chain, to support Art. 127(2)
+                    # secured/unsecured split with non-financial collateral.
                     # 2. QCCP trade exposures: 2% proprietary / 4% client-cleared
                     # (CRR Art. 306, CRE54.14-15)
                     .when(pl.col("cp_entity_type") == "ccp")
@@ -532,6 +609,26 @@ class SACalculator:
                     # 4. ADC: 150% or 100% pre-sold (CRE20.87-88)
                     .when(pl.col("is_adc").fill_null(False))
                     .then(b31_adc_rw_expr())
+                    # 4b. Other RE (Art. 124J): non-qualifying RE that fails Art. 124A
+                    # criteria. Routes before qualifying RE branches so non-qualifying
+                    # exposures get 150% (income) / cp RW (resi) / max(60%,cp) (cre).
+                    # Null is_qualifying_re defaults to qualifying (True) — backward
+                    # compatible: existing data without this flag gets standard treatment.
+                    .when(
+                        (pl.col("is_qualifying_re").fill_null(True) == False)  # noqa: E712
+                        & (
+                            _uc.str.contains("MORTGAGE", literal=True)
+                            | _uc.str.contains("RESIDENTIAL", literal=True)
+                            | _uc.str.contains("COMMERCIAL", literal=True)
+                            | _uc.str.contains("CRE", literal=True)
+                            | (
+                                pl.col("property_type")
+                                .fill_null("")
+                                .is_in(["residential", "commercial"])
+                            )
+                        )
+                    )
+                    .then(b31_other_re_rw_expr("_cqs_risk_weight"))
                     # 2. Residential mortgage: loan-split (Art. 124F) / LTV-band (Art. 124G)
                     .when(
                         _uc.str.contains("MORTGAGE", literal=True)
@@ -649,10 +746,12 @@ class SACalculator:
                         .then(pl.lit(scra_b_rw))
                         .otherwise(pl.lit(scra_c_rw))
                     )
-                    # 5. Investment-grade assessment (Art. 122(6))
+                    # 5. Investment-grade assessment (Art. 122(6)/(8))
                     # Only active when use_investment_grade_assessment=True.
                     # IG corporates → 65% (Art. 122(6)(a)), non-IG → 135% (Art. 122(6)(b))
                     # Without this election, all unrated corporates get 100%.
+                    # Art. 122(8): IRB institutions must declare this choice to the PRA;
+                    # it also determines the sa_rwa used for S-TREA (output floor).
                     .when(
                         pl.lit(config.use_investment_grade_assessment)
                         & _uc.str.contains("CORPORATE", literal=True)
@@ -694,13 +793,20 @@ class SACalculator:
                         & _uc.str.contains("SME", literal=True)
                     )
                     .then(pl.lit(sme_corp_rw))
-                    # 9. QRRE transactor: 45% (Art. 123)
+                    # 9. QRRE transactor: 45% (Art. 123(2))
                     .when(
                         _uc.str.contains("RETAIL", literal=True)
                         & pl.col("is_qrre_transactor").fill_null(False)
                     )
                     .then(pl.lit(0.45))
-                    # 9a. Non-regulatory retail: 100% (Art. 123(3)(c))
+                    # 9b. Payroll/pension loans: 35% (Art. 123(3)(a-b))
+                    # Loans secured by assignment of borrower's payroll or pension
+                    .when(
+                        _uc.str.contains("RETAIL", literal=True)
+                        & pl.col("is_payroll_loan").fill_null(False)
+                    )
+                    .then(pl.lit(0.35))
+                    # 9c. Non-regulatory retail: 100% (Art. 123(3)(c))
                     # Retail exposures failing Art. 123A qualifying criteria
                     .when(
                         _uc.str.contains("RETAIL", literal=True)
@@ -779,9 +885,6 @@ class SACalculator:
             cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
             cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
             cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
-            crr_def_threshold = float(CRR_DEFAULTED_PROVISION_THRESHOLD)
-            crr_def_high_rw = float(CRR_DEFAULTED_RW_HIGH_PROVISION)
-            crr_def_low_rw = float(CRR_DEFAULTED_RW_LOW_PROVISION)
 
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()
@@ -792,20 +895,9 @@ class SACalculator:
                     # 0. Art. 114(3)/(4): Domestic CGCB → 0% RW (overrides all CQS)
                     pl.when(_uc.str.contains("CENTRAL_GOVT", literal=True) & _is_domestic_currency)
                     .then(pl.lit(0.0))
-                    # 1. Defaulted exposures: 100% or 150% (CRR Art. 127)
-                    # HIGH_RISK excluded: Art. 128 (150%) takes priority over
-                    # Art. 127 per Art. 112 Table A2 classification ordering.
-                    # Provision ratio = provision_allocated / (ead + provision_deducted)
-                    # where denominator reconstructs pre-provision unsecured EAD
-                    .when(pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK"))
-                    .then(
-                        pl.when(
-                            pl.col("provision_allocated")
-                            >= crr_def_threshold * (pl.col(_ead_col) + pl.col("provision_deducted"))
-                        )
-                        .then(pl.lit(crr_def_high_rw))
-                        .otherwise(pl.lit(crr_def_low_rw))
-                    )
+                    # 1. Defaulted exposures: handled in _apply_defaulted_risk_weight()
+                    # after the base RW when-chain, to support Art. 127(2)
+                    # secured/unsecured split with non-financial collateral.
                     # 2. QCCP trade exposures: 2% proprietary / 4% client-cleared
                     # (CRR Art. 306, CRE54.14-15)
                     .when(pl.col("cp_entity_type") == "ccp")
@@ -913,12 +1005,15 @@ class SACalculator:
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 7. Unrated covered bonds: derive from issuer institution RW
-                    # (CRR Art. 129(5)) — unrated institution = 40% → covered bond = 20%
+                    # (CRR Art. 129(5)) — institution CQS → institution RW → CB RW
+                    # via COVERED_BOND_UNRATED_DERIVATION table. When issuing
+                    # institution is also unrated, uses sovereign-derived RW:
+                    # UK (40%) → CB 20%, standard (100%) → CB 50%.
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
-                    .then(pl.lit(0.20))
+                    .then(_crr_unrated_cb_rw_expr(use_uk_deviation))
                     # 7a. High-risk items → 150% (Art. 128)
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.
@@ -959,6 +1054,20 @@ class SACalculator:
                 ]
             )
 
+        # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
+        # FX-denominated unrated institution exposures.
+        # The risk weight cannot be lower than the sovereign's risk weight when
+        # the exposure is not in the institution's domestic currency.
+        # Exception: self-liquidating trade items with original maturity ≤ 1yr.
+        exposures = self._apply_sovereign_floor_for_institutions(exposures, _is_domestic_currency)
+
+        # Apply Art. 127 defaulted risk weight (secured/unsecured split)
+        # Runs after the base RW when-chain so defaulted exposures have their
+        # non-defaulted base RW available for blending with collateral coverage.
+        schema_for_ead = exposures.collect_schema()
+        _ead_col = "ead_final" if "ead_final" in schema_for_ead.names() else "ead"
+        exposures = self._apply_defaulted_risk_weight(exposures, config, _ead_col)
+
         # Clean up temporary columns
         exposures = exposures.drop(
             [
@@ -968,6 +1077,7 @@ class SACalculator:
                     "_lookup_cqs",
                     "_upper_class",
                     "_cqs_risk_weight",
+                    "_sovereign_rw",
                     "risk_weight_rw",
                 ]
                 if col in exposures.collect_schema().names()
@@ -975,6 +1085,306 @@ class SACalculator:
         )
 
         return exposures
+
+    def _apply_sovereign_floor_for_institutions(
+        self,
+        exposures: pl.LazyFrame,
+        is_domestic_currency_expr: pl.Expr,
+    ) -> pl.LazyFrame:
+        """
+        Apply sovereign RW floor for FX unrated institution exposures.
+
+        Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): The risk weight for an
+        unrated institution exposure not denominated in the institution's
+        domestic currency cannot be lower than the sovereign risk weight of
+        the institution's jurisdiction.
+
+        Exception: Self-liquidating trade-related contingent items arising
+        from the movement of goods with original maturity ≤ 1 year are not
+        subject to this floor (CRE20.22 footnote 13).
+
+        Requires ``cp_sovereign_cqs`` to be present and non-null on the
+        exposure. When absent or null, no floor is applied (backward
+        compatible). ``cp_local_currency`` enables accurate FX detection;
+        when absent, falls back to the UK/EU domestic currency expression.
+
+        References:
+        - CRR Art. 121(6)
+        - PRA PS1/26 Art. 121(6)
+        - CRE20.22 (Basel 3.1 SCRA sovereign floor)
+        """
+        _uc = pl.col("_upper_class")
+
+        # Sovereign CQS → risk weight mapping (Art. 114 table)
+        _sovereign_rw = (
+            pl.when(pl.col("cp_sovereign_cqs") == 1)
+            .then(pl.lit(0.0))
+            .when(pl.col("cp_sovereign_cqs") == 2)
+            .then(pl.lit(0.20))
+            .when(pl.col("cp_sovereign_cqs") == 3)
+            .then(pl.lit(0.50))
+            .when(pl.col("cp_sovereign_cqs").is_in([4, 5]))
+            .then(pl.lit(1.0))
+            .when(pl.col("cp_sovereign_cqs") == 6)
+            .then(pl.lit(1.50))
+            .otherwise(pl.lit(None).cast(pl.Float64))
+        )
+
+        # Compute sovereign RW as a temporary column
+        exposures = exposures.with_columns(_sovereign_rw.alias("_sovereign_rw"))
+
+        # FX detection: exposure currency != institution's domestic currency.
+        # Use cp_local_currency if available; fall back to UK/EU domestic check.
+        _is_fx = (
+            pl.when(pl.col("cp_local_currency").is_not_null())
+            .then(pl.col("currency").fill_null("") != pl.col("cp_local_currency"))
+            .otherwise(~is_domestic_currency_expr)
+        )
+
+        # Exception: self-liquidating trade items ≤ 1yr original maturity
+        _is_trade_exempt = pl.col("is_short_term_trade_lc").fill_null(False) & (
+            pl.col("residual_maturity_years").fill_null(5.0) <= 1.0
+        )
+
+        # Floor applies to: unrated institution exposures in FX with
+        # a known sovereign CQS, excluding trade-exempt items.
+        _is_unrated = pl.col("cqs").is_null() | (pl.col("cqs") <= 0)
+        _is_institution = _uc.str.contains("INSTITUTION", literal=True)
+
+        _floor_applies = (
+            _is_institution
+            & _is_unrated
+            & _is_fx
+            & ~_is_trade_exempt
+            & pl.col("_sovereign_rw").is_not_null()
+        )
+
+        exposures = exposures.with_columns(
+            pl.when(_floor_applies)
+            .then(pl.max_horizontal(pl.col("risk_weight"), pl.col("_sovereign_rw")))
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight")
+        )
+
+        return exposures
+
+    def _apply_defaulted_risk_weight(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+        ead_col: str,
+    ) -> pl.LazyFrame:
+        """
+        Apply Art. 127 defaulted risk weight with secured/unsecured split.
+
+        CRR Art. 127(1)-(2) / CRE20.89-90 require splitting defaulted exposures
+        into secured and unsecured portions based on eligible CRM:
+        - Secured portion (non-financial collateral): retains the base risk weight
+        - Unsecured portion: 100% if provisions >= 20% of unsecured value, else 150%
+
+        Financial collateral already reduces EAD via collateral_adjusted_value
+        before this method is called. Non-financial collateral (RE, receivables,
+        other physical) provides additional secured coverage that reduces the
+        portion subject to the defaulted 100%/150% override.
+
+        When no non-financial collateral is present, the entire exposure gets
+        the provision-based 100%/150% (identical to prior behaviour).
+
+        Basel 3.1 exception: non-income-dependent RESI RE defaults always get
+        100% flat regardless of provisions or collateral (CRE20.88).
+
+        References:
+        - CRR Art. 127(1): unsecured part risk weight (100%/150%)
+        - CRR Art. 127(2): secured/unsecured split via eligible CRM
+        - CRE20.88: B31 RESI RE non-income flat 100%
+        - CRE20.89-90: B31 defaulted provision test and CRM eligibility
+        """
+        _uc = pl.col("exposure_class").fill_null("").str.to_uppercase()
+
+        # Non-financial collateral coverage (Art. 127(2))
+        # Financial collateral already reduced EAD; these are additional
+        # non-financial CRM items that define the secured portion.
+        non_fin_collateral = (
+            pl.col("collateral_re_value").fill_null(0.0)
+            + pl.col("collateral_receivables_value").fill_null(0.0)
+            + pl.col("collateral_other_physical_value").fill_null(0.0)
+        )
+
+        # Secured/unsecured split — guard against zero EAD
+        ead = pl.col(ead_col)
+        secured_pct = (
+            pl.when(ead > 0).then((non_fin_collateral / ead).clip(0.0, 1.0)).otherwise(pl.lit(0.0))
+        )
+        unsecured_pct = pl.lit(1.0) - secured_pct
+
+        # Compute provision-based defaulted risk weight for the unsecured portion
+        if config.is_basel_3_1:
+            b31_threshold = float(B31_DEFAULTED_PROVISION_THRESHOLD)
+            b31_high = float(B31_DEFAULTED_RW_HIGH_PROVISION)
+            b31_low = float(B31_DEFAULTED_RW_LOW_PROVISION)
+
+            # B31 RESI RE non-income-dependent: 100% flat for whole exposure (CRE20.88)
+            is_resi_re_non_income = (
+                _uc.str.contains("MORTGAGE", literal=True)
+                | _uc.str.contains("RESIDENTIAL", literal=True)
+            ) & ~pl.col("has_income_cover").fill_null(False)
+
+            # B31 provision ratio: provision / unsecured_ead
+            unsecured_ead = ead * unsecured_pct
+            provision_rw = (
+                pl.when(pl.col("provision_allocated") >= b31_threshold * unsecured_ead)
+                .then(pl.lit(b31_high))
+                .otherwise(pl.lit(b31_low))
+            )
+
+            # RESI RE non-income: 100% flat for the whole exposure (no split)
+            # All other defaulted: blend base RW (secured) + provision RW (unsecured)
+            blended_rw = (
+                pl.when(is_resi_re_non_income)
+                .then(pl.lit(float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW)))
+                .otherwise(unsecured_pct * provision_rw + secured_pct * pl.col("risk_weight"))
+            )
+        else:
+            crr_threshold = float(CRR_DEFAULTED_PROVISION_THRESHOLD)
+            crr_high = float(CRR_DEFAULTED_RW_HIGH_PROVISION)
+            crr_low = float(CRR_DEFAULTED_RW_LOW_PROVISION)
+
+            # CRR provision ratio: provision / (unsecured_ead + provision_deducted)
+            # Denominator reconstructs pre-provision unsecured value per Art. 127(1)
+            unsecured_pre_prov = (ead + pl.col("provision_deducted")) * unsecured_pct
+            provision_rw = (
+                pl.when(pl.col("provision_allocated") >= crr_threshold * unsecured_pre_prov)
+                .then(pl.lit(crr_high))
+                .otherwise(pl.lit(crr_low))
+            )
+
+            # Blend base RW (secured) + provision RW (unsecured)
+            blended_rw = unsecured_pct * provision_rw + secured_pct * pl.col("risk_weight")
+
+        # Apply only to defaulted, non-HIGH_RISK exposures
+        is_defaulted = pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
+
+        return exposures.with_columns(
+            pl.when(is_defaulted)
+            .then(blended_rw)
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight")
+        )
+
+    def _apply_fcsm_rw_substitution(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """Apply Art. 222 Financial Collateral Simple Method risk weight substitution.
+
+        When the Simple Method is elected, the secured portion of each SA exposure
+        gets the collateral's SA risk weight (with a 20% floor) instead of the
+        exposure's own risk weight. The unsecured portion retains the original RW.
+
+        Blended RW = secured_pct × max(20%, collateral_rw) + unsecured_pct × exposure_rw
+
+        This method is a no-op when the Comprehensive Method is elected (default)
+        or when fcsm_collateral_value is zero/absent.
+
+        Args:
+            exposures: Exposures with risk_weight and fcsm_* columns.
+            config: Calculation configuration.
+
+        Returns:
+            Exposures with blended risk weight for FCSM-covered portion.
+        """
+        if config.crm_collateral_method != CRMCollateralMethod.SIMPLE:
+            return exposures
+
+        schema = exposures.collect_schema()
+        if "fcsm_collateral_value" not in schema.names():
+            return exposures
+
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        fcsm_rw_floor = 0.20  # Art. 222(1) minimum 20% floor
+
+        ead = pl.col(ead_col).fill_null(0.0)
+        fcsm_value = pl.col("fcsm_collateral_value").fill_null(0.0)
+        fcsm_rw = pl.col("fcsm_collateral_rw").fill_null(0.0)
+
+        # Secured percentage (capped at 100%)
+        secured_pct = pl.when(ead > 0).then((fcsm_value / ead).clip(0.0, 1.0)).otherwise(0.0)
+        unsecured_pct = pl.lit(1.0) - secured_pct
+
+        # Secured RW: apply 20% floor per Art. 222(1)
+        # Art. 222(4) 0% exceptions are already factored into fcsm_collateral_rw
+        # per-item by compute_fcsm_columns, so the weighted avg can be < 20% when
+        # 0%-RW items (same-currency cash) dominate. The floor applies to the
+        # aggregate secured portion RW.
+        secured_rw = pl.max_horizontal(fcsm_rw, pl.lit(fcsm_rw_floor))
+
+        # Blended risk weight
+        blended_rw = secured_pct * secured_rw + unsecured_pct * pl.col("risk_weight")
+
+        # Only apply when there is actual collateral value
+        has_fcsm = fcsm_value > 0
+
+        return exposures.with_columns(
+            # Save pre-FCSM risk weight for audit
+            pl.col("risk_weight").alias("pre_fcsm_risk_weight"),
+            # Apply blended RW
+            pl.when(has_fcsm)
+            .then(blended_rw)
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight"),
+            # Track method for audit/COREP
+            pl.when(has_fcsm)
+            .then(pl.lit("simple"))
+            .otherwise(pl.lit("comprehensive"))
+            .alias("ead_calculation_method"),
+        )
+
+    @staticmethod
+    def _apply_life_insurance_rw_mapping(
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Apply Art. 232 life insurance risk weight mapping for SA exposures.
+
+        When life insurance collateral secures an exposure, the secured portion
+        receives a mapped risk weight (not direct substitution):
+            Insurer RW 20%           -> 20%
+            Insurer RW 30% or 50%    -> 35%
+            Insurer RW 65%-135%      -> 70%
+            Insurer RW 150%          -> 150%
+
+        Blended RW = secured_pct x mapped_rw + unsecured_pct x exposure_rw
+
+        This method is a no-op when no life insurance collateral is present.
+
+        Args:
+            exposures: Exposures with risk_weight and life_ins_* columns.
+
+        Returns:
+            Exposures with blended risk weight for life-insurance-covered portion.
+        """
+        schema = exposures.collect_schema()
+        if "life_ins_collateral_value" not in schema.names():
+            return exposures
+
+        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        ead = pl.col(ead_col).fill_null(0.0)
+        li_value = pl.col("life_ins_collateral_value").fill_null(0.0)
+        li_rw = pl.col("life_ins_secured_rw").fill_null(0.0)
+
+        # Secured percentage (capped at 100%)
+        secured_pct = pl.when(ead > 0).then((li_value / ead).clip(0.0, 1.0)).otherwise(0.0)
+        unsecured_pct = pl.lit(1.0) - secured_pct
+
+        # Blended risk weight: no floor — Art. 232 has no 20% floor like FCSM
+        blended_rw = secured_pct * li_rw + unsecured_pct * pl.col("risk_weight")
+
+        # Only apply when there is actual life insurance collateral
+        has_li = li_value > 0
+
+        return exposures.with_columns(
+            pl.when(has_li).then(blended_rw).otherwise(pl.col("risk_weight")).alias("risk_weight"),
+        )
 
     def _apply_guarantee_substitution(
         self,
@@ -1063,7 +1473,7 @@ class SACalculator:
 
         # Guarantor risk weights by exposure class and CQS
         # CGCB: 0%, 20%, 50%, 100%, 100%, 150% (unrated 100%)
-        # Institution: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated 40%)
+        # Institution: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated: UK 40%, standard 100%)
         # MDB named/IO: 0% unconditional
         # MDB rated (Table 2B): 20%, 30%, 50%, 100%, 100%, 150% (unrated 50%)
         # Corporate: 20%, 50%, 100%, 100%, 150%, 150% (unrated 100%)
@@ -1136,7 +1546,8 @@ class SACalculator:
                     .then(pl.lit(1.0))
                     .when(pl.col("guarantor_cqs") == 6)
                     .then(pl.lit(1.50))
-                    .otherwise(pl.lit(0.40))  # Unrated institution = 40%
+                    # Unrated institution: UK sovereign-derived = 40%, standard = 100%
+                    .otherwise(pl.lit(0.40) if use_uk_deviation else pl.lit(1.00))
                 )
                 # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
                 .when(_gec == "pse")
@@ -1353,6 +1764,8 @@ class SACalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SME and infrastructure supporting factors.
@@ -1360,6 +1773,7 @@ class SACalculator:
         Args:
             exposures: Exposures with rwa_pre_factor
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             Exposures with supporting factors applied
@@ -1388,7 +1802,7 @@ class SACalculator:
                 ]
             )
 
-        return self._supporting_factor_calc.apply_factors(exposures, config)
+        return self._supporting_factor_calc.apply_factors(exposures, config, errors=errors)
 
     def _build_audit(
         self,

@@ -235,7 +235,7 @@ def profile_pipeline_stages(
             results,
         )
         adjusted_collateral = _time(
-            lambda: haircut_calc.apply_maturity_mismatch(adjusted_collateral),
+            lambda: haircut_calc.apply_maturity_mismatch(adjusted_collateral, config),
             "CRM: maturity mismatch (lazy)",
             results,
         )

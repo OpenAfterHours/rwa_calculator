@@ -79,7 +79,7 @@ INSTITUTION_RISK_WEIGHTS_STANDARD: dict[CQS, Decimal] = {
     CQS.CQS4: Decimal("1.00"),
     CQS.CQS5: Decimal("1.00"),
     CQS.CQS6: Decimal("1.50"),
-    CQS.UNRATED: Decimal("0.40"),
+    CQS.UNRATED: Decimal("1.00"),  # Art. 120(2) Table 3: unrated sovereign → 100%
 }
 
 
@@ -88,7 +88,7 @@ def _create_institution_df(use_uk_deviation: bool = True) -> pl.DataFrame:
     if use_uk_deviation:
         weights = [0.20, 0.30, 0.50, 1.00, 1.00, 1.50, 0.40]
     else:
-        weights = [0.20, 0.50, 0.50, 1.00, 1.00, 1.50, 0.40]
+        weights = [0.20, 0.50, 0.50, 1.00, 1.00, 1.50, 1.00]
 
     return pl.DataFrame(
         {

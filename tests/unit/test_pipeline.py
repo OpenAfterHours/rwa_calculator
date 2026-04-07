@@ -539,7 +539,7 @@ class TestPipelineStageExecution:
         pipeline = PipelineOrchestrator()
         pipeline._ensure_components_initialized()
 
-        result = pipeline._run_crm_processor(mock_classified_bundle, crr_config)
+        result = pipeline._run_crm_processor_unified(mock_classified_bundle, crr_config)
 
         assert isinstance(result, CRMAdjustedBundle)
 

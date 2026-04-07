@@ -12,7 +12,7 @@ from __future__ import annotations
 import polars as pl
 
 # Canonical IRB approach identifiers — union of ApproachType enum values and
-# aggregator fallback labels. Used for output floor application.
+# aggregator fallback labels. Used for EL summary and other IRB-specific logic.
 IRB_APPROACHES: frozenset[str] = frozenset(
     {
         "foundation_irb",
@@ -20,6 +20,17 @@ IRB_APPROACHES: frozenset[str] = frozenset(
         "FIRB",
         "AIRB",
         "IRB",  # Aggregator fallback labels
+    }
+)
+
+# Floor-eligible approaches — IRB + slotting. The output floor compares
+# "modelled" RWA (U-TREA) against SA-equivalent (S-TREA) at portfolio level.
+# Slotting (Art. 153(5)) is an IRB-chapter sub-approach and is included per
+# PRA PS1/26 Art. 92 para 2A which references all of Part Three, Title II.
+FLOOR_ELIGIBLE_APPROACHES: frozenset[str] = IRB_APPROACHES | frozenset(
+    {
+        "slotting",  # ApproachType.SLOTTING.value
+        "SLOTTING",  # Defensive: test fixtures may use uppercase
     }
 )
 

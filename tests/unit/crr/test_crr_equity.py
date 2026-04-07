@@ -696,14 +696,14 @@ class TestEquityRiskWeightTables:
     def test_get_equity_rw_table_sa(self):
         """get_equity_rw_table returns correct SA DataFrame."""
         df = get_equity_rw_table("sa")
-        assert df.height == 10  # All EquityType values
+        assert df.height == 11  # All EquityType values (incl. subordinated_debt)
         listed_row = df.filter(pl.col("equity_type") == "listed").to_dicts()[0]
         assert listed_row["risk_weight"] == pytest.approx(1.00)
 
     def test_get_equity_rw_table_irb_simple(self):
         """get_equity_rw_table returns correct IRB Simple DataFrame."""
         df = get_equity_rw_table("irb_simple")
-        assert df.height == 10  # All EquityType values
+        assert df.height == 11  # All EquityType values (incl. subordinated_debt)
         other_row = df.filter(pl.col("equity_type") == "other").to_dicts()[0]
         assert other_row["risk_weight"] == pytest.approx(3.70)
 

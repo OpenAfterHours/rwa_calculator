@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
     IRB_EXPOSURE_CLASS_ROWS,
     PD_BANDS,
@@ -230,6 +231,17 @@ class COREPGenerator:
         sa_df: pl.DataFrame = sa_data.collect()
         if len(sa_df) == 0:
             return {}
+
+        # Art. 112 Table A2: Under SA, specialised lending is a corporate
+        # sub-type (Art. 112(1)(g)), not a separate exposure class.  Merge SL
+        # into corporate so C 07.00 reports SL under the corporate sheet; the
+        # SL "of which" sub-rows (0021-0026) still populate via sl_type.
+        sa_df = sa_df.with_columns(
+            pl.when(pl.col(ec_col) == ExposureClass.SPECIALISED_LENDING.value)
+            .then(pl.lit(ExposureClass.CORPORATE.value))
+            .otherwise(pl.col(ec_col))
+            .alias(ec_col)
+        )
 
         data_cols = set(sa_df.columns)
         classes = sa_df[ec_col].unique().sort().to_list()
@@ -657,12 +669,15 @@ _RE_ROW_FILTERS: dict[str, dict[str, object]] = {
     "0342": {"property_type": "commercial", "materially_dependent": True},
     "0343": {"property_type": "commercial", "materially_dependent": False, "is_sme": True},
     "0344": {"property_type": "commercial", "materially_dependent": True, "is_sme": True},
+    # Other real estate (Art. 124J) — non-qualifying RE
+    "0350": {"is_qualifying": False},
+    "0351": {"is_qualifying": False, "property_type": "residential", "materially_dependent": False},
+    "0352": {"is_qualifying": False, "property_type": "residential", "materially_dependent": True},
+    "0353": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": False},
+    "0354": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": True},
     # Land ADC (CRE20.88)
     "0360": {"is_adc": True},
 }
-# Note: Rows 0350-0354 ("Other real estate") require a separate "other" RE
-# classification not yet in the pipeline. They remain null until a
-# regulatory_re_category field is added to distinguish regulatory vs other RE.
 
 # =============================================================================
 # EQUITY TRANSITIONAL ROW CONFIGURATION (Basel 3.1 OF 07.00 rows 0371-0374)
@@ -816,6 +831,7 @@ def _filter_re(
     materially_dependent: bool | None = None,
     is_sme: bool | None = None,
     is_adc: bool | None = None,
+    is_qualifying: bool | None = None,
 ) -> pl.DataFrame:
     """Filter to real estate exposures with optional sub-criteria.
 
@@ -824,11 +840,18 @@ def _filter_re(
         materially_dependent: True/False filter on materially_dependent_on_property
         is_sme: True/False filter for SME sub-split (uses _filter_sme logic)
         is_adc: True/False filter on is_adc column
+        is_qualifying: True/False filter on is_qualifying_re (Art. 124A)
     """
     if "property_type" not in cols:
         return data.clear()
 
     result = data.filter(pl.col("property_type").is_not_null())
+
+    if is_qualifying is not None and "is_qualifying_re" in cols:
+        result = result.filter(pl.col("is_qualifying_re").fill_null(True) == is_qualifying)
+    elif is_qualifying is False:
+        # No is_qualifying_re column — no non-qualifying RE to report
+        return data.clear()
 
     if property_type is not None:
         result = result.filter(pl.col("property_type") == property_type)
@@ -1042,9 +1065,13 @@ def _compute_c07_values(
     values["0060"] = cd_val if cd_val is not None else 0.0
 
     # --- CRM Substitution: Funded ---
-    # 0070: (-) Financial collateral: Simple method
-    # Comprehensive method is used; simple method not implemented → always 0
-    values["0070"] = 0.0
+    # 0070: (-) Financial collateral: Simple method (Art. 222)
+    # When Simple Method is elected, this is the total collateral value recognised.
+    # Under Comprehensive Method, this is always 0.
+    if "fcsm_collateral_value" in data.columns:
+        values["0070"] = data["fcsm_collateral_value"].sum()
+    else:
+        values["0070"] = 0.0
 
     # 0080: (-) Other funded credit protection (non-financial collateral)
     values["0080"] = _sum_cols_eager(

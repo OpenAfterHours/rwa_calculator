@@ -210,7 +210,9 @@ def _classify(
 
     classifier = ExposureClassifier()
     result = classifier.classify(bundle, config)
-    return result.all_exposures.collect()
+    collected = result.all_exposures.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected
 
 
 def _make_sl_table(sl_type: str, is_hvcre: bool = False) -> pl.LazyFrame:

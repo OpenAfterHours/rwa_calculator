@@ -808,7 +808,6 @@ class TestApplyAll:
             "is_hvcre",
             "risk_weight",
             "rwa",
-            "rwa_final",
         ]
         for col in expected_columns:
             assert col in result.columns, f"Missing column: {col}"

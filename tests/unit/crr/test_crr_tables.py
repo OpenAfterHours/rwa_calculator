@@ -105,9 +105,13 @@ class TestInstitutionRiskWeights:
         """CQS 1 institutions get 20% RW."""
         assert INSTITUTION_RISK_WEIGHTS_UK[CQS.CQS1] == Decimal("0.20")
 
-    def test_unrated_forty_percent(self) -> None:
-        """Unrated institutions get 40% RW (derived from sovereign CQS2)."""
+    def test_unrated_uk_forty_percent(self) -> None:
+        """UK: Unrated institutions get 40% RW (sovereign-derived)."""
         assert INSTITUTION_RISK_WEIGHTS_UK[CQS.UNRATED] == Decimal("0.40")
+
+    def test_unrated_standard_hundred_percent(self) -> None:
+        """Standard: Unrated institutions get 100% RW (Art. 120(2) Table 3)."""
+        assert INSTITUTION_RISK_WEIGHTS_STANDARD[CQS.UNRATED] == Decimal("1.00")
 
     def test_lookup_with_uk_deviation(self) -> None:
         """Test lookup function respects UK deviation."""

@@ -45,7 +45,6 @@ from rwa_calc.engine.irb.formulas import (
 )
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 
-
 # =============================================================================
 # STATS BACKEND TESTS (previously zero coverage)
 # =============================================================================
@@ -79,7 +78,7 @@ class TestNormalCDF:
             normal_cdf(pl.col("x")).alias("cdf_pos"),
             normal_cdf(-pl.col("x")).alias("cdf_neg"),
         )
-        for pos, neg in zip(result["cdf_pos"], result["cdf_neg"]):
+        for pos, neg in zip(result["cdf_pos"], result["cdf_neg"], strict=True):
             assert pos + neg == pytest.approx(1.0, abs=1e-12)
 
     def test_cdf_monotonically_increasing(self) -> None:
@@ -134,7 +133,7 @@ class TestNormalPPF:
         probs = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]
         df = pl.DataFrame({"p": probs})
         result = df.select(normal_cdf(normal_ppf(pl.col("p"))).alias("roundtrip"))
-        for orig, rt in zip(probs, result["roundtrip"].to_list()):
+        for orig, rt in zip(probs, result["roundtrip"].to_list(), strict=True):
             assert rt == pytest.approx(orig, abs=1e-10)
 
     def test_cdf_ppf_roundtrip(self) -> None:
@@ -142,7 +141,7 @@ class TestNormalPPF:
         xs = [-2.0, -1.0, 0.0, 1.0, 2.0]
         df = pl.DataFrame({"x": xs})
         result = df.select(normal_ppf(normal_cdf(pl.col("x"))).alias("roundtrip"))
-        for orig, rt in zip(xs, result["roundtrip"].to_list()):
+        for orig, rt in zip(xs, result["roundtrip"].to_list(), strict=True):
             assert rt == pytest.approx(orig, abs=1e-10)
 
     def test_ppf_monotonically_increasing(self) -> None:
@@ -385,9 +384,7 @@ class TestLGDFloorsBasel31:
         result = apply_irb_formulas(lf, b31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.25, abs=1e-4)
 
-    def test_b31_corporate_lgd_above_floor_unchanged(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_b31_corporate_lgd_above_floor_unchanged(self, b31_config: CalculationConfig) -> None:
         """LGD above floor passes through unchanged."""
         lf = pl.LazyFrame(
             {
@@ -416,9 +413,7 @@ class TestLGDFloorsBasel31:
         result = apply_irb_formulas(lf, b31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.05, abs=1e-4)
 
-    def test_b31_retail_qrre_unsecured_floor_50pct(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_b31_retail_qrre_unsecured_floor_50pct(self, b31_config: CalculationConfig) -> None:
         """A-IRB QRRE unsecured: LGD floor = 50% (Art. 164(4)(b)(i))."""
         lf = pl.LazyFrame(
             {
@@ -432,9 +427,7 @@ class TestLGDFloorsBasel31:
         result = apply_irb_formulas(lf, b31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.50, abs=1e-4)
 
-    def test_b31_retail_other_unsecured_floor_30pct(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_b31_retail_other_unsecured_floor_30pct(self, b31_config: CalculationConfig) -> None:
         """A-IRB retail other unsecured: LGD floor = 30% (Art. 164(4)(b)(ii))."""
         lf = pl.LazyFrame(
             {
@@ -477,9 +470,7 @@ class TestLGDFloorsBasel31:
         result = apply_irb_formulas(lf, b31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.0, abs=1e-8)
 
-    def test_b31_other_physical_collateral_floor_15pct(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_b31_other_physical_collateral_floor_15pct(self, b31_config: CalculationConfig) -> None:
         """Other physical collateral LGD floor = 15% (Art. 161(5))."""
         lf = pl.LazyFrame(
             {
@@ -1007,54 +998,90 @@ class TestCalculateIRBRWA:
     def test_crr_scaling_factor(self) -> None:
         """CRR applies 1.06 scaling factor."""
         result = calculate_irb_rwa(
-            ead=1_000_000.0, pd=0.01, lgd=0.45, correlation=0.20, maturity=2.5,
-            apply_maturity_adjustment=True, apply_scaling_factor=True,
-            pd_floor=0.0003, lgd_floor=None,
+            ead=1_000_000.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.20,
+            maturity=2.5,
+            apply_maturity_adjustment=True,
+            apply_scaling_factor=True,
+            pd_floor=0.0003,
+            lgd_floor=None,
         )
         assert result["scaling_factor"] == 1.06
 
     def test_b31_no_scaling_factor(self) -> None:
         """Basel 3.1 uses scaling factor = 1.0."""
         result = calculate_irb_rwa(
-            ead=1_000_000.0, pd=0.01, lgd=0.45, correlation=0.20, maturity=2.5,
-            apply_maturity_adjustment=True, apply_scaling_factor=False,
-            pd_floor=0.0005, lgd_floor=None,
+            ead=1_000_000.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.20,
+            maturity=2.5,
+            apply_maturity_adjustment=True,
+            apply_scaling_factor=False,
+            pd_floor=0.0005,
+            lgd_floor=None,
         )
         assert result["scaling_factor"] == 1.0
 
     def test_pd_floor_applied(self) -> None:
         """PD below floor is raised to floor value."""
         result = calculate_irb_rwa(
-            ead=1_000_000.0, pd=0.0001, lgd=0.45, correlation=0.20, maturity=2.5,
-            apply_maturity_adjustment=True, apply_scaling_factor=True,
-            pd_floor=0.0005, lgd_floor=None,
+            ead=1_000_000.0,
+            pd=0.0001,
+            lgd=0.45,
+            correlation=0.20,
+            maturity=2.5,
+            apply_maturity_adjustment=True,
+            apply_scaling_factor=True,
+            pd_floor=0.0005,
+            lgd_floor=None,
         )
         assert result["pd_floored"] == 0.0005
 
     def test_lgd_floor_applied(self) -> None:
         """LGD below floor is raised to floor value."""
         result = calculate_irb_rwa(
-            ead=1_000_000.0, pd=0.01, lgd=0.10, correlation=0.20, maturity=2.5,
-            apply_maturity_adjustment=True, apply_scaling_factor=True,
-            pd_floor=0.0003, lgd_floor=0.25,
+            ead=1_000_000.0,
+            pd=0.01,
+            lgd=0.10,
+            correlation=0.20,
+            maturity=2.5,
+            apply_maturity_adjustment=True,
+            apply_scaling_factor=True,
+            pd_floor=0.0003,
+            lgd_floor=0.25,
         )
         assert result["lgd_floored"] == 0.25
 
     def test_no_maturity_adjustment(self) -> None:
         """Without maturity adjustment, MA forced to 1.0."""
         result = calculate_irb_rwa(
-            ead=1_000_000.0, pd=0.01, lgd=0.45, correlation=0.20, maturity=5.0,
-            apply_maturity_adjustment=False, apply_scaling_factor=True,
-            pd_floor=0.0003, lgd_floor=None,
+            ead=1_000_000.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.20,
+            maturity=5.0,
+            apply_maturity_adjustment=False,
+            apply_scaling_factor=True,
+            pd_floor=0.0003,
+            lgd_floor=None,
         )
         assert result["maturity_adjustment"] == 1.0
 
     def test_risk_weight_formula(self) -> None:
         """risk_weight = K × 12.5 × scaling × MA."""
         result = calculate_irb_rwa(
-            ead=1_000_000.0, pd=0.01, lgd=0.45, correlation=0.20, maturity=2.5,
-            apply_maturity_adjustment=True, apply_scaling_factor=True,
-            pd_floor=0.0003, lgd_floor=None,
+            ead=1_000_000.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.20,
+            maturity=2.5,
+            apply_maturity_adjustment=True,
+            apply_scaling_factor=True,
+            pd_floor=0.0003,
+            lgd_floor=None,
         )
         expected_rw = result["k"] * 12.5 * result["scaling_factor"] * result["maturity_adjustment"]
         assert result["risk_weight"] == pytest.approx(expected_rw, rel=1e-6)
@@ -1062,18 +1089,30 @@ class TestCalculateIRBRWA:
     def test_rwa_formula(self) -> None:
         """RWA = risk_weight × EAD."""
         result = calculate_irb_rwa(
-            ead=1_000_000.0, pd=0.01, lgd=0.45, correlation=0.20, maturity=2.5,
-            apply_maturity_adjustment=True, apply_scaling_factor=True,
-            pd_floor=0.0003, lgd_floor=None,
+            ead=1_000_000.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.20,
+            maturity=2.5,
+            apply_maturity_adjustment=True,
+            apply_scaling_factor=True,
+            pd_floor=0.0003,
+            lgd_floor=None,
         )
         assert result["rwa"] == pytest.approx(result["risk_weight"] * result["ead"], rel=1e-6)
 
     def test_zero_ead_gives_zero_rwa(self) -> None:
         """Zero EAD → zero RWA."""
         result = calculate_irb_rwa(
-            ead=0.0, pd=0.01, lgd=0.45, correlation=0.20, maturity=2.5,
-            apply_maturity_adjustment=True, apply_scaling_factor=True,
-            pd_floor=0.0003, lgd_floor=None,
+            ead=0.0,
+            pd=0.01,
+            lgd=0.45,
+            correlation=0.20,
+            maturity=2.5,
+            apply_maturity_adjustment=True,
+            apply_scaling_factor=True,
+            pd_floor=0.0003,
+            lgd_floor=None,
         )
         assert result["rwa"] == pytest.approx(0.0, abs=1e-10)
 
@@ -1239,9 +1278,15 @@ class TestApplyIRBFormulas:
         )
         result = apply_irb_formulas(lf, config).collect()
         expected_cols = {
-            "pd_floored", "lgd_floored", "correlation", "k",
-            "maturity_adjustment", "scaling_factor", "risk_weight",
-            "rwa", "expected_loss",
+            "pd_floored",
+            "lgd_floored",
+            "correlation",
+            "k",
+            "maturity_adjustment",
+            "scaling_factor",
+            "risk_weight",
+            "rwa",
+            "expected_loss",
         }
         assert expected_cols.issubset(set(result.columns))
 

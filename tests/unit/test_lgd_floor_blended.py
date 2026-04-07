@@ -17,6 +17,8 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
+
 import polars as pl
 import pytest
 
@@ -68,8 +70,6 @@ def _make_df(
         }
     )
 
-
-from datetime import date
 
 _REPORTING_DATE = date(2027, 1, 1)
 B31 = CalculationConfig.basel_3_1(reporting_date=_REPORTING_DATE)
@@ -219,17 +219,7 @@ class TestBlendedExpressionDirect:
 
     def test_overcollateralised(self):
         """Collateral exceeds EAD: unsecured portion clamped to 0."""
-        lf = _make_df(
-            crm_alloc_other_physical=120_000.0,
-            total_collateral_for_lgd=100_000.0,  # capped at EAD
-        )
-        # Fully secured, unsecured portion = 0
-        # But alloc = 120k, EAD = 100k. Numerator = 120k * 15% = 18k.
-        # Floor = 18k / 100k = 18%. But this is before alloc cap.
-        # Actually the waterfall caps at EAD, so total_collateral = 100k.
-        # The _es_ amounts ARE capped by the waterfall (cumulative trick).
-        # In real use, crm_alloc_other_physical would be 100k (capped).
-        # Let's test with actual waterfall output (capped values).
+        # Waterfall caps allocations at EAD, so test with capped values.
         lf2 = _make_df(
             crm_alloc_other_physical=100_000.0,
             total_collateral_for_lgd=100_000.0,

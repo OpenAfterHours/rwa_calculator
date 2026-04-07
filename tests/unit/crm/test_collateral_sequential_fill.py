@@ -160,7 +160,9 @@ def _run_crm(
 ) -> pl.DataFrame:
     """Run CRM processing and return collected exposures."""
     result = processor.get_crm_adjusted_bundle(bundle, config)
-    return result.exposures.collect()
+    collected = result.exposures.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected
 
 
 # =============================================================================

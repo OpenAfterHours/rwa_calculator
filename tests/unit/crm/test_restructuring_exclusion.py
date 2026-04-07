@@ -186,7 +186,9 @@ def _run_crm(
     )
 
     result = crm_processor.get_crm_adjusted_bundle(classified_bundle, config)
-    return result.exposures.collect()
+    collected = result.exposures.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected
 
 
 class TestCDSRestructuringExclusionHaircut:

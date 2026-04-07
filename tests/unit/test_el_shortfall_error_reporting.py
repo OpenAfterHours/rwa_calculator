@@ -62,7 +62,7 @@ class TestIRBELShortfallErrorReporting:
         """Warning emitted when expected_loss column is missing."""
         errors: list[CalculationError] = []
         lf = _frame_without_expected_loss()
-        result = compute_el_shortfall_excess(lf, errors=errors).collect()
+        compute_el_shortfall_excess(lf, errors=errors).collect()
 
         assert len(errors) == 1
         err = errors[0]
@@ -132,7 +132,7 @@ class TestSlottingELShortfallErrorReporting:
                 "provision_allocated": [1_000.0],
             }
         )
-        result = lf.slotting.compute_el_shortfall_excess(errors=errors).collect()
+        lf.slotting.compute_el_shortfall_excess(errors=errors).collect()
 
         assert len(errors) == 1
         err = errors[0]
@@ -197,7 +197,7 @@ class TestIRBNamespaceELShortfallErrorReporting:
                 "provision_allocated": [1_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess(errors=errors).collect()
+        lf.irb.compute_el_shortfall_excess(errors=errors).collect()
 
         assert len(errors) == 1
         assert errors[0].code == ERROR_MISSING_EXPECTED_LOSS

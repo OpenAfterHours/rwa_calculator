@@ -219,7 +219,9 @@ def _classify(
 
     classifier = ExposureClassifier()
     result = classifier.classify(bundle, config)
-    return result.all_exposures.collect()
+    collected = result.all_exposures.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected
 
 
 # =============================================================================

@@ -6,13 +6,15 @@ Pipeline position:
 
 Key responsibilities:
 - Combining per-approach calculator results into a unified view
-- Applying output floor (Basel 3.1) with impact analysis
+- Computing portfolio-level EL summary with T2 credit cap
+- Computing OF-ADJ from EL summary and capital-tier inputs
+- Applying output floor (Basel 3.1) with OF-ADJ
 - Generating supporting factor impact (CRR)
 - Generating summaries by exposure class and approach
 - Generating pre/post-CRM regulatory reporting views
-- Computing portfolio-level EL summary with T2 credit cap
 
 References:
+- PRA PS1/26 Art. 92 para 2A: TREA = max(U-TREA, x * S-TREA + OF-ADJ)
 - CRE99.1-8: Output floor (Basel 3.1)
 - PS1/26 Ch.12: PRA output floor implementation
 - CRR Art. 501/501a: SME and infrastructure supporting factors
@@ -34,7 +36,7 @@ from rwa_calc.engine.aggregator._crm_reporting import (
 )
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.aggregator._equity_prep import prepare_equity_results
-from rwa_calc.engine.aggregator._floor import apply_floor_with_impact
+from rwa_calc.engine.aggregator._floor import apply_floor_with_impact, compute_of_adj
 from rwa_calc.engine.aggregator._summaries import (
     generate_summary_by_approach,
     generate_summary_by_class,
@@ -93,28 +95,9 @@ class OutputAggregator:
         summary_by_class = generate_summary_by_class(post_crm_detailed)
         summary_by_approach = generate_summary_by_approach(post_crm_detailed)
 
-        # Apply portfolio-level output floor if applicable (Art. 92 para 2A)
-        # Floor only applies to specific (institution_type, reporting_basis)
-        # combinations — exempt entities use U-TREA with no floor add-on.
-        floor_impact = None
-        output_floor_summary = None
-        if config.output_floor.is_floor_applicable():
-            floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
-            combined, floor_impact, output_floor_summary = apply_floor_with_impact(
-                combined,
-                combined,  # SA-equivalent RW already joined by SA calculator
-                floor_pct,
-            )
-
-        # Supporting factor impact
-        supporting_factor_impact = None
-        if config.supporting_factors.enabled:
-            supporting_factor_impact = generate_supporting_factor_impact(combined)
-
         # EL portfolio summary (T2 credit cap, CET1/T2 deductions)
-        # Include slotting EL: slotting is an IRB sub-approach (Art. 153(5) is in
-        # the IRB chapter), so slotting RWA and EL feed into the T2 credit cap
-        # (Art. 62(d)) and EL shortfall/excess (Art. 158-159).
+        # Computed BEFORE the output floor because OF-ADJ depends on EL summary
+        # results (IRB T2 credit and IRB CET1 deduction).
         #
         # IMPORTANT: The T2 credit cap (Art. 62(d)) uses un-floored IRB RWA,
         # not post-floor TREA.  Art. 62(d) references "risk-weighted exposure
@@ -125,6 +108,62 @@ class OutputAggregator:
         # NOT the floored `combined` LazyFrame.  Using post-floor TREA would
         # also create a circular dependency with the OF-ADJ formula.
         el_summary = compute_el_portfolio_summary(irb_results, slotting_results)
+
+        # Apply portfolio-level output floor if applicable (Art. 92 para 2A)
+        # Floor only applies to specific (institution_type, reporting_basis)
+        # combinations — exempt entities use U-TREA with no floor add-on.
+        floor_impact = None
+        output_floor_summary = None
+        if config.output_floor.is_floor_applicable():
+            floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
+
+            # Compute OF-ADJ from EL summary + capital-tier config inputs
+            # OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2)
+            irb_t2 = el_summary.t2_credit if el_summary else 0.0
+            irb_cet1 = (
+                (el_summary.cet1_deduction if el_summary else 0.0)
+                + config.output_floor.art_40_deductions
+            )
+            gcra = config.output_floor.gcra_amount
+            sa_t2 = config.output_floor.sa_t2_credit
+
+            # S-TREA is needed for GCRA cap — pre-compute it here.
+            # We need a quick aggregate of SA-equivalent RWA for floor-eligible
+            # exposures.  This duplicates some work in apply_floor_with_impact
+            # but avoids restructuring the floor module's internal flow.
+            from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES
+
+            combined_cols = set(combined.collect_schema().names())
+            if "approach_applied" in combined_cols:
+                sa_rwa_col = "sa_rwa" if "sa_rwa" in combined_cols else "rwa_final"
+                s_trea_pre = float(
+                    combined.filter(
+                        pl.col("approach_applied").is_in(list(FLOOR_ELIGIBLE_APPROACHES))
+                    )
+                    .select(pl.col(sa_rwa_col).fill_null(0.0).sum())
+                    .collect()
+                    .item()
+                )
+            else:
+                s_trea_pre = 0.0
+
+            of_adj_val, gcra_capped = compute_of_adj(irb_t2, irb_cet1, gcra, sa_t2, s_trea_pre)
+
+            combined, floor_impact, output_floor_summary = apply_floor_with_impact(
+                combined,
+                combined,  # SA-equivalent RW already joined by SA calculator
+                floor_pct,
+                of_adj=of_adj_val,
+                irb_t2_credit=irb_t2,
+                irb_cet1_deduction=irb_cet1,
+                gcra_amount=gcra_capped,
+                sa_t2_credit=sa_t2,
+            )
+
+        # Supporting factor impact
+        supporting_factor_impact = None
+        if config.supporting_factors.enabled:
+            supporting_factor_impact = generate_supporting_factor_impact(combined)
 
         return AggregatedResultBundle(
             results=combined,

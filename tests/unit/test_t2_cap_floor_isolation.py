@@ -92,8 +92,11 @@ class TestT2CapFloorIsolation:
         """Core test: T2 cap = 0.6% of pre-floor IRB RWA, not floored TREA.
 
         Setup: IRB RWA = 50m, SA RWA = 100m, floor = 72.5%.
-        Floor binds: TREA = 72.5m (> 50m).
-        T2 cap must be 50m × 0.6% = 300k (not 72.5m × 0.6% = 435k).
+        T2 credit = min(excess 500k, cap 300k) = 300k.
+        OF-ADJ = 12.5 × (300k - 0 - 0 + 0) = 3.75m.
+        Floor threshold = 72.5% × 100m + 3.75m = 76.25m.
+        Floor binds: TREA = 76.25m (> 50m).
+        T2 cap must be 50m × 0.6% = 300k (not 76.25m × 0.6% = 457.5k).
         """
         irb = _irb_frame_with_el(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
         result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
@@ -102,10 +105,10 @@ class TestT2CapFloorIsolation:
         assert result.output_floor_summary is not None
         assert result.output_floor_summary.portfolio_floor_binding is True
 
-        # Verify rwa_final on the combined frame is the floored value
+        # Verify rwa_final includes OF-ADJ (72.5m base + 3.75m OF-ADJ = 76.25m)
         df = result.results.collect()
         total_rwa_final = df["rwa_final"].sum()
-        assert total_rwa_final == pytest.approx(72_500_000.0, rel=0.01)
+        assert total_rwa_final == pytest.approx(76_250_000.0, rel=0.01)
 
         # Verify T2 cap uses pre-floor IRB RWA (50m), not post-floor (72.5m)
         el = result.el_summary

@@ -312,6 +312,18 @@ class OutputFloorConfig:
     institution_type: InstitutionType | None = None
     reporting_basis: ReportingBasis | None = None
 
+    # OF-ADJ capital-tier inputs (Art. 92 para 2A)
+    # These are institution-level capital parameters that cannot be derived
+    # from exposure-level data.  When all are zero (default), OF-ADJ = 0
+    # and the floor formula simplifies to max(U-TREA, x * S-TREA).
+    gcra_amount: float = 0.0
+    """General credit risk adjustments, gross of tax effects.
+    Capped internally at 1.25% of S-TREA per Art. 92 para 2A."""
+    sa_t2_credit: float = 0.0
+    """Art. 62(c) SA T2 credit for general credit risk adjustments."""
+    art_40_deductions: float = 0.0
+    """Art. 40 additional CET1 deductions (supervisory add-on beyond Art. 36(1)(d))."""
+
     # Art. 92 para 2A(a): combinations where the output floor applies
     _FLOOR_APPLICABLE_COMBINATIONS: frozenset[tuple[InstitutionType, ReportingBasis]] = field(
         default=frozenset({
@@ -380,6 +392,9 @@ class OutputFloorConfig:
         cls,
         institution_type: InstitutionType | None = None,
         reporting_basis: ReportingBasis | None = None,
+        gcra_amount: float = 0.0,
+        sa_t2_credit: float = 0.0,
+        art_40_deductions: float = 0.0,
     ) -> OutputFloorConfig:
         """Basel 3.1 output floor configuration with transitional period.
 
@@ -389,6 +404,9 @@ class OutputFloorConfig:
                 When None, the floor is assumed applicable (backward compatible).
             reporting_basis: Basis of calculation per Rule 2.2A. Required with
                 institution_type for floor applicability determination.
+            gcra_amount: General credit risk adjustments for OF-ADJ (Art. 92 para 2A).
+            sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
+            art_40_deductions: Art. 40 additional CET1 deductions (OF-ADJ input).
         """
         # PRA PS1/26 Art. 92(5) transitional schedule
         # NOTE: PRA compressed the BCBS 6-year phase-in to 4 years (2027-2030).
@@ -406,6 +424,9 @@ class OutputFloorConfig:
             transitional_floor_schedule=transitional_schedule,
             institution_type=institution_type,
             reporting_basis=reporting_basis,
+            gcra_amount=gcra_amount,
+            sa_t2_credit=sa_t2_credit,
+            art_40_deductions=art_40_deductions,
         )
 
 
@@ -803,6 +824,9 @@ class CalculationConfig:
         use_investment_grade_assessment: bool = False,
         institution_type: InstitutionType | None = None,
         reporting_basis: ReportingBasis | None = None,
+        gcra_amount: float = 0.0,
+        sa_t2_credit: float = 0.0,
+        art_40_deductions: float = 0.0,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -813,7 +837,7 @@ class CalculationConfig:
         - Differentiated PD floors by exposure class
         - LGD floors for A-IRB by collateral type
         - No supporting factors (SME/infrastructure)
-        - Output floor (72.5%, transitional)
+        - Output floor (72.5%, transitional) with OF-ADJ
         - 1.06 scaling factor removed (PRA PS1/26 confirms)
         - Post-model adjustments (mortgage RW floor, PMAs)
 
@@ -831,6 +855,10 @@ class CalculationConfig:
                 applicability. When None, floor is assumed applicable.
             reporting_basis: Calculation basis per Rule 2.2A. Required with
                 institution_type for floor applicability check.
+            gcra_amount: General credit risk adjustments for OF-ADJ (Art. 92 para 2A).
+                Capped at 1.25% of S-TREA.
+            sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
+            art_40_deductions: Art. 40 additional CET1 deductions (OF-ADJ input).
             collect_engine: Polars engine for .collect() - 'cpu' (default)
                 for memory efficiency, 'cpu' for in-memory processing
 
@@ -847,6 +875,9 @@ class CalculationConfig:
             output_floor=OutputFloorConfig.basel_3_1(
                 institution_type=institution_type,
                 reporting_basis=reporting_basis,
+                gcra_amount=gcra_amount,
+                sa_t2_credit=sa_t2_credit,
+                art_40_deductions=art_40_deductions,
             ),
             post_model_adjustments=(
                 post_model_adjustments or PostModelAdjustmentConfig.basel_3_1()

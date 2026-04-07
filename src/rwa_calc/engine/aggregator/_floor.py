@@ -5,18 +5,30 @@ Pipeline position:
     SA/IRB/Slotting/Equity Calculators -> OutputAggregator (floor) -> AggregatedResultBundle
 
 Key responsibilities:
-- Portfolio-level output floor: TREA = max(U-TREA, x * S-TREA)
+- Portfolio-level output floor: TREA = max(U-TREA, x * S-TREA + OF-ADJ)
+- OF-ADJ computation from capital-tier inputs and EL summary
 - Pro-rata shortfall distribution across floor-eligible exposures
 - Per-exposure floor impact analysis for COREP reporting
-- OutputFloorSummary with U-TREA, S-TREA, and shortfall
+- OutputFloorSummary with U-TREA, S-TREA, OF-ADJ, and shortfall
 
 The output floor compares total modelled RWA (U-TREA) against total
-SA-equivalent RWA scaled by the floor percentage (S-TREA * x). When the
-floor binds at portfolio level, the shortfall is distributed pro-rata
-to each floor-eligible exposure proportional to its SA-equivalent RWA.
+SA-equivalent RWA scaled by the floor percentage plus the output floor
+adjustment (S-TREA * x + OF-ADJ). When the floor binds at portfolio level,
+the shortfall is distributed pro-rata to each floor-eligible exposure
+proportional to its SA-equivalent RWA.
+
+OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2) reconciles the
+different provision treatments between IRB and SA so the floor comparison
+is on a like-for-like basis.  Without OF-ADJ, the floor penalises IRB
+banks that have EL shortfall (CET1 deduction) while giving no credit for
+excess provisions (T2 addition), and vice versa for SA general provisions.
 
 References:
 - PRA PS1/26 Art. 92 para 2A: TREA = max(U-TREA, x * S-TREA + OF-ADJ)
+- PRA PS1/26 Art. 92 para 2A: OF-ADJ = 12.5 * (IRB T2 - IRB CET1 - GCRA + SA T2)
+- PRA PS1/26 Art. 62(d): IRB T2 credit (excess provisions, capped at 0.6% of IRB RWA)
+- PRA PS1/26 Art. 36(1)(d), Art. 40: IRB CET1 deductions (EL shortfall)
+- PRA PS1/26 Art. 62(c): SA T2 credit (general credit risk adjustments)
 - PRA PS1/26 Art. 122(8): IRB institutions choose 100% flat or 65%/135%
   IG assessment for unrated corporates in S-TREA (via use_investment_grade_assessment)
 - CRE99.1-8: Output floor (Basel 3.1)
@@ -33,28 +45,68 @@ from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES, FLOOR_IMPACT_SCHEMA
 from rwa_calc.engine.aggregator._utils import col_or_default, empty_frame, resolve_rwa_col
 
+# GCRA cap: 1.25% of S-TREA per Art. 92 para 2A definition
+GCRA_CAP_RATE = 0.0125
+
+
+def compute_of_adj(
+    irb_t2_credit: float,
+    irb_cet1_deduction: float,
+    gcra_amount: float,
+    sa_t2_credit: float,
+    s_trea: float,
+) -> tuple[float, float]:
+    """Compute OF-ADJ per PRA PS1/26 Art. 92 para 2A.
+
+    OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2)
+
+    GCRA is capped at 1.25% of S-TREA before entering the formula.
+
+    Args:
+        irb_t2_credit: Art. 62(d) IRB T2 credit (capped at 0.6% of IRB RWA).
+        irb_cet1_deduction: Art. 36(1)(d) + Art. 40 CET1 deductions.
+        gcra_amount: General credit risk adjustments (gross of tax).
+        sa_t2_credit: Art. 62(c) SA T2 credit.
+        s_trea: Standardised total risk exposure amount (for GCRA cap).
+
+    Returns:
+        Tuple of (of_adj, gcra_capped) where gcra_capped is the GCRA after
+        applying the 1.25% of S-TREA cap.
+    """
+    gcra_cap = s_trea * GCRA_CAP_RATE
+    gcra_capped = min(gcra_amount, gcra_cap) if gcra_cap > 0 else gcra_amount
+    of_adj = 12.5 * (irb_t2_credit - irb_cet1_deduction - gcra_capped + sa_t2_credit)
+    return of_adj, gcra_capped
+
 
 def apply_floor_with_impact(
     combined: pl.LazyFrame,
     sa_results: pl.LazyFrame,
     floor_pct: float,
+    of_adj: float = 0.0,
+    irb_t2_credit: float = 0.0,
+    irb_cet1_deduction: float = 0.0,
+    gcra_amount: float = 0.0,
+    sa_t2_credit: float = 0.0,
 ) -> tuple[pl.LazyFrame, pl.LazyFrame, OutputFloorSummary]:
     """
     Apply portfolio-level output floor and generate impact analysis.
 
     The floor is applied at portfolio level per PRA PS1/26 Art. 92 para 2A:
-    ``TREA = max(U-TREA, x * S-TREA)``. When the floor binds, the shortfall
-    (``x * S-TREA - U-TREA``) is distributed pro-rata across floor-eligible
-    exposures (IRB + slotting) proportional to each exposure's ``sa_rwa``.
-
-    This replaces the prior per-exposure ``max(irb_rwa, floor_pct * sa_rwa)``
-    approach which systematically overstated capital for portfolios near but
-    above the aggregate floor threshold.
+    ``TREA = max(U-TREA, x * S-TREA + OF-ADJ)``. When the floor binds, the
+    shortfall (``x * S-TREA + OF-ADJ - U-TREA``) is distributed pro-rata
+    across floor-eligible exposures (IRB + slotting) proportional to each
+    exposure's ``sa_rwa``.
 
     Args:
         combined: Combined results with ``rwa_final`` column.
         sa_results: SA results to derive floor RWA from.
         floor_pct: Floor percentage (e.g. 0.725 for 72.5%).
+        of_adj: Pre-computed OF-ADJ amount (default 0.0 for backward compat).
+        irb_t2_credit: Art. 62(d) IRB T2 credit (for summary reporting).
+        irb_cet1_deduction: Art. 36(1)(d) + Art. 40 CET1 deductions (for summary).
+        gcra_amount: GCRA after cap (for summary reporting).
+        sa_t2_credit: Art. 62(c) SA T2 credit (for summary reporting).
 
     Returns:
         Tuple of (floored results, floor impact analysis, portfolio summary).
@@ -89,6 +141,11 @@ def apply_floor_with_impact(
                 shortfall=0.0,
                 portfolio_floor_binding=False,
                 total_rwa_post_floor=0.0,
+                of_adj=of_adj,
+                irb_t2_credit=irb_t2_credit,
+                irb_cet1_deduction=irb_cet1_deduction,
+                gcra_amount=gcra_amount,
+                sa_t2_credit=sa_t2_credit,
             )
             return combined, empty_frame(FLOOR_IMPACT_SCHEMA), summary
 
@@ -104,10 +161,13 @@ def apply_floor_with_impact(
     #    exposures (IRB + slotting). SA exposures cancel out (same RWA
     #    in both U-TREA and S-TREA) so we only need the modelled subset.
     #
-    # 2. If floor binds (floor_pct * S-TREA > U-TREA), distribute the
-    #    shortfall pro-rata by each exposure's sa_rwa share.
+    # 2. Floor threshold = x * S-TREA + OF-ADJ.  OF-ADJ reconciles the
+    #    different provision treatments (IRB EL vs SA general CRA).
     #
-    # 3. Per-exposure columns: floor_rwa, floor_impact_rwa, is_floor_binding,
+    # 3. If floor binds (threshold > U-TREA), distribute the shortfall
+    #    pro-rata by each exposure's sa_rwa share.
+    #
+    # 4. Per-exposure columns: floor_rwa, floor_impact_rwa, is_floor_binding,
     #    rwa_final (post-floor), output_floor_pct for COREP reporting.
     floor_eligible_approaches = list(FLOOR_ELIGIBLE_APPROACHES)
     is_eligible = pl.col("approach_applied").is_in(floor_eligible_approaches)
@@ -128,14 +188,14 @@ def apply_floor_with_impact(
             .sum()
             .alias("_s_trea"),
         )
-        # Step 2: Floor threshold and shortfall
+        # Step 2: Floor threshold = x * S-TREA + OF-ADJ
         .with_columns(
-            (pl.col("_s_trea") * floor_pct).alias("_floor_threshold"),
+            (pl.col("_s_trea") * floor_pct + pl.lit(of_adj)).alias("_floor_threshold"),
             pl.max_horizontal(
-                pl.col("_s_trea") * floor_pct - pl.col("_u_trea"),
+                pl.col("_s_trea") * floor_pct + pl.lit(of_adj) - pl.col("_u_trea"),
                 pl.lit(0.0),
             ).alias("_shortfall"),
-            (pl.col("_s_trea") * floor_pct > pl.col("_u_trea")).alias(
+            (pl.col("_s_trea") * floor_pct + pl.lit(of_adj) > pl.col("_u_trea")).alias(
                 "_portfolio_floor_binds"
             ),
         )
@@ -195,6 +255,11 @@ def apply_floor_with_impact(
         shortfall=shortfall,
         portfolio_floor_binding=binding,
         total_rwa_post_floor=u_trea + shortfall,
+        of_adj=of_adj,
+        irb_t2_credit=irb_t2_credit,
+        irb_cet1_deduction=irb_cet1_deduction,
+        gcra_amount=gcra_amount,
+        sa_t2_credit=sa_t2_credit,
     )
 
     # Drop internal columns

@@ -358,14 +358,23 @@ class OutputFloorSummary:
     the shortfall is distributed pro-rata across floor-eligible exposures
     (IRB + slotting) proportional to each exposure's SA-equivalent RWA.
 
+    OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2) reconciles the
+    different provision treatments between IRB (EL shortfall/excess) and SA
+    (general credit risk adjustments) so the floor comparison is like-for-like.
+
     Attributes:
         u_trea: Total RWA for floor-eligible exposures using actual approaches
         s_trea: Total SA-equivalent RWA for the same exposures
         floor_pct: Floor percentage applied (e.g. 0.725 for 72.5%)
-        floor_threshold: floor_pct * s_trea — the minimum acceptable RWA
+        floor_threshold: x * s_trea + of_adj — the minimum acceptable RWA
         shortfall: max(0, floor_threshold - u_trea) — add-on when floor binds
         portfolio_floor_binding: True when the portfolio floor binds
         total_rwa_post_floor: u_trea + shortfall (= max(u_trea, floor_threshold))
+        of_adj: Output Floor Adjustment per Art. 92 para 2A
+        irb_t2_credit: Art. 62(d) IRB T2 credit (capped at 0.6% of IRB RWA)
+        irb_cet1_deduction: Art. 36(1)(d) + Art. 40 CET1 deductions
+        gcra_amount: General credit risk adjustments (capped at 1.25% of S-TREA)
+        sa_t2_credit: Art. 62(c) SA T2 credit
 
     References:
     - PRA PS1/26 Art. 92 para 2A
@@ -379,6 +388,11 @@ class OutputFloorSummary:
     shortfall: float
     portfolio_floor_binding: bool
     total_rwa_post_floor: float
+    of_adj: float = 0.0
+    irb_t2_credit: float = 0.0
+    irb_cet1_deduction: float = 0.0
+    gcra_amount: float = 0.0
+    sa_t2_credit: float = 0.0
 
 
 @dataclass(frozen=True)

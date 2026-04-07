@@ -1,19 +1,19 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.84 T2 cap floor isolation + P1.9a resolved as false positive)
-**Current version:** 0.1.121 | **Test suite:** ~3,495 collected (~3,462 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84 fixed.
+**Last updated:** 2026-04-07 (P1.84 T2 cap floor isolation + P1.9a OF-ADJ implemented + P1.9a resolved)
+**Current version:** 0.1.121 | **Test suite:** ~3,523 collected (~3,490 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.59, P1.60, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.9a fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed, P1.83 Art. 159(1) Pool B AVAs now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 76 (+P1.9a sub-item; P1.5, P1.47 fixed, P1.62 fixed, P1.66/P1.79 closed as false positives, P1.19 implemented, P1.82 closed as false positive, P1.67 SA SL classification now fixed, P1.65 FRC 100% CCF now fixed, P1.83 Art. 159(1) Pool B AVAs now fixed, P1.9a OF-ADJ now fixed) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed] P1.75 (LGD* formula single-LGD not blended), P1.76 (bond haircut 3 bands vs 5)
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
-- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ sub-item (a) still open; portfolio-level floor (b) now fixed), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
+- *Missing B31 features (whole categories absent):* P1.9 (output floor: OF-ADJ (a) fixed; (d) documentation remains), P1.30 (CRM method selection), P1.39 (liquidation period scaling now fixed) [P1.12 SCRA enhanced/short-term now fixed] [P1.29 40% CCF now fixed] [P1.38(b) entity-type carve-outs now fixed; (a) GCRA cap and (c) reporting basis remain] [P1.14 Other RE Art. 124J now fixed] [P1.6 Junior charges Art. 124F(2)/G(2)/I(3)/L now fixed] [P1.67 SA SL classification now fixed] [P1.65 SA Table A1 Row 2 FRC 100% CCF now fixed]
 - *Other critical:* [P1.43, P1.47 now fixed]
 
 ## Status Legend
@@ -215,16 +215,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 9 new unit tests in `tests/unit/test_basel31_engine.py` (TestLGDFloors P1.8 section): immovable+retail_mortgage→5%, real_estate+retail_mortgage→5%, property+retail_mortgage→5%, immovable+corporate→10%, immovable+retail_other→10%, immovable without exposure_class→10%, apply_irb_formulas pipeline→5%, namespace pipeline→5%, mixed batch 5 rows. All 3,193 tests pass (was ~3,184). Test count: 3,193 passed, 33 skipped.
 
 ### P1.9 Output Floor -- OF-ADJ, portfolio-level application, U-TREA/S-TREA
-- **Status:** [~] Partial (3 sub-issues remain; (b) complete)
-- **Fixed (b):** 2026-04-07
+- **Status:** [~] Partial (2 sub-issues remain; (a) and (b) complete)
+- **Fixed (a) and (b):** 2026-04-07
 - **Impact:** The output floor implementation has four related gaps:
-  - **(a) OF-ADJ not implemented:** PRA PS1/26 Art. 92 para 2A defines `TREA = max(U-TREA, x * S-TREA + OF-ADJ)` where `OF-ADJ = 12.5 x (IRB_T2 - IRB_CET1 - GCRA + SA_T2)`. No code computes any OF-ADJ component. **Additional from PDF comparison:** `IRB_CET1` must include Art. 40 deductions (additional shortfall provisions), not just Art. 36(1)(d). `IRB_T2` = Art. 62(d) excess provisions (a T2 **credit/addition**, not a deduction — the spec description is backwards). `SA_T2` = Art. 62(c) general credit risk adjustments. The Art. 62(d) IRB T2 credit is **capped at 0.6% of IRB credit RWAs** — this cap is binding for many institutions and must be applied. Requires capital-tier input data (IRB_T2, IRB_CET1, GCRA, SA_T2).
+  - **(a) OF-ADJ implemented:** FIXED (2026-04-07). OF-ADJ = 12.5 × (IRB_T2 - IRB_CET1 - GCRA + SA_T2) now computed and applied to the floor formula. IRB_T2 (Art. 62(d) excess provisions, capped) and IRB_CET1 (Art. 36(1)(d) shortfall + Art. 40 supervisory add-on) are derived from the internal EL summary. GCRA (general credit risk adjustments, capped at 1.25% of S-TREA per Art. 92 para 2A) and SA_T2 (Art. 62(c) SA T2 credit) are institution-level config inputs on `OutputFloorConfig`. `compute_of_adj()` function exported from `_floor.py`. EL summary now computed BEFORE the output floor in the aggregator (was after). `OutputFloorSummary` extended with `of_adj`, `irb_t2_credit`, `irb_cet1_deduction`, `gcra_amount`, `sa_t2_credit` fields. `CalculationConfig.basel_3_1()` accepts `gcra_amount`, `sa_t2_credit`, `art_40_deductions` params. 28 new unit tests in `tests/unit/test_of_adj.py`.
   - **(b) Floor is exposure-level, not portfolio-level:** FIXED. Previously `_floor.py` applied `max(rwa_pre_floor, floor_rwa)` per exposure row, systematically overstating capital. Now computes portfolio-level U-TREA and S-TREA, applies `TREA = max(U-TREA, x * S-TREA)`, and distributes any shortfall pro-rata by `sa_rwa` share. Slotting exposures now included in floor scope via `FLOOR_ELIGIBLE_APPROACHES` (were previously excluded). `OutputFloorSummary` dataclass added to `contracts/bundles.py` with `u_trea`, `s_trea`, `floor_pct`, `floor_threshold`, `shortfall`, `portfolio_floor_binding`, `total_rwa_post_floor` fields, and attached to `AggregatedResultBundle`.
   - **(c) U-TREA/S-TREA COREP export:** `OutputFloorSummary` is now on `AggregatedResultBundle` so U-TREA/S-TREA are accessible. Full `OF 02.01` COREP template wiring (4-column comparison) not yet done — tracked under P2.
   - **(d) Transitional floor rates are permissive, not mandatory:** Art. 92 para 5 says institutions "may apply" the 60/65/70% transitional rates — firms can voluntarily use 72.5% from day one. `OutputFloorConfig` should document this optionality.
 - **File:Line:** `engine/aggregator/_floor.py`, `engine/aggregator/_schemas.py`, `engine/aggregator/aggregator.py`, `contracts/bundles.py`
 - **Spec ref:** `docs/specifications/output-reporting.md` lines 28-46, PRA PS1/26 Art. 92 para 2A/3A/5
-- **Fix remaining:** (a) Implement OF-ADJ once capital-tier data is available as pipeline input. (d) Document optionality in `OutputFloorConfig`.
+- **Fix remaining:** (d) Document optionality in `OutputFloorConfig`.
 - **Tests:** 24 new unit tests in `tests/unit/test_portfolio_level_floor.py`. Acceptance test B31-F2 updated (`is_floor_binding` now portfolio-level flag). All tests pass.
 
 ### P1.9a EL T2 credit cap uses pre-floor IRB RWA
@@ -235,12 +235,12 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** CRR Art. 62(d), PRA PS1/26 Art. 92(2A), PRA Annex II row 0160
 
 ### P1.10 Unfunded credit protection transitional (PRA Rule 4.11)
-- **Status:** [ ] Not implemented
-- **Impact:** PRA PS1/26 Rule 4.11 provides transitional treatment for unfunded credit protection entered into before 1 Jan 2027: such protection continues to receive CRR treatment until 30 June 2028. No code references Rule 4.11 or inception-date-based CRM treatment selection.
+- **Status:** [ ] Not implemented (low priority — underlying eligibility checks not yet implemented)
+- **Impact:** PRA PS1/26 Rule 4.11 is a **narrow eligibility-condition carve-out**, not a broad permission to use CRR calculation methods. During 1 Jan 2027 to 30 Jun 2028, it reads Art. 213(1)(c)(i) and Art. 183(1A)(b) with the words "or change" omitted for unfunded credit protection entered before 1 Jan 2027. This means legacy contracts that allow the provider to *change* (but not cancel) the protection remain eligible during the transitional window. All other Basel 3.1 CRM calculation changes (haircuts, method taxonomy, parameter substitution LGD) apply from day one regardless. The underlying eligibility checks (Art. 213(1)(c)(i) "change clause" check) are not yet implemented in the calculator, making this transitional provision currently moot.
 - **File:Line:** No code exists
-- **Spec ref:** `docs/specifications/crr/credit-risk-mitigation.md`
-- **Fix:** Add `protection_inception_date` field. In CRM and guarantee processing, when `is_b31=True` and `reporting_date < 2028-07-01` and `inception_date < 2027-01-01`, apply CRR treatment.
-- **Tests needed:** Unit tests for transitional date logic.
+- **Spec ref:** PRA PS1/26 Rule 4.11, Art. 213(1)(c)(i), Art. 183(1A)(b)
+- **Fix:** Implement Art. 213 eligibility validation first (with "change clause" check). Then add `protection_inception_date` field and transitional date logic to relax the check for legacy contracts.
+- **Tests needed:** Unit tests for eligibility validation + transitional date logic.
 
 ### P1.11 CRM maturity mismatch hardcoded exposure maturity (Art. 238)
 - **Status:** [x] Complete

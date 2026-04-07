@@ -187,6 +187,11 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "is_investment_grade": pl.Series(np.zeros(n, dtype=bool)),
                 "is_ccp_client_cleared": pl.Series([None] * n, dtype=pl.Boolean),
                 "borrower_income_currency": pl.Series(income_currencies, dtype=pl.String),
+                "is_natural_person": pl.Series(ind_mask),
+                "is_social_housing": pl.Series(np.zeros(n, dtype=bool)),
+                "sovereign_cqs": pl.Series([None] * n, dtype=pl.Int32),
+                "local_currency": pl.Series([None] * n, dtype=pl.String),
+                "institution_cqs": pl.Series([None] * n, dtype=pl.Int8),
             }
         )
         .cast(COUNTERPARTY_SCHEMA)
@@ -395,8 +400,15 @@ def generate_facilities(
                 "seniority": seniority,
                 "risk_type": risk_types,
                 "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
+                "ead_modelled": np.full(n_facilities, None),  # No modelled EAD for benchmarks
                 "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
+                "is_payroll_loan": np.full(n_facilities, None),  # Payroll loan flag
                 "is_buy_to_let": np.full(n_facilities, None),  # BTL flag for SME supporting factor
+                "has_one_day_maturity_floor": np.full(n_facilities, None),  # Repo/SFT 1-day floor
+                "facility_termination_date": pl.Series([None] * n_facilities, dtype=pl.Date),
+                "underlying_risk_type": pl.Series([None] * n_facilities, dtype=pl.String),
+                "lgd_unsecured": np.full(n_facilities, None),  # A-IRB unsecured LGD
+                "has_sufficient_collateral_data": np.full(n_facilities, None),  # LGD modelling flag
             }
         )
         .cast(FACILITY_SCHEMA)
@@ -585,7 +597,11 @@ def generate_loans(
             "lgd": lgd,
             "beel": np.zeros(n_loans),
             "seniority": seniority,
+            "lgd_unsecured": np.full(n_loans, None),  # A-IRB unsecured LGD
+            "has_sufficient_collateral_data": np.full(n_loans, None),  # LGD modelling flag
+            "is_payroll_loan": np.full(n_loans, None),  # Payroll loan flag
             "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
+            "has_one_day_maturity_floor": np.full(n_loans, None),  # Repo/SFT 1-day floor
             "has_netting_agreement": np.full(n_loans, None),  # Netting flag (CRR Art. 195)
             "netting_facility_reference": np.full(n_loans, None),  # Facility for netting agreement
         }
@@ -917,11 +933,18 @@ def generate_contingents(
                 "currency": currencies,
                 "nominal_amount": nominal_amounts,
                 "lgd": np.full(n_contingents, 0.45),
+                "lgd_unsecured": np.full(n_contingents, None),  # A-IRB unsecured LGD
+                "has_sufficient_collateral_data": np.full(
+                    n_contingents, None
+                ),  # LGD modelling flag
                 "beel": np.zeros(n_contingents),
                 "seniority": np.full(n_contingents, "senior"),
                 "risk_type": risk_types,
+                "underlying_risk_type": pl.Series([None] * n_contingents, dtype=pl.String),
                 "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
+                "ead_modelled": np.full(n_contingents, None),  # No modelled EAD for benchmarks
                 "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
+                "has_one_day_maturity_floor": np.full(n_contingents, None),  # Repo/SFT 1-day floor
                 "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default
             }
         )
@@ -1073,6 +1096,13 @@ def generate_collateral(
             "is_income_producing": is_income_producing,
             "is_adc": is_adc,
             "is_presold": is_presold,
+            "original_maturity_years": np.full(n_collateral, None),
+            "is_qualifying_re": np.full(n_collateral, None),
+            "prior_charge_ltv": np.full(n_collateral, None),
+            "liquidation_period_days": pl.Series([None] * n_collateral, dtype=pl.Int32),
+            "qualifies_for_zero_haircut": np.full(n_collateral, None),
+            "insurer_risk_weight": np.full(n_collateral, None),
+            "credit_event_reduction": np.full(n_collateral, None),
         }
     )
 

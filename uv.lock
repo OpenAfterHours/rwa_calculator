@@ -941,9 +941,12 @@ name = "rwa-calc"
 version = "0.1.52"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "fastexcel" },
+    { name = "itsdangerous" },
     { name = "polars" },
     { name = "polars-normal-stats" },
+    { name = "uvicorn" },
     { name = "xlsxwriter" },
     { name = "zensical" },
 ]
@@ -990,8 +993,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi", specifier = ">=0.135.3" },
     { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.115.0" },
     { name = "fastexcel", specifier = ">=0.19.0" },
+    { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "marimo", marker = "extra == 'ui'", specifier = ">=0.5.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26.0" },
@@ -1003,6 +1008,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.0" },
     { name = "rwa-calc", extras = ["ui", "dev"], marker = "extra == 'all'" },
     { name = "ty", marker = "extra == 'dev'" },
+    { name = "uvicorn", specifier = ">=0.40.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.27.0" },
     { name = "xlsxwriter", specifier = ">=3.1.0" },
     { name = "zensical", specifier = ">=0.0.30" },

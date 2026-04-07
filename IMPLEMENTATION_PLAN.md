@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-07 (P1.39/P1.73/P1.74 liquidation period haircut scaling + B31 haircut value corrections implemented)
-**Current version:** 0.1.110 | **Test suite:** ~3,227 collected (~3,184 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
+**Last updated:** 2026-04-07 (P1.23 duplicate IRB defaulted treatment consolidated)
+**Current version:** 0.1.111 | **Test suite:** ~3,227 collected (~3,184 passed), ~33 skipped | P1.3, P1.4, P1.5, P1.6, P1.11, P1.12, P1.13, P1.14, P1.15, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.29, P1.32, P1.34, P1.35, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.62, P1.64, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82 fixed.
 **CRR acceptance:** 100% (101 tests) | **Basel 3.1 acceptance:** 100% (116 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -401,12 +401,13 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fixed:** 2026-04-06
 
 ### P1.23 Duplicated IRB defaulted treatment code
-- **Status:** [~] Divergence risk
-- **Impact:** IRB defaulted treatment (K=0 for FIRB, K=max(0,LGD-BEEL) for AIRB) is implemented in TWO places: inline in `formulas.py:325-378` (scalar path) and separately in `adjustments.py:34-129` (vectorized path). The pipeline uses only the `adjustments.py` version via `namespace.py:618`. The `formulas.py` version is functionally identical but creates divergence risk if one is updated without the other. IRB engine agent confirms: `apply_irb_formulas` is legacy/redundant function exported from `__init__.py`; production uses namespace chain.
-- **File:Line:** `engine/irb/formulas.py:325-378`, `engine/irb/adjustments.py:34-129`, `engine/irb/__init__.py:34`
-- **Spec ref:** CRR Art. 158(5)/(6)
-- **Fix:** Remove the inline defaulted treatment from `formulas.py:apply_irb_formulas()` or extract to a shared function. Consider removing the legacy `apply_irb_formulas` export entirely.
-- **Tests needed:** Verify pipeline behavior unchanged after refactor.
+- **Status:** [x] Complete
+- **Fixed:** 2026-04-07
+- **Impact:** IRB defaulted treatment (K=0 for FIRB, K=max(0,LGD-BEEL) for AIRB) was implemented in TWO places: inline in `formulas.py:363-415` (Step 10 of `apply_irb_formulas`) and separately in `adjustments.py:34-129` (`apply_defaulted_treatment`). The pipeline uses only the `adjustments.py` version via `namespace.py:apply_all_formulas()` line 674. The `formulas.py` inline version was functionally identical but created divergence risk.
+- **Resolution:** Removed the 50-line inline Step 10 from `formulas.py:apply_irb_formulas()` and replaced it with a delegation to `adjustments.apply_defaulted_treatment()`. The function is still exported via `__init__.py` and used by tests/benchmarks, but now delegates to the single source of truth. Local import used to avoid circular dependency concerns.
+- **File:Line:** `engine/irb/formulas.py:363-369` (now delegates to adjustments.py)
+- **Spec ref:** CRR Art. 153(1)(ii), Art. 154(1)(i), Art. 158(5)/(6)
+- **Tests:** All 3,184 tests pass including 18 IRB defaulted tests (`test_irb_defaulted.py`), 101 B31 engine tests (`test_basel31_engine.py`), and 60 IRB namespace tests (`test_irb_namespace.py`). The `test_apply_irb_formulas_standalone_with_defaulted` test confirms delegated behavior is identical.
 
 ### P1.24 Non-investment-grade corporate 135% risk weight (Art. 122(6)(b))
 - **Status:** [x] Complete

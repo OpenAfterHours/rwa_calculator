@@ -78,10 +78,7 @@ The LGDS values by collateral type are:
 Where no split between secured/unsecured portions is available, the conservative approach is
 to apply the relevant collateral-type LGDS directly (or LGDU=30% if unsecured).
 
-**Implementation:** `src/rwa_calc/engine/irb/formulas.py` — `_lgd_floor_expression()` and
-`_lgd_floor_expression_with_collateral()`. The collateral-type LGDS lookup is applied
-directly per row; the weighted blended formula requires exposure-level secured/unsecured
-split data that is not currently available in the pipeline — this is a known gap.
+**Implementation:** `src/rwa_calc/engine/irb/formulas.py` — `_lgd_floor_blended_expression()` computes the weighted-average floor using the `crm_alloc_*` columns from the Art. 231 sequential waterfall. The formula: `LGD_floor = (E_unsecured / EAD) × LGDU + Σ_i (E_i / EAD) × LGDS_i`. Applies to `retail_other` (LGDU=30%) and `retail_qrre` (LGDU=50%) with collateral present. Falls back to single-type floor when allocation columns are absent.
 
 !!! note "Scope of Corporate vs Institution LGD Floors"
     Art. 161(5) specifies the 25% unsecured LGD floor for "unsecured exposures to **corporates**". Institution exposures are restricted to F-IRB under Art. 147A(1)(b), so A-IRB LGD floors are not applicable to institutions. Art. 161(4) is "[Note: Provision left blank]" in PRA PS1/26 — only Art. 161(5) is active.
@@ -90,12 +87,11 @@ split data that is not currently available in the pipeline — this is a known g
     The PRA PS1/26 retail RRE LGD floor is **5%** per Art. 164(4)(a). This was changed from 10% in the near-final rules to 5% in the final PS1/26 rules. BCBS CRE32.25 also specifies 5%.
 
 !!! note "Implementation Status"
-    All four Art. 164(4) retail LGD floors are implemented. Floor values are configured in
-    `src/rwa_calc/contracts/config.py` (`LGDFloorConfig`, `basel_3_1()` factory). Floor logic is
-    applied per-row in `src/rwa_calc/engine/irb/formulas.py` via `_lgd_floor_expression()` and
-    `_lgd_floor_expression_with_collateral()`. The Art. 164(4)(c) blended formula is a known
-    partial gap: the per-collateral LGDS is applied but the weighted blend requires the
-    secured/unsecured split to be present in exposure data.
+    All four Art. 164(4) retail LGD floors are fully implemented (P1.87 complete). Floor values
+    are configured in `src/rwa_calc/contracts/config.py` (`LGDFloorConfig`, `basel_3_1()` factory).
+    The Art. 164(4)(c) blended formula uses `crm_alloc_*` columns from the Art. 231 waterfall
+    to compute the weighted secured/unsecured floor. 27 dedicated tests in
+    `tests/unit/test_lgd_floor_blended.py`.
 
 ## FI Scalar
 

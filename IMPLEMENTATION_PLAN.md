@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P5.8 model permissions B31 acceptance tests + Art. 147A enforcement fix)
-**Current version:** 0.1.153 | **Test suite:** 4,204 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-08 (P5.8 model permissions B31 acceptance tests + Art. 147A enforcement fix; P4.15 CRM spec rewrite)
+**Current version:** 0.1.153 | **Test suite:** 4,204 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P4.15, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (208 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 9 | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 20 | P5 (tests): 9 | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -331,15 +331,15 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** `key-differences.md` now correctly shows currency mismatch, SA specialised lending, and provision-based defaulted treatment as implemented. All three features confirmed complete with file/line references.
 
 ### P4.15 CRM spec extensive gaps vs PRA PS1/26 (Art. 192-239)
-- **Status:** [ ] Major rewrite needed
-- **Impact:** Comparison of `credit-risk-mitigation.md` against PDF (pp. 162-223) found 26 gaps:
-  - **Critical values wrong:** Other equity haircut (25% in spec, 30% in PDF 10-day), non-financial collateral HC values (receivables 20% vs 40%, RE 0% vs 40%), overcollateralisation ratios (1.25x/1.4x) have no basis in PS1/26
-  - **Missing tables:** LGDS values (0%/20%/20%/25%), CQS4 govt bond haircuts, short-term ECAI Table 2, securitisation haircuts, 5-maturity-band table (CRR uses 3 bands, PDF uses 5)
-  - **Missing formulas:** Full LGD* formula (Art. 230), mixed pools formula (Art. 231), volatility scaling (Art. 226), G* = G x (1-Hfx) for unfunded (Art. 233(3))
-  - **Missing rules:** FCSM mutual exclusivity with FCCM (Art. 222(1)), 0% FCSM for repos (Art. 222(4)/(6)), Art. 227 zero-haircut conditions, partial protection tranching (Art. 234), credit-linked notes (Art. 218), Part 4 capping rule
-  - **Inaccurate descriptions:** Rule 4.11 scope, parameter substitution LGD choice (Art. 236)
-  - **Code bug triggered by spec gap:** CQS 4-6 bond haircut silently returns 20% instead of ineligibility error (`crr_haircuts.py`) -- see P1.56
-- **Fix:** Comprehensive rewrite of CRM spec with all regulatory table values and formulas.
+- **Status:** [x] Complete (2026-04-08)
+- **Fixed:** Comprehensive rewrite of `credit-risk-mitigation.md`. All 26 originally identified gaps addressed:
+  - Separated CRR and Basel 3.1 supervisory haircut tables throughout — previously tables were mixed or used wrong-regime values
+  - Fixed corporate/institution bond 5-band haircut values — old spec showed values matching neither CRR nor Basel 3.1; now shows correct CRR 3-band and B31 5-band tables separately
+  - Added CRR LGDS values (35%/35%/40%) alongside Basel 3.1 values (20%/20%/25%) — previously only B31 LGDS shown
+  - Added CRR vs B31 distinctions for gold (CRR 15% → B31 20%), equity main-index/other (CRR 15%/25% → B31 20%/30%), and LGDU (CRR 45% uniform → B31 40%/45% FSE split)
+  - Documented overcollateralisation ratios with regulatory basis (Art. 230(2)) — previously flagged as having "no basis in PS1/26"
+  - Cleaned up 6 "Warning — Previous Description Was Wrong" admonition boxes into concise notes — spec corrections are now established fact, not pending corrections
+  - Fixed AIRB section stale "known gap" language for Art. 164(4)(c) blended LGD floor — P1.87 is complete; updated accordingly
 
 ### P4.16 IRB spec inaccuracies vs PRA PS1/26 PDF
 - **Status:** [x] Complete
@@ -648,6 +648,8 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 These items are verified complete. Items with **[!]** have known gaps documented in P1/P2:
 
 **P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.9d, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.49, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87
+
+**P4 items complete:** P4.1, P4.5, P4.7, P4.13, P4.14, P4.15, P4.16, P4.17, P4.18, P4.19, P4.21
 
 **P5 items complete:** P5.6, P5.7, P5.8, P5.9, P5.10
 

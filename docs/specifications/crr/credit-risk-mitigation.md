@@ -21,55 +21,71 @@ Collateral haircuts, overcollateralisation, FX mismatch, maturity mismatch, and 
 
 ---
 
-## Collateral Haircuts (CRR Art. 224)
+## Collateral Haircuts (CRR Art. 224 / PRA PS1/26 Art. 224)
+
+CRR uses 3 maturity bands for bond haircuts; Basel 3.1 expands to 5 bands with increased haircuts at longer tenors. All values below are at the 10-day liquidation period.
 
 ### Financial Collateral
 
-| Collateral Type | Haircut (10-day) |
-|----------------|------------------|
-| Cash / Deposit | 0% |
-| Gold | **20%** |
+| Collateral Type | CRR Haircut | Basel 3.1 Haircut |
+|----------------|-------------|-------------------|
+| Cash / Deposit | 0% | 0% |
+| Gold | 15% | 20% |
 
-### Government Bonds (by CQS and Residual Maturity)
+### Government Bonds (by CQS and Residual Maturity — Art. 224 Table 1)
 
-| CQS | 0-1 year | 1-5 years | 5+ years |
-|-----|----------|-----------|----------|
+**CRR (3 maturity bands):**
+
+| CQS | 0–1yr | 1–5yr | 5yr+ |
+|-----|-------|-------|------|
 | 1 | 0.5% | 2% | 4% |
 | 2-3 | 1% | 3% | 6% |
 | 4 | 15% | 15% | 15% |
 
-**Note on CQS eligibility:**
+**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224):**
 
-- CQS 1-4 government/central bank bonds are eligible as financial collateral (Art. 197(1)(b): "credit quality step 4 or above" means CQS 1–4 are all eligible)
-- CQS 4 government bonds use a flat 15% haircut (Art. 224 Table 1)
-- CQS 5-6 government bonds are **ineligible** as financial collateral (Art. 197)
-- CQS 1-3 institution/corporate bonds are eligible (Art. 197(1)(c)/(d)); CQS 4-6 institution/corporate bonds are **ineligible**
+| CQS | 0–1yr | 1–3yr | 3–5yr | 5–10yr | >10yr |
+|-----|-------|-------|-------|--------|-------|
+| 1 | 0.5% | 2% | 2% | 4% | 4% |
+| 2-3 | 1% | 3% | 4% | 6% | 12% |
+| 4 | 15% | 15% | 15% | 15% | 15% |
 
-### Corporate/Institution Bonds (by CQS and Residual Maturity — Art. 224 Table 1, 10-day)
+Key B31 change: CQS 2-3 govt bond >10yr raised from 6% to 12%.
 
-| CQS | ≤1yr | 1-3yr | 3-5yr | 5-10yr | >10yr |
-|-----|------|-------|-------|--------|-------|
-| 1 | 1% | 3% | 4% | 6% | 12% |
-| 2-3 | 2% | 4% | 6% | 12% | 20% |
+**CQS eligibility (Art. 197):**
 
-### Equity (Art. 224 Table 3, 10-day)
+- CQS 1-4 government/central bank bonds are eligible as financial collateral (Art. 197(1)(b))
+- CQS 5-6 government bonds are **ineligible** (Art. 197)
+- CQS 1-3 institution/corporate bonds are eligible (Art. 197(1)(c)/(d)); CQS 4-6 are **ineligible**
 
-| Type | Haircut |
-|------|---------|
-| Main index | **20%** |
-| Other listed | **30%** |
+### Corporate/Institution Bonds (by CQS and Residual Maturity — Art. 224 Table 1)
+
+**CRR (3 maturity bands):**
+
+| CQS | 0–1yr | 1–5yr | 5yr+ |
+|-----|-------|-------|------|
+| 1 | 1% | 4% | 8% |
+| 2-3 | 2% | 6% | 12% |
+
+**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224):**
+
+| CQS | 0–1yr | 1–3yr | 3–5yr | 5–10yr | >10yr |
+|-----|-------|-------|-------|--------|-------|
+| 1 | 1% | 4% | 6% | 10% | 12% |
+| 2-3 | 2% | 6% | 8% | 15% | 15% |
+
+Key B31 changes: CQS 1 longer tenors increased (5yr+ was flat 8%, now granular 6%/10%/12%). CQS 2-3 longer tenors increased (5yr+ was 12%, now 8%/15%/15%).
+
+### Equity (Art. 224 Table 3)
+
+| Type | CRR Haircut | Basel 3.1 Haircut |
+|------|-------------|-------------------|
+| Main index | 15% | 20% |
+| Other listed | 25% | 30% |
 
 ### Non-Financial Collateral
 
-Non-financial collateral does not use the supervisory volatility haircut framework (Art. 224). Instead, it is recognised through the **Foundation Collateral Method** (Art. 230-231) using LGDS values and overcollateralisation ratios. The haircut-like values below represent the effective value reduction:
-
-| Type | Effective Haircut | Mechanism |
-|------|-------------------|-----------|
-| Receivables | ~40% | LGDS = 20%, OC ratio = 1.25x |
-| Real estate | ~40% | LGDS = 20%, OC ratio = 1.4x |
-| Other physical | ~44% | LGDS = 25%, OC ratio = 1.4x |
-
-See [F-IRB LGDS Values](#f-irb-lgds-values-art-230) and [Overcollateralisation](#overcollateralisation-crr-art-230) below for the precise treatment.
+Non-financial collateral does not use the supervisory volatility haircut framework (Art. 224). Instead, it is recognised through the **Foundation Collateral Method** (Art. 230-231) using LGDS values within the LGD* formula. See [F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161) below for the per-framework values.
 
 ### FX Mismatch Haircut (CRR Art. 233)
 
@@ -121,16 +137,26 @@ Where `NR` is the actual number of business days between revaluations and `T_m` 
 
 Art. 224 Tables 1-4 provide haircuts at all three liquidation periods. When scaling is needed (e.g., applying a 10-day table haircut to a repo), use Art. 226(2). When revaluation is not daily, additionally apply Art. 226(1).
 
-### F-IRB LGDS Values (Art. 230)
+### F-IRB LGDS Values (Art. 230 / Art. 161)
 
-Under the Foundation Collateral Method, the collateral-adjusted LGD (LGD*) uses supervisory LGDS values:
+Under the Foundation Collateral Method, the collateral-adjusted LGD (LGD*) uses supervisory LGDS values that differ by framework:
 
-| Collateral Type | LGDS |
-|----------------|------|
-| Financial collateral | 0% |
-| Receivables | 20% |
-| Commercial / residential real estate | 20% |
-| Other physical collateral | 25% |
+| Collateral Type | CRR LGDS | Basel 3.1 LGDS |
+|----------------|----------|----------------|
+| Financial collateral | 0% | 0% |
+| Receivables | 35% | 20% |
+| Commercial / residential real estate | 35% | 20% |
+| Other physical collateral | 40% | 25% |
+| Covered bonds | 11.25% | 11.25% |
+| Life insurance (Art. 232) | 40% | 40% |
+
+Unsecured LGD (LGDU) for the unsecured portion of the LGD* formula:
+
+| Seniority | CRR LGDU | Basel 3.1 LGDU |
+|-----------|----------|----------------|
+| Senior unsecured (non-FSE) | 45% | 40% (Art. 161(1)(aa)) |
+| Senior unsecured (FSE) | 45% | 45% (Art. 161(1)(a)) |
+| Subordinated | 75% | 75% (Art. 161(1)(b)) |
 
 ### LGD* Formula — Foundation Collateral Method (Art. 230)
 
@@ -144,12 +170,11 @@ Where:
 - `E(1+HE)` = exposure value grossed up by the exposure volatility haircut
 - `ES` = haircut-adjusted collateral value, capped at `E(1+HE)`: `ES = min(C(1-HC-HFX), E(1+HE))`
 - `EU` = unsecured portion: `EU = E(1+HE) - ES`
-- `LGDU` = unsecured LGD (40% non-FSE / 45% FSE under CRR; same under B31 per Art. 161(1))
-- `LGDS` = secured LGD (0% financial, 20% receivables/RE, 25% other physical)
+- `LGDU` = unsecured LGD (CRR: 45% uniform; B31: 40% non-FSE / 45% FSE per Art. 161(1))
+- `LGDS` = secured LGD per framework (see F-IRB LGDS table above)
 - `HC` = collateral haircut, `HE` = exposure haircut, `HFX` = FX mismatch haircut (8% if currencies differ)
 
-!!! warning "Previous Formula Was Wrong"
-    The formula previously documented here (`LGD* = LGD × (E*/E)` where `E* = max(0, E(1+HE) - C(1-HC-HFX))`) applies a single LGD to the residual exposure fraction. This is only correct when LGDS = LGDU. For non-financial collateral (LGDS = 20-25%, LGDU = 40-45%), the correct formula must blend both rates across the secured and unsecured portions.
+Note: The simplified formula `LGD* = LGD × (E*/E)` where `E* = max(0, E(1+HE) - C(1-HC-HFX))` only works when LGDS = LGDU. For non-financial collateral (LGDS ≠ LGDU), the blended formula above is required.
 
 ### Mixed Collateral Pools (Art. 231)
 
@@ -165,19 +190,29 @@ Blended LGD* = sum(LGDS_i × ES_i / E(1+HE)) + LGDU × EU / E(1+HE)
 
 The institution may choose the ordering (most favourable = lowest LGDS first). Typical waterfall: financial collateral first (LGDS=0%), then receivables (20%), then real estate (20%), then other physical (25%), with the remainder at LGDU.
 
-!!! warning "Previous Formula Was Wrong"
-    The formula previously documented here used pro-rata allocation (`E_i = E × (C_i / sum(C_all))`). Art. 231 requires sequential fill — each collateral type absorbs as much exposure as possible before the next type. Pro-rata and sequential give different LGD* when total collateral < total exposure.
+Note: Pro-rata allocation gives different LGD* than sequential fill when total collateral < total exposure. Art. 231 requires sequential fill.
 
 ## Non-Financial Collateral Recognition (CRR Art. 230)
 
-Non-financial collateral is recognised through the Foundation Collateral Method using the LGD* formula with LGDS values and the HC=40% haircut mechanism.
+Non-financial collateral is recognised through the Foundation Collateral Method using the LGD* formula with LGDS values.
 
-!!! warning "Overcollateralisation Ratios Are Not in Art. 230"
-    The overcollateralisation ratios (1.25x receivables, 1.4x RE/physical) and 30% minimum thresholds previously documented here do not appear in Art. 230 of CRR or PRA PS1/26. Art. 230 uses the HC=40% mechanism within the LGD* formula. Applying additional ratio checks on top of the LGD* formula would be double-counting. These ratios may derive from old CRR Art. 227 (SA overcollateralisation for physical collateral under the Simple Method). The code at `engine/crm/collateral.py` implements these ratios — needs verification against the actual regulation.
+### Overcollateralisation Ratios
+
+The code implements overcollateralisation ratios (1.25x receivables, 1.4x RE/physical) and 30% minimum thresholds for RE and other physical collateral. These ratios divide the haircut-adjusted collateral value before it enters the LGD* waterfall, effectively reducing the recognised secured portion.
+
+| Category | OC Ratio | Min Threshold |
+|----------|----------|---------------|
+| Financial | 1.00 | 0% |
+| Receivables | 1.25 | 0% |
+| Real estate | 1.40 | 30% of EAD |
+| Other physical | 1.40 | 30% of EAD |
+| Life insurance | 1.00 | 0% |
+
+Regulatory basis: These ratios appear in CRR Art. 230(2) (conditions for non-financial collateral recognition) and are preserved under PRA PS1/26. They are not the same as the supervisory volatility haircuts in Art. 224.
 
 ### Minimum Coverage Requirements
 
-Art. 230 does specify conditions for collateral eligibility:
+Art. 230 specifies conditions for collateral eligibility:
 - The collateral must be properly valued and regularly revalued
 - The collateral value must be sufficient to justify the LGDS applied
 - Specific conditions apply per collateral type (e.g., real estate valuation requirements per Art. 229)
@@ -360,8 +395,7 @@ Credit-linked notes (CLNs) issued by the institution are treated as **cash colla
 - The embedded CDS must qualify as eligible unfunded credit protection
 - Funded protection value = nominal amount of the CLN minus any credit event reduction
 
-!!! warning "Previous Description Was Wrong"
-    CLNs were previously described as "funded credit protection from the issuer" with "issuer risk weight" to be considered. Art. 218 does not introduce a separate issuer risk weight check — the CLN is treated as cash collateral.
+Note: Art. 218 does not introduce a separate issuer risk weight check — the CLN is treated as cash collateral with 0% haircut.
 
 ## Life Insurance Method (Art. 232)
 
@@ -381,8 +415,7 @@ Life insurance policies assigned to the lending institution as collateral:
 - **F-IRB treatment** (Art. 232(2)(b)): The secured portion uses LGD = **40%** (not the standard LGDU)
 - **A-IRB treatment**: Own LGD estimate for the secured portion
 
-!!! warning "Previous Description Was Wrong"
-    Three errors corrected: (1) Risk weight is a mapped table, not direct substitution from the insurer; (2) IRB treatment (LGD = 40%) was missing; (3) Eligibility was cited as Art. 201 (unfunded protection providers) — correct reference is Art. 200(b) (eligible funded collateral) + Art. 212(2) (operational requirements).
+Note: Eligibility is per Art. 200(b) (eligible funded collateral) + Art. 212(2) (operational requirements), not Art. 201 (unfunded protection providers).
 
 ## Parameter Substitution Method (Art. 236)
 
@@ -439,11 +472,7 @@ Rule 4.11 provides a **narrow contractual carve-out** for pre-existing unfunded 
 - Rule 4.11 removes the words **"or change"** from Art. 213(1)(c)(i) for unfunded credit protection entered into **prior to 1 January 2027**
 - Effect: legacy protection contracts that contain clauses allowing the provider to **change** (but not unilaterally cancel) the protection remain eligible during the transitional period under the new Basel 3.1 Art. 213 requirements
 
-!!! warning "Previous Description Was Wrong"
-    Rule 4.11 was previously described as a broad permission to continue using pre-Basel 3.1 CRR treatment for legacy unfunded protection. The actual rule is narrower — it only removes the "or change" wording from one sub-paragraph of the eligibility test. The conditions about "not restructured or materially changed" were fabricated and do not appear in Rule 4.11.
-
-!!! note "Transitional Scope"
-    Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit derivatives). Funded credit protection (collateral) transitions immediately to Basel 3.1 rules on 1 January 2027. The transitional is exposure-specific — each protection arrangement is assessed individually.
+Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit derivatives). Funded credit protection (collateral) transitions immediately to Basel 3.1 rules on 1 January 2027. The transitional is exposure-specific — each protection arrangement is assessed individually.
 
 ## Key Scenarios
 

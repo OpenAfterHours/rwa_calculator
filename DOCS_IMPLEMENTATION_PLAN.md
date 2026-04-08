@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-08 (Phase 2 — 5 parallel verification agents cross-checked PDFs, code, and all doc files)
+Last updated: 2026-04-08 (Phase 3 — 10 parallel agents: 6 Explore for orientation, 4 PDF verification agents cross-checked PS1/26, CRR, and comparison PDFs against all doc files and source code)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -15,7 +15,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [ ] **D1.3** — CRE income-producing table in `key-differences.md` (lines 330-332) and `basel31.md` (lines 163-165) shows "LTV <=60%: 70%, >60%: 110%". Art. 124I actual: <=80%: 100%, >80%: 110%. The 70% value does not exist in Art. 124I.
 - [ ] **D1.4** — Sovereign unrated in `basel31.md` (lines 234-235) shows OECD bifurcation (0% OECD / 100% non-OECD). Basel 3.1 Art. 114 = flat **100%** for all unrated sovereigns; no OECD bifurcation. Art. 114(5) is left blank in PRA rules.
 - [ ] **D1.5** — Corporate A-IRB subordinated LGD floor shown as 50% in `technical-reference.md` (line 43), `basel31.md` (line 87). Art. 161(5) sets **25%** for all corporate unsecured (no senior/subordinated distinction). The `airb-calculation.md` correction note is right; four other files are wrong.
-- [ ] **D1.6** — Large corporate correlation multiplier in `irb-approach.md` (lines 211-213): says 1.25x applies to "large corporates (>GBP500m)". Wrong on two counts: (a) applies to **financial sector entities**, not large non-financial corporates; (b) B31 threshold is EUR 500m / **GBP440m**, not GBP500m. `key-differences.md` and `technical-reference.md` are correct. **Also wrong in:** `basel31.md` (line 213) — same error.
+- [ ] **D1.6** — Large corporate correlation multiplier in `irb-approach.md` (lines 211-213): says 1.25x applies to "large corporates (>GBP500m)". Wrong on three counts: (a) applies to **financial sector entities**, not large non-financial corporates; (b) the threshold is **total assets > EUR 70bn / GBP 79bn** (PRA PS1/26 Art. 1.3, CRR Art. 4(1)(146)), not revenue; (c) "GBP500m" conflates with the Art. 147A large corporate revenue threshold (GBP 440m) which is an approach restriction, not a correlation uplift. `key-differences.md` and `technical-reference.md` are correct on entity type. **Also wrong in:** `basel31.md` (line 213) — same error. See also D1.31 for threshold details.
 - [ ] **D1.7** — SCRA Grade A enhanced (30%) missing from `key-differences.md` SCRA table (lines 290-295) and `basel31.md` (line 254). Only shows A=40%, B=75%, C=150%. The spec `sa-risk-weights.md` has the full 4-row table (A/A-enhanced/B/C).
 - [ ] **D1.8** — CRR equity SA table in user guide `equity.md` (lines 22-29) shows 250%/400% for unlisted/speculative. These are Basel 3.1 values. CRR Art. 133 = flat **100%** for all equity. The spec `equity-approach.md` was corrected; `equity.md` was not. The section header "Article 133 - Standardised Approach (SA)" combined with B31 values is especially misleading.
 - [ ] **D1.9** — CRR equity in `sa-risk-weights.md` (lines 461-483) still shows "Unlisted: 150%, PE/VC: 190%" referencing non-existent "Art. 133(3)/(4)". These are Art. 155 IRB Simple values. The spec `equity-approach.md` correction was not propagated here.
@@ -38,7 +38,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### New Critical Findings (Phase 2)
 
-- [ ] **D1.20** — CIU fallback in `key-differences.md` (line 409) shows **1,250%** for both CRR and Basel 3.1, labelled "Unchanged". CRR Art. 132(2) fallback = **150%**; Basel 3.1 aligns CIU fallback to equity SA weights (250%/400%). The 1,250% applies only to securitisation residuals, not general CIU fallback.
+- [ ] **D1.20** — CIU fallback in `key-differences.md` (line 409) shows **1,250%** for both CRR and Basel 3.1, labelled "Unchanged". **Three errors:** (a) CRR Art. 132(1) default assignment was **100%**, not 150% or 1,250% (the 150% was only the ECAI method CQS 5-6 rate, not the general fallback); (b) Art. 132 was **omitted from UK law** by SI 2021/1078 (1 Jan 2022), so no CIU fallback exists in current UK CRR; (c) Basel 3.1 Art. 132B(2) fallback = **1,250%**, which differs from CRR's 100%. The "Unchanged" label is wrong on all counts.
 - [ ] **D1.21** — Art. 122(6)(b) non-investment grade unrated corporate = **135%** entirely absent from all docs. PDF Art. 122(6)(b): "Exposures to corporates which the institution has assessed as not being investment grade shall be assigned a risk weight of 135%." Files affected: `sa-risk-weights.md`, `key-differences.md`, `basel31.md`.
 - [ ] **D1.22** — `sa-risk-weights.md` (lines 220-229): Table 4A mislabelled as "Own-Rating Based (CRR Art. 120(2))". Actual Table 4A is for **short-term ECAI assessments** (Art. 120(2B)): CQS1=20%, CQS2=50%, CQS3=100%, Others=150%. Current values (20/20/20/50/150/20%) are from the general short-term preferential treatment (Table 4).
 - [ ] **D1.23** — Rated covered bond CQS 6 = **50%** in `key-differences.md` (line 457). Art. 129 Table 7 confirms CQS 6 = **100%**.
@@ -46,6 +46,13 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [ ] **D1.25** — `other.md` (lines 43-49): B31 equity example shows exchange-traded equity at **100%** RW. This is the CRR SA value. Under Basel 3.1, exchange-traded equity = **250%** (or 160% transitionally in 2027).
 - [ ] **D1.26** — `basel31.md` (lines 252-256): SCRA Grade A criteria mislabelled. Quantitative thresholds (CET1 >=14%, Leverage >=5%) shown as the criteria for 40% (standard Grade A). These are actually the criteria for **30% (Grade A Enhanced)**. Standard Grade A (40%) requires only a qualitative assessment.
 - [ ] **D1.27** — `equity.md` (line 47): "Government-supported: 190%" under Art. 155 IRB Simple. Art. 155 has only three categories: exchange-traded (290%), PE diversified (190%), all other (370%). No "Government-supported" category exists.
+
+### New Critical Findings (Phase 3 — PDF cross-check)
+
+- [ ] **D1.28** — CRR Art. 128 (high-risk items, 150%) **omitted from UK law** by SI 2021/1078 effective 1 Jan 2022. `sa-risk-weights.md` (lines 300-307) and code (`crr_risk_weights.py:341`, `sa/calculator.py:1041-1045`) treat it as active for CRR. Under **Basel 3.1** it IS active (PS1/26 page 59 confirmed). The CRR engine path may incorrectly classify venture capital and speculative RE as 150% when it should fall through to Art. 133 (100% equity) or another treatment. Files affected: `sa-risk-weights.md`, `crr.md`, `other.md`, `crr_risk_weights.py`, `sa/calculator.py`.
+- [ ] **D1.29** — CRR Art. 132 (CIU treatment) **omitted from UK law** by SI 2021/1078 effective 1 Jan 2022. Equity calculator docstring (`equity/calculator.py:21`) says "CIU fallback: 150% → 250%" — both values wrong. CRR pre-omission Art. 132(1) fallback was **100%**; Basel 3.1 Art. 132B(2) fallback = **1,250%**. The 250% is the SA equity weight for CIU underlyings, not the CIU fallback itself. Also extends D1.20.
+- [ ] **D1.30** — CRR institution CQS 2 risk weight: code (`crr_risk_weights.py:67`) and docs (`institution.md:19`, `crr.md`) use **30%** labelled "UK deviation". UK onshored CRR Art. 120 Table 3 (legislation.gov.uk, current version) shows CQS 2 = **50%**. The 30% value matches **Basel 3.1 ECRA** Table 3, not CRR. **Needs verification against PRA Rulebook (CRR Firms)** — if no PRA rule overrides retained CRR Art. 120, this is a misclassification affecting CRR capital calculations (overstating capital for CQS 2 institutions). Files affected: `crr_risk_weights.py`, `institution.md`, `crr.md`, `key-differences.md` regulatory index.
+- [ ] **D1.31** — FI scalar threshold conflation in docs. D1.6 identifies the entity-type error (FSE, not large corporates). Additionally, the B31 threshold for "large FSE" is total assets > **GBP 79bn** (PRA PS1/26 Art. 1.3 definition, CRR Art. 4(1)(146) = EUR 70bn). Code (`fx_rates.py:119`, `schemas.py:177`) correctly uses EUR 70bn. But `irb-approach.md` (line 213) says ">GBP500m" which conflates with the Art. 147A large corporate **revenue** threshold (GBP 440m). The two thresholds are entirely distinct: GBP 440m revenue = F-IRB only (approach restriction); GBP 79bn total assets = 1.25x correlation (parameter uplift). Update all doc references to distinguish clearly.
 
 ---
 
@@ -68,7 +75,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### Missing Regulatory Content in Docs
 
-- [ ] **D2.7** — Art. 124A qualifying criteria for real estate (9-point list: first-lien requirement, completed property, LTV monitoring, legal certainty, etc.) not documented anywhere. These determine whether exposures qualify for preferential RE risk weights (Art. 124F-124L) vs. 150%/counterparty RW fallback. Add to `sa-risk-weights.md` and/or a new B31 RE spec.
+- [ ] **D2.7** — Art. 124A qualifying criteria for real estate (6 top-level criteria (a)-(f) at para 1, with sub-conditions expanding detail: property condition, legal certainty, charge conditions, valuation per Art. 124D, value independence from borrower, insurance monitoring) not documented anywhere. These determine whether exposures qualify for preferential RE risk weights (Art. 124F-124L) vs. 150%/counterparty RW fallback. Add to `sa-risk-weights.md` and/or a new B31 RE spec.
 - [ ] **D2.8** — F-IRB supervisory LGD FSE distinction missing from `technical-reference.md` and `basel31.md`. Art. 161(1)(aa)/(a): non-FSE senior = 40%, FSE senior = 45%. Both files collapse to "40%".
 - [ ] **D2.9** — Covered bond F-IRB LGD (11.25%, Art. 161(1B)) absent from all comparison tables except `firb-calculation.md`. Add to `key-differences.md` and `technical-reference.md`.
 - [ ] **D2.10** — PD floors for sovereign and institution classes (0.05%) missing from all comparison tables in `key-differences.md`, `technical-reference.md`, `basel31.md`. Only `firb-calculation.md` documents them.
@@ -123,6 +130,11 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [ ] **D3.9** — `corep/generator.py` lines 1558, 1735: COREP C07/C08 counterparty credit risk rows (0090-0130) produce null values ("CCR rows — not implemented"). No documentation warning about this omission.
 - [ ] **D3.10** — `crr_firb_lgd.py` F-IRB LGD table and `technical-reference.md` lines 54-60: both missing subordinated purchased corporate receivables LGD = **100%** (Art. 161(1)(f)). Extends D4.12.
 
+### New Phase 3 Code-Docs Findings
+
+- [ ] **D3.11** — Equity calculator docstring (`equity/calculator.py:21`): "CIU fallback: 150% → 250%". Both values wrong (see D1.29). CRR fallback was 100% (Art. 132(1), now omitted from UK law); B31 fallback is 1,250% (Art. 132B(2)). The 250% is the SA equity weight for CIU underlyings, not the CIU fallback.
+- [ ] **D3.12** — CRR HIGH_RISK exposure class treated as active in CRR engine path (`sa/calculator.py:1041-1045`). If Art. 128 is omitted from UK law (see D1.28), these exposures should fall through to Art. 133 (equity 100%) or their counterparty's standard class treatment, not 150%. Basel 3.1 path (`sa/calculator.py:859`) is correct (Art. 128 re-introduced). Cross-reference D1.28 — needs verification of whether PRA Rulebook (CRR Firms) retains an Art. 128 equivalent.
+
 ---
 
 ## Priority 4: Minor Fixes (article references, formatting, stale metadata)
@@ -166,6 +178,13 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [ ] **D4.29** — `firb-calculation.md` (lines 45-48): Basel 3.1 F-IRB collateral-type LGD values cited as "CRE32.9-12" (BCBS references). PRA regulatory reference should be Art. 161 and Art. 230. Minor citation improvement.
 - [ ] **D4.30** — `slotting-approach.md` CRR table: Default category shows "0%" without EL annotation. B31 table says "0% (EL)". Inconsistent annotation — add EL context to CRR table too.
 
+### New Phase 3 Minor Findings
+
+- [ ] **D4.31** — CRR Art. 125 real estate mechanism: spec simplifies RRE treatment to "35% ≤80% LTV" implying LTV bands, but Art. 125 actual mechanism is "portion not exceeding 80% of property value receives 35%" (proportion-based, not band-based). The practical outcome is equivalent for simple cases, but the mechanism description in `sa-risk-weights.md` and `crr.md` could mislead implementers. Minor precision issue.
+- [ ] **D4.32** — CRR Art. 127 defaulted provision denominator: spec says "Specific provisions >= 20% of (EAD + provision_deducted)" but Art. 127(1) text says "20% of the unsecured portion of the exposure value before applying specific adjustments". The denominator is the **unsecured portion before provisions**, not EAD+provision. Minor regulatory text precision.
+- [ ] **D4.33** — `key-differences.md` CCF table shows separate rows for "Other Commitments <1yr" and "Other Commitments ≥1yr" both at 40%. Under Basel 3.1 Art. 111 Table A1 Row 5, there is a single category "any other commitment" at 40% with no tenor distinction. The tenor split is CRR-only (20%/50%). The two-row presentation is accurate in outcome but structurally misleading — should be collapsed to one row with a note about CRR tenor distinction removal.
+- [ ] **D4.34** — `crr.md` CCF table (lines 138-147): shows "Undrawn credit facilities: 20%" conflating MR (50%) and MLR (20%) categories. CRR Annex I distinguishes: undrawn >1yr = 50% (MR), undrawn ≤1yr not unconditionally cancellable = 20% (MLR). Already flagged as D4.24 but note D4.33 is the B31 counterpart issue.
+
 ---
 
 ## Completed
@@ -182,6 +201,11 @@ _No items completed yet._
 - PRA slotting pre-op PF: no separate table (uses standard non-HVCRE), not BCBS CRE33 elevated weights.
 - Cross-references to `IMPLEMENTATION_PLAN.md` items noted where doc issues overlap with code issues (P4.x series).
 - PRA deviation from BCBS on CRE income-producing: PRA Art. 124I uses <=80%: 100%, >80%: 110%. BCBS uses <=60%: 70%, >60%-80%: 90%, >80%: 110%.
-- Large FSE threshold for FI scalar: confirmed from PRA definitions (page 78) — applies to financial sector entities, not large non-financial corporates.
-- Art. 128 (high-risk 150%) is confirmed active in PRA PS1/26 (page 59, paras 1 and 3); para 2 left blank. Status in pre-2027 UK CRR requires separate verification.
+- Large FSE threshold for FI scalar: PRA PS1/26 Art. 1.3 defines "large FSE" as total assets > GBP 79bn (CRR Art. 4(1)(146) = EUR 70bn). This is entirely distinct from Art. 147A large corporate revenue threshold of GBP 440m.
+- Art. 128 (high-risk 150%) is confirmed active in PRA PS1/26 (page 59, paras 1 and 3); para 2 left blank. **Under current UK CRR (pre-2027), Art. 128 was omitted by SI 2021/1078 effective 1 Jan 2022** — the high-risk class is dead letter until Basel 3.1 reintroduces it.
+- Art. 132 (CIU) similarly omitted from UK CRR by SI 2021/1078 (1 Jan 2022). Pre-omission Art. 132(1) fallback was **100%** (not 150%). Basel 3.1 Art. 132B(2) introduces **1,250%** fallback.
+- CRR institution CQS 2: UK onshored CRR Art. 120 Table 3 shows **50%** (verified via legislation.gov.uk). The **30%** value used in the project may derive from a PRA Rulebook overlay or supervisory statement not found in the retained EU CRR text itself. Needs verification against the PRA CRR Firms Instrument before asserting it's wrong.
+- Art. 124A qualifying criteria: **6 top-level criteria** (a)-(f) at para 1, not 9. Sub-conditions and paras 2-4 expand detail but the primary structure is 6 named criteria.
+- Art. 155 (IRB Simple equity) has exactly three categories: exchange-traded (290%), PE diversified (190%), all other (370%). No "government-supported" category exists anywhere in the CRR or Basel 3.1 text.
 - D4.8 flagged for review: CQS 4 govt bond haircut row appears present in current version of `credit-risk-mitigation.md`.
+- Phase 3 PDF verification confirmed all 27 existing D1.x items and all 31 existing D2.x items. 4 new P1 items, 2 new P3 items, and 4 new P4 items added based on CRR omission findings and threshold clarifications.

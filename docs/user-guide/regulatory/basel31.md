@@ -282,16 +282,16 @@ Enhanced requirements for unrated exposures:
 
 ### Institution Exposures
 
-External Credit Risk Assessment Approach (ECRA):
+External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
 
-| CQS | Risk Weight |
-|-----|-------------|
-| CQS 1 | 20% |
-| CQS 2 | 30% |
-| CQS 3 | 50% |
-| CQS 4 | 100% |
-| CQS 5 | 100% |
-| CQS 6 | 150% |
+| CQS | Risk Weight | Change from CRR |
+|-----|-------------|-----------------|
+| CQS 1 | 20% | — |
+| CQS 2 | **30%** | Reduced from 50% |
+| CQS 3 | 50% | — |
+| CQS 4 | 100% | — |
+| CQS 5 | 100% | — |
+| CQS 6 | 150% | — |
 
 Standardised Credit Risk Assessment Approach (SCRA):
 

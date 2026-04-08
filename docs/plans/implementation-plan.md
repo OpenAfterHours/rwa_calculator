@@ -28,7 +28,7 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 | CRR-A1 | UK Sovereign exposure | £1m loan to UK Govt, CQS1 | £0 (0% RW) | CRR Art. 114 |
 | CRR-A2 | Unrated corporate | £1m loan, no rating, no SME | £1m (100% RW) | CRR Art. 122 |
 | CRR-A3 | Rated corporate CQS2 | £1m loan, A-rated | £500k (50% RW) | CRR Art. 122 |
-| CRR-A4 | Institution ECRA CQS2 | £1m loan to UK bank, A-rated | £300k (30% RW) | CRR Art. 120 + UK deviation |
+| CRR-A4 | Institution ECRA CQS2 | £1m loan to UK bank, A-rated | £500k (50% RW) | CRR Art. 120 Table 3 |
 | CRR-A5 | Residential mortgage ≤80% LTV | £500k loan, 75% LTV | £175k (35% RW) | CRR Art. 125 |
 | CRR-A6 | Residential mortgage >80% LTV | £850k loan, 85% LTV | £425k (50% avg RW) | CRR Art. 125 |
 | CRR-A7 | Commercial real estate ≤50% LTV | £600k loan, 50% LTV | £300k (50% RW) | CRR Art. 126 |
@@ -153,7 +153,7 @@ These scenarios test the Basel 3.1 implementation per PRA PS1/26, effective 1 Ja
 | B31-A1 | UK Sovereign exposure | £1m loan to UK Govt, CQS1 | £0 (0% RW) | CRE20.7 |
 | B31-A2 | Unrated corporate | £1m loan, no rating | £1m (100% RW) | CRE20.26 |
 | B31-A3 | Rated corporate CQS2 | £1m loan, A-rated | £500k (50% RW) | CRE20.25 |
-| B31-A4 | Institution ECRA CQS2 | £1m loan to UK bank | £300k (30% RW) | UK deviation |
+| B31-A4 | Institution ECRA CQS2 | £1m loan to UK bank | £300k (30% RW) | PRA PS1/26 Art. 120 Table 3 |
 | B31-A5 | Residential mortgage 60% LTV | £500k loan | £100k (20% RW) | CRE20.71 |
 | B31-A6 | Residential mortgage 85% LTV | £850k loan | £297.5k (35% RW) | CRE20.71 |
 | B31-A10 | SME (no supporting factor) | £1m loan, SME | £1m (100% RW) | No factor in B3.1 |

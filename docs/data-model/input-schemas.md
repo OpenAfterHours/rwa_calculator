@@ -575,7 +575,7 @@ provisions = pl.DataFrame({
 | 5 | B+ to B- | B1 to B3 | 100% | 100% | 150% |
 | 6 | CCC+ and below | Caa1 and below | 150% | 150% | 150% |
 
-*UK deviation: CQS 2 institutions get 30% RW (not 50%)
+*CRR Art. 120 Table 3 assigns CQS 2 institutions 50%. Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3) reduces this to 30%.
 
 **Example:**
 

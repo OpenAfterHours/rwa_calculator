@@ -25,17 +25,21 @@ Sovereign weights are identical under CRR and Basel 3.1.
 
 ### Institution Risk Weights (CRR Art. 120–121)
 
-| CQS | UK CRR (ECRA) | Standard CRR |
-|-----|---------------|--------------|
+| CQS | CRR (Art. 120) | Basel 3.1 ECRA |
+|-----|----------------|----------------|
 | 1 | 20% | 20% |
-| 2 | **30%** | 50% |
+| 2 | 50% | **30%** |
 | 3 | 50% | 50% |
 | 4 | 100% | 100% |
 | 5 | 100% | 100% |
 | 6 | 150% | 150% |
-| Unrated | 40% | 40% |
+| Unrated | 40% (sovereign-derived) | SCRA (see below) |
 
-The UK CRR deviates from the standard EU CRR at CQS 2 (30% vs 50%).
+!!! warning "Code Divergence"
+    The code (`INSTITUTION_RISK_WEIGHTS_UK`) currently uses 30% for CRR CQS 2, labelled as
+    a "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 confirms CQS 2 = **50%**.
+    The 30% value matches Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3), not CRR. This is a known
+    code bug — see D1.30 in the docs implementation plan.
 
 **Basel 3.1 SCRA** (for unrated institutions, CRE20.16-21):
 

@@ -16,9 +16,14 @@ Institution exposures include:
 
 ## Risk Weights (SA)
 
-Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). UK deviation: CQS 2 receives 30% instead of the standard Basel 50%.
+Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). Under CRR Art. 120 Table 3, CQS 2 receives **50%**. Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3) reduces CQS 2 to **30%**.
 
 Under CRR, unrated institutions receive **40%** via the sovereign-derived approach (Art. 121, Table 5). Under Basel 3.1, this is replaced by the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
+
+!!! warning "Code Divergence"
+    The code currently uses 30% for CRR CQS 2 (labelled "UK deviation"). PDF verification of UK
+    onshored CRR Art. 120 Table 3 confirms CQS 2 = **50%**. The 30% value is correct for Basel 3.1
+    ECRA only. See D1.30 in the docs implementation plan.
 
 > **Details:** See [Key Differences — Institution Exposures](../../framework-comparison/key-differences.md#institution-exposures) for the complete ECRA/SCRA comparison tables.
 
@@ -35,13 +40,13 @@ F-IRB uses supervisory LGD (45% senior, 75% subordinated) with PD floors of 0.03
 
 Exposures with original maturity ≤ 3 months may receive preferential treatment:
 
-| CQS | Standard RW | Short-Term RW |
-|-----|-------------|---------------|
-| CQS 1 | 20% | 20% |
-| CQS 2 | 30% | 20% |
-| CQS 3 | 50% | 20% |
-| CQS 4-5 | 100% | 50% |
-| CQS 6 | 150% | 150% |
+| CQS | CRR RW | B31 ECRA RW | Short-Term RW |
+|-----|--------|-------------|---------------|
+| CQS 1 | 20% | 20% | 20% |
+| CQS 2 | 50% | 30% | 20% |
+| CQS 3 | 50% | 50% | 20% |
+| CQS 4-5 | 100% | 100% | 50% |
+| CQS 6 | 150% | 150% | 150% |
 
 **Eligibility:**
 - Original maturity ≤ 3 months
@@ -119,10 +124,11 @@ Bonds issued by institutions as collateral:
 - Maturity: 6 months
 
 ```python
-# CQS 2 institution under CRR
-Risk_Weight = 30%  # UK deviation
+# CQS 2 institution under CRR (Art. 120 Table 3)
+Risk_Weight = 50%
 EAD = £25,000,000
-RWA = £25,000,000 × 30% = £7,500,000
+RWA = £25,000,000 × 50% = £12,500,000
+# Under Basel 3.1 ECRA: 30% → RWA = £7,500,000
 ```
 
 **Example 2: Unrated Bank (Basel 3.1)**

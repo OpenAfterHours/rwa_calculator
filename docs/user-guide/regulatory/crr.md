@@ -99,7 +99,7 @@ CRR does not apply an output floor. IRB RWA can be significantly lower than SA e
 | CQS | Risk Weight |
 |-----|-------------|
 | CQS 1 | 20% |
-| CQS 2 | 30% (UK deviation from 50%) |
+| CQS 2 | 50% |
 | CQS 3 | 50% |
 | CQS 4 | 100% |
 | CQS 5 | 100% |

@@ -174,7 +174,7 @@ Other MDBs not on the 0% list use Table 2B:
 | Unrated | **50%** |
 
 !!! note "MDB Table Differs from Institution Table"
-    MDB Table 2B has CQS 2 = 30% (same as UK institutions) and unrated = **50%** (not 40% like UK institutions). Do not use the institution table for MDB lookups.
+    MDB Table 2B has CQS 2 = 30% and unrated = **50%** (institution Table 3 has CQS 2 = 50% and unrated = 40%). Do not use the institution table for MDB lookups. The MDB CQS 2 = 30% value requires verification against CRR Art. 117 — it may reflect the same misattribution as the institution "UK deviation" (see D1.30).
 
 ## International Organisations (CRR Art. 118)
 
@@ -188,20 +188,23 @@ The following international organisations receive a **0%** risk weight:
 
 ## Institution Exposures (CRR Art. 120-121)
 
-!!! note "UK Deviation"
-    CQS 2 institutions receive a 30% risk weight under the UK CRR, rather than the standard 50% under EU CRR.
+| CQS | Risk Weight |
+|-----|-------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | 40% (Art. 121, sovereign-derived from CQS 2) |
 
-| CQS | Risk Weight (UK) | Risk Weight (EU Standard) |
-|-----|-------------------|--------------------------|
-| 1 | 20% | 20% |
-| 2 | **30%** | 50% |
-| 3 | 50% | 50% |
-| 4 | 100% | 100% |
-| 5 | 100% | 100% |
-| 6 | 150% | 150% |
-| Unrated | 40% | 100% |
-
-UK unrated institutions default to 40% (derived from sovereign CQS 2).
+!!! warning "Code Divergence — CQS 2"
+    The code (`INSTITUTION_RISK_WEIGHTS_UK`) uses **30%** for CRR CQS 2, labelled as a
+    "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 (legislation.gov.uk,
+    current version) confirms CQS 2 = **50%**. The 30% value matches the **Basel 3.1 ECRA**
+    table (PRA PS1/26 Art. 120 Table 3), not CRR. No PRA Rulebook instrument or supervisory
+    statement has been identified that reduces CRR CQS 2 to 30%. See D1.30 in the docs
+    implementation plan.
 
 ### Short-Term Institution Exposures (CRR Art. 120(2), Art. 121(3))
 
@@ -493,7 +496,7 @@ Non-regulatory real estate (doesn't meet Art. 124A requirements):
 
 ## Basel 3.1 Institution Exposures (CRE20.16-21)
 
-Rated institutions use ECRA (same CQS table as CRR, including UK CQS 2 = 30% deviation). Unrated institutions use SCRA:
+Rated institutions use ECRA (PRA PS1/26 Art. 120 Table 3). CQS 2 is reduced from CRR 50% to **30%** under Basel 3.1 ECRA. Unrated institutions use SCRA:
 
 | SCRA Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
 |------------|--------------------|--------------------|----------|
@@ -634,13 +637,13 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 | Scenario ID | Description | Expected RW |
 |-------------|-------------|-------------|
 | CRR-A1 | UK Sovereign CQS 1 | 0% |
-| CRR-A4 | UK Institution CQS 2 (UK deviation) | 30% |
+| CRR-A4 | Institution CQS 2 (Art. 120 Table 3) | 50% |
 | CRR-A | Corporate unrated | 100% |
 | CRR-A | Retail exposure | 75% |
 | CRR-A | Residential mortgage LTV 60% | 35% |
 | CRR-A | CRE with income cover, LTV 45% | 50% |
 | B31-A2 | Corporate CQS 2 (Basel 3.1) | 50% |
-| B31-A3 | UK Institution CQS 2 (Basel 3.1 ECRA) | 30% |
+| B31-A3 | Institution CQS 2 (Basel 3.1 ECRA, Art. 120 Table 3) | 30% |
 | B31-A8 | SME corporate (Basel 3.1) | 85% |
 
 ## Acceptance Tests

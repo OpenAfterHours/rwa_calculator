@@ -23,11 +23,20 @@ This section contains the formal specifications for the RWA Calculator. These sp
 
 ### Basel 3.1 Framework (From January 2027)
 
-| Specification | Description | Regulatory Reference |
-|--------------|-------------|---------------------|
-| [Framework Differences](../framework-comparison/technical-reference.md) | Key changes from CRR including output floor, PD/LGD floors | PRA PS1/26 |
+| Specification | Description | Regulatory Reference | Test Group |
+|--------------|-------------|---------------------|------------|
+| [SA Risk Weights](basel31/sa-risk-weights.md) | ECRA/SCRA, corporate sub-categories, RE loan-splitting, SA specialised lending | Art. 112–134 | B31-A |
+| [Foundation IRB](basel31/firb-calculation.md) | Reduced senior LGD (40%), higher PD floor (0.05%), covered bond LGD, 1.06 removal | Art. 153–163 | B31-B |
+| [Advanced IRB](basel31/airb-calculation.md) | LGD floors, post-model adjustments, CCF floor, double default removal | Art. 153–154, 161, 164, 166D | B31-C |
+| [Credit Risk Mitigation](basel31/credit-risk-mitigation.md) | Revised 5-band haircuts, equity haircuts, IRB parameter substitution | Art. 191A–241 | B31-D, B31-D7 |
+| [Slotting Approach](basel31/slotting-approach.md) | Revised weights, maturity split removal, no pre-op PF distinction | Art. 147(8), 153(5) | B31-E |
+| [Output Floor](basel31/output-floor.md) | PRA 4-year transitional floor, OF-ADJ capital adjustment | Art. 92(2A)–(2D) | B31-F |
+| [Provisions](basel31/provisions.md) | EL with revised LGD, Art. 158(6A) monotonicity, shortfall/excess | Art. 158–159 | B31-G |
+| [Defaulted Exposures](basel31/defaulted-exposures.md) | Provision-coverage split (100%/150%), RESI RE exception, IRB defaulted | Art. 127, 153(1), 154(1) | B31-K |
+| [Equity Approach](basel31/equity-approach.md) | New SA equity regime (250%/400%), IRB removal, transitional, CIU | Art. 133, 147A, Rules 4.1–4.8 | B31-L |
+| [Model Permissions](basel31/model-permissions.md) | Art. 147A approach restrictions: FSE, large corporate, institution, equity | Art. 147A, 4(1)(146) | B31-M |
 
-See the [CRR vs Basel 3.1](../framework-comparison/index.md) section for comprehensive comparison documentation.
+See also the [CRR vs Basel 3.1](../framework-comparison/index.md) section for comparison documentation.
 
 ### Common (Framework-Agnostic)
 
@@ -55,7 +64,7 @@ See the [CRR vs Basel 3.1](../framework-comparison/index.md) section for compreh
 Covers risk weight determination for all SA exposure classes:
 
 - Sovereigns (CQS 1-6 and unrated)
-- Institutions (including UK 30% CQS 2 deviation)
+- Institutions (CQS-based per Art. 120)
 - Corporates (rated and unrated)
 - Retail (fixed 75%)
 - Residential mortgages (LTV-based split at 80%)
@@ -126,8 +135,11 @@ Covers defaulted exposure treatment:
 Basel 3.1 scenarios mirror the CRR structure with additional framework-specific tests:
 
 - B31-A through B31-H: Same structure as CRR groups with Basel 3.1 rule changes
-- B31-D7: Parameter substitution (guarantee-driven IRB→SA CCF/RW substitution)
+- B31-D7: Parameter substitution (IRB guarantor PD substitution, new in Basel 3.1)
 - B31-F: Output floor phase-in (60%–72.5%, 2027–2030)
+- B31-K: Defaulted exposures (provision-coverage split, RESI RE exception, IRB K=0)
+- B31-L: Equity approach (SA 250%/400%, IRB removal, transitional phase-in, CIU treatment)
+- B31-M: Model permissions (Art. 147A restrictions — FSE, large corporate, institution, equity routing)
 
 ### Comparison Groups
 Dual-framework comparison scenarios:
@@ -159,6 +171,9 @@ Each scenario is tagged with an identifier for traceability:
 | `B31-F` | Basel 3.1 Output Floor |
 | `B31-G` | Basel 3.1 Provisions |
 | `B31-H` | Basel 3.1 Complex/Combined |
+| `B31-K` | Basel 3.1 Defaulted Exposures |
+| `B31-L` | Basel 3.1 Equity Approach |
+| `B31-M` | Basel 3.1 Model Permissions |
 | `M3.1` | Dual-framework comparison |
 | `M3.2` | Capital impact analysis |
 | `M3.3` | Transitional floor modelling |

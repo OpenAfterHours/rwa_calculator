@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-09 (D1.30: Institution CQS 2 "UK deviation" corrected — CRR Art. 120 = 50%, B31 ECRA = 30%; 30% is a Basel 3.1 change, not a CRR deviation. Fixed across 8 doc files. Code bug filed as D3.17.)
+Last updated: 2026-04-09 (D2.1: Created `docs/specifications/basel31/` with 10 dedicated spec files + index covering all 12 B31 test groups (90 scenarios, 212 tests). Nav and specs index updated.)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -62,7 +62,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### Missing B31 Specification Files
 
-- [ ] **D2.1** — `docs/specifications/` has 9 dedicated CRR spec files but **zero** dedicated B31 spec files. All 212 B31 acceptance tests have no standalone spec to trace to. Create `docs/specifications/basel31/` with equivalent depth, or explicitly document which CRR spec files cover B31 and add B31-specific sections within them with "unchanged" markers where rules carry over.
+- [x] **D2.1** — ~~`docs/specifications/` has zero dedicated B31 spec files.~~ **FIXED:** Created `docs/specifications/basel31/` with 10 spec files + index covering all 12 B31 test groups (90 scenarios, 212 tests): `sa-risk-weights.md` (B31-A), `firb-calculation.md` (B31-B), `airb-calculation.md` (B31-C), `credit-risk-mitigation.md` (B31-D/D7), `slotting-approach.md` (B31-E), `output-floor.md` (B31-F), `provisions.md` (B31-G), `defaulted-exposures.md` (B31-K), `equity-approach.md` (B31-L), `model-permissions.md` (B31-M). Each file includes requirements status, risk weight tables, formulas, regulatory references, key scenarios, and acceptance test tables matching CRR spec depth. `zensical.toml` nav updated with "Basel 3.1 Framework" section. `specifications/index.md` updated with full B31 table and B31-K/L/M scenario ID prefixes. CCF changes remain in CRR `credit-conversion-factors.md` (comparison tables already present). Supporting factors N/A for B31 (removed). (2026-04-09)
 
 ### Scenario ID and Test Traceability Gaps
 
@@ -223,6 +223,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [x] **D4.9** — Art. 128 framework applicability clarified as part of D1.28 fix. (2026-04-08)
 - [x] **D1.31** — FI scalar threshold conflation fixed across 8 doc files. EUR 70bn total assets (Art. 4(1)(146), correlation multiplier) clearly distinguished from GBP 440m revenue (Art. 147A(1)(d), approach restriction). Fixed: glossary (wrong target — "capital requirement" → "correlation coefficient"), input-schemas (stale entity-type gate, missing user-flag-only clarification), components (internal contradiction), firb-calculation (wrong article ref Art. 142), airb-calculation (missing threshold), key-differences (missing EUR 70bn), irb-approach (no FI scalar section at all), slotting-approach (wrong article ref, unclear EUR/GBP). (2026-04-08)
 - [x] **D1.30** — Institution CQS 2 "UK deviation" corrected across 8 doc files. PDF verification: UK onshored CRR Art. 120 Table 3 (crr.pdf p.119) = **50%**; PRA PS1/26 Art. 120 Table 3 (ps126app1.pdf p.40) = **30%**. The 30% is a Basel 3.1 ECRA change, not a pre-existing UK CRR deviation. Files fixed: `crr.md` (50%), `institution.md` (CRR/B31 columns + code warning + Example 1), `sa-risk-weights.md` (removed UK Deviation admonition, single 50% column, code divergence warning, CRR-A4/B31-A3 scenarios, MDB comparison note), `regulatory-tables.md` (CRR=50%, code divergence warning), `input-schemas.md` (removed UK deviation footnote), `regulatory/index.md` (CRR vs B31 ECRA table), `basel31.md` (added "Change from CRR" column), `implementation-plan.md` (CRR-A4 RW 30%→50%, B31-A4 basis). `key-differences.md` was already correct. Code bug filed as D3.17. (2026-04-09)
+- [x] **D2.1** — Created `docs/specifications/basel31/` with 10 dedicated spec files + index. Covers all 12 B31 test groups (B31-A through B31-M, 90 scenarios, 212 tests): `sa-risk-weights.md`, `firb-calculation.md`, `airb-calculation.md`, `credit-risk-mitigation.md`, `slotting-approach.md`, `output-floor.md`, `provisions.md`, `defaulted-exposures.md`, `equity-approach.md`, `model-permissions.md`. Each includes requirements status tables, regulatory article references, risk weight/parameter tables, formulas, key scenarios with expected outcomes, and acceptance test pass rates. `zensical.toml` nav updated with "Basel 3.1 Framework" section (11 nav entries). `specifications/index.md` updated with B31 table (10 specs + regulatory references + test groups) and B31-K/L/M scenario ID prefixes. CCF changes documented within CRR `credit-conversion-factors.md` (comparison tables already present). Supporting factors not applicable (removed under B31). Docs build validated — all 10 pages render correctly. (2026-04-09)
 
 ---
 

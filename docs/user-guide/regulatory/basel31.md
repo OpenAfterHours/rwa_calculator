@@ -79,17 +79,29 @@ PD floors vary by exposure class instead of a uniform 0.03%:
 
 ### 5. A-IRB LGD Floors
 
-New minimum LGD values for Advanced IRB:
+New minimum LGD values for Advanced IRB. Corporate and retail floors are defined separately:
+
+**Corporate / Institution (Art. 161(5)):**
 
 | Collateral Type | LGD Floor |
 |-----------------|-----------|
-| Unsecured - Senior | 25% |
-| Unsecured - Subordinated | 50% |
+| Unsecured | 25% |
 | Secured - Financial Collateral | 0% |
 | Secured - Receivables | 10%* |
 | Secured - Commercial Real Estate | 10%* |
-| Secured - Residential Real Estate | 5%* |
+| Secured - Residential Real Estate | 10%* |
 | Secured - Other Physical | 15%* |
+
+!!! note "No senior/subordinated distinction"
+    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures (both senior and subordinated). The 50% floor applies only to retail QRRE unsecured (Art. 164(4)(b)(i)), not corporate subordinated debt.
+
+**Retail (Art. 164(4)):**
+
+| Exposure Type | LGD Floor |
+|---------------|-----------|
+| Secured by residential RE | 5% |
+| QRRE unsecured | 50% |
+| Other unsecured retail | 30% |
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 

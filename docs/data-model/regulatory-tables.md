@@ -324,15 +324,26 @@ HVCRE has **higher** risk weights than standard specialised lending.
 
 Under CRR, A-IRB has no LGD floors. Basel 3.1 introduces LGD floors:
 
+**Corporate / Institution (Art. 161(5)):**
+
 | Collateral Type | LGD Floor |
 |-----------------|-----------|
-| Unsecured senior | 25% |
-| Unsecured subordinated | 50% |
+| Unsecured | 25% |
 | Financial collateral | 0% |
 | Receivables | 10% |
 | Commercial real estate | 10% |
-| Residential real estate | 5% |
+| Residential real estate | 10% |
 | Other physical | 15% |
+
+Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordinated distinction.
+
+**Retail (Art. 164(4)):**
+
+| Exposure Type | LGD Floor |
+|---------------|-----------|
+| Secured by residential RE | 5% |
+| QRRE unsecured | 50% |
+| Other unsecured retail | 30% |
 
 ---
 

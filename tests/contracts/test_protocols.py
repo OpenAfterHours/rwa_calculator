@@ -168,6 +168,13 @@ class StubResultExporter:
     ) -> ExportResult:
         return ExportResult(format="corep_excel")
 
+    def export_to_pillar3(
+        self,
+        response: object,
+        output_path: Path,
+    ) -> ExportResult:
+        return ExportResult(format="pillar3_excel")
+
 
 class TestProtocolCompliance:
     """Tests that stub implementations satisfy protocols."""
@@ -341,6 +348,13 @@ class TestResultExporterProtocol:
         assert isinstance(result, ExportResult)
         assert result.format == "corep_excel"
 
+    def test_export_to_pillar3_returns_export_result(self):
+        """export_to_pillar3 should return ExportResult."""
+        exporter = StubResultExporter()
+        result = exporter.export_to_pillar3(None, Path("/tmp"))
+        assert isinstance(result, ExportResult)
+        assert result.format == "pillar3_excel"
+
     def test_missing_export_to_corep_fails_isinstance(self):
         """Class without export_to_corep should not satisfy protocol."""
 
@@ -353,6 +367,9 @@ class TestResultExporterProtocol:
 
             def export_to_excel(self, response, output_path):
                 return ExportResult(format="excel")
+
+            def export_to_pillar3(self, response, output_path):
+                return ExportResult(format="pillar3_excel")
 
         assert not isinstance(IncompleteExporter(), ResultExporterProtocol)
 

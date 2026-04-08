@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P2.2d C 08.07 / OF 08.07 IRB scope of use template implemented)
-**Current version:** 0.1.163 | **Test suite:** 4,533 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.4, P2.10, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**Last updated:** 2026-04-08 (P3.1 Pillar III disclosure framework implemented — 9 templates)
+**Current version:** 0.1.164 | **Test suite:** 4,640 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.4, P2.10, P3.1, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.2b/P2.2c/P2.2d/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.2b/P2.2c/P2.2d/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -217,11 +217,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 ## Priority 3 -- Pillar III Disclosures
 
 ### P3.1 Pillar III disclosure code
-- **Status:** [ ] Not started -- no code exists in `src/`, no `reporting/pillar3/` directory
-- **Impact:** 9 disclosure templates specified: OV1, CR4, CR5, CR6, CR6-A, CR7, CR7-A, CR8, CR10. Full column/row definitions in `docs/features/pillar3-disclosures.md` with CRR (UK prefix) and Basel 3.1 (UKB prefix) variants.
-- **Spec ref:** `docs/specifications/output-reporting.md`, `docs/features/pillar3-disclosures.md`
-- **Fix:** Create `src/rwa_calc/reporting/pillar3/` package with generator, templates, and protocol. Add to `ResultExporterProtocol`.
-- **Tests needed:** Unit tests for each template. Acceptance tests.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** All 9 disclosure templates implemented: OV1, CR4, CR5, CR6, CR6-A, CR7, CR7-A, CR8, CR10. Full CRR (UK prefix) and Basel 3.1 (UKB prefix) framework switching via selector functions.
+- **Implementation:**
+  - **Package:** `src/rwa_calc/reporting/pillar3/` — three-layer architecture mirroring COREP pattern: `templates.py` (column/row definitions, framework selectors), `generator.py` (Pillar3Generator, Pillar3TemplateBundle), `__init__.py` (public exports).
+  - **Templates:** `templates.py` defines P3Column/P3Row frozen dataclasses, SA_DISCLOSURE_CLASSES (16 Art. 112 mappings), IRB_EXPOSURE_CLASSES (8 mappings), CR6_PD_RANGES (17 fixed buckets), CR10_SLOTTING_ROWS (6), plus all CRR/B31 column/row variants. 13 framework selector functions (`get_ov1_rows`, `get_cr4_columns`, `get_cr5_columns`, etc.).
+  - **Generator:** Stateless `Pillar3Generator` class with `generate(response)` → `Pillar3TemplateBundle` and `generate_from_lazyframe(results, *, framework)` for direct LazyFrame input. `export_to_excel(bundle, output_path)` → `ExportResult`. Templates: OV1 (RWA by approach + 8% own funds), CR4 (SA exposure class breakdown), CR5 (risk weight bucket allocation), CR6 (per-IRB-class PD range breakdown), CR6-A (IRB/SA scope split), CR7 (pre/post credit derivative RWEA), CR7-A (per-approach CRM coverage), CR8 (flow statement), CR10 (per-SL-type slotting breakdown).
+  - **Integration:** `ResultExporterProtocol.export_to_pillar3()` added to protocols.py. `ResultExporter.export_to_pillar3()` wired in `api/export.py`. `reporting/__init__.py` updated with Pillar3 exports.
+  - **Known approximations:** CR7 pre-credit-derivative RWEA approximated as equal to post-CD (pipeline doesn't track pre-CRM RWA separately). CR8 flow statement only populates closing balance (historical data not available from single pipeline run).
+- **Spec ref:** `docs/specifications/output-reporting.md`, `docs/features/pillar3-disclosures.md`, CRR Part 8 Art. 438, 444, 452, 453
+- **Tests:** 106 new tests in `tests/unit/test_pillar3.py` across 14 test classes: TestTemplateDefinitions (38), TestFrameworkSelectors (13), TestPillar3Bundle (2), TestOV1Generation (7), TestCR4Generation (7), TestCR5Generation (6), TestCR6Generation (8), TestCR6AGeneration (4), TestCR7Generation (4), TestCR7AGeneration (4), TestCR8Generation (4), TestCR10Generation (6), TestGeneratorEndToEnd (5), TestExcelExport (2). Contract tests updated (StubResultExporter, protocol compliance). All 4,640 tests pass.
 
 ### P3.2 UKB CR9 / CR9.1 (PD back-testing) missing from spec and plan
 - **Status:** [ ] Not in spec -- mandatory Basel 3.1 template

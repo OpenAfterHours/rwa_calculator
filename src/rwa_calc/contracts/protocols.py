@@ -728,3 +728,32 @@ class ResultExporterProtocol(Protocol):
             ExportResult with the written file path and row count
         """
         ...
+
+    def export_to_pillar3(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """
+        Export results as Pillar III public disclosure templates.
+
+        Generates 9 quantitative credit risk templates (OV1, CR4, CR5,
+        CR6, CR6-A, CR7, CR7-A, CR8, CR10) in a multi-sheet Excel
+        workbook following CRR Part 8 / Disclosure (CRR) Part structure.
+
+        Why: CRR firms must publish Pillar III disclosures for market
+        transparency. CRR templates use the UK prefix; Basel 3.1
+        templates use UKB prefix.
+
+        References:
+            - CRR Part 8 (Art. 438, 444, 452, 453)
+            - PRA PS1/26 Disclosure (CRR) Part
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+        """
+        ...

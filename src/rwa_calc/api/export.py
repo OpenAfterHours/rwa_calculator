@@ -276,3 +276,15 @@ class ResultExporter:
         generator = COREPGenerator()
         bundle = generator.generate(response)
         return generator.export_to_excel(bundle, output_path)
+
+    def export_to_pillar3(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """Export results as Pillar III public disclosure templates."""
+        from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+
+        generator = Pillar3Generator()
+        bundle = generator.generate(response)
+        return generator.export_to_excel(bundle, output_path)

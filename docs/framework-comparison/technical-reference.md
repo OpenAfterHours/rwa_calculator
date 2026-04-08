@@ -20,7 +20,7 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 | Output Floor | None | 72.5% of SA | PRA PS1/26 |
 | PD Floor | 0.03% (all classes) | Differentiated | CRE30.55 |
 | A-IRB LGD Floors | None | Yes (by collateral type) | CRE30.41 |
-| Slotting Risk Weights | Maturity-differentiated | HVCRE + PF pre-op differentiated | PRA PS1/26 |
+| Slotting Risk Weights | Maturity-differentiated | HVCRE-differentiated (no pre-op distinction) | PRA PS1/26 |
 
 ## Differentiated PD Floors (Basel 3.1)
 
@@ -149,9 +149,9 @@ Currency mismatch haircut remains 8% under both frameworks (CRR Art. 224 / CRE22
 
 ## Slotting Risk Weights (Basel 3.1)
 
-Basel 3.1 (BCBS CRE33) introduces three distinct slotting weight tables:
+PRA PS1/26 Art. 153(5) Table A defines two slotting weight tables — non-HVCRE and HVCRE:
 
-### Non-HVCRE Operational (OF, CF, IPRE, PF Operational)
+### Non-HVCRE (OF, CF, PF, IPRE)
 
 | Category | Risk Weight |
 |----------|-------------|
@@ -161,15 +161,13 @@ Basel 3.1 (BCBS CRE33) introduces three distinct slotting weight tables:
 | Weak | 250% |
 | Default | 0% (EL) |
 
-### Project Finance Pre-Operational
-
-| Category | Risk Weight |
-|----------|-------------|
-| Strong | 80% |
-| Good | 100% |
-| Satisfactory | 120% |
-| Weak | 350% |
-| Default | 0% (EL) |
+!!! warning "PRA Deviation from BCBS — No Pre-Operational PF Slotting Table"
+    BCBS CRE33.6 Table 6 defines separate elevated slotting weights for pre-operational
+    project finance (Strong 80%, Good 100%, Satisfactory 120%, Weak 350%). **PRA PS1/26
+    does not adopt this distinction** — all project finance uses the standard non-HVCRE
+    table regardless of operational status. The pre-operational / operational distinction
+    only applies under the SA approach (Art. 122B(2)(c): 130% pre-op, 100% operational,
+    80% high-quality operational).
 
 ### HVCRE
 

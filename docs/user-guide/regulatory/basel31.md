@@ -411,16 +411,22 @@ Basel 3.1 restructures CRM methods with clearer names and applicability:
 
 ## Specialised Lending
 
-Slotting remains available with updated risk weights:
+Slotting remains available with updated risk weights (PRA PS1/26 Art. 153(5) Table A):
 
 | Category | Strong | Good | Satisfactory | Weak | Default |
 |----------|--------|------|--------------|------|---------|
-| Project Finance (Pre-Operational) | 80% | 100% | 120% | 350% | 0% (EL) |
-| Project Finance (Operational) | 70% | 90% | 115% | 250% | 0% (EL) |
+| Project Finance | 70% | 90% | 115% | 250% | 0% (EL) |
 | Object Finance | 70% | 90% | 115% | 250% | 0% (EL) |
 | Commodities Finance | 70% | 90% | 115% | 250% | 0% (EL) |
 | IPRE | 70% | 90% | 115% | 250% | 0% (EL) |
 | HVCRE | 95% | 120% | 140% | 250% | 0% (EL) |
+
+!!! warning "PRA Deviation from BCBS — No Pre-Operational PF Slotting Distinction"
+    BCBS CRE33.6 Table 6 defines separate elevated slotting weights for pre-operational
+    project finance (Strong 80%, Good 100%, Satisfactory 120%, Weak 350%). **PRA PS1/26
+    does not adopt this distinction** — all project finance uses the standard non-HVCRE
+    table regardless of operational status. The pre-operational / operational distinction
+    only applies under the SA approach (Art. 122B(2)(c)) shown below.
 
 ### SA Specialised Lending (Art. 122A-122B)
 

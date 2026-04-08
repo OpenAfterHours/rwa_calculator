@@ -525,13 +525,20 @@ Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):
 
 ### Project Finance
 
-| Category | CRR (≥2.5yr) | CRR (<2.5yr) | Basel 3.1 (Pre-Op) | Basel 3.1 (Operational) |
-|----------|--------------|--------------|---------------------|------------------------|
-| Strong | 70% | 50% | **80%** | 70% |
-| Good | 90% | 70% | **100%** | 90% |
-| Satisfactory | 115% | 115% | **120%** | 115% |
-| Weak | 250% | 250% | **350%** | 250% |
-| Default | 0% | 0% | 0% (EL) | 0% (EL) |
+| Category | CRR (≥2.5yr) | CRR (<2.5yr) | Basel 3.1 |
+|----------|--------------|--------------|-----------|
+| Strong | 70% | 50% | 70% |
+| Good | 90% | 70% | 90% |
+| Satisfactory | 115% | 115% | 115% |
+| Weak | 250% | 250% | 250% |
+| Default | 0% | 0% | 0% (EL) |
+
+!!! warning "PRA Deviation from BCBS — No Pre-Operational PF Slotting Distinction"
+    BCBS CRE33.6 Table 6 defines separate elevated slotting weights for pre-operational
+    project finance (Strong 80%, Good 100%, Satisfactory 120%, Weak 350%). **PRA PS1/26
+    does not adopt this distinction** — all project finance uses the standard non-HVCRE
+    Table A (Art. 153(5)) regardless of operational status. The pre-operational / operational
+    distinction only applies under the SA approach (Art. 122B(2)(c)).
 
 ### Other Specialised Lending (OF, CF, IPRE)
 

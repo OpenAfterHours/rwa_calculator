@@ -441,9 +441,19 @@ Non-regulatory real estate (doesn't meet Art. 124A requirements):
 
 | Treatment | Risk Weight | Condition |
 |-----------|-------------|-----------|
-| Investment-grade corporate (CRE20.44) | 65% | Unrated, investment-grade designation |
-| SME corporate (CRE20.47) | 85% | SME qualifying corporate (replaces CRR 100% + 0.7619 SF) |
+| Investment-grade corporate (Art. 122(6)(a)) | 65% | Unrated, institution IG assessment, requires PRA permission |
+| Non-investment-grade corporate (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, requires PRA permission |
+| SME corporate (Art. 122(11)) | 85% | SME qualifying corporate (replaces CRR 100% + 0.7619 SF) |
 | Subordinated debt (CRE20.49) | 150% | Overrides all other treatments |
+
+!!! note "PRA Permission Required for Investment Grade Assessment (Art. 122(6)–(10))"
+    The 65%/135% split requires **prior PRA permission** and demonstration of sound credit
+    risk management practices (Art. 122(6)). Without permission, all unrated non-SME corporates
+    receive **100%** (Art. 122(5)). The investment grade definition (Art. 122(9)) requires
+    adequate capacity to meet financial commitments, robust against adverse economic cycles —
+    this is the institution's own internal assessment (Art. 122(10)), not an external rating.
+    SME corporates (Art. 122(11)) receive **85%** regardless of IG status. For IRB output
+    floor S-TREA (Art. 122(8)), firms may elect the 65%/135% split instead of flat 100%.
 
 ## Basel 3.1 Institution Exposures (CRE20.16-21)
 
@@ -566,8 +576,9 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
 - **SCRA enhanced Grade A** (CRE20.19): 30% for CET1 ≥ 14% and leverage ratio ≥ 5% — Done
 - **SCRA short-term maturity** (CRE20.20): Grade A/A_ENHANCED 20%, Grade B 50% for ≤3m exposures — Done
-- **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done
-- **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
+- **Investment-grade corporates** (Art. 122(6)(a)): 65% for unrated investment-grade (PRA permission required) — Done
+- **Non-investment-grade corporates** (Art. 122(6)(b)): 135% for unrated non-IG (PRA permission required) — Done
+- **SME corporate** (Art. 122(11)): 85% flat weight, replaces CRR 100% + supporting factor — Done
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Done

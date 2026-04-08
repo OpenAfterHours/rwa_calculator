@@ -266,12 +266,19 @@ flooring to SA. They persist until the model non-compliance is remediated.
 !!! note "PRA vs BCBS Deviation for CQS 5"
     BCBS CRE20.42 reduced CQS 5 from 150% to 100%. However, PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**. The PRA did not adopt this reduction.
 
-#### New Basel 3.1 Corporate Sub-Categories (CRE20.47-49)
+#### New Basel 3.1 Corporate Sub-Categories (Art. 122(6)–(11))
 
 | Sub-Category | Basel 3.1 RW | Criteria |
 |-------------|-------------|----------|
-| Investment Grade | **65%** | Publicly traded + investment grade rating |
-| SME Corporate | **85%** | Turnover ≤ EUR 50m, unrated |
+| Investment Grade (Art. 122(6)(a)) | **65%** | Unrated, institution IG assessment, PRA permission required |
+| Non-Investment Grade (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, PRA permission required |
+| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ EUR 50m, unrated |
+
+!!! note "PRA Permission Required"
+    The 65%/135% investment grade split requires **prior PRA permission** (Art. 122(6)).
+    Without permission, all unrated non-SME corporates receive 100% (Art. 122(5)).
+    Investment grade is assessed by the institution's own internal credit assessment
+    (Art. 122(9)–(10)), not by external ratings. SME corporates receive 85% regardless.
 
 ### Institution Exposures
 

@@ -358,44 +358,33 @@ def _(mo):
 
 
 @app.cell
-def _(WB_STYLES, current_folder, mo, set_current_folder):
+def _(WB_STYLES, current_folder, mo):
     _safe = WB_STYLES.replace("{", "{{").replace("}", "}}")
 
+    _header = mo.Html(
+        _safe
+        + '<div class="wb-page"><div class="wb-section">'
+        + "<h2>\U0001f4c1 My Workbooks</h2>"
+        + "</div></div>"
+    )
+
     if current_folder():
-        _back_btn = mo.ui.button(
-            label="\u2190 All workbooks",
-            on_click=lambda _: set_current_folder(""),
-        )
-        _breadcrumb = mo.Html(
-            _safe
-            + '<div class="wb-page"><div class="wb-breadcrumbs">'
-            + "{back}"
-            + f'<span class="wb-breadcrumbs-label">/ {current_folder()}</span>'
-            + "</div></div>"
-        ).batch(back=_back_btn)
+        breadcrumb_back = mo.ui.run_button(label="\u2190 All workbooks")
         mo.output.replace(
             mo.vstack(
                 [
-                    mo.Html(
-                        _safe
-                        + '<div class="wb-page"><div class="wb-section">'
-                        + "<h2>\U0001f4c1 My Workbooks</h2>"
-                        + "</div></div>"
+                    _header,
+                    mo.hstack(
+                        [breadcrumb_back, mo.md(f"/ **{current_folder()}**")],
+                        align="center",
                     ),
-                    _breadcrumb,
                 ]
             )
         )
     else:
-        mo.output.replace(
-            mo.Html(
-                _safe
-                + '<div class="wb-page"><div class="wb-section">'
-                + "<h2>\U0001f4c1 My Workbooks</h2>"
-                + "</div></div>"
-            )
-        )
-    return
+        breadcrumb_back = None
+        mo.output.replace(_header)
+    return (breadcrumb_back,)
 
 
 # ---------------------------------------------------------------------------
@@ -413,9 +402,6 @@ def _(
     datetime,
     mo,
     refresh_trigger,
-    set_current_folder,
-    set_pending_delete,
-    set_pending_move,
 ):
     refresh_trigger  # noqa: B018 — reactive dependency
 
@@ -439,86 +425,115 @@ def _(
     )
 
     if _folders or _files:
-        _buttons = {}
-        _card_html = []
+        # Build buttons in a mo.ui.dictionary for reliable reactivity
+        # (.batch() does not propagate interactions to downstream cells)
+        _btn_elements: dict[str, object] = {}
+        _btn_meta: dict[str, tuple[str, object]] = {}
+        _cards: list[object] = []
 
         # Folder cards
         for _di, _d in enumerate(_folders):
             _py_count = len([f for f in _d.glob("*.py") if f.stem != "__init__"])
             _open_key = f"folder_open_{_di}"
             _del_key = f"folder_del_{_di}"
-            _buttons[_open_key] = mo.ui.button(
-                label="Open \u2192",
-                on_click=lambda _, fname=_d.name: set_current_folder(fname),
+            _btn_elements[_open_key] = mo.ui.button(
+                label="Open \u2192", on_click=lambda v: (v or 0) + 1
             )
-            _buttons[_del_key] = mo.ui.button(
-                label="\U0001f5d1\ufe0f",
-                on_click=lambda _, n=_d.name: set_pending_delete(f"__folder__:{n}"),
-                kind="danger",
+            _btn_elements[_del_key] = mo.ui.button(
+                label="\U0001f5d1\ufe0f", on_click=lambda v: (v or 0) + 1, kind="danger"
             )
-            _card_html.append(
-                f'<div class="wb-card wb-card-folder">'
-                f'  <div class="wb-card-delete">{{{_del_key}}}</div>'
-                f'  <div class="wb-card-icon">\U0001f4c1</div>'
-                f"  <h3>{_d.name}</h3>"
-                f'  <span class="wb-card-desc">{_py_count} workbook(s)</span>'
-                f'  <div class="wb-card-actions">{{{_open_key}}}</div>'
-                f"</div>"
+            _btn_meta[_open_key] = ("open_folder", _d.name)
+            _btn_meta[_del_key] = ("delete_folder", _d.name)
+
+        for _i, _f in enumerate(_files):
+            _del_key = f"btn_{_i}"
+            _move_key = f"move_{_i}"
+            _pub_key = f"pub_{_i}"
+            _cf = current_folder()
+            _btn_elements[_del_key] = mo.ui.button(
+                label="\U0001f5d1\ufe0f", on_click=lambda v: (v or 0) + 1, kind="danger"
+            )
+            _btn_elements[_move_key] = mo.ui.button(label="Move", on_click=lambda v: (v or 0) + 1)
+            _btn_elements[_pub_key] = mo.ui.button(label="Publish", on_click=lambda v: (v or 0) + 1)
+            _btn_meta[_del_key] = (
+                "delete_file",
+                f"{_cf}/{_f.stem}" if _cf else _f.stem,
+            )
+            _btn_meta[_move_key] = (
+                "move_file",
+                (f"{_cf}/{_f.stem}.py" if _cf else f"{_f.stem}.py", _f.stem),
+            )
+            _btn_meta[_pub_key] = (
+                "publish_file",
+                (
+                    f"__publish__:{_cf}/{_f.stem}" if _cf else f"__publish__:{_f.stem}",
+                    _f.stem,
+                ),
             )
 
-        # File cards
+        wb_actions = mo.ui.dictionary(_btn_elements)
+        wb_action_meta = _btn_meta
+
+        # Build card display using dictionary buttons
+        for _di, _d in enumerate(_folders):
+            _py_count = len([f for f in _d.glob("*.py") if f.stem != "__init__"])
+            _cards.append(
+                mo.callout(
+                    mo.vstack(
+                        [
+                            mo.md(f"\U0001f4c1 **{_d.name}**"),
+                            mo.md(f"_{_py_count} workbook(s)_"),
+                            mo.hstack(
+                                [
+                                    wb_actions[f"folder_open_{_di}"],
+                                    wb_actions[f"folder_del_{_di}"],
+                                ]
+                            ),
+                        ]
+                    ),
+                    kind="info",
+                )
+            )
+
         _cf = current_folder()
         for _i, _f in enumerate(_files):
             _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
-            _del_btn_key = f"btn_{_i}"
-            _move_btn_key = f"move_{_i}"
-            _pub_btn_key = f"pub_{_i}"
-            _buttons[_del_btn_key] = mo.ui.button(
-                label="\U0001f5d1\ufe0f",
-                on_click=lambda _, n=_f.stem, cf=_cf: set_pending_delete(f"{cf}/{n}" if cf else n),
-                kind="danger",
+            _rel = f"local/{_cf}/{_f.name}" if _cf else f"local/{_f.name}"
+            _edit_link = mo.md(
+                f"[Open in Editor \u2192](http://localhost:{EDIT_PORT}/?file={_rel})"
             )
-            _buttons[_move_btn_key] = mo.ui.button(
-                label="Move",
-                on_click=lambda _, n=_f.stem, cf=_cf: set_pending_move(
-                    (f"{cf}/{n}.py" if cf else f"{n}.py", n)
-                ),
-            )
-            _buttons[_pub_btn_key] = mo.ui.button(
-                label="Publish",
-                on_click=lambda _, n=_f.stem, cf=_cf: set_pending_move(
-                    (f"__publish__:{cf}/{n}" if cf else f"__publish__:{n}", n)
-                ),
-            )
-            _rel = f"local/{current_folder()}/{_f.name}" if current_folder() else f"local/{_f.name}"
-            _card_html.append(
-                f'<div class="wb-card">'
-                f'  <div class="wb-card-delete">{{{_del_btn_key}}}</div>'
-                f'  <div class="wb-card-icon">\U0001f4d3</div>'
-                f"  <h3>{_f.stem}</h3>"
-                f'  <span class="wb-card-desc">Python workbook</span>'
-                f'  <span class="wb-card-meta">Modified {_mod_time:%Y-%m-%d %H:%M}</span>'
-                f'  <div class="wb-card-actions">'
-                f'    <a href="http://localhost:{EDIT_PORT}/?file={_rel}"'
-                f'       class="wb-card-action">Open in Editor \u2192</a>'
-                f"    {{{_move_btn_key}}} {{{_pub_btn_key}}}"
-                f"  </div>"
-                f"</div>"
+            _cards.append(
+                mo.callout(
+                    mo.vstack(
+                        [
+                            mo.md(f"\U0001f4d3 **{_f.stem}**"),
+                            mo.md(f"_Modified {_mod_time:%Y-%m-%d %H:%M}_"),
+                            mo.hstack(
+                                [
+                                    _edit_link,
+                                    wb_actions[f"move_{_i}"],
+                                    wb_actions[f"pub_{_i}"],
+                                    wb_actions[f"btn_{_i}"],
+                                ]
+                            ),
+                        ]
+                    ),
+                    kind="neutral",
+                )
             )
 
-        _safe_styles = WB_STYLES.replace("{", "{{").replace("}", "}}")
-        wb_card_grid = mo.Html(
-            _safe_styles
-            + '<div class="wb-page"><div class="wb-grid">\n'
-            + "\n".join(_card_html)
-            + "\n</div></div>"
-        ).batch(**_buttons)
-        _listing = wb_card_grid
+        # Arrange cards in rows of 3
+        _rows = []
+        for _start in range(0, len(_cards), 3):
+            _rows.append(mo.hstack(_cards[_start : _start + 3], widths="equal"))
+        mo.output.replace(mo.Html(WB_STYLES) if not _rows else mo.vstack(_rows))
     else:
-        wb_card_grid = None
-        _listing = mo.Html(
-            WB_STYLES
-            + """
+        wb_actions = mo.ui.dictionary({})
+        wb_action_meta = {}
+        mo.output.replace(
+            mo.Html(
+                WB_STYLES
+                + """
 <div class="wb-page">
   <div class="wb-empty">
     <div class="wb-empty-icon">\U0001f4d3</div>
@@ -528,9 +543,49 @@ def _(
   </div>
 </div>
 """
+            )
         )
-    mo.output.replace(_listing)
-    return (wb_card_grid,)
+    return wb_action_meta, wb_actions
+
+
+# ---------------------------------------------------------------------------
+# Card grid + breadcrumb button handler
+# ---------------------------------------------------------------------------
+# .batch() does not propagate interactions to downstream cells (marimo #6435).
+# We use mo.ui.dictionary instead — interacting with any child element
+# automatically re-executes cells that reference the dictionary.
+
+
+@app.cell
+def _(
+    breadcrumb_back,
+    mo,
+    set_current_folder,
+    set_pending_delete,
+    set_pending_move,
+    wb_action_meta,
+    wb_actions,
+):
+    # Handle back button in breadcrumb (plain mo.ui.button, not in batch)
+    if breadcrumb_back is not None and breadcrumb_back.value:
+        set_current_folder("")
+        mo.stop(True)
+
+    # Handle card grid buttons from mo.ui.dictionary
+    _vals = wb_actions.value
+    for _key, _count in _vals.items():
+        if _count and _key in wb_action_meta:
+            _action, _data = wb_action_meta[_key]
+            if _action == "open_folder":
+                set_current_folder(_data)
+            elif _action == "delete_folder":
+                set_pending_delete(f"__folder__:{_data}")
+            elif _action == "delete_file":
+                set_pending_delete(_data)
+            elif _action in ("move_file", "publish_file"):
+                set_pending_move(_data)
+            break
+    return
 
 
 # ---------------------------------------------------------------------------
@@ -686,6 +741,10 @@ def _(Path, cancel_btn, confirm_btn, mo, pending_delete, set_pending_delete, set
 
 @app.cell
 def _(Path, SKIP_DIRS, mo, pending_move, set_pending_move, set_refresh):
+    move_cancel_btn = None
+    move_confirm_btn = None
+    move_dropdown = None
+
     mo.stop(pending_move() is None)
 
     _source_path, _source_name = pending_move()
@@ -705,16 +764,18 @@ def _(Path, SKIP_DIRS, mo, pending_move, set_pending_move, set_refresh):
             set_refresh(lambda n: n + 1)
             set_pending_move(None)
             _rel = f"team/{_dest.name}"
-            mo.callout(
-                mo.md(
-                    f"Published **{_source_name}** to team workspace. "
-                    f"[Open in Editor](http://localhost:8002/?file={_rel})"
-                ),
-                kind="success",
+            mo.output.replace(
+                mo.callout(
+                    mo.md(
+                        f"Published **{_source_name}** to team workspace. "
+                        f"[Open in Editor](http://localhost:8002/?file={_rel})"
+                    ),
+                    kind="success",
+                )
             )
         else:
             set_pending_move(None)
-            mo.callout(mo.md(f"Source not found: {_pub_rel}"), kind="danger")
+            mo.output.replace(mo.callout(mo.md(f"Source not found: {_pub_rel}"), kind="danger"))
     else:
         # Move dialog — show folder dropdown
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
@@ -730,43 +791,47 @@ def _(Path, SKIP_DIRS, mo, pending_move, set_pending_move, set_refresh):
         )
         move_confirm_btn = mo.ui.run_button(label="Move")
         move_cancel_btn = mo.ui.run_button(label="Cancel")
-        mo.callout(
-            mo.vstack(
-                [
-                    mo.md(f"Move **{_source_name}** to:"),
-                    mo.hstack([move_dropdown, move_confirm_btn, move_cancel_btn], gap=1),
-                ]
-            ),
-            kind="info",
+        mo.output.replace(
+            mo.callout(
+                mo.vstack(
+                    [
+                        mo.md(f"Move **{_source_name}** to:"),
+                        mo.hstack([move_dropdown, move_confirm_btn, move_cancel_btn], gap=1),
+                    ]
+                ),
+                kind="info",
+            )
         )
-    return
+    return move_cancel_btn, move_confirm_btn, move_dropdown
 
 
 @app.cell
-def _(Path, mo, pending_move, set_pending_move, set_refresh):
+def _(
+    Path,
+    mo,
+    move_cancel_btn,
+    move_confirm_btn,
+    move_dropdown,
+    pending_move,
+    set_pending_move,
+    set_refresh,
+):
     mo.stop(pending_move() is None)
+    mo.stop(move_confirm_btn is None)
 
     _source_path, _source_name = pending_move()
     # Skip publish actions (handled above)
     mo.stop(_source_path.startswith("__publish__:"))
 
-    # Check for the move UI elements in the namespace
-    try:
-        _move_confirm = move_confirm_btn  # noqa: F821
-        _move_cancel = move_cancel_btn  # noqa: F821
-        _move_dropdown = move_dropdown  # noqa: F821
-    except NameError:
-        mo.stop(True)
+    mo.stop(not move_confirm_btn.value and not move_cancel_btn.value)
 
-    mo.stop(not _move_confirm.value and not _move_cancel.value)
-
-    if _move_cancel.value:
+    if move_cancel_btn.value:
         set_pending_move(None)
         mo.callout(mo.md("Move cancelled."), kind="info")
-    elif _move_confirm.value:
+    elif move_confirm_btn.value:
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
         _src = _ws_dir / _source_path
-        _dest_folder = _move_dropdown.value
+        _dest_folder = move_dropdown.value
         _dest_dir = _ws_dir if _dest_folder == "(root)" else _ws_dir / _dest_folder
         _dest = _dest_dir / _src.name
         if _dest.exists():
@@ -822,10 +887,11 @@ def _(EDIT_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
     # Get git status for team files
     _git_statuses: dict[str, str] = {}
     try:
-        from rwa_calc.ui.marimo.git_ops import find_repo_root, get_status
+        from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
+        from rwa_calc.ui.marimo.git_ops import get_status as _get_status
 
-        _repo_root = find_repo_root(_team_dir)
-        for _s in get_status(_team_dir, _repo_root):
+        _repo_root = _find_repo_root(_team_dir)
+        for _s in _get_status(_team_dir, _repo_root):
             _key = f"{_s.folder}/{_s.name}" if _s.folder else _s.name
             _git_statuses[_key] = _s.status
     except Exception:
@@ -909,16 +975,17 @@ def _(Path, commit_btn, mo):
 
     _team_dir = Path(__file__).parent / "workspaces" / "team"
     try:
-        from rwa_calc.ui.marimo.git_ops import commit_and_push, find_repo_root
+        from rwa_calc.ui.marimo.git_ops import commit_and_push as _commit_and_push
+        from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
 
-        _repo_root = find_repo_root(_team_dir)
+        _repo_root = _find_repo_root(_team_dir)
         _files = [f for f in _team_dir.rglob("*.py") if f.stem != "__init__"]
         if not _files:
             mo.callout(mo.md("No workbooks to commit."), kind="info")
         else:
             _names = sorted({f.stem for f in _files})
             _message = f"workbench: update {', '.join(_names)}"
-            _result = commit_and_push(_team_dir, _repo_root, _files, _message)
+            _result = _commit_and_push(_team_dir, _repo_root, _files, _message)
             if _result.success:
                 mo.callout(mo.md(f"**{_result.message}**"), kind="success")
             else:
@@ -939,10 +1006,11 @@ def _(Path, mo, pull_btn, set_refresh):
 
     _team_dir = Path(__file__).parent / "workspaces" / "team"
     try:
-        from rwa_calc.ui.marimo.git_ops import find_repo_root, pull
+        from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
+        from rwa_calc.ui.marimo.git_ops import pull as _pull
 
-        _repo_root = find_repo_root(_team_dir)
-        _result = pull(_repo_root)
+        _repo_root = _find_repo_root(_team_dir)
+        _result = _pull(_repo_root)
         set_refresh(lambda n: n + 1)
         if _result.success:
             mo.callout(mo.md(f"**{_result.message}**"), kind="success")

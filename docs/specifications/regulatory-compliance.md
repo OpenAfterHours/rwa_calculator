@@ -31,7 +31,7 @@
 | CRE32.9–12 | Overcollateralisation (carried forward) | Done |
 | CRE32 | A-IRB LGD floors | Done |
 | — | Differentiated PD floors | Done |
-| — | Output floor (50%–72.5% phase-in) | Done |
+| — | Output floor (60%–72.5% phase-in) | Done |
 | — | Removal of 1.06 scaling factor | Done |
 | — | Removal of SME supporting factor | Done |
 | — | Removal of equity IRB | Done |

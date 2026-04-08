@@ -1025,8 +1025,8 @@ class OutputAggregator:
 
         Final RWA = max(IRB RWA, SA RWA x floor_percentage).
 
-        Transitional phase-in: 50% (2027) → 55% (2028) → 60% (2029)
-        → 65% (2030) → 70% (2031) → 72.5% (2032+).
+        Transitional phase-in: 60% (2027) → 65% (2028) → 70% (2029)
+        → 72.5% (2030+). PRA 4-year schedule per Art. 92 para 5.
         """
 ```
 

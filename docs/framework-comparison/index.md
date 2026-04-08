@@ -1,7 +1,7 @@
 # CRR vs Basel 3.1
 
 UK firms transition from CRR to Basel 3.1 (PRA PS1/26) on 1 January 2027, with the output
-floor phasing in through 2032. This section brings together all framework comparison content
+floor phasing in through 2030. This section brings together all framework comparison content
 in one place.
 
 ## Why Basel 3.1?

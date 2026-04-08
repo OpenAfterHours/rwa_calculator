@@ -43,5 +43,5 @@ This appendix provides reference materials and supplementary information.
 |------|-------|
 | 31 Dec 2026 | CRR final effective date |
 | 1 Jan 2027 | Basel 3.1 effective date |
-| 2027-2032 | Output floor phase-in |
-| 1 Jan 2032 | Full 72.5% floor |
+| 2027-2030 | Output floor phase-in |
+| 1 Jan 2030 | Full 72.5% floor |

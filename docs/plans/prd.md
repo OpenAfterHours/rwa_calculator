@@ -69,7 +69,7 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 | **Regulatory Frameworks** | UK CRR (Basel 3.0) and UK Basel 3.1 (PRA PS1/26)                                                                                                   |
 | **Credit Risk Mitigation** | Collateral (9 types with supervisory haircuts), guarantees (substitution approach), provisions (drawn-first SA deduction, IRB EL shortfall/excess) |
 | **Supporting Factors** | CRR SME tiered factor (0.7619/0.85), infrastructure factor (0.75)                                                                                  |
-| **Output Floor** | Basel 3.1 output floor with transitional phase-in schedule (50%–72.5%, 2027–2032)                                                                  |
+| **Output Floor** | Basel 3.1 output floor with transitional phase-in schedule (60%–72.5%, 2027–2030)                                                                  |
 | **Multi-Currency** | FX conversion to configurable target currency with haircut adjustments                                                                             |
 | **Hierarchies** | Multi-level counterparty hierarchies (up to 10 levels) with rating inheritance; multi-level facility hierarchies with drawn aggregation            |
 | **Input Validation** | Non-blocking error accumulation with categorised error codes                                                                                       |
@@ -364,7 +364,7 @@ Input Data (Parquet/CSV/DataFrames)
 | CRE32.9–12 | Overcollateralisation (carried forward) | Done |
 | CRE32 | A-IRB LGD floors | Not Started |
 | — | Differentiated PD floors | Not Started |
-| — | Output floor (50%–72.5% phase-in) | Done |
+| — | Output floor (60%–72.5% phase-in) | Done |
 | — | Removal of 1.06 scaling factor | Done |
 | — | Removal of SME supporting factor | Done |
 | — | Removal of equity IRB | Done |
@@ -394,7 +394,7 @@ Input Data (Parquet/CSV/DataFrames)
 | M2.3 | Differentiated PD floors by exposure class | Not Started |
 | M2.4 | A-IRB LGD floors (CRE32) | Not Started |
 | M2.5 | Basel 3.1 acceptance tests | Not Started |
-| M2.6 | Output floor phase-in validation (2027–2032 schedule) | Partial (engine done, tests pending) |
+| M2.6 | Output floor phase-in validation (2027–2030 schedule) | Partial (engine done, tests pending) |
 
 ### v1.2 — Dual-Framework Comparison (Target: Q3 2026)
 

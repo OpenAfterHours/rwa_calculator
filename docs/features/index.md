@@ -43,7 +43,7 @@ This section provides an overview of all implemented features in the RWA calcula
 | **Pillar III Disclosures** | OV1, CR4, CR5, CR6, CR6-A, CR7, CR7-A, CR8, CR10 | [Feature Guide](pillar3-disclosures.md) |
 | **Dual-Framework Comparison** | Side-by-side CRR vs Basel 3.1 analysis with per-exposure delta joins | [Feature Guide](../framework-comparison/impact-analysis.md), [API](../api/engine.md#comparison-module) |
 | **Capital Impact Analysis** | 4-driver waterfall attribution (scaling, supporting, methodology, floor) | [Feature Guide](../framework-comparison/impact-analysis.md#capital-impact-analysis-m32), [API](../api/engine.md#comparison-module) |
-| **Transitional Floor Schedule** | Year-by-year output floor modelling from 50% (2027) to 72.5% (2032) | [Feature Guide](../framework-comparison/impact-analysis.md#transitional-floor-schedule-m33), [API](../api/engine.md#comparison-module) |
+| **Transitional Floor Schedule** | Year-by-year output floor modelling from 60% (2027) to 72.5% (2030) | [Feature Guide](../framework-comparison/impact-analysis.md#transitional-floor-schedule-m33), [API](../api/engine.md#comparison-module) |
 
 ## Dual-Framework Support
 

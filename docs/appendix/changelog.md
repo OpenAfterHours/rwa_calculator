@@ -5,6 +5,14 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.176] — 2026-04-08
+
+### Fixed
+- **Docs**: Documentation accuracy sweep correcting wrong regulatory values across 13 files (P4.5, P4.6, P4.22):
+  - **PD floors (P4.5)**: Retail mortgage Basel 3.1 PD floor corrected from 0.05% to **0.10%** (Art. 163(1)(b)) in 5 files. QRRE transactor Basel 3.1 PD floor corrected from 0.03% to **0.05%** (Art. 163(1)(c)) in 5 files. Affected: `api/configuration.md`, `user-guide/configuration.md`, `user-guide/exposure-classes/retail.md`, `data-model/regulatory-tables.md`.
+  - **LGD floors (P4.6)**: Corporate LGD floor code example corrected (RECEIVABLES 15%→10%, CRE 15%→10%, OTHER_PHYSICAL 20%→15%) in `user-guide/configuration.md`. Corporate `residential_real_estate` field corrected from 0.05 to **0.10** (Art. 161(5)) in `api/configuration.md` — was showing retail floor instead of corporate floor.
+  - **Output floor schedule (P4.22)**: BCBS 6-year schedule (50%/55%/60%/65%/70%/72.5%, 2027–2032) replaced with PRA 4-year schedule (**60%/65%/70%/72.5%**, 2027–2030) across 12 files. Affected: `plans/implementation-plan.md`, `api/engine.md`, `api/contracts.md`, `framework-comparison/reporting-differences.md`, `plans/prd.md`, `specifications/index.md`, `features/index.md`, `specifications/regulatory-compliance.md`, `framework-comparison/index.md`, `appendix/index.md`, `framework-comparison/impact-analysis.md`, `user-guide/configuration.md`.
+
 ## [0.1.175] — 2026-04-08
 
 ### Fixed

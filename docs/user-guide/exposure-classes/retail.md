@@ -56,7 +56,7 @@ CRR uses a flat 35% (LTV ≤ 80%) or 75% (LTV > 80%). Basel 3.1 introduces LTV-b
 
 ### IRB Treatment
 
-Retail mortgage correlation is fixed at 15% with no maturity adjustment. PD floors: 0.03% (CRR) / 0.05% (Basel 3.1). Basel 3.1 introduces a 5% LGD floor for residential RE.
+Retail mortgage correlation is fixed at 15% with no maturity adjustment. PD floors: 0.03% (CRR) / 0.10% (Basel 3.1, Art. 163(1)(b)). Basel 3.1 introduces a 5% LGD floor for residential RE.
 
 > **Details:** See [IRB Approach](../methodology/irb-approach.md) for the full formula and parameter details.
 
@@ -88,7 +88,7 @@ Examples:
 
 ### IRB Treatment
 
-QRRE correlation is fixed at 4%. PD floors: 0.03% for CRR/transactors, 0.10% for Basel 3.1 revolvers. Bank-estimated LGD subject to 50% floor (Basel 3.1 unsecured).
+QRRE correlation is fixed at 4%. PD floors: 0.03% (CRR all), 0.05% (Basel 3.1 transactors, Art. 163(1)(c)), 0.10% (Basel 3.1 revolvers). Bank-estimated LGD subject to 50% floor (Basel 3.1 unsecured).
 
 ## Retail Other
 

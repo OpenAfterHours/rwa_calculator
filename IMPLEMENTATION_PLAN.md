@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P6.21 complete — is_main_index decoupled from is_eligible_financial_collateral; other-listed equity haircut now reachable)
-**Current version:** 0.1.175 | **Test suite:** 5,087 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.2, P5.3, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20, P6.21 fixed.
+**Last updated:** 2026-04-08 (P4.5/P4.6/P4.22 complete — documentation accuracy sweep: PD floors, LGD floors, output floor schedule corrected across 13 files)
+**Current version:** 0.1.176 | **Test suite:** 5,087 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.6, P4.13, P4.14, P4.15, P4.22, P5.1, P5.2, P5.3, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20, P6.21 fixed.
 **CRR acceptance:** 100% (169 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -330,15 +330,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Update FR status values.
 
 ### P4.5 PD floor documentation discrepancy
-- **Status:** [~] Mostly complete (2026-04-08 — one remaining file)
-- **Impact:** `technical-reference.md` shows retail mortgage PD floor as 0.05% -- should be **0.10%** per PRA Art. 163(1)(b). The `key-differences.md` table correctly shows 0.10%. Code also wrong (P1.1).
-- **Fix:** Fixed retail mortgage PD floor 0.05%→0.10% (Art. 163(1)(b)) and QRRE transactor 0.03%→0.05% (Art. 163(1)(c)) in technical-reference.md, basel31.md. Fixed PDFloors docstring in config.py. key-differences.md already had correct values.
-- **Remaining:** `docs/api/configuration.md` lines 161 and 185 still show QRRE transactor PD floor as 0.03% (should be 0.05% per Art. 163(1)(c)). Code in `config.py:98` correctly uses 0.05%.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** Multiple doc files showed wrong Basel 3.1 PD floor values for retail mortgage (0.05% instead of 0.10%, Art. 163(1)(b)) and QRRE transactor (0.03% instead of 0.05%, Art. 163(1)(c)).
+- **Fix:** Corrected PD floor values across 5 doc files (10 locations): `api/configuration.md` (basel_3_1() docstring: mortgage 0.05%→0.10%, transactor 0.03%→0.05%; code example comment 0.0300%→0.0500%), `user-guide/configuration.md` (RETAIL_MORTGAGE 0.0005→0.0010, RETAIL_QRRE_TRANSACTOR 0.0003→0.0005, custom floors example 0.0005→0.0010), `user-guide/exposure-classes/retail.md` (mortgage IRB 0.05%→0.10%, QRRE clarified CRR 0.03% vs B31 0.05%), `data-model/regulatory-tables.md` (mortgage B31 0.05%→0.10%, transactor B31 0.03%→0.05%).
 
 ### P4.6 LGD floor documentation discrepancy
-- **Status:** [~] Docs inconsistent with PRA
-- **Impact:** `technical-reference.md` and `key-differences.md` list retail RRE LGD floor as 5% (correct per Art. 164(4)(a)), but code uses 10% (same as corporate). The footnote "Values reflect PRA PS1/26 implementation" is incorrect for the retail entry.
-- **Fix:** Update docs to clarify corporate vs retail LGD floor distinction. Fix code per P1.2.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** `user-guide/configuration.md` LGD floor code example showed BCBS values instead of PRA PS1/26 values. `api/configuration.md` showed residential_real_estate as 0.05 (retail floor) instead of 0.10 (corporate floor, Art. 161(5)).
+- **Fix:** Fixed 2 files: `user-guide/configuration.md` LGD floor example corrected (RECEIVABLES 15%→10%, CRE 15%→10%, OTHER_PHYSICAL 20%→15%, RRE annotated as corporate 10% with note about retail 5%). `api/configuration.md` residential_real_estate corrected from 0.05 to 0.10 with Art. 161(5) annotation. Note: code correctly uses 0.10 for corporate (residential_real_estate field) and 0.05 for retail (retail_rre field) — these are separate LGDFloors fields.
 
 ### P4.7 Spec file for equity approach
 - **Status:** [x] Complete
@@ -439,9 +438,9 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Status:** [x] Complete
 
 ### P4.22 Basel 3.1 haircut values wrong in documentation + remaining stale output floor references
-- **Status:** [~] Partially fixed (2026-04-08)
-- **Impact:** Multiple doc files had wrong Basel 3.1 supervisory haircut values: main index equities 25%→20%, other equities 35%→30%, gold 15%→20%. Fixed in technical-reference.md, key-differences.md, basel31.md, regulatory-tables.md, input-schemas.md. ~10 secondary doc files still reference BCBS 6-year output floor schedule (2032, 50%): framework-comparison/index.md, reporting-differences.md, appendix/index.md, api/contracts.md, api/engine.md, plans/prd.md, plans/implementation-plan.md, specifications/index.md, features/index.md, framework-comparison/impact-analysis.md.
-- **Fix remaining:** Update remaining ~10 secondary doc files with PRA 4-year schedule values.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** Multiple doc files had wrong Basel 3.1 supervisory haircut values (already fixed in primary files) and BCBS 6-year output floor schedule (50%/2032) instead of PRA 4-year (60%/2030).
+- **Fix:** Haircut values were previously corrected. Output floor schedule corrected across 12 files (13 locations): `plans/implementation-plan.md` (B31-F3 50%→60%, full 6-year table→4-year table), `api/engine.md` (docstring 50%→60%, 2032→2030), `api/contracts.md` (TransitionalScheduleBundle docstring 50%→60%, 2032→2030), `framework-comparison/reporting-differences.md` (50%→60%, 2032→2030), `plans/prd.md` (scope table 50%→60%, feature row 50%→60%, milestone 2032→2030), `specifications/index.md` (B31-F 50%→60%, M3.3 2032→2030), `features/index.md` (50%→60%, 2032→2030), `specifications/regulatory-compliance.md` (50%→60%), `framework-comparison/index.md` (2032→2030), `appendix/index.md` (2027-2032→2027-2030, 1 Jan 2032→2030), `framework-comparison/impact-analysis.md` (2032→2030), `user-guide/configuration.md` (code examples: 55%→65% for 2028, explicit 0.55→0.65).
 
 ---
 
@@ -779,7 +778,7 @@ These items are verified complete. Items with **[!]** have known gaps documented
 
 **P3 items complete:** P3.1, P3.2, P3.4
 
-**P4 items complete:** P4.1, P4.5, P4.7, P4.13, P4.14, P4.15, P4.16, P4.17, P4.18, P4.19, P4.21
+**P4 items complete:** P4.1, P4.5, P4.6, P4.7, P4.13, P4.14, P4.15, P4.16, P4.17, P4.18, P4.19, P4.21, P4.22
 
 **P5 items complete:** P5.1, P5.2, P5.3, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10
 

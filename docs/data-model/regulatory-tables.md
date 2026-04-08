@@ -331,8 +331,8 @@ Under CRR, A-IRB has no LGD floors. Basel 3.1 introduces LGD floors:
 |----------------|-----|-----------|
 | Corporate | 0.03% | 0.05% |
 | Institution | 0.03% | 0.05% |
-| Retail Mortgage | 0.03% | 0.05% |
-| Retail QRRE (transactor) | 0.03% | 0.03% |
+| Retail Mortgage | 0.03% | 0.10% |
+| Retail QRRE (transactor) | 0.03% | 0.05% |
 | Retail QRRE (revolver) | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
 

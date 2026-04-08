@@ -180,9 +180,9 @@ class PDFloors:
         """Basel 3.1 PD floors: differentiated by class (CRE30.55).
 
         - Corporate/Corporate SME: 0.05%
-        - Retail mortgage: 0.05%
+        - Retail mortgage: 0.10%
         - Retail other: 0.05%
-        - QRRE transactors: 0.03%
+        - QRRE transactors: 0.05%
         - QRRE revolvers: 0.10%
         """
 ```
@@ -200,7 +200,7 @@ class LGDFloors:
     financial_collateral: Decimal = Decimal("0.0")         # 0%
     receivables: Decimal = Decimal("0.10")                 # 10%
     commercial_real_estate: Decimal = Decimal("0.10")      # 10%
-    residential_real_estate: Decimal = Decimal("0.05")     # 5%
+    residential_real_estate: Decimal = Decimal("0.10")     # 10% (corporate, Art. 161(5))
     other_physical: Decimal = Decimal("0.15")              # 15%
 
     def get_floor(self, collateral_type: CollateralType) -> Decimal:
@@ -407,7 +407,7 @@ print(f"Corporate PD floor: {pd_floor:.4%}")  # 0.0500% (Basel 3.1)
 qrre_floor = config.pd_floors.get_floor(
     ExposureClass.RETAIL_QRRE, is_qrre_transactor=True
 )
-print(f"QRRE transactor PD floor: {qrre_floor:.4%}")  # 0.0300%
+print(f"QRRE transactor PD floor: {qrre_floor:.4%}")  # 0.0500%
 
 # LGD floor lookup
 lgd_floor = config.lgd_floors.get_floor(CollateralType.IMMOVABLE)

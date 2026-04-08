@@ -25,14 +25,21 @@ import pytest
 
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
+    B31_C02_00_COLUMN_REFS,
+    B31_C02_00_COLUMNS,
+    B31_C02_00_ROW_SECTIONS,
     B31_C07_COLUMNS,
     B31_C08_COLUMNS,
     B31_C08_07_ROWS,
     B31_IRB_ROW_SECTIONS,
     B31_SA_RISK_WEIGHT_BANDS,
     B31_SA_ROW_SECTIONS,
+    C02_00_SA_CLASS_MAP,
     C07_COLUMNS,
     C08_01_COLUMNS,
+    CRR_C02_00_COLUMN_REFS,
+    CRR_C02_00_COLUMNS,
+    CRR_C02_00_ROW_SECTIONS,
     CRR_C07_COLUMNS,
     CRR_C08_COLUMNS,
     CRR_C08_07_ROWS,
@@ -45,6 +52,8 @@ from rwa_calc.reporting.corep.templates import (
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
     SA_RISK_WEIGHT_BANDS,
+    get_c02_00_columns,
+    get_c02_00_row_sections,
     get_c07_columns,
     get_c08_columns,
     get_irb_row_sections,
@@ -5410,3 +5419,618 @@ class TestC0807EdgeCases:
         refs = df["row_ref"].to_list()
         expected = [r[0] for r in B31_C08_07_ROWS]
         assert refs == expected
+
+
+# =============================================================================
+# C 02.00 / OF 02.00 — OWN FUNDS REQUIREMENTS
+# =============================================================================
+
+
+def _c02_sa_results() -> pl.LazyFrame:
+    """SA-only results for C 02.00 testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["S1", "S2", "S3", "S4"],
+            "approach_applied": ["standardised"] * 4,
+            "exposure_class": ["corporate", "institution", "retail", "central_government"],
+            "ead_final": [1000.0, 500.0, 300.0, 200.0],
+            "risk_weight": [1.0, 0.2, 0.75, 0.0],
+            "rwa_final": [1000.0, 100.0, 225.0, 0.0],
+        }
+    )
+
+
+def _c02_mixed_results() -> pl.LazyFrame:
+    """Mixed SA + IRB results for C 02.00 testing."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["S1", "S2", "I1", "I2", "SL1"],
+            "approach_applied": [
+                "standardised",
+                "standardised",
+                "foundation_irb",
+                "advanced_irb",
+                "slotting",
+            ],
+            "exposure_class": [
+                "corporate",
+                "institution",
+                "corporate",
+                "retail_mortgage",
+                "specialised_lending",
+            ],
+            "ead_final": [1000.0, 500.0, 2000.0, 800.0, 600.0],
+            "risk_weight": [1.0, 0.2, 0.5, 0.3, 0.7],
+            "rwa_final": [1000.0, 100.0, 1000.0, 240.0, 420.0],
+        }
+    )
+
+
+def _c02_b31_results_with_floor() -> pl.LazyFrame:
+    """Basel 3.1 results with output floor columns."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["S1", "I1", "I2", "SL1"],
+            "approach_applied": [
+                "standardised",
+                "foundation_irb",
+                "advanced_irb",
+                "slotting",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "retail_mortgage",
+                "specialised_lending",
+            ],
+            "ead_final": [1000.0, 2000.0, 800.0, 600.0],
+            "risk_weight": [1.0, 0.5, 0.3, 0.7],
+            "rwa_final": [1000.0, 1000.0, 240.0, 420.0],
+            "rwa_pre_floor": [1000.0, 1000.0, 240.0, 420.0],
+            "sa_rwa": [1000.0, 1500.0, 400.0, 500.0],
+            "sl_type": [None, None, None, "project_finance"],
+        }
+    )
+
+
+def _c02_b31_floor_binding() -> pl.LazyFrame:
+    """Basel 3.1 results where floor is binding (total RWA > pre-floor)."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["I1", "I2"],
+            "approach_applied": ["foundation_irb", "advanced_irb"],
+            "exposure_class": ["corporate", "retail_mortgage"],
+            "ead_final": [2000.0, 800.0],
+            "risk_weight": [0.15, 0.1],
+            "rwa_final": [600.0, 280.0],  # Post-floor (higher)
+            "rwa_pre_floor": [300.0, 80.0],  # Pre-floor (lower)
+            "sa_rwa": [1500.0, 400.0],
+        }
+    )
+
+
+class TestC0200TemplateDefinitions:
+    """Template structure definitions for C 02.00 / OF 02.00."""
+
+    def test_crr_column_count(self) -> None:
+        """CRR C 02.00 has 1 column."""
+        assert len(CRR_C02_00_COLUMNS) == 1
+
+    def test_b31_column_count(self) -> None:
+        """Basel 3.1 OF 02.00 has 3 columns."""
+        assert len(B31_C02_00_COLUMNS) == 3
+
+    def test_crr_column_refs(self) -> None:
+        """CRR column ref is 0010."""
+        assert CRR_C02_00_COLUMN_REFS == ["0010"]
+
+    def test_b31_column_refs(self) -> None:
+        """Basel 3.1 column refs are 0010, 0020, 0030."""
+        assert B31_C02_00_COLUMN_REFS == ["0010", "0020", "0030"]
+
+    def test_crr_section_count(self) -> None:
+        """CRR has 3 sections."""
+        assert len(CRR_C02_00_ROW_SECTIONS) == 3
+
+    def test_b31_section_count(self) -> None:
+        """Basel 3.1 has 6 sections (SA, F-IRB, A-IRB, slotting, other expanded)."""
+        assert len(B31_C02_00_ROW_SECTIONS) == 6
+
+    def test_crr_total_row_exists(self) -> None:
+        """CRR has a TOTAL RISK EXPOSURE AMOUNT row."""
+        all_rows = [r for s in CRR_C02_00_ROW_SECTIONS for r in s.rows]
+        refs = [r.ref for r in all_rows]
+        assert "0010" in refs
+
+    def test_b31_floor_indicator_rows(self) -> None:
+        """Basel 3.1 has output floor indicator rows 0034, 0035, 0036."""
+        all_rows = [r for s in B31_C02_00_ROW_SECTIONS for r in s.rows]
+        refs = [r.ref for r in all_rows]
+        assert "0034" in refs
+        assert "0035" in refs
+        assert "0036" in refs
+
+    def test_b31_slotting_rows(self) -> None:
+        """Basel 3.1 has per-SL-type slotting rows 0412-0416."""
+        all_rows = [r for s in B31_C02_00_ROW_SECTIONS for r in s.rows]
+        refs = [r.ref for r in all_rows]
+        for ref in ["0411", "0412", "0413", "0414", "0415", "0416"]:
+            assert ref in refs, f"Missing slotting row {ref}"
+
+    def test_b31_firb_breakdown_rows(self) -> None:
+        """Basel 3.1 has F-IRB sub-class rows 0271, 0290, 0295-0297."""
+        all_rows = [r for s in B31_C02_00_ROW_SECTIONS for r in s.rows]
+        refs = [r.ref for r in all_rows]
+        for ref in ["0271", "0290", "0295", "0296", "0297"]:
+            assert ref in refs, f"Missing F-IRB row {ref}"
+
+    def test_b31_airb_retail_rows(self) -> None:
+        """Basel 3.1 has A-IRB retail sub-rows 0382-0385."""
+        all_rows = [r for s in B31_C02_00_ROW_SECTIONS for r in s.rows]
+        refs = [r.ref for r in all_rows]
+        for ref in ["0382", "0383", "0384", "0385"]:
+            assert ref in refs, f"Missing A-IRB retail row {ref}"
+
+    def test_sa_class_map_covers_major_classes(self) -> None:
+        """SA class map has entries for major exposure classes."""
+        for cls in ["corporate", "institution", "retail", "central_government", "equity"]:
+            assert cls in C02_00_SA_CLASS_MAP, f"Missing SA class mapping for {cls}"
+
+    def test_get_columns_selector(self) -> None:
+        """get_c02_00_columns returns framework-appropriate columns."""
+        assert get_c02_00_columns("CRR") == CRR_C02_00_COLUMNS
+        assert get_c02_00_columns("BASEL_3_1") == B31_C02_00_COLUMNS
+
+    def test_get_row_sections_selector(self) -> None:
+        """get_c02_00_row_sections returns framework-appropriate rows."""
+        assert get_c02_00_row_sections("CRR") == CRR_C02_00_ROW_SECTIONS
+        assert get_c02_00_row_sections("BASEL_3_1") == B31_C02_00_ROW_SECTIONS
+
+    def test_b31_sa_specialised_lending_row(self) -> None:
+        """Basel 3.1 has SA specialised lending row 0131."""
+        all_rows = [r for s in B31_C02_00_ROW_SECTIONS for r in s.rows]
+        refs = [r.ref for r in all_rows]
+        assert "0131" in refs
+
+
+class TestC0200Generation:
+    """C 02.00 / OF 02.00 generation from pipeline results."""
+
+    def test_generated_under_crr(self) -> None:
+        """C 02.00 is generated under CRR."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        assert bundle.c_02_00 is not None
+
+    def test_generated_under_b31(self) -> None:
+        """OF 02.00 is generated under Basel 3.1."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
+
+    def test_is_dataframe(self) -> None:
+        """Result is a polars DataFrame."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        assert isinstance(bundle.c_02_00, pl.DataFrame)
+
+    def test_crr_has_one_data_column(self) -> None:
+        """CRR C 02.00 has row_ref, row_name, and 1 data column (0010)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        assert "row_ref" in df.columns
+        assert "row_name" in df.columns
+        assert "0010" in df.columns
+        # Only 1 data column + 2 metadata columns
+        assert len(df.columns) == 3
+
+    def test_b31_has_three_data_columns(self) -> None:
+        """Basel 3.1 OF 02.00 has row_ref, row_name, and 3 data columns."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="BASEL_3_1")
+        df = bundle.c_02_00
+        assert df is not None
+        assert "0010" in df.columns
+        assert "0020" in df.columns
+        assert "0030" in df.columns
+        assert len(df.columns) == 5
+
+    def test_missing_rwa_column_returns_none(self) -> None:
+        """Returns None when RWA column is missing."""
+        gen = COREPGenerator()
+        results = pl.LazyFrame({"exposure_reference": ["E1"], "ead_final": [1000.0]})
+        bundle = gen.generate_from_lazyframe(results, framework="CRR")
+        assert bundle.c_02_00 is None
+
+    def test_error_logged_when_skipped(self) -> None:
+        """Error logged when C 02.00 is skipped."""
+        gen = COREPGenerator()
+        results = pl.LazyFrame({"exposure_reference": ["E1"]})
+        bundle = gen.generate_from_lazyframe(results, framework="CRR")
+        assert any("C 02.00 skipped" in e for e in bundle.errors)
+
+    def test_bundle_field_none_by_default(self) -> None:
+        """c_02_00 field defaults to None."""
+        bundle = COREPTemplateBundle(c07_00={}, c08_01={}, c08_02={})
+        assert bundle.c_02_00 is None
+
+
+class TestC0200TotalRow:
+    """TOTAL RISK EXPOSURE AMOUNT row (0010) tests."""
+
+    def test_sa_only_total(self) -> None:
+        """Total RWEA = sum of all SA RWA."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0010")
+        # S1=1000, S2=100, S3=225, S4=0 → 1325
+        assert row["0010"][0] == pytest.approx(1325.0)
+
+    def test_mixed_total(self) -> None:
+        """Total RWEA = SA + IRB + slotting."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0010")
+        # S1=1000, S2=100, I1=1000, I2=240, SL1=420 → 2760
+        assert row["0010"][0] == pytest.approx(2760.0)
+
+    def test_own_funds_requirement(self) -> None:
+        """Own funds requirement (row 0040) = 8% × TREA."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        trea = df.filter(pl.col("row_ref") == "0010")["0010"][0]
+        own_funds = df.filter(pl.col("row_ref") == "0040")["0010"][0]
+        assert own_funds == pytest.approx(trea * 0.08)
+
+    def test_b31_total_row_three_columns(self) -> None:
+        """B31 total row has all 3 columns populated."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0010")
+        assert row["0010"][0] is not None
+        assert row["0020"][0] is not None
+        assert row["0030"][0] is not None
+
+    def test_b31_total_rwa_matches(self) -> None:
+        """B31 col 0010 total = sum of all rwa_final."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0010")
+        # S1=1000, I1=1000, I2=240, SL1=420 → 2660
+        assert row["0010"][0] == pytest.approx(2660.0)
+
+
+class TestC0200SABreakdown:
+    """SA exposure class breakdown rows."""
+
+    def test_sa_total(self) -> None:
+        """SA total (row 0060) = sum of SA approach RWA."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0060")
+        # All SA: 1000+100+225+0 = 1325
+        assert row["0010"][0] == pytest.approx(1325.0)
+
+    def test_sa_corporate_row(self) -> None:
+        """Corporate RWA in SA class row 0130."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0130")
+        assert row["0010"][0] == pytest.approx(1000.0)
+
+    def test_sa_institution_row(self) -> None:
+        """Institution RWA in SA class row 0120."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0120")
+        assert row["0010"][0] == pytest.approx(100.0)
+
+    def test_sa_retail_row(self) -> None:
+        """Retail RWA in SA class row 0140."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0140")
+        assert row["0010"][0] == pytest.approx(225.0)
+
+    def test_sa_sovereign_row(self) -> None:
+        """Sovereign RWA in SA class row 0070."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0070")
+        assert row["0010"][0] == pytest.approx(0.0)
+
+    def test_mixed_sa_only_in_sa_rows(self) -> None:
+        """With mixed data, only SA approach goes to SA rows."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        sa_total = df.filter(pl.col("row_ref") == "0060")
+        # SA exposures only: S1=1000, S2=100 → 1100
+        assert sa_total["0010"][0] == pytest.approx(1100.0)
+
+
+class TestC0200IRBBreakdown:
+    """IRB approach breakdown rows."""
+
+    def test_irb_total(self) -> None:
+        """IRB total (row 0220) = F-IRB + A-IRB + slotting."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0220")
+        # I1=1000 (FIRB) + I2=240 (AIRB) + SL1=420 (slotting) = 1660
+        assert row["0010"][0] == pytest.approx(1660.0)
+
+    def test_firb_total(self) -> None:
+        """F-IRB total (row 0240) = F-IRB RWA."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0240")
+        assert row["0010"][0] == pytest.approx(1000.0)
+
+    def test_airb_total(self) -> None:
+        """A-IRB total (row 0300) = A-IRB RWA."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0300")
+        assert row["0010"][0] == pytest.approx(240.0)
+
+    def test_airb_retail_mortgage(self) -> None:
+        """A-IRB retail mortgage RWA in row 0380."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0380")
+        assert row["0010"][0] == pytest.approx(240.0)
+
+    def test_slotting_total(self) -> None:
+        """Slotting total in CRR row 0410."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0410")
+        assert row["0010"][0] == pytest.approx(420.0)
+
+    def test_b31_slotting_by_type(self) -> None:
+        """Basel 3.1 breaks slotting into per-SL-type rows."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        # SL1 is project_finance → row 0412
+        sl_total = df.filter(pl.col("row_ref") == "0411")
+        pf_row = df.filter(pl.col("row_ref") == "0412")
+        assert sl_total["0010"][0] == pytest.approx(420.0)
+        assert pf_row["0010"][0] == pytest.approx(420.0)
+
+    def test_credit_risk_equals_total(self) -> None:
+        """Credit risk row (0050) = total (0010) since only CR in scope."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        total = df.filter(pl.col("row_ref") == "0010")["0010"][0]
+        cr = df.filter(pl.col("row_ref") == "0050")["0010"][0]
+        assert cr == pytest.approx(total)
+
+    def test_sa_plus_irb_equals_credit_risk(self) -> None:
+        """SA total + IRB total = credit risk total."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        cr = df.filter(pl.col("row_ref") == "0050")["0010"][0]
+        sa = df.filter(pl.col("row_ref") == "0060")["0010"][0]
+        irb = df.filter(pl.col("row_ref") == "0220")["0010"][0]
+        assert sa + irb == pytest.approx(cr)
+
+
+class TestC0200B31Features:
+    """Basel 3.1 specific features: 3 columns, floor rows, sub-breakdowns."""
+
+    def test_sa_equivalent_column(self) -> None:
+        """Col 0020 (SA-equivalent) is populated from sa_rwa."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0010")
+        # sa_rwa: 1000+1500+400+500 = 3400
+        assert row["0020"][0] == pytest.approx(3400.0)
+
+    def test_floor_indicator_row(self) -> None:
+        """Row 0034 indicates whether floor is activated."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0034")
+        assert len(row) == 1
+        # Floor not binding in this dataset (rwa_final == rwa_pre_floor)
+        assert row["0010"][0] == pytest.approx(0.0)
+
+    def test_floor_binding_indicator(self) -> None:
+        """Row 0034 = 1 when floor is binding."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_floor_binding(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0034")
+        assert row["0010"][0] == pytest.approx(1.0)
+
+    def test_b31_firb_institution_row(self) -> None:
+        """B31 has F-IRB institution detail row 0271."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0271")
+        assert len(row) == 1  # Row exists
+
+    def test_b31_sa_specialised_lending_row(self) -> None:
+        """B31 SA SL sub-row 0131 populated when SL under SA."""
+        gen = COREPGenerator()
+        # SL under SA → goes to corporate row 0130 and SL sub-row 0131
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["specialised_lending"],
+                "ead_final": [500.0],
+                "risk_weight": [1.0],
+                "rwa_final": [500.0],
+            }
+        )
+        bundle = gen.generate_from_lazyframe(results, framework="BASEL_3_1")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0131")
+        assert row["0010"][0] == pytest.approx(500.0)
+
+
+class TestC0200NullRows:
+    """Non-credit-risk rows should be null (out of scope)."""
+
+    @pytest.mark.parametrize(
+        "row_ref,row_name",
+        [
+            ("0430", "Settlement risk"),
+            ("0440", "Securitisation positions in non-trading book"),
+            ("0460", "Position, foreign exchange and commodities risk"),
+            ("0590", "Credit valuation adjustment (CVA)"),
+            ("0640", "Operational risk"),
+            ("0680", "Additional risk exposure: fixed overheads"),
+        ],
+    )
+    def test_out_of_scope_row_is_null(self, row_ref: str, row_name: str) -> None:
+        """Non-credit-risk rows have null values."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == row_ref)
+        assert len(row) == 1
+        assert row["row_name"][0] == row_name
+        assert row["0010"][0] is None
+
+
+class TestC0200EdgeCases:
+    """Edge cases for C 02.00 generation."""
+
+    def test_empty_results(self) -> None:
+        """Empty results produce zero totals."""
+        gen = COREPGenerator()
+        results = pl.LazyFrame(
+            schema={
+                "exposure_reference": pl.String,
+                "approach_applied": pl.String,
+                "exposure_class": pl.String,
+                "ead_final": pl.Float64,
+                "rwa_final": pl.Float64,
+            }
+        )
+        bundle = gen.generate_from_lazyframe(results, framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        total = df.filter(pl.col("row_ref") == "0010")
+        assert total["0010"][0] == pytest.approx(0.0)
+
+    def test_data_columns_are_float64(self) -> None:
+        """Data columns are Float64."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        assert df["0010"].dtype == pl.Float64
+
+    def test_row_ref_is_string(self) -> None:
+        """Row ref column is String."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        assert df["row_ref"].dtype == pl.String
+
+    def test_row_order_preserved(self) -> None:
+        """Rows appear in the order defined by row sections."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        refs = df["row_ref"].to_list()
+        expected = [r.ref for s in CRR_C02_00_ROW_SECTIONS for r in s.rows]
+        assert refs == expected
+
+    def test_b31_row_order_preserved(self) -> None:
+        """Basel 3.1 rows appear in the order defined by row sections."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        assert df is not None
+        refs = df["row_ref"].to_list()
+        expected = [r.ref for s in B31_C02_00_ROW_SECTIONS for r in s.rows]
+        assert refs == expected
+
+    def test_null_rwa_treated_as_zero(self) -> None:
+        """Null RWA values treated as zero in aggregation."""
+        gen = COREPGenerator()
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["standardised", "standardised"],
+                "exposure_class": ["corporate", "corporate"],
+                "ead_final": [1000.0, 500.0],
+                "rwa_final": [1000.0, None],
+            }
+        )
+        bundle = gen.generate_from_lazyframe(results, framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        total = df.filter(pl.col("row_ref") == "0010")
+        assert total["0010"][0] == pytest.approx(1000.0)

@@ -37,17 +37,23 @@ import polars as pl
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
+    B31_C02_00_COLUMN_REFS,
+    C02_00_CREDIT_RISK_ROWS,
+    C02_00_SA_CLASS_MAP,
     C08_03_COLUMN_REFS,
     C08_03_PD_RANGES,
     C08_06_CATEGORY_MAP,
     C08_06_COLUMN_REFS,
     C08_07_CRR_RETAIL_CLASSES,
     C08_07_IRB_APPROACHES,
+    CRR_C02_00_COLUMN_REFS,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
     OF_02_01_ROW_SECTIONS,
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
+    get_c02_00_columns,
+    get_c02_00_row_sections,
     get_c07_columns,
     get_c08_02_columns,
     get_c08_03_columns,
@@ -95,6 +101,10 @@ class COREPTemplateBundle:
         exposure class. Basel 3.1: 11 rows by Art. 147B roll-out class.
     OF 02.01 (Output Floor comparison): Single DataFrame, 8 risk-type rows,
         4 columns (modelled RWA, SA RWA, U-TREA, S-TREA). Basel 3.1 only.
+    C 02.00 / OF 02.00 (Own Funds Requirements): Single DataFrame aggregating
+        RWEA across all risk types. CRR: 1 column. Basel 3.1: 3 columns
+        (all approaches, SA-only, output floor). Includes output floor
+        indicator rows (0034-0036) under Basel 3.1.
 
     Why: COREP templates are submitted per exposure class to the regulator.
     Each class gets a fixed row structure (totals, exposure types, risk weights,
@@ -109,6 +119,7 @@ class COREPTemplateBundle:
     c08_06: dict[str, pl.DataFrame] = field(default_factory=dict)
     c08_07: pl.DataFrame | None = None
     of_02_01: pl.DataFrame | None = None
+    c_02_00: pl.DataFrame | None = None
     framework: str = "CRR"
     errors: list[str] = field(default_factory=list)
 
@@ -173,6 +184,9 @@ class COREPGenerator:
         # OF 02.01 — Output floor comparison (Basel 3.1 only)
         of_02_01 = self._generate_of_02_01(results, cols, framework, errors)
 
+        # C 02.00 / OF 02.00 — Own Funds Requirements
+        c_02_00 = self._generate_c_02_00(results, cols, framework, errors)
+
         return COREPTemplateBundle(
             c07_00=c07_00,
             c08_01=c08_01,
@@ -181,6 +195,7 @@ class COREPGenerator:
             c08_06=c08_06,
             c08_07=c08_07,
             of_02_01=of_02_01,
+            c_02_00=c_02_00,
             framework=framework,
             errors=errors,
         )
@@ -237,6 +252,11 @@ class COREPGenerator:
             if bundle.of_02_01 is not None:
                 total_rows += self._write_single_template_sheet(
                     workbook, bundle.of_02_01, "OF 02.01"
+                )
+            if bundle.c_02_00 is not None:
+                c02_prefix = "OF 02.00" if bundle.framework == "BASEL_3_1" else "C 02.00"
+                total_rows += self._write_single_template_sheet(
+                    workbook, bundle.c_02_00, c02_prefix
                 )
         finally:
             workbook.close()
@@ -554,6 +574,329 @@ class COREPGenerator:
         schema = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.Float64
+
+        return pl.DataFrame(rows, schema=schema)
+
+    # =========================================================================
+    # C 02.00 / OF 02.00 — Own Funds Requirements (CA2)
+    # =========================================================================
+
+    def _generate_c_02_00(
+        self,
+        results: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> pl.DataFrame | None:
+        """Generate C 02.00 (CRR) / OF 02.00 (Basel 3.1) Own Funds Requirements.
+
+        The master capital template aggregating RWEA across all risk types.
+        This calculator only populates credit risk rows (SA, F-IRB, A-IRB,
+        slotting, equity); all other risk-type rows (CCR, market, op risk)
+        are null.
+
+        CRR: 1 column (col 0010 — all approaches RWEA).
+        Basel 3.1: 3 columns — col 0010 (U-TREA components), col 0020
+        (SA-only / S-TREA components), col 0030 (output floor RWEA).
+
+        Basel 3.1 adds indicator rows: 0034 (floor activated Yes/No),
+        0035 (floor multiplier %), 0036 (OF-ADJ monetary value).
+
+        References:
+            CRR Art. 92 (own funds requirements)
+            PRA PS1/26 Art. 92 para 2A/3A/5 (output floor)
+        """
+        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+
+        if ead_col is None or rwa_col is None:
+            errors.append(
+                "C 02.00 skipped: missing EAD or RWA columns in results"
+            )
+            return None
+
+        is_b31 = framework == "BASEL_3_1"
+        column_refs = B31_C02_00_COLUMN_REFS if is_b31 else CRR_C02_00_COLUMN_REFS
+        row_sections = get_c02_00_row_sections(framework)
+
+        # --- Aggregate RWEA by approach and exposure class ---
+        agg_exprs = [
+            pl.col(rwa_col).fill_null(0.0).sum().alias("total_rwa"),
+        ]
+
+        # SA RWEA by exposure class
+        ec_col = _pick(cols, "exposure_class")
+        approach_col = _pick(cols, "approach_applied")
+
+        # Compute totals per approach
+        approach_rwa: dict[str, float] = {}
+        sa_class_rwa: dict[str, float] = {}
+        total_rwa = 0.0
+        total_sa_rwa = 0.0
+
+        if approach_col and ec_col:
+            collected = results.select(
+                pl.col(approach_col).alias("_approach"),
+                pl.col(ec_col).alias("_ec"),
+                pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
+            ).collect()
+
+            # Total RWA
+            total_rwa = float(collected["_rwa"].sum())
+
+            # RWA by approach
+            by_approach = collected.group_by("_approach").agg(
+                pl.col("_rwa").sum().alias("rwa")
+            )
+            for row in by_approach.iter_rows(named=True):
+                approach_rwa[row["_approach"]] = float(row["rwa"])
+
+            # SA class breakdown
+            sa_mask = collected["_approach"] == "standardised"
+            equity_mask = collected["_approach"] == "equity"
+            sa_rows = collected.filter(sa_mask | equity_mask)
+            by_class = sa_rows.group_by("_ec").agg(
+                pl.col("_rwa").sum().alias("rwa")
+            )
+            for row in by_class.iter_rows(named=True):
+                sa_class_rwa[row["_ec"]] = float(row["rwa"])
+
+            # Total SA RWA (for floor comparison col 0020)
+            total_sa_rwa = float(sa_rows["_rwa"].sum())
+
+            # IRB sub-approach breakdowns
+            irb_rows = collected.filter(
+                ~sa_mask & ~equity_mask
+            )
+
+            # Per-approach + class breakdown for IRB sub-rows
+            irb_class_approach = irb_rows.group_by(["_approach", "_ec"]).agg(
+                pl.col("_rwa").sum().alias("rwa")
+            )
+            self._irb_class_rwa = {}
+            for row in irb_class_approach.iter_rows(named=True):
+                key = (row["_approach"], row["_ec"])
+                self._irb_class_rwa[key] = float(row["rwa"])
+
+            # Slotting by SL type
+            self._slotting_type_rwa: dict[str, float] = {}
+            if "sl_type" in cols:
+                sl_collected = results.filter(
+                    pl.col(approach_col) == "slotting"
+                ).select(
+                    pl.col("sl_type").alias("_sl"),
+                    pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
+                ).collect()
+                by_sl = sl_collected.group_by("_sl").agg(
+                    pl.col("_rwa").sum().alias("rwa")
+                )
+                for row in by_sl.iter_rows(named=True):
+                    if row["_sl"] is not None:
+                        self._slotting_type_rwa[row["_sl"]] = float(row["rwa"])
+        else:
+            # Fallback: just compute total RWA
+            total_stats = results.select(
+                pl.col(rwa_col).fill_null(0.0).sum().alias("total_rwa"),
+            ).collect()
+            total_rwa = float(total_stats["total_rwa"][0])
+
+        # SA-equivalent RWA for floor comparison (B31 col 0020)
+        sa_equiv_rwa = 0.0
+        if is_b31 and "sa_rwa" in cols:
+            sa_equiv_stats = results.select(
+                pl.col("sa_rwa").fill_null(0.0).sum().alias("sa_equiv"),
+            ).collect()
+            sa_equiv_rwa = float(sa_equiv_stats["sa_equiv"][0])
+
+        # Output floor RWEA (B31 col 0030)
+        floor_rwa = total_rwa  # Default: no floor binding
+        floor_pct = 0.0
+        of_adj = 0.0
+        floor_activated = False
+        if is_b31 and "rwa_pre_floor" in cols:
+            pre_floor_stats = results.select(
+                pl.col("rwa_pre_floor").fill_null(0.0).sum().alias("pre_floor"),
+            ).collect()
+            pre_floor_total = float(pre_floor_stats["pre_floor"][0])
+            # floor_rwa = total RWA (which includes floor add-on if binding)
+            floor_rwa = total_rwa
+            floor_activated = total_rwa > pre_floor_total + 0.01
+
+        # Convenience: approach totals
+        sa_rwa_total = approach_rwa.get("standardised", 0.0)
+        equity_rwa = approach_rwa.get("equity", 0.0)
+        firb_rwa = approach_rwa.get("foundation_irb", 0.0)
+        airb_rwa = approach_rwa.get("advanced_irb", 0.0)
+        slotting_rwa = approach_rwa.get("slotting", 0.0)
+        irb_total_rwa = firb_rwa + airb_rwa + slotting_rwa
+
+        # Own funds requirement = 8% × TREA (Art. 92(1))
+        own_funds_req = total_rwa * 0.08
+
+        # Build row values
+        row_values: dict[str, dict[str, object]] = {}
+
+        # Total and summary rows
+        row_values["0010"] = {"0010": total_rwa}
+        row_values["0040"] = {"0010": own_funds_req}
+        row_values["0050"] = {"0010": total_rwa}  # Credit risk = total (only CR in scope)
+        row_values["0060"] = {"0010": sa_rwa_total + equity_rwa}
+
+        # SA per-class breakdown
+        for ec_value, row_ref in C02_00_SA_CLASS_MAP.items():
+            if ec_value in sa_class_rwa:
+                if row_ref not in row_values:
+                    row_values[row_ref] = {"0010": 0.0}
+                existing = row_values[row_ref].get("0010", 0.0) or 0.0
+                row_values[row_ref]["0010"] = existing + sa_class_rwa[ec_value]
+
+        # Specialised lending sub-row (B31 only, under SA corporates)
+        if is_b31 and "specialised_lending" in sa_class_rwa:
+            row_values["0131"] = {"0010": sa_class_rwa["specialised_lending"]}
+
+        # IRB total
+        row_values["0220"] = {"0010": irb_total_rwa}
+
+        # F-IRB total and sub-rows
+        row_values["0240"] = {"0010": firb_rwa}
+        irb_class_rwa = getattr(self, "_irb_class_rwa", {})
+        # F-IRB — Institutions
+        firb_inst = irb_class_rwa.get(("foundation_irb", "institution"), 0.0)
+        row_values["0250"] = {"0010": firb_inst}
+        if is_b31:
+            row_values["0271"] = {"0010": firb_inst}
+        # F-IRB — Corporates
+        firb_corp = irb_class_rwa.get(("foundation_irb", "corporate"), 0.0)
+        firb_sl = irb_class_rwa.get(("foundation_irb", "specialised_lending"), 0.0)
+        row_values["0260"] = {"0010": firb_corp + firb_sl}
+        if is_b31:
+            row_values["0290"] = {"0010": firb_sl}
+            # Approximate: all non-SL F-IRB corporate goes to "other"
+            row_values["0295"] = {"0010": 0.0}  # Financial/large — needs cp_is_fse
+            row_values["0296"] = {"0010": 0.0}  # SME — needs is_sme
+            row_values["0297"] = {"0010": firb_corp}  # Fallback: all non-SL corporate
+
+        # A-IRB total and sub-rows
+        row_values["0300"] = {"0010": airb_rwa}
+        # A-IRB by exposure class
+        airb_sovereign = irb_class_rwa.get(("advanced_irb", "central_government"), 0.0)
+        row_values["0310"] = {"0010": airb_sovereign}
+        airb_inst = irb_class_rwa.get(("advanced_irb", "institution"), 0.0)
+        row_values["0330"] = {"0010": airb_inst}
+        airb_corp = irb_class_rwa.get(("advanced_irb", "corporate"), 0.0)
+        airb_sl_excl = irb_class_rwa.get(("advanced_irb", "specialised_lending"), 0.0)
+        row_values["0340"] = {"0010": airb_corp + airb_sl_excl}
+        if is_b31:
+            row_values["0350"] = {"0010": airb_sl_excl}
+            row_values["0355"] = {"0010": 0.0}  # SME — needs is_sme
+            row_values["0356"] = {"0010": airb_corp}  # Fallback: all non-SL
+
+        # A-IRB retail
+        airb_retail_mort = irb_class_rwa.get(("advanced_irb", "retail_mortgage"), 0.0)
+        airb_retail_qrre = irb_class_rwa.get(("advanced_irb", "retail_qrre"), 0.0)
+        airb_retail_other = irb_class_rwa.get(("advanced_irb", "retail_other"), 0.0)
+        airb_retail_total = airb_retail_mort + airb_retail_qrre + airb_retail_other
+        row_values["0370"] = {"0010": airb_retail_total}
+        row_values["0380"] = {"0010": airb_retail_mort}
+        if is_b31:
+            row_values["0382"] = {"0010": 0.0}  # Residential SME — needs is_sme
+            row_values["0383"] = {"0010": airb_retail_mort}  # Fallback: all residential
+            row_values["0384"] = {"0010": 0.0}  # CRE SME — needs is_sme
+            row_values["0385"] = {"0010": 0.0}  # CRE non-SME
+        row_values["0390"] = {"0010": airb_retail_qrre}
+        row_values["0400"] = {"0010": airb_retail_other}  # CRR: SME only
+        if is_b31:
+            row_values["0410"] = {"0010": 0.0}  # Retail other non-SME — needs split
+
+        # Slotting
+        slotting_type_rwa = getattr(self, "_slotting_type_rwa", {})
+        if is_b31:
+            row_values["0411"] = {"0010": slotting_rwa}
+            row_values["0412"] = {"0010": slotting_type_rwa.get("project_finance", 0.0)}
+            row_values["0413"] = {"0010": slotting_type_rwa.get("object_finance", 0.0)}
+            row_values["0414"] = {"0010": slotting_type_rwa.get("commodities_finance", 0.0)}
+            row_values["0415"] = {"0010": slotting_type_rwa.get("ipre", 0.0)}
+            row_values["0416"] = {"0010": slotting_type_rwa.get("hvcre", 0.0)}
+        else:
+            row_values["0410"] = {"0010": slotting_rwa}
+
+        # Equity IRB
+        row_values["0420"] = {"0010": equity_rwa}
+
+        # B31 output floor indicator rows
+        if is_b31:
+            row_values["0034"] = {"0010": 1.0 if floor_activated else 0.0}
+            row_values["0035"] = {"0010": 0.0}  # Placeholder — needs OutputFloorConfig
+            row_values["0036"] = {"0010": 0.0}  # Placeholder — needs OF-ADJ
+
+        # Add B31 col 0020 (SA-equivalent) and col 0030 (output floor) values
+        if is_b31:
+            for ref, vals in row_values.items():
+                col_0010 = vals.get("0010")
+                if ref == "0010":
+                    # Total row: col 0020 = SA-equivalent TREA, col 0030 = floor TREA
+                    vals["0020"] = sa_equiv_rwa
+                    vals["0030"] = floor_rwa
+                elif ref == "0040":
+                    # Own funds: 8% of respective column totals
+                    vals["0020"] = sa_equiv_rwa * 0.08
+                    vals["0030"] = floor_rwa * 0.08
+                elif ref in {"0034", "0035", "0036"}:
+                    # Indicator rows: same value across all columns
+                    vals["0020"] = col_0010
+                    vals["0030"] = col_0010
+                elif ref == "0050":
+                    # Credit risk total = SA-equiv for col 0020
+                    vals["0020"] = sa_equiv_rwa
+                    vals["0030"] = floor_rwa
+                elif ref == "0060":
+                    # SA subtotal: SA-equiv includes all SA + equity
+                    vals["0020"] = vals["0010"]  # SA-only RWEA is what SA produces
+                    vals["0030"] = vals["0010"]  # SA approach doesn't get floored
+                elif ref in {"0220", "0240", "0300"}:
+                    # IRB totals: col 0020 = SA-equivalent of IRB exposures
+                    vals["0020"] = 0.0  # IRB → SA equivalent not separately tracked here
+                    vals["0030"] = 0.0
+                else:
+                    # Default: col 0020/0030 same as col 0010 for SA rows,
+                    # 0.0 for IRB rows (SA equivalent not separately computed)
+                    vals["0020"] = col_0010 if col_0010 is not None else None
+                    vals["0030"] = col_0010 if col_0010 is not None else None
+
+        # Build DataFrame rows
+        rows: list[dict[str, object]] = []
+        for section in row_sections:
+            for row_def in section.rows:
+                if row_def.ref in row_values:
+                    row_data: dict[str, object] = {
+                        "row_ref": row_def.ref,
+                        "row_name": row_def.name,
+                    }
+                    vals = row_values[row_def.ref]
+                    for ref in column_refs:
+                        row_data[ref] = vals.get(ref)
+                    rows.append(row_data)
+                elif row_def.ref in C02_00_CREDIT_RISK_ROWS:
+                    # Credit risk row without data — zero
+                    row_data = {"row_ref": row_def.ref, "row_name": row_def.name}
+                    for ref in column_refs:
+                        row_data[ref] = 0.0
+                    rows.append(row_data)
+                else:
+                    # Non-credit-risk rows — null (out of scope)
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+
+        # Schema: String for refs/names, Float64 for data columns
+        schema: dict[str, pl.DataType] = {
+            "row_ref": pl.String,
+            "row_name": pl.String,
+        }
+        for ref in column_refs:
+            schema[ref] = pl.Float64
+
+        # Clean up temporary state
+        self._irb_class_rwa = {}
+        self._slotting_type_rwa = {}
 
         return pl.DataFrame(rows, schema=schema)
 

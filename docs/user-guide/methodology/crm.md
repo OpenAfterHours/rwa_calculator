@@ -371,7 +371,7 @@ CRR Article 153(3) and CRE31.4 — when a guarantee provides credit protection, 
 
 ## Provisions
 
-### SA Treatment (Art. 111(2) Compliant)
+### SA Treatment (Art. 111(1)(a)-(b) Compliant)
 
 Provisions are resolved **before** CCF application using a drawn-first deduction approach:
 
@@ -436,7 +436,7 @@ Provisions can be allocated at different levels:
 When multiple CRM types are available, provisions are resolved first (before CCF), then the remaining CRM is applied after EAD initialization:
 
 ```python
-# Order of application (Art. 111(2) compliant)
+# Order of application (Art. 111(1)(a)-(b) compliant)
 1. Resolve provisions (before CCF) — drawn-first deduction, adjusts nominal
 2. Apply CCFs (uses nominal_after_provision for off-balance sheet conversion)
 3. Initialize EAD waterfall

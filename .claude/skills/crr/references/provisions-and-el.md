@@ -2,7 +2,7 @@
 
 Quick-reference for provision treatment under SA and IRB.
 
-**Regulatory Reference:** CRR Articles 110, 111(2), 158-159
+**Regulatory Reference:** CRR Articles 110, 111(1)(a)-(b), 158-159
 
 ---
 
@@ -24,7 +24,7 @@ resolve_provisions -> CCF -> initialize_ead -> collateral -> guarantees -> final
 
 Direct allocations applied first; facility and counterparty distributed proportionally.
 
-## SA Approach (Art. 110, 111(2))
+## SA Approach (Art. 110, 111(1)(a)-(b))
 
 Drawn-first deduction:
 

@@ -46,7 +46,6 @@ Quick-reference for specialised lending slotting risk weights and equity treatme
 |-------------|-------------|
 | Central bank / sovereign | 0% |
 | Listed / exchange-traded | 100% |
-| Government-supported | 100% |
 
 ### IRB Simple (Art. 155)
 

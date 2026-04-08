@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P2.3 C 09.01/OF 09.01 + C 09.02/OF 09.02 geographical breakdown implemented)
-**Current version:** 0.1.170 | **Test suite:** 4,953 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**Last updated:** 2026-04-08 (P2.8 C 07.00/OF 07.00 memorandum rows + supporting factor rows/columns implemented)
+**Current version:** 0.1.171 | **Test suite:** 4,981 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 12 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -114,7 +114,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
   - B31 OF 08.02 missing columns `0001` and `0101-0105` (per-grade CCF breakdown) (`templates.py:646-651`)
   - B31 C 08.01 off-BS CCF sub-rows `0031-0035` always null (`generator.py:521`)
   - C 07.00 B31 CIU sub-rows `0284/0285` defined in `templates.py:348-353` but never populated by generator
-  - Equity transitional rows `0371-0374` and currency mismatch row `0380` null due to missing pipeline columns (`equity_transitional_approach`, `currency_mismatch_multiplier_applied`)
+  - Equity transitional rows `0371-0374` and currency mismatch row `0380` implemented (filter on `equity_transitional_approach` and `currency_mismatch_multiplier_applied` columns — null only when pipeline columns absent)
+  - ~~C 07.00 memorandum rows 0290/0300/0310/0320 permanently null~~ — **FIXED** in P2.8 (2026-04-08)
+  - ~~CRR supporting factor "of which" rows 0030/0035 permanently null~~ — **FIXED** in P2.8 (2026-04-08)
+  - ~~CRR RWEA columns 0215-0217 permanently null due to column name mismatch~~ — **FIXED** in P2.8 (2026-04-08)
   - B31 slotting FCCM cols `0101-0104` in C 08.01 always null (`generator.py:1281-1283`)
   - Dead backward-compatibility aliases (`C07_COLUMNS`, `C08_01_COLUMNS`, `C08_02_COLUMNS`) at `templates.py:661-689` still exported but unused
   **Additional from PDF comparison:** OF 07.00 has 22 columns in spec vs ~29 actual (missing cols 0230/0235/0240 ECAI breakdown, col 0235 "ECAI not available" new in B31). OF 09.02 has 15 cols in spec vs 13 actual (missing col 0107 defaulted EV; remove SF cols). OF 08.01 missing cols 0254 (unrecognised exposure adjustments, NOT PD floors), 0265, 0282 (total post-adjustment EL, NOT PD/LGD floors); col 0280 renamed. OF 02.00 needs rows 0034 (Yes/No indicator), 0035 (multiplier %), 0036 (monetary OF-ADJ). OF 08.06 CRR risk weight column 0070 removed in B3.1; col 0031 FCCM is a deduction column. OF 08.07 cols 0160-0180 require consolidated-basis-only reporting. OF 09.01 missing col 0061 (additional value adjustments).
@@ -195,8 +198,23 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `reporting/corep/generator.py:1460-1472`
 - **Fix:** Track pre-CD and post-CD RWEA in the CRM/IRB pipeline.
 
-### P2.8 COREP memorandum rows (0300, 0320)
-- **Status:** [ ] Not implemented (confirmed at `generator.py:411`)
+### P2.8 COREP C 07.00 / OF 07.00 memorandum rows and supporting factor rows
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** Six previously-null rows in the primary SA credit risk COREP template are now populated from pipeline data, plus the CRR RWEA supporting factor columns (0216/0217) now work with pipeline-available column names.
+- **Implementation:**
+  - **Row 0300** (CRR + B31): "Exposures in default subject to RW of 100%" — filters defaulted exposures via `_filter_defaulted()` then by `risk_weight ≈ 1.00` (4-decimal rounding for float tolerance).
+  - **Row 0320** (CRR + B31): "Exposures in default subject to RW of 150%" — same pattern, `risk_weight ≈ 1.50`.
+  - **Row 0290** (CRR only): "Exposures secured by mortgages on commercial immovable property" — filters by `property_type == "commercial"`.
+  - **Row 0310** (CRR only): "Exposures secured by mortgages on residential immovable property" — filters by `property_type == "residential"`.
+  - **Row 0030** (CRR only): "of which: Exposures subject to SME-supporting factor" — filters by `is_sme == True AND supporting_factor_applied == True`.
+  - **Row 0035** (CRR only): "of which: Exposures subject to infrastructure supporting factor" — filters by `is_infrastructure == True AND supporting_factor_applied == True`.
+  - **RWEA col 0216** (CRR C 07.00 + C 08.01): SME factor adjustment now falls back to `is_sme + supporting_factor_applied + rwa_pre_factor` when legacy `sme_supporting_factor_applied` column absent.
+  - **RWEA col 0217** (CRR C 07.00 + C 08.01): Infrastructure factor adjustment now falls back to `is_infrastructure + supporting_factor_applied + rwa_pre_factor`.
+  - **RWEA col 0215** (CRR C 07.00): Pre-factor RWEA now also tries `rwa_pre_factor` (pipeline name) in addition to `rwa_before_sme_factor` (legacy name).
+  - **New helper functions:** `_filter_defaulted_at_rw()`, `_filter_re_secured()`, `_filter_supporting_factor()` in `generator.py`.
+- **File:Line:** `reporting/corep/generator.py` (Section 1 rows 0030/0035 handling, Section 5 memorandum rows 0290/0300/0310/0320 handling, RWEA columns 0215-0217 fallback logic, 3 new helper functions)
+- **Spec ref:** CRR Art. 127 (defaulted RW), Art. 124-126 (immovable property), Art. 501/501a (supporting factors)
+- **Tests:** 28 new tests in `tests/unit/test_corep.py` across 3 test classes: TestC0700MemorandumRows (14 tests: defaulted at RW 100%/150%, CRR commercial/residential RE, B31 rows present/populated, null when no defaults, float precision, column completeness), TestC0700SupportingFactorRows (8 tests: SME/infrastructure filter, exclusion, null fallback, B31 absent, missing column handling, original exposure), TestC0700SupportingFactorRWEA (7 tests: pre-factor from pipeline, SME/infra adjustments, post-factor total, arithmetic identity, null without columns, B31 absent). All 4,981 tests pass (was 4,953). COREP tests: 663 (was 635).
 - **File:Line:** `reporting/corep/generator.py:411`
 - **Fix:** Implement memorandum item aggregation.
 

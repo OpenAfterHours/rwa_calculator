@@ -1360,8 +1360,25 @@ class COREPGenerator:
                     rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref == "0030":
+                # CRR: of which: Exposures subject to SME-supporting factor
+                subset = _filter_supporting_factor(class_data, cols, "sme")
+                if len(subset) > 0:
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref == "0035":
+                # CRR: of which: Exposures subject to infrastructure supporting factor
+                subset = _filter_supporting_factor(class_data, cols, "infrastructure")
+                if len(subset) > 0:
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
-                # Other "of which" rows — Phase 3 features (equity), null for now
+                # Other "of which" rows (0040/0050/0060) — require
+                # pipeline columns not yet available
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         # Section 2: Breakdown by Exposure Types
@@ -1413,6 +1430,8 @@ class COREPGenerator:
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         # Section 5: Memorandum Items
+        _MEMO_DEFAULTED_RW = {"0300": 1.0, "0320": 1.5}
+        _MEMO_RE_SECURED = {"0290": "commercial", "0310": "residential"}
         for row_def in row_sections[4].rows:
             if row_def.ref in _EQUITY_TRANSITIONAL_FILTERS:
                 eq_filter = _EQUITY_TRANSITIONAL_FILTERS[row_def.ref]
@@ -1430,8 +1449,25 @@ class COREPGenerator:
                     rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref in _MEMO_DEFAULTED_RW:
+                # Defaulted at specific RW (CRR Art. 127 / PRA Art. 127)
+                target_rw = _MEMO_DEFAULTED_RW[row_def.ref]
+                subset = _filter_defaulted_at_rw(class_data, cols, target_rw)
+                if len(subset) > 0:
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            elif row_def.ref in _MEMO_RE_SECURED:
+                # CRR: Exposures secured by mortgages (Art. 124-126)
+                prop_type = _MEMO_RE_SECURED[row_def.ref]
+                subset = _filter_re_secured(class_data, cols, prop_type)
+                if len(subset) > 0:
+                    values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
+                else:
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
-                # Other memorandum rows (0300, 0320) — not yet implemented
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         schema: dict[str, pl.DataType] = {
@@ -2479,6 +2515,81 @@ def _filter_currency_mismatch(data: pl.DataFrame, cols: set[str]) -> pl.DataFram
     return data.filter(pl.col("currency_mismatch_multiplier_applied") == True)  # noqa: E712
 
 
+def _filter_defaulted_at_rw(
+    data: pl.DataFrame, cols: set[str], target_rw: float
+) -> pl.DataFrame:
+    """Filter to defaulted exposures with a specific risk weight.
+
+    Used for C 07.00 / OF 07.00 memorandum items:
+    - Row 0300: Exposures in default subject to RW of 100% (target_rw=1.0)
+    - Row 0320: Exposures in default subject to RW of 150% (target_rw=1.5)
+
+    References:
+        CRR Art. 127: Defaulted exposure risk weights
+        PRA PS1/26 Art. 127: Defaulted exposure risk weights
+    """
+    defaulted = _filter_defaulted(data, cols)
+    if len(defaulted) == 0:
+        return defaulted
+    rw_col = _pick(set(defaulted.columns), "risk_weight", "sa_final_risk_weight")
+    if rw_col is None:
+        return data.clear()
+    return defaulted.filter(pl.col(rw_col).round(4) == round(target_rw, 4))
+
+
+def _filter_re_secured(
+    data: pl.DataFrame, cols: set[str], property_type: str
+) -> pl.DataFrame:
+    """Filter to exposures secured by mortgages on immovable property.
+
+    Used for CRR C 07.00 memorandum items:
+    - Row 0290: Exposures secured by mortgages on commercial immovable property
+    - Row 0310: Exposures secured by mortgages on residential immovable property
+
+    References:
+        CRR Art. 124-126: Exposures secured by immovable property
+    """
+    if "property_type" not in cols:
+        return data.clear()
+    return data.filter(pl.col("property_type") == property_type)
+
+
+def _filter_supporting_factor(
+    data: pl.DataFrame, cols: set[str], factor_type: str
+) -> pl.DataFrame:
+    """Filter to exposures where a specific supporting factor was applied.
+
+    Args:
+        factor_type: "sme" or "infrastructure"
+
+    Used for CRR C 07.00 Section 1 "of which" rows:
+    - Row 0030: Exposures subject to SME-supporting factor
+    - Row 0035: Exposures subject to infrastructure supporting factor
+
+    References:
+        CRR Art. 501: SME supporting factor
+        CRR Art. 501a: Infrastructure supporting factor
+    """
+    flag_col = "is_sme" if factor_type == "sme" else "is_infrastructure"
+    if flag_col not in cols:
+        return data.clear()
+
+    # Check for specific factor_applied columns first, then generic
+    sf_applied = _pick(
+        cols,
+        f"{factor_type}_supporting_factor_applied",
+        "supporting_factor_applied",
+    )
+    if sf_applied is None:
+        # No supporting factor tracking — filter by flag only
+        return data.filter(pl.col(flag_col) == True)  # noqa: E712
+
+    return data.filter(
+        (pl.col(flag_col) == True)  # noqa: E712
+        & (pl.col(sf_applied) == True)  # noqa: E712
+    )
+
+
 def _filter_section3_row(
     data: pl.DataFrame,
     cols: set[str],
@@ -2868,14 +2979,34 @@ def _compute_c07_values(
 
     # --- RWEA ---
     # 0215: RWEA pre supporting factors (CRR only)
+    # Try rwa_before_sme_factor first (legacy), then rwa_pre_factor (pipeline)
     rwa_pre = _col_sum_eager(data, cols, "rwa_before_sme_factor")
+    if rwa_pre is None:
+        rwa_pre = _col_sum_eager(data, cols, "rwa_pre_factor")
     values["0215"] = rwa_pre if rwa_pre is not None else _col_sum_eager(data, cols, rwa_col)
 
+    # Pre-factor column: pipeline uses rwa_pre_factor; legacy uses rwa_before_sme_factor
+    pre_factor_col = _pick(cols, "rwa_before_sme_factor", "rwa_pre_factor")
+
     # 0216: (-) SME supporting factor adjustment (CRR only)
-    if "sme_supporting_factor_applied" in cols and "rwa_before_sme_factor" in cols:
-        sme_data = data.filter(pl.col("sme_supporting_factor_applied") == True)  # noqa: E712
+    # Adjustment = sum(rwa_pre_factor - rwa_final) for SME-factor-applied exposures
+    sme_applied_col = _pick(cols, "sme_supporting_factor_applied")
+    if sme_applied_col and pre_factor_col:
+        sme_data = data.filter(pl.col(sme_applied_col) == True)  # noqa: E712
         if len(sme_data) > 0:
-            pre = float(sme_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            pre = float(sme_data[pre_factor_col].fill_null(0.0).sum())
+            post = float(sme_data[rwa_col].fill_null(0.0).sum())
+            values["0216"] = pre - post
+        else:
+            values["0216"] = 0.0
+    elif "is_sme" in cols and "supporting_factor_applied" in cols and pre_factor_col:
+        # Fallback: use is_sme + supporting_factor_applied (pipeline columns)
+        sme_data = data.filter(
+            (pl.col("is_sme") == True)  # noqa: E712
+            & (pl.col("supporting_factor_applied") == True)  # noqa: E712
+        )
+        if len(sme_data) > 0:
+            pre = float(sme_data[pre_factor_col].fill_null(0.0).sum())
             post = float(sme_data[rwa_col].fill_null(0.0).sum())
             values["0216"] = pre - post
         else:
@@ -2884,10 +3015,23 @@ def _compute_c07_values(
         values["0216"] = None
 
     # 0217: (-) Infrastructure supporting factor adjustment (CRR only)
-    if "infrastructure_factor_applied" in cols and "rwa_before_sme_factor" in cols:
-        infra_data = data.filter(pl.col("infrastructure_factor_applied") == True)  # noqa: E712
+    infra_applied_col = _pick(cols, "infrastructure_factor_applied")
+    if infra_applied_col and pre_factor_col:
+        infra_data = data.filter(pl.col(infra_applied_col) == True)  # noqa: E712
         if len(infra_data) > 0:
-            pre = float(infra_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            pre = float(infra_data[pre_factor_col].fill_null(0.0).sum())
+            post = float(infra_data[rwa_col].fill_null(0.0).sum())
+            values["0217"] = pre - post
+        else:
+            values["0217"] = 0.0
+    elif "is_infrastructure" in cols and "supporting_factor_applied" in cols and pre_factor_col:
+        # Fallback: use is_infrastructure + supporting_factor_applied (pipeline columns)
+        infra_data = data.filter(
+            (pl.col("is_infrastructure") == True)  # noqa: E712
+            & (pl.col("supporting_factor_applied") == True)  # noqa: E712
+        )
+        if len(infra_data) > 0:
+            pre = float(infra_data[pre_factor_col].fill_null(0.0).sum())
             post = float(infra_data[rwa_col].fill_null(0.0).sum())
             values["0217"] = pre - post
         else:
@@ -3120,13 +3264,30 @@ def _compute_c08_values(
 
     # 0255: RWEA pre supporting factors (CRR only)
     rwa_pre = _col_sum_eager(data, cols, "rwa_before_sme_factor")
+    if rwa_pre is None:
+        rwa_pre = _col_sum_eager(data, cols, "rwa_pre_factor")
     values["0255"] = rwa_pre if rwa_pre is not None else _col_sum_eager(data, cols, rwa_col)
 
+    # Pre-factor column: pipeline uses rwa_pre_factor; legacy uses rwa_before_sme_factor
+    c08_pre_factor_col = _pick(cols, "rwa_before_sme_factor", "rwa_pre_factor")
+
     # 0256: (-) SME supporting factor adjustment (CRR only)
-    if "sme_supporting_factor_applied" in cols and "rwa_before_sme_factor" in cols:
-        sme_data = data.filter(pl.col("sme_supporting_factor_applied") == True)  # noqa: E712
+    sme_applied = _pick(cols, "sme_supporting_factor_applied")
+    if sme_applied and c08_pre_factor_col:
+        sme_data = data.filter(pl.col(sme_applied) == True)  # noqa: E712
         if len(sme_data) > 0:
-            pre = float(sme_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            pre = float(sme_data[c08_pre_factor_col].fill_null(0.0).sum())
+            post = float(sme_data[rwa_col].fill_null(0.0).sum())
+            values["0256"] = pre - post
+        else:
+            values["0256"] = 0.0
+    elif "is_sme" in cols and "supporting_factor_applied" in cols and c08_pre_factor_col:
+        sme_data = data.filter(
+            (pl.col("is_sme") == True)  # noqa: E712
+            & (pl.col("supporting_factor_applied") == True)  # noqa: E712
+        )
+        if len(sme_data) > 0:
+            pre = float(sme_data[c08_pre_factor_col].fill_null(0.0).sum())
             post = float(sme_data[rwa_col].fill_null(0.0).sum())
             values["0256"] = pre - post
         else:
@@ -3135,10 +3296,26 @@ def _compute_c08_values(
         values["0256"] = None
 
     # 0257: (-) Infrastructure supporting factor adjustment (CRR only)
-    if "infrastructure_factor_applied" in cols and "rwa_before_sme_factor" in cols:
-        infra_data = data.filter(pl.col("infrastructure_factor_applied") == True)  # noqa: E712
+    infra_applied = _pick(cols, "infrastructure_factor_applied")
+    if infra_applied and c08_pre_factor_col:
+        infra_data = data.filter(pl.col(infra_applied) == True)  # noqa: E712
         if len(infra_data) > 0:
-            pre = float(infra_data["rwa_before_sme_factor"].fill_null(0.0).sum())
+            pre = float(infra_data[c08_pre_factor_col].fill_null(0.0).sum())
+            post = float(infra_data[rwa_col].fill_null(0.0).sum())
+            values["0257"] = pre - post
+        else:
+            values["0257"] = 0.0
+    elif (
+        "is_infrastructure" in cols
+        and "supporting_factor_applied" in cols
+        and c08_pre_factor_col
+    ):
+        infra_data = data.filter(
+            (pl.col("is_infrastructure") == True)  # noqa: E712
+            & (pl.col("supporting_factor_applied") == True)  # noqa: E712
+        )
+        if len(infra_data) > 0:
+            pre = float(infra_data[c08_pre_factor_col].fill_null(0.0).sum())
             post = float(infra_data[rwa_col].fill_null(0.0).sum())
             values["0257"] = pre - post
         else:

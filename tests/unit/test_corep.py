@@ -7618,3 +7618,501 @@ class TestC0902EdgeCases:
         total = bundle.c09_02["TOTAL"]
         total_row = total.filter(pl.col("row_ref") == "0150")
         assert total_row["0105"][0] == pytest.approx(0.0)
+
+
+# =============================================================================
+# C 07.00 / OF 07.00 — MEMORANDUM ROWS AND SUPPORTING FACTOR ROWS
+# =============================================================================
+
+
+def _sa_results_with_defaulted() -> pl.LazyFrame:
+    """SA results with defaulted exposures at different risk weights.
+
+    Contains:
+    - 2 defaulted corporate exposures: one at RW 100%, one at RW 150%
+    - 1 non-defaulted corporate (RW 100%) to verify filtering
+    - 1 defaulted retail at RW 150%
+    """
+    return pl.LazyFrame({
+        "exposure_reference": [
+            "SA_DEF_100", "SA_DEF_150", "SA_CORP_LIVE", "SA_RET_DEF",
+        ],
+        "approach_applied": [
+            "standardised", "standardised", "standardised", "standardised",
+        ],
+        "exposure_class": [
+            "corporate", "corporate", "corporate", "retail_other",
+        ],
+        "drawn_amount": [1000.0, 2000.0, 3000.0, 500.0],
+        "undrawn_amount": [0.0, 0.0, 500.0, 0.0],
+        "ead_final": [1000.0, 2000.0, 3200.0, 500.0],
+        "rwa_final": [1000.0, 3000.0, 3200.0, 750.0],
+        "risk_weight": [1.00, 1.50, 1.00, 1.50],
+        "default_status": [True, True, False, True],
+        "scra_provision_amount": [50.0, 100.0, 10.0, 25.0],
+        "gcra_provision_amount": [0.0, 0.0, 5.0, 0.0],
+        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
+        "sa_cqs": [None, None, 3, None],
+    })
+
+
+def _sa_results_with_re_memorandum() -> pl.LazyFrame:
+    """SA results with RE-secured exposures for CRR memorandum rows 0290/0310.
+
+    Contains:
+    - 2 commercial RE-secured exposures (EAD 1000 + 2000)
+    - 1 residential RE-secured exposure (EAD 3000)
+    - 1 non-RE exposure
+    """
+    return pl.LazyFrame({
+        "exposure_reference": [
+            "SA_CRE_1", "SA_CRE_2", "SA_RRE_1", "SA_PLAIN",
+        ],
+        "approach_applied": [
+            "standardised", "standardised", "standardised", "standardised",
+        ],
+        "exposure_class": [
+            "secured_by_re_property", "secured_by_re_property",
+            "secured_by_re_property", "corporate",
+        ],
+        "drawn_amount": [1000.0, 2000.0, 3000.0, 4000.0],
+        "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
+        "ead_final": [1000.0, 2000.0, 3000.0, 4000.0],
+        "rwa_final": [500.0, 1000.0, 1050.0, 4000.0],
+        "risk_weight": [0.50, 0.50, 0.35, 1.00],
+        "property_type": ["commercial", "commercial", "residential", None],
+        "scra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+        "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
+        "sa_cqs": [None, None, None, 3],
+    })
+
+
+def _sa_results_with_supporting_factors() -> pl.LazyFrame:
+    """SA results with supporting factor data for CRR rows 0030/0035.
+
+    All exposures are "corporate" class. The is_sme/is_infrastructure flags
+    indicate which supporting factor applies. In a real pipeline, the
+    classifier sets these flags while keeping exposure_class as "corporate".
+
+    Contains:
+    - 2 SME corporate exposures with supporting factor applied
+    - 1 infrastructure corporate exposure with supporting factor applied
+    - 1 plain corporate (no factor)
+    """
+    return pl.LazyFrame({
+        "exposure_reference": [
+            "SA_SME_1", "SA_SME_2", "SA_INFRA_1", "SA_CORP_1",
+        ],
+        "approach_applied": [
+            "standardised", "standardised", "standardised", "standardised",
+        ],
+        "exposure_class": [
+            "corporate", "corporate", "corporate", "corporate",
+        ],
+        "drawn_amount": [1000.0, 2000.0, 5000.0, 3000.0],
+        "undrawn_amount": [0.0, 0.0, 0.0, 500.0],
+        "ead_final": [1000.0, 2000.0, 5000.0, 3200.0],
+        "rwa_final": [700.0, 1400.0, 3750.0, 3200.0],
+        "risk_weight": [1.00, 1.00, 1.00, 1.00],
+        "rwa_pre_factor": [1000.0, 2000.0, 5000.0, 3200.0],
+        "supporting_factor_applied": [True, True, True, False],
+        "is_sme": [True, True, False, False],
+        "is_infrastructure": [False, False, True, False],
+        "scra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+        "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
+        "sa_cqs": [3, 3, 3, 3],
+    })
+
+
+class TestC0700MemorandumRows:
+    """Tests for C 07.00 / OF 07.00 Section 5 memorandum rows.
+
+    Memorandum items provide supplementary breakdowns:
+    - Row 0290 (CRR): Exposures secured by mortgages on commercial immovable property
+    - Row 0300: Exposures in default subject to RW of 100%
+    - Row 0310 (CRR): Exposures secured by mortgages on residential immovable property
+    - Row 0320: Exposures in default subject to RW of 150%
+
+    Why: These rows are mandatory COREP fields. Previously they were
+    always null, misrepresenting the institution's defaulted exposure
+    distribution and RE-secured positions.
+
+    References:
+        CRR Art. 127: Defaulted exposure risk weights
+        CRR Art. 124-126: Exposures secured by immovable property
+    """
+
+    def test_row_0300_defaulted_rw_100(self) -> None:
+        """Row 0300 filters defaulted exposures with RW = 100%."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0300")
+        assert len(row) == 1
+        # SA_DEF_100 has EAD 1000, RW 100%, defaulted
+        assert row["0200"][0] == pytest.approx(1000.0)
+        assert row["0220"][0] == pytest.approx(1000.0)
+
+    def test_row_0320_defaulted_rw_150(self) -> None:
+        """Row 0320 filters defaulted exposures with RW = 150%."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0320")
+        assert len(row) == 1
+        # SA_DEF_150 has EAD 2000, RW 150%, defaulted
+        assert row["0200"][0] == pytest.approx(2000.0)
+        assert row["0220"][0] == pytest.approx(3000.0)
+
+    def test_row_0300_excludes_non_defaulted(self) -> None:
+        """Row 0300 must not include non-defaulted exposures even at RW 100%."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0300 = corp.filter(pl.col("row_ref") == "0300")
+        # SA_CORP_LIVE is RW 100% but NOT defaulted; should be excluded
+        # Only SA_DEF_100 (EAD 1000) qualifies
+        assert row_0300["0200"][0] == pytest.approx(1000.0)
+
+    def test_row_0320_retail_class(self) -> None:
+        """Row 0320 applies within each exposure class independently."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="CRR"
+        )
+        retail = bundle.c07_00["retail_other"]
+        row = retail.filter(pl.col("row_ref") == "0320")
+        # SA_RET_DEF has EAD 500, RW 150%, defaulted
+        assert row["0200"][0] == pytest.approx(500.0)
+        assert row["0220"][0] == pytest.approx(750.0)
+
+    def test_row_0300_null_when_no_defaults_at_100(self) -> None:
+        """Row 0300 is null when no defaulted exposures have RW = 100%."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="CRR"
+        )
+        retail = bundle.c07_00["retail_other"]
+        row = retail.filter(pl.col("row_ref") == "0300")
+        # No defaulted retail exposures at RW 100%
+        assert row["0200"][0] is None
+
+    def test_b31_rows_0300_0320_present(self) -> None:
+        """Basel 3.1 OF 07.00 also has rows 0300 and 0320."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_refs = corp["row_ref"].to_list()
+        assert "0300" in row_refs
+        assert "0320" in row_refs
+
+    def test_b31_row_0300_populated(self) -> None:
+        """B31 row 0300 is populated from defaulted exposures at RW 100%."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0300")
+        assert row["0200"][0] == pytest.approx(1000.0)
+
+    def test_row_0290_crr_commercial_re(self) -> None:
+        """CRR row 0290: commercial immovable property secured exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re_memorandum(), framework="CRR"
+        )
+        re = bundle.c07_00["secured_by_re_property"]
+        row = re.filter(pl.col("row_ref") == "0290")
+        assert len(row) == 1
+        # Two commercial RE: EAD 1000 + 2000 = 3000
+        assert row["0200"][0] == pytest.approx(3000.0)
+        # RWA 500 + 1000 = 1500
+        assert row["0220"][0] == pytest.approx(1500.0)
+
+    def test_row_0310_crr_residential_re(self) -> None:
+        """CRR row 0310: residential immovable property secured exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re_memorandum(), framework="CRR"
+        )
+        re = bundle.c07_00["secured_by_re_property"]
+        row = re.filter(pl.col("row_ref") == "0310")
+        assert len(row) == 1
+        # One residential RE: EAD 3000
+        assert row["0200"][0] == pytest.approx(3000.0)
+        assert row["0220"][0] == pytest.approx(1050.0)
+
+    def test_row_0290_null_for_non_re_class(self) -> None:
+        """Row 0290 is null for classes without RE-secured exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re_memorandum(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0290")
+        assert row["0200"][0] is None
+
+    def test_b31_no_rows_0290_0310(self) -> None:
+        """B31 OF 07.00 does not have rows 0290/0310 (replaced by Section 1 RE breakdown)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_re_memorandum(), framework="BASEL_3_1"
+        )
+        re = bundle.c07_00["secured_by_re_property"]
+        row_refs = re["row_ref"].to_list()
+        # B31 memorandum doesn't include 0290/0310 (removed in template defs)
+        assert "0290" not in row_refs
+        assert "0310" not in row_refs
+
+    def test_defaulted_rw_matching_uses_rounding(self) -> None:
+        """RW comparison uses 4-decimal rounding to handle float imprecision."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["E1"],
+            "approach_applied": ["standardised"],
+            "exposure_class": ["corporate"],
+            "drawn_amount": [1000.0],
+            "undrawn_amount": [0.0],
+            "ead_final": [1000.0],
+            "rwa_final": [1000.0],
+            # Slightly imprecise 100% due to float arithmetic
+            "risk_weight": [0.99999999],
+            "default_status": [True],
+            "scra_provision_amount": [0.0],
+            "gcra_provision_amount": [0.0],
+            "counterparty_reference": ["CP_A"],
+        })
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="CRR")
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0300")
+        # Should match despite float imprecision
+        assert row["0200"][0] == pytest.approx(1000.0)
+
+    def test_memorandum_columns_complete(self) -> None:
+        """Memorandum rows have the full set of COREP columns."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_defaulted(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0300 = corp.filter(pl.col("row_ref") == "0300")
+        # Should have all CRR C07 columns
+        crr_col_refs = [c.ref for c in CRR_C07_COLUMNS]
+        for ref in crr_col_refs:
+            assert ref in row_0300.columns
+
+
+class TestC0700SupportingFactorRows:
+    """Tests for CRR C 07.00 Section 1 supporting factor rows.
+
+    Row 0030: of which: Exposures subject to SME-supporting factor
+    Row 0035: of which: Exposures subject to infrastructure supporting factor
+
+    Why: These rows report the regulatory benefit from supporting factors.
+    Previously they were always null despite the pipeline computing
+    supporting factors. Now populated using is_sme/is_infrastructure
+    flags and supporting_factor_applied status.
+
+    References:
+        CRR Art. 501: SME supporting factor
+        CRR Art. 501a: Infrastructure supporting factor
+    """
+
+    def test_row_0030_sme_exposures(self) -> None:
+        """Row 0030 filters SME exposures with supporting factor applied."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        # corporate_sme merges into corporate for C 07.00
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0030")
+        assert len(row) == 1
+        # SA_SME_1 (EAD 1000) + SA_SME_2 (EAD 2000) = 3000
+        assert row["0200"][0] == pytest.approx(3000.0)
+        assert row["0220"][0] == pytest.approx(2100.0)  # 700 + 1400
+
+    def test_row_0035_infrastructure_exposures(self) -> None:
+        """Row 0035 filters infrastructure exposures with factor applied."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0035")
+        assert len(row) == 1
+        # SA_INFRA_1: EAD 5000, RWA 3750
+        assert row["0200"][0] == pytest.approx(5000.0)
+        assert row["0220"][0] == pytest.approx(3750.0)
+
+    def test_row_0030_excludes_non_sme(self) -> None:
+        """Row 0030 excludes non-SME exposures even with factor applied."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0030 = corp.filter(pl.col("row_ref") == "0030")
+        # Only SME exposures (3000), not infra (5000) or plain (3200)
+        assert row_0030["0200"][0] == pytest.approx(3000.0)
+
+    def test_row_0035_excludes_non_infrastructure(self) -> None:
+        """Row 0035 excludes non-infrastructure exposures."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_0035 = corp.filter(pl.col("row_ref") == "0035")
+        # Only infra (5000), not SME (3000) or plain (3200)
+        assert row_0035["0200"][0] == pytest.approx(5000.0)
+
+    def test_row_0030_null_when_no_sme(self) -> None:
+        """Row 0030 is null when no SME exposures exist."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results(), framework="CRR")
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0030")
+        assert row["0200"][0] is None
+
+    def test_b31_no_supporting_factor_rows(self) -> None:
+        """B31 has no supporting factor rows (removed under Basel 3.1)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        row_refs = corp["row_ref"].to_list()
+        # B31 removes rows 0030 and 0035
+        assert "0030" not in row_refs
+        assert "0035" not in row_refs
+
+    def test_supporting_factor_without_flag_column(self) -> None:
+        """Rows 0030/0035 are null when is_sme/is_infrastructure absent."""
+        gen = COREPGenerator()
+        # _sa_results() has no is_sme or is_infrastructure columns
+        bundle = gen.generate_from_lazyframe(_sa_results(), framework="CRR")
+        corp = bundle.c07_00["corporate"]
+        row_0030 = corp.filter(pl.col("row_ref") == "0030")
+        row_0035 = corp.filter(pl.col("row_ref") == "0035")
+        assert row_0030["0200"][0] is None
+        assert row_0035["0200"][0] is None
+
+    def test_original_exposure_correct_for_sme(self) -> None:
+        """Row 0030 original exposure (col 0010) = drawn + undrawn for SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0030")
+        # SME_1: 1000+0=1000, SME_2: 2000+0=2000, total 3000
+        assert row["0010"][0] == pytest.approx(3000.0)
+
+
+class TestC0700SupportingFactorRWEA:
+    """Tests for CRR C 07.00 RWEA columns 0215-0217 with pipeline columns.
+
+    The pipeline produces rwa_pre_factor and supporting_factor_applied,
+    while the COREP spec expects per-type breakdown (SME vs infrastructure).
+    The generator now uses fallback logic: tries legacy column names first,
+    then pipeline columns (is_sme/is_infrastructure + supporting_factor_applied).
+
+    Why: These columns quantify the SME/infrastructure capital relief. Without
+    the fallback, they were always null despite the pipeline computing factors.
+
+    References:
+        CRR Art. 501: SME supporting factor
+        CRR Art. 501a: Infrastructure supporting factor
+    """
+
+    def test_col_0215_pre_factor_rwa(self) -> None:
+        """Col 0215 uses rwa_pre_factor when rwa_before_sme_factor absent."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Total rwa_pre_factor: 1000+2000+5000+3200 = 11200
+        assert total["0215"][0] == pytest.approx(11200.0)
+
+    def test_col_0216_sme_adjustment(self) -> None:
+        """Col 0216 computes SME factor adjustment from pipeline columns."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # SME adjustment = pre - post for SME rows
+        # SME_1: 1000 - 700 = 300, SME_2: 2000 - 1400 = 600
+        assert total["0216"][0] == pytest.approx(900.0)
+
+    def test_col_0217_infra_adjustment(self) -> None:
+        """Col 0217 computes infrastructure factor adjustment."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Infrastructure adjustment = pre - post for infra rows
+        # INFRA_1: 5000 - 3750 = 1250
+        assert total["0217"][0] == pytest.approx(1250.0)
+
+    def test_col_0220_post_factor_rwa(self) -> None:
+        """Col 0220 (post-factor RWEA) is the sum of rwa_final."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Total rwa_final: 700+1400+3750+3200 = 9050
+        assert total["0220"][0] == pytest.approx(9050.0)
+
+    def test_pre_minus_adjustments_equals_post(self) -> None:
+        """RWEA integrity: 0215 - 0216 - 0217 ≈ 0220."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="CRR"
+        )
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        pre = total["0215"][0]
+        sme_adj = total["0216"][0]
+        infra_adj = total["0217"][0]
+        post = total["0220"][0]
+        # 11200 - 900 - 1250 = 9050
+        assert pre - sme_adj - infra_adj == pytest.approx(post)
+
+    def test_col_0216_null_without_pipeline_columns(self) -> None:
+        """Col 0216 is null when neither legacy nor pipeline columns exist."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results(), framework="CRR")
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        assert total["0216"][0] is None
+
+    def test_b31_no_supporting_factor_columns(self) -> None:
+        """B31 does not have cols 0215-0217 (supporting factors removed)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_supporting_factors(), framework="BASEL_3_1"
+        )
+        corp = bundle.c07_00["corporate"]
+        assert "0215" not in corp.columns
+        assert "0216" not in corp.columns
+        assert "0217" not in corp.columns

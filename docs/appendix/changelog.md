@@ -5,6 +5,14 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.174] — 2026-04-08
+
+### Added
+- **Tests**: 36 new CRM acceptance tests in `tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py` across 13 test classes covering advanced CRM scenarios not tested by the basic D1-D6/G1-G3 groups: non-beneficial guarantee (guarantor RW = borrower RW), sovereign guarantee 0% substitution, CDS restructuring exclusion (40% haircut, Art. 216(1)/233(2)), CDS with restructuring (no haircut contrast), gold collateral (15% CRR haircut), equity collateral (main-index 15%), overcollateralisation (EAD=0), full CRM chain (provision+collateral+guarantee), mixed collateral types (cash+bond), SA provision EAD deduction, multiple provisions summed, provision+collateral combined, and structural baseline validation. CRR acceptance: 169 (was 133). Total: 5,061 (was 5,025). (P5.3)
+
+### Found
+- **CRM**: Equity collateral `is_eligible_financial_collateral` is overloaded as `is_main_index` proxy in haircut lookup (`haircuts.py:282-285`). All eligible equity gets main-index haircut (CRR 15% / B31 20%). Other-listed equity (CRR 25% / B31 30%) cannot be specified. Tracked as P6.21.
+
 ## [0.1.173] — 2026-04-08
 
 ### Fixed

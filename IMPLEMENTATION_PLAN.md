@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P2.5 partial — OF 02.00 IRB sub-rows/floor indicator rows, OF 07.00 RE sub-rows/equity transitional rows improved; 24 new tests)
-**Current version:** 0.1.173 | **Test suite:** 5,025 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.2, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
-**CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
+**Last updated:** 2026-04-08 (P5.3 complete — 36 advanced CRM acceptance tests for CRR; equity collateral is_main_index finding documented)
+**Current version:** 0.1.174 | **Test suite:** 5,061 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.2, P5.3, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**CRR acceptance:** 100% (169 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.5 [!partial]/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.5 [!partial]/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.3/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -490,8 +490,26 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** All 5,001 tests pass (was 4,981). Integration tests: 121 (was 101). Contract tests: 145.
 
 ### P5.3 CRR CRM guarantee/provision test placeholders
-- **Status:** [~] Documented as placeholders
-- **Fix:** Audit and expand test coverage.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** CRM acceptance tests covered only 6 basic scenarios (D1-D6: cash/bond/equity collateral, bank guarantee, maturity mismatch, FX mismatch) and 3 provision scenarios (G1-G3: SA deduction, IRB shortfall, IRB excess). Advanced CRM flows (non-beneficial guarantees, sovereign guarantee substitution, CDS restructuring exclusion, gold/equity collateral, overcollateralisation, full CRM chain, mixed collateral, multi-provision, provision+collateral combo) were untested at acceptance level.
+- **Fix:** Added 36 new end-to-end acceptance tests in `tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py` across 13 test classes using the inline data pipeline pattern (self-contained, no fixture regeneration required):
+  - **TestCRRD7_NonBeneficialGuarantee (3 tests):** Unrated corporate guarantor (100% RW) on unrated corporate borrower (100% RW) → no substitution benefit. Verifies RWA unchanged, RW unchanged, EAD not reduced.
+  - **TestCRRD8_SovereignGuarantee (3 tests):** UK sovereign (CQS 0, 0% RW) fully guarantees corporate → RWA near zero. Tests full substitution to 0% RW.
+  - **TestCRRD9_CDSRestructuringExclusion (3 tests):** CDS from CQS 1 institution without restructuring clause → 40% protection reduction (Art. 216(1)/233(2)). RWA between fully-protected and unprotected.
+  - **TestCRRD9b_CDSWithRestructuring (2 tests):** Same CDS with restructuring included → no haircut, full protection. Contrast with D9.
+  - **TestCRRD10_GoldCollateral (3 tests):** Gold at CRR 15% haircut. EAD = 1M - 500k × 0.85 = 575k. RWA consistent with EAD.
+  - **TestCRRD11_EquityCollateral (3 tests):** Main-index equity at CRR 15% haircut. Same EAD as gold (both 15% CRR).
+  - **TestCRRD12_Overcollateralised (2 tests):** Cash 700k > loan 500k → EAD = 0, RWA = 0. Tests EAD floor.
+  - **TestCRRD13_FullCRMChain (4 tests):** Provision (100k) + cash collateral (300k) + bank guarantee (200k at 20% RW) on 1M corporate. All three CRM mechanisms reduce capital.
+  - **TestCRRD14_MixedCollateral (3 tests):** Cash (0% haircut) + CQS 1 sovereign bond 6yr (4% haircut) on 2M exposure. EAD = 2M - 500k - 480k = 1.02M.
+  - **TestCRRG4_ProvisionSADeduction (3 tests):** 150k provision on 500k drawn → EAD = 350k.
+  - **TestCRRG5_MultipleProvisions (2 tests):** Two provisions (100k + 50k) summed → EAD = 850k.
+  - **TestCRRG6_ProvisionAndCollateral (3 tests):** 200k provision + 300k cash on 1M → EAD = 500k.
+  - **TestCRRD2_StructuralValidation (2 tests):** Unprotected baseline 1M corporate validates test infrastructure.
+- **Finding:** Equity collateral haircut always uses main-index rate (CRR 15% / B31 20%) because `is_eligible_financial_collateral` is overloaded as the `is_main_index` proxy in `haircuts.py:282-285`. Other-listed equity (CRR 25% / B31 30%) cannot be specified through the standard schema — a dedicated `is_main_index` Boolean field is needed on COLLATERAL_SCHEMA.
+- **File:Line:** `tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py` (36 tests, ~740 lines)
+- **Spec ref:** CRR Art. 110, Art. 213-217, Art. 224 Table 4, Art. 233(2)/Art. 216(1), Art. 233A, Art. 235
+- **Tests:** All 5,061 tests pass (was 5,025). CRR acceptance: 169 (was 133). Contract tests: 145.
 
 ### P5.4 Conditional pytest.skip() in acceptance tests
 - **Status:** [x] Complete (2026-04-08)
@@ -726,6 +744,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** CRR Art. 230-231, PRA PS1/26 Art. 230-231
 - **Tests:** 24 new tests in `tests/unit/crm/test_collateral_allocation_bundle.py`: 5 population tests (populated/LazyFrame type/None without collateral/None with invalid collateral/row count), 6 column tests (identifiers/waterfall/coverage/values/LGD/no extra columns), 6 value tests (cash financial allocation/coverage pct/SA EAD reduction/FIRB LGD impact/zero allocation/matches exposure frame), 3 unified bundle tests (populated/None/values match), 4 edge cases (overcollateralised/mixed types/empty exposures/preserves references). All 4,228 tests pass (was 4,204). Contract tests: 135.
 
+### P6.21 Equity collateral `is_main_index` proxy overloads `is_eligible_financial_collateral`
+- **Status:** [ ] Not started
+- **Impact:** `haircuts.py:282-285` uses `is_eligible_financial_collateral` as the `is_main_index` lookup key for equity collateral. When True → main-index haircut (CRR 15%, B31 20%). When False → the collateral is marked ineligible for SA EAD reduction (via `collateral.py:435-436`), so "other equity" (CRR 25%, B31 30%) cannot be specified through the current schema. All eligible equity collateral is forced to the main-index haircut tier.
+- **File:Line:** `engine/crm/haircuts.py:282-285` (is_main_index proxy), `engine/crm/collateral.py:435-436` (eligibility check)
+- **Spec ref:** CRR Art. 224 Table 4 (main-index 15%, other 25%), PRA PS1/26 Art. 224 (main-index 20%, other 30%)
+- **Fix:** Add `is_main_index` Boolean field to COLLATERAL_SCHEMA. Update haircut lookup to use this field instead of `is_eligible_financial_collateral`. Set `is_eligible_financial_collateral=True` for all eligible equity regardless of index membership.
+- **Tests needed:** Unit test for other-equity haircut (25% CRR, 30% B31). Acceptance test for non-main-index equity.
+
 ---
 
 ## Priority 7 -- Future / v2.0 (Not Yet Planned)
@@ -755,7 +781,7 @@ These items are verified complete. Items with **[!]** have known gaps documented
 
 **P4 items complete:** P4.1, P4.5, P4.7, P4.13, P4.14, P4.15, P4.16, P4.17, P4.18, P4.19, P4.21
 
-**P5 items complete:** P5.1, P5.2, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10
+**P5 items complete:** P5.1, P5.2, P5.3, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10
 
 - [x] All 8 pipeline stages (loader, hierarchy, classifier, CRM, SA/IRB/slotting/equity, aggregator)
 - [x] **[!]** CRR SA risk weights (core classes: sovereign, institution, corporate, retail, RE, defaulted, equity; PSE/RGLA/MDB/Int.Org/Other Items pending -- see P1.52-P1.55)

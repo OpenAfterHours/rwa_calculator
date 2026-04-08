@@ -122,22 +122,33 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 
 **Source**: `B31_RESIDENTIAL_INCOME_LTV_BANDS` in `data/tables/b31_risk_weights.py`
 
-### Basel 3.1 Commercial Real Estate (CRE20.86)
+### Basel 3.1 Commercial Real Estate (PRA Art. 124H–124K)
 
-#### General
-
-| LTV | Risk Weight |
-|-----|------------|
-| ≤ 60% | min(60%, counterparty RW) |
-| > 60% | counterparty RW |
-
-#### Income-producing
+#### General (Art. 124H — Loan-Splitting)
 
 | LTV | Risk Weight |
 |-----|------------|
-| ≤ 60% | 70% |
-| 60–80% | 90% |
+| ≤ 55% (secured portion) | 60% |
+| > 55% (unsecured portion) | counterparty RW |
+
+#### Income-Producing (Art. 124I — Whole-Loan)
+
+| LTV | Risk Weight |
+|-----|------------|
+| ≤ 80% | 100% |
 | > 80% | 110% |
+
+!!! warning "PRA vs BCBS deviation"
+    BCBS CRE20.86 uses a 3-band table (≤60%: 70%, 60–80%: 90%, >80%: 110%).
+    The PRA simplified this to a **2-band table** in Art. 124I.
+
+**Junior Charge Multiplier (Art. 124I(3)):**
+
+| LTV | Multiplier | Effective RW |
+|-----|-----------|--------------|
+| ≤ 60% | 1.0× | 100% |
+| 60–80% | 1.25× | 125% |
+| > 80% | 1.375× | 137.5% |
 
 #### ADC Exposures
 

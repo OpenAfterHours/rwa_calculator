@@ -329,10 +329,24 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 
 ### Commercial Real Estate
 
+**Income-Producing (PRA Art. 124I) — Whole-Loan:**
+
 | Scenario | CRR | Basel 3.1 |
 |----------|-----|-----------|
-| LTV ≤ 60%, Income-Producing | 100% | **70%** |
-| LTV > 60%, Income-Producing | 100% | **110%** |
+| LTV ≤ 80%, Income-Producing | 100% | **100%** |
+| LTV > 80%, Income-Producing | 100% | **110%** |
+
+!!! warning "PRA vs BCBS deviation"
+    BCBS CRE20.86 uses a 3-band table for CRE income-producing (≤60%: 70%, 60–80%: 90%, >80%: 110%).
+    The PRA simplified this to a **2-band table** (≤80%: 100%, >80%: 110%) in Art. 124I.
+
+**Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges exist that are not held by the institution, the risk weight is multiplied:
+
+| LTV | Multiplier | Effective RW |
+|-----|-----------|--------------|
+| ≤ 60% | 1.0× | 100% |
+| 60–80% | 1.25× | 125% |
+| > 80% | 1.375× | 137.5% |
 
 ### ADC Exposures (CRE20.85)
 

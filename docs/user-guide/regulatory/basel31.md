@@ -161,12 +161,18 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
 | 90-100% | 75% |
 | > 100% | 105% |
 
-**Commercial Real Estate:**
+**Commercial Real Estate — Income-Producing (PRA Art. 124I):**
 
-| LTV | Income-Producing |
-|-----|------------------|
-| ≤ 60% | 70% |
-| > 60% | 110% |
+| LTV | Income-Producing RW |
+|-----|---------------------|
+| ≤ 80% | 100% |
+| > 80% | 110% |
+
+!!! warning "PRA vs BCBS deviation"
+    BCBS CRE20.86 uses a 3-band table (≤60%: 70%, 60–80%: 90%, >80%: 110%).
+    The PRA simplified this to a **2-band table** in Art. 124I.
+
+**Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges not held by the institution exist, multiply the base RW: ≤60% LTV = 1.0×, 60–80% = 1.25×, >80% = 1.375×.
 
 #### ADC Exposures (CRE20.85)
 

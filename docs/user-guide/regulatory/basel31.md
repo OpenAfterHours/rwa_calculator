@@ -118,9 +118,12 @@ Standardised Approach risk weights are recalibrated:
 | CQS 2 (A+ to A-) | 50% | 50% |
 | CQS 3 (BBB+ to BBB-) | 100% | **75%** |
 | CQS 4 (BB+ to BB-) | 100% | 100% |
-| CQS 5 (B+ to B-) | 150% | **100%** |
+| CQS 5 (B+ to B-) | 150% | 150% |
 | CQS 6 (CCC+/Below) | 150% | 150% |
 | Unrated | 100% | 100% |
+
+!!! note "PRA vs BCBS Deviation for CQS 5"
+    BCBS CRE20.42 reduced CQS 5 from 150% to 100%. PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**.
 
 #### New Corporate Sub-Categories (CRE20.47-49)
 

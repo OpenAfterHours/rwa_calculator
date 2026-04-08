@@ -259,9 +259,12 @@ flooring to SA. They persist until the model non-compliance is remediated.
 | CQS2 (A+-A-) | 50% | 50% | - |
 | CQS3 (BBB+-BBB-) | 100% | 75% | -25pp |
 | CQS4 (BB+-BB-) | 100% | 100% | - |
-| CQS5 (B+-B-) | 150% | **100%** | -50pp |
+| CQS5 (B+-B-) | 150% | 150% | - |
 | CQS6 (CCC+/Below) | 150% | 150% | - |
 | Unrated | 100% | 100% | - |
+
+!!! note "PRA vs BCBS Deviation for CQS 5"
+    BCBS CRE20.42 reduced CQS 5 from 150% to 100%. However, PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**. The PRA did not adopt this reduction.
 
 #### New Basel 3.1 Corporate Sub-Categories (CRE20.47-49)
 

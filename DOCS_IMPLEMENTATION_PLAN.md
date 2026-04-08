@@ -10,7 +10,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### Wrong Risk Weight / Parameter Values in Docs
 
-- [ ] **D1.1** — Corporate CQS 5 shown as 100% (BCBS) in `key-differences.md` (line 263), `basel31.md` (line 121), `corporate.md` (line 36). PRA PS1/26 Art. 122 Table 6 confirms CQS 5 = **150%**. The spec `sa-risk-weights.md` is correct; the three user-facing files are wrong.
+- [x] **D1.1** — ~~Corporate CQS 5 shown as 100% (BCBS) in `key-differences.md`, `basel31.md`, `corporate.md`.~~ **FIXED:** All three files corrected to 150%. Added PRA vs BCBS deviation admonition to `key-differences.md` and `basel31.md`. `corporate.md` prose updated to explain PRA retained 150%.
 - [ ] **D1.2** — Equity transitional 2027 row in `basel31.md` (lines 278-280) shows Standard=130%, Higher-Risk=160%. Correct values (confirmed in `key-differences.md`, `equity-approach.md`, code): Standard=**160%**, Higher-Risk=**220%**.
 - [ ] **D1.3** — CRE income-producing table in `key-differences.md` (lines 330-332) and `basel31.md` (lines 163-165) shows "LTV <=60%: 70%, >60%: 110%". Art. 124I actual: <=80%: 100%, >80%: 110%. The 70% value does not exist in Art. 124I.
 - [ ] **D1.4** — Sovereign unrated in `basel31.md` (lines 234-235) shows OECD bifurcation (0% OECD / 100% non-OECD). Basel 3.1 Art. 114 = flat **100%** for all unrated sovereigns; no OECD bifurcation. Art. 114(5) is left blank in PRA rules.
@@ -134,6 +134,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 - [ ] **D3.11** — Equity calculator docstring (`equity/calculator.py:21`): "CIU fallback: 150% → 250%". Both values wrong (see D1.29). CRR fallback was 100% (Art. 132(1), now omitted from UK law); B31 fallback is 1,250% (Art. 132B(2)). The 250% is the SA equity weight for CIU underlyings, not the CIU fallback.
 - [ ] **D3.12** — CRR HIGH_RISK exposure class treated as active in CRR engine path (`sa/calculator.py:1041-1045`). If Art. 128 is omitted from UK law (see D1.28), these exposures should fall through to Art. 133 (equity 100%) or their counterparty's standard class treatment, not 150%. Basel 3.1 path (`sa/calculator.py:859`) is correct (Art. 128 re-introduced). Cross-reference D1.28 — needs verification of whether PRA Rulebook (CRR Firms) retains an Art. 128 equivalent.
+- [ ] **D3.13** — `b31_risk_weights.py` module docstring (line 16): says "CQS5: 100%". Line 327 docstring: says "CQS5=100%". Both wrong — PRA retains CQS 5 = **150%**. The code constant itself is correct (`5: Decimal("1.50")` at line 143). Docstrings only.
 
 ---
 
@@ -189,7 +190,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ## Completed
 
-_No items completed yet._
+- [x] **D1.1** — Corporate CQS 5 corrected from 100% (BCBS) to 150% (PRA) in `key-differences.md`, `basel31.md`, `corporate.md`. PRA vs BCBS deviation admonition added to comparison tables. (2026-04-08)
 
 ---
 

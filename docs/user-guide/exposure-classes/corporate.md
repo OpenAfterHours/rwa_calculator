@@ -33,7 +33,7 @@ def is_sme(counterparty):
 
 ## Risk Weights (SA)
 
-Corporate risk weights range from 20% (CQS 1) to 150% (CQS 6), with 100% for unrated. Basel 3.1 reduces CQS 3 from 100% to 75% and CQS 5 from 150% to 100%. Basel 3.1 also introduces new sub-categories: investment grade (65%) and SME corporate (85%).
+Corporate risk weights range from 20% (CQS 1) to 150% (CQS 6), with 100% for unrated. Basel 3.1 reduces CQS 3 from 100% to 75%. PRA PS1/26 Art. 122(2) Table 6 retains CQS 5 at 150% (BCBS CRE20.42 reduced to 100%, but the PRA did not adopt this reduction). Basel 3.1 also introduces new sub-categories: investment grade (65%) and SME corporate (85%).
 
 > **Details:** See [Key Differences — Corporate](../../framework-comparison/key-differences.md#corporate) for the complete CRR vs Basel 3.1 comparison and new sub-categories.
 

@@ -203,21 +203,13 @@ The following international organisations receive a **0%** risk weight:
 
 UK unrated institutions default to 40% (derived from sovereign CQS 2).
 
-### Short-Term Institution Exposures (CRR Art. 120 Table 4 / Art. 120 Table 4A)
+### Short-Term Institution Exposures (CRR Art. 120(2), Art. 121(3))
 
-Short-term exposures (≤ 3 months, denominated and funded in domestic currency):
+Rated institutions with residual maturity ≤ 3 months receive preferential risk weights
+under Art. 120(2). Unrated institutions with maturity ≤ 3 months receive 20% under
+Art. 121(3).
 
-**Table 4 — Sovereign-Derived (CRR Art. 120(1))**
-
-| Sovereign CQS | Short-Term RW |
-|---------------|---------------|
-| 1 | 20% |
-| 2 | 20% |
-| 3 | 20% |
-| 4-5 | 50% |
-| 6 | 150% |
-
-**Table 4A — Own-Rating Based (CRR Art. 120(2))**
+**Table 4 — Short-Term Preferential (CRR Art. 120(2))**
 
 | Institution CQS | Short-Term RW |
 |-----------------|---------------|
@@ -226,7 +218,28 @@ Short-term exposures (≤ 3 months, denominated and funded in domestic currency)
 | 3 | 20% |
 | 4-5 | 50% |
 | 6 | 150% |
-| Unrated | 20% |
+| Unrated | 20% (Art. 121(3)) |
+
+!!! warning "Correction: CRR has no Table 4A"
+    CRR Tables 3 and 4 both use the **institution's own ECAI rating** — Table 3 for
+    general maturities (Art. 120(1)), Table 4 for short-term (Art. 120(2)). The
+    sovereign-derived approach for **unrated** institutions is Art. 121 (Table 5).
+    Earlier versions of this spec incorrectly labelled Table 4 as "Sovereign-Derived"
+    and included a non-existent "Table 4A".
+
+!!! info "Basel 3.1 — Table 4A: Short-Term ECAI Assessments (Art. 120(2B))"
+    Basel 3.1 introduces Table 4A for institutions with a specific **short-term ECAI
+    assessment** (as opposed to a long-term rating applied to a short-term exposure).
+    Table 4A uses the short-term CQS scale with only 3 steps:
+
+    | Short-Term CQS | 1 | 2 | 3 | Others |
+    |----------------|---|---|---|--------|
+    | Risk Weight | 20% | 50% | 100% | 150% |
+
+    Art. 120(3) governs the interaction: where no short-term rating exists, Table 4
+    applies; where a short-term rating yields a lower or equal RW, Table 4A applies;
+    where it yields a worse RW, unrated short-term claims against that obligor also
+    receive the higher weight.
 
 ## Corporate Exposures (CRR Art. 122)
 
@@ -297,13 +310,36 @@ Under Basel 3.1, covered bond risk weights are reduced and the CQS mapping is si
     B31 unrated derivation uses SCRA grade → institution RW → CB RW chain
     per Art. 129(5) with values traced to COVERED_BOND_UNRATED_DERIVATION table.
 
-## High-Risk Exposures (CRR Art. 128)
+## High-Risk Exposures (Art. 128)
 
-Exposures associated with particularly high risk receive **150%** risk weight, including:
+Exposures associated with particularly high risk receive **150%** risk weight. Assessment
+criteria per Art. 128(3): (a) high risk of loss from obligor default; (b) impossible to
+adequately assess whether (a) applies.
 
-- Investments in venture capital firms or private equity
-- Speculative immovable property financing
-- Other exposures designated as high-risk by the PRA
+Examples of high-risk items include speculative immovable property financing and other
+exposures designated by the PRA. Under the Art. 112 Table A2 exposure class waterfall,
+equity (priority 3) takes precedence over high-risk items (priority 4) — venture capital
+and private equity exposures are classified as equity under Art. 133, not as high-risk
+items under Art. 128.
+
+!!! warning "Art. 128 Omitted from UK CRR (SI 2021/1078)"
+    Art. 128 was **omitted from UK onshored CRR** by The Capital Requirements Regulation
+    (Amendment) Regulations 2021 (SI 2021/1078), reg. 6(3)(a), effective 1 January 2022.
+    The high-risk exposure class is a **dead letter under current UK CRR** (pre-2027).
+    Exposures that would otherwise be classified as high-risk should fall through to
+    their counterparty's standard exposure class (e.g., equity at 100% per Art. 133(2),
+    or corporate at the applicable CQS weight).
+
+    Under **PRA PS1/26** (Basel 3.1, effective 1 January 2027), Art. 128 is **re-introduced**
+    with paragraphs 1 and 3 retained (paragraph 2 left blank — the original EU CRR
+    Art. 128(2) list of specific categories such as venture capital and speculative RE
+    is not carried forward). The 150% risk weight applies from 2027.
+
+!!! bug "Code Note (D3.12)"
+    The calculator's CRR engine path currently applies Art. 128 (150%) to HIGH_RISK
+    exposures despite the UK CRR omission. Under strict UK CRR treatment, these
+    exposures should fall through to their standard exposure class. The Basel 3.1
+    engine path correctly applies Art. 128.
 
 ## Residential Mortgage Exposures (CRR Art. 125)
 
@@ -441,9 +477,19 @@ Non-regulatory real estate (doesn't meet Art. 124A requirements):
 
 | Treatment | Risk Weight | Condition |
 |-----------|-------------|-----------|
-| Investment-grade corporate (CRE20.44) | 65% | Unrated, investment-grade designation |
-| SME corporate (CRE20.47) | 85% | SME qualifying corporate (replaces CRR 100% + 0.7619 SF) |
+| Investment-grade corporate (Art. 122(6)(a)) | 65% | Unrated, institution IG assessment, requires PRA permission |
+| Non-investment-grade corporate (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, requires PRA permission |
+| SME corporate (Art. 122(11)) | 85% | SME qualifying corporate (replaces CRR 100% + 0.7619 SF) |
 | Subordinated debt (CRE20.49) | 150% | Overrides all other treatments |
+
+!!! note "PRA Permission Required for Investment Grade Assessment (Art. 122(6)–(10))"
+    The 65%/135% split requires **prior PRA permission** and demonstration of sound credit
+    risk management practices (Art. 122(6)). Without permission, all unrated non-SME corporates
+    receive **100%** (Art. 122(5)). The investment grade definition (Art. 122(9)) requires
+    adequate capacity to meet financial commitments, robust against adverse economic cycles —
+    this is the institution's own internal assessment (Art. 122(10)), not an external rating.
+    SME corporates (Art. 122(11)) receive **85%** regardless of IG status. For IRB output
+    floor S-TREA (Art. 122(8)), firms may elect the 65%/135% split instead of flat 100%.
 
 ## Basel 3.1 Institution Exposures (CRE20.16-21)
 
@@ -462,12 +508,16 @@ ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR
 
 ### CRR Equity Risk Weights
 
+Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraphs — references to "Art. 133(3)" or "Art. 133(4)" with differentiated weights are erroneous (those values belong to Art. 155 IRB Simple).
+
 | Equity Type | Risk Weight | Reference |
 |-------------|-------------|-----------|
-| Central bank/sovereign | 0% | Art. 133(1) |
-| Listed/exchange-traded | 100% | Art. 133(2) |
-| Unlisted/other | 150% | Art. 133(3) |
-| Private equity / venture capital | 190% | Art. 133(4) |
+| Central bank / sovereign equity | 0% | Sovereign treatment |
+| All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
+| CIU (fallback) | 1,250% | Art. 132(2) |
+
+!!! warning "Previous Spec Error Corrected"
+    This table previously showed Unlisted=150% (Art. 133(3)) and PE/VC=190% (Art. 133(4)). These paragraph numbers and values were fabricated. The 150%/190% values are from **Art. 155** (IRB Simple Method), not Art. 133. PE/VC that qualifies as high-risk is treated under Art. 128 (150%), not Art. 133. See [Equity Approach Specification](equity-approach.md) for full details.
 
 ### Basel 3.1 Equity Risk Weights (PRA PS1/26 Art. 133)
 
@@ -562,8 +612,9 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
 - **SCRA enhanced Grade A** (CRE20.19): 30% for CET1 ≥ 14% and leverage ratio ≥ 5% — Done
 - **SCRA short-term maturity** (CRE20.20): Grade A/A_ENHANCED 20%, Grade B 50% for ≤3m exposures — Done
-- **Investment-grade corporates** (CRE20.44): 65% for unrated investment-grade — Done
-- **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
+- **Investment-grade corporates** (Art. 122(6)(a)): 65% for unrated investment-grade (PRA permission required) — Done
+- **Non-investment-grade corporates** (Art. 122(6)(b)): 135% for unrated non-IG (PRA permission required) — Done
+- **SME corporate** (Art. 122(11)): 85% flat weight, replaces CRR 100% + supporting factor — Done
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Done

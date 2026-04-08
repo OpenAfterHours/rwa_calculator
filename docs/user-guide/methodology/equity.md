@@ -15,17 +15,19 @@ flowchart LR
     D --> E
 ```
 
-## Article 133 - Standardised Approach (SA)
+## CRR Article 133 - Standardised Approach (SA)
 
-The default approach for firms without IRB approval. Risk weights are based on equity type:
+Under CRR, Art. 133(2) assigns a **flat 100% risk weight** to all equity exposures (except central bank sovereign equity at 0%). There is no differentiation by equity type — listed, unlisted, PE, and speculative all receive 100%.
 
-| Equity Type | Risk Weight | Description |
-|-------------|-------------|-------------|
-| Central bank | 0% | Central bank equity holdings |
-| Listed / Exchange-traded | 100% | Publicly traded on recognised exchanges |
-| Government-supported | 100% | Government-backed equity investments |
-| Unlisted / Private equity | 250% | Non-publicly traded equities |
-| Speculative | 400% | Venture capital, high-risk investments |
+| Equity Type | Risk Weight | Reference |
+|-------------|-------------|-----------|
+| Central bank / sovereign equity | 0% | Sovereign treatment |
+| All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
+
+PE/VC and speculative equity that qualifies as high-risk may be reclassified under Art. 128 (150%), but that is a separate exposure class treatment, not an Art. 133 weight.
+
+!!! warning "Common Confusion: CRR vs Basel 3.1 Art. 133"
+    CRR Art. 133 assigns a flat 100% to all equity. **Basel 3.1** rewrites Art. 133 with differentiated weights: 250% (standard), 400% (higher risk), 150% (subordinated debt), 100% (legislative). Do not confuse the two. See the [Equity Approach Specification](../../specifications/crr/equity-approach.md) for full details including CIU treatment and the Basel 3.1 transitional schedule.
 
 **Calculation:**
 ```
@@ -36,15 +38,14 @@ RWA = EAD x Risk Weight
 
 For firms with IRB permission, a different risk weight schedule applies:
 
-| Equity Type | Risk Weight | Description |
-|-------------|-------------|-------------|
-| Central bank | 0% | Central bank equity holdings |
-| Private equity (diversified) | 190% | Diversified portfolio treatment |
-| Government-supported | 190% | Government-backed equity investments |
-| Exchange-traded / Listed | 290% | Publicly traded equities |
-| Unlisted / Private equity | 370% | Non-publicly traded equities |
-| Speculative / CIU | 370% | Venture capital, collective investments |
-| Other equity | 370% | All other equity holdings |
+| Equity Type | Risk Weight | Reference |
+|-------------|-------------|-----------|
+| Exchange-traded / Listed | 290% | Art. 155(2)(a) |
+| Private equity (diversified portfolios) | 190% | Art. 155(2)(b) |
+| All other equity (unlisted, speculative, CIU, other) | 370% | Art. 155(2)(c) |
+
+!!! warning "Art. 155 has exactly three categories"
+    CRR Art. 155(2) defines only the three risk weight buckets shown above. The code additionally maps `GOVERNMENT_SUPPORTED` and `CENTRAL_BANK` equity types to 190% and 0% respectively — these are implementation-specific mappings with no direct basis in Art. 155 text. Government-supported equity at 100% under SA (Art. 133) is a legislative programme treatment, not an IRB Simple category. See [D3.4 in DOCS_IMPLEMENTATION_PLAN.md](../../../DOCS_IMPLEMENTATION_PLAN.md) and the [Equity Approach Specification](../../specifications/crr/equity-approach.md#crr-irb-simple-risk-weight-method-art-155) for details.
 
 ### Diversified Portfolio Treatment
 

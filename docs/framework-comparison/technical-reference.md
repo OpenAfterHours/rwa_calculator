@@ -37,15 +37,27 @@ PRA PS1/26 Art. 163(1):
 
 ## A-IRB LGD Floors (Basel 3.1)
 
+**Corporate / Institution (Art. 161(5)):**
+
 | Collateral Type | LGD Floor |
 |----------------|-----------|
-| Unsecured (Senior) | 25% |
-| Unsecured (Subordinated) | 50% |
+| Unsecured | 25% |
 | Financial collateral | 0% |
 | Receivables | 10%* |
 | Commercial real estate | 10%* |
-| Residential real estate | 5%* |
+| Residential real estate | 10%* |
 | Other physical | 15%* |
+
+!!! note "No senior/subordinated distinction"
+    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures. Unlike F-IRB supervisory LGD (which distinguishes senior 40% / subordinated 75%), A-IRB LGD floors have no subordinated uplift.
+
+**Retail (Art. 164(4)):**
+
+| Exposure Type | LGD Floor |
+|---------------|-----------|
+| Secured by residential RE | 5% |
+| QRRE unsecured | 50% |
+| Other unsecured retail | 30% |
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 

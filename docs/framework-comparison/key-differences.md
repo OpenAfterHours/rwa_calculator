@@ -40,6 +40,12 @@ of secured corporate or retail exposures under CRR Art. 125/126.
 
 Where an exposure meets multiple criteria, the highest-priority class applies.
 
+!!! info "Art. 128 Re-introduction"
+    Priority 4 (high-risk items) was omitted from UK CRR by SI 2021/1078 effective
+    1 January 2022. Basel 3.1 re-introduces Art. 128 with paragraphs 1 and 3 retained
+    (paragraph 2 left blank). The 150% risk weight for particularly high risk
+    exposures applies from 1 January 2027.
+
 ## IRB Treatment
 
 ### Scaling Factor
@@ -266,12 +272,19 @@ flooring to SA. They persist until the model non-compliance is remediated.
 !!! note "PRA vs BCBS Deviation for CQS 5"
     BCBS CRE20.42 reduced CQS 5 from 150% to 100%. However, PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**. The PRA did not adopt this reduction.
 
-#### New Basel 3.1 Corporate Sub-Categories (CRE20.47-49)
+#### New Basel 3.1 Corporate Sub-Categories (Art. 122(6)–(11))
 
 | Sub-Category | Basel 3.1 RW | Criteria |
 |-------------|-------------|----------|
-| Investment Grade | **65%** | Publicly traded + investment grade rating |
-| SME Corporate | **85%** | Turnover ≤ EUR 50m, unrated |
+| Investment Grade (Art. 122(6)(a)) | **65%** | Unrated, institution IG assessment, PRA permission required |
+| Non-Investment Grade (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, PRA permission required |
+| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ EUR 50m, unrated |
+
+!!! note "PRA Permission Required"
+    The 65%/135% investment grade split requires **prior PRA permission** (Art. 122(6)).
+    Without permission, all unrated non-SME corporates receive 100% (Art. 122(5)).
+    Investment grade is assessed by the institution's own internal credit assessment
+    (Art. 122(9)–(10)), not by external ratings. SME corporates receive 85% regardless.
 
 ### Institution Exposures
 
@@ -292,7 +305,8 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
 |-------|-------------------|-------------------|----------|
-| A | 40% | 20% | CET1 ≥ 14%, Leverage ≥ 5% |
+| A | 40% | 20% | Meets all minimum requirements + buffers |
+| A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
 | B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
 | C | 150% | 150% | Below minimum requirements |
 
@@ -329,10 +343,24 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 
 ### Commercial Real Estate
 
+**Income-Producing (PRA Art. 124I) — Whole-Loan:**
+
 | Scenario | CRR | Basel 3.1 |
 |----------|-----|-----------|
-| LTV ≤ 60%, Income-Producing | 100% | **70%** |
-| LTV > 60%, Income-Producing | 100% | **110%** |
+| LTV ≤ 80%, Income-Producing | 100% | **100%** |
+| LTV > 80%, Income-Producing | 100% | **110%** |
+
+!!! warning "PRA vs BCBS deviation"
+    BCBS CRE20.86 uses a 3-band table for CRE income-producing (≤60%: 70%, 60–80%: 90%, >80%: 110%).
+    The PRA simplified this to a **2-band table** (≤80%: 100%, >80%: 110%) in Art. 124I.
+
+**Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges exist that are not held by the institution, the risk weight is multiplied:
+
+| LTV | Multiplier | Effective RW |
+|-----|-----------|--------------|
+| ≤ 60% | 1.0× | 100% |
+| 60–80% | 1.25× | 125% |
+| > 80% | 1.375× | 137.5% |
 
 ### ADC Exposures (CRE20.85)
 
@@ -373,7 +401,7 @@ exposure is not hedged. Distinct from the 8% FX collateral haircut in CRM.
 |------|-----|--------------------------|--------|
 | Standard listed equities | 100% | **250%** | +150pp |
 | Higher-risk (unlisted, PE, etc.) | 100% | **400%** | +300pp |
-| Speculative / venture capital | 100% (or 150% if Art. 128 high-risk) | **400%** | +250-300pp |
+| Speculative / venture capital | 100% (Art. 133(2)) | **400%** | +300pp |
 
 IRB is **removed** for equity under Basel 3.1 — SA only. The PD/LGD method (CRR Art. 155)
 is blanked in the final rules.
@@ -409,7 +437,24 @@ for equity underlyings has a material impact:
 |----------|-----------|-----------------|
 | Look-through (Art. 132A(1) / 152(2)) | RW each underlying as if held directly | Equity underlyings now get **SA RWs** (250%/400%) instead of IRB PD/LGD |
 | Mandate-based (Art. 132A(2) / 152(5)) | Worst-case allocation per mandate limits | Equity underlyings use SA RWs |
-| Fall-back | **1,250%** | Unchanged |
+| Fall-back (Art. 132(2)) | **1,250%** | Unchanged from CRR2 |
+
+!!! info "Art. 132 UK Law Status"
+    CRR Art. 132 was **omitted from UK retained law** by SI 2021/1078 (effective 1 Jan 2022)
+    and moved to the PRA Rulebook (CRR Firms). The 1,250% fallback originates from CRR2
+    (Regulation 2019/876). PRA PS1/26 Art. 132(2) reinstates the same 1,250% fallback.
+
+    The 1,250% fallback applies only where neither look-through nor mandate-based
+    approaches are feasible. CIU equity exposures **excluded** under Art. 132B(2)
+    (e.g., sovereign entities, legislative programme holdings) instead receive
+    Art. 133 equity treatment (250% listed / 400% unlisted under Basel 3.1).
+
+!!! warning "Implementation Note"
+    The calculator currently applies 150% (CRR) / 250%-400% (Basel 3.1) for
+    `ciu_approach = "fallback"`, which corresponds to **Art. 133 equity weights**
+    rather than the true Art. 132(2) penalty of 1,250%. This is a known code
+    divergence — see [Equity Approach Specification](../specifications/crr/equity-approach.md)
+    for regulatory details.
 
 Under CRR, IRB firms could apply the **simple risk weight approach** (Art. 155(2)) to
 equity underlyings in CIUs, producing lower risk weights via PD/LGD. Under Basel 3.1,

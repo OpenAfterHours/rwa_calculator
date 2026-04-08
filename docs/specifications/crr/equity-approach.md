@@ -30,7 +30,7 @@ as high risk items in accordance with Article 128."
 |-------------|-------------|-----------|
 | Central bank / sovereign equity | 0% | Sovereign treatment |
 | All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
-| CIU (fallback) | 150% | Art. 132(2) |
+| CIU (fallback) | 1,250% | Art. 132(2) |
 | CIU (look-through) | Underlying RW | Art. 132(1) |
 | CIU (mandate-based) | Mandate RW | Art. 132A |
 
@@ -39,7 +39,10 @@ as high risk items in accordance with Article 128."
     (Art. 133(3)) and PE/VC=190% (Art. 133(4)). These paragraph numbers and values were
     fabricated. CRR Art. 133 has only 3 paragraphs and assigns a **flat 100%** to all equity.
     The 150%/190% values are from Art. 155 (IRB Simple Method), not Art. 133.
-    PE/VC that qualifies as high-risk is treated under Art. 128 (150%), not Art. 133.
+    Under the Art. 112 Table A2 waterfall, equity (priority 3) takes precedence over
+    high-risk items (priority 4). PE/VC is classified as equity under Art. 133, not
+    as a high-risk item under Art. 128. Note: Art. 128 was omitted from UK CRR by
+    SI 2021/1078 (effective 1 Jan 2022) and is only active under Basel 3.1 (from 2027).
 
 ## Basel 3.1 SA Equity Risk Weights (PRA PS1/26 Art. 133)
 
@@ -115,9 +118,24 @@ Where neither look-through nor mandate-based approaches are feasible:
 
 | CIU Type | CRR Risk Weight | Basel 3.1 Risk Weight |
 |----------|-----------------|----------------------|
-| Standard CIU fallback | 150% | 250% (listed) / 400% (unlisted) |
+| Standard CIU fallback | 1,250% | 1,250% |
 
-Under Basel 3.1, the fallback weights align with the equity SA table (Art. 133).
+The 1,250% fallback originates from CRR2 (Regulation 2019/876) and is carried forward
+unchanged in PRA PS1/26 Art. 132(2). This is a punitive weight designed to incentivise
+firms to use look-through or mandate-based approaches.
+
+!!! info "Art. 132B(2) Exclusion — Not the Same as Fallback"
+    CIU equity exposures **excluded** from CIU treatment under Art. 132B(2) (e.g.,
+    0% sovereign entities, legislative programme holdings) receive standard **Art. 133
+    equity treatment** instead: 100% (CRR) / 250% listed or 400% unlisted (Basel 3.1).
+    These are NOT the Art. 132(2) "fallback" — they are reclassified equity exposures.
+
+!!! warning "Implementation Divergence"
+    The calculator currently applies 150% (CRR) / 250% listed or 400% unlisted
+    (Basel 3.1) for `ciu_approach = "fallback"`. These values correspond to
+    Art. 133 equity weights, not the true Art. 132(2) fallback of 1,250%. The
+    code constants are in `crr_equity_rw.py` (`CIU: 1.50`) and `b31_equity_rw.py`
+    (`CIU: 2.50`). This should be corrected to 12.50 (1,250%) for both frameworks.
 
 ## Equity Transitional Schedule (PRA Rules 4.1-4.3)
 
@@ -152,8 +170,8 @@ PRA PS1/26 provides a transitional phase-in for the increased equity risk weight
 | Scenario ID | Description | Expected RW |
 |-------------|-------------|-------------|
 | CRR-E | Listed equity SA (CRR) | 100% |
-| CRR-E | Unlisted equity SA (CRR) | 150% |
-| CRR-E | PE / VC equity SA (CRR) | 190% |
+| CRR-E | Unlisted equity SA (CRR) | 100% |
+| CRR-E | PE / VC equity SA (CRR) | 100% |
 | CRR-E | Listed equity IRB Simple (CRR) | 290% |
 | B31-E | Listed equity SA (Basel 3.1) | 250% |
 | B31-E | Unlisted/higher-risk equity SA (Basel 3.1) | 400% |
@@ -161,4 +179,5 @@ PRA PS1/26 provides a transitional phase-in for the increased equity risk weight
 | B31-E | Subordinated debt (Basel 3.1) | 150% |
 | B31-E | Listed equity transitional Year 1 | 160% |
 | B31-E | CIU look-through | Varies |
-| B31-E | CIU fallback (Basel 3.1) | 250%/400% |
+| CRR-E | CIU fallback (CRR) | 1,250% |
+| B31-E | CIU fallback (Basel 3.1) | 1,250% |

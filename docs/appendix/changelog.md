@@ -5,6 +5,17 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.178] — 2026-04-08
+
+### Fixed
+- **Docs**: Art. 128 (high-risk items, 150%) UK CRR omission clarified across 6 files (D1.28, D4.9). Art. 128 was omitted from UK onshored CRR by SI 2021/1078, reg. 6(3)(a), effective 1 January 2022 — the high-risk exposure class is a dead letter under current UK CRR. Re-introduced under PRA PS1/26 (Basel 3.1, from 1 January 2027) with paragraphs 1 and 3 retained (paragraph 2 left blank). Files updated:
+  - `specifications/crr/sa-risk-weights.md`: Added omission admonition, B31 re-introduction note, code bug cross-reference (D3.12), and exposure class waterfall clarification (equity priority 3 > high-risk priority 4)
+  - `user-guide/exposure-classes/other.md`: Restructured "Items Associated with High Risk" section — added framework applicability warning, corrected table to Art. 128 items only (speculative RE, PRA-designated), added waterfall note explaining PE/VC are equity (Art. 133), not high-risk
+  - `framework-comparison/key-differences.md`: Corrected equity table row (removed "(or 150% if Art. 128 high-risk)" — PE/VC is equity per waterfall), added Art. 128 re-introduction admonition to priority waterfall section
+  - `user-guide/regulatory/crr.md`: Added "Omitted Provisions" section documenting Art. 128 and Art. 132 omissions by SI 2021/1078
+  - `specifications/crr/equity-approach.md`: Corrected Art. 128 note to explain waterfall precedence (equity > high-risk) and UK CRR omission
+  - `specifications/common/hierarchy-classification.md`: Updated calculator coverage note with Art. 128 framework status and CRR legal basis issue
+
 ## [0.1.177] — 2026-04-08
 
 ### Added
@@ -803,9 +814,12 @@ Complete equity exposure RWA calculation supporting two regulatory approaches:
 |-------------|-------------|
 | Central bank | 0% |
 | Private equity (diversified portfolio) | 190% |
-| Government-supported | 190% |
+| ~~Government-supported~~ | ~~190%~~ |
 | Exchange-traded/Listed | 290% |
 | Other equity | 370% |
+
+!!! warning "Correction (D1.27)"
+    "Government-supported: 190%" was incorrectly listed as an Art. 155 category. Art. 155(2) has only three categories: (a) exchange-traded 290%, (b) PE diversified 190%, (c) all other 370%. No "government-supported" category exists in Art. 155.
 
 **New Components:**
 - `EquityCalculator` class (`src/rwa_calc/engine/equity/calculator.py`)

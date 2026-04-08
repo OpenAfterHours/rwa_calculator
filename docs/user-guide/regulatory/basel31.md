@@ -79,17 +79,29 @@ PD floors vary by exposure class instead of a uniform 0.03%:
 
 ### 5. A-IRB LGD Floors
 
-New minimum LGD values for Advanced IRB:
+New minimum LGD values for Advanced IRB. Corporate and retail floors are defined separately:
+
+**Corporate / Institution (Art. 161(5)):**
 
 | Collateral Type | LGD Floor |
 |-----------------|-----------|
-| Unsecured - Senior | 25% |
-| Unsecured - Subordinated | 50% |
+| Unsecured | 25% |
 | Secured - Financial Collateral | 0% |
 | Secured - Receivables | 10%* |
 | Secured - Commercial Real Estate | 10%* |
-| Secured - Residential Real Estate | 5%* |
+| Secured - Residential Real Estate | 10%* |
 | Secured - Other Physical | 15%* |
+
+!!! note "No senior/subordinated distinction"
+    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures (both senior and subordinated). The 50% floor applies only to retail QRRE unsecured (Art. 164(4)(b)(i)), not corporate subordinated debt.
+
+**Retail (Art. 164(4)):**
+
+| Exposure Type | LGD Floor |
+|---------------|-----------|
+| Secured by residential RE | 5% |
+| QRRE unsecured | 50% |
+| Other unsecured retail | 30% |
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
@@ -125,12 +137,19 @@ Standardised Approach risk weights are recalibrated:
 !!! note "PRA vs BCBS Deviation for CQS 5"
     BCBS CRE20.42 reduced CQS 5 from 150% to 100%. PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**.
 
-#### New Corporate Sub-Categories (CRE20.47-49)
+#### New Corporate Sub-Categories (Art. 122(6)–(11))
 
 | Sub-Category | Risk Weight | Criteria |
 |-------------|-------------|----------|
-| Investment Grade | **65%** | Publicly traded + investment grade rating |
-| SME Corporate | **85%** | Turnover ≤ EUR 50m, unrated |
+| Investment Grade (Art. 122(6)(a)) | **65%** | Unrated, institution IG assessment, PRA permission required |
+| Non-Investment Grade (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, PRA permission required |
+| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ EUR 50m, unrated |
+
+!!! note "PRA Permission Required"
+    The 65%/135% split requires **prior PRA permission** (Art. 122(6)). Without it, all
+    unrated non-SME corporates receive 100% (Art. 122(5)). "Investment grade" is determined
+    by the institution's own internal assessment (Art. 122(9)–(10)), not external ratings.
+    For IRB output floor S-TREA (Art. 122(8)), firms may elect the 65%/135% split or flat 100%.
 
 #### Real Estate Exposures
 
@@ -161,12 +180,18 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
 | 90-100% | 75% |
 | > 100% | 105% |
 
-**Commercial Real Estate:**
+**Commercial Real Estate — Income-Producing (PRA Art. 124I):**
 
-| LTV | Income-Producing |
-|-----|------------------|
-| ≤ 60% | 70% |
-| > 60% | 110% |
+| LTV | Income-Producing RW |
+|-----|---------------------|
+| ≤ 80% | 100% |
+| > 80% | 110% |
+
+!!! warning "PRA vs BCBS deviation"
+    BCBS CRE20.86 uses a 3-band table (≤60%: 70%, 60–80%: 90%, >80%: 110%).
+    The PRA simplified this to a **2-band table** in Art. 124I.
+
+**Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges not held by the institution exist, multiply the base RW: ≤60% LTV = 1.0×, 60–80% = 1.25×, >80% = 1.375×.
 
 #### ADC Exposures (CRE20.85)
 
@@ -186,17 +211,25 @@ Payroll/pension loans are a new category for loans repaid directly from salary o
 
 #### Currency Mismatch Multiplier
 
-!!! warning "Not Yet Implemented"
-    The currency mismatch risk weight multiplier is not yet implemented in the calculator.
-
 For unhedged retail and residential real estate exposures where the lending currency differs from the
-borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/26 Art. 123A / CRE20.76).
-The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral haircut
-used in CRM (CRR Art. 224).
+borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/26 Art. 123A /
+CRE20.76). The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral
+haircut used in CRM (CRR Art. 224).
+
+To trigger the multiplier, set `cp_borrower_income_currency` on each exposure. When it differs from
+`currency`, the 1.5x multiplier is applied automatically and the `currency_mismatch_multiplier_applied`
+output column is set to `True`. COREP memorandum row 0380 is populated from this flag.
 
 #### Defaulted Exposures
 
-Defaulted exposures receive 100% SA risk weight. Provision-coverage-based differentiation (CRE20.87-90) is not currently implemented in the SA calculator — defaulted treatment with provision coverage is handled through IRB.
+Defaulted exposures receive a risk weight based on provision coverage (PRA PS1/26 Art. 127 /
+CRE20.87-90). Where specific provisions are ≥20% of the unsecured exposure value, the risk weight
+is **100%**; otherwise **150%**. When eligible collateral is present, the secured portion retains the
+collateral-based risk weight and only the unsecured portion is subject to the provision test.
+
+!!! note "Basel 3.1 Exception"
+    Non-income-dependent residential real estate defaulted exposures receive a flat 100% risk weight
+    regardless of provision level (CRE20.88 / Art. 127(1A)).
 
 ### 8. Input Floors for IRB
 
@@ -211,9 +244,12 @@ Beyond PD and LGD floors, Basel 3.1 introduces:
 - Effective maturity floor: 1 year
 - Cap remains: 5 years
 
-### 9. Large Corporate Correlation Multiplier (CRE31.5)
+### 9. Financial Sector Entity Correlation Multiplier (CRE31.5)
 
-Large corporates (consolidated revenue > £500m) receive a **1.25x** multiplier on their asset correlation under F-IRB. This increases capital requirements for exposures to large financial and non-financial corporates.
+**Large financial sector entities** (regulated FSEs with total assets > EUR 70bn per CRR Art. 4(1)(146)) and **unregulated financial sector entities** (regardless of size) receive a **1.25x** multiplier on their asset correlation (Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier is unchanged between CRR and Basel 3.1.
+
+!!! note "Not the same as the large corporate threshold"
+    The 1.25x correlation multiplier applies to **financial sector entities** based on **total assets**, not to large non-financial corporates. The Art. 147A large corporate threshold (revenue > £440m) is an **approach restriction** (F-IRB only) — it does not trigger the correlation uplift. See the [IRB restrictions table](#irb-restrictions) below.
 
 ### 10. Due Diligence Requirements
 
@@ -234,8 +270,15 @@ Enhanced requirements for unrated exposures:
 | CQS 4 | 100% |
 | CQS 5 | 100% |
 | CQS 6 | 150% |
-| Unrated (OECD) | 0% |
-| Unrated (non-OECD) | 100% |
+| Unrated | 100% |
+
+!!! note "No OECD bifurcation"
+    PRA PS1/26 Art. 114(1) assigns a flat 100% risk weight to all unrated sovereign
+    exposures. The Basel I/II approach of 0% for OECD sovereigns and 100% for
+    non-OECD sovereigns was replaced by ECAI-based credit assessments in the EU CRR
+    and is not carried forward. The UK domestic currency exemption (Art. 114(4):
+    UK Government/Bank of England in GBP = 0%) is a separate provision, not an
+    OECD-based rule.
 
 ### Institution Exposures
 
@@ -252,11 +295,18 @@ External Credit Risk Assessment Approach (ECRA):
 
 Standardised Credit Risk Assessment Approach (SCRA):
 
-| Grade | Risk Weight | Criteria |
-|-------|-------------|----------|
-| A | 40% | CET1 > 14%, Leverage > 5% |
-| B | 75% | CET1 > 5.5%, Leverage > 3% |
-| C | 150% | Below minimum requirements |
+| Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
+|-------|-------------------|-------------------|----------|
+| A | 40% | 20% | Meets all minimum requirements + buffers |
+| A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
+| B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
+| C | 150% | 150% | Below minimum requirements |
+
+!!! info "SCRA Grade A vs A (enhanced)"
+    Standard Grade A (40%) requires a qualitative assessment that the institution meets all
+    minimum capital requirements plus applicable buffers. Grade A enhanced (30%) additionally
+    requires quantitative thresholds: CET1 ratio ≥ 14% and leverage ratio ≥ 5%
+    (Art. 120(2A), CRE20.19).
 
 ### Subordinated Debt
 
@@ -278,9 +328,9 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
 
 | Year | Standard | Higher-Risk |
 |------|----------|-------------|
-| 2027 | 130% | 160% |
-| 2028 | 160% | 220% |
-| 2029 | 190% | 280% |
+| 2027 | 160% | 220% |
+| 2028 | 190% | 280% |
+| 2029 | 220% | 340% |
 | 2030+ | 250% | 400% |
 
 Under CRR, standard equities receive 100%, with some categories at 250% or 400%.
@@ -374,12 +424,9 @@ Slotting remains available with updated risk weights:
 
 ### SA Specialised Lending (Art. 122A-122B)
 
-!!! warning "Not Yet Implemented"
-    SA specialised lending risk weights under Art. 122A-122B are described here for regulatory
-    completeness but are not yet implemented in the calculator. The SA calculator currently assigns
-    corporate risk weights to specialised lending exposures.
-
-Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from slotting:
+Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from slotting.
+Unrated exposures use the type-specific weights below; rated exposures fall through to the standard
+corporate CQS table per Art. 122A(3).
 
 | Specialised Lending Type | Risk Weight |
 |--------------------------|-------------|
@@ -436,7 +483,7 @@ gantt
 | Real estate | CRE20.70-90 |
 | PD/LGD floors | CRE32 |
 | Specialised lending | CRE33 |
-| Large corporate correlation | CRE31.5 |
+| Financial sector entity correlation | CRE31.5 |
 | A-IRB CCF floor | CRE32.27 |
 
 ## Next Steps

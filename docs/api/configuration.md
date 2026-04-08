@@ -195,8 +195,8 @@ LGD floor values by collateral type for A-IRB. Only applicable under Basel 3.1
 ```python
 @dataclass(frozen=True)
 class LGDFloors:
-    unsecured: Decimal = Decimal("0.25")                  # 25%
-    subordinated_unsecured: Decimal = Decimal("0.50")      # 50%
+    unsecured: Decimal = Decimal("0.25")                  # 25% (Art. 161(5)(a))
+    subordinated_unsecured: Decimal = Decimal("0.50")      # Conservative fallback (see note)
     financial_collateral: Decimal = Decimal("0.0")         # 0%
     receivables: Decimal = Decimal("0.10")                 # 10%
     commercial_real_estate: Decimal = Decimal("0.10")      # 10%
@@ -216,6 +216,13 @@ class LGDFloors:
         """Basel 3.1 LGD floors (CRE30.41).
         Note: Values reflect PRA implementation."""
 ```
+
+!!! warning "subordinated_unsecured is a conservative fallback, not a regulatory floor"
+    Art. 161(5)(a) sets a flat 25% for **all** corporate unsecured exposures — no senior/subordinated
+    distinction. The `subordinated_unsecured = 0.50` is a conservative fallback used only when
+    `exposure_class` is unavailable and seniority is subordinated. See
+    [A-IRB LGD Floors](../specifications/crr/airb-calculation.md#lgd-floors-basel-31-only) for the
+    regulatory basis. The 50% figure originates from retail QRRE unsecured (Art. 164(4)(b)(i)).
 
 ### `SupportingFactors`
 

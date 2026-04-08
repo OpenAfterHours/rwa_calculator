@@ -122,22 +122,33 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 
 **Source**: `B31_RESIDENTIAL_INCOME_LTV_BANDS` in `data/tables/b31_risk_weights.py`
 
-### Basel 3.1 Commercial Real Estate (CRE20.86)
+### Basel 3.1 Commercial Real Estate (PRA Art. 124H–124K)
 
-#### General
-
-| LTV | Risk Weight |
-|-----|------------|
-| ≤ 60% | min(60%, counterparty RW) |
-| > 60% | counterparty RW |
-
-#### Income-producing
+#### General (Art. 124H — Loan-Splitting)
 
 | LTV | Risk Weight |
 |-----|------------|
-| ≤ 60% | 70% |
-| 60–80% | 90% |
+| ≤ 55% (secured portion) | 60% |
+| > 55% (unsecured portion) | counterparty RW |
+
+#### Income-Producing (Art. 124I — Whole-Loan)
+
+| LTV | Risk Weight |
+|-----|------------|
+| ≤ 80% | 100% |
 | > 80% | 110% |
+
+!!! warning "PRA vs BCBS deviation"
+    BCBS CRE20.86 uses a 3-band table (≤60%: 70%, 60–80%: 90%, >80%: 110%).
+    The PRA simplified this to a **2-band table** in Art. 124I.
+
+**Junior Charge Multiplier (Art. 124I(3)):**
+
+| LTV | Multiplier | Effective RW |
+|-----|-----------|--------------|
+| ≤ 60% | 1.0× | 100% |
+| 60–80% | 1.25× | 125% |
+| > 80% | 1.375× | 137.5% |
 
 #### ADC Exposures
 
@@ -313,15 +324,26 @@ HVCRE has **higher** risk weights than standard specialised lending.
 
 Under CRR, A-IRB has no LGD floors. Basel 3.1 introduces LGD floors:
 
+**Corporate / Institution (Art. 161(5)):**
+
 | Collateral Type | LGD Floor |
 |-----------------|-----------|
-| Unsecured senior | 25% |
-| Unsecured subordinated | 50% |
+| Unsecured | 25% |
 | Financial collateral | 0% |
 | Receivables | 10% |
 | Commercial real estate | 10% |
-| Residential real estate | 5% |
+| Residential real estate | 10% |
 | Other physical | 15% |
+
+Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordinated distinction.
+
+**Retail (Art. 164(4)):**
+
+| Exposure Type | LGD Floor |
+|---------------|-----------|
+| Secured by residential RE | 5% |
+| QRRE unsecured | 50% |
+| Other unsecured retail | 30% |
 
 ---
 
@@ -342,35 +364,59 @@ Under CRR, A-IRB has no LGD floors. Basel 3.1 introduces LGD floors:
 
 ## Equity Risk Weights
 
-### SA Equity (CRR Art. 133)
+### SA Equity (Code Constants)
 
-| Equity Type | Risk Weight |
-|------------|------------|
-| Central bank | 0% |
-| Listed | 100% |
-| Exchange traded | 100% |
-| Government supported | 100% |
-| Diversified private equity | 250% |
-| Unlisted | 250% |
-| Private equity | 250% |
-| CIU | 250% |
-| Other | 250% |
-| Speculative | 400% |
+!!! warning "Code Values vs Regulation"
+    This table reflects the **code constants** in `SA_EQUITY_RISK_WEIGHTS` and
+    `B31_SA_EQUITY_RISK_WEIGHTS`. Under CRR Art. 133(2), all equity receives a flat
+    **100%** — the differentiated weights (250%/400%) apply only under **Basel 3.1**
+    Art. 133. The CIU fallback (Art. 132(2)) is **1,250%** per regulation, but the
+    code uses 150% (CRR) / 250% (B31). See [Equity Approach](../specifications/crr/equity-approach.md)
+    for the regulatory specification.
+
+**CRR SA (Art. 133(2) — flat 100%):**
+
+| Equity Type | Code Value | Regulatory Value |
+|------------|-----------|-----------------|
+| Central bank | 0% | 0% |
+| All other equity | 100% | 100% (Art. 133(2)) |
+| CIU (fallback) | 150% | 1,250% (Art. 132(2)) |
+
+**Basel 3.1 SA (Art. 133):**
+
+| Equity Type | Code Value | Regulatory Value |
+|------------|-----------|-----------------|
+| Central bank | 0% | 0% (Art. 133(6)) |
+| Legislative programme | 100% | 100% (Art. 133(6)) |
+| Subordinated debt | 150% | 150% (Art. 133(1)) |
+| Standard (listed) | 250% | 250% (Art. 133(3)) |
+| Higher risk (unlisted/PE/VC) | 400% | 400% (Art. 133(5)) |
+| CIU (fallback) | 250% | 1,250% (Art. 132(2)) |
 
 ### IRB Simple Equity (CRR Art. 155)
 
-| Equity Type | Risk Weight |
-|------------|------------|
-| Central bank | 0% |
-| Government supported | 190% |
-| Diversified private equity | 190% |
-| Listed | 290% |
-| Exchange traded | 290% |
-| Unlisted | 370% |
-| Private equity | 370% |
-| Speculative | 370% |
-| CIU | 370% |
-| Other | 370% |
+Art. 155(2) defines exactly three risk weight categories:
+
+| Equity Category | Risk Weight | Reference |
+|----------------|-------------|-----------|
+| Exchange-traded / listed | 290% | Art. 155(2)(a) |
+| Private equity (diversified portfolios) | 190% | Art. 155(2)(b) |
+| All other equity | 370% | Art. 155(2)(c) |
+
+**Code mapping** (`IRB_SIMPLE_EQUITY_RISK_WEIGHTS` in `data/tables/crr_equity_rw.py`):
+
+The code maps the `EquityType` enum to these three buckets:
+
+| EquityType enum value | Code RW | Art. 155 bucket |
+|----------------------|---------|-----------------|
+| `CENTRAL_BANK` | 0% | *(exempt — sovereign treatment)* |
+| `PRIVATE_EQUITY_DIVERSIFIED` | 190% | Art. 155(2)(b) |
+| `GOVERNMENT_SUPPORTED` | 190% | *(no Art. 155 basis — see D3.4)* |
+| `LISTED`, `EXCHANGE_TRADED` | 290% | Art. 155(2)(a) |
+| `UNLISTED`, `PRIVATE_EQUITY`, `SPECULATIVE`, `CIU`, `OTHER` | 370% | Art. 155(2)(c) |
+
+!!! warning "Code deviation: GOVERNMENT_SUPPORTED"
+    The `GOVERNMENT_SUPPORTED` type is mapped to 190% in the IRB Simple table, but Art. 155 has no "government-supported" category. This is a code-specific mapping (treating it as PE diversified). See [D3.4](../../DOCS_IMPLEMENTATION_PLAN.md).
 
 **Note:** Under Basel 3.1, IRB equity approaches are withdrawn. All equity falls to SA.
 

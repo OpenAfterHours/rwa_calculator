@@ -87,6 +87,7 @@ if TYPE_CHECKING:
     from rwa_calc.api.export import ExportResult
     from rwa_calc.api.models import CalculationResponse
     from rwa_calc.contracts.bundles import OutputFloorSummary
+    from rwa_calc.contracts.config import OutputFloorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,8 @@ class COREPTemplateBundle:
     c09_01: dict[str, pl.DataFrame] = field(default_factory=dict)
     c09_02: dict[str, pl.DataFrame] = field(default_factory=dict)
     framework: str = "CRR"
+    reporting_basis: str | None = None
+    institution_type: str | None = None
     errors: list[str] = field(default_factory=list)
 
 
@@ -184,6 +187,7 @@ class COREPGenerator:
         response: CalculationResponse,
         *,
         output_floor_summary: OutputFloorSummary | None = None,
+        output_floor_config: OutputFloorConfig | None = None,
     ) -> COREPTemplateBundle:
         """Generate all COREP templates from a CalculationResponse."""
         results_lf = response.scan_results()
@@ -191,6 +195,7 @@ class COREPGenerator:
             results_lf,
             framework=response.framework,
             output_floor_summary=output_floor_summary,
+            output_floor_config=output_floor_config,
         )
 
     def generate_from_lazyframe(
@@ -199,6 +204,7 @@ class COREPGenerator:
         *,
         framework: str = "CRR",
         output_floor_summary: OutputFloorSummary | None = None,
+        output_floor_config: OutputFloorConfig | None = None,
     ) -> COREPTemplateBundle:
         """Generate all COREP templates from a results LazyFrame.
 
@@ -211,6 +217,10 @@ class COREPGenerator:
             framework: Regulatory framework ("CRR" or "BASEL_3_1")
             output_floor_summary: Optional floor summary for OF 02.00
                 rows 0035 (multiplier) and 0036 (OF-ADJ).
+            output_floor_config: Optional floor config for reporting
+                basis conditionality (Art. 92 para 2A). When provided,
+                gates floor indicator rows and materiality columns on
+                entity-type applicability and reporting basis.
         """
         errors: list[str] = []
         cols = _available_columns(results)
@@ -229,15 +239,22 @@ class COREPGenerator:
         c08_06 = self._generate_all_c08_06(irb_data, cols, framework, errors)
 
         # C 08.07 / OF 08.07 — IRB scope of use
-        c08_07 = self._generate_c08_07(results, cols, framework, errors)
+        c08_07 = self._generate_c08_07(
+            results, cols, framework, errors,
+            output_floor_config=output_floor_config,
+        )
 
         # OF 02.01 — Output floor comparison (Basel 3.1 only)
-        of_02_01 = self._generate_of_02_01(results, cols, framework, errors)
+        of_02_01 = self._generate_of_02_01(
+            results, cols, framework, errors,
+            output_floor_config=output_floor_config,
+        )
 
         # C 02.00 / OF 02.00 — Own Funds Requirements
         c_02_00 = self._generate_c_02_00(
             results, cols, framework, errors,
             output_floor_summary=output_floor_summary,
+            output_floor_config=output_floor_config,
         )
 
         # C 09.01 / OF 09.01 — Geographical Breakdown SA
@@ -245,6 +262,21 @@ class COREPGenerator:
 
         # C 09.02 / OF 09.02 — Geographical Breakdown IRB
         c09_02 = self._generate_all_c09_02(irb_data, cols, framework, errors)
+
+        # Extract reporting_basis / institution_type for bundle metadata
+        _rb = None
+        _it = None
+        if output_floor_config is not None:
+            _rb = (
+                output_floor_config.reporting_basis.value
+                if output_floor_config.reporting_basis is not None
+                else None
+            )
+            _it = (
+                output_floor_config.institution_type.value
+                if output_floor_config.institution_type is not None
+                else None
+            )
 
         return COREPTemplateBundle(
             c07_00=c07_00,
@@ -260,6 +292,8 @@ class COREPGenerator:
             c09_01=c09_01,
             c09_02=c09_02,
             framework=framework,
+            reporting_basis=_rb,
+            institution_type=_it,
             errors=errors,
         )
 
@@ -403,6 +437,8 @@ class COREPGenerator:
         cols: set[str],
         framework: str,
         errors: list[str],
+        *,
+        output_floor_config: OutputFloorConfig | None = None,
     ) -> pl.DataFrame | None:
         """Generate C 08.07 (CRR) / OF 08.07 (Basel 3.1) IRB scope of use.
 
@@ -412,6 +448,10 @@ class COREPGenerator:
 
         Uses full results LazyFrame (not just IRB data) because the template
         reports both SA and IRB coverage.
+
+        Materiality columns (0160-0180) are consolidated-basis only per
+        Art. 150(1A). When ``output_floor_config`` provides a reporting
+        basis, these columns are gated on ``CONSOLIDATED`` basis.
 
         References:
         - CRR Art. 147(2), Art. 148, Art. 150
@@ -472,6 +512,12 @@ class COREPGenerator:
         row_defs = get_c08_07_rows(framework)
 
         is_b31 = framework == "BASEL_3_1"
+        # Materiality columns (0160-0180) are consolidated-basis only
+        _is_consolidated = (
+            output_floor_config is not None
+            and output_floor_config.reporting_basis is not None
+            and output_floor_config.reporting_basis.value == "consolidated"
+        )
         rows: list[dict[str, object]] = []
 
         for row_ref, row_name, ec_value in row_defs:
@@ -485,6 +531,7 @@ class COREPGenerator:
                     sa_rwa = sum(class_sa_rwa.values())
                     values = self._compute_c08_07_values(
                         irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                        is_consolidated=_is_consolidated,
                     )
                 else:
                     # Materiality row: null (requires institutional config)
@@ -497,6 +544,7 @@ class COREPGenerator:
                 sa_rwa = class_sa_rwa.get(ec_value, 0.0)
                 values = self._compute_c08_07_values(
                     irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                    is_consolidated=_is_consolidated,
                 )
             elif row_ref == "0090":
                 # CRR "Retail" aggregate row
@@ -514,6 +562,7 @@ class COREPGenerator:
                 )
                 values = self._compute_c08_07_values(
                     irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                    is_consolidated=_is_consolidated,
                 )
             elif row_ref == "0060":
                 # CRR "SL excluding slotting" — SL on IRB (non-slotting approaches)
@@ -537,6 +586,8 @@ class COREPGenerator:
         sa_rwa: float,
         column_refs: list[str],
         is_b31: bool,
+        *,
+        is_consolidated: bool = False,
     ) -> dict[str, object]:
         """Compute column values for a single C 08.07 / OF 08.07 row.
 
@@ -547,6 +598,9 @@ class COREPGenerator:
             sa_rwa: Total RWEA under SA for this class.
             column_refs: Ordered list of column reference strings.
             is_b31: Whether Basel 3.1 (18-column) layout is active.
+            is_consolidated: Whether reporting is on consolidated basis.
+                Materiality columns (0160-0180) are populated only when
+                True, per Art. 150(1A) consolidated-basis-only rule.
         """
         total_ead = irb_ead + sa_ead
         total_rwa = irb_rwa + sa_rwa
@@ -579,7 +633,10 @@ class COREPGenerator:
             elif ref == "0150" and is_b31:
                 values[ref] = irb_rwa
             elif ref in {"0160", "0170", "0180"} and is_b31:
-                # Materiality columns: consolidated-basis only, institutional config
+                # Materiality columns: consolidated-basis only (Art. 150(1A)).
+                # Non-consolidated reporting basis → not applicable (None).
+                # Consolidated basis → in scope but requires institutional
+                # config data not yet available (also None for now).
                 values[ref] = None
             elif is_b31:
                 # SA RWEA breakdown cols 0070-0130: null (requires sa_use_reason)
@@ -599,6 +656,8 @@ class COREPGenerator:
         cols: set[str],
         framework: str,
         errors: list[str],
+        *,
+        output_floor_config: OutputFloorConfig | None = None,
     ) -> pl.DataFrame | None:
         """Generate OF 02.01 output floor comparison template.
 
@@ -607,12 +666,18 @@ class COREPGenerator:
 
         Requires ``rwa_pre_floor`` and ``sa_rwa`` columns in the results
         LazyFrame (added by the output floor calculation in the aggregator).
-        Returns None under CRR or when floor columns are absent.
+        Returns None under CRR, when floor columns are absent, or when the
+        entity is exempt from the output floor per Art. 92 para 2A.
 
         References:
             PRA PS1/26 Art. 92 para 2A/3A
         """
         if framework != "BASEL_3_1":
+            return None
+
+        # Exempt entities do not report the output floor comparison.
+        # Art. 92 para 2A restricts the floor to 3 entity-type/basis combos.
+        if output_floor_config is not None and not output_floor_config.is_floor_applicable():
             return None
 
         if "rwa_pre_floor" not in cols or "sa_rwa" not in cols:
@@ -682,6 +747,7 @@ class COREPGenerator:
         errors: list[str],
         *,
         output_floor_summary: OutputFloorSummary | None = None,
+        output_floor_config: OutputFloorConfig | None = None,
     ) -> pl.DataFrame | None:
         """Generate C 02.00 (CRR) / OF 02.00 (Basel 3.1) Own Funds Requirements.
 
@@ -695,7 +761,9 @@ class COREPGenerator:
         (SA-only / S-TREA components), col 0030 (output floor RWEA).
 
         Basel 3.1 adds indicator rows: 0034 (floor activated Yes/No),
-        0035 (floor multiplier %), 0036 (OF-ADJ monetary value).
+        0035 (floor multiplier %), 0036 (OF-ADJ monetary value). These
+        rows are gated on entity-type floor applicability (Art. 92 para
+        2A) when ``output_floor_config`` is provided.
 
         References:
             CRR Art. 92 (own funds requirements)
@@ -982,15 +1050,29 @@ class COREPGenerator:
         # Equity IRB
         row_values["0420"] = {"0010": equity_rwa}
 
-        # B31 output floor indicator rows
+        # B31 output floor indicator rows.
+        # Art. 92 para 2A: floor only applies to 3 entity-type/basis combos.
+        # When output_floor_config is provided, gate on is_floor_applicable().
+        _floor_applicable = (
+            output_floor_config is None or output_floor_config.is_floor_applicable()
+        )
         if is_b31:
-            row_values["0034"] = {"0010": 1.0 if floor_activated else 0.0}
-            # Row 0035: floor multiplier % (e.g. 72.5 for 72.5%)
-            # Row 0036: OF-ADJ monetary value
-            if output_floor_summary is not None:
-                row_values["0035"] = {"0010": output_floor_summary.floor_pct * 100.0}
-                row_values["0036"] = {"0010": output_floor_summary.of_adj}
+            if _floor_applicable:
+                row_values["0034"] = {"0010": 1.0 if floor_activated else 0.0}
+                # Row 0035: floor multiplier % (e.g. 72.5 for 72.5%)
+                # Row 0036: OF-ADJ monetary value
+                if output_floor_summary is not None:
+                    row_values["0035"] = {
+                        "0010": output_floor_summary.floor_pct * 100.0,
+                    }
+                    row_values["0036"] = {"0010": output_floor_summary.of_adj}
+                else:
+                    row_values["0035"] = {"0010": 0.0}
+                    row_values["0036"] = {"0010": 0.0}
             else:
+                # Exempt entity: floor not applicable (Art. 92 para 2A).
+                # Rows present but indicate no floor activation.
+                row_values["0034"] = {"0010": 0.0}
                 row_values["0035"] = {"0010": 0.0}
                 row_values["0036"] = {"0010": 0.0}
 

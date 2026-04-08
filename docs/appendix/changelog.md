@@ -5,6 +5,17 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.177] — 2026-04-08
+
+### Added
+- **COREP**: Reporting basis conditionality for output floor (P1.38(c)). `COREPGenerator` now accepts `output_floor_config: OutputFloorConfig` to gate floor-related COREP template content on entity-type applicability per Art. 92 para 2A:
+  - **OF 02.00 rows 0034-0036** (floor activated/multiplier/OF-ADJ) show 0.0 for exempt entities (international subsidiaries, ring-fenced bodies on individual basis, etc.)
+  - **OF 02.01** (output floor comparison) returns None for exempt entities — only applicable entities report the floor comparison
+  - **C 08.07 materiality columns 0160-0180** documented as consolidated-basis-only (Art. 150(1A)), threaded with `is_consolidated` flag for future population
+  - **COREPTemplateBundle** extended with `reporting_basis` and `institution_type` metadata fields
+  - **ResultExporterProtocol** and **ResultExporter** accept `output_floor_config` keyword parameter
+- **Tests**: 38 new tests in `tests/unit/test_corep_reporting_basis.py` across 7 test classes: COREPTemplateBundleMetadata (7), OF0201FloorApplicability (6), OF0200FloorIndicatorRows (7), C0807MaterialityColumns (4), BackwardCompatibility (3), EntityTypeCombinations (9 parametrized), ExporterProtocolCompliance (2). Total: 5,125 (was 5,087). Contract tests: 145.
+
 ## [0.1.176] — 2026-04-08
 
 ### Fixed

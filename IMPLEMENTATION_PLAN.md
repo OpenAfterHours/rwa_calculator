@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P4.5/P4.6/P4.22 complete — documentation accuracy sweep: PD floors, LGD floors, output floor schedule corrected across 13 files)
-**Current version:** 0.1.176 | **Test suite:** 5,087 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.6, P4.13, P4.14, P4.15, P4.22, P5.1, P5.2, P5.3, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20, P6.21 fixed.
+**Last updated:** 2026-04-08 (P1.38(c) complete — COREP reporting basis conditionality: output floor gating, materiality columns, entity-type metadata)
+**Current version:** 0.1.177 | **Test suite:** 5,125 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.38c, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.6, P4.13, P4.14, P4.15, P4.22, P5.1, P5.2, P5.3, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20, P6.21 fixed.
 **CRR acceptance:** 100% (169 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.5 [!partial]/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.3/P5.4/P5.5 resolved) | P6 (code quality): 21 (P6.7/P6.11/P6.21 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (2 open: P1.10, P1.30(e)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.5 [!partial]/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.3/P5.4/P5.5 resolved) | P6 (code quality): 21 (P6.7/P6.11/P6.21 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -64,7 +64,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 34 Art. 227 tests in `tests/unit/crm/test_art227_zero_haircut.py`, 49 FCSM tests in `tests/unit/crm/test_simple_method.py`, 35 life insurance + CLN tests in `tests/unit/crm/test_life_insurance.py`.
 
 ### P1.38 Output floor GCRA 1.25% cap and entity-type carve-outs (Art. 92)
-- **Status:** [~] Partial ((a) and (b) complete; (c) remains)
+- **Status:** [x] Complete ((a), (b), (c) all complete)
 - **Fixed (a):** 2026-04-07 (implemented as part of P1.9a OF-ADJ)
 - **Fixed (b):** 2026-04-07
 - **Impact:** Three output floor gaps from PDF analysis:
@@ -76,11 +76,18 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
     - Aggregator uses `is_floor_applicable()` instead of raw `enabled` check
     - `CalculationConfig.basel_3_1()` accepts and propagates `institution_type` and `reporting_basis` params
     - Backward compatible: when institution_type/reporting_basis are None, floor defaults to applicable
-  - **(c) Reporting basis (Rule 2.2A):** Output floor reporting must be on the same basis as Art. 92 para 3A — not always individual basis. Ring-fenced bodies report sub-consolidated; international subsidiaries do not report at all. Not yet implemented.
-- **File:Line:** `domain/enums.py` (InstitutionType, ReportingBasis), `contracts/config.py` (OutputFloorConfig.is_floor_applicable, CalculationConfig.basel_3_1), `engine/aggregator/aggregator.py` (is_floor_applicable check)
-- **Spec ref:** PRA PS1/26 Art. 92 para 2A(a)-(d), Reporting (CRR) Part Rule 2.2A
-- **Tests:** 50 new unit tests in `tests/unit/test_output_floor_entity_type.py`: 18 is_floor_applicable unit tests (CRR, B31 default, None params backward compat, 3 applicable combos, 3 exempt combos, 6 wrong-basis combos), 4 CalculationConfig integration tests, 10 end-to-end aggregator tests (exempt entities keep original RWA, applicable entities get floored, backward compat), 15 parametrized exhaustive all-combinations test, 4 enum value tests. All 3057 tests pass. Test count: 3057 (was 3007).
-- **Fix remaining:** (c) Add reporting basis conditionality to COREP output.
+  - **(c) Reporting basis (Rule 2.2A):** FIXED (2026-04-08). Output floor reporting now conditioned on reporting basis per Art. 92 para 3A. Implementation:
+    - **COREP generator** accepts `output_floor_config: OutputFloorConfig | None` on both `generate()` and `generate_from_lazyframe()`. Threaded to `_generate_c08_07`, `_generate_c_02_00`, and `_generate_of_02_01`.
+    - **OF 02.00 rows 0034-0036** (floor activated/multiplier/OF-ADJ) gated on `is_floor_applicable()`. Exempt entities show 0.0 for all three indicators. Applicable entities preserve existing floor-detection logic.
+    - **OF 02.01** (output floor comparison) returns `None` for exempt entities — per Art. 92 para 2A, entities outside the 3 applicable (institution_type, reporting_basis) combinations do not report floor comparison.
+    - **C 08.07 materiality columns 0160-0180** explicitly documented as consolidated-basis-only (Art. 150(1A)). `is_consolidated` flag threaded to `_compute_c08_07_values()` for future population when institutional materiality data becomes available.
+    - **COREPTemplateBundle** extended with `reporting_basis: str | None` and `institution_type: str | None` metadata fields so downstream consumers know the reporting basis.
+    - **ResultExporterProtocol** and **ResultExporter** (`api/export.py`) extended with `output_floor_config` keyword-only parameter. Backward compatible: `None` preserves all existing behaviour.
+    - **StubResultExporter** in contract tests updated.
+- **File:Line:** `domain/enums.py` (InstitutionType, ReportingBasis), `contracts/config.py` (OutputFloorConfig.is_floor_applicable, CalculationConfig.basel_3_1), `engine/aggregator/aggregator.py` (is_floor_applicable check), `reporting/corep/generator.py` (output_floor_config threading, floor gating, materiality gating, bundle metadata), `contracts/protocols.py` (export_to_corep output_floor_config param), `api/export.py` (export_to_corep output_floor_config param)
+- **Spec ref:** PRA PS1/26 Art. 92 para 2A(a)-(d), Art. 150(1A), Reporting (CRR) Part Rule 2.2A
+- **Tests:** 50 existing tests in `tests/unit/test_output_floor_entity_type.py` (P1.38(a)/(b)). 38 new tests in `tests/unit/test_corep_reporting_basis.py` across 7 test classes: TestCOREPTemplateBundleMetadata (7), TestOF0201FloorApplicability (6), TestOF0200FloorIndicatorRows (7), TestC0807MaterialityColumns (4), TestBackwardCompatibility (3), TestEntityTypeCombinations (9 parametrized), TestExporterProtocolCompliance (2). All 5,125 tests pass (was 5,087). Contract tests: 145.
+- **Fix remaining:** None — all sub-items (a), (b), (c) complete.
 
 ### P1.49 Art. 110A due diligence obligation (new SA requirement)
 - **Status:** [x] Complete (2026-04-08)
@@ -774,7 +781,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 These items are verified complete. Items with **[!]** have known gaps documented in P1/P2:
 
-**P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.9d, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.49, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87
+**P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.9d, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.38, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.49, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88
 
 **P3 items complete:** P3.1, P3.2, P3.4
 

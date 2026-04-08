@@ -35,7 +35,7 @@ if TYPE_CHECKING:
         RawDataBundle,
         ResolvedHierarchyBundle,
     )
-    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
     from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
 
 
@@ -704,6 +704,8 @@ class ResultExporterProtocol(Protocol):
         self,
         response: CalculationResponse,
         output_path: Path,
+        *,
+        output_floor_config: OutputFloorConfig | None = None,
     ) -> ExportResult:
         """
         Export results as COREP regulatory reporting templates.
@@ -719,10 +721,14 @@ class ResultExporterProtocol(Protocol):
         References:
             - CRR Art. 99: COREP reporting obligation
             - PRA PS1/26: Basel 3.1 OF-variant templates
+            - PRA PS1/26 Art. 92 para 2A: entity-type floor applicability
 
         Args:
             response: CalculationResponse with cached results
             output_path: Path for the .xlsx output file
+            output_floor_config: Optional floor config for reporting
+                basis conditionality. Gates floor indicators and
+                materiality columns on entity type and reporting basis.
 
         Returns:
             ExportResult with the written file path and row count

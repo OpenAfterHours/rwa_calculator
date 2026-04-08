@@ -165,6 +165,8 @@ class StubResultExporter:
         self,
         response: object,
         output_path: Path,
+        *,
+        output_floor_config: object | None = None,
     ) -> ExportResult:
         return ExportResult(format="corep_excel")
 

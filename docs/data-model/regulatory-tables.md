@@ -395,18 +395,28 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 
 ### IRB Simple Equity (CRR Art. 155)
 
-| Equity Type | Risk Weight |
-|------------|------------|
-| Central bank | 0% |
-| Government supported | 190% |
-| Diversified private equity | 190% |
-| Listed | 290% |
-| Exchange traded | 290% |
-| Unlisted | 370% |
-| Private equity | 370% |
-| Speculative | 370% |
-| CIU | 370% |
-| Other | 370% |
+Art. 155(2) defines exactly three risk weight categories:
+
+| Equity Category | Risk Weight | Reference |
+|----------------|-------------|-----------|
+| Exchange-traded / listed | 290% | Art. 155(2)(a) |
+| Private equity (diversified portfolios) | 190% | Art. 155(2)(b) |
+| All other equity | 370% | Art. 155(2)(c) |
+
+**Code mapping** (`IRB_SIMPLE_EQUITY_RISK_WEIGHTS` in `data/tables/crr_equity_rw.py`):
+
+The code maps the `EquityType` enum to these three buckets:
+
+| EquityType enum value | Code RW | Art. 155 bucket |
+|----------------------|---------|-----------------|
+| `CENTRAL_BANK` | 0% | *(exempt — sovereign treatment)* |
+| `PRIVATE_EQUITY_DIVERSIFIED` | 190% | Art. 155(2)(b) |
+| `GOVERNMENT_SUPPORTED` | 190% | *(no Art. 155 basis — see D3.4)* |
+| `LISTED`, `EXCHANGE_TRADED` | 290% | Art. 155(2)(a) |
+| `UNLISTED`, `PRIVATE_EQUITY`, `SPECULATIVE`, `CIU`, `OTHER` | 370% | Art. 155(2)(c) |
+
+!!! warning "Code deviation: GOVERNMENT_SUPPORTED"
+    The `GOVERNMENT_SUPPORTED` type is mapped to 190% in the IRB Simple table, but Art. 155 has no "government-supported" category. This is a code-specific mapping (treating it as PE diversified). See [D3.4](../../DOCS_IMPLEMENTATION_PLAN.md).
 
 **Note:** Under Basel 3.1, IRB equity approaches are withdrawn. All equity falls to SA.
 

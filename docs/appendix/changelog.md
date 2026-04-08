@@ -803,9 +803,12 @@ Complete equity exposure RWA calculation supporting two regulatory approaches:
 |-------------|-------------|
 | Central bank | 0% |
 | Private equity (diversified portfolio) | 190% |
-| Government-supported | 190% |
+| ~~Government-supported~~ | ~~190%~~ |
 | Exchange-traded/Listed | 290% |
 | Other equity | 370% |
+
+!!! warning "Correction (D1.27)"
+    "Government-supported: 190%" was incorrectly listed as an Art. 155 category. Art. 155(2) has only three categories: (a) exchange-traded 290%, (b) PE diversified 190%, (c) all other 370%. No "government-supported" category exists in Art. 155.
 
 **New Components:**
 - `EquityCalculator` class (`src/rwa_calc/engine/equity/calculator.py`)

@@ -174,7 +174,7 @@ class EquityType(StrEnum):
     CENTRAL_BANK = "central_bank"                          # 0% SA (Art. 133(6))
     LISTED = "listed"                                      # 100% SA / 290% IRB
     EXCHANGE_TRADED = "exchange_traded"                     # 100% SA / 290% IRB
-    GOVERNMENT_SUPPORTED = "government_supported"           # 100% SA / 190% IRB
+    GOVERNMENT_SUPPORTED = "government_supported"           # 100% SA / 190% IRB (code mapping; no Art. 155 basis)
     UNLISTED = "unlisted"                                  # 250% SA / 370% IRB
     SPECULATIVE = "speculative"                            # 400% SA / 370% IRB
     PRIVATE_EQUITY = "private_equity"                      # 250% SA / 370% IRB

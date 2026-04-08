@@ -604,6 +604,8 @@ def generate_loans(
             "has_one_day_maturity_floor": np.full(n_loans, None),  # Repo/SFT 1-day floor
             "has_netting_agreement": np.full(n_loans, None),  # Netting flag (CRR Art. 195)
             "netting_facility_reference": np.full(n_loans, None),  # Facility for netting agreement
+            "due_diligence_performed": np.full(n_loans, None),  # Art. 110A (B31 only)
+            "due_diligence_override_rw": np.full(n_loans, None),  # Art. 110A override RW (B31 only)
         }
     ).cast(LOAN_SCHEMA)
 
@@ -946,6 +948,10 @@ def generate_contingents(
                 "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
                 "has_one_day_maturity_floor": np.full(n_contingents, None),  # Repo/SFT 1-day floor
                 "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default
+                "due_diligence_performed": np.full(n_contingents, None),  # Art. 110A (B31 only)
+                "due_diligence_override_rw": np.full(
+                    n_contingents, None
+                ),  # Art. 110A override RW (B31 only)
             }
         )
         .cast(CONTINGENTS_SCHEMA)
@@ -1103,6 +1109,7 @@ def generate_collateral(
             "qualifies_for_zero_haircut": np.full(n_collateral, None),
             "insurer_risk_weight": np.full(n_collateral, None),
             "credit_event_reduction": np.full(n_collateral, None),
+            "is_main_index": np.full(n_collateral, None),  # Equity index membership (Art. 224)
         }
     )
 

@@ -234,9 +234,9 @@ Step 5a: _apply_infrastructure_classification()
         Check product_type for infrastructure lending
 
 Step 5b: _apply_fi_scalar_classification()
-        Determine if FI scalar (1.25x correlation) applies:
-        - Large FSE: total_assets >= EUR 70bn
-        - Financial sector entity with apply_fi_scalar = True
+        Derive requires_fi_scalar from user-supplied apply_fi_scalar flag.
+        (User sets apply_fi_scalar=True for LFSE total assets ≥ EUR 70bn
+        or unregulated FSEs — no automatic threshold check in code.)
 
 Step 6: _determine_approach()
         Assign SA/FIRB/AIRB/SLOTTING based on IRB permissions

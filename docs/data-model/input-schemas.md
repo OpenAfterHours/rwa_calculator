@@ -101,20 +101,17 @@ For certain entity types, the regulatory treatment differs between SA and IRB ap
 | `apply_fi_scalar` | Directly controls whether FI scalar (1.25x correlation) applies | Financial sector entities with this flag set to True get FI scalar under IRB (CRR Art. 153(2)) |
 | `is_managed_as_retail` | SME managed on pooled retail basis | Can use 75% RW under SA (CRR Art. 123) |
 
-### Financial Sector Entity (FSE) Determination
+### Financial Sector Entity (FSE) and FI Scalar
 
-The following entity types are classified as Financial Sector Entities for FI scalar purposes:
+The **1.25x correlation multiplier** (CRR Art. 153(2)) applies to large financial sector entities (total assets ≥ EUR 70bn per Art. 4(1)(146)) and unregulated financial sector entities.
 
-- `institution`
-- `bank`
-- `ccp`
-- `financial_institution`
-- `pse_institution` (PSE treated as institution)
-- `rgla_institution` (RGLA treated as institution)
+**How it works in the calculator:** The `apply_fi_scalar` flag on the counterparty record is the **sole input** — the calculator does not automatically compare `total_assets` against the EUR 70bn threshold. The user is responsible for setting `apply_fi_scalar = True` on counterparties that meet the regulatory criteria. The classifier derives `requires_fi_scalar` directly from this flag with no entity-type gate.
 
-**FI Scalar applies when (CRR Art. 153(2)):**
-1. Large FSE: `total_assets >= EUR 70bn`, OR
-2. Financial sector entity with `apply_fi_scalar = True`
+!!! warning "Two distinct thresholds — do not conflate"
+    - **EUR 70bn total assets** → 1.25x correlation multiplier (Art. 153(2), both CRR and Basel 3.1). Applies to the asset correlation coefficient R, not to the capital requirement directly.
+    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(d), Basel 3.1 only). Does not affect correlation.
+
+    These thresholds serve entirely different purposes and apply to different entity populations. See [Key Differences](../framework-comparison/key-differences.md#financial-sector-correlation-multiplier) for details.
 
 **Example:**
 

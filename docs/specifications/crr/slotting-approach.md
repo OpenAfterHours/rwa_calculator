@@ -134,7 +134,7 @@ These EL rates are used when calculating the IRB EL shortfall/excess for slottin
 
 ### Large FSE Threshold
 
-Under Basel 3.1, a **large financial sector entity (FSE)** is defined as having total assets exceeding **GBP 79 billion** (per PRA PS1/26 Art. 1.3). This threshold is relevant for slotting approach exposures to FSEs, which may attract different treatment under Art. 147A restrictions.
+A **large financial sector entity (FSE)** is defined as having total assets ≥ **EUR 70bn** (CRR Art. 4(1)(146), ≈ GBP 79bn at PRA FX rate). This threshold determines eligibility for the 1.25x correlation multiplier (Art. 153(2)), not the Art. 147A approach restriction (which applies to all FSEs regardless of size). This is distinct from the Art. 147A(1)(d) large corporate revenue threshold (GBP 440m).
 
 See [Framework Differences](../../framework-comparison/technical-reference.md) for full Basel 3.1 detail.
 

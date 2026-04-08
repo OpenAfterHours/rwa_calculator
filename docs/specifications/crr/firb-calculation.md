@@ -130,7 +130,12 @@ R = 0.03 x f(PD) + 0.16 x (1 - f(PD))
 
 ## FI Scalar (CRR Art. 153(2))
 
-A **1.25x** multiplier applied to the **correlation coefficient** for **large financial sector entities** (total assets ≥ GBP 79bn per Art. 142) **and unregulated financial sector entities** (per CRR Art. 153(2)). Note: the GBP 79bn threshold defines "large FSE" for the scalar only — the F-IRB approach restriction under Art. 147A(1)(e) applies to **all** FSEs regardless of size.
+A **1.25x** multiplier applied to the **asset correlation coefficient** (R) for **large financial sector entities** (total assets ≥ EUR 70bn per CRR Art. 4(1)(146)) **and unregulated financial sector entities** (per CRR Art. 153(2)).
+
+!!! warning "Two distinct thresholds — do not conflate"
+    - **EUR 70bn total assets** (≈ GBP 79bn) → 1.25x correlation multiplier (Art. 153(2)). Applies to large FSEs and all unregulated FSEs under both CRR and Basel 3.1.
+    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(d), Basel 3.1 only). Does not affect correlation.
+    - The Art. 147A(1)(e) F-IRB restriction applies to **all** FSEs regardless of size — it is separate from the correlation uplift which only applies to *large* or *unregulated* FSEs.
 
 ## Capital Requirement Formula
 

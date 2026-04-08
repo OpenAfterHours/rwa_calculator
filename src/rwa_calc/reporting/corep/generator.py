@@ -35,6 +35,8 @@ import polars as pl
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
+    C08_03_COLUMN_REFS,
+    C08_03_PD_RANGES,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
     OF_02_01_ROW_SECTIONS,
@@ -42,6 +44,7 @@ from rwa_calc.reporting.corep.templates import (
     SA_EXPOSURE_CLASS_ROWS,
     get_c07_columns,
     get_c08_02_columns,
+    get_c08_03_columns,
     get_c08_columns,
     get_irb_row_sections,
     get_sa_risk_weight_bands,
@@ -70,6 +73,8 @@ class COREPTemplateBundle:
     C 07.00 (SA): One DataFrame per SA exposure class, with 5 row sections.
     C 08.01 (IRB): One DataFrame per IRB exposure class, with 3 row sections.
     C 08.02 (IRB by PD grade): One DataFrame per IRB exposure class.
+    C 08.03 (IRB PD ranges): One DataFrame per IRB exposure class, 17 fixed
+        regulatory PD range buckets, 11 columns. Slotting excluded.
     OF 02.01 (Output Floor comparison): Single DataFrame, 8 risk-type rows,
         4 columns (modelled RWA, SA RWA, U-TREA, S-TREA). Basel 3.1 only.
 
@@ -82,6 +87,7 @@ class COREPTemplateBundle:
     c07_00: dict[str, pl.DataFrame]
     c08_01: dict[str, pl.DataFrame]
     c08_02: dict[str, pl.DataFrame]
+    c08_03: dict[str, pl.DataFrame] = field(default_factory=dict)
     of_02_01: pl.DataFrame | None = None
     framework: str = "CRR"
     errors: list[str] = field(default_factory=list)
@@ -96,8 +102,8 @@ class COREPGenerator:
     """Generates COREP credit risk templates from RWA calculation results.
 
     Produces per-exposure-class DataFrames for C 07.00 (SA), C 08.01 (IRB totals),
-    and C 08.02 (IRB PD grade breakdown) with correct 4-digit COREP column
-    references and multi-section row structure.
+    C 08.02 (IRB PD grade breakdown), and C 08.03 (IRB PD ranges) with correct
+    4-digit COREP column references and multi-section row structure.
 
     Usage:
         generator = COREPGenerator()
@@ -133,10 +139,11 @@ class COREPGenerator:
         sa_data = _filter_by_approach(results, "standardised", cols)
         c07_00 = self._generate_all_c07(sa_data, cols, framework, errors)
 
-        # IRB templates (C 08.01, C 08.02)
+        # IRB templates (C 08.01, C 08.02, C 08.03)
         irb_data = _filter_by_irb_approach(results, cols)
         c08_01 = self._generate_all_c08_01(irb_data, cols, framework, errors)
         c08_02 = self._generate_all_c08_02(irb_data, cols, framework, errors)
+        c08_03 = self._generate_all_c08_03(irb_data, cols, framework, errors)
 
         # OF 02.01 — Output floor comparison (Basel 3.1 only)
         of_02_01 = self._generate_of_02_01(results, cols, framework, errors)
@@ -145,6 +152,7 @@ class COREPGenerator:
             c07_00=c07_00,
             c08_01=c08_01,
             c08_02=c08_02,
+            c08_03=c08_03,
             of_02_01=of_02_01,
             framework=framework,
             errors=errors,
@@ -185,6 +193,9 @@ class COREPGenerator:
             )
             total_rows += self._write_template_sheets(
                 workbook, bundle.c08_02, "C 08.02", IRB_EXPOSURE_CLASS_ROWS
+            )
+            total_rows += self._write_template_sheets(
+                workbook, bundle.c08_03, "C 08.03", IRB_EXPOSURE_CLASS_ROWS
             )
             if bundle.of_02_01 is not None:
                 total_rows += self._write_single_template_sheet(
@@ -767,6 +778,151 @@ class COREPGenerator:
         for ref in column_refs:
             schema[ref] = pl.String if ref == "0005" else pl.Float64
 
+        return pl.DataFrame(rows, schema=schema)
+
+    # =========================================================================
+    # C 08.03 — IRB PD Ranges (per exposure class, 17 fixed regulatory buckets)
+    # =========================================================================
+
+    def _generate_all_c08_03(
+        self,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> dict[str, pl.DataFrame]:
+        """Generate C 08.03 / OF 08.03 DataFrames for all IRB exposure classes.
+
+        C 08.03 provides PD distribution analysis using 17 fixed regulatory PD
+        range buckets (0.00-0.03% through 100% default). Each row contains
+        aggregated exposure, PD, LGD, maturity, RWEA, EL, and provision data
+        for exposures falling within the PD range.
+
+        Slotting exposures are excluded (they use category-based weights,
+        not PD-based calculation).
+
+        Basel 3.1 distinction: Row allocation uses pre-input-floor PD,
+        but col 0050 reports post-input-floor average PD.
+
+        References:
+        - CRR Art. 153, Regulation (EU) 2021/451 Annex I
+        - PRA PS1/26 Annex I/II (OF 08.03)
+        """
+        ec_col = _pick(cols, "exposure_class")
+        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+
+        if ec_col is None or ead_col is None or rwa_col is None:
+            errors.append("C08.03: Missing required columns (exposure_class/ead/rwa)")
+            return {}
+
+        # For row allocation: B31 uses pre-input-floor PD, CRR uses floored PD
+        if framework == "BASEL_3_1":
+            alloc_pd_col = _pick(cols, "irb_pd_original", "irb_pd_floored")
+        else:
+            alloc_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        # For col 0050 (reported PD): always post-input-floor
+        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+
+        if alloc_pd_col is None:
+            errors.append("C08.03: No PD column available — skipping PD range breakdown")
+            return {}
+
+        # Exclude slotting exposures — C 08.03 covers F-IRB/A-IRB only
+        approach_col = _pick(cols, "approach_applied", "approach")
+        if approach_col is not None:
+            irb_no_slotting = irb_data.filter(pl.col(approach_col) != "slotting")
+        else:
+            irb_no_slotting = irb_data
+
+        irb_df: pl.DataFrame = irb_no_slotting.collect()
+        if len(irb_df) == 0:
+            return {}
+
+        data_cols = set(irb_df.columns)
+        classes = irb_df[ec_col].unique().sort().to_list()
+        result: dict[str, pl.DataFrame] = {}
+
+        for ec in classes:
+            class_df = irb_df.filter(pl.col(ec_col) == ec)
+            template_df = self._generate_c08_03_for_class(
+                class_df,
+                data_cols,
+                ead_col,
+                rwa_col,
+                alloc_pd_col,
+                report_pd_col or alloc_pd_col,
+                framework,
+            )
+            result[ec] = template_df
+
+        return result
+
+    def _generate_c08_03_for_class(
+        self,
+        class_data: pl.DataFrame,
+        cols: set[str],
+        ead_col: str,
+        rwa_col: str,
+        alloc_pd_col: str,
+        report_pd_col: str,
+        framework: str,
+    ) -> pl.DataFrame:
+        """Generate a C 08.03 DataFrame for a single IRB exposure class.
+
+        Rows = 17 fixed regulatory PD range buckets (plus optional unassigned).
+        Columns = 11: on/off-BS exposure, avg CCF, EAD, avg PD, obligors,
+        avg LGD, avg maturity, RWEA, EL, provisions.
+
+        Args:
+            class_data: DataFrame filtered to a single exposure class.
+            cols: Available column names.
+            ead_col: EAD column name.
+            rwa_col: RWA column name.
+            alloc_pd_col: PD column for row allocation (pre-floor for B31).
+            report_pd_col: PD column for col 0050 reporting (post-floor).
+            framework: "CRR" or "BASEL_3_1".
+        """
+        column_defs = get_c08_03_columns(framework)
+        column_refs = [c.ref for c in column_defs]
+
+        # Assign PD range buckets using the allocation PD column
+        band_expr = pl.lit("Unassigned")
+        for lower, upper, _row_ref, label in reversed(C08_03_PD_RANGES):
+            band_expr = (
+                pl.when((pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper))
+                .then(pl.lit(label))
+                .otherwise(band_expr)
+            )
+        banded = class_data.with_columns(band_expr.alias("_pd_range"))
+
+        rows: list[dict[str, object]] = []
+
+        for _lower, _upper, row_ref, label in C08_03_PD_RANGES:
+            band_data = banded.filter(pl.col("_pd_range") == label).drop("_pd_range")
+            if len(band_data) == 0:
+                continue
+
+            values = _compute_c08_03_values(
+                band_data, cols, ead_col, rwa_col, report_pd_col, column_refs
+            )
+            rows.append({"row_ref": row_ref, "row_name": label, **values})
+
+        # Handle unassigned (e.g. null PD)
+        unassigned = banded.filter(pl.col("_pd_range") == "Unassigned").drop("_pd_range")
+        if len(unassigned) > 0:
+            values = _compute_c08_03_values(
+                unassigned, cols, ead_col, rwa_col, report_pd_col, column_refs
+            )
+            rows.append({"row_ref": "9999", "row_name": "Unassigned", **values})
+
+        if not rows:
+            schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+            schema.update(dict.fromkeys(column_refs, pl.Float64))
+            return pl.DataFrame(schema=schema)
+
+        schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
 
@@ -1777,3 +1933,120 @@ def _compute_rw_section_rows(
             result[label] = _compute_c07_values(band_data, cols, ead_col, rwa_col, column_refs)
 
     return result
+
+
+def _compute_c08_03_values(
+    data: pl.DataFrame,
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
+    pd_col: str,
+    column_refs: list[str],
+) -> dict[str, float | None]:
+    """Compute C 08.03 column values for a PD range bucket.
+
+    11 columns: on/off-BS exposure, average CCF, EAD, average PD,
+    obligor count, average LGD, average maturity, RWEA, EL, provisions.
+
+    Args:
+        data: DataFrame filtered to a single PD range bucket.
+        cols: Available column names in the data.
+        ead_col: EAD column name.
+        rwa_col: RWA column name.
+        pd_col: PD column for reporting (post-input-floor for B31).
+        column_refs: List of column refs to include in output.
+
+    References:
+    - CRR Art. 153 / Regulation (EU) 2021/451 Annex I (C 08.03)
+    - PRA PS1/26 Annex I/II (OF 08.03)
+    """
+    values: dict[str, float | None] = {}
+    ead_sum = float(data[ead_col].fill_null(0.0).sum()) if ead_col in cols else 0.0
+
+    # 0010: Original exposure — on-balance sheet
+    on_bs = _filter_on_bs(data, cols)
+    if on_bs is not None and len(on_bs) > 0:
+        values["0010"] = _safe_sum_eager(on_bs, set(on_bs.columns), "drawn_amount", "interest")
+    else:
+        values["0010"] = _safe_sum_eager(data, cols, "drawn_amount", "interest")
+
+    # 0020: Original exposure — off-balance sheet
+    off_bs = _filter_off_bs(data, cols)
+    if off_bs is not None and len(off_bs) > 0:
+        values["0020"] = _col_sum_eager(off_bs, set(off_bs.columns), "nominal_amount")
+    else:
+        values["0020"] = _col_sum_eager(data, cols, "nominal_amount")
+
+    # 0030: Average CCF (%)
+    ccf_col = _pick(cols, "ccf_applied", "ccf")
+    if ccf_col is not None and ead_sum > 0:
+        # Weighted average by nominal amount (off-BS component)
+        nominal_col = _pick(cols, "nominal_amount")
+        if nominal_col is not None:
+            nominal_sum = float(data[nominal_col].fill_null(0.0).sum())
+            if nominal_sum > 0:
+                ccf_x_nominal = float(
+                    (data[ccf_col].fill_null(0.0) * data[nominal_col].fill_null(0.0)).sum()
+                )
+                values["0030"] = ccf_x_nominal / nominal_sum
+            else:
+                values["0030"] = None
+        else:
+            values["0030"] = None
+    else:
+        values["0030"] = None
+
+    # 0040: Exposure value (EAD, post CCF and post CRM)
+    values["0040"] = ead_sum if ead_sum > 0 else 0.0
+
+    # 0050: Exposure-weighted average PD (%)
+    if pd_col in cols and ead_sum > 0:
+        pd_x_ead = float(
+            (data[pd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
+        )
+        values["0050"] = pd_x_ead / ead_sum
+    else:
+        values["0050"] = None
+
+    # 0060: Number of obligors
+    if "counterparty_reference" in cols:
+        values["0060"] = float(data["counterparty_reference"].n_unique())
+    else:
+        values["0060"] = float(len(data))
+
+    # 0070: Exposure-weighted average LGD (%)
+    lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
+    if lgd_col is not None and ead_sum > 0:
+        lgd_x_ead = float(
+            (data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
+        )
+        values["0070"] = lgd_x_ead / ead_sum
+    else:
+        values["0070"] = None
+
+    # 0080: Exposure-weighted average maturity (years)
+    if "irb_maturity_m" in cols and ead_sum > 0:
+        m_x_ead = float(
+            (data["irb_maturity_m"].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
+        )
+        values["0080"] = m_x_ead / ead_sum
+    else:
+        values["0080"] = None
+
+    # 0090: RWEA
+    values["0090"] = _col_sum_eager(data, cols, rwa_col)
+
+    # 0100: Expected loss amount
+    el_col = _pick(cols, "irb_expected_loss", "expected_loss")
+    values["0100"] = _col_sum_eager(data, cols, el_col) if el_col else None
+
+    # 0110: Value adjustments and provisions
+    prov = _safe_sum_eager(data, cols, "scra_provision_amount", "gcra_provision_amount")
+    if abs(prov) < 1e-9:
+        held = _col_sum_eager(data, cols, "provision_held")
+        values["0110"] = held if held is not None else prov
+    else:
+        values["0110"] = prov
+
+    # Filter to only refs in this framework's column set
+    return {ref: values.get(ref) for ref in column_refs if ref in values}

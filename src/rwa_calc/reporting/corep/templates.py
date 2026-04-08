@@ -5,6 +5,7 @@ Defines the row/column structure for COREP credit risk templates:
 - C 07.00 / OF 07.00: SA credit risk — 24/22 columns, 5 row sections
 - C 08.01 / OF 08.01: IRB totals — 35/40+ columns, row sections
 - C 08.02 / OF 08.02: IRB PD grade bands for granular reporting
+- C 08.03 / OF 08.03: IRB PD ranges — 11 columns, 17 fixed regulatory PD buckets
 - OF 02.01: Output floor comparison — 4 columns, 8 risk-type rows (Basel 3.1 only)
 
 Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
@@ -653,6 +654,84 @@ B31_C08_02_COLUMNS: list[COREPColumn] = [
 
 
 # =============================================================================
+# C 08.03 / OF 08.03 — IRB PD RANGES (regulatory fixed buckets)
+# =============================================================================
+
+# C 08.03 uses 17 fixed regulatory PD range buckets (unlike C 08.02 which uses
+# firm-specific internal rating grades). One submission per IRB exposure class.
+# Slotting exposures are excluded.
+# Each tuple: (lower_bound_inclusive, upper_bound_exclusive, row_ref, display_label)
+#
+# Basel 3.1 distinction: Row allocation uses pre-input-floor PD
+# ("PD RANGE (PRE-INPUT FLOOR)"), but column 0050 reports the post-input-floor
+# exposure-weighted average PD ("EXPOSURE WEIGHTED AVERAGE PD (POST INPUT FLOOR)").
+#
+# References:
+# - CRR Art. 153 (IRB PD distribution), Regulation (EU) 2021/451 Annex I
+# - PRA PS1/26 Annex I (OF 08.03 template layout)
+# - PRA PS1/26 Annex II (OF 08.03 reporting instructions)
+
+C08_03_PD_RANGES: list[tuple[float, float, str, str]] = [
+    (0.0, 0.0003, "0010", "0.00 to < 0.03%"),
+    (0.0003, 0.0005, "0020", "0.03 to < 0.05%"),
+    (0.0005, 0.0010, "0030", "0.05 to < 0.10%"),
+    (0.0010, 0.0015, "0040", "0.10 to < 0.15%"),
+    (0.0015, 0.0020, "0050", "0.15 to < 0.20%"),
+    (0.0020, 0.0025, "0060", "0.20 to < 0.25%"),
+    (0.0025, 0.0050, "0070", "0.25 to < 0.50%"),
+    (0.0050, 0.0075, "0080", "0.50 to < 0.75%"),
+    (0.0075, 0.0100, "0090", "0.75 to < 1.00%"),
+    (0.0100, 0.0250, "0100", "1.00 to < 2.50%"),
+    (0.0250, 0.0500, "0110", "2.50 to < 5.00%"),
+    (0.0500, 0.1000, "0120", "5.00 to < 10.00%"),
+    (0.1000, 0.2000, "0130", "10.00 to < 20.00%"),
+    (0.2000, 0.3000, "0140", "20.00 to < 30.00%"),
+    (0.3000, 0.5000, "0150", "30.00 to < 50.00%"),
+    (0.5000, 1.0000, "0160", "50.00 to < 100%"),
+    (1.0000, float("inf"), "0170", "100% (Default)"),
+]
+
+# C 08.03 / OF 08.03 has 11 columns — simpler than C 08.01/08.02.
+# References: Regulation (EU) 2021/451 Annex I (C 08.03), PRA PS1/26 Annex I (OF 08.03)
+CRR_C08_03_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors — on-balance sheet", "Exposure"),
+    COREPColumn("0020", "Original exposure pre conversion factors — off-balance sheet", "Exposure"),
+    COREPColumn("0030", "Average CCF (%)", "CCF"),
+    COREPColumn("0040", "Exposure value (post CCF and post CRM)", "EAD"),
+    COREPColumn("0050", "Exposure-weighted average PD (%)", "PD"),
+    COREPColumn("0060", "Number of obligors", "Obligors"),
+    COREPColumn("0070", "Exposure-weighted average LGD (%)", "LGD"),
+    COREPColumn("0080", "Exposure-weighted average maturity (years)", "Maturity"),
+    COREPColumn("0090", "Risk weighted exposure amount (RWEA)", "RWEA"),
+    COREPColumn("0100", "Expected loss amount", "EL"),
+    COREPColumn("0110", "Value adjustments and provisions", "Provisions"),
+]
+
+# OF 08.03 (Basel 3.1) has the same 11 columns but with adjusted naming for the
+# PD column to clarify it reports post-input-floor values.
+# Supporting factors are removed (no sub-columns under RWEA).
+B31_C08_03_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors — on-balance sheet", "Exposure"),
+    COREPColumn("0020", "Original exposure pre conversion factors — off-balance sheet", "Exposure"),
+    COREPColumn("0030", "Average CCF (%)", "CCF"),
+    COREPColumn("0040", "Exposure value (post CCF and post CRM)", "EAD"),
+    COREPColumn(
+        "0050",
+        "Exposure-weighted average PD (%) (post input floor)",
+        "PD",
+    ),
+    COREPColumn("0060", "Number of obligors", "Obligors"),
+    COREPColumn("0070", "Exposure-weighted average LGD (%)", "LGD"),
+    COREPColumn("0080", "Exposure-weighted average maturity (years)", "Maturity"),
+    COREPColumn("0090", "Risk weighted exposure amount (RWEA)", "RWEA"),
+    COREPColumn("0100", "Expected loss amount", "EL"),
+    COREPColumn("0110", "Value adjustments and provisions", "Provisions"),
+]
+
+C08_03_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_03_COLUMNS]
+
+
+# =============================================================================
 # OF 02.01 — OUTPUT FLOOR COMPARISON (Basel 3.1 only, PRA PS1/26 Art. 92)
 # =============================================================================
 
@@ -738,6 +817,11 @@ def get_c08_columns(framework: str = "CRR") -> list[COREPColumn]:
 def get_c08_02_columns(framework: str = "CRR") -> list[COREPColumn]:
     """Return the C 08.02 / OF 08.02 column definitions for the given framework."""
     return B31_C08_02_COLUMNS if framework == "BASEL_3_1" else CRR_C08_02_COLUMNS
+
+
+def get_c08_03_columns(framework: str = "CRR") -> list[COREPColumn]:
+    """Return the C 08.03 / OF 08.03 column definitions for the given framework."""
+    return B31_C08_03_COLUMNS if framework == "BASEL_3_1" else CRR_C08_03_COLUMNS
 
 
 def get_sa_row_sections(framework: str = "CRR") -> list[RowSection]:

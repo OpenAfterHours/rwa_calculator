@@ -255,12 +255,12 @@ class TestProtocolCompliance:
         result = calculator.calculate(data, config)
         assert isinstance(result, LazyFrameResult)
 
-    def test_result_exporter_protocol_satisfied(self):
+    def test_result_exporter_protocol_satisfied(self, tmp_path):
         """StubResultExporter should satisfy ResultExporterProtocol."""
         exporter = StubResultExporter()
         assert isinstance(exporter, ResultExporterProtocol)
 
-        result = exporter.export_to_corep(None, Path("/tmp/test.xlsx"))
+        result = exporter.export_to_corep(None, tmp_path / "test.xlsx")
         assert isinstance(result, ExportResult)
         assert result.format == "corep_excel"
 
@@ -322,38 +322,38 @@ class TestResultExporterProtocol:
         exporter = StubResultExporter()
         assert isinstance(exporter, ResultExporterProtocol)
 
-    def test_export_to_parquet_returns_export_result(self):
+    def test_export_to_parquet_returns_export_result(self, tmp_path):
         """export_to_parquet should return ExportResult."""
         exporter = StubResultExporter()
-        result = exporter.export_to_parquet(None, Path("/tmp"))
+        result = exporter.export_to_parquet(None, tmp_path)
         assert isinstance(result, ExportResult)
         assert result.format == "parquet"
 
-    def test_export_to_csv_returns_export_result(self):
+    def test_export_to_csv_returns_export_result(self, tmp_path):
         """export_to_csv should return ExportResult."""
         exporter = StubResultExporter()
-        result = exporter.export_to_csv(None, Path("/tmp"))
+        result = exporter.export_to_csv(None, tmp_path)
         assert isinstance(result, ExportResult)
         assert result.format == "csv"
 
-    def test_export_to_excel_returns_export_result(self):
+    def test_export_to_excel_returns_export_result(self, tmp_path):
         """export_to_excel should return ExportResult."""
         exporter = StubResultExporter()
-        result = exporter.export_to_excel(None, Path("/tmp"))
+        result = exporter.export_to_excel(None, tmp_path)
         assert isinstance(result, ExportResult)
         assert result.format == "excel"
 
-    def test_export_to_corep_returns_export_result(self):
+    def test_export_to_corep_returns_export_result(self, tmp_path):
         """export_to_corep should return ExportResult."""
         exporter = StubResultExporter()
-        result = exporter.export_to_corep(None, Path("/tmp"))
+        result = exporter.export_to_corep(None, tmp_path)
         assert isinstance(result, ExportResult)
         assert result.format == "corep_excel"
 
-    def test_export_to_pillar3_returns_export_result(self):
+    def test_export_to_pillar3_returns_export_result(self, tmp_path):
         """export_to_pillar3 should return ExportResult."""
         exporter = StubResultExporter()
-        result = exporter.export_to_pillar3(None, Path("/tmp"))
+        result = exporter.export_to_pillar3(None, tmp_path)
         assert isinstance(result, ExportResult)
         assert result.format == "pillar3_excel"
 

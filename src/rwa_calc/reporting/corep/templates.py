@@ -7,6 +7,7 @@ Defines the row/column structure for COREP credit risk templates:
 - C 08.02 / OF 08.02: IRB PD grade bands for granular reporting
 - C 08.03 / OF 08.03: IRB PD ranges — 11 columns, 17 fixed regulatory PD buckets
 - C 08.06 / OF 08.06: IRB specialised lending slotting — 10/11 columns, per SL type
+- C 08.07 / OF 08.07: IRB scope of use — 5/18 columns, per exposure class (CRR/B31)
 - OF 02.01: Output floor comparison — 4 columns, 8 risk-type rows (Basel 3.1 only)
 
 Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
@@ -899,6 +900,129 @@ def get_c08_06_rows(framework: str = "CRR") -> list[tuple[str, str, bool | None,
 def get_c08_06_sl_types(framework: str = "CRR") -> dict[str, str]:
     """Return the SL type filter values for the given framework."""
     return B31_SL_TYPES if framework == "BASEL_3_1" else CRR_SL_TYPES
+
+
+# =============================================================================
+# C 08.07 / OF 08.07 — IRB SCOPE OF USE
+# =============================================================================
+#
+# CRR C 08.07: 5 columns (0010-0050) — exposure values and coverage percentages.
+# Basel 3.1 OF 08.07: 18 columns (0010-0180) — adds RWEA decomposition by
+# SA-use reason (cols 0060-0140), IRB RWEA (0150), and materiality (0160-0180).
+#
+# Rows: CRR uses Art. 147(2) exposure classes (0010-0170, 17 rows).
+# Basel 3.1 uses Art. 147B roll-out classes (0180-0260, 9 rows) plus
+# materiality percentage row (0270).
+#
+# References:
+# - CRR Art. 147(2) (IRB exposure classes)
+# - CRR Art. 148 (roll-out plans), Art. 150 (permanent partial use)
+# - PRA PS1/26 Art. 147B (roll-out classes), Art. 150(1A) (materiality)
+
+CRR_C08_07_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Total exposure value subject to IRB", "Exposure"),
+    COREPColumn("0020", "Total exposure value subject to SA and IRB", "Exposure"),
+    COREPColumn("0030", "% subject to permanent partial use of SA", "Coverage %"),
+    COREPColumn("0040", "% subject to a roll-out plan", "Coverage %"),
+    COREPColumn("0050", "% subject to IRB approach", "Coverage %"),
+]
+
+B31_C08_07_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Total exposure value subject to IRB (Art 166A-166D)", "Exposure"),
+    COREPColumn("0020", "Total exposure value subject to SA and IRB", "Exposure"),
+    COREPColumn("0030", "% subject to permanent partial use of SA", "Coverage %"),
+    COREPColumn("0040", "% subject to a roll-out plan", "Coverage %"),
+    COREPColumn("0050", "% subject to IRB approach", "Coverage %"),
+    COREPColumn("0060", "Total RWEA for exposures subject to SA or IRB", "RWEA"),
+    COREPColumn(
+        "0070", "RWEA for SA: connected counterparties (Art 150(1)(e))", "RWEA: SA Breakdown"
+    ),
+    COREPColumn(
+        "0080",
+        "RWEA for SA: roll-out class — SA does not result in lower capital",
+        "RWEA: SA Breakdown",
+    ),
+    COREPColumn(
+        "0090", "RWEA for SA: roll-out class — cannot reasonably model", "RWEA: SA Breakdown"
+    ),
+    COREPColumn("0100", "RWEA for SA: roll-out class — immaterial", "RWEA: SA Breakdown"),
+    COREPColumn(
+        "0110", "RWEA for SA: exposure type — cannot reasonably model", "RWEA: SA Breakdown"
+    ),
+    COREPColumn(
+        "0120", "RWEA for SA: exposure type — immaterial in aggregate", "RWEA: SA Breakdown"
+    ),
+    COREPColumn("0130", "RWEA for SA: due to roll-out plan", "RWEA: SA Breakdown"),
+    COREPColumn("0140", "RWEA for SA: other", "RWEA: SA Breakdown"),
+    COREPColumn("0150", "RWEA for exposures subject to IRB", "RWEA"),
+    COREPColumn(
+        "0160", "Materiality of roll-out class (Art 150(1A)(c))", "Materiality"
+    ),
+    COREPColumn("0170", "% subject to permanent partial use (type)", "Materiality"),
+    COREPColumn(
+        "0180", "% subject to permanent partial use (immaterial in aggregate)", "Materiality"
+    ),
+]
+
+C08_07_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_07_COLUMNS]
+B31_C08_07_COLUMN_REFS: list[str] = [c.ref for c in B31_C08_07_COLUMNS]
+
+# CRR C 08.07 rows: Art. 147(2) exposure classes (17 rows)
+# Tuples: (row_ref, display_name, exposure_class_value or None for sub-rows)
+CRR_C08_07_ROWS: list[tuple[str, str, str | None]] = [
+    ("0010", "Central governments or central banks", "central_govt_central_bank"),
+    ("0020", "Of which: regional governments or local authorities", "rgla"),
+    ("0030", "Of which: public sector entities", "pse"),
+    ("0040", "Institutions", "institution"),
+    ("0050", "Corporates", "corporate"),
+    ("0060", "Of which: specialised lending, excluding slotting", None),
+    ("0070", "Of which: specialised lending, including slotting", "specialised_lending"),
+    ("0080", "Of which: SMEs", "corporate_sme"),
+    ("0090", "Retail", None),
+    ("0100", "Of which: secured by RE — SMEs", None),
+    ("0110", "Of which: secured by RE — non-SMEs", "retail_mortgage"),
+    ("0120", "Of which: qualifying revolving", "retail_qrre"),
+    ("0130", "Of which: other SMEs", None),
+    ("0140", "Of which: other non-SMEs", "retail_other"),
+    ("0150", "Equity", "equity"),
+    ("0160", "Other non-credit obligation assets", "other"),
+    ("0170", "Total", None),
+]
+
+# Basel 3.1 OF 08.07 rows: Art. 147B roll-out classes (9 rows + materiality)
+B31_C08_07_ROWS: list[tuple[str, str, str | None]] = [
+    ("0180", "Sovereign and central bank", "central_govt_central_bank"),
+    ("0190", "Institutions", "institution"),
+    ("0200", "Corporate — other", "corporate"),
+    ("0210", "Corporate — specialised lending (excl. slotting)", None),
+    ("0220", "Corporate — specialised lending (slotting)", "specialised_lending"),
+    ("0230", "Corporate — SME", "corporate_sme"),
+    ("0240", "Retail — secured by immovable property", "retail_mortgage"),
+    ("0250", "Retail — qualifying revolving", "retail_qrre"),
+    ("0260", "Retail — other", "retail_other"),
+    ("0270", "Total", None),
+    ("0280", "Aggregate immateriality %", None),
+]
+
+# Exposure classes that count as "retail" for row aggregation in CRR rows 0090-0140
+C08_07_CRR_RETAIL_CLASSES: frozenset[str] = frozenset({
+    "retail_mortgage", "retail_qrre", "retail_other",
+})
+
+# Exposure classes that count as IRB approaches (not SA)
+C08_07_IRB_APPROACHES: frozenset[str] = frozenset({
+    "foundation_irb", "advanced_irb", "slotting",
+})
+
+
+def get_c08_07_columns(framework: str = "CRR") -> list[COREPColumn]:
+    """Return the C 08.07 / OF 08.07 column definitions for the given framework."""
+    return B31_C08_07_COLUMNS if framework == "BASEL_3_1" else CRR_C08_07_COLUMNS
+
+
+def get_c08_07_rows(framework: str = "CRR") -> list[tuple[str, str, str | None]]:
+    """Return the C 08.07 / OF 08.07 row definitions for the given framework."""
+    return B31_C08_07_ROWS if framework == "BASEL_3_1" else CRR_C08_07_ROWS
 
 
 # =============================================================================

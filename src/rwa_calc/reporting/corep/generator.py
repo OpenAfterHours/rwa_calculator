@@ -8,6 +8,7 @@ Key responsibilities:
 - Generate per-exposure-class COREP template DataFrames with row sections
 - Populate COREP columns from pipeline calculation results using 4-digit refs
 - Generate C 08.06 / OF 08.06 specialised lending slotting per SL type
+- Generate C 08.07 / OF 08.07 IRB scope of use (portfolio-level)
 - Generate OF 02.01 output floor comparison (Basel 3.1, portfolio-level)
 - Support both CRR and Basel 3.1 framework variants
 - Export to Excel with per-class sheet structure
@@ -40,6 +41,8 @@ from rwa_calc.reporting.corep.templates import (
     C08_03_PD_RANGES,
     C08_06_CATEGORY_MAP,
     C08_06_COLUMN_REFS,
+    C08_07_CRR_RETAIL_CLASSES,
+    C08_07_IRB_APPROACHES,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
     OF_02_01_ROW_SECTIONS,
@@ -51,6 +54,8 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_06_columns,
     get_c08_06_rows,
     get_c08_06_sl_types,
+    get_c08_07_columns,
+    get_c08_07_rows,
     get_c08_columns,
     get_irb_row_sections,
     get_sa_risk_weight_bands,
@@ -84,6 +89,10 @@ class COREPTemplateBundle:
     C 08.06 (IRB slotting): One DataFrame per SL type, rows by slotting
         category (Strong-Default) × maturity band (< 2.5yr / ≥ 2.5yr).
         10 columns (CRR) / 11 columns (Basel 3.1 adds FCCM deduction).
+    C 08.07 / OF 08.07 (IRB scope of use): Single DataFrame showing IRB vs SA
+        coverage per exposure class. 5 columns (CRR) / 18 columns (Basel 3.1
+        adds RWEA decomposition and materiality). CRR: 17 rows by Art. 147(2)
+        exposure class. Basel 3.1: 11 rows by Art. 147B roll-out class.
     OF 02.01 (Output Floor comparison): Single DataFrame, 8 risk-type rows,
         4 columns (modelled RWA, SA RWA, U-TREA, S-TREA). Basel 3.1 only.
 
@@ -98,6 +107,7 @@ class COREPTemplateBundle:
     c08_02: dict[str, pl.DataFrame]
     c08_03: dict[str, pl.DataFrame] = field(default_factory=dict)
     c08_06: dict[str, pl.DataFrame] = field(default_factory=dict)
+    c08_07: pl.DataFrame | None = None
     of_02_01: pl.DataFrame | None = None
     framework: str = "CRR"
     errors: list[str] = field(default_factory=list)
@@ -112,9 +122,9 @@ class COREPGenerator:
     """Generates COREP credit risk templates from RWA calculation results.
 
     Produces per-exposure-class DataFrames for C 07.00 (SA), C 08.01 (IRB totals),
-    C 08.02 (IRB PD grade breakdown), C 08.03 (IRB PD ranges), and C 08.06
-    (IRB specialised lending slotting) with correct 4-digit COREP column
-    references and multi-section row structure.
+    C 08.02 (IRB PD grade breakdown), C 08.03 (IRB PD ranges), C 08.06
+    (IRB specialised lending slotting), and C 08.07 / OF 08.07 (IRB scope of use)
+    with correct 4-digit COREP column references and multi-section row structure.
 
     Usage:
         generator = COREPGenerator()
@@ -157,6 +167,9 @@ class COREPGenerator:
         c08_03 = self._generate_all_c08_03(irb_data, cols, framework, errors)
         c08_06 = self._generate_all_c08_06(irb_data, cols, framework, errors)
 
+        # C 08.07 / OF 08.07 — IRB scope of use
+        c08_07 = self._generate_c08_07(results, cols, framework, errors)
+
         # OF 02.01 — Output floor comparison (Basel 3.1 only)
         of_02_01 = self._generate_of_02_01(results, cols, framework, errors)
 
@@ -166,6 +179,7 @@ class COREPGenerator:
             c08_02=c08_02,
             c08_03=c08_03,
             c08_06=c08_06,
+            c08_07=c08_07,
             of_02_01=of_02_01,
             framework=framework,
             errors=errors,
@@ -215,6 +229,11 @@ class COREPGenerator:
             total_rows += self._write_template_sheets(
                 workbook, bundle.c08_06, "C 08.06", sl_class_map
             )
+            if bundle.c08_07 is not None:
+                c08_07_prefix = "OF 08.07" if bundle.framework == "BASEL_3_1" else "C 08.07"
+                total_rows += self._write_single_template_sheet(
+                    workbook, bundle.c08_07, c08_07_prefix
+                )
             if bundle.of_02_01 is not None:
                 total_rows += self._write_single_template_sheet(
                     workbook, bundle.of_02_01, "OF 02.01"
@@ -260,6 +279,202 @@ class COREPGenerator:
         sheet = re.sub(r"[\[\]:*?/\\]", "", sheet_name)[:31]
         df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
         return len(df)
+
+    # =========================================================================
+    # C 08.07 / OF 08.07 — IRB Scope of Use
+    # =========================================================================
+
+    def _generate_c08_07(
+        self,
+        results: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> pl.DataFrame | None:
+        """Generate C 08.07 (CRR) / OF 08.07 (Basel 3.1) IRB scope of use.
+
+        Shows the split of exposures between SA and IRB approaches per
+        exposure class. CRR: 5 columns (exposure values + coverage %).
+        Basel 3.1: 18 columns (adds RWEA decomposition + materiality).
+
+        Uses full results LazyFrame (not just IRB data) because the template
+        reports both SA and IRB coverage.
+
+        References:
+        - CRR Art. 147(2), Art. 148, Art. 150
+        - PRA PS1/26 Art. 147B, Art. 150(1A)
+        """
+        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+        approach_col = _pick(cols, "approach_applied", "approach")
+        ec_col = _pick(cols, "exposure_class")
+
+        if ead_col is None or approach_col is None or ec_col is None:
+            missing = [
+                n
+                for n, v in [("ead", ead_col), ("approach", approach_col), ("class", ec_col)]
+                if v is None
+            ]
+            errors.append(f"C 08.07: missing columns: {', '.join(missing)}")
+            return None
+
+        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+
+        # Collect grouped data: (exposure_class, approach_applied) -> (sum_ead, sum_rwa)
+        agg_exprs = [pl.col(ead_col).sum().alias("_sum_ead")]
+        if rwa_col:
+            agg_exprs.append(pl.col(rwa_col).sum().alias("_sum_rwa"))
+
+        grouped = (
+            results.group_by([ec_col, approach_col])
+            .agg(agg_exprs)
+            .collect()
+        )
+
+        if len(grouped) == 0:
+            return None
+
+        # Build lookup: (exposure_class, is_irb) -> (sum_ead, sum_rwa)
+        class_irb_ead: dict[str, float] = {}
+        class_sa_ead: dict[str, float] = {}
+        class_irb_rwa: dict[str, float] = {}
+        class_sa_rwa: dict[str, float] = {}
+
+        for row in grouped.iter_rows(named=True):
+            ec = row[ec_col]
+            approach = row[approach_col]
+            ead = row["_sum_ead"] or 0.0
+            rwa_val = row.get("_sum_rwa", 0.0) or 0.0
+
+            if approach in C08_07_IRB_APPROACHES:
+                class_irb_ead[ec] = class_irb_ead.get(ec, 0.0) + ead
+                class_irb_rwa[ec] = class_irb_rwa.get(ec, 0.0) + rwa_val
+            else:
+                class_sa_ead[ec] = class_sa_ead.get(ec, 0.0) + ead
+                class_sa_rwa[ec] = class_sa_rwa.get(ec, 0.0) + rwa_val
+
+        all_classes = set(class_irb_ead) | set(class_sa_ead)
+
+        column_defs = get_c08_07_columns(framework)
+        column_refs = [c.ref for c in column_defs]
+        row_defs = get_c08_07_rows(framework)
+
+        is_b31 = framework == "BASEL_3_1"
+        rows: list[dict[str, object]] = []
+
+        for row_ref, row_name, ec_value in row_defs:
+            values: dict[str, object] = {}
+
+            if row_name == "Total" or row_name == "Aggregate immateriality %":
+                if row_name == "Total":
+                    irb_ead = sum(class_irb_ead.values())
+                    sa_ead = sum(class_sa_ead.values())
+                    irb_rwa = sum(class_irb_rwa.values())
+                    sa_rwa = sum(class_sa_rwa.values())
+                    values = self._compute_c08_07_values(
+                        irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                    )
+                else:
+                    # Materiality row: null (requires institutional config)
+                    values = {ref: None for ref in column_refs}
+            elif ec_value is not None:
+                # Direct exposure class mapping
+                irb_ead = class_irb_ead.get(ec_value, 0.0)
+                sa_ead = class_sa_ead.get(ec_value, 0.0)
+                irb_rwa = class_irb_rwa.get(ec_value, 0.0)
+                sa_rwa = class_sa_rwa.get(ec_value, 0.0)
+                values = self._compute_c08_07_values(
+                    irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                )
+            elif row_ref == "0090":
+                # CRR "Retail" aggregate row
+                irb_ead = sum(
+                    class_irb_ead.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
+                )
+                sa_ead = sum(
+                    class_sa_ead.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
+                )
+                irb_rwa = sum(
+                    class_irb_rwa.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
+                )
+                sa_rwa = sum(
+                    class_sa_rwa.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
+                )
+                values = self._compute_c08_07_values(
+                    irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                )
+            elif row_ref == "0060":
+                # CRR "SL excluding slotting" — SL on IRB (non-slotting approaches)
+                # Cannot distinguish from data; report as null
+                values = {ref: None for ref in column_refs}
+            else:
+                # Sub-rows without direct mapping (SME sub-rows, etc.)
+                values = {ref: None for ref in column_refs}
+
+            rows.append({"row_ref": row_ref, "row_name": row_name, **values})
+
+        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema.update(dict.fromkeys(column_refs, pl.Float64))
+        return pl.DataFrame(rows, schema=schema)
+
+    @staticmethod
+    def _compute_c08_07_values(
+        irb_ead: float,
+        sa_ead: float,
+        irb_rwa: float,
+        sa_rwa: float,
+        column_refs: list[str],
+        is_b31: bool,
+    ) -> dict[str, object]:
+        """Compute column values for a single C 08.07 / OF 08.07 row.
+
+        Args:
+            irb_ead: Total EAD under IRB approaches for this class.
+            sa_ead: Total EAD under SA for this class.
+            irb_rwa: Total RWEA under IRB for this class.
+            sa_rwa: Total RWEA under SA for this class.
+            column_refs: Ordered list of column reference strings.
+            is_b31: Whether Basel 3.1 (18-column) layout is active.
+        """
+        total_ead = irb_ead + sa_ead
+        total_rwa = irb_rwa + sa_rwa
+
+        # Percentages: avoid division by zero
+        pct_sa = (sa_ead / total_ead * 100.0) if total_ead > 0 else 0.0
+        pct_irb = (irb_ead / total_ead * 100.0) if total_ead > 0 else 0.0
+
+        values: dict[str, object] = {}
+        for ref in column_refs:
+            if ref == "0010":
+                values[ref] = irb_ead
+            elif ref == "0020":
+                values[ref] = total_ead
+            elif ref == "0030":
+                # % subject to permanent partial use of SA — all SA is treated
+                # as permanent partial use when IRB permissions exist
+                values[ref] = pct_sa
+            elif ref == "0040":
+                # % subject to roll-out plan — not tracked in pipeline
+                values[ref] = 0.0
+            elif ref == "0050":
+                values[ref] = pct_irb
+            elif ref == "0060" and is_b31:
+                values[ref] = total_rwa
+            elif ref == "0140" and is_b31:
+                # RWEA for SA: other — all SA RWEA goes here when no
+                # sa_use_reason column is available to split by reason
+                values[ref] = sa_rwa
+            elif ref == "0150" and is_b31:
+                values[ref] = irb_rwa
+            elif ref in {"0160", "0170", "0180"} and is_b31:
+                # Materiality columns: consolidated-basis only, institutional config
+                values[ref] = None
+            elif is_b31:
+                # SA RWEA breakdown cols 0070-0130: null (requires sa_use_reason)
+                values[ref] = 0.0
+            else:
+                values[ref] = 0.0
+
+        return values
 
     # =========================================================================
     # OF 02.01 — Output Floor Comparison (Basel 3.1 only)

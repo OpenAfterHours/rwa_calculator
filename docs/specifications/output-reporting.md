@@ -157,7 +157,8 @@ breakdown, risk weight breakdown, memorandum items).
 - `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf` — Basel 3.1 reporting instructions
 
 ### Status
-- Generator: Needs rework — current implementation uses simplified column set and one-row-per-class structure. Covers C 07.00, C 08.01, C 08.02 only. Templates 08.03–09.02 are documented but not yet implemented in the generator.
+- Generator: Needs rework — current implementation uses simplified column set and one-row-per-class structure. Covers C 07.00, C 08.01, C 08.02, and OF 02.01 (Basel 3.1 only). Templates 08.03–09.02 are documented but not yet implemented in the generator.
+- OF 02.01: Complete — `COREPGenerator._generate_of_02_01()` populates credit risk row (0010) and Total row (0080); other rows null (CCR/market/op risk out of scope).
 - Template definitions: Needs rework — column refs and row structure don't match actual EBA/PRA templates.
 - Excel export: Needs update to match per-exposure-class template structure.
 - Integration: Done (`ResultExporter.export_to_corep()`, `CalculationResponse.to_corep()`)

@@ -73,6 +73,53 @@ flowchart TD
 
 ---
 
+## OF 02.01 — Output Floor Comparison (Basel 3.1 only)
+
+OF 02.01 is a Basel 3.1-only template with no CRR equivalent. It provides a dedicated output
+floor comparison for internal-model firms, showing modelled versus standardised total risk
+exposure amounts side by side by risk type. The template supplies the raw comparison data
+consumed by OF 02.00 to apply the floor multiplier.
+
+**Reference:** PRA PS1/26 Art. 92 para 2A / 3A
+
+### Column Structure
+
+| Column | Label | Description |
+|--------|-------|-------------|
+| **0010** | Modelled RWA | RWEA using internal models (IRB, IMM, IMA, SEC-IRBA, etc.) |
+| **0020** | SA RWA | RWEA calculated under the Standardised Approach equivalent portfolio |
+| **0030** | U-TREA | Un-floored Total Risk Exposure Amount (Art. 92 para 3) |
+| **0040** | S-TREA | Standardised Total Risk Exposure Amount (Art. 92 para 3A) — calculated without IRB, SFT VaR, SEC-IRBA, IAA, IMM, or IMA |
+
+### Row Structure
+
+| Row | Risk Type | Current Scope |
+|-----|-----------|---------------|
+| **0010** | Credit risk | Populated — SA and IRB credit RWA from pipeline output |
+| **0020** | Counterparty credit risk (CCR) | Null — CCR out of scope |
+| **0030** | CVA | Null — CVA out of scope |
+| **0040** | Securitisation | Null — securitisation out of scope |
+| **0050** | Market risk | Null — market risk out of scope |
+| **0060** | Operational risk | Null — operational risk out of scope |
+| **0070** | Other risk | Null — no other risk types in scope |
+| **0080** | Total | Populated — sum of all in-scope risk types (currently credit risk only) |
+
+!!! note "Scope"
+    Only the credit risk row (0010) and Total row (0080) are populated. All other rows
+    (CCR, CVA, securitisation, market risk, operational risk, other) are null because those
+    risk types are outside the current scope of the calculator.
+
+### Implementation
+
+| Item | Detail |
+|------|--------|
+| Generator method | `COREPGenerator._generate_of_02_01()` |
+| Bundle field | `COREPTemplateBundle.of_02_01` |
+| Framework | Basel 3.1 only — not generated for CRR frameworks |
+| Status | **Complete** |
+
+---
+
 ## C 07.00 / OF 07.00 — CR SA
 
 ### Column Structure

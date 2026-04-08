@@ -5,8 +5,9 @@ Defines the row/column structure for COREP credit risk templates:
 - C 07.00 / OF 07.00: SA credit risk — 24/22 columns, 5 row sections
 - C 08.01 / OF 08.01: IRB totals — 35/40+ columns, row sections
 - C 08.02 / OF 08.02: IRB PD grade bands for granular reporting
+- OF 02.01: Output floor comparison — 4 columns, 8 risk-type rows (Basel 3.1 only)
 
-Supports both CRR (current) and Basel 3.1 (PRA PS9/24) frameworks.
+Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
 
 Why: COREP templates have a fixed regulatory format (EBA DPM taxonomy).
 These definitions are the single source of truth for template structure,
@@ -649,6 +650,40 @@ B31_C08_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", "PD assigned to obligor grade or pool (%)", "Internal Rating"),
     *B31_C08_COLUMNS,
 ]
+
+
+# =============================================================================
+# OF 02.01 — OUTPUT FLOOR COMPARISON (Basel 3.1 only, PRA PS1/26 Art. 92)
+# =============================================================================
+
+# OF 02.01 compares modelled (U-TREA) vs standardised (S-TREA) risk exposure
+# amounts by risk type. Basel 3.1 only — no CRR equivalent.
+# Reference: PRA PS1/26 Art. 92 para 2A/3A, PRA COREP reporting framework
+
+OF_02_01_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Total risk exposure amount (modelled approaches)", "Comparison"),
+    COREPColumn("0020", "Total risk exposure amount (standardised approaches)", "Comparison"),
+    COREPColumn("0030", "U-TREA", "Output Floor"),
+    COREPColumn("0040", "S-TREA", "Output Floor"),
+]
+
+OF_02_01_ROW_SECTIONS: list[RowSection] = [
+    RowSection(
+        "Risk Type Breakdown",
+        [
+            COREPRow("0010", "Credit risk (excluding CCR)"),
+            COREPRow("0020", "Counterparty credit risk"),
+            COREPRow("0030", "Credit valuation adjustment risk"),
+            COREPRow("0040", "Securitisation positions in the non-trading book"),
+            COREPRow("0050", "Market risk"),
+            COREPRow("0060", "Operational risk"),
+            COREPRow("0070", "Other"),
+            COREPRow("0080", "Total"),
+        ],
+    ),
+]
+
+OF_02_01_COLUMN_REFS: list[str] = [c.ref for c in OF_02_01_COLUMNS]
 
 
 # =============================================================================

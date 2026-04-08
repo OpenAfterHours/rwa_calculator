@@ -5,12 +5,14 @@ Generates EBA/PRA COREP templates from RWA calculation results:
 - C 07.00 / OF 07.00: CR SA — Standardised Approach credit risk
 - C 08.01 / OF 08.01: CR IRB — IRB approach totals by exposure class
 - C 08.02 / OF 08.02: CR IRB — IRB approach breakdown by PD grade
+- OF 02.01: Output floor comparison — modelled vs SA by risk type (Basel 3.1 only)
 
-Supports both CRR (current) and Basel 3.1 (PRA PS9/24) frameworks.
+Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
 
 References:
 - Regulation (EU) 2021/451 (ITS on Supervisory Reporting), Annexes I/II
 - PRA PS1/26 (Basel 3.1 OF template layouts)
+- PRA PS1/26 Art. 92 para 2A/3A (output floor)
 - CRR Art. 111-134 (SA), Art. 142-191 (IRB)
 """
 
@@ -30,6 +32,9 @@ from rwa_calc.reporting.corep.templates import (
     CRR_IRB_ROW_SECTIONS,
     CRR_SA_ROW_SECTIONS,
     IRB_EXPOSURE_CLASS_ROWS,
+    OF_02_01_COLUMN_REFS,
+    OF_02_01_COLUMNS,
+    OF_02_01_ROW_SECTIONS,
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
     SA_RISK_WEIGHT_BANDS,
@@ -55,6 +60,9 @@ __all__ = [
     "CRR_IRB_ROW_SECTIONS",
     "CRR_SA_ROW_SECTIONS",
     "IRB_EXPOSURE_CLASS_ROWS",
+    "OF_02_01_COLUMN_REFS",
+    "OF_02_01_COLUMNS",
+    "OF_02_01_ROW_SECTIONS",
     "PD_BANDS",
     "SA_EXPOSURE_CLASS_ROWS",
     "SA_RISK_WEIGHT_BANDS",

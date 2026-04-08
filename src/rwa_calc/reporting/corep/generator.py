@@ -7,6 +7,7 @@ Pipeline position:
 Key responsibilities:
 - Generate per-exposure-class COREP template DataFrames with row sections
 - Populate COREP columns from pipeline calculation results using 4-digit refs
+- Generate OF 02.01 output floor comparison (Basel 3.1, portfolio-level)
 - Support both CRR and Basel 3.1 framework variants
 - Export to Excel with per-class sheet structure
 
@@ -35,6 +36,8 @@ import polars as pl
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
     IRB_EXPOSURE_CLASS_ROWS,
+    OF_02_01_COLUMN_REFS,
+    OF_02_01_ROW_SECTIONS,
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
     get_c07_columns,
@@ -61,12 +64,14 @@ logger = logging.getLogger(__name__)
 class COREPTemplateBundle:
     """Bundle of generated COREP template DataFrames.
 
-    Each template is a dict keyed by exposure class value, where each value
-    is a DataFrame with row sections and 4-digit COREP column references.
+    Each per-class template is a dict keyed by exposure class value, where
+    each value is a DataFrame with row sections and 4-digit COREP column refs.
 
     C 07.00 (SA): One DataFrame per SA exposure class, with 5 row sections.
     C 08.01 (IRB): One DataFrame per IRB exposure class, with 3 row sections.
     C 08.02 (IRB by PD grade): One DataFrame per IRB exposure class.
+    OF 02.01 (Output Floor comparison): Single DataFrame, 8 risk-type rows,
+        4 columns (modelled RWA, SA RWA, U-TREA, S-TREA). Basel 3.1 only.
 
     Why: COREP templates are submitted per exposure class to the regulator.
     Each class gets a fixed row structure (totals, exposure types, risk weights,
@@ -77,6 +82,7 @@ class COREPTemplateBundle:
     c07_00: dict[str, pl.DataFrame]
     c08_01: dict[str, pl.DataFrame]
     c08_02: dict[str, pl.DataFrame]
+    of_02_01: pl.DataFrame | None = None
     framework: str = "CRR"
     errors: list[str] = field(default_factory=list)
 
@@ -132,10 +138,14 @@ class COREPGenerator:
         c08_01 = self._generate_all_c08_01(irb_data, cols, framework, errors)
         c08_02 = self._generate_all_c08_02(irb_data, cols, framework, errors)
 
+        # OF 02.01 — Output floor comparison (Basel 3.1 only)
+        of_02_01 = self._generate_of_02_01(results, cols, framework, errors)
+
         return COREPTemplateBundle(
             c07_00=c07_00,
             c08_01=c08_01,
             c08_02=c08_02,
+            of_02_01=of_02_01,
             framework=framework,
             errors=errors,
         )
@@ -176,6 +186,10 @@ class COREPGenerator:
             total_rows += self._write_template_sheets(
                 workbook, bundle.c08_02, "C 08.02", IRB_EXPOSURE_CLASS_ROWS
             )
+            if bundle.of_02_01 is not None:
+                total_rows += self._write_single_template_sheet(
+                    workbook, bundle.of_02_01, "OF 02.01"
+                )
         finally:
             workbook.close()
 
@@ -204,6 +218,100 @@ class COREPGenerator:
                 df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
                 total += len(df)
         return total
+
+    @staticmethod
+    def _write_single_template_sheet(
+        workbook: object,
+        df: pl.DataFrame,
+        sheet_name: str,
+    ) -> int:
+        """Write a single DataFrame as an Excel sheet. Returns rows written."""
+        if len(df) == 0:
+            return 0
+        sheet = re.sub(r"[\[\]:*?/\\]", "", sheet_name)[:31]
+        df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
+        return len(df)
+
+    # =========================================================================
+    # OF 02.01 — Output Floor Comparison (Basel 3.1 only)
+    # =========================================================================
+
+    def _generate_of_02_01(
+        self,
+        results: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> pl.DataFrame | None:
+        """Generate OF 02.01 output floor comparison template.
+
+        Basel 3.1 only (no CRR equivalent). Compares modelled (U-TREA) vs
+        standardised (S-TREA) total risk exposure amounts by risk type.
+
+        Requires ``rwa_pre_floor`` and ``sa_rwa`` columns in the results
+        LazyFrame (added by the output floor calculation in the aggregator).
+        Returns None under CRR or when floor columns are absent.
+
+        References:
+            PRA PS1/26 Art. 92 para 2A/3A
+        """
+        if framework != "BASEL_3_1":
+            return None
+
+        if "rwa_pre_floor" not in cols or "sa_rwa" not in cols:
+            errors.append(
+                "OF 02.01 skipped: rwa_pre_floor and/or sa_rwa columns not found "
+                "(output floor not applied)"
+            )
+            return None
+
+        # Compute credit risk totals from the full results LazyFrame.
+        # rwa_pre_floor = actual modelled RWA (before floor add-on).
+        # sa_rwa = SA-equivalent RWA for each exposure.
+        credit_risk_stats = results.select(
+            pl.col("rwa_pre_floor").fill_null(0.0).sum().alias("modelled_rwa"),
+            pl.col("sa_rwa").fill_null(0.0).sum().alias("sa_rwa_total"),
+        ).collect()
+
+        modelled_rwa = float(credit_risk_stats["modelled_rwa"][0])
+        sa_rwa_total = float(credit_risk_stats["sa_rwa_total"][0])
+
+        column_refs = OF_02_01_COLUMN_REFS
+        rows: list[dict[str, object]] = []
+
+        for section in OF_02_01_ROW_SECTIONS:
+            for row_def in section.rows:
+                if row_def.ref == "0010":
+                    # Credit risk (excluding CCR) — populated from pipeline
+                    rows.append(
+                        _of_02_01_row(
+                            row_def.ref,
+                            row_def.name,
+                            column_refs,
+                            modelled_rwa=modelled_rwa,
+                            sa_rwa=sa_rwa_total,
+                        )
+                    )
+                elif row_def.ref == "0080":
+                    # Total — same as credit risk for credit-risk-only calculator
+                    rows.append(
+                        _of_02_01_row(
+                            row_def.ref,
+                            row_def.name,
+                            column_refs,
+                            modelled_rwa=modelled_rwa,
+                            sa_rwa=sa_rwa_total,
+                        )
+                    )
+                else:
+                    # CCR, CVA, securitisation, market, op risk, other — out of scope
+                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+
+        schema = {"row_ref": pl.String, "row_name": pl.String}
+        for ref in column_refs:
+            schema[ref] = pl.Float64
+
+        return pl.DataFrame(rows, schema=schema)
 
     # =========================================================================
     # C 07.00 — SA Credit Risk (per exposure class)
@@ -1001,6 +1109,32 @@ def _null_row(row_ref: str, row_name: str, column_refs: list[str]) -> dict[str, 
     row: dict[str, object] = {"row_ref": row_ref, "row_name": row_name}
     for ref in column_refs:
         row[ref] = None
+    return row
+
+
+def _of_02_01_row(
+    row_ref: str,
+    row_name: str,
+    column_refs: list[str],
+    *,
+    modelled_rwa: float,
+    sa_rwa: float,
+) -> dict[str, object]:
+    """Build an OF 02.01 row with modelled/SA RWA and U-TREA/S-TREA values.
+
+    For a credit-risk-only calculator, U-TREA = modelled RWA and S-TREA = SA RWA
+    for the credit risk row. At the total row, these are the same (only credit
+    risk is in scope).
+    """
+    row: dict[str, object] = {"row_ref": row_ref, "row_name": row_name}
+    values = {
+        "0010": modelled_rwa,
+        "0020": sa_rwa,
+        "0030": modelled_rwa,
+        "0040": sa_rwa,
+    }
+    for ref in column_refs:
+        row[ref] = values.get(ref)
     return row
 
 

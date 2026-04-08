@@ -280,11 +280,18 @@ External Credit Risk Assessment Approach (ECRA):
 
 Standardised Credit Risk Assessment Approach (SCRA):
 
-| Grade | Risk Weight | Criteria |
-|-------|-------------|----------|
-| A | 40% | CET1 > 14%, Leverage > 5% |
-| B | 75% | CET1 > 5.5%, Leverage > 3% |
-| C | 150% | Below minimum requirements |
+| Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
+|-------|-------------------|-------------------|----------|
+| A | 40% | 20% | Meets all minimum requirements + buffers |
+| A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
+| B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
+| C | 150% | 150% | Below minimum requirements |
+
+!!! info "SCRA Grade A vs A (enhanced)"
+    Standard Grade A (40%) requires a qualitative assessment that the institution meets all
+    minimum capital requirements plus applicable buffers. Grade A enhanced (30%) additionally
+    requires quantitative thresholds: CET1 ratio ≥ 14% and leverage ratio ≥ 5%
+    (Art. 120(2A), CRE20.19).
 
 ### Subordinated Debt
 

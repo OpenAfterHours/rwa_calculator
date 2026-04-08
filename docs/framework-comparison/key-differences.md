@@ -292,7 +292,8 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
 |-------|-------------------|-------------------|----------|
-| A | 40% | 20% | CET1 ≥ 14%, Leverage ≥ 5% |
+| A | 40% | 20% | Meets all minimum requirements + buffers |
+| A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
 | B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
 | C | 150% | 150% | Below minimum requirements |
 

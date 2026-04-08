@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P3.1 Pillar III disclosure framework implemented — 9 templates)
-**Current version:** 0.1.164 | **Test suite:** 4,640 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.4, P2.10, P3.1, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**Last updated:** 2026-04-08 (P3.4 CMS1/CMS2 output floor comparison templates implemented)
+**Current version:** 0.1.165 | **Test suite:** 4,687 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.4, P2.10, P3.1, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.2b/P2.2c/P2.2d/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.2b/P2.2c/P2.2d/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -255,15 +255,18 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
   - CR7-A PDF typo: column "n" duplicated (should be "o" and "p") -- spec already resolves correctly
 - **Fix:** Update `docs/features/pillar3-disclosures.md` with missing qualitative tables (CRD, CRE), purchased receivables sub-row, CR5 rows 18-33, and field-level precision fixes.
 
-### P3.4 UKB CMS1 / CMS2 (output floor comparison) missing from spec and plan
-- **Status:** [ ] Not in spec -- mandatory Basel 3.1 Pillar III templates
-- **Impact:** PRA PS1/26 Art. 456 and Art. 2a define two mandatory output floor comparison templates:
-  - **UKB CMS1**: Comparison of SA vs. modelled RWEs by risk type (Art. 456(1)(a), Art. 2a(1))
-  - **UKB CMS2**: Comparison of SA vs. modelled RWEs for credit risk at asset class level (Art. 456(1)(b), Art. 2a(2))
-  These are new Basel 3.1-specific Pillar III templates with no CRR equivalent. Neither is in `docs/features/pillar3-disclosures.md` or `docs/specifications/output-reporting.md`.
+### P3.4 UKB CMS1 / CMS2 (output floor comparison)
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** PRA PS1/26 Art. 456 and Art. 2a define two mandatory output floor comparison templates. Both are new Basel 3.1-specific Pillar III templates with no CRR equivalent.
+- **Implementation:**
+  - **UKB CMS1** — Comparison of SA vs modelled RWA by risk type (Art. 456(1)(a), Art. 2a(1)). 4 columns (a: modelled RWA, b: SA portfolio RWA, c: total actual RWA, d: full SA RWA) × 8 rows (credit risk, CCR, CVA, securitisation, market risk, op risk, residual, total). Only credit risk row (0010) and total row (0080) populated from pipeline; other risk type rows are null (beyond credit risk scope). Returns None under CRR.
+  - **UKB CMS2** — Comparison of SA vs modelled RWA for credit risk at asset class level (Art. 456(1)(b), Art. 2a(2)). 4 columns × 17 rows covering sovereign, institutions, subordinated debt/equity, corporates (with FIRB/AIRB/SL/IPRE sub-rows), retail (with QRRE/other/mortgage sub-rows), others, and total. Sub-rows 0044 (IPRE/HVCRE), 0045 (purchased receivables corp), 0054 (purchased receivables retail) are null (require pipeline data not yet available).
+  - **Bundle:** `Pillar3TemplateBundle.cms1` and `.cms2` fields added (both `pl.DataFrame | None`).
+  - **Excel export:** CMS1/CMS2 exported via `export_to_excel()` with `UKB CMS1` and `UKB CMS2` sheet names.
+  - **Data source:** Uses `rwa_pre_floor` (modelled RWA), `sa_rwa` (SA-equivalent RWA), and per-exposure `approach_applied`/`exposure_class` columns from the pipeline results LazyFrame. Same data source as COREP OF 02.01.
+- **File:Line:** `reporting/pillar3/templates.py` (CMS1_COLUMNS, CMS1_ROWS, CMS2_COLUMNS, CMS2_ROWS, CMS2_SA_CLASS_MAP), `reporting/pillar3/generator.py` (_generate_cms1, _generate_cms2, Pillar3TemplateBundle.cms1/.cms2)
 - **Spec ref:** PRA PS1/26 Art. 456, Art. 2a (page 467 of PS1/26 App 1)
-- **Fix:** Add CMS1 and CMS2 template definitions to Pillar III spec. Include in P3.1 implementation scope.
-- **Tests needed:** Unit tests for CMS1/CMS2 templates.
+- **Tests:** 47 new tests in `tests/unit/test_pillar3.py`: TestCMS1TemplateDefinitions (7), TestCMS1Generation (13), TestCMS2TemplateDefinitions (8), TestCMS2Generation (16), plus 3 end-to-end tests. Total: 4,687 (was 4,640). Pillar III tests: 153 (was 106).
 
 ---
 

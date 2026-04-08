@@ -635,6 +635,96 @@ CRR only, equity exposures under the simple risk-weighted approach).
 
 ---
 
+## UKB CMS1 — Output Floor Comparison by Risk Type (Art. 456(1)(a))
+
+Basel 3.1 only — no CRR equivalent. Institutions subject to the output floor must disclose a
+comparison between full standardised RWA and modelled RWA by risk type.
+
+**Regulatory basis:** PRA PS1/26 Art. 456(1)(a), Art. 2a(1)
+
+### Column Structure
+
+| Col | Title |
+|-----|-------|
+| a | RWA for modelled approaches |
+| b | RWA for portfolios where standardised approaches are used |
+| c | Total actual RWA |
+| d | RWA calculated using full standardised approach |
+
+### Row Structure
+
+| Row | Description |
+|-----|-------------|
+| 0010 | Credit risk (excluding CCR) |
+| 0020 | Counterparty credit risk |
+| 0030 | Credit valuation adjustment |
+| 0040 | Securitisation exposures in the banking book |
+| 0050 | Market risk |
+| 0060 | Operational risk |
+| 0070 | Residual RWA |
+| 0080 | Total |
+
+### Implementation Notes
+
+- Only row 0010 (credit risk) and 0080 (total) are populated from the pipeline
+- Rows 0020–0070 (CCR, CVA, securitisation, market risk, op risk, residual) are null — require
+  data beyond credit risk scope
+- Col a: RWA from IRB + slotting exposures (modelled approaches)
+- Col b: RWA from SA-only portfolios
+- Col c: Sum of cols a and b
+- Col d: sa_rwa for all exposures (full SA recalculation)
+
+---
+
+## UKB CMS2 — Output Floor Comparison by Asset Class (Art. 456(1)(b))
+
+Basel 3.1 only — no CRR equivalent. Breaks down the credit risk comparison at asset class level.
+
+**Regulatory basis:** PRA PS1/26 Art. 456(1)(b), Art. 2a(2)
+
+### Column Structure
+
+| Col | Title |
+|-----|-------|
+| a | RWA for modelled approaches (IRB incl. slotting) |
+| b | RWA for column (a) re-computed using SA |
+| c | Total actual RWA |
+| d | RWA calculated using full standardised approach |
+
+### Row Structure
+
+| Row | Description |
+|-----|-------------|
+| 0010 | Sovereign |
+| 0011 | Of which: MDB/PSE in SA |
+| 0020 | Institutions |
+| 0030 | Subordinated debt, equity and other own funds |
+| 0040 | Corporates |
+| 0041 | Of which are FIRB |
+| 0042 | Of which are AIRB |
+| 0043 | Of which: specialised lending |
+| 0044 | Of which: IPRE and HVCRE |
+| 0045 | Of which: purchased receivables |
+| 0050 | Retail |
+| 0051 | Of which: qualifying revolving retail |
+| 0052 | Of which: other retail |
+| 0053 | Of which: retail secured by residential immovable property |
+| 0054 | Of which: purchased receivables |
+| 0060 | Others (non-credit obligation assets) |
+| 0070 | Total |
+
+### Implementation Notes
+
+- Col a: IRB + slotting RWA per exposure class
+- Col b: sa_rwa for modelled exposures (SA-equivalent recalculation)
+- Col c: Modelled RWA + SA portfolio RWA per class
+- Col d: sa_rwa for all exposures in each class
+- Sub-rows 0041/0042 filter by approach (F-IRB/A-IRB within corporates)
+- Sub-rows 0044, 0045, 0054 are null (require pipeline data not yet available)
+- Excludes CCR, CVA, and securitisation exposures
+
+---
+
 ## See Also
 
 - [COREP Reporting](corep-reporting.md) — supervisory return templates (C 07.00, C 08.01, C 08.02)

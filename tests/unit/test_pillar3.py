@@ -11,6 +11,8 @@ Tests cover:
     - CR7-A: Extent of CRM techniques
     - CR8: RWEA flow statements
     - CR10: Slotting approach exposures
+    - CMS1: Output floor comparison by risk type (Basel 3.1 only)
+    - CMS2: Output floor comparison by asset class (Basel 3.1 only)
     - Export integration
 
 Why: Pillar III disclosures are mandatory public regulatory outputs.
@@ -38,6 +40,11 @@ from rwa_calc.reporting.pillar3.templates import (
     B31_CR7A_COLUMNS,
     B31_CR7_ROWS,
     B31_OV1_ROWS,
+    CMS1_COLUMNS,
+    CMS1_ROWS,
+    CMS2_COLUMNS,
+    CMS2_ROWS,
+    CMS2_SA_CLASS_MAP,
     CR10_CATEGORY_MAP,
     CR10_SLOTTING_ROWS,
     CR6A_COLUMNS,
@@ -744,6 +751,361 @@ class TestCR10Generation:
             assert set(df.columns) == expected
 
 
+def _make_mixed_data_with_sa_rwa() -> pl.LazyFrame:
+    """Create mixed pipeline data with sa_rwa column for output floor tests."""
+    sa = _make_sa_data(
+        sa_rwa=[1000.0, 700.0, 750.0],  # SA RWA = actual RWA for SA exposures
+    ).collect()
+    irb = _make_irb_data(
+        sa_rwa=[3500.0, 2100.0, 1400.0],  # SA equivalent of IRB exposures
+    ).collect()
+    slotting = _make_slotting_data(
+        sa_rwa=[800.0, 650.0, 500.0],  # SA equivalent of slotting exposures
+    ).collect()
+    all_frames = [sa, irb, slotting]
+    col_types: dict[str, pl.DataType] = {}
+    for df in all_frames:
+        for col_name in df.columns:
+            dtype = df.schema[col_name]
+            if dtype != pl.Null:
+                col_types[col_name] = dtype
+    all_cols = sorted(col_types.keys())
+    frames = []
+    for df in all_frames:
+        for col in all_cols:
+            if col not in df.columns:
+                df = df.with_columns(pl.lit(None).cast(col_types[col]).alias(col))
+        frames.append(df.select(all_cols))
+    return pl.concat(frames).lazy()
+
+
+# ---------------------------------------------------------------------------
+# CMS1 — Output floor comparison by risk type (Art. 456(1)(a))
+# ---------------------------------------------------------------------------
+
+
+class TestCMS1TemplateDefinitions:
+    """Tests for CMS1 template constant definitions."""
+
+    def test_cms1_columns_count(self):
+        assert len(CMS1_COLUMNS) == 4
+
+    def test_cms1_column_refs(self):
+        refs = [c.ref for c in CMS1_COLUMNS]
+        assert refs == ["a", "b", "c", "d"]
+
+    def test_cms1_rows_count(self):
+        assert len(CMS1_ROWS) == 8
+
+    def test_cms1_row_refs(self):
+        refs = [r.ref for r in CMS1_ROWS]
+        assert refs == ["0010", "0020", "0030", "0040", "0050", "0060", "0070", "0080"]
+
+    def test_cms1_total_row_is_last(self):
+        assert CMS1_ROWS[-1].is_total is True
+        assert CMS1_ROWS[-1].ref == "0080"
+
+    def test_cms1_credit_risk_row_first(self):
+        assert CMS1_ROWS[0].ref == "0010"
+        assert "Credit risk" in CMS1_ROWS[0].name
+
+    def test_cms1_no_crr_rows(self):
+        """CMS1 has no CRR variant — B31 only."""
+        # CMS1 constants are not framework-split, they are B31-only
+        assert len(CMS1_ROWS) == 8
+
+
+class TestCMS1Generation:
+    """Tests for CMS1 template generation."""
+
+    def test_cms1_none_under_crr(self, generator: Pillar3Generator):
+        """CMS1 is Basel 3.1 only — must be None under CRR."""
+        data = _make_mixed_data()
+        bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cms1 is None
+
+    def test_cms1_generated_under_b31(self, generator: Pillar3Generator):
+        """CMS1 must be populated under Basel 3.1."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+
+    def test_cms1_row_count(self, generator: Pillar3Generator):
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1.height == 8
+
+    def test_cms1_columns_match(self, generator: Pillar3Generator):
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        expected = {"row_ref", "row_name"} | {c.ref for c in CMS1_COLUMNS}
+        assert set(bundle.cms1.columns) == expected
+
+    def test_cms1_credit_risk_row_populated(self, generator: Pillar3Generator):
+        """Row 0010 (credit risk) should have non-null values."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        assert cr_row["a"][0] is not None  # Modelled RWA
+        assert cr_row["b"][0] is not None  # SA portfolio RWA
+        assert cr_row["c"][0] is not None  # Total actual RWA
+        assert cr_row["d"][0] is not None  # Full SA RWA
+
+    def test_cms1_total_row_matches_credit_risk(self, generator: Pillar3Generator):
+        """Total row should match credit risk row (only risk type in scope)."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        total_row = bundle.cms1.filter(pl.col("row_ref") == "0080")
+        for col in ["a", "b", "c", "d"]:
+            assert total_row[col][0] == cr_row[col][0]
+
+    def test_cms1_non_credit_rows_null(self, generator: Pillar3Generator):
+        """Rows 0020-0070 (CCR, CVA, etc.) should be all null."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        non_credit_refs = ["0020", "0030", "0040", "0050", "0060", "0070"]
+        for ref in non_credit_refs:
+            row = bundle.cms1.filter(pl.col("row_ref") == ref)
+            for col in ["a", "b", "c", "d"]:
+                assert row[col][0] is None, f"Row {ref} col {col} should be None"
+
+    def test_cms1_modelled_rwa_is_irb_plus_slotting(self, generator: Pillar3Generator):
+        """Col a: modelled RWA = F-IRB + A-IRB + slotting RWA."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        modelled_rwa = cr_row["a"][0]
+        # IRB RWA: 4000 + 1500 + 1200 = 6700, Slotting RWA: 700 + 720 + 690 = 2110
+        assert modelled_rwa == pytest.approx(6700.0 + 2110.0)
+
+    def test_cms1_sa_portfolio_rwa(self, generator: Pillar3Generator):
+        """Col b: SA portfolio RWA (exposures actually using SA)."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        sa_portfolio_rwa = cr_row["b"][0]
+        # SA RWA: 1000 + 700 + 750 = 2450
+        assert sa_portfolio_rwa == pytest.approx(2450.0)
+
+    def test_cms1_total_actual_rwa(self, generator: Pillar3Generator):
+        """Col c: total actual RWA = modelled + SA portfolio."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        total_rwa = cr_row["c"][0]
+        # 6700 + 2110 + 2450 = 11260
+        assert total_rwa == pytest.approx(8810.0 + 2450.0)
+
+    def test_cms1_full_sa_rwa(self, generator: Pillar3Generator):
+        """Col d: full SA RWA for all exposures."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        full_sa_rwa = cr_row["d"][0]
+        # Total sa_rwa: 1000+700+750 + 3500+2100+1400 + 800+650+500 = 11400
+        assert full_sa_rwa == pytest.approx(11400.0)
+
+    def test_cms1_missing_rwa_column(self, generator: Pillar3Generator):
+        """Missing RWA column should return None and add error."""
+        data = pl.LazyFrame({"exposure_reference": ["X"]})
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is None
+        assert any("CMS1" in e for e in bundle.errors)
+
+    def test_cms1_no_sa_rwa_column(self, generator: Pillar3Generator):
+        """Without sa_rwa column, col d should be None."""
+        data = _make_mixed_data()  # No sa_rwa column
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+        cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        assert cr_row["d"][0] is None
+
+
+# ---------------------------------------------------------------------------
+# CMS2 — Output floor comparison by asset class (Art. 456(1)(b))
+# ---------------------------------------------------------------------------
+
+
+class TestCMS2TemplateDefinitions:
+    """Tests for CMS2 template constant definitions."""
+
+    def test_cms2_columns_count(self):
+        assert len(CMS2_COLUMNS) == 4
+
+    def test_cms2_column_refs(self):
+        refs = [c.ref for c in CMS2_COLUMNS]
+        assert refs == ["a", "b", "c", "d"]
+
+    def test_cms2_rows_count(self):
+        assert len(CMS2_ROWS) == 17
+
+    def test_cms2_row_refs(self):
+        refs = [r.ref for r in CMS2_ROWS]
+        expected = [
+            "0010", "0011", "0020", "0030", "0040", "0041", "0042",
+            "0043", "0044", "0045", "0050", "0051", "0052", "0053",
+            "0054", "0060", "0070",
+        ]
+        assert refs == expected
+
+    def test_cms2_total_row_is_last(self):
+        assert CMS2_ROWS[-1].is_total is True
+        assert CMS2_ROWS[-1].ref == "0070"
+
+    def test_cms2_corporate_row_has_exposure_classes(self):
+        corp_row = [r for r in CMS2_ROWS if r.ref == "0040"][0]
+        assert "corporate" in corp_row.exposure_classes
+        assert "corporate_sme" in corp_row.exposure_classes
+        assert "specialised_lending" in corp_row.exposure_classes
+
+    def test_cms2_retail_row_has_exposure_classes(self):
+        retail_row = [r for r in CMS2_ROWS if r.ref == "0050"][0]
+        assert "retail_mortgage" in retail_row.exposure_classes
+        assert "retail_qrre" in retail_row.exposure_classes
+        assert "retail_other" in retail_row.exposure_classes
+
+    def test_cms2_sa_class_map_covers_main_rows(self):
+        """SA class map should cover all main rows with exposure classes."""
+        for row in CMS2_ROWS:
+            if row.exposure_classes and row.ref in CMS2_SA_CLASS_MAP:
+                assert len(CMS2_SA_CLASS_MAP[row.ref]) > 0
+
+
+class TestCMS2Generation:
+    """Tests for CMS2 template generation."""
+
+    def test_cms2_none_under_crr(self, generator: Pillar3Generator):
+        data = _make_mixed_data()
+        bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cms2 is None
+
+    def test_cms2_generated_under_b31(self, generator: Pillar3Generator):
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
+
+    def test_cms2_row_count(self, generator: Pillar3Generator):
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2.height == 17
+
+    def test_cms2_columns_match(self, generator: Pillar3Generator):
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        expected = {"row_ref", "row_name"} | {c.ref for c in CMS2_COLUMNS}
+        assert set(bundle.cms2.columns) == expected
+
+    def test_cms2_corporate_row_populated(self, generator: Pillar3Generator):
+        """Corporate row (0040) should be populated from IRB data."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp_row = bundle.cms2.filter(pl.col("row_ref") == "0040")
+        # IRB corporate RWA = 4000 (foundation_irb, corporate)
+        assert corp_row["a"][0] is not None
+        assert corp_row["a"][0] > 0
+
+    def test_cms2_retail_row_populated(self, generator: Pillar3Generator):
+        """Retail row (0050) should have modelled RWA from A-IRB retail."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        retail_row = bundle.cms2.filter(pl.col("row_ref") == "0050")
+        # IRB retail: retail_mortgage 1500 + retail_other 1200 = 2700
+        assert retail_row["a"][0] == pytest.approx(2700.0)
+
+    def test_cms2_retail_sub_rows(self, generator: Pillar3Generator):
+        """Retail sub-rows should break down the total."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        qrre = bundle.cms2.filter(pl.col("row_ref") == "0051")
+        other = bundle.cms2.filter(pl.col("row_ref") == "0052")
+        mortgage = bundle.cms2.filter(pl.col("row_ref") == "0053")
+        # retail_qrre: not in IRB data → 0 or None
+        # retail_other IRB: 1200
+        assert other["a"][0] == pytest.approx(1200.0)
+        # retail_mortgage IRB: 1500
+        assert mortgage["a"][0] == pytest.approx(1500.0)
+
+    def test_cms2_total_row(self, generator: Pillar3Generator):
+        """Total row (0070) should aggregate all modelled exposures."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
+        # Total modelled RWA = IRB (6700) + slotting (2110)
+        assert total_row["a"][0] == pytest.approx(8810.0)
+
+    def test_cms2_col_b_sa_equivalent(self, generator: Pillar3Generator):
+        """Col b should show SA-equivalent RWA for modelled exposures."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
+        # Total sa_rwa for modelled: 3500+2100+1400 + 800+650+500 = 8950
+        assert total_row["b"][0] == pytest.approx(8950.0)
+
+    def test_cms2_col_c_total_actual(self, generator: Pillar3Generator):
+        """Col c should be modelled + SA portfolio for total row."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
+        # Total actual = modelled (8810) + SA portfolio (2450) = 11260
+        assert total_row["c"][0] == pytest.approx(11260.0)
+
+    def test_cms2_col_d_full_sa(self, generator: Pillar3Generator):
+        """Col d should show full SA RWA."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
+        # Total sa_rwa for all: 11400
+        assert total_row["d"][0] == pytest.approx(11400.0)
+
+    def test_cms2_firb_sub_row(self, generator: Pillar3Generator):
+        """Row 0041 (FIRB) should show corporate F-IRB RWA."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        firb_row = bundle.cms2.filter(pl.col("row_ref") == "0041")
+        # Corporate F-IRB: 4000
+        assert firb_row["a"][0] == pytest.approx(4000.0)
+
+    def test_cms2_airb_sub_row(self, generator: Pillar3Generator):
+        """Row 0042 (AIRB) should show corporate A-IRB RWA (zero in test data)."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        airb_row = bundle.cms2.filter(pl.col("row_ref") == "0042")
+        # No corporate A-IRB in test data (A-IRB is retail)
+        assert airb_row["a"][0] is None or airb_row["a"][0] == pytest.approx(0.0)
+
+    def test_cms2_purchased_receivables_null(self, generator: Pillar3Generator):
+        """Purchased receivable rows (0045, 0054) should be null."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        for ref in ["0045", "0054"]:
+            row = bundle.cms2.filter(pl.col("row_ref") == ref)
+            assert row["a"][0] is None
+
+    def test_cms2_missing_rwa_column(self, generator: Pillar3Generator):
+        data = pl.LazyFrame({"exposure_reference": ["X"]})
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is None
+        assert any("CMS2" in e for e in bundle.errors)
+
+    def test_cms2_no_sa_rwa_column(self, generator: Pillar3Generator):
+        """Without sa_rwa, cols b and d should be None."""
+        data = _make_mixed_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
+        total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
+        assert total_row["b"][0] is None
+        assert total_row["d"][0] is None
+
+    def test_cms2_specialised_lending_sub_row(self, generator: Pillar3Generator):
+        """Row 0043 (specialised lending) should show slotting RWA."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        sl_row = bundle.cms2.filter(pl.col("row_ref") == "0043")
+        # Slotting RWA: 700 + 720 + 690 = 2110
+        assert sl_row["a"][0] == pytest.approx(2110.0)
+
+
 class TestGeneratorEndToEnd:
     """End-to-end generator tests with mixed data."""
 
@@ -762,6 +1124,20 @@ class TestGeneratorEndToEnd:
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         assert bundle.framework == "BASEL_3_1"
+
+    def test_b31_cms_templates_populated(self, generator: Pillar3Generator):
+        """CMS1 and CMS2 should be populated under Basel 3.1."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+        assert bundle.cms2 is not None
+
+    def test_crr_cms_templates_none(self, generator: Pillar3Generator):
+        """CMS1 and CMS2 should be None under CRR."""
+        data = _make_mixed_data()
+        bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cms1 is None
+        assert bundle.cms2 is None
 
     def test_crr_framework_set(self, generator: Pillar3Generator):
         data = _make_mixed_data()

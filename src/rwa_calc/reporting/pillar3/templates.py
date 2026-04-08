@@ -1,7 +1,7 @@
 """
 Pillar III Disclosure Template Definitions.
 
-Template structure constants for 9 credit risk disclosure templates under
+Template structure constants for 11 credit risk disclosure templates under
 CRR Part 8 / Disclosure (CRR) Part. CRR templates use UK prefix;
 Basel 3.1 templates use UKB prefix.
 
@@ -15,10 +15,12 @@ Templates:
     CR7-A  Extent of CRM techniques for IRB (Art. 453(g))
     CR8    RWEA flow statements for IRB (Art. 438(h))
     CR10   Slotting approach exposures (Art. 438(e))
+    CMS1   Output floor comparison by risk type (Art. 456(1)(a)) — Basel 3.1 only
+    CMS2   Output floor comparison by asset class (Art. 456(1)(b)) — Basel 3.1 only
 
 References:
     CRR Part 8 (Art. 438, 444, 452, 453)
-    PRA PS1/26 Disclosure (CRR) Part
+    PRA PS1/26 Disclosure (CRR) Part, Art. 456, Art. 2a
 """
 from __future__ import annotations
 
@@ -494,6 +496,106 @@ HVCRE_RISK_WEIGHTS: dict[str, float] = {
     "satisfactory": 1.40,
     "weak": 2.50,
     "default": 0.00,
+}
+
+
+# ---------------------------------------------------------------------------
+# CMS1 — Output Floor Comparison by Risk Type (Art. 456(1)(a))
+# Basel 3.1 only (UKB CMS1) — no CRR equivalent
+# ---------------------------------------------------------------------------
+
+CMS1_COLUMNS: list[P3Column] = [
+    P3Column("a", "RWA for modelled approaches"),
+    P3Column("b", "RWA for portfolios where standardised approaches are used"),
+    P3Column("c", "Total actual RWA"),
+    P3Column("d", "RWA calculated using full standardised approach"),
+]
+
+CMS1_ROWS: list[P3Row] = [
+    P3Row("0010", "Credit risk (excluding CCR)"),
+    P3Row("0020", "Counterparty credit risk"),
+    P3Row("0030", "Credit valuation adjustment"),
+    P3Row("0040", "Securitisation exposures in the banking book"),
+    P3Row("0050", "Market risk"),
+    P3Row("0060", "Operational risk"),
+    P3Row("0070", "Residual RWA"),
+    P3Row("0080", "Total", is_total=True),
+]
+
+
+# ---------------------------------------------------------------------------
+# CMS2 — Output Floor Comparison by Asset Class (Art. 456(1)(b))
+# Basel 3.1 only (UKB CMS2) — no CRR equivalent
+# ---------------------------------------------------------------------------
+
+CMS2_COLUMNS: list[P3Column] = [
+    P3Column("a", "RWA for modelled approaches"),
+    P3Column("b", "RWA for column (a) re-computed using SA"),
+    P3Column("c", "Total actual RWA"),
+    P3Column("d", "RWA calculated using full standardised approach"),
+]
+
+CMS2_ROWS: list[P3Row] = [
+    P3Row("0010", "Sovereign", ("central_govt_central_bank",)),
+    P3Row(
+        "0011",
+        "  Of which: categorised as MDB/PSE in SA",
+        ("mdb", "pse"),
+    ),
+    P3Row("0020", "Institutions", ("institution",)),
+    P3Row(
+        "0030",
+        "Subordinated debt, equity and other own funds",
+        ("equity",),
+    ),
+    P3Row(
+        "0040",
+        "Corporates",
+        ("corporate", "corporate_sme", "specialised_lending"),
+    ),
+    P3Row("0041", "  Of which are FIRB"),
+    P3Row("0042", "  Of which are AIRB"),
+    P3Row("0043", "  Of which: specialised lending exposures", ("specialised_lending",)),
+    P3Row(
+        "0044",
+        "  Of which: IPRE and HVCRE exposures",
+    ),
+    P3Row("0045", "  Of which: purchased receivables"),
+    P3Row(
+        "0050",
+        "Retail",
+        ("retail_mortgage", "retail_qrre", "retail_other"),
+    ),
+    P3Row("0051", "  Of which: qualifying revolving retail", ("retail_qrre",)),
+    P3Row("0052", "  Of which: other retail", ("retail_other",)),
+    P3Row(
+        "0053",
+        "  Of which: retail secured by residential immovable property",
+        ("retail_mortgage",),
+    ),
+    P3Row("0054", "  Of which: purchased receivables"),
+    P3Row(
+        "0060",
+        "Others",
+        ("other", "rgla", "covered_bond", "defaulted"),
+    ),
+    P3Row("0070", "Total", is_total=True),
+]
+
+# Mapping of CMS2 exposure classes to SA disclosure class pipeline values
+# Used to compute column d (full SA RWA) at asset class level
+CMS2_SA_CLASS_MAP: dict[str, tuple[str, ...]] = {
+    "0010": ("central_govt_central_bank",),
+    "0011": ("mdb", "pse"),
+    "0020": ("institution",),
+    "0030": ("equity",),
+    "0040": ("corporate", "corporate_sme", "specialised_lending"),
+    "0043": ("specialised_lending",),
+    "0050": ("retail_mortgage", "retail_qrre", "retail_other"),
+    "0051": ("retail_qrre",),
+    "0052": ("retail_other",),
+    "0053": ("retail_mortgage",),
+    "0060": ("other", "rgla", "covered_bond", "defaulted"),
 }
 
 

@@ -182,6 +182,8 @@ COREP supervisory returns with publicly available credit risk data.
 - **CR7-A** — Extent of CRM techniques for IRB (Art. 453(g))
 - **CR8** — RWEA flow statements for IRB (Art. 438(h))
 - **CR10** — Slotting approach exposures (Art. 438(e))
+- **CMS1** — Output floor comparison by risk type (Art. 456(1)(a), Art. 2a) — Basel 3.1 only
+- **CMS2** — Output floor comparison by asset class (Art. 456(1)(b), Art. 2a) — Basel 3.1 only
 
 ### Reference Documents
 - CRR: `docs/assets/crr-annex-xx-instructions-regarding-disclosure.PDF`, `crr-pillar3-irb-credit-risk-instructions.pdf`, `crr-pillar3-risk-weighted-exposure-instructions-leverage-ratio.pdf`, `crr-pillar3-specialised-lending-instructions.pdf`

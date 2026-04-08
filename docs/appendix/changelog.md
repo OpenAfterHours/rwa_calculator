@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Pillar III**: CMS1 — Output floor comparison by risk type (Art. 456(1)(a)). 4 columns × 8 rows. Basel 3.1 only. Only credit risk row populated from pipeline.
+- **Pillar III**: CMS2 — Output floor comparison by asset class (Art. 456(1)(b)). 4 columns × 17 rows. Basel 3.1 only. Full asset class breakdown with FIRB/AIRB/slotting sub-rows.
+- **Pillar III**: `Pillar3TemplateBundle.cms1` and `.cms2` fields added
+- **Pillar III**: CMS1/CMS2 Excel export via `export_to_excel()` (UKB CMS1, UKB CMS2 sheets)
+- **Tests**: 47 new tests for CMS1/CMS2 (7 CMS1 definition, 13 CMS1 generation, 8 CMS2 definition, 16 CMS2 generation, 3 end-to-end). Total: 4,687 (was 4,640). (P3.4)
+
+### Added
 - **SA**: Implement Art. 110A due diligence risk weight override (Basel 3.1 only). Two new optional schema fields (`due_diligence_performed`, `due_diligence_override_rw`) allow firms to flag DD assessment status and override SA risk weights upward where due diligence reveals higher risk. Override uses max(calculated_rw, override_rw) — can only increase, never decrease. SA004 warning emitted when DD assessment status is absent under B31. 25 new unit tests (P1.49)
 
 ### Fixed

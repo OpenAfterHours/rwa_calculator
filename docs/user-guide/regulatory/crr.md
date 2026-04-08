@@ -104,7 +104,7 @@ CRR does not apply an output floor. IRB RWA can be significantly lower than SA e
 | CQS 4 | 100% |
 | CQS 5 | 100% |
 | CQS 6 | 150% |
-| Unrated | See due diligence approach |
+| Unrated | 40% (Art. 121 sovereign-derived) |
 
 ### Corporate Exposures (SA)
 

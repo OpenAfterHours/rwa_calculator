@@ -18,7 +18,7 @@ Institution exposures include:
 
 Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). UK deviation: CQS 2 receives 30% instead of the standard Basel 50%.
 
-Under Basel 3.1, unrated institutions use the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%), replacing the CRR due diligence approach. Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
+Under CRR, unrated institutions receive **40%** via the sovereign-derived approach (Art. 121, Table 5). Under Basel 3.1, this is replaced by the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
 
 > **Details:** See [Key Differences — Institution Exposures](../../framework-comparison/key-differences.md#institution-exposures) for the complete ECRA/SCRA comparison tables.
 

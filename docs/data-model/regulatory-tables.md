@@ -364,20 +364,34 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 
 ## Equity Risk Weights
 
-### SA Equity (CRR Art. 133)
+### SA Equity (Code Constants)
 
-| Equity Type | Risk Weight |
-|------------|------------|
-| Central bank | 0% |
-| Listed | 100% |
-| Exchange traded | 100% |
-| Government supported | 100% |
-| Diversified private equity | 250% |
-| Unlisted | 250% |
-| Private equity | 250% |
-| CIU | 250% |
-| Other | 250% |
-| Speculative | 400% |
+!!! warning "Code Values vs Regulation"
+    This table reflects the **code constants** in `SA_EQUITY_RISK_WEIGHTS` and
+    `B31_SA_EQUITY_RISK_WEIGHTS`. Under CRR Art. 133(2), all equity receives a flat
+    **100%** — the differentiated weights (250%/400%) apply only under **Basel 3.1**
+    Art. 133. The CIU fallback (Art. 132(2)) is **1,250%** per regulation, but the
+    code uses 150% (CRR) / 250% (B31). See [Equity Approach](../specifications/crr/equity-approach.md)
+    for the regulatory specification.
+
+**CRR SA (Art. 133(2) — flat 100%):**
+
+| Equity Type | Code Value | Regulatory Value |
+|------------|-----------|-----------------|
+| Central bank | 0% | 0% |
+| All other equity | 100% | 100% (Art. 133(2)) |
+| CIU (fallback) | 150% | 1,250% (Art. 132(2)) |
+
+**Basel 3.1 SA (Art. 133):**
+
+| Equity Type | Code Value | Regulatory Value |
+|------------|-----------|-----------------|
+| Central bank | 0% | 0% (Art. 133(6)) |
+| Legislative programme | 100% | 100% (Art. 133(6)) |
+| Subordinated debt | 150% | 150% (Art. 133(1)) |
+| Standard (listed) | 250% | 250% (Art. 133(3)) |
+| Higher risk (unlisted/PE/VC) | 400% | 400% (Art. 133(5)) |
+| CIU (fallback) | 250% | 1,250% (Art. 132(2)) |
 
 ### IRB Simple Equity (CRR Art. 155)
 

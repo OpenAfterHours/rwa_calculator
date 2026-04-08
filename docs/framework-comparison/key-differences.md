@@ -431,7 +431,24 @@ for equity underlyings has a material impact:
 |----------|-----------|-----------------|
 | Look-through (Art. 132A(1) / 152(2)) | RW each underlying as if held directly | Equity underlyings now get **SA RWs** (250%/400%) instead of IRB PD/LGD |
 | Mandate-based (Art. 132A(2) / 152(5)) | Worst-case allocation per mandate limits | Equity underlyings use SA RWs |
-| Fall-back | **1,250%** | Unchanged |
+| Fall-back (Art. 132(2)) | **1,250%** | Unchanged from CRR2 |
+
+!!! info "Art. 132 UK Law Status"
+    CRR Art. 132 was **omitted from UK retained law** by SI 2021/1078 (effective 1 Jan 2022)
+    and moved to the PRA Rulebook (CRR Firms). The 1,250% fallback originates from CRR2
+    (Regulation 2019/876). PRA PS1/26 Art. 132(2) reinstates the same 1,250% fallback.
+
+    The 1,250% fallback applies only where neither look-through nor mandate-based
+    approaches are feasible. CIU equity exposures **excluded** under Art. 132B(2)
+    (e.g., sovereign entities, legislative programme holdings) instead receive
+    Art. 133 equity treatment (250% listed / 400% unlisted under Basel 3.1).
+
+!!! warning "Implementation Note"
+    The calculator currently applies 150% (CRR) / 250%-400% (Basel 3.1) for
+    `ciu_approach = "fallback"`, which corresponds to **Art. 133 equity weights**
+    rather than the true Art. 132(2) penalty of 1,250%. This is a known code
+    divergence — see [Equity Approach Specification](../specifications/crr/equity-approach.md)
+    for regulatory details.
 
 Under CRR, IRB firms could apply the **simple risk weight approach** (Art. 155(2)) to
 equity underlyings in CIUs, producing lower risk weights via PD/LGD. Under Basel 3.1,
